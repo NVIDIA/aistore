@@ -1,6 +1,6 @@
 //
 // how to run:
-// # go test -v -run=evi -args -lwm 10 -hwm 20 -dir /tmp/eviction
+// # go test -v -run=fss -args -lwm 10 -hwm 20 -dir /tmp/eviction
 // The specified directory must be first populated with nested dirs and stuff..
 //
 package dfc
@@ -27,7 +27,7 @@ func init() {
 	flag.Parse()
 }
 
-// e.g.: go test -v -run=evi -args -lwm 10 -hwm 20 -dir /tmp/eviction
+// e.g.: go test -v -run=fss -args -lwm 10 -hwm 20 -dir /tmp/eviction
 func Test_fsscan(t *testing.T) {
 	glog.Infoln("Test_fsscan: ", "lwm", lwm, "hwm", hwm, "dir", dir)
 
