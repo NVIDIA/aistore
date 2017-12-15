@@ -55,7 +55,7 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 	// FS is used less than HighWaterMark, nothing needs to be done.
 	if (used * 100 / fs.Blocks) < uint64(hwm) {
 		// Do nothing
-		glog.Infof("mp %q used %d% hwm %d", mntpath, used*100/fs.Blocks, hwm)
+		glog.Infof("mp %q used %d%% hwm %d%%", mntpath, used*100/fs.Blocks, hwm)
 		return nil
 	}
 
