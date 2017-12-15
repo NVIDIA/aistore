@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/shrirama/dfc"
+	"github.com/NVIDIA/dfcpub/dfc"
 )
 
 func main() {

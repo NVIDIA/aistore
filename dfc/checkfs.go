@@ -31,6 +31,8 @@ func checkfs() {
 	return
 }
 
+// FIXME: use Bavail
+// FIXME: translate into bytes once, and never log blocks or do any math with blocks, etc.
 func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 	defer fschkwg.Done()
 	glog.Infof("fsscan mp %q", mntpath)
@@ -40,8 +42,12 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 		glog.Errorf("Failed to statfs mp %q, err: %v", mntpath, err)
 		return err
 	}
+	// FIXME: wrong description in this printout: s/Used/Total/
 	glog.Infof("Used blocks %d free blocks %d", fs.Blocks, fs.Bfree)
-	// in terms of block
+	// in blocks
+	//
+	// FIXME - make it simple: available-bytes = Bsize * Bavail
+	//
 	used := fs.Blocks - fs.Bfree
 	hwm := ctx.config.Cache.FSHighWaterMark
 	lwm := ctx.config.Cache.FSLowWaterMark
@@ -62,16 +68,35 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 		glog.Infof("Used blocks %d blocks to be freed %d bytes %d",
 			fs.Blocks, desiredblks, tobedeletedblks, bytestodel)
 	}
+	//
+	// FIXME: for performance reasons you might want to do instead:
+	//           var fileList []string
+	//           filelist = make([]string, 256)
+	// FIXME: otherwise, the append() below will do a lot of memory (re)allocations
 	fileList := []string{}
 
+	//
+	// FIXME #1: do not inline anonymous functions, make it a separate (named) one
+	// FIXME #2: handle Walk/walk errors
+	// FIXME #3: why do we ignore here the os.FileInfo structure (that has file size)
+	//           only to call os.Stat() again on the same file a few lines below
+	// FIXME #4: use os.FileInfo to skip adding directories into the recursive filelist
+	//
 	_ = filepath.Walk(mntpath, func(path string, f os.FileInfo, err error) error {
 		fileList = append(fileList, path)
 		return nil
 	})
+	// FIXME: the code (above) never assigns the err
+	// FIXME: do we really want to kill the entire daemon with Fatalf()? I think not..
 	if err != nil {
 		glog.Fatalf("Failed to traverse all files in dir %q, err: %v", mntpath, err)
 		return err
 	}
+
+	//
+	// FIXME: the for-loop below must go into a separate function that
+	//        receives a filelist and builds max-heap
+	//
 	h := &PriorityQueue{}
 	heap.Init(h)
 
@@ -102,6 +127,9 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 
 			// Heapsize refers to total size of objects into heap.
 			// Insert into heap until evictDesiredBytes
+			//
+			// FIXME: remove debug printouts to unclutter the code
+			//
 			if evictCurrBytes < evictDesiredBytes {
 				heap.Push(h, item)
 				evictCurrBytes += stat.Size
@@ -164,7 +192,7 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 		}
 		heapelecnt--
 		err := os.Remove(maxfo.path)
-		// FIXME: may fail to reach the "desired" target
+		// FIXME: just skipping this one is not enough - may fail to reach the "desired" target
 		if err != nil {
 			glog.Errorf("Failed to delete file %q, err: %v", maxfo.path, err)
 			continue
