@@ -11,6 +11,7 @@ import (
 	"html"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,15 +64,13 @@ func createHTTPClient() *http.Client {
 // Proxyhdlr function serves request coming to listening port of DFC's Proxy Client.
 // It supports GET and POST method only and return 405 error for non supported Methods.
 func proxyhdlr(w http.ResponseWriter, r *http.Request) {
-
 	if glog.V(3) {
 		glog.Infof("Proxy Request from %s: %s %q \n", r.RemoteAddr, r.Method, r.URL)
 	}
 	switch r.Method {
 	case "GET":
 		// Serve the resource.
-		// TODO Give proper error if no server is registered and client is requesting data
-		// or may be directly get from S3??
+		// TODO: handle error if no server is registered and client is requesting data
 		if len(ctx.smap) < 1 {
 			// No storage server is registered yet
 			glog.Errorf("Storage Server count = %d  Proxy Request from %s: %s %q \n",
@@ -101,7 +100,6 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, storageurlurl, http.StatusMovedPermanently)
 			}
 		}
-
 	case "POST":
 		//Proxy server will get POST for  Storage server registration only
 		err := r.ParseForm()
@@ -152,9 +150,7 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 		glog.Error(errstr)
 		err := errors.New(errstr)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-
 	}
-
 }
 
 // It registers DFC's storage Server Instance with DFC's Proxy Client.
@@ -255,4 +251,53 @@ func proxyclientRequest(sid string, w http.ResponseWriter, r *http.Request) (rer
 		}
 	}
 	return nil
+}
+
+//===========================================================================
+//
+// http runner
+//
+//===========================================================================
+type httprunner struct {
+	listener net.Listener // http listener
+}
+
+func (r *httprunner) runhandler(handler func(http.ResponseWriter, *http.Request)) error {
+	var err error
+	httpmux := http.NewServeMux()
+	httpmux.HandleFunc("/", handler)
+	portstring := ":" + ctx.config.Listen.Port
+
+	r.listener, err = net.Listen("tcp", portstring)
+	if err != nil {
+		glog.Errorf("Failed to start listening on port %s, err: %v", portstring, err)
+		return err
+	}
+	return http.Serve(r.listener, httpmux)
+
+}
+
+// stop gracefully
+func (r *httprunner) stop(err error) {
+	if r.listener == nil {
+		return
+	}
+	glog.Infof("Stopping httprunner, err: %v", err)
+
+	// stop listening
+	r.listener.Close()
+}
+
+//===========================================================================
+//
+// proxy runner
+//
+//===========================================================================
+type proxyrunner struct {
+	httprunner
+}
+
+// start storage runner
+func (r *proxyrunner) run() error {
+	return r.runhandler(proxyhdlr)
 }

@@ -31,8 +31,6 @@ type daemon struct {
 	smap    map[string]serverinfo // registered storage servers (proxy only)
 	config  dfconfig              // Configuration
 	mntpath []MountPoint          // List of usable mountpoints on storage server
-	isproxy bool                  // DFC can run as a proxy (true) or a Server (false)
-	httprun *httprunner
 }
 
 // registration info
@@ -139,15 +137,15 @@ func dfcinit() {
 	}
 	err := initconfigparam(conffile, loglevel, role)
 	if err != nil {
-		// exit and dump stacktrace
+		// exit and dump trace
 		glog.Fatalf("Failed to initialize, config %q, err: %v", conffile, err)
 	}
 	if role == roleproxy {
-		ctx.isproxy = true
 		ctx.smap = make(map[string]serverinfo)
+		grp.add(&proxyrunner{})
+	} else {
+		grp.add(&storagerunner{})
 	}
-	// add runners
-	grp.add(&httprunner{})
 	grp.add(&sigrunner{})
 }
 
