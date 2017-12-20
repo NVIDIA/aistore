@@ -30,6 +30,11 @@ type dfconfig struct {
 	Cache         cacheconfig  `json:"cache"`
 }
 
+const (
+	amazoncloud = "aws"
+	googlecloud = "gcp"
+)
+
 // Need to define structure for each cloud vendor like S3 , Azure, Cloud etc
 // AWS S3 configurable parameters
 
@@ -118,6 +123,7 @@ func initconfigparam(configfile, loglevel, role string) error {
 		glog.Errorf("Failed to create Logdir %q, err: %v", ctx.config.Logdir, err)
 		return err
 	}
+
 	// Argument specified at commandline or through flags has highest precedence.
 	if loglevel != "" {
 		err = flag.Lookup("v").Value.Set(loglevel)
