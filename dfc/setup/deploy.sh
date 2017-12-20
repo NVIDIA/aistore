@@ -6,6 +6,7 @@
 #
 ############################################
 
+export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 INSTANCEPREFIX="dfc"
 TMPDIR="/tmp/nvidia"
 CACHEDIR="cache"
@@ -20,7 +21,8 @@ PORT=8079
 ID=0
 
 PROTO="tcp"
-CLDPROVIDER="amazon"
+#CLDPROVIDER : aws , gcp
+CLDPROVIDER="aws"
 DIRPATH="/tmp/nvidia/"
 # Verbosity: 0 (minimal) to 4 (max)
 LOGLEVEL="3"
