@@ -6,12 +6,13 @@ package dfc
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"html"
 	"io"
 	"io/ioutil"
-	"net"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -258,34 +259,52 @@ func proxyclientRequest(sid string, w http.ResponseWriter, r *http.Request) (rer
 // http runner
 //
 //===========================================================================
+type glogwriter struct {
+}
+
+func (r *glogwriter) Write(p []byte) (int, error) {
+	n := len(p)
+	s := string(p[:n])
+	glog.Errorln(s)
+	return n, nil
+}
+
 type httprunner struct {
-	listener net.Listener // http listener
+	mux     *http.ServeMux
+	h       *http.Server
+	glogger *log.Logger
 }
 
 func (r *httprunner) runhandler(handler func(http.ResponseWriter, *http.Request)) error {
-	var err error
-	httpmux := http.NewServeMux()
-	httpmux.HandleFunc("/", handler)
+	r.mux = http.NewServeMux()
+	r.mux.HandleFunc("/", handler)
 	portstring := ":" + ctx.config.Listen.Port
 
-	r.listener, err = net.Listen("tcp", portstring)
-	if err != nil {
-		glog.Errorf("Failed to start listening on port %s, err: %v", portstring, err)
-		return err
-	}
-	return http.Serve(r.listener, httpmux)
+	// a wrapper to glog http.Server errors - otherwise
+	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
+	r.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 
+	r.h = &http.Server{Addr: portstring, Handler: r.mux, ErrorLog: r.glogger}
+	if err := r.h.ListenAndServe(); err != nil {
+		if err != http.ErrServerClosed {
+			glog.Errorf("httprunner err: %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // stop gracefully
 func (r *httprunner) stop(err error) {
-	if r.listener == nil {
-		return
-	}
 	glog.Infof("Stopping httprunner, err: %v", err)
 
-	// stop listening
-	r.listener.Close()
+	// FIXME: hardcoded timeout 60 seconds
+	contextwith, _ := context.WithTimeout(context.Background(), 60*time.Second)
+
+	err = r.h.Shutdown(contextwith)
+	if err != nil {
+		glog.Infof("Stopped httprunner, err: %v", err)
+	}
 }
 
 //===========================================================================

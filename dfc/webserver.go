@@ -200,9 +200,6 @@ func (r *storagerunner) run() error {
 
 // stop gracefully
 func (r *storagerunner) stop(err error) {
-	if r.listener == nil {
-		return
-	}
 	glog.Infof("Stopping storagerunner, err: %v", err)
 	r.httprunner.stop(err)
 	close(r.fschkchan)
