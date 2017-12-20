@@ -21,8 +21,6 @@ PORT=8079
 ID=0
 
 PROTO="tcp"
-#CLDPROVIDER : aws , gcp
-CLDPROVIDER="aws"
 DIRPATH="/tmp/nvidia/"
 # Verbosity: 0 (minimal) to 4 (max)
 LOGLEVEL="3"
@@ -52,6 +50,22 @@ if ! [[ "$mntpointcount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$mntpointcount' is not a number"; exit 1
 fi
 CACHEPATHCOUNT=$mntpointcount
+
+echo Select Cloud Provider: 
+echo  1: Amazon Cloud 
+echo  2: Google Cloud
+echo Enter your choice:
+read cldprovider
+if [ $cldprovider -eq 1 ]
+then
+	CLDPROVIDER="aws"
+elif [ $cldprovider -eq 2 ]
+then
+	CLDPROVIDER="gcp"
+else
+	echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
+fi
+	
 
 for (( c=$START; c<=$END; c++ ))
 do
