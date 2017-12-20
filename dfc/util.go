@@ -1,7 +1,7 @@
-// CopyRight Notice: All rights reserved
-//
-//
-
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc
 
 import (
