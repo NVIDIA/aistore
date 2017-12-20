@@ -36,8 +36,8 @@ func (obj awsobj) listbucket(w http.ResponseWriter, bucket string) {
 		// It will print keys but not metadata of keys.
 		// Getting metadata of indiviual key is separate operation/call and
 		// need to be done on per object basis.
-
-		fmt.Fprintf(w, *key.Key)
+		keystr := fmt.Sprintf("%s \n", *key.Key)
+		fmt.Fprintf(w, keystr)
 	}
 	return
 }
