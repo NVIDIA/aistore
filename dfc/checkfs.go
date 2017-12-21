@@ -18,7 +18,7 @@ type fileinfo struct {
 	stat *syscall.Stat_t
 }
 
-var fileList = make([]fileinfo, 0)
+var fileList []fileinfo
 var critsect = &sync.Mutex{}
 
 func checkfs() {
@@ -90,6 +90,7 @@ func walkfunc(path string, fi os.FileInfo, err error) error {
 		glog.Errorf("Failed to walk , err: %v", err)
 		return err
 	}
+	fileList = make([]fileinfo, 256)
 	// Skip special files starting with .
 	if strings.HasPrefix(path, ".") || fi.Mode().IsDir() {
 		glog.Infof("Skipping path = %s ", path)
@@ -181,5 +182,8 @@ func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
 		atomic.AddInt64(&stats.bytesevicted, maxfo.size)
 		atomic.AddInt64(&stats.filesevicted, 1)
 	}
+	// delete fileList
+	fileList = fileList[:0]
+
 	return nil
 }

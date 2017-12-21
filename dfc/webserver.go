@@ -21,11 +21,11 @@ const (
 )
 
 // TODO Fillin AWS specific initialization
-type awsobj struct {
+type awsif struct {
 }
 
 // TODO Fillin GCP specific initialization
-type gcpobj struct {
+type gcpif struct {
 }
 
 type cinterface interface {
@@ -170,12 +170,12 @@ func (r *httprunner) run() error {
 	// Check and Instantiate Cloud Provider object
 	if ctx.config.CloudProvider == amazoncloud {
 		// TODO do AWS initialization including sessions.
-		obj := awsobj{}
+		obj := awsif{}
 		r.cloudobj = &obj
 
 	}
 	if ctx.config.CloudProvider == googlecloud {
-		obj := gcpobj{}
+		obj := gcpif{}
 		r.cloudobj = &obj
 	}
 	if r.cloudobj == nil {

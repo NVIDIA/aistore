@@ -26,7 +26,7 @@ func getProjID() string {
 	return projectID
 }
 
-func (obj gcpobj) listbucket(w http.ResponseWriter, bucket string) {
+func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) {
 	glog.Infof(" listbucket : bucket = %s ", bucket)
 	projid := getProjID()
 	if projid == "" {
@@ -54,7 +54,7 @@ func (obj gcpobj) listbucket(w http.ResponseWriter, bucket string) {
 	return
 }
 
-func (obj gcpobj) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) {
+func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) {
 	fname := mpath + fslash + bktname + fslash + objname
 
 	projid := getProjID()

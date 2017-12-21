@@ -24,7 +24,7 @@ func createsession() *session.Session {
 		SharedConfigState: session.SharedConfigEnable}))
 
 }
-func (obj awsobj) listbucket(w http.ResponseWriter, bucket string) {
+func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) {
 	glog.Infof(" listbucket : bucket = %s ", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
@@ -42,7 +42,7 @@ func (obj awsobj) listbucket(w http.ResponseWriter, bucket string) {
 	return
 }
 
-func (obj awsobj) getobj(w http.ResponseWriter, mpath string, bktname string, keyname string) {
+func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, keyname string) {
 	fname := mpath + fslash + bktname + fslash + keyname
 	sess := createsession()
 	// Create S3 Downloader
