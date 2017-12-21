@@ -1,7 +1,11 @@
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
+
+// Example: evict /tmp/eviction to the specified 10% (low) and 20% (high) watermarks:
 //
-// how to run:
 // # go test -v -run=fss -args -lwm 10 -hwm 20 -dir /tmp/eviction
-// The specified directory must be first populated with nested dirs and stuff..
 //
 package dfc
 
