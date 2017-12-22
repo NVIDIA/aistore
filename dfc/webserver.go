@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -24,9 +23,6 @@ const (
 	s3skipTokenToKey = 3
 )
 
-// FIXME: use graceful shutdown instead
-var httprqwg = &sync.WaitGroup{}
-
 // Servhdlr function serves request coming to listening port of DFC's Storage Server.
 // It supports GET method only and return 405 error for non supported Methods.
 // This function checks wheather key exists locally or not. If key does not exist locally
@@ -34,6 +30,7 @@ var httprqwg = &sync.WaitGroup{}
 func servhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		stats := getstorstats()
 		atomic.AddInt64(&stats.numget, 1)
 		// Expecting /<bucketname>/keypath
 		s := strings.SplitN(html.EscapeString(r.URL.Path), fslash, s3skipTokenToKey)
@@ -56,7 +53,6 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 			// TODO: Optimize downloader options
 			// (currently: 5MB chunks and 5 concurrent downloads)
 			downloader := s3manager.NewDownloader(sess)
-			httprqwg.Add(1)
 
 			err = downloadobject(w, downloader, mpath, bktname, keyname)
 			if err != nil {
@@ -100,9 +96,6 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 // This function download S3 object into local file.
 func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 	mpath string, bucket string, kname string) error {
-
-	defer httprqwg.Done()
-
 	var file *os.File
 	var err error
 	var bytes int64
@@ -141,6 +134,7 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 			kname, bucket, err)
 		checksetmounterror(fname)
 	} else {
+		stats := getstorstats()
 		atomic.AddInt64(&stats.bytesloaded, bytes)
 	}
 	return err
@@ -203,7 +197,4 @@ func (r *storagerunner) stop(err error) {
 	glog.Infof("Stopping storagerunner, err: %v", err)
 	r.httprunner.stop(err)
 	close(r.fschkchan)
-
-	// wait for the completion of pending requests
-	httprqwg.Wait()
 }

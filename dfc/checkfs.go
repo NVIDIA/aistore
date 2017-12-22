@@ -197,6 +197,7 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 			glog.Errorf("Failed to delete file %q, err: %v", maxfo.path, err)
 			continue
 		}
+		stats := getstorstats()
 		atomic.AddInt64(&stats.bytesevicted, maxfo.size)
 		atomic.AddInt64(&stats.filesevicted, 1)
 	}

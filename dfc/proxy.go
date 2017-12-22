@@ -270,6 +270,7 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 }
 
 type httprunner struct {
+	namedrunner
 	mux     *http.ServeMux
 	h       *http.Server
 	glogger *log.Logger

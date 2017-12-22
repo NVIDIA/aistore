@@ -5,10 +5,25 @@
 package dfc
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/golang/glog"
 )
+
+func assert(cond bool, args ...interface{}) {
+	if cond {
+		return
+	}
+	var message = "assertion failed"
+	if len(args) > 0 {
+		message += ": "
+		for i := 0; i < len(args); i++ {
+			message += fmt.Sprintf("%#v ", args[i])
+		}
+	}
+	glog.Fatalln(message)
+}
 
 // Returns first IP address of host.
 func getipaddr() (string, error) {

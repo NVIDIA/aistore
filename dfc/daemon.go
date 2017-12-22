@@ -9,8 +9,11 @@ import (
 )
 
 const (
-	rolesetrver = "server"
-	roleproxy   = "proxy"
+	xproxy      = "proxy"
+	xstorage    = "storage"
+	xsignal     = "signal"
+	xproxystats = "proxystats"
+	xstorstats  = "storstats"
 )
 
 //====================
@@ -19,7 +22,6 @@ const (
 //
 //====================
 var ctx = &daemon{}
-var grp = &rungroup{}
 
 //====================
 //
@@ -31,6 +33,7 @@ type daemon struct {
 	smap    map[string]serverinfo // registered storage servers (proxy only)
 	config  dfconfig              // Configuration
 	mntpath []MountPoint          // List of usable mountpoints on storage server
+	rg      *rungroup
 }
 
 // registration info
@@ -41,18 +44,28 @@ type serverinfo struct {
 	mntpath []MountPoint // mount points FIXME: lowercase
 }
 
-// (any) runner
+// runner if
 type runner interface {
 	run() error
 	stop(error)
+	setname(string)
 }
+
+type namedrunner struct {
+	name string
+}
+
+func (r *namedrunner) run() error       { assert(false); return nil }
+func (r *namedrunner) stop(error)       { assert(false) }
+func (r *namedrunner) setname(n string) { r.name = n }
 
 // rungroup
 type rungroup struct {
-	runners []runner
-	errch   chan error
-	idxch   chan int
-	stpch   chan error
+	runarr []runner
+	runmap map[string]runner // redundant, named
+	errch  chan error
+	idxch  chan int
+	stpch  chan error
 }
 
 type gstopError struct {
@@ -63,18 +76,20 @@ type gstopError struct {
 // rungroup
 //
 //====================
-func (g *rungroup) add(r runner) {
-	g.runners = append(g.runners, r)
+func (g *rungroup) add(r runner, name string) {
+	r.setname(name)
+	g.runarr = append(g.runarr, r)
+	g.runmap[name] = r
 }
 
 func (g *rungroup) run() error {
-	if len(g.runners) == 0 {
+	if len(g.runarr) == 0 {
 		return nil
 	}
-	g.errch = make(chan error, len(g.runners))
-	g.idxch = make(chan int, len(g.runners))
+	g.errch = make(chan error, len(g.runarr))
+	g.idxch = make(chan int, len(g.runarr))
 	g.stpch = make(chan error, 1)
-	for i, r := range g.runners {
+	for i, r := range g.runarr {
 		go func(i int, r runner) {
 			g.errch <- r.run()
 			g.idxch <- i
@@ -84,7 +99,7 @@ func (g *rungroup) run() error {
 	err := <-g.errch
 	idx := <-g.idxch
 
-	for _, r := range g.runners {
+	for _, r := range g.runarr {
 		r.stop(err)
 	}
 	glog.Flush()
@@ -109,11 +124,11 @@ func (ge *gstopError) Error() string {
 	return "rungroup stop"
 }
 
-//====================
+//==================
 //
 // daemon init & run
 //
-//====================
+//==================
 func dfcinit() {
 	// CLI to override dfc JSON config
 	var (
@@ -121,7 +136,7 @@ func dfcinit() {
 		conffile string
 		loglevel string
 	)
-	flag.StringVar(&role, "role", "", "role: proxy OR server")
+	flag.StringVar(&role, "role", "", "role: proxy OR storage")
 	flag.StringVar(&conffile, "configfile", "", "config filename")
 	flag.StringVar(&loglevel, "loglevel", "", "glog loglevel")
 
@@ -130,23 +145,27 @@ func dfcinit() {
 		fmt.Fprintf(os.Stderr, "Usage: go run dfc role=<proxy|server> configfile=<somefile.json>\n")
 		os.Exit(2)
 	}
-	if role != roleproxy && role != rolesetrver {
-		fmt.Fprintf(os.Stderr, "Invalid role %q\n", role)
-		fmt.Fprintf(os.Stderr, "Usage: go run dfc role=<proxy|server> configfile=<somefile.json>\n")
-		os.Exit(2)
-	}
+	assert(role == xproxy || role == xstorage, "Invalid flag: role="+role)
 	err := initconfigparam(conffile, loglevel, role)
 	if err != nil {
-		// exit and dump trace
 		glog.Fatalf("Failed to initialize, config %q, err: %v", conffile, err)
 	}
-	if role == roleproxy {
-		ctx.smap = make(map[string]serverinfo)
-		grp.add(&proxyrunner{})
-	} else {
-		grp.add(&storagerunner{})
+	assert(role == xproxy || role == xstorage, "Invalid configuration: role="+role)
+
+	// init daemon
+	ctx.rg = &rungroup{
+		runarr: make([]runner, 0, 4),
+		runmap: make(map[string]runner),
 	}
-	grp.add(&sigrunner{})
+	if role == xproxy {
+		ctx.smap = make(map[string]serverinfo)
+		ctx.rg.add(&proxyrunner{}, xproxy)
+		ctx.rg.add(&proxystatsrunner{}, xproxystats)
+	} else {
+		ctx.rg.add(&storagerunner{}, xstorage)
+		ctx.rg.add(&storstatsrunner{}, xstorstats)
+	}
+	ctx.rg.add(&sigrunner{}, xsignal)
 }
 
 // main
@@ -154,7 +173,7 @@ func Run() {
 	dfcinit()
 	var ok bool
 
-	err := grp.run()
+	err := ctx.rg.run()
 	if err == nil {
 		goto m
 	}
@@ -167,4 +186,23 @@ func Run() {
 m:
 	glog.Infoln("============== Terminated OK")
 	glog.Flush()
+}
+
+//==================
+//
+// global helpers
+//
+//==================
+func getproxystats() *proxystats {
+	r := ctx.rg.runmap[xproxystats]
+	rr, ok := r.(*proxystatsrunner)
+	assert(ok)
+	return &rr.stats
+}
+
+func getstorstats() *storstats {
+	r := ctx.rg.runmap[xstorstats]
+	rr, ok := r.(*storstatsrunner)
+	assert(ok)
+	return &rr.stats
 }

@@ -27,6 +27,7 @@ func (se *signalError) Error() string {
 //
 //===========================================================================
 type sigrunner struct {
+	namedrunner
 	chsig chan os.Signal
 }
 
