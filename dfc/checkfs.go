@@ -74,6 +74,8 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 		glog.Infof("Bytetodelete = %v ", bytestodel)
 	}
 
+	fileList = make([]fileinfo, 256)
+	fileList = fileList[:0]
 	err = filepath.Walk(mntpath, walkfunc)
 
 	if err != nil {
@@ -91,10 +93,9 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 
 func walkfunc(path string, fi os.FileInfo, err error) error {
 	if err != nil {
-		glog.Errorf("Failed to walk , err: %v", err)
+		glog.Errorf("Failed to walk, err: %v", err)
 		return err
 	}
-	fileList = make([]fileinfo, 256)
 	// Skip special files starting with .
 	if strings.HasPrefix(path, ".") || fi.Mode().IsDir() {
 		glog.Infof("Skipping path = %s ", path)
@@ -125,7 +126,7 @@ func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
 		item := &FileObject{
 			path: file, size: stat.Size, atime: atime, index: 0}
 
-		if evictCurrBytes+stat.Size < evictDesiredBytes {
+		if evictCurrBytes < evictDesiredBytes {
 			heap.Push(h, item)
 			evictCurrBytes += stat.Size
 			if glog.V(3) {
@@ -134,6 +135,13 @@ func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
 			}
 			continue
 		}
+		// Print error if no heap entry and break
+		// TODO ASSERT
+		if h.Len() == 0 {
+			glog.Errorf("evictCurrBytes: %v evictDesiredBytes: %v ", evictCurrBytes, evictDesiredBytes)
+			break
+		}
+
 		// Find Maxheap element for comparision with next set of incoming file object.
 		maxfo = heap.Pop(h).(*FileObject)
 		maxatime = maxfo.atime

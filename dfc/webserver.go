@@ -63,7 +63,7 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 		bktname := s[1]
 		if cnt == 1 {
 			// Get with only bucket name will imply getting list of objects from bucket.
-			ctx.httprun.cloudobj.listbucket(w, bktname)
+			ctx.httprun.cloudif.listbucket(w, bktname)
 
 		} else {
 			// Expecting /<bucketname>/keypath
@@ -76,7 +76,7 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 			if os.IsNotExist(err) {
 				atomic.AddInt64(&stats.numnotcached, 1)
 				glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
-				ctx.httprun.cloudobj.getobj(w, mpath, bktname, keyname)
+				ctx.httprun.cloudif.getobj(w, mpath, bktname, keyname)
 			} else if glog.V(2) {
 				glog.Infof("Bucket %s key %s fqn %q *is* cached", bktname, keyname, fname)
 			}
@@ -120,7 +120,7 @@ type httprunner struct {
 	listener  net.Listener    // http listener
 	fschkchan chan bool       // to stop checkfs timer
 	httprqwg  *sync.WaitGroup // to complete pending http
-	cloudobj  cinterface      // Interface for multiple cloud
+	cloudif   cinterface      // Interface for multiple cloud
 }
 
 // start http runner
@@ -135,13 +135,13 @@ func (r *httprunner) run() error {
 		//
 		err = registerwithproxy()
 		if err != nil {
-			glog.Errorf("Failed to parse mounts, err: %v", err)
+			glog.Errorf("Failed to register with proxy, err: %v", err)
 			return err
 		}
 		// Local mount points have precedence over cachePath settings.
 		ctx.mntpath, err = parseProcMounts(procMountsPath)
 		if err != nil {
-			glog.Errorf("Failed to register with proxy, err: %v", err)
+			glog.Errorf("Failed to parse mounts, err: %v", err)
 			return err
 		}
 		if len(ctx.mntpath) == 0 {
@@ -174,15 +174,14 @@ func (r *httprunner) run() error {
 	// Check and Instantiate Cloud Provider object
 	if ctx.config.CloudProvider == amazoncloud {
 		// TODO do AWS initialization including sessions.
-		obj := awsif{}
-		r.cloudobj = &obj
+		r.cloudif = &awsif{}
 
 	}
 	if ctx.config.CloudProvider == googlecloud {
-		obj := gcpif{}
-		r.cloudobj = &obj
+		r.cloudif = &gcpif{}
 	}
-	if r.cloudobj == nil {
+	if r.cloudif == nil {
+		r.listener.Close()
 		errstr := fmt.Sprintf("Failed to initialize cloud object provider, provider : %s", ctx.config.CloudProvider)
 		glog.Error(errstr)
 		err := errors.New(errstr)
