@@ -27,27 +27,14 @@ var (
 )
 
 const (
-
-	// Maximum Idle connections allowed
-	maxidleconnection int = 20
-
-	// Timeout in seconds for HTTP request
-	requesttimeout int = 5
+	maxidleconnection int = 20 // maximum idle connections
+	requesttimeout    int = 5  // http timeout in seconds (FIXME)
 )
 
 const (
-
-	// IP refers to Local IP address of DFC instance.
-	IP = "ip"
-
-	// PORT is specified as positive integer, it
-	PORT = "port"
-
-	// ID uniquely identifies a Node in DFC cluster.
-	// It is specified as type string.
-	// User can specifiy ID through config file or DFC node can auto
-	// generate based on MAC ID.
-	ID = "id"
+	IP   = "ip"   // local IP address of the DFC instance
+	PORT = "port" // expecting an integer > 1000
+	ID   = "id"   // node ID must be unique
 )
 
 // createHTTPClient for connection re-use
@@ -66,19 +53,16 @@ func createHTTPClient() *http.Client {
 // It supports GET and POST method only and return 405 error for non supported Methods.
 func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
-		glog.Infof("Proxy Request from %s: %s %q \n", r.RemoteAddr, r.Method, r.URL)
+		glog.Infof("Proxy request from %s: %s %q", r.RemoteAddr, r.Method, r.URL)
 	}
 	switch r.Method {
 	case "GET":
-		// Serve the resource.
-		// TODO: handle error if no server is registered and client is requesting data
 		if len(ctx.smap) < 1 {
-			// No storage server is registered yet
-			glog.Errorf("Storage Server count = %d  Proxy Request from %s: %s %q \n",
+			// TODO FIXME: No storage server is registered yet
+			glog.Errorf("Storage server count %d proxy request from %s: %s %q",
 				len(ctx.smap), r.RemoteAddr, r.Method, r.URL)
 			http.Error(w, http.StatusText(http.StatusInternalServerError),
 				http.StatusInternalServerError)
-
 		} else {
 
 			sid := doHashfindServer(html.EscapeString(r.URL.Path))
@@ -87,7 +71,7 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				} else {
-					// TODO HTTP redirect
+					// TODO FIXME: implement
 					fmt.Fprintf(w, "DFC-Daemon %q", html.EscapeString(r.URL.Path))
 				}
 			} else { // passthrough
@@ -105,41 +89,38 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 		//Proxy server will get POST for  Storage server registration only
 		err := r.ParseForm()
 		if err != nil {
-			glog.Errorf("Failed to Parse Post Value err = %v \n", err)
+			glog.Errorf("Failed to parse POST request, err: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		if glog.V(2) {
-			glog.Infof("request content %s  \n", r.Form)
 		}
 		var sinfo serverinfo
 		// Parse POST values
 		for str, val := range r.Form {
 			if str == IP {
 				if glog.V(3) {
-					glog.Infof("val : %s \n", strings.Join(val, ""))
+					glog.Infof("val : %s", strings.Join(val, ""))
 				}
 				sinfo.ip = strings.Join(val, "")
 			}
 			if str == PORT {
 				if glog.V(3) {
-					glog.Infof("val : %s \n", strings.Join(val, ""))
+					glog.Infof("val : %s", strings.Join(val, ""))
 				}
 				sinfo.port = strings.Join(val, "")
 			}
 			if str == ID {
 				if glog.V(3) {
-					glog.Infof("val : %s \n", strings.Join(val, ""))
+					glog.Infof("val : %s", strings.Join(val, ""))
 				}
 				sinfo.id = strings.Join(val, "")
 			}
-
 		}
 
-		// Insert into Map based on ID and fail if duplicates.
-		// TODO Fail if there already client registered with same ID
+		_, ok := ctx.smap[sinfo.id]
+		assert(!ok)
 		ctx.smap[sinfo.id] = sinfo
+
 		if glog.V(3) {
-			glog.Infof(" IP = %s Port = %s  Id = %s Curlen of map = %d \n",
+			glog.Infof("IP %s port %s ID %s maplen %d",
 				sinfo.ip, sinfo.port, sinfo.id, len(ctx.smap))
 		}
 		fmt.Fprintf(w, "DFC-Daemon %q", html.EscapeString(r.URL.Path))
@@ -147,7 +128,7 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 	case "PUT":
 	case "DELETE":
 	default:
-		errstr := fmt.Sprintf("Invalid Proxy Request from %s: %s %q \n", r.RemoteAddr, r.Method, r.URL)
+		errstr := fmt.Sprintf("Invalid proxy request from %s: %s %q", r.RemoteAddr, r.Method, r.URL)
 		glog.Error(errstr)
 		err := errors.New(errstr)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -191,7 +172,7 @@ func registerwithproxy() (rerr error) {
 	// Use httpClient to send request
 	response, err := httpClient.Do(req)
 	if err != nil && response == nil {
-		glog.Errorf("Error sending request to Proxy server %+v \n", err)
+		glog.Errorf("Failed sending request to proxy, err: %+v", err)
 		return err
 	}
 	// Close the connection to reuse it
@@ -206,12 +187,12 @@ func registerwithproxy() (rerr error) {
 	// Did we get 200 OK response?
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		glog.Errorf("Couldn't parse response body. %+v \n", err)
+		glog.Errorf("Couldn't parse response body: %+v", err)
 		return err
 	}
 
 	if glog.V(3) {
-		glog.Infof("Response Body: %s \n", string(body))
+		glog.Infof("Response body: %s", string(body))
 	}
 	return nil
 }
@@ -220,17 +201,17 @@ func registerwithproxy() (rerr error) {
 // Storage server ID is provided as one of argument to this call.
 func proxyclientRequest(sid string, w http.ResponseWriter, r *http.Request) (rerr error) {
 	if glog.V(3) {
-		glog.Infof(" Request path = %s Sid = %s Port = %s \n",
+		glog.Infof("Request path %s sid %s port %s",
 			html.EscapeString(r.URL.Path), sid, ctx.smap[sid].port)
 	}
 
 	url := "http://" + ctx.smap[sid].ip + ":" + ctx.smap[sid].port + html.EscapeString(r.URL.Path)
 	if glog.V(3) {
-		glog.Infof(" URL = %s \n", url)
+		glog.Infof("URL %q", url)
 	}
 	resp, err := http.Get(url)
 	if err != nil {
-		glog.Errorf("Failed to get url = %s err = %q", url, err)
+		glog.Errorf("Failed to get URL %q, err: %v", url, err)
 		return err
 	}
 	defer func() {
@@ -242,13 +223,12 @@ func proxyclientRequest(sid string, w http.ResponseWriter, r *http.Request) (rer
 
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
-		glog.Errorf("Failed to Copy data to http response for URL rq %s, err: %v \n",
+		glog.Errorf("Failed to copy data to http response, URL %q, err: %v",
 			html.EscapeString(r.URL.Path), err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		if glog.V(3) {
-			glog.Infof("Succefully copied data from Body to Response for rq %s \n",
-				html.EscapeString(r.URL.Path))
+			glog.Infof("Copied data, URL %q", html.EscapeString(r.URL.Path))
 		}
 	}
 	return nil
@@ -288,7 +268,7 @@ func (r *httprunner) runhandler(handler func(http.ResponseWriter, *http.Request)
 	r.h = &http.Server{Addr: portstring, Handler: r.mux, ErrorLog: r.glogger}
 	if err := r.h.ListenAndServe(); err != nil {
 		if err != http.ErrServerClosed {
-			glog.Errorf("httprunner err: %v", err)
+			glog.Errorf("Terminated %s with err: %v", r.name, err)
 			return err
 		}
 	}
@@ -297,14 +277,14 @@ func (r *httprunner) runhandler(handler func(http.ResponseWriter, *http.Request)
 
 // stop gracefully
 func (r *httprunner) stop(err error) {
-	glog.Infof("Stopping httprunner, err: %v", err)
+	glog.Infof("Stopping %s, err: %v", r.name, err)
 
 	// FIXME: hardcoded timeout 60 seconds
 	contextwith, _ := context.WithTimeout(context.Background(), 60*time.Second)
 
 	err = r.h.Shutdown(contextwith)
 	if err != nil {
-		glog.Infof("Stopped httprunner, err: %v", err)
+		glog.Infof("Stopped %s, err: %v", r.name, err)
 	}
 }
 

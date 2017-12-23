@@ -109,7 +109,6 @@ func walkfunc(path string, fi os.FileInfo, err error) error {
 }
 
 func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
-
 	h := &PriorityQueue{}
 	heap.Init(h)
 
@@ -135,14 +134,9 @@ func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
 			}
 			continue
 		}
-		// Print error if no heap entry and break
-		// TODO ASSERT
-		if h.Len() == 0 {
-			glog.Errorf("evictCurrBytes: %v evictDesiredBytes: %v ", evictCurrBytes, evictDesiredBytes)
-			break
-		}
 
 		// Find Maxheap element for comparision with next set of incoming file object.
+		assert(h.Len() > 0)
 		maxfo = heap.Pop(h).(*FileObject)
 		maxatime = maxfo.atime
 		evictCurrBytes -= maxfo.size
@@ -178,6 +172,8 @@ func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
 		glog.Infof("max-heap size %d evictCurrBytes %d evictDesiredBytes %d filecnt %d",
 			heapelecnt, evictCurrBytes, evictDesiredBytes, filecnt)
 	}
+
+	// FIXME: make this a separate function, handle errors
 	for heapelecnt > 0 && evictCurrBytes > 0 {
 		maxfo = heap.Pop(h).(*FileObject)
 		evictCurrBytes -= maxfo.size
@@ -195,7 +191,7 @@ func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
 		atomic.AddInt64(&stats.bytesevicted, maxfo.size)
 		atomic.AddInt64(&stats.filesevicted, 1)
 	}
-	// delete fileList
+	// empty fileList
 	fileList = fileList[:0]
 
 	return nil

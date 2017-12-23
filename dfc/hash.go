@@ -33,10 +33,8 @@ func doHashfindMountPath(key string) string {
 	var mpath string
 	var min uint32 = math.MaxUint32
 
-	// Panic or ASSERT
-	if len(ctx.mntpath) == 0 {
-		glog.Fatalf("Invalid mntpath count = %d \n", len(ctx.mntpath))
-	} else if len(ctx.mntpath) == 1 {
+	assert(len(ctx.mntpath) > 0, "mntpath count = 0 (zero)")
+	if len(ctx.mntpath) == 1 {
 		if glog.V(3) {
 			glog.Infof("mntpath = %s keypath = %s \n", ctx.mntpath[0].Path, key)
 		}
