@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc_test
 
 import (
@@ -21,7 +25,7 @@ const (
 
 func Test_thirty(t *testing.T) {
 	var wg = &sync.WaitGroup{}
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		keyname := "/dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		// false: read the response and drop it, true: write it to a file
@@ -109,4 +113,61 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup) {
 	}
 	ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
+}
+func Test_list(t *testing.T) {
+	bktname := remroot
+	// false: read the response and drop it, true: write it to a file
+	listAndCopyTmp(bktname, t, true)
+}
+
+func listAndCopyTmp(bktname string, t *testing.T, copy bool) {
+	url := "http://localhost:" + "8080" + bktname
+	fname := "/tmp" + locroot + bktname
+	dirname := filepath.Dir(fname)
+	_, err := os.Stat(dirname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.MkdirAll(dirname, 0755)
+			if err != nil {
+				t.Logf("Failed to create bucket dir %q err: %v", dirname, err)
+				return
+			}
+		} else {
+			t.Logf("Failed to fstat, dir = %s err = %q \n", dirname, err)
+			return
+		}
+	}
+	file, err := os.Create(fname)
+	if err != nil {
+		t.Logf("Unable to create file = %s err = %v", fname, err)
+		return
+	}
+	t.Logf("URL = %s \n", url)
+	resp, err := http.Get(url)
+	if err != nil {
+		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
+			t.Fatalf("http connection refused - terminating")
+		}
+		t.Logf("Failed to get bucket %s list err: %v", bktname, err)
+	}
+	if resp == nil {
+		return
+	}
+
+	defer resp.Body.Close()
+	if copy {
+		numBytesWritten, err := io.Copy(file, resp.Body)
+		if err != nil {
+			t.Errorf("Failed to write to file err: %v", err)
+			return
+		}
+		t.Logf("Got bucket list and copied %q size %d", fname, numBytesWritten)
+	} else {
+		_, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Errorf("Failed to read http response %v", err)
+			return
+		}
+		t.Logf("Got bucket list %q", fname)
+	}
 }

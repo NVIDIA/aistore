@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc
 
 import (
@@ -7,14 +11,9 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/golang/glog"
 )
 
@@ -22,6 +21,19 @@ const (
 	fslash           = "/"
 	s3skipTokenToKey = 3
 )
+
+// TODO Fillin AWS specific initialization
+type awsif struct {
+}
+
+// TODO Fillin GCP specific initialization
+type gcpif struct {
+}
+
+type cinterface interface {
+	listbucket(http.ResponseWriter, string)
+	getobj(http.ResponseWriter, string, string, string)
+}
 
 // Servhdlr function serves request coming to listening port of DFC's Storage Server.
 // It supports GET method only and return 405 error for non supported Methods.
@@ -32,53 +44,44 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		stats := getstorstats()
 		atomic.AddInt64(&stats.numget, 1)
-		// Expecting /<bucketname>/keypath
-		s := strings.SplitN(html.EscapeString(r.URL.Path), fslash, s3skipTokenToKey)
+		cnt := strings.Count(html.EscapeString(r.URL.Path), fslash)
+		s := strings.Split(html.EscapeString(r.URL.Path), fslash)
 		bktname := s[1]
-		keyname := s[2]
-		mpath := doHashfindMountPath(bktname + keyname)
-		fname := mpath + fslash + bktname + fslash + keyname
-
-		// Check wheather filename exists in local directory or not
-		_, err := os.Stat(fname)
-		if os.IsNotExist(err) {
-			atomic.AddInt64(&stats.numnotcached, 1)
-			glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
-			// TODO: avoid creating sessions for each request
-			sess := session.Must(session.NewSessionWithOptions(session.Options{
-				SharedConfigState: session.SharedConfigEnable,
-			}))
-
-			// Create S3 Downloader
-			// TODO: Optimize downloader options
-			// (currently: 5MB chunks and 5 concurrent downloads)
-			downloader := s3manager.NewDownloader(sess)
-
-			err = downloadobject(w, downloader, mpath, bktname, keyname)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			} else {
-				glog.Infof("Bucket %s key %s fqn %q downloaded", bktname, keyname, fname)
-			}
-		} else if glog.V(2) {
-			glog.Infof("Bucket %s key %s fqn %q *is* cached", bktname, keyname, fname)
-		}
-		file, err := os.Open(fname)
-		if err != nil {
-			glog.Errorf("Failed to open file %q, err: %v", fname, err)
-			checksetmounterror(fname)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if cnt == 1 {
+			// Get with only bucket name will imply getting list of objects from bucket.
+			getcloudif().listbucket(w, bktname)
 		} else {
-			defer file.Close()
-
-			// TODO: optimize. Currently the file gets downloaded and stored locally
-			//       _prior_ to sending http response back to the requesting client
-			_, err := io.Copy(w, file)
+			// Expecting /<bucketname>/keypath
+			s := strings.SplitN(html.EscapeString(r.URL.Path), fslash, s3skipTokenToKey)
+			keyname := s[2]
+			mpath := doHashfindMountPath(bktname + fslash + keyname)
+			fname := mpath + fslash + bktname + fslash + keyname
+			// Check wheather filename exists in local directory or not
+			_, err := os.Stat(fname)
+			if os.IsNotExist(err) {
+				atomic.AddInt64(&stats.numnotcached, 1)
+				glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
+				getcloudif().getobj(w, mpath, bktname, keyname)
+			} else if glog.V(2) {
+				glog.Infof("Bucket %s key %s fqn %q *is* cached", bktname, keyname, fname)
+			}
+			file, err := os.Open(fname)
 			if err != nil {
-				glog.Errorf("Failed to copy data to http response for fname %q, err: %v", fname, err)
+				glog.Errorf("Failed to open file %q, err: %v", fname, err)
+				checksetmounterror(fname)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			} else {
-				glog.Infof("Copied %q to http response\n", fname)
+				defer file.Close()
+
+				// TODO: optimize. Currently the file gets downloaded and stored locally
+				//       _prior_ to sending http response back to the requesting client
+				_, err := io.Copy(w, file)
+				if err != nil {
+					glog.Errorf("Failed to copy data to http response for fname %q, err: %v", fname, err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				} else {
+					glog.Infof("Copied %q to http response\n", fname)
+				}
 			}
 		}
 	case "POST":
@@ -93,53 +96,6 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 	glog.Flush()
 }
 
-// This function download S3 object into local file.
-func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
-	mpath string, bucket string, kname string) error {
-	var file *os.File
-	var err error
-	var bytes int64
-
-	//pathname := ctx.configparam.cachedir + "/" + bucket + "/" + kname
-	fname := mpath + fslash + bucket + fslash + kname
-	// strips the last part from filepath
-	dirname := filepath.Dir(fname)
-	_, err = os.Stat(dirname)
-	if err != nil {
-		// Create bucket-path directory for non existent paths.
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(dirname, 0755)
-			if err != nil {
-				glog.Errorf("Failed to create bucket dir %s, err: %v", dirname, err)
-				return err
-			}
-		} else {
-			glog.Errorf("Failed to fstat dir %q, err: %v", dirname, err)
-			return err
-		}
-	}
-
-	file, err = os.Create(fname)
-	if err != nil {
-		glog.Errorf("Unable to create file %q, err: %v", fname, err)
-		checksetmounterror(fname)
-		return err
-	}
-	bytes, err = downloader.Download(file, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(kname),
-	})
-	if err != nil {
-		glog.Errorf("Failed to download key %s from bucket %s, err: %v",
-			kname, bucket, err)
-		checksetmounterror(fname)
-	} else {
-		stats := getstorstats()
-		atomic.AddInt64(&stats.bytesloaded, bytes)
-	}
-	return err
-}
-
 //===========================================================================
 //
 // storage runner
@@ -147,7 +103,8 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 //===========================================================================
 type storagerunner struct {
 	httprunner
-	fschkchan chan bool // to stop checkfs timer
+	fschkchan chan bool  // to stop checkfs timer
+	cloudif   cinterface // Interface for multiple cloud
 }
 
 // start storage runner
@@ -170,6 +127,7 @@ func (r *storagerunner) run() error {
 		glog.Errorf("Failed to register with proxy, err: %v", err)
 		return err
 	}
+
 	if len(ctx.mntpath) == 0 {
 		glog.Infof("Warning: configuring %d mount points for testing purposes", ctx.config.Cache.CachePathCount)
 
@@ -185,11 +143,19 @@ func (r *storagerunner) run() error {
 	} else {
 		glog.Infof("Found %d mount points", len(ctx.mntpath))
 	}
-	// Start FScheck thread
+
 	go fsCheckTimer(r.fschkchan)
 
-	return r.runhandler(servhdlr)
+	// cloud provider
+	assert(ctx.config.CloudProvider == amazoncloud || ctx.config.CloudProvider == googlecloud)
+	if ctx.config.CloudProvider == amazoncloud {
+		// TODO do AWS initialization including sessions
+		r.cloudif = &awsif{}
 
+	} else {
+		r.cloudif = &gcpif{}
+	}
+	return r.runhandler(servhdlr)
 }
 
 // stop gracefully

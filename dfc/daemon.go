@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc
 
 import (
@@ -205,4 +209,11 @@ func getstorstats() *storstats {
 	rr, ok := r.(*storstatsrunner)
 	assert(ok)
 	return &rr.stats
+}
+
+func getcloudif() cinterface {
+	r := ctx.rg.runmap[xstorage]
+	rr, ok := r.(*storagerunner)
+	assert(ok)
+	return rr.cloudif
 }
