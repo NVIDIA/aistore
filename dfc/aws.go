@@ -52,6 +52,8 @@ func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, ke
 
 	err := downloadobject(w, downloader, mpath, bktname, keyname)
 	if err != nil {
+		stats := getstorstats()
+		atomic.AddInt64(&stats.numerr, 1)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
 		glog.Infof("Bucket %s key %s fqn %q downloaded", bktname, keyname, fname)

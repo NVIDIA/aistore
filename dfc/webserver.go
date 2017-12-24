@@ -40,9 +40,9 @@ type cinterface interface {
 // This function checks wheather key exists locally or not. If key does not exist locally
 // it prepares session and download objects from S3 to path on local host.
 func servhdlr(w http.ResponseWriter, r *http.Request) {
+	stats := getstorstats()
 	switch r.Method {
 	case "GET":
-		stats := getstorstats()
 		atomic.AddInt64(&stats.numget, 1)
 		cnt := strings.Count(html.EscapeString(r.URL.Path), fslash)
 		s := strings.Split(html.EscapeString(r.URL.Path), fslash)
@@ -70,6 +70,7 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 				glog.Errorf("Failed to open file %q, err: %v", fname, err)
 				checksetmounterror(fname)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				atomic.AddInt64(&stats.numerr, 1)
 			} else {
 				defer file.Close()
 
@@ -79,6 +80,7 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					glog.Errorf("Failed to copy data to http response for fname %q, err: %v", fname, err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
+					atomic.AddInt64(&stats.numerr, 1)
 				} else {
 					glog.Infof("Copied %q to http response\n", fname)
 				}

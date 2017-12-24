@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"cloud.google.com/go/storage"
 	"github.com/golang/glog"
@@ -113,5 +114,6 @@ func webinterror(w http.ResponseWriter, errstr string) {
 	glog.Error(errstr)
 	err := errors.New(errstr)
 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
+	stats := getstorstats()
+	atomic.AddInt64(&stats.numerr, 1)
 }

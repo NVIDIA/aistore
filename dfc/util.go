@@ -7,6 +7,7 @@ package dfc
 import (
 	"fmt"
 	"net"
+	"reflect"
 
 	"github.com/golang/glog"
 )
@@ -23,6 +24,11 @@ func assert(cond bool, args ...interface{}) {
 		}
 	}
 	glog.Fatalln(message)
+}
+
+func clearStruct(x interface{}) {
+	p := reflect.ValueOf(x).Elem()
+	p.Set(reflect.Zero(p.Type()))
 }
 
 // Returns first IP address of host.

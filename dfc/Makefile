@@ -38,6 +38,9 @@ clean: kill rmcache
 deploy:
 	@./setup/deploy.sh
 
+# example extracting 'numget' stats out of all local logs
+numget:
+	@./setup/numget.sh
 
 # run benchmarks 10 times to generate cpu.prof
 cpuprof:

@@ -14,6 +14,7 @@ import (
 
 type storstats struct {
 	numget       int64
+	numerr       int64
 	numnotcached int64
 	bytesloaded  int64
 	bytesevicted int64
@@ -25,8 +26,9 @@ type statslogger interface {
 }
 
 type proxystats struct {
-	numget int64
-	// TODO
+	numget  int64
+	numpost int64
+	numerr  int64
 }
 
 type statsrunner struct {
@@ -76,8 +78,12 @@ func (r *proxystatsrunner) run() error {
 }
 
 func (r *proxystatsrunner) log() {
-	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
+	s := fmt.Sprintf("%s: %v", r.name, r.stats)
 	glog.Infoln(s)
+	// zero out all counters except err
+	numerr := r.stats.numerr
+	clearStruct(&r.stats)
+	r.stats.numerr = numerr
 }
 
 func (r *storstatsrunner) run() error {
@@ -85,6 +91,10 @@ func (r *storstatsrunner) run() error {
 }
 
 func (r *storstatsrunner) log() {
-	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
+	s := fmt.Sprintf("%s: %v", r.name, r.stats)
 	glog.Infoln(s)
+	// zero out all counters except err
+	numerr := r.stats.numerr
+	clearStruct(&r.stats)
+	r.stats.numerr = numerr
 }

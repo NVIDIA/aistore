@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -52,17 +53,20 @@ func createHTTPClient() *http.Client {
 // Proxyhdlr function serves request coming to listening port of DFC's Proxy Client.
 // It supports GET and POST method only and return 405 error for non supported Methods.
 func proxyhdlr(w http.ResponseWriter, r *http.Request) {
+	stats := getproxystats()
 	if glog.V(3) {
 		glog.Infof("Proxy request from %s: %s %q", r.RemoteAddr, r.Method, r.URL)
 	}
 	switch r.Method {
 	case "GET":
+		atomic.AddInt64(&stats.numget, 1)
 		if len(ctx.smap) < 1 {
 			// TODO FIXME: No storage server is registered yet
 			glog.Errorf("Storage server count %d proxy request from %s: %s %q",
 				len(ctx.smap), r.RemoteAddr, r.Method, r.URL)
 			http.Error(w, http.StatusText(http.StatusInternalServerError),
 				http.StatusInternalServerError)
+			atomic.AddInt64(&stats.numerr, 1)
 		} else {
 
 			sid := doHashfindServer(html.EscapeString(r.URL.Path))
@@ -70,6 +74,7 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 				err := proxyclientRequest(sid, w, r)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
+					atomic.AddInt64(&stats.numerr, 1)
 				} else {
 					// TODO FIXME: implement
 					fmt.Fprintf(w, "DFC-Daemon %q", html.EscapeString(r.URL.Path))
@@ -86,14 +91,16 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case "POST":
-		//Proxy server will get POST for  Storage server registration only
+		atomic.AddInt64(&stats.numpost, 1)
+		// proxy server will get POST for storage registration only
 		err := r.ParseForm()
 		if err != nil {
 			glog.Errorf("Failed to parse POST request, err: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			atomic.AddInt64(&stats.numerr, 1)
 		}
+		// parse
 		var sinfo serverinfo
-		// Parse POST values
 		for str, val := range r.Form {
 			if str == IP {
 				if glog.V(3) {
@@ -132,6 +139,7 @@ func proxyhdlr(w http.ResponseWriter, r *http.Request) {
 		glog.Error(errstr)
 		err := errors.New(errstr)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		atomic.AddInt64(&stats.numerr, 1)
 	}
 }
 
@@ -226,6 +234,8 @@ func proxyclientRequest(sid string, w http.ResponseWriter, r *http.Request) (rer
 		glog.Errorf("Failed to copy data to http response, URL %q, err: %v",
 			html.EscapeString(r.URL.Path), err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		stats := getproxystats()
+		atomic.AddInt64(&stats.numerr, 1)
 	} else {
 		if glog.V(3) {
 			glog.Infof("Copied data, URL %q", html.EscapeString(r.URL.Path))
