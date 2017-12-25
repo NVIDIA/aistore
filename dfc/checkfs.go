@@ -22,7 +22,7 @@ type fileinfo struct {
 	stat *syscall.Stat_t
 }
 
-var fileList []fileinfo
+var fileList = make([]fileinfo, 0, 256)
 var critsect = &sync.Mutex{}
 
 func checkfs() {
@@ -44,50 +44,33 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 	defer fschkwg.Done()
 	hwm := ctx.config.Cache.FSHighWaterMark
 	lwm := ctx.config.Cache.FSLowWaterMark
-	fs := syscall.Statfs_t{}
-	err := syscall.Statfs(mntpath, &fs)
-	if err != nil {
-		glog.Errorf("Failed to statfs mp %q, err: %v", mntpath, err)
-		return err
-	}
-	// Bfree is not equal to Bavail and Used blocks are (TotalBlks- Availableblks)
-	glog.Infof("Total blocks %v free blocks %v avail blocks %v", fs.Blocks, fs.Bfree, fs.Bavail)
-	// in terms of block
-	used := fs.Blocks - fs.Bavail
 
-	// FS is used less than HighWaterMark, nothing needs to be done.
-	if (used * 100 / fs.Blocks) < uint64(hwm) {
-		// Do nothing
-		glog.Infof("mp %q used %d hwm %d", mntpath, used*100/fs.Blocks, hwm)
+	statfs := syscall.Statfs_t{}
+	if err := syscall.Statfs(mntpath, &statfs); err != nil {
+		glog.Errorf("Failed to statfs mp %q, err: %v", mntpath, err)
+	}
+	blocks, bavail, bsize := statfs.Blocks, statfs.Bavail, statfs.Bsize
+	used := blocks - bavail
+	usedpct := used * 100 / blocks
+	glog.Infof("Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", blocks, bavail, usedpct, hwm, lwm)
+
+	if usedpct < uint64(hwm) {
 		return nil
 	}
-	desiredusedblks := fs.Blocks * uint64(lwm) / 100
-	tobedeletedblks := used - desiredusedblks
-	bytestodel := tobedeletedblks * uint64(fs.Bsize)
-	glog.Infof("Total blocks %v Used blocks %v  desiredusedblks %v blocks to be freed %v bytes %v",
-		fs.Blocks, used, desiredusedblks, tobedeletedblks, bytestodel)
-
-	// if FileSystem's Used block are more than hwm(%), delete files to bring
-	// FileSystem's Used block equal to lwm.
-
+	lwmblocks := blocks * uint64(lwm) / 100
+	toevict := int64(used-lwmblocks) * bsize
 	if glog.V(3) {
-		glog.Infof("Bytetodelete = %v ", bytestodel)
+		glog.Infof("lwmblocks %d to-evict-bytes %d", lwmblocks, toevict)
 	}
 
-	fileList = make([]fileinfo, 256)
-	fileList = fileList[:0]
-	err = filepath.Walk(mntpath, walkfunc)
-
-	if err != nil {
+	if err := filepath.Walk(mntpath, walkfunc); err != nil {
 		glog.Errorf("Failed to traverse all files in dir %q, err: %v", mntpath, err)
 		return err
 	}
-	err = doMaxAtimeHeapAndDelete(bytestodel)
-	if err != nil {
+	if err := doMaxAtimeHeapAndDelete(toevict); err != nil {
 		glog.Errorf("Error in creating Heap and Delete for path %q, err: %v", mntpath, err)
 		return err
 	}
-
 	return nil
 }
 
@@ -96,9 +79,8 @@ func walkfunc(path string, fi os.FileInfo, err error) error {
 		glog.Errorf("Failed to walk, err: %v", err)
 		return err
 	}
-	// Skip special files starting with .
+	// skip system files and directories
 	if strings.HasPrefix(path, ".") || fi.Mode().IsDir() {
-		glog.Infof("Skipping path = %s ", path)
 	} else {
 		var obj fileinfo
 		obj.file = path
@@ -108,91 +90,86 @@ func walkfunc(path string, fi os.FileInfo, err error) error {
 	return nil
 }
 
-func doMaxAtimeHeapAndDelete(bytestodel uint64) error {
+func doMaxAtimeHeapAndDelete(toevict int64) error {
 	h := &PriorityQueue{}
 	heap.Init(h)
-
-	var evictCurrBytes, evictDesiredBytes int64
-	evictDesiredBytes = int64(bytestodel)
-	var maxatime time.Time
-	var maxfo *FileObject
-	var filecnt uint64
+	var (
+		bytecnt  int64
+		maxatime time.Time
+		maxfo    *FileObject
+		filecnt  uint64
+	)
+	defer func() { fileList = fileList[:0] }() // empty filelist upon return
 	for _, fo := range fileList {
 		filecnt++
-		file := fo.file
-		stat := fo.stat
+		file, stat := fo.file, fo.stat
 		atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
 		item := &FileObject{
 			path: file, size: stat.Size, atime: atime, index: 0}
 
-		if evictCurrBytes < evictDesiredBytes {
+		if bytecnt < toevict {
 			heap.Push(h, item)
-			evictCurrBytes += stat.Size
+			bytecnt += stat.Size
 			if glog.V(3) {
-				glog.Infof("1A: evictCurrBytes %v currentpath %s atime %v",
-					evictCurrBytes, file, atime)
+				glog.Infof("1A: bytecnt %d file %q atime %v", bytecnt, file, atime)
 			}
 			continue
 		}
-
-		// Find Maxheap element for comparision with next set of incoming file object.
 		assert(h.Len() > 0)
 		maxfo = heap.Pop(h).(*FileObject)
 		maxatime = maxfo.atime
-		evictCurrBytes -= maxfo.size
+		bytecnt -= maxfo.size
 		if glog.V(3) {
-			glog.Infof("1B: curheapsize %v len %v", evictCurrBytes, h.Len())
+			glog.Infof("1B: bytecnt %d heap len %d", bytecnt, h.Len())
 		}
 
-		// Push object into heap only if current fileobject's atime is lower than Maxheap element.
+		// Push object into heap iff older
 		if atime.Before(maxatime) {
 			heap.Push(h, item)
-			evictCurrBytes += stat.Size
-
+			bytecnt += stat.Size
 			if glog.V(3) {
-				glog.Infof("1C: curheapsize %d len %d", evictCurrBytes, h.Len())
+				glog.Infof("1C: bytecnt %d len %d", bytecnt, h.Len())
 			}
 
-			// Get atime of Maxheap fileobject
+			// Get atime of max-heap file object
 			maxfo = heap.Pop(h).(*FileObject)
-			evictCurrBytes -= maxfo.size
+			bytecnt -= maxfo.size
 			if glog.V(3) {
-				glog.Infof("1D: curheapsize %d len %d", evictCurrBytes, h.Len())
+				glog.Infof("1D: bytecnt %d len %d", bytecnt, h.Len())
 			}
 			maxatime = maxfo.atime
 			if glog.V(3) {
-				glog.Infof("1C: current path %q atime %v maxfo.path %q maxatime %v",
+				glog.Infof("1E: file %q atime %v maxfo.path %q maxatime %v",
 					file, atime, maxfo.path, maxatime)
 			}
 		}
 	}
-
 	heapelecnt := h.Len()
 	if glog.V(3) {
-		glog.Infof("max-heap size %d evictCurrBytes %d evictDesiredBytes %d filecnt %d",
-			heapelecnt, evictCurrBytes, evictDesiredBytes, filecnt)
+		glog.Infof("max-heap size %d bytecnt %d toevict %d filecnt %d",
+			heapelecnt, bytecnt, toevict, filecnt)
 	}
-
-	// FIXME: make this a separate function, handle errors
-	for heapelecnt > 0 && evictCurrBytes > 0 {
+	// delete some files
+	var bevicted, fevicted int64
+	for heapelecnt > 0 && bytecnt > 0 {
 		maxfo = heap.Pop(h).(*FileObject)
-		evictCurrBytes -= maxfo.size
-		if glog.V(3) {
-			glog.Infof("1E: curheapsize %d len %d", evictCurrBytes, h.Len())
-		}
 		heapelecnt--
-		err := os.Remove(maxfo.path)
-		// FIXME: may fail to reach the "desired" target
-		if err != nil {
-			glog.Errorf("Failed to delete file %q, err: %v", maxfo.path, err)
+		// FIXME: error not handled - will fail to reach the target
+		if err := os.Remove(maxfo.path); err != nil {
+			glog.Errorf("Failed to evict %q, err: %v", maxfo.path, err)
 			continue
 		}
-		stats := getstorstats()
-		atomic.AddInt64(&stats.bytesevicted, maxfo.size)
-		atomic.AddInt64(&stats.filesevicted, 1)
+		bytecnt -= maxfo.size
+		if glog.V(3) {
+			glog.Infof("1E: curheapsize %d len %d", bytecnt, h.Len())
+		}
+		bevicted += maxfo.size
+		fevicted++
 	}
-	// empty fileList
-	fileList = fileList[:0]
-
+	if ctx.rg != nil { // FIXME: for fsscan_test only
+		stats := getstorstats()
+		atomic.AddInt64(&stats.bytesevicted, bevicted)
+		atomic.AddInt64(&stats.filesevicted, fevicted)
+	}
 	return nil
 }

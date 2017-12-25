@@ -56,7 +56,7 @@ func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, ke
 		atomic.AddInt64(&stats.numerr, 1)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
-		glog.Infof("Bucket %s key %s fqn %q downloaded", bktname, keyname, fname)
+		glog.Infof("Downloaded bucket %s key %s fqn %q", bktname, keyname, fname)
 	}
 	return
 }
@@ -78,7 +78,7 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
-				glog.Errorf("Failed to create bucket dir %s, err: %s", dirname, err)
+				glog.Errorf("Failed to create local dir %s, err: %s", dirname, err)
 				return err
 			}
 		} else {
@@ -98,8 +98,7 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 		Key:    aws.String(kname),
 	})
 	if err != nil {
-		glog.Errorf("Failed to download key %s from bucket %s, err: %s",
-			kname, bucket, err)
+		glog.Errorf("Failed to download key %s from bucket %s, err: %v", kname, bucket, err)
 		checksetmounterror(fname)
 	} else {
 		stats := getstorstats()

@@ -46,7 +46,7 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) {
 			break
 		}
 		if err != nil {
-			errstr := fmt.Sprintf("Failed to get bucket objects, err : %s", err)
+			errstr := fmt.Sprintf("Failed to get bucket objects, err: %v", err)
 			webinterror(w, errstr)
 			return
 		}
@@ -55,12 +55,13 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) {
 	return
 }
 
+// FIXME: missing error processing
 func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) {
 	fname := mpath + fslash + bktname + fslash + objname
 
 	projid := getProjID()
 	if projid == "" {
-		glog.Errorf("Failed to get Project ID from GCP ")
+		glog.Errorf("Failed to get Project ID from GCP")
 		return
 	}
 	ctx := context.Background()
@@ -70,7 +71,7 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	}
 	rc, err := client.Bucket(bktname).Object(objname).NewReader(ctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create rc for object %s to filename %s , err : %s", objname, fname, err)
+		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fname, err)
 		webinterror(w, errstr)
 		return
 	}
@@ -83,27 +84,27 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
-				errstr := fmt.Sprintf("Failed to create bucket dir %s, err: %s", dirname, err)
+				errstr := fmt.Sprintf("Failed to create bucket dir %q, err: %v", dirname, err)
 				webinterror(w, errstr)
 				return
 			}
 		} else {
-			errstr := fmt.Sprintf("Failed to fstat dir %q, err: %s", dirname, err)
+			errstr := fmt.Sprintf("Failed to fstat dir %q, err: %v", dirname, err)
 			webinterror(w, errstr)
 			return
 		}
 	}
 	file, err := os.Create(fname)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create file %s, err:%s", fname, err)
+		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fname, err)
 		webinterror(w, errstr)
 		return
 	} else {
-		glog.Infof("Created file %s succesfully ", fname)
+		glog.Infof("Created file %q", fname)
 	}
 	_, err = io.Copy(file, rc)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to download object %s to filename %s , err : %s", objname, fname, err)
+		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fname, err)
 		webinterror(w, errstr)
 		return
 	}

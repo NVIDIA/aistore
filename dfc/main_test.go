@@ -44,17 +44,17 @@ func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool) 
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
-				t.Logf("Failed to create bucket dir %q err: %v", dirname, err)
+				t.Errorf("Failed to create bucket dir %q err: %v", dirname, err)
 				return
 			}
 		} else {
-			t.Logf("Failed to fstat, dir = %s err = %q \n", dirname, err)
+			t.Errorf("Failed to fstat, dir = %s err = %q \n", dirname, err)
 			return
 		}
 	}
 	file, err := os.Create(fname)
 	if err != nil {
-		t.Logf("Unable to create file = %s err = %v", fname, err)
+		t.Errorf("Unable to create file = %s err = %v", fname, err)
 		return
 	}
 	t.Logf("URL = %s \n", url)
@@ -63,7 +63,7 @@ func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool) 
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			t.Fatalf("http connection refused - terminating")
 		}
-		t.Logf("Failed to get key %s err: %v", keyname, err)
+		t.Errorf("Failed to get key %s err: %v", keyname, err)
 	}
 	if resp == nil {
 		return
@@ -129,17 +129,17 @@ func listAndCopyTmp(bktname string, t *testing.T, copy bool) {
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
-				t.Logf("Failed to create bucket dir %q err: %v", dirname, err)
+				t.Errorf("Failed to create bucket dir %q err: %v", dirname, err)
 				return
 			}
 		} else {
-			t.Logf("Failed to fstat, dir = %s err = %q \n", dirname, err)
+			t.Errorf("Failed to fstat, dir %q err: %v", dirname, err)
 			return
 		}
 	}
 	file, err := os.Create(fname)
 	if err != nil {
-		t.Logf("Unable to create file = %s err = %v", fname, err)
+		t.Errorf("Unable to create file %q err: %v", fname, err)
 		return
 	}
 	t.Logf("URL = %s \n", url)
@@ -148,7 +148,7 @@ func listAndCopyTmp(bktname string, t *testing.T, copy bool) {
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			t.Fatalf("http connection refused - terminating")
 		}
-		t.Logf("Failed to get bucket %s list err: %v", bktname, err)
+		t.Errorf("Failed to get bucket %s list err: %v", bktname, err)
 	}
 	if resp == nil {
 		return
