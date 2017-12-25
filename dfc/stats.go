@@ -7,6 +7,7 @@ package dfc
 import (
 	"fmt"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/golang/glog"
@@ -14,12 +15,14 @@ import (
 
 type storstats struct {
 	numget       int64
-	numerr       int64
-	numnotcached int64
+	numcoldget   int64
 	bytesloaded  int64
 	bytesevicted int64
 	filesevicted int64
+	numerr       int64
 }
+
+type usedstats map[string]int
 
 type statslogger interface {
 	log()
@@ -45,6 +48,7 @@ type proxystatsrunner struct {
 type storstatsrunner struct {
 	statsrunner
 	stats storstats
+	used  usedstats
 }
 
 func (r *statsrunner) runcommon(logger statslogger) error {
@@ -78,7 +82,11 @@ func (r *proxystatsrunner) run() error {
 }
 
 func (r *proxystatsrunner) log() {
-	s := fmt.Sprintf("%s: %v", r.name, r.stats)
+	// nothing changed since the previous call
+	if r.stats.numget == 0 {
+		return
+	}
+	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
 	glog.Infoln(s)
 	// zero out all counters except err
 	numerr := r.stats.numerr
@@ -91,8 +99,24 @@ func (r *storstatsrunner) run() error {
 }
 
 func (r *storstatsrunner) log() {
-	s := fmt.Sprintf("%s: %v", r.name, r.stats)
+	// nothing changed since the previous call
+	if r.stats.numget == 0 && r.stats.bytesloaded == 0 && r.stats.bytesevicted == 0 {
+		return
+	}
+	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
 	glog.Infoln(s)
+
+	for _, mountpath := range ctx.mountpaths {
+		statfs := syscall.Statfs_t{}
+		if err := syscall.Statfs(mountpath.Path, &statfs); err != nil {
+			glog.Errorf("Failed to statfs mp %q, err: %v", mountpath.Path, err)
+		}
+		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
+		r.used[mountpath.Path] = int(u)
+	}
+	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
+	glog.Infoln(s)
+
 	// zero out all counters except err
 	numerr := r.stats.numerr
 	clearStruct(&r.stats)

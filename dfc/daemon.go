@@ -34,18 +34,17 @@ var ctx = &daemon{}
 //====================
 // DFC instance: proxy or storage server
 type daemon struct {
-	smap    map[string]serverinfo // registered storage servers (proxy only)
-	config  dfconfig              // Configuration
-	mntpath []MountPoint          // List of usable mountpoints on storage server
-	rg      *rungroup
+	smap       map[string]serverinfo // registered storage servers (proxy only)
+	config     dfconfig              // Configuration
+	mountpaths []mountPath           //
+	rg         *rungroup
 }
 
 // registration info
 type serverinfo struct {
-	port    string       // http listening port
-	ip      string       // FIXME: always picking the first IP address as the server's IP
-	id      string       // macaddr (as a unique ID)
-	mntpath []MountPoint // mount points FIXME: lowercase
+	port string // http listening port
+	ip   string // FIXME: always picking the first IP address as the server's IP
+	id   string // macaddr (as a unique ID)
 }
 
 // runner if
@@ -209,6 +208,23 @@ func getstorstats() *storstats {
 	rr, ok := r.(*storstatsrunner)
 	assert(ok)
 	return &rr.stats
+}
+
+func initusedstats() {
+	r := ctx.rg.runmap[xstorstats]
+	rr, ok := r.(*storstatsrunner)
+	assert(ok)
+	rr.used = make(map[string]int, len(ctx.mountpaths))
+	for _, mountpath := range ctx.mountpaths {
+		rr.used[mountpath.Path] = 0
+	}
+}
+
+func getusedstats() usedstats {
+	r := ctx.rg.runmap[xstorstats]
+	rr, ok := r.(*storstatsrunner)
+	assert(ok)
+	return rr.used
 }
 
 func getcloudif() cinterface {

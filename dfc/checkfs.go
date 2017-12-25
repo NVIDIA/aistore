@@ -25,29 +25,30 @@ type fileinfo struct {
 var fileList = make([]fileinfo, 0, 256)
 var critsect = &sync.Mutex{}
 
+// FIXME: mountpath.Usable is never used
 func checkfs() {
 	critsect.Lock()
 	defer critsect.Unlock()
-	mntcnt := len(ctx.mntpath)
+	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
 	glog.Infof("checkfs start, num mp-s %d", mntcnt)
 	for i := 0; i < mntcnt; i++ {
 		fschkwg.Add(1)
-		go fsscan(ctx.mntpath[i].Path, fschkwg)
+		go fsscan(ctx.mountpaths[i].Path, fschkwg)
 	}
 	fschkwg.Wait()
 	glog.Infof("checkfs done")
 	return
 }
 
-func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
+func fsscan(mpath string, fschkwg *sync.WaitGroup) error {
 	defer fschkwg.Done()
 	hwm := ctx.config.Cache.FSHighWaterMark
 	lwm := ctx.config.Cache.FSLowWaterMark
 
 	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(mntpath, &statfs); err != nil {
-		glog.Errorf("Failed to statfs mp %q, err: %v", mntpath, err)
+	if err := syscall.Statfs(mpath, &statfs); err != nil {
+		glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
 	}
 	blocks, bavail, bsize := statfs.Blocks, statfs.Bavail, statfs.Bsize
 	used := blocks - bavail
@@ -63,12 +64,12 @@ func fsscan(mntpath string, fschkwg *sync.WaitGroup) error {
 		glog.Infof("lwmblocks %d to-evict-bytes %d", lwmblocks, toevict)
 	}
 
-	if err := filepath.Walk(mntpath, walkfunc); err != nil {
-		glog.Errorf("Failed to traverse all files in dir %q, err: %v", mntpath, err)
+	if err := filepath.Walk(mpath, walkfunc); err != nil {
+		glog.Errorf("Failed to traverse all files in dir %q, err: %v", mpath, err)
 		return err
 	}
 	if err := doMaxAtimeHeapAndDelete(toevict); err != nil {
-		glog.Errorf("Error in creating Heap and Delete for path %q, err: %v", mntpath, err)
+		glog.Errorf("Error in creating Heap and Delete for path %q, err: %v", mpath, err)
 		return err
 	}
 	return nil

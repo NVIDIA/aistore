@@ -13,12 +13,9 @@ import (
 	"github.com/golang/glog"
 )
 
-// MountPoint structure encapsulates mount specific information on local DFC Node.
-type MountPoint struct {
-
-	// Mountpath can be only used for ConsistentHash if Usable is set to  True.
-	// It will be set to True after verifying signature file.
-	// It will be set to False incase of error(IO error or Non Accessible error).
+// mountPath encapsulates mount specific information on the local DFC node
+// Can only be used if Usable (below) is set to true AND and upon verifying the signature file
+type mountPath struct {
 	Usable bool
 	Device string
 	Path   string
@@ -28,22 +25,19 @@ type MountPoint struct {
 }
 
 const (
-	//
-	dfcStoreMntPrefix    = "/mnt/dfcstore"
-	dfcSignatureFileName = "/.dfc.txt"
-	// Number of fields per line in /proc/mounts as per the fstab man page.
-	expectedNumFieldsPerLine = 6
-	// Location of the mount file to use
-	procMountsPath = "/proc/mounts"
+	dfcStoreMntPrefix        = "/mnt/dfcstore"
+	dfcSignatureFileName     = "/.dfc.txt"
+	expectedNumFieldsPerLine = 6              // num fields per line in /proc/mounts as per the fstab man
+	procMountsPath           = "/proc/mounts" // location of the mount file
 )
 
-// Parse and populate usable locally mounted path on DFC Instance.
-func parseProcMounts(filename string) ([]MountPoint, error) {
+// locate and populate local mount points
+func parseProcMounts(filename string) ([]mountPath, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
-		glog.Fatalf("Failed to read from file %s err = %v \n", filename, err)
+		glog.Fatalf("Failed to read file %q, err: %v", filename, err)
 	}
-	out := []MountPoint{}
+	out := []mountPath{}
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
 		if line == "" {
@@ -52,22 +46,21 @@ func parseProcMounts(filename string) ([]MountPoint, error) {
 		}
 		fields := strings.Fields(line)
 		if len(fields) != expectedNumFieldsPerLine {
-			glog.Errorf("Wrong number of fields (expected %d, got %d): %s \n",
+			glog.Errorf("Wrong number of fields (expected %d, got %d): %s",
 				expectedNumFieldsPerLine, len(fields), line)
 			continue
 		}
 		if checkdfcmntpath(fields[1]) {
 			if glog.V(3) {
-				glog.Infof(" Found DFC storage Mountpath = %s \n", fields[1])
+				glog.Infof("Found mount point %s", fields[1])
 			}
-			mp := MountPoint{
+			mp := mountPath{
 				Usable: true,
 				Device: fields[0],
 				Path:   fields[1],
 				Type:   fields[2],
 				Opts:   strings.Split(fields[3], ","),
 			}
-
 			out = append(out, mp)
 		}
 	}
@@ -76,11 +69,11 @@ func parseProcMounts(filename string) ([]MountPoint, error) {
 
 // populateCachepathMounts provides functionality to emulate multimountpath support with
 // local directories.
-func populateCachepathMounts() []MountPoint {
-	out := []MountPoint{}
+func populateCachepathMounts() []mountPath {
+	out := []mountPath{}
 	for i := 0; i < ctx.config.Cache.CachePathCount; i++ {
 		mpath := ctx.config.Cache.CachePath + dfcStoreMntPrefix + strconv.Itoa(i)
-		mp := MountPoint{
+		mp := mountPath{
 			Usable: true,
 			Device: "",
 			Path:   mpath,
@@ -90,41 +83,36 @@ func populateCachepathMounts() []MountPoint {
 	return out
 }
 
-// DFC can only use mountpaths starting with dfcStoreMntPrefix.
+// can only use prefixed mount points
 func checkdfcmntpath(path string) bool {
-
-	if strings.HasPrefix(path, dfcStoreMntPrefix) && checkdfcsignature(path) {
-		return true
-	}
-	return false
-
+	return strings.HasPrefix(path, dfcStoreMntPrefix) && checkdfcsignature(path)
 }
 
-// To Check if signature file is present or not.
+// check if signature is present
 func checkdfcsignature(path string) bool {
-	//TODO keep handle open on file so that underlying mountpoint cannot be unmounted.
+	// TODO keep open so that underlying mountpath cannot be unmounted.
 	filename := path + dfcSignatureFileName
-	_, err := os.Stat(filename)
-	if err != nil {
+	if _, err := os.Stat(filename); err != nil {
 		return false
 	}
 	return true
 }
 
-// Sets the MountPath status.
+// set mount point usability
 func setMountPathStatus(path string, status bool) {
-	for _, minfo := range ctx.mntpath {
-		if strings.HasPrefix(path, minfo.Path) {
-			minfo.Usable = status
+	for _, mountpath := range ctx.mountpaths {
+		if strings.HasPrefix(path, mountpath.Path) {
+			mountpath.Usable = status
+			// FIXME: handle num mount points reduced to zero
 		}
 	}
 }
 
-// Get error count for underlying mountpath.
+// Get error count
 func getMountPathErrorCount(path string) int {
-	for _, minfo := range ctx.mntpath {
-		if strings.HasPrefix(path, minfo.Path) {
-			return minfo.errcnt
+	for _, mountpath := range ctx.mountpaths {
+		if strings.HasPrefix(path, mountpath.Path) {
+			return mountpath.errcnt
 		}
 	}
 	return 0
@@ -132,9 +120,10 @@ func getMountPathErrorCount(path string) int {
 
 // Increment error count for underlying mountpath.
 func incrMountPathErrorCount(path string) {
-	for _, minfo := range ctx.mntpath {
-		if strings.HasPrefix(path, minfo.Path) {
-			minfo.errcnt++
+	for _, mountpath := range ctx.mountpaths {
+		if strings.HasPrefix(path, mountpath.Path) {
+			mountpath.errcnt++
+			// FIXME: break?
 		}
 	}
 }

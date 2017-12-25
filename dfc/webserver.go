@@ -55,11 +55,13 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 			s := strings.SplitN(html.EscapeString(r.URL.Path), fslash, s3skipTokenToKey)
 			keyname := s[2]
 			mpath := doHashfindMountPath(bktname + fslash + keyname)
+			assert(len(mpath) > 0) // see mountpath.Usable
+
 			fname := mpath + fslash + bktname + fslash + keyname
 			// Check wheather filename exists in local directory or not
 			_, err := os.Stat(fname)
 			if os.IsNotExist(err) {
-				atomic.AddInt64(&stats.numnotcached, 1)
+				atomic.AddInt64(&stats.numcoldget, 1)
 				glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
 				getcloudif().getobj(w, mpath, bktname, keyname)
 			} else if glog.V(2) {
@@ -111,29 +113,24 @@ type storagerunner struct {
 
 // start storage runner
 func (r *storagerunner) run() error {
-	var err error
-
-	// Chanel for stopping filesystem check timer.
+	// chanel to stop fstimer
 	r.fschkchan = make(chan bool)
-	//
-	// FIXME: UNREGISTER is totally missing
-	//
-	err = registerwithproxy()
-	if err != nil {
-		glog.Errorf("Failed to parse mounts, err: %v", err)
-		return err
-	}
-	// Local mount points have precedence over cachePath settings.
-	ctx.mntpath, err = parseProcMounts(procMountsPath)
-	if err != nil {
+
+	// FIXME cleanup: unreg is missing
+	if err := registerwithproxy(); err != nil {
 		glog.Errorf("Failed to register with proxy, err: %v", err)
 		return err
 	}
+	// Local mount points have precedence over cachePath settings
+	var err error
+	if ctx.mountpaths, err = parseProcMounts(procMountsPath); err != nil {
+		glog.Errorf("Failed to parse mount points, err: %v", err)
+		return err
+	}
+	if len(ctx.mountpaths) == 0 {
+		glog.Infof("Warning: configuring %d mount points for testing", ctx.config.Cache.CachePathCount)
 
-	if len(ctx.mntpath) == 0 {
-		glog.Infof("Warning: configuring %d mount points for testing purposes", ctx.config.Cache.CachePathCount)
-
-		// Use CachePath from config file if set.
+		// Use CachePath from config file if set
 		if ctx.config.Cache.CachePath == "" || ctx.config.Cache.CachePathCount < 1 {
 			errstr := fmt.Sprintf("Invalid configuration: CachePath %q or CachePathCount %d",
 				ctx.config.Cache.CachePath, ctx.config.Cache.CachePathCount)
@@ -141,11 +138,15 @@ func (r *storagerunner) run() error {
 			err := errors.New(errstr)
 			return err
 		}
-		ctx.mntpath = populateCachepathMounts()
+		ctx.mountpaths = populateCachepathMounts()
 	} else {
-		glog.Infof("Found %d mount points", len(ctx.mntpath))
+		glog.Infof("Found %d mount points", len(ctx.mountpaths))
 	}
 
+	// init mps in the stats
+	initusedstats()
+
+	// go timer
 	go fsCheckTimer(r.fschkchan)
 
 	// cloud provider

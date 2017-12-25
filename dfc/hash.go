@@ -28,31 +28,26 @@ func doHashfindServer(url string) string {
 	return sid
 }
 
-// It will do hash on MountPath + bucket+ keypath and will pick mountpath with Min Hash value.
-func doHashfindMountPath(key string) string {
-	var mpath string
+func doHashfindMountPath(key string) (mpath string) {
 	var min uint32 = math.MaxUint32
 
-	assert(len(ctx.mntpath) > 0, "mntpath count = 0 (zero)")
-	if len(ctx.mntpath) == 1 {
-		if glog.V(3) {
-			glog.Infof("mntpath = %s keypath = %s \n", ctx.mntpath[0].Path, key)
+	assert(len(ctx.mountpaths) > 0, "mp count = 0 (zero)")
+	if len(ctx.mountpaths) == 1 {
+		mpath = ctx.mountpaths[0].Path
+		return
+	}
+	for _, mountpath := range ctx.mountpaths {
+		if !mountpath.Usable {
+			continue
 		}
-		mpath = ctx.mntpath[0].Path
-	} else {
-		for _, minfo := range ctx.mntpath {
-			// MountPath can become non usable in context of error
-			if minfo.Usable {
-				if glog.V(3) {
-					glog.Infof("mntpath = %s keypath = %s \n", minfo.Path, key)
-				}
-				cs := crc32.Checksum([]byte(key+minfo.Path), crc32.IEEETable)
-				if cs < min {
-					min = cs
-					mpath = minfo.Path
-				}
-			}
+		if glog.V(3) {
+			glog.Infof("mpath %q key %s", mountpath.Path, key)
+		}
+		cs := crc32.Checksum([]byte(key+mountpath.Path), crc32.IEEETable)
+		if cs < min {
+			min = cs
+			mpath = mountpath.Path
 		}
 	}
-	return mpath
+	return
 }
