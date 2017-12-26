@@ -289,8 +289,7 @@ func (r *httprunner) runhandler(handler func(http.ResponseWriter, *http.Request)
 func (r *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 
-	// FIXME: hardcoded timeout 60 seconds
-	contextwith, _ := context.WithTimeout(context.Background(), 60*time.Second)
+	contextwith, _ := context.WithTimeout(context.Background(), ctx.config.HttpTimeout)
 
 	err = r.h.Shutdown(contextwith)
 	if err != nil {

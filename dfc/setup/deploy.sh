@@ -33,6 +33,8 @@ MAXPARTSIZE=4294967296
 CACHEDIR="/cache"
 ERRORTHRESHOLD=5
 FSCHECKFREQ=5
+STATSTIMESEC=10
+HTTPTIMEOUTSEC=60
 FSLOWWATERMARK=65
 FSHIGHWATERMARK=80
 
@@ -65,6 +67,8 @@ then
 else
 	echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
 fi
+let "STATSTIMESEC=$STATSTIMESEC*10**9" # nanoseconds to seconds
+let "HTTPTIMEOUTSEC=$HTTPTIMEOUTSEC*10**9"
 	
 
 for (( c=$START; c<=$END; c++ ))
@@ -79,6 +83,8 @@ do
 		"logdir":			"${DIRPATH}${CURINSTANCE}${LOGDIR}",
 		"loglevel": 			"${LOGLEVEL}",
 		"cloudprovider":		"${CLDPROVIDER}",
+		"stats_time":			${STATSTIMESEC},
+		"http_timeout":			${HTTPTIMEOUTSEC},
 		"listen": {
 			"proto": 		"${PROTO}",
 			"port":			"${PORT}"
@@ -104,8 +110,7 @@ do
 EOL
 done
 
-# Start Proxy Client and Storage Daemon, First Configuration file is used for Proxy 
-# and subsequent one is used for Storage Server(s).
+# run proxy and storage daemons
 for (( c=$START; c<=$END; c++ ))
 do
 		CONFFILE=$CONFPATH$c.json

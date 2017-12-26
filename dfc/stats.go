@@ -55,8 +55,7 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	r.chsts = make(chan os.Signal, 1)
 
 	glog.Infof("Starting %s", r.name)
-	// ticker := time.NewTicker(ctx.config.Cache.StatsIval) // TODO - config
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(ctx.config.StatsTime)
 	for {
 		select {
 		case <-ticker.C:
@@ -106,16 +105,27 @@ func (r *storstatsrunner) log() {
 	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
 	glog.Infoln(s)
 
+	var runcheckfs bool
 	for _, mountpath := range ctx.mountpaths {
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(mountpath.Path, &statfs); err != nil {
 			glog.Errorf("Failed to statfs mp %q, err: %v", mountpath.Path, err)
+			continue
 		}
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
+
+		if u >= uint64(ctx.config.Cache.FSHighWaterMark) {
+			runcheckfs = true
+		}
+
 		r.used[mountpath.Path] = int(u)
 	}
 	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
 	glog.Infoln(s)
+
+	if runcheckfs {
+		go checkfs()
+	}
 
 	// zero out all counters except err
 	numerr := r.stats.numerr

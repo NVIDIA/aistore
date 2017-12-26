@@ -23,12 +23,14 @@ type fileinfo struct {
 }
 
 var fileList = make([]fileinfo, 0, 256)
-var critsect = &sync.Mutex{}
+var checkfscas int64
 
 // FIXME: mountpath.Usable is never used
 func checkfs() {
-	critsect.Lock()
-	defer critsect.Unlock()
+	if !atomic.CompareAndSwapInt64(&checkfscas, 0, 7890123) {
+		glog.Infoln("checkfs is already running")
+		return
+	}
 	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
 	glog.Infof("checkfs start, num mp-s %d", mntcnt)
@@ -37,8 +39,9 @@ func checkfs() {
 		go fsscan(ctx.mountpaths[i].Path, fschkwg)
 	}
 	fschkwg.Wait()
-	glog.Infof("checkfs done")
-	return
+	glog.Infoln("checkfs done")
+	swapped := atomic.CompareAndSwapInt64(&checkfscas, 7890123, 0)
+	assert(swapped)
 }
 
 func fsscan(mpath string, fschkwg *sync.WaitGroup) error {
@@ -49,6 +52,7 @@ func fsscan(mpath string, fschkwg *sync.WaitGroup) error {
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(mpath, &statfs); err != nil {
 		glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
+		return err
 	}
 	blocks, bavail, bsize := statfs.Blocks, statfs.Bavail, statfs.Bsize
 	used := blocks - bavail
@@ -81,7 +85,8 @@ func walkfunc(path string, fi os.FileInfo, err error) error {
 		return err
 	}
 	// skip system files and directories
-	if strings.HasPrefix(path, ".") || fi.Mode().IsDir() {
+	base := filepath.Base(path)
+	if strings.HasPrefix(base, ".") || fi.Mode().IsDir() {
 	} else {
 		var obj fileinfo
 		obj.file = path
@@ -145,16 +150,15 @@ func doMaxAtimeHeapAndDelete(toevict int64) error {
 			}
 		}
 	}
-	heapelecnt := h.Len()
 	if glog.V(3) {
-		glog.Infof("max-heap size %d bytecnt %d toevict %d filecnt %d",
-			heapelecnt, bytecnt, toevict, filecnt)
+		glog.Infof("max-heap len %d bytecnt %d toevict %d filecnt %d",
+			h.Len(), bytecnt, toevict, filecnt)
 	}
-	// delete some files
+	// evict some files
 	var bevicted, fevicted int64
-	for heapelecnt > 0 && bytecnt > 0 {
+	for h.Len() > 0 && bytecnt > 10 {
 		maxfo = heap.Pop(h).(*FileObject)
-		heapelecnt--
+
 		// FIXME: error not handled - will fail to reach the target
 		if err := os.Remove(maxfo.path); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", maxfo.path, err)

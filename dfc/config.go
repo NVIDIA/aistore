@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -20,14 +21,16 @@ import (
 //  These Parameter overrides default paramemters.
 // TODO Get and Set Config Parameter functionality/interface(s).
 type dfconfig struct {
-	ID            string       `json:"id"`
-	Logdir        string       `json:"logdir"`
-	Loglevel      string       `json:"loglevel"`
-	CloudProvider string       `json:"cloudprovider"`
-	Listen        listenconfig `json:"listen"`
-	Proxy         proxyconfig  `json:"proxy"`
-	S3            s3config     `json:"s3"`
-	Cache         cacheconfig  `json:"cache"`
+	ID            string        `json:"id"`
+	Logdir        string        `json:"logdir"`
+	Loglevel      string        `json:"loglevel"`
+	CloudProvider string        `json:"cloudprovider"`
+	StatsTime     time.Duration `json:"stats_time"`
+	HttpTimeout   time.Duration `json:"http_timeout"`
+	Listen        listenconfig  `json:"listen"`
+	Proxy         proxyconfig   `json:"proxy"`
+	S3            s3config      `json:"s3"`
+	Cache         cacheconfig   `json:"cache"`
 }
 
 const (
@@ -47,27 +50,12 @@ type s3config struct {
 
 // cacheconfig specifies caching specific parameters.
 type cacheconfig struct {
-
-	// CachePath specifies caching path(location) on DFC instance for cached objects.
-	// It can be nil .
-	CachePath string `json:"cachepath"`
-
-	// CachePathCount specifies number of cache paths for DFC storage instance. It is to emulate
-	// MultiMountPoint support. It can be zero.
-	CachePathCount int `json:"cachepathcount"`
-
-	// ErrorThreshold specifies errorthreshold for specific cache path.DFC will set cachepath to be unusable
-	// if errorcount is > errorthreshold.
-	ErrorThreshold int `json:"errorthreshold"`
-
-	// FSCheck frequency specifies frequency to run FSCheck thread . It is specified in minutes.
-	FSCheckfreq uint32 `json:"fscheckfreq"`
-
-	// LowWaterMark is specified in %, FS Usage need to be higher than LowWaterMark for FSCheck thread to purge old cached data.
-	FSLowWaterMark uint32 `json:"fslowwatermark"`
-
-	// HighWaterMark is specified in %. FSCheck thread will purge old data aggressively if FS Usage is more than HighWaterMark.
-	FSHighWaterMark uint32 `json:"fshighwatermark"`
+	CachePath       string `json:"cachepath"`       // caching path
+	CachePathCount  int    `json:"cachepathcount"`  // num cache paths
+	ErrorThreshold  int    `json:"errorthreshold"`  // error threshold for the specific cache path to become unusable
+	FSCheckfreq     uint32 `json:"fscheckfreq"`     // frequency (in minutes) to run fstimer
+	FSLowWaterMark  uint32 `json:"fslowwatermark"`  // capacity usage low watermark
+	FSHighWaterMark uint32 `json:"fshighwatermark"` // capacity usage high watermark
 }
 
 // listenconfig specifies listner Parameter for DFC instance.
@@ -85,7 +73,7 @@ type proxyconfig struct {
 
 // Read JSON Config file and populate DFC Instance's config parameters.
 // We currently support only one configuration per JSON file.
-func initconfigparam(configfile, loglevel, role string) error {
+func initconfigparam(configfile, loglevel, role string, statstime time.Duration) error {
 	getConfig(configfile)
 
 	err := flag.Lookup("log_dir").Value.Set(ctx.config.Logdir)
@@ -124,9 +112,13 @@ func initconfigparam(configfile, loglevel, role string) error {
 		return err
 	}
 
-	// Argument specified at commandline or through flags has highest precedence.
+	// CLI override
+	if statstime != 0 {
+		ctx.config.StatsTime = statstime
+	}
 	if loglevel != "" {
 		err = flag.Lookup("v").Value.Set(loglevel)
+		ctx.config.Loglevel = loglevel
 	} else {
 		err = flag.Lookup("v").Value.Set(ctx.config.Loglevel)
 	}
@@ -136,7 +128,8 @@ func initconfigparam(configfile, loglevel, role string) error {
 	}
 
 	glog.Infof("============== ")
-	glog.Infof("============== Log level: %s Config: %s Role: %s", flag.Lookup("v").Value.String(), configfile, role)
+	glog.Infof("============== Verbosity: %s Config: %q Role: %s StatsTime %v",
+		ctx.config.Loglevel, configfile, role, ctx.config.StatsTime)
 	glog.Infof("============== ")
 	glog.Flush()
 	return err

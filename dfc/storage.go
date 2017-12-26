@@ -107,15 +107,11 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 //===========================================================================
 type storagerunner struct {
 	httprunner
-	fschkchan chan bool  // to stop checkfs timer
-	cloudif   cinterface // Interface for multiple cloud
+	cloudif cinterface // Interface for multiple cloud
 }
 
 // start storage runner
 func (r *storagerunner) run() error {
-	// chanel to stop fstimer
-	r.fschkchan = make(chan bool)
-
 	// FIXME cleanup: unreg is missing
 	if err := registerwithproxy(); err != nil {
 		glog.Errorf("Failed to register with proxy, err: %v", err)
@@ -146,9 +142,6 @@ func (r *storagerunner) run() error {
 	// init mps in the stats
 	initusedstats()
 
-	// go timer
-	go fsCheckTimer(r.fschkchan)
-
 	// cloud provider
 	assert(ctx.config.CloudProvider == amazoncloud || ctx.config.CloudProvider == googlecloud)
 	if ctx.config.CloudProvider == amazoncloud {
@@ -165,5 +158,4 @@ func (r *storagerunner) run() error {
 func (r *storagerunner) stop(err error) {
 	glog.Infof("Stopping storagerunner, err: %v", err)
 	r.httprunner.stop(err)
-	close(r.fschkchan)
 }

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -135,21 +136,23 @@ func (ge *gstopError) Error() string {
 func dfcinit() {
 	// CLI to override dfc JSON config
 	var (
-		role     string
-		conffile string
-		loglevel string
+		role      string
+		conffile  string
+		loglevel  string
+		statstime time.Duration
 	)
 	flag.StringVar(&role, "role", "", "role: proxy OR storage")
 	flag.StringVar(&conffile, "configfile", "", "config filename")
 	flag.StringVar(&loglevel, "loglevel", "", "glog loglevel")
+	flag.DurationVar(&statstime, "statstime", 0, "http and capacity utilization statistics log interval")
 
 	flag.Parse()
 	if conffile == "" {
-		fmt.Fprintf(os.Stderr, "Usage: go run dfc role=<proxy|server> configfile=<somefile.json>\n")
+		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|storage> -configfile=<somefile.json> [-statstime=<duration>]\n")
 		os.Exit(2)
 	}
 	assert(role == xproxy || role == xstorage, "Invalid flag: role="+role)
-	err := initconfigparam(conffile, loglevel, role)
+	err := initconfigparam(conffile, loglevel, role, statstime)
 	if err != nil {
 		glog.Fatalf("Failed to initialize, config %q, err: %v", conffile, err)
 	}
