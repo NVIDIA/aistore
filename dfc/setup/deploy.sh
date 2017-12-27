@@ -2,7 +2,7 @@
 
 ############################################
 #
-# Usage: deploy.sh [-loglevel=0|1|2|3]
+# Usage: deploy.sh [-loglevel=0|1|2|3] [-statstime=<DURATION>]
 #
 ############################################
 
@@ -32,9 +32,9 @@ MAXCONCURRENTUPLOAD=64
 MAXPARTSIZE=4294967296
 CACHEDIR="/cache"
 ERRORTHRESHOLD=5
-FSCHECKFREQ=5
 STATSTIMESEC=10
 HTTPTIMEOUTSEC=60
+DONTEVICTIMESEC=600
 FSLOWWATERMARK=65
 FSHIGHWATERMARK=80
 
@@ -67,8 +67,10 @@ then
 else
 	echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
 fi
-let "STATSTIMESEC=$STATSTIMESEC*10**9" # nanoseconds to seconds
+# convert all timers to seconds
+let "STATSTIMESEC=$STATSTIMESEC*10**9"
 let "HTTPTIMEOUTSEC=$HTTPTIMEOUTSEC*10**9"
+let "DONTEVICTIMESEC=$DONTEVICTIMESEC*10**9"
 	
 
 for (( c=$START; c<=$END; c++ ))
@@ -102,9 +104,9 @@ do
 			"cachepath":			"${DIRPATH}${CURINSTANCE}${CACHEDIR}",
 			"cachepathcount":		${CACHEPATHCOUNT},
 			"errorthreshold":		${ERRORTHRESHOLD},
-			"fscheckfreq":			${FSCHECKFREQ},
 			"fslowwatermark":		${FSLOWWATERMARK},
-			"fshighwatermark":		${FSHIGHWATERMARK}	
+			"fshighwatermark":		${FSHIGHWATERMARK},
+			"dont_evict_time":		${DONTEVICTIMESEC}
 		}
 	}
 EOL

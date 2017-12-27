@@ -9,19 +9,21 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/golang/glog"
 )
 
 // mountPath encapsulates mount specific information on the local DFC node
-// Can only be used if Usable (below) is set to true AND and upon verifying the signature file
+// Can only be used if enabled (below) is set to true AND and upon verifying the signature file
 type mountPath struct {
-	Usable bool
-	Device string
-	Path   string
-	Type   string
-	Opts   []string
-	errcnt int
+	Device  string
+	Path    string
+	Type    string
+	Opts    []string
+	Fsid    syscall.Fsid
+	errcnt  int
+	enabled bool
 }
 
 const (
@@ -35,7 +37,7 @@ const (
 func parseProcMounts(filename string) ([]mountPath, error) {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
-		glog.Fatalf("Failed to read file %q, err: %v", filename, err)
+		glog.Fatalf("Failed to read %q, err: %v", filename, err)
 	}
 	out := []mountPath{}
 	lines := strings.Split(string(content), "\n")
@@ -52,32 +54,42 @@ func parseProcMounts(filename string) ([]mountPath, error) {
 		}
 		if checkdfcmntpath(fields[1]) {
 			if glog.V(3) {
-				glog.Infof("Found mount point %s", fields[1])
+				glog.Infof("Found mp %s", fields[1])
 			}
 			mp := mountPath{
-				Usable: true,
-				Device: fields[0],
-				Path:   fields[1],
-				Type:   fields[2],
-				Opts:   strings.Split(fields[3], ","),
+				Device:  fields[0],
+				Path:    fields[1],
+				Type:    fields[2],
+				Opts:    strings.Split(fields[3], ","),
+				enabled: true,
 			}
+			statfs := syscall.Statfs_t{}
+			if err := syscall.Statfs(mp.Path, &statfs); err != nil {
+				glog.Fatalf("Failed to statfs mp %q, err: %v", mp.Path, err)
+				return nil, err
+			}
+			mp.Fsid = statfs.Fsid
 			out = append(out, mp)
 		}
 	}
 	return out, nil
 }
 
-// populateCachepathMounts provides functionality to emulate multimountpath support with
-// local directories.
-func populateCachepathMounts() []mountPath {
+// emulate mountpath with // local directories.
+func emulateCachepathMounts() []mountPath {
 	out := []mountPath{}
 	for i := 0; i < ctx.config.Cache.CachePathCount; i++ {
 		mpath := ctx.config.Cache.CachePath + dfcStoreMntPrefix + strconv.Itoa(i)
 		mp := mountPath{
-			Usable: true,
-			Device: "",
-			Path:   mpath,
+			Path:    mpath,
+			enabled: true,
 		}
+		statfs := syscall.Statfs_t{}
+		if err := syscall.Statfs(mp.Path, &statfs); err != nil {
+			glog.Fatalf("Failed to statfs mp %q, err: %v", mp.Path, err)
+			return nil
+		}
+		mp.Fsid = statfs.Fsid
 		out = append(out, mp)
 	}
 	return out
@@ -90,7 +102,7 @@ func checkdfcmntpath(path string) bool {
 
 // check if signature is present
 func checkdfcsignature(path string) bool {
-	// TODO keep open so that underlying mountpath cannot be unmounted.
+	// TODO keep open so that underlying mountpath cannot be unmounted
 	filename := path + dfcSignatureFileName
 	if _, err := os.Stat(filename); err != nil {
 		return false
@@ -98,12 +110,12 @@ func checkdfcsignature(path string) bool {
 	return true
 }
 
-// set mount point usability
+// FIXME: disabling all mp-s not handled
 func setMountPathStatus(path string, status bool) {
 	for _, mountpath := range ctx.mountpaths {
 		if strings.HasPrefix(path, mountpath.Path) {
-			mountpath.Usable = status
-			// FIXME: handle num mount points reduced to zero
+			mountpath.enabled = status
+			return
 		}
 	}
 }
@@ -118,12 +130,12 @@ func getMountPathErrorCount(path string) int {
 	return 0
 }
 
-// Increment error count for underlying mountpath.
+// Increment error counter
 func incrMountPathErrorCount(path string) {
 	for _, mountpath := range ctx.mountpaths {
 		if strings.HasPrefix(path, mountpath.Path) {
 			mountpath.errcnt++
-			// FIXME: break?
+			return
 		}
 	}
 }

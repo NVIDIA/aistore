@@ -25,7 +25,7 @@ type fileinfo struct {
 var fileList = make([]fileinfo, 0, 256)
 var checkfscas int64
 
-// FIXME: mountpath.Usable is never used
+// FIXME: mountpath.enabled is never used
 func checkfs() {
 	if !atomic.CompareAndSwapInt64(&checkfscas, 0, 7890123) {
 		glog.Infoln("checkfs is already running")
@@ -33,10 +33,17 @@ func checkfs() {
 	}
 	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
+	fsmap := make(map[syscall.Fsid]bool, mntcnt)
 	glog.Infof("checkfs start, num mp-s %d", mntcnt)
-	for i := 0; i < mntcnt; i++ {
+	for _, mountpath := range ctx.mountpaths {
+		_, ok := fsmap[mountpath.Fsid]
+		if ok {
+			glog.Infof("checkfs: duplicate FSID %v, mpath %q", mountpath.Fsid, mountpath.Path)
+			continue
+		}
+		fsmap[mountpath.Fsid] = true
 		fschkwg.Add(1)
-		go fsscan(ctx.mountpaths[i].Path, fschkwg)
+		go fsscan(mountpath.Path, fschkwg)
 	}
 	fschkwg.Wait()
 	glog.Infoln("checkfs done")
@@ -81,7 +88,7 @@ func fsscan(mpath string, fschkwg *sync.WaitGroup) error {
 
 func walkfunc(path string, fi os.FileInfo, err error) error {
 	if err != nil {
-		glog.Errorf("Failed to walk, err: %v", err)
+		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
 	}
 	// skip system files and directories
@@ -99,6 +106,8 @@ func walkfunc(path string, fi os.FileInfo, err error) error {
 func doMaxAtimeHeapAndDelete(toevict int64) error {
 	h := &PriorityQueue{}
 	heap.Init(h)
+	now := time.Now()
+	dontevictime := now.Add(-ctx.config.Cache.DontEvictTime)
 	var (
 		bytecnt  int64
 		maxatime time.Time
@@ -110,43 +119,56 @@ func doMaxAtimeHeapAndDelete(toevict int64) error {
 		filecnt++
 		file, stat := fo.file, fo.stat
 		atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
+		mtime := time.Unix(int64(stat.Mtim.Sec), int64(stat.Mtim.Nsec))
+		// atime controversy - see e.g. https://en.wikipedia.org/wiki/Stat_(system_call)#Criticism_of_atime
+		usetime := atime
+		if mtime.After(atime) {
+			usetime = mtime
+		}
+		// do not evict freshly-updated and most recently accessed
+		if usetime.After(dontevictime) {
+			if glog.V(3) {
+				glog.Infof("1A: skipping %q dontevictime %v usetime %v", file, dontevictime, usetime)
+			}
+			continue
+		}
 		item := &FileObject{
-			path: file, size: stat.Size, atime: atime, index: 0}
+			path: file, size: stat.Size, usetime: usetime, index: 0}
 
 		if bytecnt < toevict {
 			heap.Push(h, item)
 			bytecnt += stat.Size
 			if glog.V(3) {
-				glog.Infof("1A: bytecnt %d file %q atime %v", bytecnt, file, atime)
+				glog.Infof("1B: bytecnt %d file %q usetime %v", bytecnt, file, usetime)
 			}
 			continue
 		}
 		assert(h.Len() > 0)
 		maxfo = heap.Pop(h).(*FileObject)
-		maxatime = maxfo.atime
+		maxatime = maxfo.usetime
 		bytecnt -= maxfo.size
 		if glog.V(3) {
-			glog.Infof("1B: bytecnt %d heap len %d", bytecnt, h.Len())
+			glog.Infof("1C: bytecnt %d heap len %d", bytecnt, h.Len())
 		}
 
 		// Push object into heap iff older
-		if atime.Before(maxatime) {
+		if usetime.Before(maxatime) {
 			heap.Push(h, item)
 			bytecnt += stat.Size
 			if glog.V(3) {
-				glog.Infof("1C: bytecnt %d len %d", bytecnt, h.Len())
+				glog.Infof("1D: bytecnt %d len %d", bytecnt, h.Len())
 			}
 
-			// Get atime of max-heap file object
+			// vs maxatime
 			maxfo = heap.Pop(h).(*FileObject)
 			bytecnt -= maxfo.size
 			if glog.V(3) {
-				glog.Infof("1D: bytecnt %d len %d", bytecnt, h.Len())
+				glog.Infof("1E: bytecnt %d len %d", bytecnt, h.Len())
 			}
-			maxatime = maxfo.atime
+			maxatime = maxfo.usetime
 			if glog.V(3) {
-				glog.Infof("1E: file %q atime %v maxfo.path %q maxatime %v",
-					file, atime, maxfo.path, maxatime)
+				glog.Infof("1F: file %q usetime %v maxfo.path %q maxatime %v",
+					file, usetime, maxfo.path, maxatime)
 			}
 		}
 	}

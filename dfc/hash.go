@@ -37,7 +37,7 @@ func doHashfindMountPath(key string) (mpath string) {
 		return
 	}
 	for _, mountpath := range ctx.mountpaths {
-		if !mountpath.Usable {
+		if !mountpath.enabled {
 			continue
 		}
 		if glog.V(3) {

@@ -38,41 +38,36 @@ const (
 	googlecloud = "gcp"
 )
 
-// Need to define structure for each cloud vendor like S3 , Azure, Cloud etc
-// AWS S3 configurable parameters
-
-// s3config specifies  Amazon S3 specific configuration parameters.
+// s3config specifies  Amazon S3 specific configuration parameters
 type s3config struct {
 	Maxconcurrdownld uint32 `json:"maxconcurrdownld"` // Concurent Download for a session.
 	Maxconcurrupld   uint32 `json:"maxconcurrupld"`   // Concurrent Upload for a session.
 	Maxpartsize      uint64 `json:"maxpartsize"`      // Maximum part size for Upload and Download used for buffering.
 }
 
-// cacheconfig specifies caching specific parameters.
+// caching configuration
 type cacheconfig struct {
-	CachePath       string `json:"cachepath"`       // caching path
-	CachePathCount  int    `json:"cachepathcount"`  // num cache paths
-	ErrorThreshold  int    `json:"errorthreshold"`  // error threshold for the specific cache path to become unusable
-	FSCheckfreq     uint32 `json:"fscheckfreq"`     // frequency (in minutes) to run fstimer
-	FSLowWaterMark  uint32 `json:"fslowwatermark"`  // capacity usage low watermark
-	FSHighWaterMark uint32 `json:"fshighwatermark"` // capacity usage high watermark
+	CachePath       string        `json:"cachepath"`       // caching path
+	CachePathCount  int           `json:"cachepathcount"`  // num cache paths
+	ErrorThreshold  int           `json:"errorthreshold"`  // error threshold for the specific cache path to become unusable
+	FSLowWaterMark  uint32        `json:"fslowwatermark"`  // capacity usage low watermark
+	FSHighWaterMark uint32        `json:"fshighwatermark"` // capacity usage high watermark
+	DontEvictTime   time.Duration `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
 }
 
-// listenconfig specifies listner Parameter for DFC instance.
-// User can specify Port and Protocol(TCP/UDP) as part of listenconfig.
+// daemon listenig params
 type listenconfig struct {
 	Proto string `json:"proto"` // Prototype : tcp, udp
 	Port  string `json:"port"`  // Listening port.
 }
 
-// proxyconfig specifies well-known address for http proxy as http://<ipaddress>:<portnumber>
+// proxyconfig specifies proxy's well-known address as http://<ipaddress>:<portnumber>
 type proxyconfig struct {
 	URL      string `json:"url"`      // used to register caching servers
 	Passthru bool   `json:"passthru"` // false: get then redirect, true (default): redirect right away
 }
 
-// Read JSON Config file and populate DFC Instance's config parameters.
-// We currently support only one configuration per JSON file.
+// Load and validate daemon's config
 func initconfigparam(configfile, loglevel, role string, statstime time.Duration) error {
 	getConfig(configfile)
 

@@ -9,19 +9,12 @@ import (
 	"time"
 )
 
-// An FileObject is something we manage in a priority queue.
+// file info object used in a priority queue
 type FileObject struct {
-	// path refers to local file DFC Node
-	path string
-
-	// atime refers to access time of file object.
-	// It's being used as property for minHeap implementation.
-	atime time.Time
-
-	size int64
-
-	// The index is needed by update and is maintained by the heap.Interface methods.
-	index int
+	path    string    // local file
+	usetime time.Time // max(atime, mtime)
+	size    int64     // file
+	index   int       // maintained by the heap.Interface
 }
 
 // A PriorityQueue implements heap.Interface and holds FileObjects.
@@ -31,7 +24,7 @@ func (pq PriorityQueue) Len() int { return len(pq) }
 
 func (pq PriorityQueue) Less(i, j int) bool {
 	// Pop to return highest access time fileobject.(MaxHeap)
-	return pq[i].atime.Sub(pq[j].atime) > 0
+	return pq[i].usetime.Sub(pq[j].usetime) > 0
 }
 
 // Swap object from index I with with object from index J.
@@ -62,6 +55,6 @@ func (pq *PriorityQueue) Pop() interface{} {
 // Update modifies the priority and value of an FileObject in the queue.
 func (pq *PriorityQueue) Update(fobj *FileObject, value string, priority time.Time) {
 	fobj.path = value
-	fobj.atime = priority
+	fobj.usetime = priority
 	heap.Fix(pq, fobj.index)
 }

@@ -106,19 +106,24 @@ func (r *storstatsrunner) log() {
 	glog.Infoln(s)
 
 	var runcheckfs bool
+	fsmap := make(map[syscall.Fsid]int, len(ctx.mountpaths))
 	for _, mountpath := range ctx.mountpaths {
+		uu, ok := fsmap[mountpath.Fsid]
+		if ok {
+			glog.Infof("%s duplicate FSID %v, mpath %q", r.name, mountpath.Fsid, mountpath.Path)
+			r.used[mountpath.Path] = uu
+			continue
+		}
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(mountpath.Path, &statfs); err != nil {
 			glog.Errorf("Failed to statfs mp %q, err: %v", mountpath.Path, err)
 			continue
 		}
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-
 		if u >= uint64(ctx.config.Cache.FSHighWaterMark) {
 			runcheckfs = true
 		}
-
-		r.used[mountpath.Path] = int(u)
+		r.used[mountpath.Path], fsmap[mountpath.Fsid] = int(u), int(u)
 	}
 	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
 	glog.Infoln(s)

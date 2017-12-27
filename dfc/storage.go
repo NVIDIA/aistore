@@ -55,7 +55,7 @@ func servhdlr(w http.ResponseWriter, r *http.Request) {
 			s := strings.SplitN(html.EscapeString(r.URL.Path), fslash, s3skipTokenToKey)
 			keyname := s[2]
 			mpath := doHashfindMountPath(bktname + fslash + keyname)
-			assert(len(mpath) > 0) // see mountpath.Usable
+			assert(len(mpath) > 0) // see mountpath.enabled
 
 			fname := mpath + fslash + bktname + fslash + keyname
 			// Check wheather filename exists in local directory or not
@@ -114,29 +114,29 @@ type storagerunner struct {
 func (r *storagerunner) run() error {
 	// FIXME cleanup: unreg is missing
 	if err := registerwithproxy(); err != nil {
-		glog.Errorf("Failed to register with proxy, err: %v", err)
+		glog.Fatalf("Failed to register with proxy, err: %v", err)
 		return err
 	}
 	// Local mount points have precedence over cachePath settings
 	var err error
 	if ctx.mountpaths, err = parseProcMounts(procMountsPath); err != nil {
-		glog.Errorf("Failed to parse mount points, err: %v", err)
+		glog.Fatalf("Failed to parse %s, err: %v", procMountsPath, err)
 		return err
 	}
 	if len(ctx.mountpaths) == 0 {
-		glog.Infof("Warning: configuring %d mount points for testing", ctx.config.Cache.CachePathCount)
+		glog.Infof("Warning: configuring %d mp-s for testing", ctx.config.Cache.CachePathCount)
 
 		// Use CachePath from config file if set
 		if ctx.config.Cache.CachePath == "" || ctx.config.Cache.CachePathCount < 1 {
-			errstr := fmt.Sprintf("Invalid configuration: CachePath %q or CachePathCount %d",
+			errstr := fmt.Sprintf("Invalid configuration: CachePath %q CachePathCount %d",
 				ctx.config.Cache.CachePath, ctx.config.Cache.CachePathCount)
 			glog.Error(errstr)
 			err := errors.New(errstr)
 			return err
 		}
-		ctx.mountpaths = populateCachepathMounts()
+		ctx.mountpaths = emulateCachepathMounts()
 	} else {
-		glog.Infof("Found %d mount points", len(ctx.mountpaths))
+		glog.Infof("Found %d mp-s", len(ctx.mountpaths))
 	}
 
 	// init mps in the stats
@@ -145,7 +145,7 @@ func (r *storagerunner) run() error {
 	// cloud provider
 	assert(ctx.config.CloudProvider == amazoncloud || ctx.config.CloudProvider == googlecloud)
 	if ctx.config.CloudProvider == amazoncloud {
-		// TODO do AWS initialization including sessions
+		// TODO: AWS initialization (sessions)
 		r.cloudif = &awsif{}
 
 	} else {
@@ -156,6 +156,6 @@ func (r *storagerunner) run() error {
 
 // stop gracefully
 func (r *storagerunner) stop(err error) {
-	glog.Infof("Stopping storagerunner, err: %v", err)
+	glog.Infof("Stopping %s, err: %v", r.name, err)
 	r.httprunner.stop(err)
 }

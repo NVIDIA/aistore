@@ -165,9 +165,8 @@ func registerwithproxy() (rerr error) {
 	u.Path = resource
 	urlStr := u.String()
 	if glog.V(3) {
-		glog.Infof("Proxy URL : %s \n ", urlStr)
+		glog.Infof("URL %q", urlStr)
 	}
-
 	req, err := http.NewRequest("POST", urlStr, bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		glog.Errorf("Error Occured. %+v", err)
