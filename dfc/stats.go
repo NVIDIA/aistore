@@ -105,7 +105,7 @@ func (r *storstatsrunner) log() {
 	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
 	glog.Infoln(s)
 
-	var runcheckfs bool
+	var runlru bool
 	fsmap := make(map[syscall.Fsid]int, len(ctx.mountpaths))
 	for _, mountpath := range ctx.mountpaths {
 		uu, ok := fsmap[mountpath.Fsid]
@@ -121,15 +121,15 @@ func (r *storstatsrunner) log() {
 		}
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
 		if u >= uint64(ctx.config.Cache.FSHighWaterMark) {
-			runcheckfs = true
+			runlru = true
 		}
 		r.used[mountpath.Path], fsmap[mountpath.Fsid] = int(u), int(u)
 	}
 	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
 	glog.Infoln(s)
 
-	if runcheckfs {
-		go checkfs()
+	if runlru {
+		go all_LRU()
 	}
 
 	// zero out all counters except err
