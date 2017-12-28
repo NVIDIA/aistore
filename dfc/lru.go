@@ -156,6 +156,15 @@ func do_LRU(toevict int64, mpath string) error {
 		atomic.AddInt64(&stats.bytesevicted, bevicted)
 		atomic.AddInt64(&stats.filesevicted, fevicted)
 	}
+	// final check
+	statfs := syscall.Statfs_t{}
+	if err := syscall.Statfs(mpath, &statfs); err == nil {
+		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
+		if u > uint64(ctx.config.Cache.FSLowWaterMark)+1 {
+			glog.Errorf("Failed to reach lwm %d for mpath %q: used %d%% rem-toevict %d",
+				ctx.config.Cache.FSLowWaterMark, mpath, u, toevict)
+		}
+	}
 	return nil
 }
 

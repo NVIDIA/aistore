@@ -8,7 +8,7 @@
 // 	low-watermark = current-usage - 5%
 //
 // Example run:
-// 	go test -v -run=fss -args -dir /tmp/eviction
+// 	go test -v -run=lru -args -dir /tmp/eviction
 //
 package dfc
 
@@ -30,8 +30,8 @@ func init() {
 	flag.Parse()
 }
 
-// e.g. run: go test -v -run=fss -args -dir /tmp/eviction
-func Test_fsscan(t *testing.T) {
+// e.g. run: go test -v -run=lru -args -dir /tmp/eviction
+func Test_lru(t *testing.T) {
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(dir, &statfs); err != nil {
 		t.Logf("Failed to statfs %q, err: %v", dir, err)
@@ -51,7 +51,7 @@ func Test_fsscan(t *testing.T) {
 
 	fschkwg := &sync.WaitGroup{}
 	fschkwg.Add(1)
-	fsscan(dir, fschkwg)
+	one_LRU(dir, fschkwg)
 
 	// check results
 	statfs = syscall.Statfs_t{}
