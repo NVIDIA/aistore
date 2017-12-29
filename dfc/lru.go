@@ -25,10 +25,17 @@ type fileinfo struct {
 	index   int
 }
 
+type lructx struct {
+	cursize int64
+	totsize int64
+	newest  time.Time
+}
+
 type maxheap []*fileinfo
 
 // vars
 var maxheapmap = make(map[string]*maxheap)
+var lructxmap = make(map[string]*lructx)
 var lrucas int64
 
 // FIXME: mountpath.enabled is never used
@@ -80,11 +87,16 @@ func one_LRU(mpath string, fschkwg *sync.WaitGroup) error {
 	}
 	lwmblocks := blocks * uint64(lwm) / 100
 	toevict := int64(used-lwmblocks) * bsize
+
+	// init LRU context
+	lructxmap[mpath] = &lructx{totsize: toevict}
+	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
+
 	if err := filepath.Walk(mpath, walkfunc); err != nil {
 		glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		return err
 	}
-	defer func() { maxheapmap[mpath] = &maxheap{} }() // GC
+
 	if err := do_LRU(toevict, mpath); err != nil {
 		glog.Errorf("Error do_LRU mpath %q, err: %v", mpath, err)
 		return err
@@ -114,42 +126,66 @@ func walkfunc(fqn string, osfi os.FileInfo, err error) error {
 	if usetime.After(dontevictime) {
 		return nil
 	}
-	var h *maxheap
+	var (
+		h *maxheap
+		c *lructx
+	)
 	for mpath, hh := range maxheapmap {
 		rel, err := filepath.Rel(mpath, fqn)
 		if err == nil && !strings.HasPrefix(rel, "../") {
 			h = hh
+			c = lructxmap[mpath]
 			break
 		}
 	}
-	assert(h != nil)
+	assert(h != nil && c != nil)
+	// partial optimization:
+	// 	do nothing if the heap's cursize >= totsize &&
+	// 	the file is more recent then the the heap's newest
+	// full optimization (tbd) entails compacting the heap when its cursize >> totsize
+	if c.cursize >= c.totsize && usetime.After(c.newest) {
+		return nil
+	}
+	// push and update the context
 	fi := &fileinfo{
 		fqn:     fqn,
 		usetime: usetime,
 		size:    stat.Size,
 	}
 	heap.Push(h, fi)
+	c.cursize += fi.size
+	if usetime.After(c.newest) {
+		c.newest = usetime
+	}
 	return nil
 }
 
 func do_LRU(toevict int64, mpath string) error {
 	h := maxheapmap[mpath]
-	var fevicted, bevicted int64
-	decusetime := time.Now()
+	var (
+		fevicted, bevicted int64
+		cnt                int
+	)
 	for h.Len() > 0 && toevict > 10 {
 		fi := heap.Pop(h).(*fileinfo)
-		assert(!decusetime.Before(fi.usetime))
-		decusetime = fi.usetime
 		if err := os.Remove(fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}
-		if glog.V(3) {
-			glog.Infof("Evicted %q (toevict %d)", fi.fqn, toevict)
-		}
 		toevict -= fi.size
 		bevicted += fi.size
 		fevicted++
+		cnt++
+		if cnt >= 10 { // check the space every so often to avoid overshooting
+			cnt = 0
+			statfs := syscall.Statfs_t{}
+			if err := syscall.Statfs(mpath, &statfs); err == nil {
+				u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
+				if u <= uint64(ctx.config.Cache.FSLowWaterMark)+1 {
+					break
+				}
+			}
+		}
 	}
 	if ctx.rg != nil { // FIXME: for *_test only
 		stats := getstorstats()
@@ -176,7 +212,7 @@ func do_LRU(toevict int64, mpath string) error {
 func (mh maxheap) Len() int { return len(mh) }
 
 func (mh maxheap) Less(i, j int) bool {
-	return mh[i].usetime.After(mh[j].usetime)
+	return mh[i].usetime.Before(mh[j].usetime)
 }
 
 func (mh maxheap) Swap(i, j int) {
