@@ -102,9 +102,15 @@ func (r *storstatsrunner) log() {
 	if r.stats.numget == 0 && r.stats.bytesloaded == 0 && r.stats.bytesevicted == 0 {
 		return
 	}
-	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
+	// 1. format and log Get stats
+	mbytesloaded := float64(r.stats.bytesloaded) / 1000 / 1000
+	mbytesevicted := float64(r.stats.bytesevicted) / 1000 / 1000
+	s := fmt.Sprintf("%s: numget,%d,numcoldget,%d,mbytesloaded,%.2f,mbytesevicted,%.2f,filesevicted,%d,numerr,%d",
+		r.name, r.stats.numget, r.stats.numcoldget,
+		mbytesloaded, mbytesevicted, r.stats.filesevicted, r.stats.numerr)
 	glog.Infoln(s)
 
+	// 2. assign usage %%
 	var runlru bool
 	fsmap := make(map[syscall.Fsid]int, len(ctx.mountpaths))
 	for _, mountpath := range ctx.mountpaths {
@@ -125,14 +131,17 @@ func (r *storstatsrunner) log() {
 		}
 		r.used[mountpath.Path], fsmap[mountpath.Fsid] = int(u), int(u)
 	}
+
+	// 3. format and log usage %%
 	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
 	glog.Infoln(s)
 
+	// 4. LRU
 	if runlru {
 		go all_LRU()
 	}
 
-	// zero out all counters except err
+	// 5. zero out all counters except err
 	numerr := r.stats.numerr
 	clearStruct(&r.stats)
 	r.stats.numerr = numerr

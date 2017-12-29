@@ -102,13 +102,15 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	} else {
 		glog.Infof("Created file %q", fname)
 	}
-	_, err = io.Copy(file, rc)
+	bytes, err := io.Copy(file, rc)
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fname, err)
 		webinterror(w, errstr)
-		return
+		// FIXME: checksetmounterror() - see aws.go
+	} else {
+		stats := getstorstats()
+		atomic.AddInt64(&stats.bytesloaded, bytes)
 	}
-	return
 }
 
 func webinterror(w http.ResponseWriter, errstr string) {
