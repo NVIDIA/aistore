@@ -7,18 +7,13 @@ package dfc
 import (
 	"hash/crc32"
 	"math"
-
-	"github.com/golang/glog"
 )
 
-// It will do hash on Normalized Path +Port+ ID and will pick storage server with Max Hash value.
+// doHashfindMountPath does a (variant of) consistent hash and picks a storage target
 func doHashfindServer(url string) string {
 	var sid string
 	var max uint32
 	for _, smap := range ctx.smap {
-		if glog.V(3) {
-			glog.Infof("Id = %s Port = %s \n", smap.id, smap.port)
-		}
 		cs := crc32.Checksum([]byte(url+smap.id+smap.port), crc32.IEEETable)
 		if cs > max {
 			max = cs
@@ -39,9 +34,6 @@ func doHashfindMountPath(key string) (mpath string) {
 	for _, mountpath := range ctx.mountpaths {
 		if !mountpath.enabled {
 			continue
-		}
-		if glog.V(3) {
-			glog.Infof("mpath %q key %s", mountpath.Path, key)
 		}
 		cs := crc32.Checksum([]byte(key+mountpath.Path), crc32.IEEETable)
 		if cs < min {

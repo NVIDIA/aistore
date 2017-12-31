@@ -112,7 +112,7 @@ do
 EOL
 done
 
-# run proxy and storage daemons
+# run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
 		CONFFILE=$CONFPATH$c.json
@@ -125,7 +125,7 @@ do
 				sleep 2
 		else
 				set -x
-				go run setup/dfc.go -configfile=$CONFFILE -role=storage $1 $2 &
+				go run setup/dfc.go -configfile=$CONFFILE -role=target $1 $2 &
 				{ set +x; } 2>/dev/null
 		fi
 done

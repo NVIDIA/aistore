@@ -1,15 +1,13 @@
 SHELL := /bin/bash
-# The name of the executable (default is current directory name)
+# The name of the executable (defaults to the current directory)
 TARGET := $(shell echo $${PWD\#\#*/})
 
 #$(info TARGET is $(TARGET))
 .DEFAULT_GOAL: $(TARGET)
 
-# These will be provided to the target
+# Build version and flags
 VERSION := 1.0.0
 BUILD := `git rev-parse HEAD`
-
-# Use linker flags to provide version/build settings to the target
 LDFLAGS=-ldflags "-X=dfc.Version=$(VERSION) -X=dfc.Build=$(BUILD)"
 
 # go source files, ignore vendor directory

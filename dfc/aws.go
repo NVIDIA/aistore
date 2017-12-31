@@ -36,14 +36,13 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) {
 		// It will print keys but not metadata of keys.
 		// Getting metadata of indiviual key is separate operation/call and
 		// need to be done on per object basis.
-		keystr := fmt.Sprintf("%s \n", *key.Key)
-		fmt.Fprintf(w, keystr)
+		keystr := fmt.Sprintf("%s", *key.Key)
+		fmt.Fprintln(w, keystr)
 	}
-	return
 }
 
 func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, keyname string) {
-	fname := mpath + fslash + bktname + fslash + keyname
+	fname := mpath + "/" + bktname + "/" + keyname
 	sess := createsession()
 	// Create S3 Downloader
 	// TODO: Optimize downloader options
@@ -69,7 +68,7 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 	var err error
 	var bytes int64
 
-	fname := mpath + fslash + bucket + fslash + kname
+	fname := mpath + "/" + bucket + "/" + kname
 	// strips the last part from filepath
 	dirname := filepath.Dir(fname)
 	_, err = os.Stat(dirname)

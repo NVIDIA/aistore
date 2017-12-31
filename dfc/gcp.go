@@ -52,12 +52,11 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) {
 		}
 		fmt.Fprintln(w, attrs.Name)
 	}
-	return
 }
 
 // FIXME: missing error processing
 func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) {
-	fname := mpath + fslash + bktname + fslash + objname
+	fname := mpath + "/" + bktname + "/" + objname
 
 	projid := getProjID()
 	if projid == "" {

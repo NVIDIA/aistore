@@ -14,8 +14,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// mountPath encapsulates mount specific information on the local DFC node
-// Can only be used if enabled (below) is set to true AND and upon verifying the signature file
+// FIXME: mountPath encapsulates mount specific information on a local node (remove)
 type mountPath struct {
 	Device  string
 	Path    string

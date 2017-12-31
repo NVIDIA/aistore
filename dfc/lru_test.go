@@ -61,7 +61,7 @@ func Test_lru(t *testing.T) {
 	}
 	usedpct = (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
 	if usedpct < lwm-1 || usedpct > lwm+1 {
-		t.Errorf("Failed to reach lwm %d%% target, post eviction used %d%%", lwm, usedpct)
+		t.Errorf("Failed to reach lwm %d%%, post eviction used %d%%", lwm, usedpct)
 	} else {
 		t.Logf("Post-eviction: used %d%%, lwm %d%%, hwm %d%%", usedpct, lwm, hwm)
 	}

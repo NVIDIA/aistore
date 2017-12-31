@@ -36,7 +36,7 @@ func Test_thirty(t *testing.T) {
 
 func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool) {
 	defer wg.Done()
-	url := "http://localhost:" + "8080" + remroot + keyname
+	url := "http://localhost:" + "8080" + "/v1/files/" + remroot + keyname
 	fname := "/tmp" + locroot + keyname
 	dirname := filepath.Dir(fname)
 	_, err := os.Stat(dirname)
@@ -44,26 +44,26 @@ func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool) 
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
-				t.Errorf("Failed to create bucket dir %q err: %v", dirname, err)
+				t.Errorf("Failed to create bucket dir %q, err: %v", dirname, err)
 				return
 			}
 		} else {
-			t.Errorf("Failed to fstat, dir = %s err = %q \n", dirname, err)
+			t.Errorf("Failed to fstat, dir %q, err: %v", dirname, err)
 			return
 		}
 	}
 	file, err := os.Create(fname)
 	if err != nil {
-		t.Errorf("Unable to create file = %s err = %v", fname, err)
+		t.Errorf("Unable to create file %q, err: %v", fname, err)
 		return
 	}
-	t.Logf("URL = %s \n", url)
+	t.Logf("GET %q", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			t.Fatalf("http connection refused - terminating")
 		}
-		t.Errorf("Failed to get key %s err: %v", keyname, err)
+		t.Errorf("Failed to get key %s, err: %v", keyname, err)
 	}
 	if resp == nil {
 		return
@@ -73,14 +73,14 @@ func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool) 
 	if copy {
 		numBytesWritten, err := io.Copy(file, resp.Body)
 		if err != nil {
-			t.Errorf("Failed to write to file err: %v", err)
+			t.Errorf("Failed to write to file, err: %v", err)
 			return
 		}
 		t.Logf("Downloaded and copied %q size %d", fname, numBytesWritten)
 	} else {
 		_, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			t.Errorf("Failed to read http response %v", err)
+			t.Errorf("Failed to read http response, err: %v", err)
 			return
 		}
 		t.Logf("Downloaded %q", fname)
@@ -99,14 +99,14 @@ func Benchmark_one(b *testing.B) {
 
 func get(keyname string, b *testing.B, wg *sync.WaitGroup) {
 	defer wg.Done()
-	url := "http://localhost:" + "8080" + remroot + keyname
+	url := "http://localhost:" + "8080" + "/v1/files/" + remroot + keyname
 	resp, err := http.Get(url)
 	if err != nil {
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			fmt.Println("http connection refused - terminating")
 			os.Exit(1)
 		}
-		fmt.Printf("Failed to get key %s err: %v", keyname, err)
+		fmt.Printf("Failed to get key %s, err: %v", keyname, err)
 	}
 	if resp == nil {
 		return
@@ -115,40 +115,39 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup) {
 	resp.Body.Close()
 }
 func Test_list(t *testing.T) {
-	bktname := remroot
 	// false: read the response and drop it, true: write it to a file
-	listAndCopyTmp(bktname, t, true)
+	listAndCopyTmp(t, true)
 }
 
-func listAndCopyTmp(bktname string, t *testing.T, copy bool) {
-	url := "http://localhost:" + "8080" + bktname
-	fname := "/tmp" + locroot + bktname
+func listAndCopyTmp(t *testing.T, copy bool) {
+	url := "http://localhost:" + "8080" + "/v1/files/" + remroot
+	fname := "/tmp" + locroot + remroot
 	dirname := filepath.Dir(fname)
 	_, err := os.Stat(dirname)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
-				t.Errorf("Failed to create bucket dir %q err: %v", dirname, err)
+				t.Errorf("Failed to create bucket dir %q, err: %v", dirname, err)
 				return
 			}
 		} else {
-			t.Errorf("Failed to fstat, dir %q err: %v", dirname, err)
+			t.Errorf("Failed to fstat, dir %q, err: %v", dirname, err)
 			return
 		}
 	}
 	file, err := os.Create(fname)
 	if err != nil {
-		t.Errorf("Unable to create file %q err: %v", fname, err)
+		t.Errorf("Unable to create file %q, err: %v", fname, err)
 		return
 	}
-	t.Logf("URL = %s \n", url)
+	t.Logf("GET %q", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			t.Fatalf("http connection refused - terminating")
 		}
-		t.Errorf("Failed to get bucket %s list err: %v", bktname, err)
+		t.Errorf("Failed to list bucket %s, err: %v", remroot, err)
 	}
 	if resp == nil {
 		return
@@ -158,14 +157,14 @@ func listAndCopyTmp(bktname string, t *testing.T, copy bool) {
 	if copy {
 		numBytesWritten, err := io.Copy(file, resp.Body)
 		if err != nil {
-			t.Errorf("Failed to write to file err: %v", err)
+			t.Errorf("Failed to write file, err: %v", err)
 			return
 		}
 		t.Logf("Got bucket list and copied %q size %d", fname, numBytesWritten)
 	} else {
 		_, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			t.Errorf("Failed to read http response %v", err)
+			t.Errorf("Failed to read http response, err: %v", err)
 			return
 		}
 		t.Logf("Got bucket list %q", fname)

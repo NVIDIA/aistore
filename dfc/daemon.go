@@ -13,9 +13,10 @@ import (
 	"github.com/golang/glog"
 )
 
+// runners
 const (
 	xproxy      = "proxy"
-	xstorage    = "storage"
+	xtarget     = "target"
 	xsignal     = "signal"
 	xproxystats = "proxystats"
 	xstorstats  = "storstats"
@@ -33,9 +34,9 @@ var ctx = &daemon{}
 // types
 //
 //====================
-// DFC instance: proxy or storage server
+// daemon instance: proxy or storage target
 type daemon struct {
-	smap       map[string]serverinfo // registered storage servers (proxy only)
+	smap       map[string]serverinfo // registered storage targets (proxy only)
 	config     dfconfig              // Configuration
 	mountpaths []mountPath           //
 	rg         *rungroup
@@ -141,22 +142,22 @@ func dfcinit() {
 		loglevel  string
 		statstime time.Duration
 	)
-	flag.StringVar(&role, "role", "", "role: proxy OR storage")
+	flag.StringVar(&role, "role", "", "role: proxy OR target")
 	flag.StringVar(&conffile, "configfile", "", "config filename")
 	flag.StringVar(&loglevel, "loglevel", "", "glog loglevel")
 	flag.DurationVar(&statstime, "statstime", 0, "http and capacity utilization statistics log interval")
 
 	flag.Parse()
 	if conffile == "" {
-		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|storage> -configfile=<somefile.json> [-statstime=<duration>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|target> -configfile=<somefile.json> [-statstime=<duration>]\n")
 		os.Exit(2)
 	}
-	assert(role == xproxy || role == xstorage, "Invalid flag: role="+role)
+	assert(role == xproxy || role == xtarget, "Invalid flag: role="+role)
 	err := initconfigparam(conffile, loglevel, role, statstime)
 	if err != nil {
 		glog.Fatalf("Failed to initialize, config %q, err: %v", conffile, err)
 	}
-	assert(role == xproxy || role == xstorage, "Invalid configuration: role="+role)
+	assert(role == xproxy || role == xtarget, "Invalid configuration: role="+role)
 
 	// init daemon
 	ctx.rg = &rungroup{
@@ -168,7 +169,7 @@ func dfcinit() {
 		ctx.rg.add(&proxyrunner{}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 	} else {
-		ctx.rg.add(&storagerunner{}, xstorage)
+		ctx.rg.add(&targetrunner{}, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
@@ -231,8 +232,8 @@ func getusedstats() usedstats {
 }
 
 func getcloudif() cinterface {
-	r := ctx.rg.runmap[xstorage]
-	rr, ok := r.(*storagerunner)
+	r := ctx.rg.runmap[xtarget]
+	rr, ok := r.(*targetrunner)
 	assert(ok)
 	return rr.cloudif
 }

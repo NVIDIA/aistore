@@ -15,11 +15,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// dfconfig structure specifies Configuration Parameters for DFC Instance
-// (Proxy Client or Storage Server) in JSON format.
-// Config Parameters are specified during DFC service instantiation.
-//  These Parameter overrides default paramemters.
-// TODO Get and Set Config Parameter functionality/interface(s).
+// dfconfig specifies common daemon's configuration structure in JSON format.
 type dfconfig struct {
 	ID            string        `json:"id"`
 	Logdir        string        `json:"logdir"`
@@ -88,8 +84,7 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 			glog.Errorf("Failed to create cachedir %q, err: %v", mpath, err)
 			return err
 		}
-		// Create DFC signature file
-
+		// FIXME: signature file - must be removed
 		dfile := mpath + dfcSignatureFileName
 		// Always write signature file, We may want data to have some instance specific
 		// timing or stateful information.
