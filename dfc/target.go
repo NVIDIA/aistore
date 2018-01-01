@@ -30,8 +30,8 @@ type gcpif struct {
 }
 
 type cinterface interface {
-	listbucket(http.ResponseWriter, string)
-	getobj(http.ResponseWriter, string, string, string)
+	listbucket(http.ResponseWriter, string) error
+	getobj(http.ResponseWriter, string, string, string) error
 }
 
 // storhdlr implements the target's REST API. It checks wheather the key exists locally,
@@ -70,7 +70,9 @@ func storhdlr(w http.ResponseWriter, r *http.Request) {
 	if os.IsNotExist(err) {
 		atomic.AddInt64(&stats.numcoldget, 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
-		getcloudif().getobj(w, mpath, bktname, keyname)
+		if err = getcloudif().getobj(w, mpath, bktname, keyname); err != nil {
+			return
+		}
 	} else if glog.V(2) {
 		glog.Infof("Bucket %s key %s fqn %q is cached", bktname, keyname, fname)
 	}

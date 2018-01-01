@@ -6,8 +6,10 @@ package dfc
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/golang/glog"
 )
@@ -43,6 +45,7 @@ func checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n in
 	return true
 }
 
+// FIXME: revisit the following 3 methods, and make consistent
 func invalhdlr(w http.ResponseWriter, r *http.Request) {
 	s := errmsgRestApi(http.StatusText(http.StatusBadRequest), r)
 	glog.Errorln(s)
@@ -52,6 +55,16 @@ func invalhdlr(w http.ResponseWriter, r *http.Request) {
 func errmsgRestApi(s string, r *http.Request) string {
 	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
 	return s
+}
+
+// FIXME: http.StatusInternalServerError - here and elsewehere
+// FIXME: numerr - differentiate
+func webinterror(w http.ResponseWriter, errstr string) error {
+	glog.Errorln(errstr)
+	http.Error(w, errstr, http.StatusInternalServerError)
+	stats := getstorstats()
+	atomic.AddInt64(&stats.numerr, 1)
+	return errors.New(errstr)
 }
 
 //===========================================================================

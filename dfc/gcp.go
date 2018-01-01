@@ -5,7 +5,6 @@
 package dfc
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,20 +18,19 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func getProjID() string {
+func getProjID() (string, string) {
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		glog.Errorf("Failed to get ProjectID from GCP")
+		return "", "Failed to get ProjectID from GCP"
 	}
-	return projectID
+	return projectID, ""
 }
 
-func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) {
-	glog.Infof(" listbucket : bucket = %s ", bucket)
-	projid := getProjID()
+func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
+	glog.Infof("listbucket %s", bucket)
+	projid, errstr := getProjID()
 	if projid == "" {
-		webinterror(w, "Failed to get Project ID from GCP ")
-		return
+		return webinterror(w, errstr)
 	}
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
@@ -47,21 +45,20 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) {
 		}
 		if err != nil {
 			errstr := fmt.Sprintf("Failed to get bucket objects, err: %v", err)
-			webinterror(w, errstr)
-			return
+			return webinterror(w, errstr)
 		}
 		fmt.Fprintln(w, attrs.Name)
 	}
+	return nil
 }
 
-// FIXME: missing error processing
-func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) {
+// FIXME: revisit error processing
+func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) error {
 	fname := mpath + "/" + bktname + "/" + objname
 
-	projid := getProjID()
+	projid, errstr := getProjID()
 	if projid == "" {
-		glog.Errorf("Failed to get Project ID from GCP")
-		return
+		return webinterror(w, errstr)
 	}
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
@@ -71,8 +68,7 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	rc, err := client.Bucket(bktname).Object(objname).NewReader(ctx)
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fname, err)
-		webinterror(w, errstr)
-		return
+		return webinterror(w, errstr)
 	}
 	defer rc.Close()
 	// strips the last part from filepath
@@ -84,38 +80,28 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
 				errstr := fmt.Sprintf("Failed to create bucket dir %q, err: %v", dirname, err)
-				webinterror(w, errstr)
-				return
+				return webinterror(w, errstr)
 			}
 		} else {
 			errstr := fmt.Sprintf("Failed to fstat dir %q, err: %v", dirname, err)
-			webinterror(w, errstr)
-			return
+			return webinterror(w, errstr)
 		}
 	}
 	file, err := os.Create(fname)
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fname, err)
-		webinterror(w, errstr)
-		return
+		return webinterror(w, errstr)
 	} else {
 		glog.Infof("Created file %q", fname)
 	}
 	bytes, err := io.Copy(file, rc)
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fname, err)
-		webinterror(w, errstr)
+		return webinterror(w, errstr)
 		// FIXME: checksetmounterror() - see aws.go
-	} else {
-		stats := getstorstats()
-		atomic.AddInt64(&stats.bytesloaded, bytes)
 	}
-}
 
-func webinterror(w http.ResponseWriter, errstr string) {
-	glog.Error(errstr)
-	err := errors.New(errstr)
-	http.Error(w, err.Error(), http.StatusInternalServerError)
 	stats := getstorstats()
-	atomic.AddInt64(&stats.numerr, 1)
+	atomic.AddInt64(&stats.bytesloaded, bytes)
+	return nil
 }

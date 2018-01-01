@@ -24,40 +24,38 @@ func createsession() *session.Session {
 		SharedConfigState: session.SharedConfigEnable}))
 
 }
-func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) {
+func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 	glog.Infof(" listbucket : bucket = %s ", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
-	resp, _ := svc.ListObjects(params)
+	resp, err := svc.ListObjects(params)
+	if err != nil {
+		return webinterror(w, err.Error())
+	}
+	// TODO: reimplement in JSON
 	for _, key := range resp.Contents {
-		glog.Infof(" bucket = %s key = %s", bucket, *key.Key)
-		// TODO modifiy response format to JSON or as per application needs.
-		// It will print keys but not metadata of keys.
-		// Getting metadata of indiviual key is separate operation/call and
-		// need to be done on per object basis.
+		glog.Infof("bucket = %s key = %s", bucket, *key.Key)
 		keystr := fmt.Sprintf("%s", *key.Key)
 		fmt.Fprintln(w, keystr)
 	}
+	return nil
 }
 
-func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, keyname string) {
+func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, keyname string) error {
 	fname := mpath + "/" + bktname + "/" + keyname
 	sess := createsession()
-	// Create S3 Downloader
-	// TODO: Optimize downloader options
-	// (currently: 5MB chunks and 5 concurrent downloads)
+	//
+	// TODO: Optimize downloader options (currently 5MB chunks and 5 concurrent downloads)
+	//
 	downloader := s3manager.NewDownloader(sess)
 
 	err := downloadobject(w, downloader, mpath, bktname, keyname)
 	if err != nil {
-		stats := getstorstats()
-		atomic.AddInt64(&stats.numerr, 1)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	} else {
-		glog.Infof("Downloaded bucket %s key %s fqn %q", bktname, keyname, fname)
+		return webinterror(w, err.Error())
 	}
-	return
+	glog.Infof("Downloaded bucket %s key %s fqn %q", bktname, keyname, fname)
+	return nil
 }
 
 // This function download S3 object into local file.
@@ -99,9 +97,9 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 	if err != nil {
 		glog.Errorf("Failed to download key %s from bucket %s, err: %v", kname, bucket, err)
 		checksetmounterror(fname)
-	} else {
-		stats := getstorstats()
-		atomic.AddInt64(&stats.bytesloaded, bytes)
+		return err
 	}
-	return err
+	stats := getstorstats()
+	atomic.AddInt64(&stats.bytesloaded, bytes)
+	return nil
 }

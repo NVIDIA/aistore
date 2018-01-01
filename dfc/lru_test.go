@@ -23,15 +23,14 @@ var dir string
 
 func init() {
 	flag.StringVar(&dir, "dir", "/tmp/eviction", "directory to evict")
-
 	flag.Lookup("log_dir").Value.Set("/tmp")
 	flag.Lookup("v").Value.Set("4")
-
-	flag.Parse()
 }
 
 // e.g. run: go test -v -run=lru -args -dir /tmp/eviction
 func Test_lru(t *testing.T) {
+	flag.Parse()
+
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(dir, &statfs); err != nil {
 		t.Logf("Failed to statfs %q, err: %v", dir, err)
