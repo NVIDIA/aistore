@@ -5,6 +5,7 @@
 package dfc_test
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -27,7 +29,9 @@ import (
 // # go test -v -run=xxx -bench . -count 10
 
 const (
-	locroot = "/iocopy"
+	LocalRootDir = "/tmp/iocopy"           // client-side download destination
+	ProxyURL     = "http://localhost:8080" // assuming local proxy is listening on 8080
+	RestAPIGet   = ProxyURL + "/v1/files"  // version = 1, resource = files
 )
 
 var (
@@ -36,18 +40,50 @@ var (
 )
 
 func init() {
-	flag.StringVar(&bucket, "bucket", "/shri-new", "AWS or GCP bucket")
+	flag.StringVar(&bucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 }
 
 func Test_download(t *testing.T) {
 	flag.Parse()
 
+	url := RestAPIGet + "/" + bucket
+	t.Logf("LIST %q", url)
+	r, err := http.Get(url)
+	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
+		return
+	}
+	reader := bufio.NewReader(r.Body)
+	var wg = &sync.WaitGroup{}
+	errch := make(chan error, 100)
+	for i := 0; i < numfiles; i++ {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			break
+		}
+		wg.Add(1)
+		keyname := strings.TrimSuffix(string(line), "\n")
+		// false: read the response and drop it, true: write it to a file
+		go getAndCopyTmp(keyname, t, wg, true, errch)
+	}
+	wg.Wait()
+	select {
+	case <-errch:
+		t.Fail()
+	default:
+	}
+}
+
+// NOTE: this test assumes the files in the AWS or GCP bucket are named
+//       in a certain special way - see keyname below
+func Test_shri(t *testing.T) {
+	flag.Parse()
+
 	var wg = &sync.WaitGroup{}
 	errch := make(chan error, 100)
 	for i := 0; i < numfiles; i++ {
 		wg.Add(1)
-		keyname := "/dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
+		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		// false: read the response and drop it, true: write it to a file
 		go getAndCopyTmp(keyname, t, wg, true, errch)
 	}
@@ -61,12 +97,31 @@ func Test_download(t *testing.T) {
 
 func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool, errch chan error) {
 	defer wg.Done()
+	url := RestAPIGet + "/" + bucket + "/" + keyname
+	t.Logf("GET %q", url)
+	r, err := http.Get(url)
+	if testfail(err, fmt.Sprintf("get key %s from bucket %s", keyname, bucket), r, errch, t) {
+		return
+	}
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
+	if !copy {
+		_, err = ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("Failed to read http response, err: %v", err)
+			return
+		}
+		t.Logf("Downloaded %q", url)
+		return
+	}
 
-	url := "http://localhost:" + "8080" + "/v1/files/" + bucket + keyname
-	fname := "/tmp" + locroot + keyname
+	// alternatively, create local copy
+	fname := LocalRootDir + "/" + keyname
 	dirname := filepath.Dir(fname)
-	_, err := os.Stat(dirname)
-	if err != nil {
+	if _, err := os.Stat(dirname); err != nil {
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
@@ -83,31 +138,15 @@ func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool, 
 		t.Errorf("Unable to create file %q, err: %v", fname, err)
 		return
 	}
-	t.Logf("GET %q", url)
-	resp, err := http.Get(url)
-	if testfail(err, fmt.Sprintf("get key %s from bucket %s", keyname, bucket), resp.StatusCode, errch, t) {
+	numBytesWritten, err := io.Copy(file, r.Body)
+	if err != nil {
+		t.Errorf("Failed to write to file, err: %v", err)
 		return
 	}
-	//
-	defer resp.Body.Close()
-	if copy {
-		numBytesWritten, err := io.Copy(file, resp.Body)
-		if err != nil {
-			t.Errorf("Failed to write to file, err: %v", err)
-			return
-		}
-		t.Logf("Downloaded and copied %q size %d", fname, numBytesWritten)
-	} else {
-		_, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Errorf("Failed to read http response, err: %v", err)
-			return
-		}
-		t.Logf("Downloaded %q", fname)
-	}
+	t.Logf("Downloaded and copied %q size %d", fname, numBytesWritten)
 }
 
-func testfail(err error, str string, httpstatus int, errch chan error, t *testing.T) bool {
+func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
 	if err != nil {
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			t.Fatalf("http connection refused - terminating")
@@ -119,8 +158,8 @@ func testfail(err error, str string, httpstatus int, errch chan error, t *testin
 		}
 		return true
 	}
-	if httpstatus >= http.StatusBadRequest {
-		s := fmt.Sprintf("Failed %s, http status %d", str, httpstatus)
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		s := fmt.Sprintf("Failed %s, http status %d", str, r.StatusCode)
 		t.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
@@ -135,7 +174,7 @@ func Benchmark_one(b *testing.B) {
 	errch := make(chan error, 100)
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		keyname := "/dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
+		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		go get(keyname, b, wg, errch)
 	}
 	wg.Wait()
@@ -148,32 +187,65 @@ func Benchmark_one(b *testing.B) {
 
 func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error) {
 	defer wg.Done()
-	url := "http://localhost:" + "8080" + "/v1/files/" + bucket + keyname
-	resp, err := http.Get(url)
-	if resp.StatusCode >= http.StatusBadRequest || err != nil {
-		s := fmt.Sprintf("Failed to get key %s from bucket %s, http status %d", keyname, bucket, resp.StatusCode)
+	url := RestAPIGet + "/" + bucket + "/" + keyname
+	r, err := http.Get(url)
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		s := fmt.Sprintf("Failed to get key %s from bucket %s, http status %d", keyname, bucket, r.StatusCode)
 		b.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
 		}
 		return
 	}
-
-	ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
+	if err != nil {
+		b.Error(err.Error())
+		if errch != nil {
+			errch <- err
+		}
+		return
+	}
+	ioutil.ReadAll(r.Body)
 }
 
 func Test_list(t *testing.T) {
 	flag.Parse()
-	listAndCopyTmp(t, true) // false: read the response and drop it; true: write to file
+	listAndCopyTmp(t, false) // false: read the response and drop it; true: write to file
 }
 
 func listAndCopyTmp(t *testing.T, copy bool) {
-	url := "http://localhost:" + "8080" + "/v1/files/" + bucket
-	fname := "/tmp" + locroot + bucket
+	url := RestAPIGet + "/" + bucket
+	t.Logf("LIST %q", url)
+	r, err := http.Get(url)
+	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
+		return
+	}
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
+
+	if !copy {
+		reader := bufio.NewReader(r.Body)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				break
+			}
+			fmt.Fprintf(os.Stdout, string(line))
+		}
+		return
+	}
+
+	// alternatively, create local copy
+	fname := LocalRootDir + "/" + bucket
 	dirname := filepath.Dir(fname)
-	_, err := os.Stat(dirname)
-	if err != nil {
+	if _, err := os.Stat(dirname); err != nil {
 		if os.IsNotExist(err) {
 			err = os.MkdirAll(dirname, 0755)
 			if err != nil {
@@ -190,26 +262,10 @@ func listAndCopyTmp(t *testing.T, copy bool) {
 		t.Errorf("Unable to create file %q, err: %v", fname, err)
 		return
 	}
-	t.Logf("GET %q", url)
-	resp, err := http.Get(url)
-	if testfail(err, fmt.Sprintf("list bucket %s", bucket), resp.StatusCode, nil, t) {
+	numBytesWritten, err := io.Copy(file, r.Body)
+	if err != nil {
+		t.Errorf("Failed to write file, err: %v", err)
 		return
 	}
-
-	defer resp.Body.Close()
-	if copy {
-		numBytesWritten, err := io.Copy(file, resp.Body)
-		if err != nil {
-			t.Errorf("Failed to write file, err: %v", err)
-			return
-		}
-		t.Logf("Got bucket list and copied %q size %d", fname, numBytesWritten)
-	} else {
-		_, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Errorf("Failed to read http response, err: %v", err)
-			return
-		}
-		t.Logf("Got bucket list %q", fname)
-	}
+	t.Logf("Got bucket list and copied %q size %d", fname, numBytesWritten)
 }
