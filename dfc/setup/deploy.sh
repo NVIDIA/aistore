@@ -25,7 +25,7 @@ DIRPATH="/tmp/nvidia/"
 # Verbosity: 0 (minimal) to 4 (max)
 LOGLEVEL="3"
 LOGDIR="/log"
-CONFPATH="/etc/dfconf"
+CONFPATH="$HOME/.dfc"
 INSTANCEPREFIX="dfc"
 MAXCONCURRENTDOWNLOAD=64
 MAXCONCURRENTUPLOAD=64
@@ -72,13 +72,14 @@ let "STATSTIMESEC=$STATSTIMESEC*10**9"
 let "HTTPTIMEOUTSEC=$HTTPTIMEOUTSEC*10**9"
 let "DONTEVICTIMESEC=$DONTEVICTIMESEC*10**9"
 	
+mkdir -p $CONFPATH
 
 for (( c=$START; c<=$END; c++ ))
 do
 	ID=$(expr $ID + 1)
 	PORT=$(expr $PORT + 1)
-	CURINSTANCE=$INSTANCEPREFIX$c
-	CONFFILE=$CONFPATH$c.json
+	CURINSTANCE="$INSTANCEPREFIX$c"
+	CONFFILE="$CONFPATH/$CURINSTANCE.json"
 	cat > $CONFFILE <<EOL
 	{
 		"id": 				"${ID}",
@@ -115,19 +116,20 @@ done
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
-		CONFFILE=$CONFPATH$c.json
-		if [ $c -eq 0 ]
-		then
-				set -x
-				go run setup/dfc.go -configfile=$CONFFILE -role=proxy $1 $2 &
-				{ set +x; } 2>/dev/null
-				# wait for the proxy to start up
-				sleep 2
-		else
-				set -x
-				go run setup/dfc.go -configfile=$CONFFILE -role=target $1 $2 &
-				{ set +x; } 2>/dev/null
-		fi
+	CURINSTANCE="$INSTANCEPREFIX$c"
+	CONFFILE="$CONFPATH/$CURINSTANCE.json"
+	if [ $c -eq 0 ]
+	then
+			set -x
+			go run setup/dfc.go -configfile=$CONFFILE -role=proxy $1 $2 &
+			{ set +x; } 2>/dev/null
+			# wait for the proxy to start up
+			sleep 2
+	else
+			set -x
+			go run setup/dfc.go -configfile=$CONFFILE -role=target $1 $2 &
+			{ set +x; } 2>/dev/null
+	fi
 done
 sleep 2
 echo done
