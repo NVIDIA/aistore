@@ -15,10 +15,6 @@ import (
 	"github.com/golang/glog"
 )
 
-var (
-	httpClient *http.Client
-)
-
 const (
 	maxidleconns   = 20              // max num idle connections
 	requesttimeout = 5 * time.Second // http timeout
@@ -29,15 +25,6 @@ const (
 	daemonPort = "daemonPort" // expecting an integer > 1000
 	daemonID   = "daemonID"   // node ID must be unique
 )
-
-// createHTTPClient
-func createHTTPClient() *http.Client {
-	client := &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
-		Timeout:   requesttimeout,
-	}
-	return client
-}
 
 // proxyfilehdlr
 func proxyfilehdlr(w http.ResponseWriter, r *http.Request) {
@@ -78,57 +65,74 @@ func proxyfilehdlr(w http.ResponseWriter, r *http.Request) {
 
 // proxyreghdlr
 func proxyreghdlr(w http.ResponseWriter, r *http.Request) {
-	assert(r.Method == http.MethodPost)
 	stats := getproxystats()
-	atomic.AddInt64(&stats.numpost, 1)
-	err := r.ParseForm()
-	if err != nil {
-		glog.Errorf("Failed to parse POST request, err: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		atomic.AddInt64(&stats.numerr, 1)
-		return
-	}
-	//
-	// parse and validate
-	//
-	urlpath := html.EscapeString(r.URL.Path)
-	split := strings.SplitN(urlpath, "/", 5)
-	apitems := split[1:]
-	if !checkRestAPI(w, r, apitems, 3, apiversion, apirestargets) {
-		atomic.AddInt64(&stats.numerr, 1)
-		return
-	}
-	// fill-in server registration
-	var sinfo serverinfo
-	for str, val := range r.Form {
-		if str == nodeIPAddr {
-			if glog.V(3) {
-				glog.Infof("val : %s", strings.Join(val, ""))
-			}
-			sinfo.ip = strings.Join(val, "")
+	if r.Method == http.MethodPost {
+		err := r.ParseForm()
+		if err != nil {
+			glog.Errorf("Failed to parse target request, err: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			atomic.AddInt64(&stats.numerr, 1)
+			return
 		}
-		if str == daemonPort {
-			if glog.V(3) {
-				glog.Infof("val : %s", strings.Join(val, ""))
-			}
-			sinfo.port = strings.Join(val, "")
+		//
+		// parse and validate
+		//
+		urlpath := html.EscapeString(r.URL.Path)
+		split := strings.SplitN(urlpath, "/", 5)
+		apitems := split[1:]
+		if !checkRestAPI(w, r, apitems, 3, apiversion, apirestargets) {
+			atomic.AddInt64(&stats.numerr, 1)
+			return
 		}
-		if str == daemonID {
-			if glog.V(3) {
-				glog.Infof("val : %s", strings.Join(val, ""))
+		// fill-in server registration
+		var sinfo serverinfo
+		for str, val := range r.Form {
+			value := strings.Join(val, "")
+			switch str {
+			case nodeIPAddr:
+				assert(sinfo.ip == "")
+				sinfo.ip = value
+			case daemonPort:
+				assert(sinfo.port == "")
+				sinfo.port = value
+			case daemonID:
+				assert(sinfo.id == "")
+				sinfo.id = value
+			default:
+				assert(false, "Unexpected option "+str+" in the URL "+urlpath)
 			}
-			sinfo.id = strings.Join(val, "")
 		}
-	}
-	_, ok := ctx.smap[sinfo.id]
-	assert(!ok, "Duplicate target ID: "+sinfo.id)
-	ctx.smap[sinfo.id] = sinfo
-	if glog.V(3) {
-		glog.Infof("Registered IP %s port %s ID %s (count %d)", sinfo.ip, sinfo.port, sinfo.id, len(ctx.smap))
+		atomic.AddInt64(&stats.numpost, 1)
+		if _, ok := ctx.smap[sinfo.id]; ok {
+			glog.Errorf("Duplicate target {%s}", sinfo.id)
+		}
+		ctx.smap[sinfo.id] = sinfo
+		if glog.V(3) {
+			glog.Infof("Registered target {%s} (count %d)", sinfo.id, len(ctx.smap))
+		}
+	} else {
+		assert(r.Method == http.MethodDelete)
+		urlpath := html.EscapeString(r.URL.Path)
+		split := strings.SplitN(urlpath, "/", 5)
+		apitems := split[1:]
+		if !checkRestAPI(w, r, apitems, 4, apiversion, apirestargets) {
+			atomic.AddInt64(&stats.numerr, 1)
+			return
+		}
+		sid := apitems[3]
+		atomic.AddInt64(&stats.numdelete, 1)
+		if _, ok := ctx.smap[sid]; !ok {
+			glog.Errorf("Unknown target {%s}", sid)
+			return
+		}
+		delete(ctx.smap, sid)
+		if glog.V(3) {
+			glog.Infof("Unregistered target {%s} (count %d)", sid, len(ctx.smap))
+		}
 	}
 }
 
-// getAndDrop
+// getAndDrop reads until EOF and uses dummy writer (ReadToNull)
 func getAndDrop(sid string, w http.ResponseWriter, r *http.Request) error {
 	if glog.V(3) {
 		glog.Infof("Request path %s sid %s port %s",
@@ -173,6 +177,7 @@ type proxyrunner struct {
 
 // run
 func (r *proxyrunner) run() error {
+	r.httprunner.init()
 	//
 	// REST API: register proxy handlers and start listening
 	//

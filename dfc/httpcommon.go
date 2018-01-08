@@ -87,6 +87,8 @@ type httprunner struct {
 	mux     *http.ServeMux
 	h       *http.Server
 	glogger *log.Logger
+	sid     string // daemonID must be cluster-wide unique
+	ipaddr  string //
 }
 
 func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -94,6 +96,16 @@ func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 		r.mux = http.NewServeMux()
 	}
 	r.mux.HandleFunc(path, handler)
+}
+
+func (r *httprunner) init() error {
+	ipaddr, err := getipaddr()
+	if err != nil {
+		return err
+	}
+	r.sid = ipaddr + ":" + ctx.config.Listen.Port
+	r.ipaddr = ipaddr
+	return nil
 }
 
 func (r *httprunner) run() error {

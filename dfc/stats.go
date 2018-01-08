@@ -29,9 +29,10 @@ type statslogger interface {
 }
 
 type proxystats struct {
-	numget  int64
-	numpost int64
-	numerr  int64
+	numget    int64
+	numpost   int64
+	numdelete int64
+	numerr    int64
 }
 
 type statsrunner struct {

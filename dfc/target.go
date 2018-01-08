@@ -102,60 +102,12 @@ func storhdlr(w http.ResponseWriter, r *http.Request) {
 	glog.Flush()
 }
 
-//===========================================================================
-//
-// registration w/ proxy
-//
-//===========================================================================
-func registerwithproxy() (rerr error) {
-	httpClient = createHTTPClient()
-	data := url.Values{}
-	ipaddr, err := getipaddr()
-	if err != nil {
-		return err
+func createHTTPClient() *http.Client {
+	client := &http.Client{
+		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Timeout:   requesttimeout,
 	}
-	// name/value: IP, port and ID as part of the target's registration
-	data.Set(nodeIPAddr, ipaddr)
-	data.Add(daemonPort, ctx.config.Listen.Port)
-	data.Add(daemonID, ipaddr+":"+ctx.config.Listen.Port)
-
-	u, _ := url.ParseRequestURI(ctx.config.Proxy.URL)
-	//
-	// REST API
-	//
-	u.Path = "/" + apiversion + "/" + apirestargets + "/"
-	urlStr := u.String()
-	if glog.V(3) {
-		glog.Infof("URL %q", urlStr)
-	}
-	req, err := http.NewRequest(http.MethodPost, urlStr, bytes.NewBufferString(data.Encode()))
-	if err != nil {
-		glog.Errorf("Unexpected failure to create POST request, err: %v", err)
-		return err
-	}
-	req.Header.Add("Authorization", "auth_token=\"XXXXXXX\"")
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
-
-	// send http request
-	response, err := httpClient.Do(req)
-	if err != nil && response == nil {
-		glog.Errorf("Failed to register with proxy, err: %v", err)
-		return err
-	}
-	// cleanup
-	defer func() {
-		err = response.Body.Close()
-		if err != nil {
-			rerr = err
-		}
-	}()
-	// check if the work was actually done
-	if _, err = ioutil.ReadAll(response.Body); err != nil {
-		glog.Errorf("Couldn't parse response body, err: %v", err)
-		return err
-	}
-	return nil
+	return client
 }
 
 //===========================================================================
@@ -165,21 +117,26 @@ func registerwithproxy() (rerr error) {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif cinterface // Interface for multiple cloud
+	cloudif    cinterface   // Interface for multiple cloud
+	httpclient *http.Client // http client for intra-cluster comm
 }
 
 // start target runner
 func (r *targetrunner) run() error {
-	// FIXME cleanup: unreg is missing
-	if err := registerwithproxy(); err != nil {
-		glog.Fatalf("Failed to register with proxy, err: %v", err)
+	// init
+	r.httprunner.init()
+	r.httpclient = createHTTPClient()
+
+	// FIXME cleanup unreg
+	if err := r.register(); err != nil {
+		glog.Errorf("Failed to register with proxy, err: %v", err)
 		return err
 	}
 	// local mp-s have precedence over cachePath
 	var err error
 	ctx.mountpaths = make(map[string]mountPath, 4)
 	if err = parseProcMounts(procMountsPath); err != nil {
-		glog.Fatalf("Failed to parse %s, err: %v", procMountsPath, err)
+		glog.Errorf("Failed to parse %s, err: %v", procMountsPath, err)
 		return err
 	}
 	if len(ctx.mountpaths) == 0 {
@@ -198,7 +155,7 @@ func (r *targetrunner) run() error {
 		glog.Infof("Found %d mp-s", len(ctx.mountpaths))
 	}
 
-	// init mps in the stats
+	// init per-mp usage stats
 	initusedstats()
 
 	// cloud provider
@@ -221,5 +178,93 @@ func (r *targetrunner) run() error {
 // stop gracefully
 func (r *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
+	r.unregister()
 	r.httprunner.stop(err)
+}
+
+// registration
+func (r *targetrunner) register() error {
+	data := url.Values{}
+	// name/value: IP, port and ID as part of the target's registration
+	data.Set(nodeIPAddr, r.ipaddr)
+	data.Add(daemonPort, ctx.config.Listen.Port)
+	data.Add(daemonID, r.sid)
+
+	u, _ := url.ParseRequestURI(ctx.config.Proxy.URL)
+	//
+	// REST API
+	//
+	u.Path = "/" + apiversion + "/" + apirestargets + "/"
+	urlStr := u.String()
+	if glog.V(3) {
+		glog.Infof("URL %q", urlStr)
+	}
+	method := http.MethodPost
+	action := "register with"
+	req, err := http.NewRequest(method, urlStr, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		glog.Errorf("Unexpected failure to create %s request, err: %v", method, err)
+		return err
+	}
+	req.Header.Add("Authorization", "auth_token=\"XXXXXXX\"")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+
+	// send http request
+	response, err := r.httpclient.Do(req)
+	if err != nil || response == nil {
+		glog.Errorf("Failed to %s proxy, err: %v", action, err)
+		return err
+	}
+	// cleanup
+	defer func() {
+		if response != nil {
+			err = response.Body.Close()
+		}
+	}()
+	// check if the work was actually done
+	if _, err = ioutil.ReadAll(response.Body); err != nil {
+		glog.Errorf("Couldn't parse response body, err: %v", err)
+		return err
+	}
+	return err
+}
+
+// unregistration
+func (r *targetrunner) unregister() error {
+	data := url.Values{}
+	u, _ := url.ParseRequestURI(ctx.config.Proxy.URL)
+	//
+	// REST API
+	//
+	u.Path = "/" + apiversion + "/" + apirestargets + "/" + daemonID + "/" + r.sid
+	urlStr := u.String()
+	if glog.V(3) {
+		glog.Infof("URL %q", urlStr)
+	}
+	method := http.MethodDelete
+	req, err := http.NewRequest(method, urlStr, bytes.NewBufferString(data.Encode()))
+	if err != nil {
+		glog.Errorf("Unexpected failure to create %s request, err: %v", method, err)
+		return err
+	}
+	// send http request
+	response, err := r.httpclient.Do(req)
+	if err != nil || response == nil {
+		// proxy may have already shut down
+		glog.Infof("Failed to unregister from proxy, err: %v", err)
+		return err
+	}
+	// cleanup
+	defer func() {
+		if response != nil {
+			err = response.Body.Close()
+		}
+	}()
+	// check if the work was actually done
+	if _, err = ioutil.ReadAll(response.Body); err != nil {
+		glog.Errorf("Couldn't parse response body, err: %v", err)
+		return err
+	}
+	return err
 }
