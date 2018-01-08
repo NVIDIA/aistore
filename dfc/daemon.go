@@ -38,7 +38,7 @@ var ctx = &daemon{}
 type daemon struct {
 	smap       map[string]serverinfo // registered storage targets (proxy only)
 	config     dfconfig              // Configuration
-	mountpaths []mountPath           //
+	mountpaths map[string]mountPath
 	rg         *rungroup
 }
 
@@ -219,8 +219,8 @@ func initusedstats() {
 	rr, ok := r.(*storstatsrunner)
 	assert(ok)
 	rr.used = make(map[string]int, len(ctx.mountpaths))
-	for _, mountpath := range ctx.mountpaths {
-		rr.used[mountpath.Path] = 0
+	for path, _ := range ctx.mountpaths {
+		rr.used[path] = 0
 	}
 }
 

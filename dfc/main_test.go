@@ -9,17 +9,16 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/NVIDIA/dfcpub/dfc"
 )
 
 // commandline examples:
@@ -109,41 +108,24 @@ func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool, 
 		}
 	}()
 	if !copy {
-		_, err = ioutil.ReadAll(r.Body)
+		bufreader := bufio.NewReader(r.Body)
+		bytes, err := dfc.ReadToNull(bufreader)
 		if err != nil {
 			t.Errorf("Failed to read http response, err: %v", err)
 			return
 		}
-		t.Logf("Downloaded %q", url)
+		t.Logf("Downloaded %q (size %.2f MB)", url, float64(bytes)/1000/1000)
 		return
 	}
 
-	// alternatively, create local copy
+	// alternatively, create a local copy
 	fname := LocalRootDir + "/" + keyname
-	dirname := filepath.Dir(fname)
-	if _, err := os.Stat(dirname); err != nil {
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(dirname, 0755)
-			if err != nil {
-				t.Errorf("Failed to create bucket dir %q, err: %v", dirname, err)
-				return
-			}
-		} else {
-			t.Errorf("Failed to fstat, dir %q, err: %v", dirname, err)
-			return
-		}
-	}
-	file, err := os.Create(fname)
-	if err != nil {
-		t.Errorf("Unable to create file %q, err: %v", fname, err)
-		return
-	}
-	numBytesWritten, err := io.Copy(file, r.Body)
+	written, err := dfc.ReceiveFile(fname, r)
 	if err != nil {
 		t.Errorf("Failed to write to file, err: %v", err)
 		return
 	}
-	t.Logf("Downloaded and copied %q size %d", fname, numBytesWritten)
+	t.Logf("Downloaded and copied %q (size %.2f MB)", fname, float64(written/1000/1000))
 }
 
 func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
@@ -209,7 +191,10 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error) {
 		}
 		return
 	}
-	ioutil.ReadAll(r.Body)
+	bufreader := bufio.NewReader(r.Body)
+	if _, err = dfc.ReadToNull(bufreader); err != nil {
+		b.Errorf("Failed to read http response, err: %v", err)
+	}
 }
 
 func Test_list(t *testing.T) {
@@ -242,30 +227,12 @@ func listAndCopyTmp(t *testing.T, copy bool) {
 		return
 	}
 
-	// alternatively, create local copy
+	// alternatively, create a local copy
 	fname := LocalRootDir + "/" + bucket
-	dirname := filepath.Dir(fname)
-	if _, err := os.Stat(dirname); err != nil {
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(dirname, 0755)
-			if err != nil {
-				t.Errorf("Failed to create dir %q, err: %v", dirname, err)
-				return
-			}
-		} else {
-			t.Errorf("Failed to fstat, dir %q, err: %v", dirname, err)
-			return
-		}
-	}
-	file, err := os.Create(fname)
-	if err != nil {
-		t.Errorf("Unable to create file %q, err: %v", fname, err)
-		return
-	}
-	numBytesWritten, err := io.Copy(file, r.Body)
+	written, err := dfc.ReceiveFile(fname, r)
 	if err != nil {
 		t.Errorf("Failed to write file, err: %v", err)
 		return
 	}
-	t.Logf("Got bucket list and copied %q size %d", fname, numBytesWritten)
+	t.Logf("Got bucket list and copied %q (size %d B)", fname, written)
 }

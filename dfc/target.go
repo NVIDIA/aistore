@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -34,13 +33,14 @@ type cinterface interface {
 	getobj(http.ResponseWriter, string, string, string) error
 }
 
-// storhdlr implements the target's REST API. It checks wheather the key exists locally,
-// and downloads the corresponding object otherwise
+// storhdlr implements the target's REST API: checks if the named fobject
+// exists locallyi. If not, it downloads it to cache and (always)
+// sends it back via http
 func storhdlr(w http.ResponseWriter, r *http.Request) {
 	assert(r.Method == http.MethodGet)
 	stats := getstorstats()
 	//
-	// parse and validate
+	// parse and validate REST API
 	//
 	split := strings.SplitN(html.EscapeString(r.URL.Path), "/", 5)
 	apitems := split[1:]
@@ -63,13 +63,16 @@ func storhdlr(w http.ResponseWriter, r *http.Request) {
 	//
 	// get from the bucket
 	//
-	mpath := doHashfindMountPath(bktname + "/" + keyname)
+	mpath := hrwMpath(bktname + "/" + keyname)
 	assert(len(mpath) > 0) // see mountpath.enabled
 	fname := mpath + "/" + bktname + "/" + keyname
 	_, err := os.Stat(fname)
 	if os.IsNotExist(err) {
 		atomic.AddInt64(&stats.numcoldget, 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
+		//
+		// TODO: do getcloudif().getobj() and write http response in parallel
+		//
 		if err = getcloudif().getobj(w, mpath, bktname, keyname); err != nil {
 			return
 		}
@@ -84,15 +87,16 @@ func storhdlr(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&stats.numerr, 1)
 	} else {
 		defer file.Close()
-		// TODO: optimize. Currently the file gets downloaded and stored locally
-		//       _prior_ to sending http response back to the requesting client
-		_, err := io.Copy(w, file)
+		// NOTE: the following copyBuffer() call is equaivalent to:
+		// 	rt, _ := w.(io.ReaderFrom)
+		// 	written, err := rt.ReadFrom(file) ==> sendfile path
+		written, err := copyBuffer(w, file)
 		if err != nil {
 			glog.Errorf("Failed to copy %q to http response, err: %v", fname, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			atomic.AddInt64(&stats.numerr, 1)
 		} else if glog.V(3) {
-			glog.Infof("Copied %q to http response", fname)
+			glog.Infof("Copied %q to http response (size %.2f MB)", fname, float64(written)/1000/1000)
 		}
 	}
 	glog.Flush()
@@ -105,18 +109,17 @@ func storhdlr(w http.ResponseWriter, r *http.Request) {
 //===========================================================================
 func registerwithproxy() (rerr error) {
 	httpClient = createHTTPClient()
-	proxyURL := ctx.config.Proxy.URL
 	data := url.Values{}
 	ipaddr, err := getipaddr()
 	if err != nil {
 		return err
 	}
 	// name/value: IP, port and ID as part of the target's registration
-	data.Set(IP, ipaddr)
-	data.Add(PORT, string(ctx.config.Listen.Port))
-	data.Add(ID, ctx.config.ID)
+	data.Set(nodeIPAddr, ipaddr)
+	data.Add(daemonPort, ctx.config.Listen.Port)
+	data.Add(daemonID, ipaddr+":"+ctx.config.Listen.Port)
 
-	u, _ := url.ParseRequestURI(string(proxyURL))
+	u, _ := url.ParseRequestURI(ctx.config.Proxy.URL)
 	//
 	// REST API
 	//
@@ -172,9 +175,10 @@ func (r *targetrunner) run() error {
 		glog.Fatalf("Failed to register with proxy, err: %v", err)
 		return err
 	}
-	// Local mount points have precedence over cachePath settings
+	// local mp-s have precedence over cachePath
 	var err error
-	if ctx.mountpaths, err = parseProcMounts(procMountsPath); err != nil {
+	ctx.mountpaths = make(map[string]mountPath, 4)
+	if err = parseProcMounts(procMountsPath); err != nil {
 		glog.Fatalf("Failed to parse %s, err: %v", procMountsPath, err)
 		return err
 	}
@@ -189,7 +193,7 @@ func (r *targetrunner) run() error {
 			err := errors.New(errstr)
 			return err
 		}
-		ctx.mountpaths = emulateCachepathMounts()
+		emulateCachepathMounts()
 	} else {
 		glog.Infof("Found %d mp-s", len(ctx.mountpaths))
 	}

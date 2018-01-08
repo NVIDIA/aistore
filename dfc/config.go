@@ -79,9 +79,8 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 	}
 	for i := 0; i < ctx.config.Cache.CachePathCount; i++ {
 		mpath := ctx.config.Cache.CachePath + dfcStoreMntPrefix + strconv.Itoa(i)
-		err = createdir(mpath)
-		if err != nil {
-			glog.Errorf("Failed to create cachedir %q, err: %v", mpath, err)
+		if err = CreateDir(mpath); err != nil {
+			glog.Errorf("Failed to create cache dir %q, err: %v", mpath, err)
 			return err
 		}
 		// FIXME: signature file - must be removed
@@ -96,9 +95,8 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 		}
 
 	}
-	err = createdir(ctx.config.Logdir)
-	if err != nil {
-		glog.Errorf("Failed to create Logdir %q, err: %v", ctx.config.Logdir, err)
+	if err = CreateDir(ctx.config.Logdir); err != nil {
+		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Logdir, err)
 		return err
 	}
 
@@ -122,25 +120,6 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 		ctx.config.Loglevel, configfile, role, ctx.config.StatsTime)
 	glog.Infof("============== ")
 	glog.Flush()
-	return err
-}
-
-// Helper function to Create specified directory. It will also create complete path, not
-// just short path.(similar to mkdir -p)
-func createdir(dirname string) error {
-	var err error
-	_, err = os.Stat(dirname)
-	if err != nil {
-		// Create bucket-path directory for non existent paths.
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(dirname, 0755)
-			if err != nil {
-				glog.Errorf("Failed to create dir %q, err: %v", dirname, err)
-			}
-		} else {
-			glog.Errorf("Failed to stat %s, err: %v", dirname, err)
-		}
-	}
 	return err
 }
 

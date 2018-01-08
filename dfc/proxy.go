@@ -5,8 +5,8 @@
 package dfc
 
 import (
+	"bufio"
 	"html"
-	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -25,9 +25,9 @@ const (
 )
 
 const (
-	IP   = "ip"   // daemon's IP address
-	PORT = "port" // expecting an integer > 1000
-	ID   = "id"   // node ID must be unique
+	nodeIPAddr = "nodeIPAddr" // daemon's IP address
+	daemonPort = "daemonPort" // expecting an integer > 1000
+	daemonID   = "daemonID"   // node ID must be unique
 )
 
 // createHTTPClient
@@ -62,20 +62,18 @@ func proxyfilehdlr(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt64(&stats.numerr, 1)
 		return
 	}
-	sid := doHashfindServer(urlpath)
+	// skip ver and resource
+	sid := hrwTarget(strings.Join(apitems[2:], "/"))
+
 	if !ctx.config.Proxy.Passthru {
-		if err := proxyclientRequest(sid, w, r); err == nil {
-			// TODO
-			assert(false, "NIY")
-		}
-	} else { // passthrough
-		if glog.V(3) {
-			glog.Infof("Redirecting %q to %s:%s", urlpath, ctx.smap[sid].ip, ctx.smap[sid].port)
-		}
-		// FIXME: https, HTTP2 here and elsewhere
-		redirecturl := "http://" + ctx.smap[sid].ip + ":" + ctx.smap[sid].port + urlpath
-		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+		getAndDrop(sid, w, r) // ignore error, proceed to http redirect
 	}
+	if glog.V(3) {
+		glog.Infof("Redirecting %q to %s:%s", urlpath, ctx.smap[sid].ip, ctx.smap[sid].port)
+	}
+	// FIXME: https, HTTP2 here and elsewhere
+	redirecturl := "http://" + ctx.smap[sid].ip + ":" + ctx.smap[sid].port + urlpath
+	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 }
 
 // proxyreghdlr
@@ -103,19 +101,19 @@ func proxyreghdlr(w http.ResponseWriter, r *http.Request) {
 	// fill-in server registration
 	var sinfo serverinfo
 	for str, val := range r.Form {
-		if str == IP {
+		if str == nodeIPAddr {
 			if glog.V(3) {
 				glog.Infof("val : %s", strings.Join(val, ""))
 			}
 			sinfo.ip = strings.Join(val, "")
 		}
-		if str == PORT {
+		if str == daemonPort {
 			if glog.V(3) {
 				glog.Infof("val : %s", strings.Join(val, ""))
 			}
 			sinfo.port = strings.Join(val, "")
 		}
-		if str == ID {
+		if str == daemonID {
 			if glog.V(3) {
 				glog.Infof("val : %s", strings.Join(val, ""))
 			}
@@ -123,46 +121,45 @@ func proxyreghdlr(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_, ok := ctx.smap[sinfo.id]
-	assert(!ok)
+	assert(!ok, "Duplicate target ID: "+sinfo.id)
 	ctx.smap[sinfo.id] = sinfo
 	if glog.V(3) {
 		glog.Infof("Registered IP %s port %s ID %s (count %d)", sinfo.ip, sinfo.port, sinfo.id, len(ctx.smap))
 	}
 }
 
-// proxyclientRequest
-func proxyclientRequest(sid string, w http.ResponseWriter, r *http.Request) (rerr error) {
+// getAndDrop
+func getAndDrop(sid string, w http.ResponseWriter, r *http.Request) error {
 	if glog.V(3) {
 		glog.Infof("Request path %s sid %s port %s",
 			html.EscapeString(r.URL.Path), sid, ctx.smap[sid].port)
 	}
-
 	urlpath := html.EscapeString(r.URL.Path)
 	redirecturl := "http://" + ctx.smap[sid].ip + ":" + ctx.smap[sid].port + urlpath
 	if glog.V(3) {
 		glog.Infof("GET redirect URL %q", redirecturl)
 	}
-	resp, err := http.Get(redirecturl)
+	newr, err := http.Get(redirecturl)
 	if err != nil {
 		glog.Errorf("Failed to GET redirect URL %q, err: %v", redirecturl, err)
 		return err
 	}
 	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			rerr = err
-		}
+		err = newr.Body.Close()
 	}()
-	_, err = io.Copy(w, resp.Body)
+	bufreader := bufio.NewReader(newr.Body)
+	bytes, err := ReadToNull(bufreader)
 	if err != nil {
 		glog.Errorf("Failed to copy data to http response, URL %q, err: %v", urlpath, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		stats := getproxystats()
 		atomic.AddInt64(&stats.numerr, 1)
-	} else if glog.V(3) {
-		glog.Infof("Copied data, URL %q", urlpath)
+		return err
 	}
-	return nil
+	if glog.V(3) {
+		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1000/1000)
+	}
+	return err
 }
 
 //===========================================================================

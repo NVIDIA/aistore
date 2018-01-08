@@ -5,8 +5,13 @@
 package dfc
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/golang/glog"
@@ -61,4 +66,91 @@ func checksetmounterror(path string) {
 		incrMountPathErrorCount(path)
 	}
 
+}
+
+func CreateDir(dirname string) (err error) {
+	if _, err := os.Stat(dirname); err != nil {
+		if os.IsNotExist(err) {
+			if err = os.MkdirAll(dirname, 0755); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	return
+}
+
+func ReceiveFile(fname string, r *http.Response) (written int64, err error) {
+	dirname := filepath.Dir(fname)
+	if err = CreateDir(dirname); err != nil {
+		return 0, err
+	}
+	fd, err := os.Create(fname)
+	if err != nil {
+		return 0, err
+	}
+	written, err = copyBuffer(fd, r.Body)
+	return
+}
+
+// copy-paste from the Go io package with a larger buffer on the read side,
+// and bufio on the write (FIXME copy-paste)
+func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
+	// If the reader has a WriteTo method, use it to do the copy.
+	// Avoids an allocation and a copy.
+	if wt, ok := src.(io.WriterTo); ok {
+		// fmt.Fprintf(os.Stdout, "use io.WriteTo\n")
+		return wt.WriteTo(dst)
+	}
+	// Similarly, if the writer has a ReadFrom method, use it to do the copy.
+	if rt, ok := dst.(io.ReaderFrom); ok {
+		// fmt.Fprintf(os.Stdout, "use io.ReadFrom\n")
+		return rt.ReadFrom(src)
+	}
+	buf := make([]byte, 1024*1024)    // buffer up to 1MB for reading (FIXME)
+	bufwriter := bufio.NewWriter(dst) // use bufio for writing
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := bufwriter.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	bufwriter.Flush()
+	return written, err
+}
+
+//===========================================================================
+//
+// dummy io.Writer & ReadToNull() helper
+//
+//===========================================================================
+type dummywriter struct {
+}
+
+func (w *dummywriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	return
+}
+
+func ReadToNull(r io.Reader) (int64, error) {
+	w := &dummywriter{}
+	return copyBuffer(w, r)
 }

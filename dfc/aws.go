@@ -69,21 +69,10 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 	fname := mpath + "/" + bucket + "/" + kname
 	// strips the last part from filepath
 	dirname := filepath.Dir(fname)
-	_, err = os.Stat(dirname)
-	if err != nil {
-		// Create bucket-path directory for non existent paths.
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(dirname, 0755)
-			if err != nil {
-				glog.Errorf("Failed to create local dir %s, err: %s", dirname, err)
-				return err
-			}
-		} else {
-			glog.Errorf("Failed to fstat dir %q, err: %v", dirname, err)
-			return err
-		}
+	if err = CreateDir(dirname); err != nil {
+		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
+		return err
 	}
-
 	file, err = os.Create(fname)
 	if err != nil {
 		glog.Errorf("Unable to create file %q, err: %v", fname, err)

@@ -73,19 +73,9 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	defer rc.Close()
 	// strips the last part from filepath
 	dirname := filepath.Dir(fname)
-	_, err = os.Stat(dirname)
-	if err != nil {
-		// Create bucket-path directory for non existent paths.
-		if os.IsNotExist(err) {
-			err = os.MkdirAll(dirname, 0755)
-			if err != nil {
-				errstr := fmt.Sprintf("Failed to create bucket dir %q, err: %v", dirname, err)
-				return webinterror(w, errstr)
-			}
-		} else {
-			errstr := fmt.Sprintf("Failed to fstat dir %q, err: %v", dirname, err)
-			return webinterror(w, errstr)
-		}
+	if err = CreateDir(dirname); err != nil {
+		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
+		return webinterror(w, errstr)
 	}
 	file, err := os.Create(fname)
 	if err != nil {

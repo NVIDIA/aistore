@@ -33,12 +33,11 @@ const (
 )
 
 // locate and populate local mount points
-func parseProcMounts(filename string) ([]mountPath, error) {
+func parseProcMounts(filename string) error {
 	content, err := ioutil.ReadFile(filename)
 	if err != nil {
 		glog.Fatalf("Failed to read %q, err: %v", filename, err)
 	}
-	out := []mountPath{}
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
 		if line == "" {
@@ -65,18 +64,19 @@ func parseProcMounts(filename string) ([]mountPath, error) {
 			statfs := syscall.Statfs_t{}
 			if err := syscall.Statfs(mp.Path, &statfs); err != nil {
 				glog.Fatalf("Failed to statfs mp %q, err: %v", mp.Path, err)
-				return nil, err
+				return err
 			}
 			mp.Fsid = statfs.Fsid
-			out = append(out, mp)
+			_, ok := ctx.mountpaths[mp.Path]
+			assert(!ok) // unique Path
+			ctx.mountpaths[mp.Path] = mp
 		}
 	}
-	return out, nil
+	return nil
 }
 
-// emulate mountpath with // local directories.
-func emulateCachepathMounts() []mountPath {
-	out := []mountPath{}
+// emulate mountpath with local directories
+func emulateCachepathMounts() {
 	for i := 0; i < ctx.config.Cache.CachePathCount; i++ {
 		mpath := ctx.config.Cache.CachePath + dfcStoreMntPrefix + strconv.Itoa(i)
 		mp := mountPath{
@@ -86,12 +86,13 @@ func emulateCachepathMounts() []mountPath {
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(mp.Path, &statfs); err != nil {
 			glog.Fatalf("Failed to statfs mp %q, err: %v", mp.Path, err)
-			return nil
+			return
 		}
 		mp.Fsid = statfs.Fsid
-		out = append(out, mp)
+		_, ok := ctx.mountpaths[mp.Path]
+		assert(!ok) // unique Path
+		ctx.mountpaths[mp.Path] = mp
 	}
-	return out
 }
 
 // can only use prefixed mount points
@@ -119,7 +120,7 @@ func setMountPathStatus(path string, status bool) {
 	}
 }
 
-// Get error count
+// FIXME: use path/filepath golang
 func getMountPathErrorCount(path string) int {
 	for _, mountpath := range ctx.mountpaths {
 		if strings.HasPrefix(path, mountpath.Path) {
@@ -129,7 +130,7 @@ func getMountPathErrorCount(path string) int {
 	return 0
 }
 
-// Increment error counter
+// FIXME: use path/filepath golang
 func incrMountPathErrorCount(path string) {
 	for _, mountpath := range ctx.mountpaths {
 		if strings.HasPrefix(path, mountpath.Path) {

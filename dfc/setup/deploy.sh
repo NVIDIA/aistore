@@ -14,7 +14,7 @@ LOGDIR="log"
 PROXYURL="http://localhost:8080"
 PASSTHRU=true
 
-# Starting Portnumber
+# local daemon ports start from $PORT+1
 PORT=8079
 
 # Starting ID
@@ -38,7 +38,13 @@ DONTEVICTIMESEC=600
 FSLOWWATERMARK=65
 FSHIGHWATERMARK=80
 
-echo Enter number of caching servers:
+PROXYPORT=$(expr $PORT + 1)
+if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
+	echo "Error: TCP port $PROXYPORT is not open (check if DFC is already running)"
+	exit 1
+fi
+
+echo Enter number of cache servers:
 read servcount
 if ! [[ "$servcount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$servcount' is not a number"; exit 1
@@ -53,8 +59,8 @@ if ! [[ "$mntpointcount" =~ ^[0-9]+$ ]] ; then
 fi
 CACHEPATHCOUNT=$mntpointcount
 
-echo Select Cloud Provider: 
-echo  1: Amazon Cloud 
+echo Select Cloud Provider:
+echo  1: Amazon Cloud
 echo  2: Google Cloud
 echo Enter your choice:
 read cldprovider
@@ -71,7 +77,7 @@ fi
 let "STATSTIMESEC=$STATSTIMESEC*10**9"
 let "HTTPTIMEOUTSEC=$HTTPTIMEOUTSEC*10**9"
 let "DONTEVICTIMESEC=$DONTEVICTIMESEC*10**9"
-	
+
 mkdir -p $CONFPATH
 
 for (( c=$START; c<=$END; c++ ))
@@ -82,7 +88,6 @@ do
 	CONFFILE="$CONFPATH/$CURINSTANCE.json"
 	cat > $CONFFILE <<EOL
 	{
-		"id": 				"${ID}",
 		"logdir":			"${DIRPATH}${CURINSTANCE}${LOGDIR}",
 		"loglevel": 			"${LOGLEVEL}",
 		"cloudprovider":		"${CLDPROVIDER}",
@@ -99,7 +104,7 @@ do
 		"s3": {
 			"maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
 			"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
-			"maxpartsize":		${MAXPARTSIZE}	
+			"maxpartsize":		${MAXPARTSIZE}
 		},
 		"cache": {
 			"cachepath":			"${DIRPATH}${CURINSTANCE}${CACHEDIR}",
