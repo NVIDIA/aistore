@@ -24,6 +24,7 @@ import (
 // commandline examples:
 // # go test -v -run=down -args -numfiles=10
 // # go test -v -run=down -args -bucket=mybucket
+// # go test -v -run=down -args -bucket=mybucket -numworkers 5
 // # go test -v -run=list
 // # go test -v -run=xxx -bench . -count 10
 
@@ -36,35 +37,60 @@ const (
 var (
 	bucket   string
 	numfiles int
+	numworkers int
 )
 
 func init() {
 	flag.StringVar(&bucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
+	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 }
 
 func Test_download(t *testing.T) {
 	flag.Parse()
 
+	// Create one channel per worker.
+	keyname_chans := make(map [int] chan string)
+	for i := 0; i < numworkers; i++ {
+		// Allow a bunch of messages at a time to be written asynchronously to a channel
+		keyname_chans[i] =  make(chan string, 100)
+	}
+
+	// Start the worker pools
+	errch := make(chan error, 100)
+	var wg = &sync.WaitGroup{}
+	// Get the workers started
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		// false: read the response and drop it, true: write it to a file
+		go getAndCopyTmp(keyname_chans[i], t, wg, true, errch)
+	}
+
+
+	// Get the list for bucket
 	url := RestAPIGet + "/" + bucket
 	t.Logf("LIST %q", url)
 	r, err := http.Get(url)
 	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
 		return
 	}
+
+	// Read the keynames from list, and share the keynames among the worker channels
 	reader := bufio.NewReader(r.Body)
-	var wg = &sync.WaitGroup{}
-	errch := make(chan error, 100)
 	for i := 0; i < numfiles; i++ {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			break
 		}
-		wg.Add(1)
 		keyname := strings.TrimSuffix(string(line), "\n")
-		// false: read the response and drop it, true: write it to a file
-		go getAndCopyTmp(keyname, t, wg, true, errch)
+		keyname_chans[i % numworkers] <- keyname
 	}
+
+	// Close the channels after the reading is done
+	for i := 0; i < numworkers; i++ {
+		close( keyname_chans[i])
+	}
+
 	wg.Wait()
 	select {
 	case <-errch:
@@ -78,13 +104,35 @@ func Test_download(t *testing.T) {
 func Test_shri(t *testing.T) {
 	flag.Parse()
 
+	// Create one channel per worker.
+	keyname_chans := make(map [int] chan string)
+	for i := 0; i < numworkers; i++ {
+		// Allow a bunch of messages at a time to be written asynchronously to a channel
+		keyname_chans[i] = make(chan string, 100)
+	}
+
 	var wg = &sync.WaitGroup{}
+
+	wg.Add(1)
+	// Get a separate coroutine to do the reading and spread the work
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numfiles; i++ {
+			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
+			keyname_chans[i % numworkers] <- keyname
+		}
+		// Close the channels after the keys are created
+		for i := 0; i < numworkers; i++ {
+			close( keyname_chans[i])
+		}
+	}()
+
 	errch := make(chan error, 100)
-	for i := 0; i < numfiles; i++ {
+
+	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		// false: read the response and drop it, true: write it to a file
-		go getAndCopyTmp(keyname, t, wg, true, errch)
+		go getAndCopyTmp(keyname_chans[i], t, wg, true, errch)
 	}
 	wg.Wait()
 	select {
@@ -94,38 +142,41 @@ func Test_shri(t *testing.T) {
 	}
 }
 
-func getAndCopyTmp(keyname string, t *testing.T, wg *sync.WaitGroup, copy bool, errch chan error) {
+func getAndCopyTmp(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool, errch chan error) {
 	defer wg.Done()
-	url := RestAPIGet + "/" + bucket + "/" + keyname
-	t.Logf("GET %q", url)
-	r, err := http.Get(url)
-	if testfail(err, fmt.Sprintf("get key %s from bucket %s", keyname, bucket), r, errch, t) {
-		return
-	}
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	if !copy {
-		bufreader := bufio.NewReader(r.Body)
-		bytes, err := dfc.ReadToNull(bufreader)
-		if err != nil {
-			t.Errorf("Failed to read http response, err: %v", err)
+
+	for keyname := range keynames {
+		url := RestAPIGet + "/" + bucket + "/" + keyname
+		t.Logf("GET %q", url)
+		r, err := http.Get(url)
+		if testfail(err, fmt.Sprintf("get key %s from bucket %s", keyname, bucket), r, errch, t) {
 			return
 		}
-		t.Logf("Downloaded %q (size %.2f MB)", url, float64(bytes)/1000/1000)
-		return
-	}
+		defer func() {
+			if r != nil {
+				r.Body.Close()
+			}
+		}()
+		if !copy {
+			bufreader := bufio.NewReader(r.Body)
+			bytes, err := dfc.ReadToNull(bufreader)
+			if err != nil {
+				t.Errorf("Failed to read http response, err: %v", err)
+				return
+			}
+			t.Logf("Downloaded %q (size %.2f MB)", url, float64(bytes)/1000/1000)
+			return
+		}
 
-	// alternatively, create a local copy
-	fname := LocalRootDir + "/" + keyname
-	written, err := dfc.ReceiveFile(fname, r)
-	if err != nil {
-		t.Errorf("Failed to write to file, err: %v", err)
-		return
+		// alternatively, create a local copy
+		fname := LocalRootDir + "/" + keyname
+		written, err := dfc.ReceiveFile(fname, r)
+		if err != nil {
+			t.Errorf("Failed to write to file, err: %v", err)
+			return
+		}
+		t.Logf("Downloaded and copied %q (size %.2f MB)", fname, float64(written/1000/1000))
 	}
-	t.Logf("Downloaded and copied %q (size %.2f MB)", fname, float64(written/1000/1000))
 }
 
 func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
