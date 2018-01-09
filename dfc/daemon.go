@@ -8,6 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -22,6 +24,14 @@ const (
 	xstorstats  = "storstats"
 )
 
+// encoding
+const (
+	nodeIPAddr = "nodeIPAddr" // daemon's IP address
+	daemonPort = "daemonPort" // expecting an integer > 1000
+	daemonID   = "daemonID"   // node ID must be unique
+	directURL  = "directURL"
+)
+
 //====================
 //
 // global
@@ -34,19 +44,27 @@ var ctx = &daemon{}
 // types
 //
 //====================
+// FIXME: consider sync.Map; NOTE: atomic version is used by readers
+type Smaptype struct {
+	Smap    map[string]*ServerInfo `json:"smap"`
+	Version int64                  `json:"version"`
+	lock    *sync.Mutex
+}
+
 // daemon instance: proxy or storage target
 type daemon struct {
-	smap       map[string]serverinfo // registered storage targets (proxy only)
-	config     dfconfig              // Configuration
+	smap       *Smaptype
+	config     dfconfig
 	mountpaths map[string]mountPath
 	rg         *rungroup
 }
 
-// registration info
-type serverinfo struct {
-	port string // http listening port
-	ip   string // FIXME: always picking the first IP address as the server's IP
-	id   string // macaddr (as a unique ID)
+// each daemon is represented by:
+type ServerInfo struct {
+	NodeIPAddr string `json:"node_ip_addr"`
+	DaemonPort string `json:"daemon_port"`
+	DaemonID   string `json:"daemon_id"`
+	DirectURL  string `json:"direct_url"`
 }
 
 // runner if
@@ -74,6 +92,38 @@ type rungroup struct {
 }
 
 type gstopError struct {
+}
+
+//====================
+//
+// smap wrapper with prelim atomic versioning
+//
+//====================
+func (m *Smaptype) add(si *ServerInfo) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.Smap[si.DaemonID] = si
+	atomic.AddInt64(&m.Version, 1)
+}
+
+func (m *Smaptype) del(sid string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	delete(m.Smap, sid)
+	atomic.AddInt64(&m.Version, 1)
+}
+
+func (m *Smaptype) get(sid string) *ServerInfo {
+	si, _ := m.Smap[sid]
+	return si
+}
+
+func (m *Smaptype) count() int {
+	return len(m.Smap)
+}
+
+func (m *Smaptype) version() int64 {
+	return atomic.LoadInt64(&m.Version)
 }
 
 //====================
@@ -165,7 +215,7 @@ func dfcinit() {
 		runmap: make(map[string]runner),
 	}
 	if role == xproxy {
-		ctx.smap = make(map[string]serverinfo)
+		ctx.smap = &Smaptype{Smap: make(map[string]*ServerInfo, 8), lock: &sync.Mutex{}}
 		ctx.rg.add(&proxyrunner{}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 	} else {
@@ -205,6 +255,13 @@ func getproxystats() *proxystats {
 	rr, ok := r.(*proxystatsrunner)
 	assert(ok)
 	return &rr.stats
+}
+
+func getproxy() *proxyrunner {
+	r := ctx.rg.runmap[xproxy]
+	rr, ok := r.(*proxyrunner)
+	assert(ok)
+	return rr
 }
 
 func getstorstats() *storstats {

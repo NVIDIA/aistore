@@ -5,13 +5,21 @@
 package dfc
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/golang/glog"
+)
+
+const (
+	maxidleconns   = 20              // max num idle connections
+	requesttimeout = 5 * time.Second // http timeout
 )
 
 // REST API
@@ -84,11 +92,11 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 
 type httprunner struct {
 	namedrunner
-	mux     *http.ServeMux
-	h       *http.Server
-	glogger *log.Logger
-	sid     string // daemonID must be cluster-wide unique
-	ipaddr  string //
+	mux        *http.ServeMux
+	h          *http.Server
+	glogger    *log.Logger
+	si         *ServerInfo
+	httpclient *http.Client // http client for intra-cluster comm
 }
 
 func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -99,12 +107,21 @@ func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 }
 
 func (r *httprunner) init() error {
-	ipaddr, err := getipaddr()
+	ipaddr, err := getipaddr() // FIXME: this must change
 	if err != nil {
 		return err
 	}
-	r.sid = ipaddr + ":" + ctx.config.Listen.Port
-	r.ipaddr = ipaddr
+	// http client
+	r.httpclient = &http.Client{
+		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Timeout:   requesttimeout,
+	}
+	// init ServerInfo here
+	r.si = &ServerInfo{}
+	r.si.NodeIPAddr = ipaddr
+	r.si.DaemonPort = ctx.config.Listen.Port
+	r.si.DaemonID = ipaddr + ":" + ctx.config.Listen.Port
+	r.si.DirectURL = "http://" + r.si.NodeIPAddr + ":" + r.si.DaemonPort
 	return nil
 }
 
@@ -134,4 +151,49 @@ func (r *httprunner) stop(err error) {
 	if err != nil {
 		glog.Infof("Stopped %s, err: %v", r.name, err)
 	}
+}
+
+// intra-cluster IPC, control plane
+// http-REST calls another target or a proxy
+// optionally, sends a json-encoded content to the callee
+// expects only OK or FAIL in the return
+func (r *httprunner) call(url string, method string, jsbytes []byte) (err error) {
+	var (
+		request  *http.Request
+		response *http.Response
+	)
+	if jsbytes == nil || len(jsbytes) == 0 {
+		request, err = http.NewRequest(method, url, nil)
+		if glog.V(3) {
+			glog.Infof("%s URL %q", method, url)
+		}
+	} else {
+		request, err = http.NewRequest(method, url, bytes.NewBuffer(jsbytes))
+		if glog.V(3) {
+			glog.Infof("%s URL %q, json %s", method, url, string(jsbytes))
+		}
+		if err == nil {
+			request.Header.Set("Content-Type", "application/json")
+		}
+	}
+	if err != nil {
+		glog.Errorf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
+		return err
+	}
+	response, err = r.httpclient.Do(request)
+	if err != nil || response == nil {
+		glog.Errorf("Failed to register with proxy, err: %v", err)
+		return err
+	}
+	defer func() {
+		if response != nil {
+			err = response.Body.Close()
+		}
+	}()
+	// block until done (note: returned content is ignored and discarded)
+	if _, err = ioutil.ReadAll(response.Body); err != nil {
+		glog.Errorf("Couldn't parse response body, err: %v", err)
+		return err
+	}
+	return err
 }

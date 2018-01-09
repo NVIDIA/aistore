@@ -5,15 +5,12 @@
 package dfc
 
 import (
-	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
-	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -102,14 +99,6 @@ func storhdlr(w http.ResponseWriter, r *http.Request) {
 	glog.Flush()
 }
 
-func createHTTPClient() *http.Client {
-	client := &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
-		Timeout:   requesttimeout,
-	}
-	return client
-}
-
 //===========================================================================
 //
 // target runner
@@ -117,15 +106,13 @@ func createHTTPClient() *http.Client {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif    cinterface   // Interface for multiple cloud
-	httpclient *http.Client // http client for intra-cluster comm
+	cloudif cinterface // Interface for multiple cloud
 }
 
 // start target runner
 func (r *targetrunner) run() error {
 	// init
 	r.httprunner.init()
-	r.httpclient = createHTTPClient()
 
 	// FIXME cleanup unreg
 	if err := r.register(); err != nil {
@@ -182,89 +169,20 @@ func (r *targetrunner) stop(err error) {
 	r.httprunner.stop(err)
 }
 
-// registration
+// target registration with proxy
 func (r *targetrunner) register() error {
-	data := url.Values{}
-	// name/value: IP, port and ID as part of the target's registration
-	data.Set(nodeIPAddr, r.ipaddr)
-	data.Add(daemonPort, ctx.config.Listen.Port)
-	data.Add(daemonID, r.sid)
-
-	u, _ := url.ParseRequestURI(ctx.config.Proxy.URL)
-	//
-	// REST API
-	//
-	u.Path = "/" + apiversion + "/" + apirestargets + "/"
-	urlStr := u.String()
-	if glog.V(3) {
-		glog.Infof("URL %q", urlStr)
-	}
-	method := http.MethodPost
-	action := "register with"
-	req, err := http.NewRequest(method, urlStr, bytes.NewBufferString(data.Encode()))
+	jsbytes, err := json.Marshal(r.si)
 	if err != nil {
-		glog.Errorf("Unexpected failure to create %s request, err: %v", method, err)
+		glog.Errorf("Unexpected failure to json-marshal %+v, err: %v", &r.si, err)
 		return err
 	}
-	req.Header.Add("Authorization", "auth_token=\"XXXXXXX\"")
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
-
-	// send http request
-	response, err := r.httpclient.Do(req)
-	if err != nil || response == nil {
-		glog.Errorf("Failed to %s proxy, err: %v", action, err)
-		return err
-	}
-	// cleanup
-	defer func() {
-		if response != nil {
-			err = response.Body.Close()
-		}
-	}()
-	// check if the work was actually done
-	if _, err = ioutil.ReadAll(response.Body); err != nil {
-		glog.Errorf("Couldn't parse response body, err: %v", err)
-		return err
-	}
-	return err
+	url := ctx.config.Proxy.URL + "/" + apiversion + "/" + apirestargets + "/"
+	return r.call(url, http.MethodPost, jsbytes)
 }
 
-// unregistration
+// deregistration
 func (r *targetrunner) unregister() error {
-	data := url.Values{}
-	u, _ := url.ParseRequestURI(ctx.config.Proxy.URL)
-	//
-	// REST API
-	//
-	u.Path = "/" + apiversion + "/" + apirestargets + "/" + daemonID + "/" + r.sid
-	urlStr := u.String()
-	if glog.V(3) {
-		glog.Infof("URL %q", urlStr)
-	}
-	method := http.MethodDelete
-	req, err := http.NewRequest(method, urlStr, bytes.NewBufferString(data.Encode()))
-	if err != nil {
-		glog.Errorf("Unexpected failure to create %s request, err: %v", method, err)
-		return err
-	}
-	// send http request
-	response, err := r.httpclient.Do(req)
-	if err != nil || response == nil {
-		// proxy may have already shut down
-		glog.Infof("Failed to unregister from proxy, err: %v", err)
-		return err
-	}
-	// cleanup
-	defer func() {
-		if response != nil {
-			err = response.Body.Close()
-		}
-	}()
-	// check if the work was actually done
-	if _, err = ioutil.ReadAll(response.Body); err != nil {
-		glog.Errorf("Couldn't parse response body, err: %v", err)
-		return err
-	}
-	return err
+	url := ctx.config.Proxy.URL + "/" + apiversion + "/" + apirestargets + "/"
+	url += daemonID + "/" + r.si.DaemonID
+	return r.call(url, http.MethodDelete, nil)
 }
