@@ -24,12 +24,10 @@ const (
 	xstorstats  = "storstats"
 )
 
-// encoding
+// REST/JSON actions - ControlMsg.Action enum
 const (
-	nodeIPAddr = "nodeIPAddr" // daemon's IP address
-	daemonPort = "daemonPort" // expecting an integer > 1000
-	daemonID   = "daemonID"   // node ID must be unique
-	directURL  = "directURL"
+	shutdown = "shutdown"
+	getstats = "getstats"
 )
 
 //====================
@@ -44,6 +42,13 @@ var ctx = &daemon{}
 // types
 //
 //====================
+type ControlMsg struct {
+	Action string `json:"action"` // shutdown, restart, getstats, TBD
+	Param1 string `json:"param1"` // action-specific params
+	Param2 string `json:"param2"`
+	Param3 string `json:"param3"`
+}
+
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smaptype struct {
 	Smap    map[string]*ServerInfo `json:"smap"`
@@ -193,13 +198,13 @@ func dfcinit() {
 		statstime time.Duration
 	)
 	flag.StringVar(&role, "role", "", "role: proxy OR target")
-	flag.StringVar(&conffile, "configfile", "", "config filename")
+	flag.StringVar(&conffile, "config", "", "config filename")
 	flag.StringVar(&loglevel, "loglevel", "", "glog loglevel")
 	flag.DurationVar(&statstime, "statstime", 0, "http and capacity utilization statistics log interval")
 
 	flag.Parse()
 	if conffile == "" {
-		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|target> -configfile=<somefile.json> [-statstime=<duration>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|target> -config=<json> [...]\n")
 		os.Exit(2)
 	}
 	assert(role == xproxy || role == xtarget, "Invalid flag: role="+role)

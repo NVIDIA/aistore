@@ -8,12 +8,16 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"html"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
 )
 
@@ -22,11 +26,12 @@ const (
 	requesttimeout = 5 * time.Second // http timeout
 )
 
-// REST API
+// RESTful URL path: /v1/....
 const (
-	apiversion    = "v1"
-	apiresfiles   = "files"
-	apirestargets = "targets"
+	Rversion = "v1"
+	Rfiles   = "files"
+	Rcluster = "cluster"
+	Rdaemon  = "daemon"
 )
 
 //===========================================================================
@@ -34,23 +39,42 @@ const (
 // http request parsing helpers
 //
 //===========================================================================
-func checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n int, ver, res string) bool {
-	if len(apitems) > 0 && ver != "" && apitems[0] != ver {
-		glog.Errorf("Invalid API version: %s (expecting %s)", apitems[0], ver)
-		invalhdlr(w, r)
-		return false
+func restApiItems(unescapedpath string, maxsplit int) []string {
+	escaped := html.EscapeString(unescapedpath)
+	split := strings.SplitN(escaped, "/", maxsplit)
+	apitems := make([]string, 0, len(split))
+	for i := 0; i < len(split); i++ {
+		if split[i] != "" { // omit empty
+			apitems = append(apitems, split[i])
+		}
 	}
-	if len(apitems) > 1 && res != "" && apitems[1] != res {
-		glog.Errorf("Invalid API resource: %s (expecting %s)", apitems[1], res)
-		invalhdlr(w, r)
-		return false
+	return apitems
+}
+
+// remove validated fields and return the resulting slice
+func checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n int, ver, res string) []string {
+	if len(apitems) > 0 && ver != "" {
+		if apitems[0] != ver {
+			glog.Errorf("Invalid API version: %s (expecting %s)", apitems[0], ver)
+			invalhdlr(w, r)
+			return nil
+		}
+		apitems = apitems[1:]
+	}
+	if len(apitems) > 0 && res != "" {
+		if apitems[0] != res {
+			glog.Errorf("Invalid API resource: %s (expecting %s)", apitems[0], res)
+			invalhdlr(w, r)
+			return nil
+		}
+		apitems = apitems[1:]
 	}
 	if len(apitems) < n {
-		glog.Errorf("Invalid API request: num elements %d (expecting at least %d)", len(apitems), n)
+		glog.Errorf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
 		invalhdlr(w, r)
-		return false
+		return nil
 	}
-	return true
+	return apitems
 }
 
 // FIXME: revisit the following 3 methods, and make consistent
@@ -120,7 +144,11 @@ func (r *httprunner) init() error {
 	r.si = &ServerInfo{}
 	r.si.NodeIPAddr = ipaddr
 	r.si.DaemonPort = ctx.config.Listen.Port
-	r.si.DaemonID = ipaddr + ":" + ctx.config.Listen.Port
+
+	// NOTE: generate and assign ID and URL here
+	split := strings.Split(ipaddr, ".")
+	cs := xxhash.ChecksumString32S(split[len(split)-1], LCG32)
+	r.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
 	r.si.DirectURL = "http://" + r.si.NodeIPAddr + ":" + r.si.DaemonPort
 	return nil
 }
@@ -182,7 +210,6 @@ func (r *httprunner) call(url string, method string, jsbytes []byte) (err error)
 	}
 	response, err = r.httpclient.Do(request)
 	if err != nil || response == nil {
-		glog.Errorf("Failed to register with proxy, err: %v", err)
 		return err
 	}
 	defer func() {
