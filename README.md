@@ -88,19 +88,19 @@ This command queries the DFC configuration; at the time of this writing it'll re
 
 Notice the 4 (four) ubiquitous elements in the `curl` command line above:
 
-1. HTTP verb aka method. In the example, it's a GET but it can also be POST, PUT, and DELETE.
+1. HTTP verb aka method.
 
-For a brief summary see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html)
+In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
 
 2. URL path: hostname or IP address of one of the DFC servers.
 
-By convention, REST operation on the DFC proxy implies a "clustered" scope - that is, operates on the entire cluster.
+By convention, REST operation implies a "clustered" scope when performed on a DFC proxy server.
 
-3. URL path: version of the REST API, resource that is operated upon, and possibly, more forward-slash delimited specifiers. 
+3. URL path: version of the REST API, resource that is operated upon, and possibly more forward-slash delimited specifiers.
 
 For example: /v1/cluster where 'v1' is the currently supported version and 'cluster' is the resource.
 
-4. Control message in JSON format, e.g. `{"what": "config"}`
+4. Control message in JSON format, e.g. `{"what": "config"}`.
 
 > Combined, all these elements tell the following story. They tell us what to do in the most generic terms (e.g., GET), designate the target aka "resource" (e.g., cluster), and may also include context-specific and JSON-encoded control message to, for instance, distinguish between getting system statistics (`{"what": "stats"}`) versus system configuration (`{"what": "config"}`).
 
@@ -112,3 +112,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Shutdown DFC cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
+| Get object | GET /v1/files/bucket-name/object-name | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (*) |
+| Get bucket contents | GET /v1/files/bucket-name | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket` |
+
+> (*) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
