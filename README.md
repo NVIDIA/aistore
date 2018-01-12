@@ -74,3 +74,41 @@ To terminate a running DFC service and cleanup local caches, run:
 $ make kill
 $ make rmcache
 ```
+## REST operations
+
+DFC supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
+
+```
+$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/cluster
+```
+
+This command queries the DFC configuration; at the time of this writing it'll result in a JSON output that looks as follows:
+
+> {"smap":{"":{"node_ip_addr":"","daemon_port":"","daemon_id":"","direct_url":""},"15205:8081":{"node_ip_addr":"192.168.176.128","daemon_port":"8081","daemon_id":"15205:8081","direct_url":"http://192.168.176.128:8081"},"15205:8082":{"node_ip_addr":"192.168.176.128","daemon_port":"8082","daemon_id":"15205:8082","direct_url":"http://192.168.176.128:8082"},"15205:8083":{"node_ip_addr":"192.168.176.128","daemon_port":"8083","daemon_id":"15205:8083","direct_url":"http://192.168.176.128:8083"}},"version":5}
+
+Notice the 4 (four) ubiquitous elements in the `curl` command line above:
+
+1. HTTP verb aka method. In the example, it's a GET but it can also be POST, PUT, and DELETE.
+
+For a brief summary see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html)
+
+2. URL path: hostname or IP address of one of the DFC servers.
+
+By convention, REST operation on the DFC proxy implies a "clustered" scope - that is, operates on the entire cluster.
+
+3. URL path: version of the REST API, resource that is operated upon, and possibly, more forward-slash delimited specifiers. 
+
+For example: /v1/cluster where 'v1' is the currently supported version and 'cluster' is the resource.
+
+4. Control message in JSON format, e.g. `{"what": "config"}`
+
+> Combined, all these elements tell the following story. They tell us what to do in the most generic terms (e.g., GET), designate the target aka "resource" (e.g., cluster), and may also include context-specific and JSON-encoded control message to, for instance, distinguish between getting system statistics (`{"what": "stats"}`) versus system configuration (`{"what": "config"}`).
+
+| Operation | HTTP action | Example |
+|--- | --- | ---|
+|Unregister storage target| DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://192.168.176.128:8080/v1/cluster/daemon/15205:8081` |
+|Get cluster configuration| GET {"what": "config"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/cluster` |
+| Shutdown target | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
+| Shutdown DFC cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
+| Get cluster statistics | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
+| Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
