@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -89,6 +88,6 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 		return err
 	}
 	stats := getstorstats()
-	atomic.AddInt64(&stats.bytesloaded, bytes)
+	statsAdd(&stats.Bytesloaded, bytes)
 	return nil
 }

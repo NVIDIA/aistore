@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 
 	"cloud.google.com/go/storage"
 	"github.com/golang/glog"
@@ -92,6 +91,6 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	}
 
 	stats := getstorstats()
-	atomic.AddInt64(&stats.bytesloaded, bytes)
+	statsAdd(&stats.Bytesloaded, bytes)
 	return nil
 }

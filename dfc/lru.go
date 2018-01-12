@@ -189,8 +189,8 @@ func do_LRU(toevict int64, mpath string) error {
 	}
 	if ctx.rg != nil { // FIXME: for *_test only
 		stats := getstorstats()
-		atomic.AddInt64(&stats.bytesevicted, bevicted)
-		atomic.AddInt64(&stats.filesevicted, fevicted)
+		statsAdd(&stats.Bytesevicted, bevicted)
+		statsAdd(&stats.Filesevicted, fevicted)
 	}
 	// final check
 	statfs := syscall.Statfs_t{}

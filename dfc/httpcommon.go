@@ -7,14 +7,15 @@ package dfc
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/OneOfOne/xxhash"
@@ -55,23 +56,23 @@ func restApiItems(unescapedpath string, maxsplit int) []string {
 func checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n int, ver, res string) []string {
 	if len(apitems) > 0 && ver != "" {
 		if apitems[0] != ver {
-			glog.Errorf("Invalid API version: %s (expecting %s)", apitems[0], ver)
-			invalhdlr(w, r)
+			s := fmt.Sprintf("Invalid API version: %s (expecting %s)", apitems[0], ver)
+			invalmsghdlr(w, r, s)
 			return nil
 		}
 		apitems = apitems[1:]
 	}
 	if len(apitems) > 0 && res != "" {
 		if apitems[0] != res {
-			glog.Errorf("Invalid API resource: %s (expecting %s)", apitems[0], res)
-			invalhdlr(w, r)
+			s := fmt.Sprintf("Invalid API resource: %s (expecting %s)", apitems[0], res)
+			invalmsghdlr(w, r, s)
 			return nil
 		}
 		apitems = apitems[1:]
 	}
 	if len(apitems) < n {
-		glog.Errorf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
-		invalhdlr(w, r)
+		s := fmt.Sprintf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
+		invalmsghdlr(w, r, s)
 		return nil
 	}
 	return apitems
@@ -89,14 +90,35 @@ func errmsgRestApi(s string, r *http.Request) string {
 	return s
 }
 
+func invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string) {
+	s := http.StatusText(http.StatusBadRequest) + ": " + specific
+	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+	glog.Errorln(s)
+	http.Error(w, s, http.StatusBadRequest)
+}
+
 // FIXME: http.StatusInternalServerError - here and elsewehere
 // FIXME: numerr - differentiate
 func webinterror(w http.ResponseWriter, errstr string) error {
 	glog.Errorln(errstr)
 	http.Error(w, errstr, http.StatusInternalServerError)
 	stats := getstorstats()
-	atomic.AddInt64(&stats.numerr, 1)
+	statsAdd(&stats.Numerr, 1)
 	return errors.New(errstr)
+}
+
+func readJson(w http.ResponseWriter, r *http.Request, out interface{}) error {
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err == nil {
+		err = json.Unmarshal(b, out)
+	}
+	if err != nil {
+		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
+		invalmsghdlr(w, r, s)
+		return err
+	}
+	return nil
 }
 
 //===========================================================================

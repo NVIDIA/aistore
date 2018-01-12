@@ -24,12 +24,6 @@ const (
 	xstorstats  = "storstats"
 )
 
-// REST/JSON actions - ControlMsg.Action enum
-const (
-	shutdown = "shutdown"
-	getstats = "getstats"
-)
-
 //====================
 //
 // global
@@ -42,12 +36,28 @@ var ctx = &daemon{}
 // types
 //
 //====================
-type ControlMsg struct {
-	Action string `json:"action"` // shutdown, restart, getstats, TBD
+type ActionMsg struct {
+	Action string `json:"action"` // shutdown, restart - see the const below
 	Param1 string `json:"param1"` // action-specific params
 	Param2 string `json:"param2"`
-	Param3 string `json:"param3"`
 }
+
+// ActionMsg.Action enum
+const (
+	ActionShutdown = "shutdown"
+)
+
+type GetMsg struct {
+	What   string `json:"what"` // specifies what exactly are we getting
+	Param1 string `json:"param1"`
+	Param2 string `json:"param2"`
+}
+
+// GetMsg.What enum
+const (
+	GetConfig = "config"
+	GetStats  = "stats"
+)
 
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smaptype struct {
@@ -108,14 +118,14 @@ func (m *Smaptype) add(si *ServerInfo) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.Smap[si.DaemonID] = si
-	atomic.AddInt64(&m.Version, 1)
+	statsAdd(&m.Version, 1)
 }
 
 func (m *Smaptype) del(sid string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	delete(m.Smap, sid)
-	atomic.AddInt64(&m.Version, 1)
+	statsAdd(&m.Version, 1)
 }
 
 func (m *Smaptype) get(sid string) *ServerInfo {
@@ -255,10 +265,15 @@ m:
 // global helpers
 //
 //==================
-func getproxystats() *proxystats {
+func getproxystatsrunner() *proxystatsrunner {
 	r := ctx.rg.runmap[xproxystats]
 	rr, ok := r.(*proxystatsrunner)
 	assert(ok)
+	return rr
+}
+
+func getproxystats() *Proxystats {
+	rr := getproxystatsrunner()
 	return &rr.stats
 }
 
@@ -269,10 +284,15 @@ func getproxy() *proxyrunner {
 	return rr
 }
 
-func getstorstats() *storstats {
+func getstorstatsrunner() *storstatsrunner {
 	r := ctx.rg.runmap[xstorstats]
 	rr, ok := r.(*storstatsrunner)
 	assert(ok)
+	return rr
+}
+
+func getstorstats() *Storstats {
+	rr := getstorstatsrunner()
 	return &rr.stats
 }
 

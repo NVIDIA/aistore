@@ -8,10 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/golang/glog"
@@ -38,12 +36,14 @@ type cinterface interface {
 type targetrunner struct {
 	httprunner
 	cloudif cinterface // Interface for multiple cloud
+	stats   *Storstats
 }
 
 // start target runner
 func (r *targetrunner) run() error {
 	// init
 	r.httprunner.init()
+	r.stats = getstorstats() // TODO: start using instead of calling getstorstats() every time..
 
 	// FIXME cleanup unreg
 	if err := r.register(); err != nil {
@@ -130,21 +130,20 @@ func (r *targetrunner) unregister() error {
 // checks if the named fobject; if not, downloads it and (always)
 // sends it back via http
 func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
-	assert(r.Method == http.MethodGet)
-	stats := getstorstats()
+	assert(r.Method == http.MethodGet) // TODO
 	//
 	// parse and validate REST API
 	//
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		atomic.AddInt64(&stats.numerr, 1)
+		statsAdd(&t.stats.Numerr, 1)
 		return
 	}
 	bktname, keyname := apitems[0], ""
 	if len(apitems) > 1 {
 		keyname = apitems[1]
 	}
-	atomic.AddInt64(&stats.numget, 1)
+	statsAdd(&t.stats.Numget, 1)
 	//
 	// list the bucket and return
 	//
@@ -160,7 +159,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	fname := mpath + "/" + bktname + "/" + keyname
 	_, err := os.Stat(fname)
 	if os.IsNotExist(err) {
-		atomic.AddInt64(&stats.numcoldget, 1)
+		statsAdd(&t.stats.Numcoldget, 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
 		//
 		// TODO: do getcloudif().getobj() and write http response in parallel
@@ -176,7 +175,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		glog.Errorf("Failed to open %q, err: %v", fname, err)
 		checksetmounterror(fname)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		atomic.AddInt64(&stats.numerr, 1)
+		statsAdd(&t.stats.Numerr, 1)
 	} else {
 		defer file.Close()
 		// NOTE: the following copyBuffer() call is equaivalent to:
@@ -186,9 +185,9 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			glog.Errorf("Failed to copy %q to http response, err: %v", fname, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			atomic.AddInt64(&stats.numerr, 1)
+			statsAdd(&t.stats.Numerr, 1)
 		} else if glog.V(3) {
-			glog.Infof("Copied %q to http response (size %.2f MB)", fname, float64(written)/1000/1000)
+			glog.Infof("Copied %q to http(%.2f MB)", fname, float64(written)/1000/1000)
 		}
 	}
 	glog.Flush()
@@ -196,31 +195,59 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 
 // handler for: "/"+Rversion+"/"+Rdaemon
 func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
-	assert(r.Method == http.MethodPut) // TODO: add GET for the stats, and more
-	stats := getstorstats()
-	//
-	// parse and validate REST API
-	//
+	switch r.Method {
+	case http.MethodGet:
+		t.httpget(w, r)
+	case http.MethodPut:
+		t.httpput(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+	glog.Flush()
+}
+
+func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
-		atomic.AddInt64(&stats.numerr, 1)
+		statsAdd(&t.stats.Numerr, 1)
 		return
 	}
-	var msg ControlMsg
-	b, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err == nil {
-		err = json.Unmarshal(b, &msg)
-	}
-	if err != nil {
-		glog.Errorf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		atomic.AddInt64(&stats.numerr, 1)
+	var msg ActionMsg
+	if readJson(w, r, &msg) != nil {
 		return
 	}
-	if msg.Action == shutdown {
+	if msg.Action == ActionShutdown {
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	} else {
-		glog.Errorf("Unexpected control message [%+v]", msg)
+		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		invalmsghdlr(w, r, s)
 	}
+}
+
+func (t *targetrunner) httpget(w http.ResponseWriter, r *http.Request) {
+	apitems := restApiItems(r.URL.Path, 5)
+	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+		statsAdd(&t.stats.Numerr, 1)
+		return
+	}
+	var msg GetMsg
+	if readJson(w, r, &msg) != nil {
+		return
+	}
+	var (
+		jsbytes []byte
+		err     error
+	)
+	switch msg.What {
+	case GetConfig:
+		jsbytes, err = json.Marshal(t.si)
+	case GetStats:
+		jsbytes = getstorstatsrunner().jsbytes
+	default:
+		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
+		invalmsghdlr(w, r, s)
+	}
+	assert(err == nil)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsbytes)
 }

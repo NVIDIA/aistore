@@ -5,6 +5,7 @@
 package dfc
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"syscall"
@@ -13,13 +14,13 @@ import (
 	"github.com/golang/glog"
 )
 
-type storstats struct {
-	numget       int64
-	numcoldget   int64
-	bytesloaded  int64
-	bytesevicted int64
-	filesevicted int64
-	numerr       int64
+type Storstats struct {
+	Numget       int64 `json:"numget"`
+	Numcoldget   int64 `json:"numcoldget"`
+	Bytesloaded  int64 `json:"bytesloaded"`
+	Bytesevicted int64 `json:"bytesevicted"`
+	Filesevicted int64 `json:"filesevicted"`
+	Numerr       int64 `json:"numerr"`
 }
 
 type usedstats map[string]int
@@ -28,11 +29,11 @@ type statslogger interface {
 	log()
 }
 
-type proxystats struct {
-	numget    int64
-	numpost   int64
-	numdelete int64
-	numerr    int64
+type Proxystats struct {
+	Numget    int64 `json:"numget"`
+	Numpost   int64 `json:"numpost"`
+	Numdelete int64 `json:"numdelete"`
+	Numerr    int64 `json:"numerr"`
 }
 
 type statsrunner struct {
@@ -43,13 +44,17 @@ type statsrunner struct {
 
 type proxystatsrunner struct {
 	statsrunner
-	stats proxystats
+	stats     Proxystats
+	statscopy Proxystats
+	jsbytes   []byte
 }
 
 type storstatsrunner struct {
 	statsrunner
-	stats storstats
-	used  usedstats
+	stats     Storstats
+	statscopy Storstats
+	used      usedstats
+	jsbytes   []byte
 }
 
 func (r *statsrunner) runcommon(logger statslogger) error {
@@ -82,16 +87,17 @@ func (r *proxystatsrunner) run() error {
 }
 
 func (r *proxystatsrunner) log() {
-	// nothing changed since the previous call
-	if r.stats.numget == 0 {
+	// nothing changed since the previous invocation
+	if r.stats.Numget == r.statscopy.Numget &&
+		r.stats.Numpost == r.statscopy.Numpost &&
+		r.stats.Numdelete == r.statscopy.Numdelete {
 		return
 	}
 	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
 	glog.Infoln(s)
-	// zero out all counters except err
-	numerr := r.stats.numerr
-	clearStruct(&r.stats)
-	r.stats.numerr = numerr
+	// copy & json
+	copyStruct(&r.statscopy, &r.stats)
+	r.jsbytes, _ = json.Marshal(&r.stats)
 }
 
 func (r *storstatsrunner) run() error {
@@ -99,16 +105,18 @@ func (r *storstatsrunner) run() error {
 }
 
 func (r *storstatsrunner) log() {
-	// nothing changed since the previous call
-	if r.stats.numget == 0 && r.stats.bytesloaded == 0 && r.stats.bytesevicted == 0 {
+	// nothing changed since the previous invocation
+	if r.stats.Numget == r.statscopy.Numget &&
+		r.stats.Bytesloaded == r.statscopy.Bytesloaded &&
+		r.stats.Bytesevicted == r.statscopy.Bytesevicted {
 		return
 	}
 	// 1. format and log Get stats
-	mbytesloaded := float64(r.stats.bytesloaded) / 1000 / 1000
-	mbytesevicted := float64(r.stats.bytesevicted) / 1000 / 1000
+	mbytesloaded := float64(r.stats.Bytesloaded) / 1000 / 1000
+	mbytesevicted := float64(r.stats.Bytesevicted) / 1000 / 1000
 	s := fmt.Sprintf("%s: numget,%d,numcoldget,%d,mbytesloaded,%.2f,mbytesevicted,%.2f,filesevicted,%d,numerr,%d",
-		r.name, r.stats.numget, r.stats.numcoldget,
-		mbytesloaded, mbytesevicted, r.stats.filesevicted, r.stats.numerr)
+		r.name, r.stats.Numget, r.stats.Numcoldget,
+		mbytesloaded, mbytesevicted, r.stats.Filesevicted, r.stats.Numerr)
 	glog.Infoln(s)
 
 	// 2. assign usage %%
@@ -117,7 +125,7 @@ func (r *storstatsrunner) log() {
 	for _, mountpath := range ctx.mountpaths {
 		uu, ok := fsmap[mountpath.Fsid]
 		if ok {
-			glog.Infof("%s duplicate FSID %v, mpath %q", r.name, mountpath.Fsid, mountpath.Path)
+			// the same filesystem: usage cannot be different..
 			r.used[mountpath.Path] = uu
 			continue
 		}
@@ -136,14 +144,16 @@ func (r *storstatsrunner) log() {
 	// 3. format and log usage %%
 	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
 	glog.Infoln(s)
-
 	// 4. LRU
 	if runlru {
 		go all_LRU()
 	}
+	// 5. copy & json
+	copyStruct(&r.statscopy, &r.stats)
+	r.jsbytes, _ = json.Marshal(&r.stats)
+}
 
-	// 5. zero out all counters except err
-	numerr := r.stats.numerr
-	clearStruct(&r.stats)
-	r.stats.numerr = numerr
+//
+func statsAdd(v *int64, val int64) {
+	*v += val
 }

@@ -36,6 +36,19 @@ func clearStruct(x interface{}) {
 	p.Set(reflect.Zero(p.Type()))
 }
 
+func copyStruct(dst interface{}, src interface{}) {
+	x := reflect.ValueOf(src)
+	if x.Kind() == reflect.Ptr {
+		starX := x.Elem()
+		y := reflect.New(starX.Type())
+		starY := y.Elem()
+		starY.Set(starX)
+		reflect.ValueOf(dst).Elem().Set(y.Elem())
+	} else {
+		dst = x.Interface()
+	}
+}
+
 // FIXME: pick the first random IPv4 that is not loopback
 func getipaddr() (string, error) {
 	var ipaddr string
