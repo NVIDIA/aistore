@@ -25,8 +25,8 @@ DIRPATH="/tmp/nvidia/"
 # Verbosity: 0 (minimal) to 4 (max)
 LOGLEVEL="3"
 LOGDIR="/log"
-# CONFPATH="$HOME/.dfc"
-CONFPATH="/etc/.dfc"
+CONFPATH="$HOME/.dfc"
+# CONFPATH="/etc/.dfc"
 INSTANCEPREFIX="dfc"
 MAXCONCURRENTDOWNLOAD=64
 MAXCONCURRENTUPLOAD=64
