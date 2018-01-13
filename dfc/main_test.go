@@ -38,6 +38,7 @@ var (
 	bucket     string
 	numfiles   int
 	numworkers int
+	match      string
 )
 
 // Work result from each worker
@@ -50,6 +51,7 @@ func init() {
 	flag.StringVar(&bucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
+	flag.StringVar(&match, "match", ".*", "regex match for the keyname")
 }
 
 func Test_download(t *testing.T) {
@@ -88,14 +90,30 @@ func Test_download(t *testing.T) {
 
 	// Read the keynames from list, and share the keynames among the worker channels
 	reader := bufio.NewReader(r.Body)
+
+	// Compile the regular expression
+	re, rerr := regexp.Compile(match)
+	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
+		return
+	}
+
+	// Select only matched keynames
+	wrkrChosen := 0
+	numExpected := 0 // Track how many will be actually chosen for download
+
 	for i := 0; i < numfiles; i++ {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			break
 		}
 		keyname := strings.TrimSuffix(string(line), "\n")
-		keyname_chans[i%numworkers] <- keyname
+		if re.MatchString(keyname) {
+			keyname_chans[wrkrChosen%numworkers] <- keyname
+			wrkrChosen++
+			numExpected++
+		}
 	}
+	t.Logf("Expecting %d files to be downloaded", numExpected)
 
 	// Close the channels after the reading is done
 	for i := 0; i < numworkers; i++ {
@@ -103,18 +121,22 @@ func Test_download(t *testing.T) {
 	}
 
 	wg.Wait()
+
 	// Now find the total number of files and data downloaed
 	var sumtotfiles int = 0
 	var sumtotbytes int64 = 0
 	for i := 0; i < numworkers; i++ {
-		for res := range result_chans[i] {
-			sumtotfiles += res.totfiles
-			sumtotbytes += res.totbytes
-		}
+		res := <-result_chans[i]
+		sumtotbytes += res.totbytes
+		sumtotfiles += res.totfiles
+		t.Logf("Worker #%d: %d files, size %.2f MB (%d B)",
+			i, res.totfiles, float64(res.totbytes/1000/1000), res.totbytes)
 	}
-	t.Logf("%d workers downloaded %d files and copied (size %.2f KB)", numworkers, sumtotfiles, float64(sumtotbytes/1000))
-	if sumtotfiles != numfiles {
-		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", numfiles, sumtotfiles)
+	t.Logf("\nSummary: %d workers, %d files, total size %.2f MB (%d B)",
+		numworkers, sumtotfiles, float64(sumtotbytes/1000/1000), sumtotbytes)
+
+	if sumtotfiles != numExpected {
+		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", numExpected, sumtotfiles)
 		t.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
@@ -165,10 +187,8 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			res.totfiles += 1
 			res.totbytes += written
 		}
-		t.Logf("Worker %2d: Downloaded and copied %q (size %.2f MB)", id, fname, float64(written/1000/1000))
 	}
 	// Send information back
-	t.Logf("Worker %2d: Downloaded and copied total of %d files and %d bytes", id, res.totfiles, res.totbytes)
 	resch <- res
 	close(resch)
 }

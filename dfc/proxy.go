@@ -169,6 +169,12 @@ func (p *proxyrunner) httpget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = json.Marshal(ctx.smap)
 	case GetStats:
 		jsbytes = getproxystatsrunner().jsbytes
+		getmsgbytes, err := json.Marshal(msg) // same message -> all targets
+		assert(err == nil)
+		for _, si := range ctx.smap.Smap {
+			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
+			p.call(url, r.Method, getmsgbytes)
+		}
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
