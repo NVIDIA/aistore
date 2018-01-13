@@ -101,7 +101,7 @@ func Test_download(t *testing.T) {
 	wrkrChosen := 0
 	numExpected := 0 // Track how many will be actually chosen for download
 
-	for i := 0; i < numfiles; i++ {
+	for i := 0; ; {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			break
@@ -111,6 +111,10 @@ func Test_download(t *testing.T) {
 			keyname_chans[wrkrChosen%numworkers] <- keyname
 			wrkrChosen++
 			numExpected++
+			i++
+			if i >= numfiles {
+				break
+			}
 		}
 	}
 	t.Logf("Expecting %d files to be downloaded", numExpected)
