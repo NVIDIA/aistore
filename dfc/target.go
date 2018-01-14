@@ -111,13 +111,15 @@ func (r *targetrunner) register() error {
 		return err
 	}
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
-	return r.call(url, http.MethodPost, jsbytes)
+	_, err = r.call(url, http.MethodPost, jsbytes)
+	return err
 }
 
 func (r *targetrunner) unregister() error {
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
 	url += "/" + Rdaemon + "/" + r.si.DaemonID
-	return r.call(url, http.MethodDelete, nil)
+	_, err := r.call(url, http.MethodDelete, nil)
+	return err
 }
 
 //==============
@@ -241,13 +243,16 @@ func (t *targetrunner) httpget(w http.ResponseWriter, r *http.Request) {
 	switch msg.What {
 	case GetConfig:
 		jsbytes, err = json.Marshal(t.si)
+		assert(err == nil, err)
 	case GetStats:
-		jsbytes = getstorstatsrunner().jsbytes
+		var stats Storstats
+		getstorstatsrunner().syncstats(&stats)
+		jsbytes, err = json.Marshal(stats)
+		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
 	}
-	assert(err == nil)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
 }

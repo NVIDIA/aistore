@@ -17,6 +17,12 @@ import (
 	"github.com/golang/glog"
 )
 
+// GET '{"what": "stats"}' /v1/cluster
+type Allstats struct {
+	Proxystats Proxystats            `json:"proxystats"`
+	Storstats  map[string]*Storstats `json:"storstats"`
+}
+
 //===========================================================================
 //
 // proxy runner
@@ -97,14 +103,14 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ctx.config.Proxy.Passthru {
 		glog.Infoln("Proxy will invoke the GET (ctx.config.Proxy.Passthru = false)")
-		p.getAndDrop(w, r, redirecturl) // ignore error, proceed to http redirect
+		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
 	// FIXME: https, HTTP2 here and elsewhere
 	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 }
 
-// getAndDrop reads until EOF and uses dummy writer (ReadToNull)
-func (p *proxyrunner) getAndDrop(w http.ResponseWriter, r *http.Request, redirecturl string) error {
+// receiveDrop reads until EOF and uses dummy writer (ReadToNull)
+func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redirecturl string) error {
 	if glog.V(3) {
 		glog.Infof("GET redirect URL %q", redirecturl)
 	}
@@ -121,7 +127,7 @@ func (p *proxyrunner) getAndDrop(w http.ResponseWriter, r *http.Request, redirec
 	bufreader := bufio.NewReader(newr.Body)
 	bytes, err := ReadToNull(bufreader)
 	if err != nil {
-		glog.Errorf("Failed to copy data to http response, URL %q, err: %v", redirecturl, err)
+		glog.Errorf("Failed to copy data to http, URL %q, err: %v", redirecturl, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		statsAdd(&p.stats.Numerr, 1)
 		return err
@@ -160,26 +166,38 @@ func (p *proxyrunner) httpget(w http.ResponseWriter, r *http.Request) {
 	if readJson(w, r, &msg) != nil {
 		return
 	}
-	var (
-		jsbytes []byte
-		err     error
-	)
 	switch msg.What {
 	case GetConfig:
-		jsbytes, err = json.Marshal(ctx.smap)
-	case GetStats:
-		jsbytes = getproxystatsrunner().jsbytes
-		getmsgbytes, err := json.Marshal(msg) // same message -> all targets
+		jsbytes, err := json.Marshal(ctx.smap)
 		assert(err == nil)
-		for _, si := range ctx.smap.Smap {
-			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-			p.call(url, r.Method, getmsgbytes)
-		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsbytes)
+	case GetStats:
+		getstatsmsg, err := json.Marshal(msg) // same message to all targets
+		assert(err == nil, err)
+		p._httpgetstats(w, r, getstatsmsg)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
 	}
-	assert(err == nil)
+}
+
+// FIXME: run this in a goroutine
+func (p *proxyrunner) _httpgetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
+	var out Allstats
+	out.Storstats = make(map[string]*Storstats, len(ctx.smap.Smap))
+	getproxystatsrunner().syncstats(&out.Proxystats)
+	for _, si := range ctx.smap.Smap {
+		stats := Storstats{}
+		out.Storstats[si.DaemonID] = &stats
+		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
+		outjson, err := p.call(url, r.Method, getstatsmsg)
+		assert(err == nil, err)
+		err = json.Unmarshal(outjson, &stats)
+		assert(err == nil, err)
+	}
+	jsbytes, err := json.Marshal(&out)
+	assert(err == nil, err)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
 }

@@ -5,9 +5,9 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 
@@ -46,7 +46,7 @@ type proxystatsrunner struct {
 	statsrunner
 	stats     Proxystats
 	statscopy Proxystats
-	jsbytes   []byte
+	lock      *sync.Mutex
 }
 
 type storstatsrunner struct {
@@ -54,7 +54,7 @@ type storstatsrunner struct {
 	stats     Storstats
 	statscopy Storstats
 	used      usedstats
-	jsbytes   []byte
+	lock      *sync.Mutex
 }
 
 func (r *statsrunner) runcommon(logger statslogger) error {
@@ -83,7 +83,14 @@ func (r *statsrunner) log() {
 }
 
 func (r *proxystatsrunner) run() error {
+	r.lock = &sync.Mutex{}
 	return r.runcommon(r)
+}
+
+func (r *proxystatsrunner) syncstats(stats *Proxystats) {
+	r.lock.Lock()
+	copyStruct(stats, &r.stats)
+	r.lock.Unlock()
 }
 
 func (r *proxystatsrunner) log() {
@@ -94,14 +101,19 @@ func (r *proxystatsrunner) log() {
 		return
 	}
 	s := fmt.Sprintf("%s: %+v", r.name, r.stats)
+	r.syncstats(&r.statscopy)
 	glog.Infoln(s)
-	// copy & json
-	copyStruct(&r.statscopy, &r.stats)
-	r.jsbytes, _ = json.Marshal(&r.stats)
 }
 
 func (r *storstatsrunner) run() error {
+	r.lock = &sync.Mutex{}
 	return r.runcommon(r)
+}
+
+func (r *storstatsrunner) syncstats(stats *Storstats) {
+	r.lock.Lock()
+	copyStruct(stats, &r.stats)
+	r.lock.Unlock()
 }
 
 func (r *storstatsrunner) log() {
@@ -144,13 +156,11 @@ func (r *storstatsrunner) log() {
 	// 3. format and log usage %%
 	s = fmt.Sprintf("%s used: %+v", r.name, r.used)
 	glog.Infoln(s)
+	r.syncstats(&r.statscopy)
 	// 4. LRU
 	if runlru {
 		go all_LRU()
 	}
-	// 5. copy & json
-	copyStruct(&r.statscopy, &r.stats)
-	r.jsbytes, _ = json.Marshal(&r.stats)
 }
 
 //

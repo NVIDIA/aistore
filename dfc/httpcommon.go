@@ -207,20 +207,20 @@ func (r *httprunner) stop(err error) {
 // http-REST calls another target or a proxy
 // optionally, sends a json-encoded content to the callee
 // expects only OK or FAIL in the return
-func (r *httprunner) call(url string, method string, jsbytes []byte) (err error) {
+func (r *httprunner) call(url string, method string, injson []byte) (outjson []byte, err error) {
 	var (
 		request  *http.Request
 		response *http.Response
 	)
-	if jsbytes == nil || len(jsbytes) == 0 {
+	if injson == nil || len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
 		if glog.V(3) {
 			glog.Infof("%s URL %q", method, url)
 		}
 	} else {
-		request, err = http.NewRequest(method, url, bytes.NewBuffer(jsbytes))
+		request, err = http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if glog.V(3) {
-			glog.Infof("%s URL %q, json %s", method, url, string(jsbytes))
+			glog.Infof("%s URL %q, json %s", method, url, string(injson))
 		}
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
@@ -228,11 +228,11 @@ func (r *httprunner) call(url string, method string, jsbytes []byte) (err error)
 	}
 	if err != nil {
 		glog.Errorf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
-		return err
+		return nil, err
 	}
 	response, err = r.httpclient.Do(request)
 	if err != nil || response == nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if response != nil {
@@ -240,9 +240,9 @@ func (r *httprunner) call(url string, method string, jsbytes []byte) (err error)
 		}
 	}()
 	// block until done (note: returned content is ignored and discarded)
-	if _, err = ioutil.ReadAll(response.Body); err != nil {
-		glog.Errorf("Couldn't parse response body, err: %v", err)
-		return err
+	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
+		glog.Errorf("Failed to read http, err: %v", err)
+		return nil, err
 	}
-	return err
+	return outjson, err
 }
