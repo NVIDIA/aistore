@@ -116,3 +116,18 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Get bucket contents | GET /v1/files/bucket-name | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket` |
 
 > (*) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
+
+### Example: querying runtime statistics
+
+
+```
+$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster
+```
+
+This single command causes execution of multiple `GET {"what": "stats"}` requests within the DFC cluster, and results in a JSON-formatted consolidated output containing both summary and per-target counters, for example:
+
+>{"proxystats":{"numget":95,"numpost":3,"numdelete":0,"numerr":0},"storstats":{"15205:8081":{"numget":26,"numcoldget":4,"bytesloaded":8388608,"bytesevicted":0,"filesevicted":0,"numerr":0},"15205:8082":{"numget":31,"numcoldget":2,"bytesloaded":4194304,"bytesevicted":0,"filesevicted":0,"numerr":0},"15205:8083":{"numget":38,"numcoldget":2,"bytesloaded":4194304,"bytesevicted":0,"filesevicted":0,"numerr":0}}}
+
+When fed into any compatible JSON viewer, the printout may look something as follows:
+
+<img src="images/dfc-get-stats.png" alt="DFC GET stats" width="200">
