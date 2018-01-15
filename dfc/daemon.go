@@ -45,6 +45,7 @@ type ActionMsg struct {
 // ActionMsg.Action enum
 const (
 	ActionShutdown = "shutdown"
+	ActionSyncSmap = "syncsmap" // synchronize cluster map aka Smap across all targets
 )
 
 type GetMsg struct {
@@ -60,7 +61,7 @@ const (
 )
 
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
-type Smaptype struct {
+type Smap struct {
 	Smap    map[string]*ServerInfo `json:"smap"`
 	Version int64                  `json:"version"`
 	lock    *sync.Mutex
@@ -68,7 +69,7 @@ type Smaptype struct {
 
 // daemon instance: proxy or storage target
 type daemon struct {
-	smap       *Smaptype
+	smap       *Smap
 	config     dfconfig
 	mountpaths map[string]mountPath
 	rg         *rungroup
@@ -114,30 +115,30 @@ type gstopError struct {
 // smap wrapper with prelim atomic versioning
 //
 //====================
-func (m *Smaptype) add(si *ServerInfo) {
+func (m *Smap) add(si *ServerInfo) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.Smap[si.DaemonID] = si
 	statsAdd(&m.Version, 1)
 }
 
-func (m *Smaptype) del(sid string) {
+func (m *Smap) del(sid string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	delete(m.Smap, sid)
 	statsAdd(&m.Version, 1)
 }
 
-func (m *Smaptype) get(sid string) *ServerInfo {
+func (m *Smap) get(sid string) *ServerInfo {
 	si, _ := m.Smap[sid]
 	return si
 }
 
-func (m *Smaptype) count() int {
+func (m *Smap) count() int {
 	return len(m.Smap)
 }
 
-func (m *Smaptype) version() int64 {
+func (m *Smap) version() int64 {
 	return atomic.LoadInt64(&m.Version)
 }
 
@@ -230,7 +231,7 @@ func dfcinit() {
 		runmap: make(map[string]runner),
 	}
 	if role == xproxy {
-		ctx.smap = &Smaptype{Smap: make(map[string]*ServerInfo, 8), lock: &sync.Mutex{}}
+		ctx.smap = &Smap{Smap: make(map[string]*ServerInfo, 8), lock: &sync.Mutex{}}
 		ctx.rg.add(&proxyrunner{}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 	} else {

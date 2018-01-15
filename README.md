@@ -20,7 +20,7 @@ started with DFC takes about 30 seconds and consists in executing the following
 4 steps:
 
 ```
-$ go get -u -v github.com/NVIDIA/dfcpub/dfc 
+$ go get -u -v github.com/NVIDIA/dfcpub
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
 $ make deploy
 $ go test -v -run=down -numfiles=2 -bucket=<your bucket name>
@@ -110,6 +110,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 |Get cluster configuration| GET {"what": "config"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/cluster` |
 | Shutdown target | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
 | Shutdown DFC cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
+| Synchronize cluster map | PUT {"action": "syncsmap"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "syncsmap"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
 | Get object | GET /v1/files/bucket-name/object-name | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (*) |

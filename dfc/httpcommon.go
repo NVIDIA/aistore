@@ -29,10 +29,11 @@ const (
 
 // RESTful URL path: /v1/....
 const (
-	Rversion = "v1"
-	Rfiles   = "files"
-	Rcluster = "cluster"
-	Rdaemon  = "daemon"
+	Rversion  = "v1"
+	Rfiles    = "files"
+	Rcluster  = "cluster"
+	Rdaemon   = "daemon"
+	Rsyncsmap = "syncsmap"
 )
 
 //===========================================================================

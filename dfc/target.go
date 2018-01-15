@@ -35,18 +35,20 @@ type cinterface interface {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif cinterface // Interface for multiple cloud
+	cloudif cinterface // multi-cloud vendor support
 	stats   *Storstats
+	smap    *Smap
 }
 
 // start target runner
-func (r *targetrunner) run() error {
+func (t *targetrunner) run() error {
 	// init
-	r.httprunner.init()
-	r.stats = getstorstats() // TODO: start using instead of calling getstorstats() every time..
+	t.httprunner.init()
+	t.stats = getstorstats() // TODO consistency: use instead of getstorstats()
+	t.smap = &Smap{}
 
 	// FIXME cleanup unreg
-	if err := r.register(); err != nil {
+	if err := t.register(); err != nil {
 		glog.Errorf("Failed to register with proxy, err: %v", err)
 		return err
 	}
@@ -80,45 +82,45 @@ func (r *targetrunner) run() error {
 	assert(ctx.config.CloudProvider == amazoncloud || ctx.config.CloudProvider == googlecloud)
 	if ctx.config.CloudProvider == amazoncloud {
 		// TODO: AWS initialization (sessions)
-		r.cloudif = &awsif{}
+		t.cloudif = &awsif{}
 
 	} else {
-		r.cloudif = &gcpif{}
+		t.cloudif = &gcpif{}
 	}
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
-	r.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", r.filehdlr)
-	r.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, r.daemonhdlr)
-	r.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", r.daemonhdlr) // FIXME
-	r.httprunner.registerhdlr("/", invalhdlr)
-	glog.Infof("Storage target is ready, ID=%s", r.si.DaemonID)
-	return r.httprunner.run()
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", t.filehdlr)
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, t.daemonhdlr)
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", t.daemonhdlr) // FIXME
+	t.httprunner.registerhdlr("/", invalhdlr)
+	glog.Infof("Storage target is ready, ID=%s", t.si.DaemonID)
+	return t.httprunner.run()
 }
 
 // stop gracefully
-func (r *targetrunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
-	r.unregister()
-	r.httprunner.stop(err)
+func (t *targetrunner) stop(err error) {
+	glog.Infof("Stopping %s, err: %v", t.name, err)
+	t.unregister()
+	t.httprunner.stop(err)
 }
 
 // target registration with proxy
-func (r *targetrunner) register() error {
-	jsbytes, err := json.Marshal(r.si)
+func (t *targetrunner) register() error {
+	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
-		glog.Errorf("Unexpected failure to json-marshal %+v, err: %v", r.si, err)
+		glog.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
 		return err
 	}
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
-	_, err = r.call(url, http.MethodPost, jsbytes)
+	_, err = t.call(url, http.MethodPost, jsbytes)
 	return err
 }
 
-func (r *targetrunner) unregister() error {
+func (t *targetrunner) unregister() error {
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
-	url += "/" + Rdaemon + "/" + r.si.DaemonID
-	_, err := r.call(url, http.MethodDelete, nil)
+	url += "/" + Rdaemon + "/" + t.si.DaemonID
+	_, err := t.call(url, http.MethodDelete, nil)
 	return err
 }
 
@@ -214,13 +216,36 @@ func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
 		statsAdd(&t.stats.Numerr, 1)
 		return
 	}
+	// PUT '{Smap}' /v1/daemon/syncsmap => target(s)
+	if len(apitems) > 0 && apitems[0] == Rsyncsmap {
+		curversion := t.smap.Version
+		var smap *Smap
+		if readJson(w, r, &smap) != nil {
+			return
+		}
+		if curversion < smap.Version {
+			glog.Infof("syncsmap: new version %d (old %d) - rebalance?", smap.Version, curversion)
+			for id, si := range smap.Smap {
+				if id == t.si.DaemonID {
+					glog.Infoln("target:", si, "<= self")
+				} else {
+					glog.Infoln("target:", si)
+				}
+			}
+			glog.Flush()
+			t.smap = smap
+		}
+		return
+	}
+
 	var msg ActionMsg
 	if readJson(w, r, &msg) != nil {
 		return
 	}
-	if msg.Action == ActionShutdown {
+	switch msg.Action {
+	case ActionShutdown:
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	} else {
+	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
 	}

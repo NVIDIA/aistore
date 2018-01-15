@@ -17,7 +17,12 @@ import (
 	"github.com/golang/glog"
 )
 
-// GET '{"what": "stats"}' /v1/cluster
+//===============
+//
+// REST messaging by proxy
+//
+//===============
+// GET '{"what": "stats"}' /v1/cluster => client
 type Allstats struct {
 	Proxystats Proxystats            `json:"proxystats"`
 	Storstats  map[string]*Storstats `json:"storstats"`
@@ -75,7 +80,17 @@ func (p *proxyrunner) stop(err error) {
 
 // handler for: "/"+Rversion+"/"+Rfiles+"/"
 func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
-	assert(r.Method == http.MethodGet)
+	switch r.Method {
+	case http.MethodGet:
+		p.httpfilget(w, r)
+	case http.MethodPut:
+		p.httpfilput(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	statsAdd(&p.stats.Numget, 1)
 
 	if ctx.smap.count() < 1 {
@@ -85,9 +100,6 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		statsAdd(&p.stats.Numerr, 1)
 		return
 	}
-	//
-	// parse and validate
-	//
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		statsAdd(&p.stats.Numerr, 1)
@@ -138,17 +150,26 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	return err
 }
 
+func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+}
+
+//===========================
+//
+// control plane
+//
+//===========================
+
 // handler for: "/"+Rversion+"/"+Rcluster
 func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		p.httpget(w, r)
+		p.httpcluget(w, r)
 	case http.MethodPost:
-		p.httppost(w, r)
+		p.httpclupost(w, r)
 	case http.MethodDelete:
-		p.httpdelete(w, r)
+		p.httpcludel(w, r)
 	case http.MethodPut:
-		p.httpput(w, r)
+		p.httpcluput(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -156,7 +177,7 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 // gets target info
-func (p *proxyrunner) httpget(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		statsAdd(&p.stats.Numerr, 1)
@@ -175,7 +196,7 @@ func (p *proxyrunner) httpget(w http.ResponseWriter, r *http.Request) {
 	case GetStats:
 		getstatsmsg, err := json.Marshal(msg) // same message to all targets
 		assert(err == nil, err)
-		p._httpgetstats(w, r, getstatsmsg)
+		p.httpclugetstats(w, r, getstatsmsg)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
@@ -183,7 +204,7 @@ func (p *proxyrunner) httpget(w http.ResponseWriter, r *http.Request) {
 }
 
 // FIXME: run this in a goroutine
-func (p *proxyrunner) _httpgetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
+func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
 	var out Allstats
 	out.Storstats = make(map[string]*Storstats, len(ctx.smap.Smap))
 	getproxystatsrunner().syncstats(&out.Proxystats)
@@ -203,7 +224,7 @@ func (p *proxyrunner) _httpgetstats(w http.ResponseWriter, r *http.Request, gets
 }
 
 // registers a new target
-func (p *proxyrunner) httppost(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		statsAdd(&p.stats.Numerr, 1)
@@ -231,7 +252,7 @@ func (p *proxyrunner) httppost(w http.ResponseWriter, r *http.Request) {
 }
 
 // unregisters a target
-func (p *proxyrunner) httpdelete(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
 		statsAdd(&p.stats.Numerr, 1)
@@ -254,11 +275,7 @@ func (p *proxyrunner) httpdelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) httpput(w http.ResponseWriter, r *http.Request) {
-	assert(r.Method == http.MethodPut) // TODO
-	//
-	// parse and validate REST API
-	//
+func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	apitems := restApiItems(r.URL.Path, 5)
 	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		statsAdd(&p.stats.Numerr, 1)
@@ -268,22 +285,30 @@ func (p *proxyrunner) httpput(w http.ResponseWriter, r *http.Request) {
 	if readJson(w, r, &msg) != nil {
 		return
 	}
-	if msg.Action != ActionShutdown {
-		s := fmt.Sprintf("Unexpected control message [%+v]", msg)
+	switch msg.Action {
+	case ActionShutdown:
+		glog.Infoln("Proxy-controlled cluster shutdown...")
+		msgbytes, err := json.Marshal(msg) // same message -> this target
+		assert(err == nil, err)
+		for _, si := range ctx.smap.Smap {
+			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
+			p.call(url, http.MethodPut, msgbytes)
+		}
+		time.Sleep(time.Second)
+		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+
+	case ActionSyncSmap:
+		// PUT '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
+		jsbytes, err := json.Marshal(ctx.smap)
+		assert(err == nil, err)
+		for _, si := range ctx.smap.Smap {
+			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsyncsmap
+			_, err := p.call(url, r.Method, jsbytes)
+			assert(err == nil, err)
+		}
+
+	default:
+		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
-		return
 	}
-	glog.Infoln("Proxy-controlled cluster shutdown...")
-	jsbytes, err := json.Marshal(msg) // same message -> this target
-	if err != nil {
-		s := fmt.Sprintf("Unexpected failure to json-marshal %+v, err: %v", msg, err)
-		invalmsghdlr(w, r, s)
-		return
-	}
-	for _, si := range ctx.smap.Smap {
-		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		p.call(url, http.MethodPut, jsbytes)
-	}
-	time.Sleep(time.Second)
-	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 }
