@@ -119,14 +119,14 @@ func (m *Smap) add(si *ServerInfo) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.Smap[si.DaemonID] = si
-	statsAdd(&m.Version, 1)
+	m.Version++
 }
 
 func (m *Smap) del(sid string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	delete(m.Smap, sid)
-	statsAdd(&m.Version, 1)
+	m.Version++
 }
 
 func (m *Smap) get(sid string) *ServerInfo {

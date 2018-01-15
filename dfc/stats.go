@@ -14,26 +14,34 @@ import (
 	"github.com/golang/glog"
 )
 
-type Storstats struct {
-	Numget       int64 `json:"numget"`
-	Numcoldget   int64 `json:"numcoldget"`
-	Bytesloaded  int64 `json:"bytesloaded"`
-	Bytesevicted int64 `json:"bytesevicted"`
-	Filesevicted int64 `json:"filesevicted"`
-	Numerr       int64 `json:"numerr"`
-}
-
 type usedstats map[string]int
 
+// implemented by the stats runners
 type statslogger interface {
 	log()
 }
 
+// implemented by the stats types: Proxystats and Storstats
+type statsif interface {
+	add(name string, val int64)
+}
+
+// TODO: use static map[string]int64
 type Proxystats struct {
 	Numget    int64 `json:"numget"`
+	Numput    int64 `json:"numput"`
 	Numpost   int64 `json:"numpost"`
 	Numdelete int64 `json:"numdelete"`
 	Numerr    int64 `json:"numerr"`
+}
+
+// TODO: same
+type Storstats struct {
+	Proxystats
+	Numcoldget   int64 `json:"numcoldget"`
+	Bytesloaded  int64 `json:"bytesloaded"`
+	Bytesevicted int64 `json:"bytesevicted"`
+	Filesevicted int64 `json:"filesevicted"`
 }
 
 type statsrunner struct {
@@ -57,6 +65,58 @@ type storstatsrunner struct {
 	lock      *sync.Mutex
 }
 
+// TODO: use static map[string]int64
+func (s *Proxystats) add(name string, val int64) {
+	var v *int64
+	switch name {
+	case "numget":
+		v = &s.Numget
+	case "numput":
+		v = &s.Numput
+	case "numpost":
+		v = &s.Numpost
+	case "numdelete":
+		v = &s.Numdelete
+	case "numerr":
+		v = &s.Numerr
+	default:
+		assert(false, "Invalid stats name "+name)
+	}
+	*v += val
+}
+func (s *Storstats) add(name string, val int64) {
+	var v *int64
+	switch name {
+	case "numget":
+		v = &s.Numget
+	case "numput":
+		v = &s.Numput
+	case "numpost":
+		v = &s.Numpost
+	case "numdelete":
+		v = &s.Numdelete
+	case "numerr":
+		v = &s.Numerr
+	case "numcoldget":
+		v = &s.Numcoldget
+	case "bytesloaded":
+		v = &s.Bytesloaded
+	case "bytesevicted":
+		v = &s.Bytesevicted
+	case "filesevicted":
+		v = &s.Filesevicted
+	default:
+		assert(false, "Invalid stats name "+name)
+	}
+	*v += val
+}
+
+//========================
+//
+// stats runners & methods
+//
+//========================
+
 func (r *statsrunner) runcommon(logger statslogger) error {
 	r.chsts = make(chan os.Signal, 1)
 
@@ -78,6 +138,7 @@ func (r *statsrunner) stop(err error) {
 	close(r.chsts)
 }
 
+// statslogger interface impl
 func (r *statsrunner) log() {
 	assert(false)
 }
@@ -93,6 +154,7 @@ func (r *proxystatsrunner) syncstats(stats *Proxystats) {
 	r.lock.Unlock()
 }
 
+// statslogger interface impl
 func (r *proxystatsrunner) log() {
 	// nothing changed since the previous invocation
 	if r.stats.Numget == r.statscopy.Numget &&
@@ -161,9 +223,4 @@ func (r *storstatsrunner) log() {
 	if runlru {
 		go all_LRU()
 	}
-}
-
-//
-func statsAdd(v *int64, val int64) {
-	*v += val
 }

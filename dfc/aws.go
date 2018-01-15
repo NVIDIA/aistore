@@ -88,6 +88,6 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
 		return err
 	}
 	stats := getstorstats()
-	statsAdd(&stats.Bytesloaded, bytes)
+	stats.add("bytesloaded", bytes)
 	return nil
 }

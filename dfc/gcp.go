@@ -91,6 +91,6 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	}
 
 	stats := getstorstats()
-	statsAdd(&stats.Bytesloaded, bytes)
+	stats.add("bytesloaded", bytes)
 	return nil
 }

@@ -41,7 +41,7 @@ cd -
 CONFFILE="$CONFPATH/$NEW.json"
 
 set -x
-go run setup/dfc.go -configfile=$CONFFILE -role=target $1 $2 &
+go run setup/dfc.go -config=$CONFFILE -role=target $1 $2 &
 { set +x; } 2>/dev/null
 sleep 1
 echo done

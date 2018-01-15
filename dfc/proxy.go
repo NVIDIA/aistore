@@ -35,13 +35,11 @@ type Allstats struct {
 //===========================================================================
 type proxyrunner struct {
 	httprunner
-	stats *Proxystats
 }
 
 // run
 func (p *proxyrunner) run() error {
-	p.httprunner.init()
-	p.stats = getproxystats()
+	p.httprunner.init(getproxystats())
 	//
 	// REST API: register proxy handlers and start listening
 	//
@@ -91,18 +89,17 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
-	statsAdd(&p.stats.Numget, 1)
+	p.statsif.add("numget", 1)
 
 	if ctx.smap.count() < 1 {
 		s := errmsgRestApi("No registered targets yet", r)
 		glog.Errorln(s)
 		http.Error(w, s, http.StatusServiceUnavailable)
-		statsAdd(&p.stats.Numerr, 1)
+		p.statsif.add("numerr", 1)
 		return
 	}
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		statsAdd(&p.stats.Numerr, 1)
+	apitems := p.restApiItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
 	sid := hrwTarget(strings.Join(apitems, "/"))
@@ -141,7 +138,7 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	if err != nil {
 		glog.Errorf("Failed to copy data to http, URL %q, err: %v", redirecturl, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		statsAdd(&p.stats.Numerr, 1)
+		p.statsif.add("numerr", 1)
 		return err
 	}
 	if glog.V(3) {
@@ -150,7 +147,9 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	return err
 }
 
+// 3-way copy
 func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+	assert(false, "NIY")
 }
 
 //===========================
@@ -178,9 +177,8 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 
 // gets target info
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
-		statsAdd(&p.stats.Numerr, 1)
+	apitems := p.restApiItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	var msg GetMsg
@@ -225,9 +223,8 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 
 // registers a new target
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
-		statsAdd(&p.stats.Numerr, 1)
+	apitems := p.restApiItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	var si ServerInfo
@@ -241,7 +238,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, s, http.StatusBadRequest)
 		return
 	}
-	statsAdd(&p.stats.Numpost, 1)
+	p.statsif.add("numpost", 1)
 	if ctx.smap.get(si.DaemonID) != nil {
 		glog.Errorf("Duplicate target {%s}", si.DaemonID)
 	}
@@ -253,9 +250,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 // unregisters a target
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
-		statsAdd(&p.stats.Numerr, 1)
+	apitems := p.restApiItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	if apitems[0] != Rdaemon {
@@ -264,7 +260,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sid := apitems[1]
-	statsAdd(&p.stats.Numdelete, 1)
+	p.statsif.add("numdelete", 1)
 	if ctx.smap.get(sid) == nil {
 		glog.Errorf("Unknown target {%s}", sid)
 		return
@@ -276,9 +272,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
-		statsAdd(&p.stats.Numerr, 1)
+	apitems := p.restApiItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	var msg ActionMsg

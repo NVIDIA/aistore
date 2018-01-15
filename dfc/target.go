@@ -36,15 +36,13 @@ type cinterface interface {
 type targetrunner struct {
 	httprunner
 	cloudif cinterface // multi-cloud vendor support
-	stats   *Storstats
 	smap    *Smap
 }
 
 // start target runner
 func (t *targetrunner) run() error {
 	// init
-	t.httprunner.init()
-	t.stats = getstorstats() // TODO consistency: use instead of getstorstats()
+	t.httprunner.init(getstorstats())
 	t.smap = &Smap{}
 
 	// FIXME cleanup unreg
@@ -130,24 +128,29 @@ func (t *targetrunner) unregister() error {
 //
 //==============
 
-// handler for: "/"+Rversion+"/"+Rfiles+"/"
-// checks if the named fobject; if not, downloads it and (always)
-// sends it back via http
+// handler for: "/"+Rversion+"/"+Rfiles
 func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
-	assert(r.Method == http.MethodGet) // TODO
-	//
-	// parse and validate REST API
-	//
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		statsAdd(&t.stats.Numerr, 1)
+	switch r.Method {
+	case http.MethodGet:
+		t.httpfilget(w, r)
+	case http.MethodPut:
+		t.httpfilput(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+// checks if the object exists - if not, downloads it and (always) sends it back via http
+func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
+	apitems := t.restApiItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
 	bktname, keyname := apitems[0], ""
 	if len(apitems) > 1 {
 		keyname = apitems[1]
 	}
-	statsAdd(&t.stats.Numget, 1)
+	t.statsif.add("numget", 1)
 	//
 	// list the bucket and return
 	//
@@ -163,7 +166,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	fname := mpath + "/" + bktname + "/" + keyname
 	_, err := os.Stat(fname)
 	if os.IsNotExist(err) {
-		statsAdd(&t.stats.Numcoldget, 1)
+		t.statsif.add("numcoldget", 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
 		//
 		// TODO: do getcloudif().getobj() and write http response in parallel
@@ -179,7 +182,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		glog.Errorf("Failed to open %q, err: %v", fname, err)
 		checksetmounterror(fname)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		statsAdd(&t.stats.Numerr, 1)
+		t.statsif.add("numerr", 1)
 	} else {
 		defer file.Close()
 		// NOTE: the following copyBuffer() call is equaivalent to:
@@ -189,13 +192,33 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			glog.Errorf("Failed to copy %q to http response, err: %v", fname, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			statsAdd(&t.stats.Numerr, 1)
+			t.statsif.add("numerr", 1)
 		} else if glog.V(3) {
 			glog.Infof("Copied %q to http(%.2f MB)", fname, float64(written)/1000/1000)
 		}
 	}
 	glog.Flush()
 }
+
+func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+	apitems := t.restApiItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bktname, keyname := apitems[0], ""
+	if len(apitems) > 1 {
+		keyname = apitems[1]
+	}
+	t.statsif.add("numput", 1)
+	glog.Infoln(bktname, keyname)
+
+}
+
+//===========================
+//
+// control plane
+//
+//===========================
 
 // handler for: "/"+Rversion+"/"+Rdaemon
 func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
@@ -211,9 +234,8 @@ func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
-		statsAdd(&t.stats.Numerr, 1)
+	apitems := t.restApiItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
 	// PUT '{Smap}' /v1/daemon/syncsmap => target(s)
@@ -252,9 +274,8 @@ func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpget(w http.ResponseWriter, r *http.Request) {
-	apitems := restApiItems(r.URL.Path, 5)
-	if apitems = checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
-		statsAdd(&t.stats.Numerr, 1)
+	apitems := t.restApiItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
 	var msg GetMsg
