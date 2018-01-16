@@ -31,11 +31,11 @@ const (
 //====================
 var ctx = &daemon{}
 
-//====================
+//=========================================
 //
-// types
+// types: JSON-formatted control structures
 //
-//====================
+//=========================================
 type ActionMsg struct {
 	Action string `json:"action"` // shutdown, restart - see the const below
 	Param1 string `json:"param1"` // action-specific params
@@ -60,6 +60,16 @@ const (
 	GetStats  = "stats"
 )
 
+type CopyMsg struct {
+	FromID string `json:"from_id"`
+	ToID   string `json:"to_id"`
+}
+
+//======
+//
+// types
+//
+//======
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smap struct {
 	Smap    map[string]*ServerInfo `json:"smap"`

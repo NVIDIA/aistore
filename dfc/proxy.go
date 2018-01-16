@@ -182,7 +182,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var msg GetMsg
-	if readJson(w, r, &msg) != nil {
+	if p.readJson(w, r, &msg) != nil {
 		return
 	}
 	switch msg.What {
@@ -228,7 +228,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var si ServerInfo
-	if readJson(w, r, &si) != nil {
+	if p.readJson(w, r, &si) != nil {
 		return
 	}
 	if net.ParseIP(si.NodeIPAddr) == nil {
@@ -277,7 +277,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var msg ActionMsg
-	if readJson(w, r, &msg) != nil {
+	if p.readJson(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {

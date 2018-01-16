@@ -128,7 +128,7 @@ func (t *targetrunner) unregister() error {
 //
 //==============
 
-// handler for: "/"+Rversion+"/"+Rfiles
+// "/"+Rversion+"/"+Rfiles
 func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -140,47 +140,47 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// checks if the object exists - if not, downloads it and (always) sends it back via http
+// "/"+Rversion+"/"+Rfiles+"/"+bucket [+"/"+fname]
+// checks if the object exists locally (if not, downloads it)
+// and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restApiItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	bktname, keyname := apitems[0], ""
+	bucket, objname := apitems[0], ""
 	if len(apitems) > 1 {
-		keyname = apitems[1]
+		objname = apitems[1]
 	}
 	t.statsif.add("numget", 1)
 	//
 	// list the bucket and return
 	//
-	if len(keyname) == 0 {
-		getcloudif().listbucket(w, bktname)
+	if len(objname) == 0 {
+		getcloudif().listbucket(w, bucket)
 		return
 	}
 	//
 	// get from the bucket
 	//
-	mpath := hrwMpath(bktname + "/" + keyname)
-	assert(len(mpath) > 0) // see mountpath.enabled
-	fname := mpath + "/" + bktname + "/" + keyname
-	_, err := os.Stat(fname)
+	fqn := t.fqn(bucket, objname)
+	_, err := os.Stat(fqn)
 	if os.IsNotExist(err) {
 		t.statsif.add("numcoldget", 1)
-		glog.Infof("Bucket %s key %s fqn %q is not cached", bktname, keyname, fname)
+		glog.Infof("Bucket %s key %s fqn %q is not cached", bucket, objname, fqn)
 		//
 		// TODO: do getcloudif().getobj() and write http response in parallel
 		//
-		if err = getcloudif().getobj(w, mpath, bktname, keyname); err != nil {
+		if err = getcloudif().getobj(w, fqn, bucket, objname); err != nil {
 			return
 		}
 	} else if glog.V(2) {
-		glog.Infof("Bucket %s key %s fqn %q is cached", bktname, keyname, fname)
+		glog.Infof("Bucket %s key %s fqn %q is cached", bucket, objname, fqn)
 	}
-	file, err := os.Open(fname)
+	file, err := os.Open(fqn)
 	if err != nil {
-		glog.Errorf("Failed to open %q, err: %v", fname, err)
-		checksetmounterror(fname)
+		glog.Errorf("Failed to open %q, err: %v", fqn, err)
+		checksetmounterror(fqn)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		t.statsif.add("numerr", 1)
 	} else {
@@ -190,28 +190,47 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		// 	written, err := rt.ReadFrom(file) ==> sendfile path
 		written, err := copyBuffer(w, file)
 		if err != nil {
-			glog.Errorf("Failed to copy %q to http response, err: %v", fname, err)
+			glog.Errorf("Failed to copy %q to http response, err: %v", fqn, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			t.statsif.add("numerr", 1)
 		} else if glog.V(3) {
-			glog.Infof("Copied %q to http(%.2f MB)", fname, float64(written)/1000/1000)
+			glog.Infof("Copied %q to http(%.2f MB)", fqn, float64(written)/1000/1000)
 		}
 	}
 	glog.Flush()
 }
 
+// '{CopyMsg}' "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+fname
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restApiItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	bktname, keyname := apitems[0], ""
-	if len(apitems) > 1 {
-		keyname = apitems[1]
+	bucket, objname := apitems[0], apitems[1]
+	var msg CopyMsg
+	if t.readJson(w, r, &msg) != nil {
+		return
 	}
-	t.statsif.add("numput", 1)
-	glog.Infoln(bktname, keyname)
+	if t.si.DaemonID != msg.FromID && t.si.DaemonID != msg.ToID {
+		s := fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
+			t.si.DaemonID, msg.FromID, msg.ToID)
+		t.statsif.add("numerr", 1)
+		invalmsghdlr(w, r, s)
+		return
+	}
 
+	t.statsif.add("numput", 1)
+
+	glog.Infoln(bucket, objname)
+}
+
+//
+// Cloud bucket + object => (local hashed path, fully qualified filename)
+//
+func (t *targetrunner) fqn(bucket, objname string) string {
+	mpath := hrwMpath(bucket + "/" + objname)
+	assert(len(mpath) > 0) // FIXME; see mountpath.enabled
+	return mpath + "/" + bucket + "/" + objname
 }
 
 //===========================
@@ -220,20 +239,20 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 //
 //===========================
 
-// handler for: "/"+Rversion+"/"+Rdaemon
+// "/"+Rversion+"/"+Rdaemon
 func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		t.httpget(w, r)
+		t.httpdaeget(w, r)
 	case http.MethodPut:
-		t.httpput(w, r)
+		t.httpdaeput(w, r)
 	default:
 		invalhdlr(w, r)
 	}
 	glog.Flush()
 }
 
-func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restApiItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
@@ -242,7 +261,7 @@ func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 0 && apitems[0] == Rsyncsmap {
 		curversion := t.smap.Version
 		var smap *Smap
-		if readJson(w, r, &smap) != nil {
+		if t.readJson(w, r, &smap) != nil {
 			return
 		}
 		if curversion < smap.Version {
@@ -261,7 +280,7 @@ func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var msg ActionMsg
-	if readJson(w, r, &msg) != nil {
+	if t.readJson(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -273,13 +292,13 @@ func (t *targetrunner) httpput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpget(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restApiItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
 	var msg GetMsg
-	if readJson(w, r, &msg) != nil {
+	if t.readJson(w, r, &msg) != nil {
 		return
 	}
 	var (

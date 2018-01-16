@@ -52,9 +52,7 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 }
 
 // FIXME: revisit error processing
-func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, objname string) error {
-	fname := mpath + "/" + bktname + "/" + objname
-
+func (obj *gcpif) getobj(w http.ResponseWriter, fqn, bucket, objname string) error {
 	projid, errstr := getProjID()
 	if projid == "" {
 		return webinterror(w, errstr)
@@ -64,28 +62,28 @@ func (obj *gcpif) getobj(w http.ResponseWriter, mpath string, bktname string, ob
 	if err != nil {
 		glog.Fatal(err)
 	}
-	rc, err := client.Bucket(bktname).Object(objname).NewReader(ctx)
+	rc, err := client.Bucket(bucket).Object(objname).NewReader(ctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fname, err)
+		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fqn, err)
 		return webinterror(w, errstr)
 	}
 	defer rc.Close()
 	// strips the last part from filepath
-	dirname := filepath.Dir(fname)
+	dirname := filepath.Dir(fqn)
 	if err = CreateDir(dirname); err != nil {
 		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
 		return webinterror(w, errstr)
 	}
-	file, err := os.Create(fname)
+	file, err := os.Create(fqn)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fname, err)
+		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fqn, err)
 		return webinterror(w, errstr)
 	} else {
-		glog.Infof("Created file %q", fname)
+		glog.Infof("Created file %q", fqn)
 	}
 	bytes, err := io.Copy(file, rc)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fname, err)
+		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fqn, err)
 		return webinterror(w, errstr)
 		// FIXME: checksetmounterror() - see aws.go
 	}

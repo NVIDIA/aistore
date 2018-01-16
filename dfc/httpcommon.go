@@ -65,20 +65,6 @@ func webinterror(w http.ResponseWriter, errstr string) error {
 	return errors.New(errstr)
 }
 
-func readJson(w http.ResponseWriter, r *http.Request, out interface{}) error {
-	b, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err == nil {
-		err = json.Unmarshal(b, out)
-	}
-	if err != nil {
-		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		invalmsghdlr(w, r, s)
-		return err
-	}
-	return nil
-}
-
 //===========================================================================
 //
 // http runner
@@ -251,4 +237,19 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 		return nil
 	}
 	return apitems
+}
+
+func (h *httprunner) readJson(w http.ResponseWriter, r *http.Request, out interface{}) error {
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err == nil {
+		err = json.Unmarshal(b, out)
+	}
+	if err != nil {
+		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
+		h.statsif.add("numerr", 1)
+		invalmsghdlr(w, r, s)
+		return err
+	}
+	return nil
 }

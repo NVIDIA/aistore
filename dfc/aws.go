@@ -41,50 +41,47 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 	return nil
 }
 
-func (obj *awsif) getobj(w http.ResponseWriter, mpath string, bktname string, keyname string) error {
-	fname := mpath + "/" + bktname + "/" + keyname
+func (obj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) error {
 	sess := createsession()
 	//
 	// TODO: Optimize downloader options (currently 5MB chunks and 5 concurrent downloads)
 	//
 	downloader := s3manager.NewDownloader(sess)
 
-	err := downloadobject(w, downloader, mpath, bktname, keyname)
+	err := downloadobject(w, downloader, fqn, bucket, objname)
 	if err != nil {
 		return webinterror(w, err.Error())
 	}
-	glog.Infof("Downloaded bucket %s key %s fqn %q", bktname, keyname, fname)
+	glog.Infof("Downloaded bucket %s key %s fqn %q", bucket, objname, fqn)
 	return nil
 }
 
 // This function download S3 object into local file.
-func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
-	mpath string, bucket string, kname string) error {
+func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader, fqn, bucket, objname string) error {
 
 	var file *os.File
 	var err error
 	var bytes int64
 
-	fname := mpath + "/" + bucket + "/" + kname
 	// strips the last part from filepath
-	dirname := filepath.Dir(fname)
+	dirname := filepath.Dir(fqn)
 	if err = CreateDir(dirname); err != nil {
 		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
 		return err
 	}
-	file, err = os.Create(fname)
+	file, err = os.Create(fqn)
 	if err != nil {
-		glog.Errorf("Unable to create file %q, err: %v", fname, err)
-		checksetmounterror(fname)
+		glog.Errorf("Unable to create file %q, err: %v", fqn, err)
+		checksetmounterror(fqn)
 		return err
 	}
 	bytes, err = downloader.Download(file, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
-		Key:    aws.String(kname),
+		Key:    aws.String(objname),
 	})
 	if err != nil {
-		glog.Errorf("Failed to download key %s from bucket %s, err: %v", kname, bucket, err)
-		checksetmounterror(fname)
+		glog.Errorf("Failed to download key %s from bucket %s, err: %v", objname, bucket, err)
+		checksetmounterror(fqn)
 		return err
 	}
 	stats := getstorstats()
