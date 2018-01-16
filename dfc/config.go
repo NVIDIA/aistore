@@ -114,12 +114,8 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 		//  Not fatal as it will use default logging level
 		glog.Errorf("Failed to set loglevel %v", err)
 	}
-
-	glog.Infof("============== ")
-	glog.Infof("============== Verbosity: %s Config: %q Role: %s StatsTime %v",
+	glog.Infof("Verbosity: %s Config: %q Role: %s StatsTime %v",
 		ctx.config.Loglevel, configfile, role, ctx.config.StatsTime)
-	glog.Infof("============== ")
-	glog.Flush()
 	return err
 }
 

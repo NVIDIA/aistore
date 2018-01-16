@@ -24,7 +24,7 @@ func createsession() *session.Session {
 
 }
 func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
-	glog.Infof(" listbucket : bucket = %s ", bucket)
+	glog.Infof("listbucket : bucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
@@ -34,7 +34,6 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 	}
 	// TODO: reimplement in JSON
 	for _, key := range resp.Contents {
-		glog.Infof("bucket = %s key = %s", bucket, *key.Key)
 		keystr := fmt.Sprintf("%s", *key.Key)
 		fmt.Fprintln(w, keystr)
 	}

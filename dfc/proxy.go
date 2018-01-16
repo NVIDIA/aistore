@@ -47,6 +47,8 @@ func (p *proxyrunner) run() error {
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster+"/", p.clusterhdlr) // FIXME
 	p.httprunner.registerhdlr("/", invalhdlr)
+	glog.Infof("Proxy %s is ready", p.si.DaemonID)
+	glog.Flush()
 	return p.httprunner.run()
 }
 

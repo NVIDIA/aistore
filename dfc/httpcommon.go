@@ -34,6 +34,8 @@ const (
 	Rcluster  = "cluster"
 	Rdaemon   = "daemon"
 	Rsyncsmap = "syncsmap"
+	Rfrom     = "from_id"
+	Rto       = "to_id"
 )
 
 // FIXME: revisit the following 3 methods, and make consistent
@@ -165,9 +167,6 @@ func (r *httprunner) call(url string, method string, injson []byte) (outjson []b
 		}
 	} else {
 		request, err = http.NewRequest(method, url, bytes.NewBuffer(injson))
-		if glog.V(3) {
-			glog.Infof("%s URL %q, json %s", method, url, string(injson))
-		}
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
 		}

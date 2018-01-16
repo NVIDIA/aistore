@@ -42,6 +42,8 @@ type Storstats struct {
 	Bytesloaded  int64 `json:"bytesloaded"`
 	Bytesevicted int64 `json:"bytesevicted"`
 	Filesevicted int64 `json:"filesevicted"`
+	Numsendfile  int64 `json:"numsendfile"`
+	Numrecvfile  int64 `json:"numrecvfile"`
 }
 
 type statsrunner struct {
@@ -105,6 +107,10 @@ func (s *Storstats) add(name string, val int64) {
 		v = &s.Bytesevicted
 	case "filesevicted":
 		v = &s.Filesevicted
+	case "numsendfile":
+		v = &s.Numsendfile
+	case "numrecvfile":
+		v = &s.Numrecvfile
 	default:
 		assert(false, "Invalid stats name "+name)
 	}

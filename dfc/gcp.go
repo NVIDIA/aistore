@@ -24,6 +24,7 @@ func getProjID() (string, string) {
 	return projectID, ""
 }
 
+// TODO: jsonify
 func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 	glog.Infof("listbucket %s", bucket)
 	projid, errstr := getProjID()
@@ -42,7 +43,7 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 			break
 		}
 		if err != nil {
-			errstr := fmt.Sprintf("Failed to get bucket objects, err: %v", err)
+			errstr := fmt.Sprintf("Failed to list bucket, err: %v", err)
 			return webinterror(w, errstr)
 		}
 		fmt.Fprintln(w, attrs.Name)

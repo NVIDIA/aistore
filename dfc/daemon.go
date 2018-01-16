@@ -60,11 +60,6 @@ const (
 	GetStats  = "stats"
 )
 
-type CopyMsg struct {
-	FromID string `json:"from_id"`
-	ToID   string `json:"to_id"`
-}
-
 //======
 //
 // types
@@ -229,8 +224,7 @@ func dfcinit() {
 		os.Exit(2)
 	}
 	assert(role == xproxy || role == xtarget, "Invalid flag: role="+role)
-	err := initconfigparam(conffile, loglevel, role, statstime)
-	if err != nil {
+	if err := initconfigparam(conffile, loglevel, role, statstime); err != nil {
 		glog.Fatalf("Failed to initialize, config %q, err: %v", conffile, err)
 	}
 	assert(role == xproxy || role == xtarget, "Invalid configuration: role="+role)
@@ -265,9 +259,9 @@ func Run() {
 		goto m
 	}
 	// dump stack trace and exit
-	glog.Fatalf("============== Terminated with err: %v\n", err)
+	glog.Fatalf("Terminated with err: %v\n", err)
 m:
-	glog.Infoln("============== Terminated OK")
+	glog.Infoln("Terminated OK")
 	glog.Flush()
 }
 

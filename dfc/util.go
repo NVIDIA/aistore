@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -91,16 +90,21 @@ func CreateDir(dirname string) (err error) {
 	return
 }
 
-func ReceiveFile(fname string, r *http.Response) (written int64, err error) {
+// NOTE: receives, flushes, and closes
+func ReceiveFile(fname string, rrbody io.ReadCloser) (written int64, err error) {
 	dirname := filepath.Dir(fname)
 	if err = CreateDir(dirname); err != nil {
 		return 0, err
 	}
-	fd, err := os.Create(fname)
+	file, err := os.Create(fname)
 	if err != nil {
 		return 0, err
 	}
-	written, err = copyBuffer(fd, r.Body)
+	written, err = copyBuffer(file, rrbody)
+	err2 := file.Close()
+	if err == nil && err2 != nil {
+		err = err2
+	}
 	return
 }
 

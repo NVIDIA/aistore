@@ -153,8 +153,8 @@ func Test_download(t *testing.T) {
 	}
 }
 
-func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool, errch chan error, resch chan workres) {
-	// Variable will contain the results
+func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
+	errch chan error, resch chan workres) {
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -183,7 +183,8 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 
 		// alternatively, create a local copy
 		fname := LocalRootDir + "/" + keyname
-		written, err := dfc.ReceiveFile(fname, r)
+		written, err := dfc.ReceiveFile(fname, r.Body)
+		r.Body.Close()
 		if err != nil {
 			t.Errorf("Worker %2d: Failed to write to file, err: %v", id, err)
 			return
@@ -298,7 +299,8 @@ func listAndCopyTmp(t *testing.T, copy bool) {
 
 	// alternatively, create a local copy
 	fname := LocalRootDir + "/" + bucket
-	written, err := dfc.ReceiveFile(fname, r)
+	written, err := dfc.ReceiveFile(fname, r.Body)
+	r.Body.Close()
 	if err != nil {
 		t.Errorf("Failed to write file, err: %v", err)
 		return
