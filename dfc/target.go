@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"syscall"
 
 	"github.com/golang/glog"
@@ -25,7 +27,7 @@ type gcpif struct {
 
 type cinterface interface {
 	listbucket(http.ResponseWriter, string) error
-	getobj(http.ResponseWriter, string, string, string) error
+	getobj(http.ResponseWriter, string, string, string) (*os.File, error)
 }
 
 //===========================================================================
@@ -140,7 +142,8 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// "/"+Rversion+"/"+Rfiles+"/"+bucket [+"/"+fname]
+// "/"+Rversion+"/"+Rfiles+"/"+bucket [+"/"+objname]
+//
 // checks if the object exists locally (if not, downloads it)
 // and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
@@ -164,44 +167,43 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	// get from the bucket
 	//
 	fqn := t.fqn(bucket, objname)
+	var file *os.File
 	_, err := os.Stat(fqn)
 	if os.IsNotExist(err) {
 		t.statsif.add("numcoldget", 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached", bucket, objname, fqn)
-		//
 		// TODO: do getcloudif().getobj() and write http response in parallel
-		//
-		if err = getcloudif().getobj(w, fqn, bucket, objname); err != nil {
+		if file, err = getcloudif().getobj(w, fqn, bucket, objname); err != nil {
 			return
 		}
-	} else if glog.V(2) {
-		glog.Infof("Bucket %s key %s fqn %q is cached", bucket, objname, fqn)
+		file.Seek(0, 0) // NOTE: needed?
+	} else {
+		if file, err = os.Open(fqn); err != nil {
+			s := fmt.Sprintf("Failed to open local file %q, err: %v", fqn, err)
+			t.statsif.add("numerr", 1)
+			invalmsghdlr(w, r, s)
+			return
+		}
 	}
-	file, err := os.Open(fqn)
+	defer file.Close()
+	// NOTE: the following copyBuffer() call is equaivalent to:
+	// 	rt, _ := w.(io.ReaderFrom)
+	// 	written, err := rt.ReadFrom(file) ==> sendfile path
+	written, err := copyBuffer(w, file)
 	if err != nil {
-		glog.Errorf("Failed to open %q, err: %v", fqn, err)
-		checksetmounterror(fqn)
+		glog.Errorf("Failed to copy %q to http, err: %v", fqn, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		t.statsif.add("numerr", 1)
-	} else {
-		defer file.Close()
-		// NOTE: the following copyBuffer() call is equaivalent to:
-		// 	rt, _ := w.(io.ReaderFrom)
-		// 	written, err := rt.ReadFrom(file) ==> sendfile path
-		written, err := copyBuffer(w, file)
-		if err != nil {
-			glog.Errorf("Failed to copy %q to http response, err: %v", fqn, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			t.statsif.add("numerr", 1)
-		} else if glog.V(3) {
-			glog.Infof("Copied %q to http(%.2f MB)", fqn, float64(written)/1000/1000)
-		}
+	} else if glog.V(3) {
+		glog.Infof("Copied %q to http(%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	glog.Flush()
 }
 
-// '{CopyMsg}' "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+fname
+// '{CopyMsg}' "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+objname
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+	var s, fqn string
+	var err error
 	apitems := t.restApiItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
 		return
@@ -212,16 +214,78 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if t.si.DaemonID != msg.FromID && t.si.DaemonID != msg.ToID {
-		s := fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
+		s = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
 			t.si.DaemonID, msg.FromID, msg.ToID)
-		t.statsif.add("numerr", 1)
-		invalmsghdlr(w, r, s)
-		return
+		goto merr
 	}
-
-	t.statsif.add("numput", 1)
+	fqn = t.fqn(bucket, objname)
+	_, err = os.Stat(fqn)
+	if t.si.DaemonID == msg.FromID {
+		//
+		// the source
+		//
+		if os.IsNotExist(err) {
+			s = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
+			goto merr
+		}
+		si, ok := ctx.smap.Smap[msg.ToID]
+		if !ok {
+			s = fmt.Sprintf("File copy: unknown destination %s (not present in the Smap)", msg.ToID)
+			goto merr
+		}
+		url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket + "/" + objname
+		file, err := os.Open(fqn)
+		if err != nil {
+			s = fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
+			goto merr
+		}
+		defer file.Close()
+		request, err := http.NewRequest(r.Method, url, file)
+		assert(err == nil, err)
+		response, err := t.httpclient.Do(request)
+		if err != nil {
+			s = fmt.Sprintf("Failed to copy %q, source %s, err: %v", t.si.DaemonID, fqn, err)
+			goto merr
+		}
+		if response != nil {
+			ioutil.ReadAll(response.Body)
+			response.Body.Close()
+		}
+	} else {
+		//
+		// the destination
+		//
+		if os.IsExist(err) {
+			s = fmt.Sprintf("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
+			return // not an error, nothing to do
+		}
+		dirname := filepath.Dir(fqn)
+		if err = CreateDir(dirname); err != nil {
+			s = fmt.Sprintf("Failed to create local dir %q, err: %s", dirname, err)
+			goto merr
+		}
+		file, err := os.Create(fqn)
+		if err != nil {
+			s = fmt.Sprintf("Failed to create local file %q, err: %v", fqn, err)
+			goto merr
+		}
+		defer file.Close()
+		written, err := copyBuffer(w, file)
+		if err != nil {
+			s = fmt.Sprintf("Failed to copy %q to http, err: %v", fqn, err)
+			goto merr
+		}
+		if glog.V(3) {
+			glog.Infof("Copied %q to http(%.2f MB)", fqn, float64(written)/1000/1000)
+		}
+	}
+	t.statsif.add("numput", 1) // FIXME: numsendfile
 
 	glog.Infoln(bucket, objname)
+	return
+merr:
+	t.statsif.add("numerr", 1)
+	invalmsghdlr(w, r, s)
 }
 
 //

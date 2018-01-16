@@ -6,7 +6,6 @@ package dfc
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,10 +51,10 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 }
 
 // FIXME: revisit error processing
-func (obj *gcpif) getobj(w http.ResponseWriter, fqn, bucket, objname string) error {
+func (obj *gcpif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error) {
 	projid, errstr := getProjID()
 	if projid == "" {
-		return webinterror(w, errstr)
+		return nil, webinterror(w, errstr)
 	}
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
@@ -64,31 +63,30 @@ func (obj *gcpif) getobj(w http.ResponseWriter, fqn, bucket, objname string) err
 	}
 	rc, err := client.Bucket(bucket).Object(objname).NewReader(ctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fqn, err)
-		return webinterror(w, errstr)
+		errstr = fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fqn, err)
+		return nil, webinterror(w, errstr)
 	}
 	defer rc.Close()
-	// strips the last part from filepath
+
 	dirname := filepath.Dir(fqn)
 	if err = CreateDir(dirname); err != nil {
-		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
-		return webinterror(w, errstr)
+		errstr = fmt.Sprintf("Failed to create local dir %q, err: %s", dirname, err)
+		return nil, webinterror(w, errstr)
 	}
-	file, err := os.Create(fqn)
+	file, err = os.Create(fqn)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fqn, err)
-		return webinterror(w, errstr)
-	} else {
-		glog.Infof("Created file %q", fqn)
+		errstr = fmt.Sprintf("Failed to create local file %q, err: %v", fqn, err)
+		return nil, webinterror(w, errstr)
 	}
-	bytes, err := io.Copy(file, rc)
+	// bytes, err := io.Copy(file, rc)
+	bytes, err := copyBuffer(file, rc)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fqn, err)
-		return webinterror(w, errstr)
+		errstr = fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fqn, err)
+		return nil, webinterror(w, errstr)
 		// FIXME: checksetmounterror() - see aws.go
 	}
 
 	stats := getstorstats()
 	stats.add("bytesloaded", bytes)
-	return nil
+	return file, nil
 }

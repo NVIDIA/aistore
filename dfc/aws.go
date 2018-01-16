@@ -41,39 +41,37 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 	return nil
 }
 
-func (obj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) error {
+func (obj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error) {
 	sess := createsession()
 	//
 	// TODO: Optimize downloader options (currently 5MB chunks and 5 concurrent downloads)
 	//
 	downloader := s3manager.NewDownloader(sess)
 
-	err := downloadobject(w, downloader, fqn, bucket, objname)
+	file, err = downloadobject(w, downloader, fqn, bucket, objname)
 	if err != nil {
-		return webinterror(w, err.Error())
+		return nil, webinterror(w, err.Error())
 	}
 	glog.Infof("Downloaded bucket %s key %s fqn %q", bucket, objname, fqn)
-	return nil
+	return file, nil
 }
 
 // This function download S3 object into local file.
-func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader, fqn, bucket, objname string) error {
-
-	var file *os.File
-	var err error
+func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader,
+	fqn, bucket, objname string) (file *os.File, err error) {
 	var bytes int64
 
 	// strips the last part from filepath
 	dirname := filepath.Dir(fqn)
 	if err = CreateDir(dirname); err != nil {
 		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
-		return err
+		return nil, err
 	}
 	file, err = os.Create(fqn)
 	if err != nil {
 		glog.Errorf("Unable to create file %q, err: %v", fqn, err)
 		checksetmounterror(fqn)
-		return err
+		return nil, err
 	}
 	bytes, err = downloader.Download(file, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -82,9 +80,9 @@ func downloadobject(w http.ResponseWriter, downloader *s3manager.Downloader, fqn
 	if err != nil {
 		glog.Errorf("Failed to download key %s from bucket %s, err: %v", objname, bucket, err)
 		checksetmounterror(fqn)
-		return err
+		return nil, err
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", bytes)
-	return nil
+	return file, nil
 }
