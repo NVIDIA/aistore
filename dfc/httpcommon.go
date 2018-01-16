@@ -141,7 +141,8 @@ func (r *httprunner) run() error {
 func (r *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 
-	contextwith, _ := context.WithTimeout(context.Background(), ctx.config.HttpTimeout)
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HttpTimeout)
+	defer cancel()
 
 	err = r.h.Shutdown(contextwith)
 	if err != nil {
