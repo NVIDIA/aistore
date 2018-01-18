@@ -151,6 +151,27 @@ func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
 	return written, err
 }
 
+func createfile(fname string) (*os.File, error) {
+
+	var file *os.File
+	var err error
+	// strips the last part from filepath
+	dirname := filepath.Dir(fname)
+	if err = CreateDir(dirname); err != nil {
+		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
+		checksetmounterror(fname)
+		return nil, err
+	}
+	file, err = os.Create(fname)
+	if err != nil {
+		glog.Errorf("Unable to create file %q, err: %v", fname, err)
+		checksetmounterror(fname)
+		return nil, err
+	}
+
+	return file, nil
+}
+
 //===========================================================================
 //
 // dummy io.Writer & ReadToNull() helper

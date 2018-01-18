@@ -1,14 +1,15 @@
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
- *
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.  *
  */
 package dfc
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	"cloud.google.com/go/storage"
 	"github.com/golang/glog"
@@ -24,26 +25,25 @@ func getProjID() (string, string) {
 	return projectID, ""
 }
 
-// TODO: jsonify
-func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
+func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 	glog.Infof("listbucket %s", bucket)
 	projid, errstr := getProjID()
 	if projid == "" {
 		return webinterror(w, errstr)
 	}
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	gctx := context.Background()
+	client, err := storage.NewClient(gctx)
 	if err != nil {
 		glog.Fatal(err)
 	}
-	it := client.Bucket(bucket).Objects(ctx, nil)
+	it := client.Bucket(bucket).Objects(gctx, nil)
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-			errstr := fmt.Sprintf("Failed to list bucket, err: %v", err)
+			errstr := fmt.Sprintf("Failed to get bucket objects, err: %v", err)
 			return webinterror(w, errstr)
 		}
 		fmt.Fprintln(w, attrs.Name)
@@ -52,42 +52,96 @@ func (obj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 }
 
 // FIXME: revisit error processing
-func (obj *gcpif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error) {
+func (cobj *gcpif) getobj(w http.ResponseWriter, mpath string, bucket string,
+	objname string) (file *os.File, err error) {
+	fname := mpath + "/" + bucket + "/" + objname
+
 	projid, errstr := getProjID()
 	if projid == "" {
 		return nil, webinterror(w, errstr)
 	}
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	gctx := context.Background()
+	client, err := storage.NewClient(gctx)
 	if err != nil {
-		glog.Fatal(err)
+		errstr := fmt.Sprintf("Failed to initialize client, err: %v", err)
+		return nil, webinterror(w, errstr)
 	}
-	rc, err := client.Bucket(bucket).Object(objname).NewReader(ctx)
+	o := client.Bucket(bucket).Object(objname)
+	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fqn, err)
+		errstr := fmt.Sprintf("Failed to get attributes for object %s from bucket %s, err: %v", objname, bucket, err)
+		return nil, webinterror(w, errstr)
+	}
+	omd5 := hex.EncodeToString(attrs.MD5)
+	rc, err := o.NewReader(gctx)
+	if err != nil {
+		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fname, err)
 		return nil, webinterror(w, errstr)
 	}
 	defer rc.Close()
-
-	dirname := filepath.Dir(fqn)
-	if err = CreateDir(dirname); err != nil {
-		errstr = fmt.Sprintf("Failed to create local dir %q, err: %s", dirname, err)
-		return nil, webinterror(w, errstr)
-	}
-	file, err = os.Create(fqn)
+	file, err = createfile(fname)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to create local file %q, err: %v", fqn, err)
+		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fname, err)
 		return nil, webinterror(w, errstr)
+	} else {
+		glog.Infof("Created file %q", fname)
 	}
-	// bytes, err := io.Copy(file, rc)
-	bytes, err := copyBuffer(file, rc)
+	// Calculate MD5 Hash
+	hash := md5.New()
+	writer := io.MultiWriter(file, hash)
+	bytes, err := io.Copy(writer, rc)
+	//bytes, err := copyBuffer(writer, rc)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fqn, err)
+		file.Close()
+		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fname, err)
 		return nil, webinterror(w, errstr)
 		// FIXME: checksetmounterror() - see aws.go
+	}
+	hashInBytes := hash.Sum(nil)[:16]
+	fmd5 := hex.EncodeToString(hashInBytes)
+	if omd5 != fmd5 {
+		errstr := fmt.Sprintf("Object's %s MD5sum %v does not match with file(%s)'s MD5sum %v",
+			objname, omd5, fname, fmd5)
+		// Remove downloaded file.
+		err := os.Remove(fname)
+		if err != nil {
+			glog.Errorf("Failed to delete file %s, err: %v", fname, err)
+		}
+		return nil, webinterror(w, errstr)
+	} else {
+		glog.Infof("Object's %s MD5sum %v does MATCH with file(%s)'s MD5sum %v",
+			objname, omd5, fname, fmd5)
 	}
 
 	stats := getstorstats()
 	stats.add("bytesloaded", bytes)
 	return file, nil
+}
+
+func (obj *gcpif) putobj(r *http.Request, w http.ResponseWriter,
+	bucket string, kname string) error {
+
+	projid, errstr := getProjID()
+	if projid == "" {
+		return webinterror(w, errstr)
+	}
+	gctx := context.Background()
+	client, err := storage.NewClient(gctx)
+	if err != nil {
+		errstr := fmt.Sprintf("Failed to create client for bucket %s object %s , err: %v",
+			bucket, kname, err)
+		return webinterror(w, errstr)
+	}
+
+	wc := client.Bucket(bucket).Object(kname).NewWriter(gctx)
+	defer wc.Close()
+	//_, err = io.Copy(wc, r.Body)
+	_, err = copyBuffer(wc, r.Body)
+	if err != nil {
+		errstr := fmt.Sprintf("Failed to upload object %s into bucket %s , err: %v",
+			kname, bucket, err)
+		return webinterror(w, errstr)
+	}
+	//TODO stats
+	return nil
 }
