@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -38,6 +39,7 @@ type targetrunner struct {
 	httprunner
 	cloudif cinterface // multi-cloud vendor support
 	smap    *Smap
+	tioxes  *tioxInProgress
 }
 
 // start target runner
@@ -45,6 +47,7 @@ func (t *targetrunner) run() error {
 	// init
 	t.httprunner.init(getstorstats())
 	t.smap = &Smap{}
+	t.tioxes = newtioxes()
 
 	// FIXME cleanup unreg
 	if err := t.register(); err != nil {
@@ -321,25 +324,39 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-	// PUT '{Smap}' /v1/daemon/syncsmap => target(s)
-	if len(apitems) > 0 && apitems[0] == Rsyncsmap {
+	// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
+	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
 		curversion := t.smap.Version
 		var smap *Smap
 		if t.readJson(w, r, &smap) != nil {
 			return
 		}
-		if curversion < smap.Version {
-			glog.Infof("syncsmap: new version %d (old %d) - rebalance?", smap.Version, curversion)
-			for id, si := range smap.Smap {
-				if id == t.si.DaemonID {
-					glog.Infoln("target:", si, "<= self")
-				} else {
-					glog.Infoln("target:", si)
-				}
-			}
-			glog.Flush()
-			t.smap = smap
+		if curversion == smap.Version {
+			return
 		}
+		if curversion > smap.Version {
+			glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, smap.Version)
+			return
+		}
+		glog.Infof("syncsmap: new version %d (old %d) - rebalance?", smap.Version, curversion)
+		var existentialQ bool
+		for id, si := range smap.Smap {
+			if id == t.si.DaemonID {
+				existentialQ = true
+				glog.Infoln("target:", si, "<= self")
+			} else {
+				glog.Infoln("target:", si)
+			}
+		}
+		glog.Flush()
+		assert(existentialQ)
+		t.smap = smap
+		if apitems[0] == Rsyncsmap {
+			return
+		}
+		// do rebalance
+		tiox := &tioxRebalance{id: qrandom(), stime: time.Now(), curversion: curversion}
+		t.tioxes.add(tiox)
 		return
 	}
 

@@ -295,11 +295,12 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
 	case ActionSyncSmap:
+	case ActionRebalance:
 		// PUT '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
 		jsbytes, err := json.Marshal(ctx.smap)
 		assert(err == nil, err)
 		for _, si := range ctx.smap.Smap {
-			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsyncsmap
+			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + msg.Action
 			_, err := p.call(url, r.Method, jsbytes)
 			assert(err == nil, err)
 		}

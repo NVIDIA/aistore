@@ -44,8 +44,9 @@ type ActionMsg struct {
 
 // ActionMsg.Action enum
 const (
-	ActionShutdown = "shutdown"
-	ActionSyncSmap = "syncsmap" // synchronize cluster map aka Smap across all targets
+	ActionShutdown  = "shutdown"
+	ActionSyncSmap  = "syncsmap"  // synchronize cluster map aka Smap across all targets
+	ActionRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
 )
 
 type GetMsg struct {

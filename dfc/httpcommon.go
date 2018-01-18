@@ -33,7 +33,8 @@ const (
 	Rfiles    = "files"
 	Rcluster  = "cluster"
 	Rdaemon   = "daemon"
-	Rsyncsmap = "syncsmap"
+	Rsyncsmap = ActionSyncSmap
+	Rebalance = ActionRebalance
 	Rfrom     = "from_id"
 	Rto       = "to_id"
 )

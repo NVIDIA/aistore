@@ -8,10 +8,12 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -170,6 +172,15 @@ func createfile(fname string) (*os.File, error) {
 	}
 
 	return file, nil
+}
+
+//===================================
+//
+// random
+//
+//===================================
+func qrandom() int64 {
+	return int64(rand.Int63n(time.Now().UTC().UnixNano()) & 0xffff)
 }
 
 //===========================================================================
