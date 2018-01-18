@@ -8,50 +8,90 @@ import (
 	"github.com/golang/glog"
 )
 
-type tioxInterface interface {
+// xaction: Extended (in time) Action -- Transaction
+
+type xactInterface interface {
 	getid() int64
 	getkind() string
+	tostring() string
 }
 
-type tioxRebalance struct {
-	id         int64
-	stime      time.Time
-	etime      time.Time
-	kind       string
+type xactInProgress struct {
+	xactinp []xactInterface
+	lock    *sync.Mutex
+}
+
+type xactBase struct {
+	id    int64
+	stime time.Time
+	etime time.Time
+	kind  string
+	abrt  chan struct{}
+}
+
+type xactRebalance struct {
+	xactBase
 	curversion int64
 }
 
-func (tiox *tioxRebalance) getid() int64 {
-	return tiox.id
+type xactLRU struct {
+	xactBase
+	// TODO
 }
 
-func (tiox *tioxRebalance) getkind() string {
-	return tiox.kind
+//====================
+//
+// xactBase
+//
+//===================
+func newxactBase(id int64, kind string) *xactBase {
+	return &xactBase{id: id, stime: time.Now(), kind: kind, abrt: make(chan struct{}, 1)}
 }
 
-type tioxInProgress struct {
-	tioxes []tioxInterface
-	lock   *sync.Mutex
+func (xact *xactBase) getid() int64 {
+	return xact.id
 }
 
-func newtioxes() *tioxInProgress {
-	q := make([]tioxInterface, 4)
-	qq := &tioxInProgress{tioxes: q[0:0]}
+func (xact *xactBase) getkind() string {
+	return xact.kind
+}
+
+func (xact *xactBase) tostring() string {
+	return fmt.Sprintf("xaction %d [stime %v, kind %s]", xact.id, xact.stime, xact.kind)
+}
+
+//===================
+//
+// xactInProgress
+//
+//===================
+
+func newxactinp() *xactInProgress {
+	q := make([]xactInterface, 4)
+	qq := &xactInProgress{xactinp: q[0:0]}
 	qq.lock = &sync.Mutex{}
 	return qq
 }
 
-func (q *tioxInProgress) add(tiox tioxInterface) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	l := len(q.tioxes)
-	q.tioxes = append(q.tioxes, nil)
-	q.tioxes[l] = tiox
+func (q *xactInProgress) uniqueid() int64 {
+	id := time.Now().UTC().UnixNano() & 0xffff
+	for i := 0; i < 10; i++ {
+		if _, x := q.find(id); x == nil {
+			return id
+		}
+		id = (time.Now().UTC().UnixNano() + id) & 0xffff
+	}
+	assert(false)
+	return 0
 }
 
-func (q *tioxInProgress) find(by interface{}) (idx int, tiox tioxInterface) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
+func (q *xactInProgress) add(xact xactInterface) {
+	l := len(q.xactinp)
+	q.xactinp = append(q.xactinp, nil)
+	q.xactinp[l] = xact
+}
+
+func (q *xactInProgress) find(by interface{}) (idx int, xact xactInterface) {
 	var id int64
 	var kind string
 	switch by.(type) {
@@ -60,31 +100,68 @@ func (q *tioxInProgress) find(by interface{}) (idx int, tiox tioxInterface) {
 	case string:
 		kind = by.(string)
 	default:
-		assert(false, fmt.Sprintf("unexpected find param: %#v", by))
+		assert(false, fmt.Sprintf("unexpected find() arg: %#v", by))
 	}
-	for i, tiox := range q.tioxes {
-		if id != 0 && tiox.getid() == id {
-			return i, tiox
+	for i, xact := range q.xactinp {
+		if id != 0 && xact.getid() == id {
+			return i, xact
 		}
-		if kind != "" && tiox.getkind() == kind {
-			return i, tiox
+		if kind != "" && xact.getkind() == kind {
+			return i, xact
 		}
 	}
 	return -1, nil
 }
 
-func (q *tioxInProgress) del(by interface{}) {
+func (q *xactInProgress) del(by interface{}) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	k, tiox := q.find(by)
-	if tiox == nil {
-		glog.Errorf("Failed to find tiox by %#v", by)
+	k, xact := q.find(by)
+	if xact == nil {
+		glog.Errorf("Failed to find xact by %#v", by)
 		return
 	}
-	l := len(q.tioxes)
+	l := len(q.xactinp)
 	if k < l-1 {
-		copy(q.tioxes[k:], q.tioxes[k+1:])
+		copy(q.xactinp[k:], q.xactinp[k+1:])
 	}
-	q.tioxes[l-1] = nil
-	q.tioxes = q.tioxes[:l-1]
+	q.xactinp[l-1] = nil
+	q.xactinp = q.xactinp[:l-1]
+}
+
+func (q *xactInProgress) renewRebalance(curversion int64) *xactRebalance {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	_, xx := q.find(ActionRebalance)
+	if xx != nil {
+		xreb := xx.(*xactRebalance)
+		assert(!(xreb.curversion > curversion))
+		if xreb.curversion == curversion {
+			glog.Infof("%s already running, nothing to do", xreb.tostring())
+			return nil
+		}
+		close(xreb.abrt) // abort
+		xreb.etime = time.Now()
+		glog.Infof("%s aborted", xreb.tostring())
+		q.del(xreb.id)
+	}
+	id := q.uniqueid()
+	xreb := &xactRebalance{xactBase: *newxactBase(id, ActionRebalance), curversion: curversion}
+	q.add(xreb)
+	return xreb
+}
+
+func (q *xactInProgress) renewLRU() *xactLRU {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	_, xx := q.find(ActionLRU)
+	if xx != nil {
+		xlru := xx.(*xactLRU)
+		glog.Infof("%s already running, nothing to do", xlru.tostring())
+		return nil
+	}
+	id := q.uniqueid()
+	xlru := &xactLRU{xactBase: *newxactBase(id, ActionLRU)}
+	q.add(xlru)
+	return xlru
 }

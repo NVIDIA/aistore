@@ -227,6 +227,7 @@ func (r *storstatsrunner) log() {
 	r.syncstats(&r.statscopy)
 	// 4. LRU
 	if runlru {
-		go all_LRU()
+		t := gettarget()
+		go t.runLRU()
 	}
 }

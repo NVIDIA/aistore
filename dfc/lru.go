@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -33,38 +32,37 @@ type lructx struct {
 
 type maxheap []*fileinfo
 
-// vars
+// globals
 var maxheapmap = make(map[string]*maxheap)
 var lructxmap = make(map[string]*lructx)
-var lrucas int64
 
 // FIXME: mountpath.enabled is never used
-func all_LRU() {
-	if !atomic.CompareAndSwapInt64(&lrucas, 0, 7890123) {
-		glog.Infoln("all_LRU is already running")
+func (t *targetrunner) runLRU() {
+	xact := t.xactinp.renewLRU()
+	if xact == nil {
 		return
 	}
 	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
 	fsmap := make(map[syscall.Fsid]bool, mntcnt)
-	glog.Infof("all_LRU start, num mp-s %d", mntcnt)
+	glog.Infof("%s started, num mp-s %d", xact.tostring(), mntcnt)
 	for _, mountpath := range ctx.mountpaths {
 		_, ok := fsmap[mountpath.Fsid]
 		if ok {
-			glog.Infof("all_LRU: duplicate FSID %v, mpath %q", mountpath.Fsid, mountpath.Path)
+			glog.Infof("LRU: duplicate FSID %v, mpath %q", mountpath.Fsid, mountpath.Path)
 			continue
 		}
 		fsmap[mountpath.Fsid] = true
 		fschkwg.Add(1)
-		go one_LRU(mountpath.Path, fschkwg)
+		go t.oneLRU(mountpath.Path, fschkwg)
 	}
 	fschkwg.Wait()
-	glog.Infoln("all_LRU done")
-	swapped := atomic.CompareAndSwapInt64(&lrucas, 7890123, 0)
-	assert(swapped)
+	xact.etime = time.Now()
+	glog.Infof("%s finished", xact.tostring())
+	t.xactinp.del(xact)
 }
 
-func one_LRU(mpath string, fschkwg *sync.WaitGroup) error {
+func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup) error {
 	defer fschkwg.Done()
 	hwm := ctx.config.Cache.FSHighWaterMark
 	lwm := ctx.config.Cache.FSLowWaterMark
@@ -92,19 +90,19 @@ func one_LRU(mpath string, fschkwg *sync.WaitGroup) error {
 	lructxmap[mpath] = &lructx{totsize: toevict}
 	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
 
-	if err := filepath.Walk(mpath, walkfunc); err != nil {
+	if err := filepath.Walk(mpath, lruwalkfunc); err != nil {
 		glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		return err
 	}
 
-	if err := do_LRU(toevict, mpath); err != nil {
+	if err := t.doLRU(toevict, mpath); err != nil {
 		glog.Errorf("Error do_LRU mpath %q, err: %v", mpath, err)
 		return err
 	}
 	return nil
 }
 
-func walkfunc(fqn string, osfi os.FileInfo, err error) error {
+func lruwalkfunc(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
@@ -160,7 +158,7 @@ func walkfunc(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
-func do_LRU(toevict int64, mpath string) error {
+func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 	h := maxheapmap[mpath]
 	var (
 		fevicted, bevicted int64

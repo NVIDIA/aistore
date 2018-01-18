@@ -50,7 +50,9 @@ func Test_lru(t *testing.T) {
 
 	fschkwg := &sync.WaitGroup{}
 	fschkwg.Add(1)
-	one_LRU(dir, fschkwg)
+
+	r := gettarget()
+	r.oneLRU(dir, fschkwg)
 
 	// check results
 	statfs = syscall.Statfs_t{}

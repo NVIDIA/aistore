@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"syscall"
-	"time"
 
 	"github.com/golang/glog"
 )
@@ -39,7 +38,7 @@ type targetrunner struct {
 	httprunner
 	cloudif cinterface // multi-cloud vendor support
 	smap    *Smap
-	tioxes  *tioxInProgress
+	xactinp *xactInProgress
 }
 
 // start target runner
@@ -47,7 +46,7 @@ func (t *targetrunner) run() error {
 	// init
 	t.httprunner.init(getstorstats())
 	t.smap = &Smap{}
-	t.tioxes = newtioxes()
+	t.xactinp = newxactinp()
 
 	// FIXME cleanup unreg
 	if err := t.register(); err != nil {
@@ -338,8 +337,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, smap.Version)
 			return
 		}
-		glog.Infof("syncsmap: new version %d (old %d) - rebalance?", smap.Version, curversion)
-		var existentialQ bool
+		glog.Infof("%s: got new version %d (old %d)", apitems[0], smap.Version, curversion)
+		var existentialQ bool // to assert
 		for id, si := range smap.Smap {
 			if id == t.si.DaemonID {
 				existentialQ = true
@@ -354,9 +353,11 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if apitems[0] == Rsyncsmap {
 			return
 		}
-		// do rebalance
-		tiox := &tioxRebalance{id: qrandom(), stime: time.Now(), curversion: curversion}
-		t.tioxes.add(tiox)
+		xact := t.xactinp.renewRebalance(t.smap.Version)
+		if xact == nil {
+			return
+		}
+		// TODO: rebalance
 		return
 	}
 

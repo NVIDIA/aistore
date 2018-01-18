@@ -47,6 +47,7 @@ const (
 	ActionShutdown  = "shutdown"
 	ActionSyncSmap  = "syncsmap"  // synchronize cluster map aka Smap across all targets
 	ActionRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
+	ActionLRU       = "lru"
 )
 
 type GetMsg struct {
@@ -286,6 +287,13 @@ func getproxystats() *Proxystats {
 func getproxy() *proxyrunner {
 	r := ctx.rg.runmap[xproxy]
 	rr, ok := r.(*proxyrunner)
+	assert(ok)
+	return rr
+}
+
+func gettarget() *targetrunner {
+	r := ctx.rg.runmap[xtarget]
+	rr, ok := r.(*targetrunner)
 	assert(ok)
 	return rr
 }
