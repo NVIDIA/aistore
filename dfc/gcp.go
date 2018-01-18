@@ -52,9 +52,8 @@ func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 }
 
 // FIXME: revisit error processing
-func (cobj *gcpif) getobj(w http.ResponseWriter, mpath string, bucket string,
+func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string,
 	objname string) (file *os.File, err error) {
-	fname := mpath + "/" + bucket + "/" + objname
 
 	projid, errstr := getProjID()
 	if projid == "" {
@@ -75,16 +74,16 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, mpath string, bucket string,
 	omd5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fname, err)
+		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fqn, err)
 		return nil, webinterror(w, errstr)
 	}
 	defer rc.Close()
-	file, err = createfile(fname)
+	file, err = createfile(fqn)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fname, err)
+		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fqn, err)
 		return nil, webinterror(w, errstr)
 	} else {
-		glog.Infof("Created file %q", fname)
+		glog.Infof("Created file %q", fqn)
 	}
 	// Calculate MD5 Hash
 	hash := md5.New()
@@ -93,7 +92,7 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, mpath string, bucket string,
 	//bytes, err := copyBuffer(writer, rc)
 	if err != nil {
 		file.Close()
-		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fname, err)
+		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fqn, err)
 		return nil, webinterror(w, errstr)
 		// FIXME: checksetmounterror() - see aws.go
 	}
@@ -101,16 +100,16 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, mpath string, bucket string,
 	fmd5 := hex.EncodeToString(hashInBytes)
 	if omd5 != fmd5 {
 		errstr := fmt.Sprintf("Object's %s MD5sum %v does not match with file(%s)'s MD5sum %v",
-			objname, omd5, fname, fmd5)
+			objname, omd5, fqn, fmd5)
 		// Remove downloaded file.
-		err := os.Remove(fname)
+		err := os.Remove(fqn)
 		if err != nil {
-			glog.Errorf("Failed to delete file %s, err: %v", fname, err)
+			glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
 		}
 		return nil, webinterror(w, errstr)
 	} else {
 		glog.Infof("Object's %s MD5sum %v does MATCH with file(%s)'s MD5sum %v",
-			objname, omd5, fname, fmd5)
+			objname, omd5, fqn, fmd5)
 	}
 
 	stats := getstorstats()
