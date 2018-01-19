@@ -16,16 +16,16 @@ const (
 
 // Create file and initialize object state.
 func initobj(fqn string) (file *os.File, err error) {
-	file, err = createfile(fqn)
+	file, err = Createfile(fqn)
 	if err != nil {
 		glog.Errorf("Unable to create file %s, err: %v", fqn, err)
 		return nil, err
 	}
 
-	err = setxattr(fqn, objstateattr, []byte(invalid))
+	err = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid))
 	if err != nil {
 		glog.Errorf("Unable to set xattr %s to file %s, err: %v",
-			objstateattr, fqn, err)
+			Objstateattr, fqn, err)
 		file.Close()
 		return nil, err
 	}
@@ -35,16 +35,16 @@ func initobj(fqn string) (file *os.File, err error) {
 
 // Finalize object state.
 func finalizeobj(fqn string, md5sum []byte) error {
-	err := setxattr(fqn, MD5attr, md5sum)
+	err := Setxattr(fqn, MD5attr, md5sum)
 	if err != nil {
 		glog.Errorf("Unable to set md5 xattr %s to file %s, err: %v",
 			MD5attr, fqn, err)
 		return err
 	}
-	err = setxattr(fqn, objstateattr, []byte(valid))
+	err = Setxattr(fqn, Objstateattr, []byte(XAttrValid))
 	if err != nil {
 		glog.Errorf("Unable to set valid xattr %s to file %s, err: %v",
-			objstateattr, fqn, err)
+			Objstateattr, fqn, err)
 		return err
 	}
 	return nil
@@ -57,12 +57,12 @@ func isinvalidobj(fqn string) bool {
 	if err == nil {
 		return true
 	} else {
-		data, err := getxattr(fqn, objstateattr)
+		data, err := Getxattr(fqn, Objstateattr)
 		if err != nil {
-			glog.Errorf("Unable to getxttr %s from file %s, err: %v", objstateattr, fqn, err)
+			glog.Errorf("Unable to getxttr %s from file %s, err: %v", Objstateattr, fqn, err)
 			return true
 		}
-		if string(data) == invalid {
+		if string(data) == XAttrInvalid {
 			return true
 		}
 		return false

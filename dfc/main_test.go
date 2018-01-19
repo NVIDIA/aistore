@@ -32,6 +32,7 @@ const (
 	LocalRootDir = "/tmp/iocopy"           // client-side download destination
 	ProxyURL     = "http://localhost:8080" // assuming local proxy is listening on 8080
 	RestAPIGet   = ProxyURL + "/v1/files"  // version = 1, resource = files
+	TestFile     = "/tmp/xattrfile"        // Test file for setting and getting xattr.
 )
 
 var (
@@ -306,4 +307,39 @@ func listAndCopyTmp(t *testing.T, copy bool) {
 		return
 	}
 	t.Logf("Got bucket list and copied %q (size %d B)", fname, written)
+}
+
+func Test_xattr(t *testing.T) {
+
+	// Create test file
+	f := TestFile
+	file, err := dfc.Createfile(f)
+	if err != nil {
+		t.Errorf("Failed to create file %s, err:%v", f, err)
+		return
+	}
+	defer file.Close()
+	// Set objstate to valid
+	err = dfc.Setxattr(f, dfc.Objstateattr, []byte(dfc.XAttrInvalid))
+	if err != nil {
+		t.Errorf("Unable to set xattr %s to file %s, err: %v",
+			dfc.Objstateattr, f, err)
+		_ = os.Remove(f)
+		return
+	}
+	// Check if xattr got set correctly.
+	data, err := dfc.Getxattr(f, dfc.Objstateattr)
+	if string(data) == dfc.XAttrInvalid && err == nil {
+		t.Logf("Successfully got file %s attr %s value %v",
+			f, dfc.Objstateattr, data)
+	} else {
+		t.Errorf("Failed to get file %s attr %s value %v, err %v",
+			f, dfc.Objstateattr, data, err)
+		_ = os.Remove(f)
+		return
+	}
+	t.Logf("Successfully set and retrieved xattr")
+	_ = os.Remove(f)
+	return
+
 }

@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	objstateattr = "user.objstate" // Object's state
+	Objstateattr = "user.objstate" // Object's state
 	MD5attr      = "user.MD5"      // Object's MD5
-	invalid      = "0"
-	valid        = "1"
+	XAttrInvalid = "0"
+	XAttrValid   = "1"
 )
 
 // TODO: AWS specific initialization

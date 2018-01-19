@@ -152,7 +152,7 @@ func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
 	return written, err
 }
 
-func createfile(fname string) (*os.File, error) {
+func Createfile(fname string) (*os.File, error) {
 
 	var file *os.File
 	var err error
@@ -174,20 +174,20 @@ func createfile(fname string) (*os.File, error) {
 }
 
 // Get specific attribute for specified path.
-func getxattr(path, name string) ([]byte, error) {
+func Getxattr(path string, attrname string) ([]byte, error) {
 	// find size.
-	size, err := syscall.Getxattr(path, name, nil)
+	size, err := syscall.Getxattr(path, attrname, nil)
 	if err != nil {
 		glog.Errorf("Failed to get extended attr for path %s attr %s, err: %v",
-			path, name, err)
+			path, attrname, err)
 		return nil, err
 	}
 	if size > 0 {
 		data := make([]byte, size)
-		read, err := syscall.Getxattr(path, name, data)
+		read, err := syscall.Getxattr(path, attrname, data)
 		if err != nil {
 			glog.Errorf("Failed to get extended attr for path %s attr %s, err: %v",
-				path, name, err)
+				path, attrname, err)
 			return nil, err
 		}
 		return data[:read], nil
@@ -196,22 +196,22 @@ func getxattr(path, name string) ([]byte, error) {
 }
 
 // Set specific named attribute for specific path.
-func setxattr(path, name string, data []byte) error {
-	err := syscall.Setxattr(path, name, data, 0)
+func Setxattr(path string, attrname string, data []byte) error {
+	err := syscall.Setxattr(path, attrname, data, 0)
 	if err != nil {
 		glog.Errorf("Failed to set extended attr for path %s attr %s, err: %v",
-			path, name, err)
+			path, attrname, err)
 		return err
 	}
 	return nil
 }
 
 // Delete specific named attribute for specific path.
-func deletexattr(path, name string) error {
-	err := syscall.Removexattr(path, name)
+func Deletexattr(path string, attrname string) error {
+	err := syscall.Removexattr(path, attrname)
 	if err != nil {
 		glog.Errorf("Failed to remove extended attr for path %s attr %s, err: %v",
-			path, name, err)
+			path, attrname, err)
 		return err
 	}
 	return nil
