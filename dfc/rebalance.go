@@ -7,6 +7,7 @@ package dfc
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,9 +77,12 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 	mpath, bucket, objname := t.splitfqn(fqn)
 	si := hrwTarget(bucket+"/"+objname, t.smap)
 	if si.DaemonID != t.si.DaemonID {
-		glog.Infof("[%s %s %s] must be rebalanced from %s to %s", mpath, bucket, objname, t.si.DaemonID, si.DaemonID)
+		glog.Infof("rebalancing [%s %s %s] %s => %s", mpath, bucket, objname, t.si.DaemonID, si.DaemonID)
 		glog.Flush()
-		return nil
+		if s := xreb.targetrunner.sendfile(http.MethodPut, bucket, objname, si); s != "" {
+			glog.Infof("Failed to rebalance [%s %s %s]: %s", mpath, bucket, objname, s)
+			glog.Flush()
+		}
 	}
 	return nil
 }

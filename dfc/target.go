@@ -261,30 +261,12 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			s = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
 			goto merr
 		}
-		url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
-		url += Rfrom + "/" + from + "/" + Rto + "/" + to + "/"
-		url += bucket + "/" + objname
-		file, err := os.Open(fqn)
-		if err != nil {
-			s = fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
+		if s = t.sendfile(r.Method, bucket, objname, si); s != "" {
 			goto merr
-		}
-		defer file.Close()
-		request, err := http.NewRequest(r.Method, url, file)
-		assert(err == nil, err)
-		response, err := t.httpclient.Do(request)
-		if err != nil {
-			s = fmt.Sprintf("Failed to copy %q from %s, err: %v", t.si.DaemonID, fqn, err)
-			goto merr
-		}
-		if response != nil {
-			ioutil.ReadAll(response.Body)
-			response.Body.Close()
 		}
 		if glog.V(3) {
 			glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
 		}
-		t.statsif.add("numsendfile", 1)
 	} else {
 		//
 		// the destination
@@ -306,6 +288,31 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 merr:
 	t.statsif.add("numerr", 1)
 	invalmsghdlr(w, r, s)
+}
+
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *ServerInfo) string {
+	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
+	fqn := t.fqn(bucket, objname)
+	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
+	url += Rfrom + "/" + fromid + "/" + Rto + "/" + toid + "/"
+	url += bucket + "/" + objname
+	file, err := os.Open(fqn)
+	if err != nil {
+		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
+	}
+	defer file.Close()
+	request, err := http.NewRequest(method, url, file)
+	assert(err == nil, err)
+	response, err := t.httpclient.Do(request)
+	if err != nil {
+		return fmt.Sprintf("Failed to copy %q from %s, err: %v", t.si.DaemonID, fqn, err)
+	}
+	if response != nil {
+		ioutil.ReadAll(response.Body)
+		response.Body.Close()
+	}
+	t.statsif.add("numsendfile", 1)
+	return ""
 }
 
 //
