@@ -165,3 +165,13 @@ func (q *xactInProgress) renewLRU() *xactLRU {
 	q.add(xlru)
 	return xlru
 }
+
+//===================
+//
+// xactRebalance
+//
+//===================
+
+func (xact *xactRebalance) tostring() string {
+	return fmt.Sprintf("xaction %d [stime %v, kind %s, version %d]", xact.id, xact.stime, xact.kind, xact.curversion)
+}

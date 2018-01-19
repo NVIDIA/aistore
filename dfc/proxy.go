@@ -90,6 +90,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	p.statsif.add("numget", 1)
 
@@ -104,8 +105,8 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	sid := hrwTarget(strings.Join(apitems, "/"))
-	si := ctx.smap.get(sid)
+	// FIXME: validate that apitems[0] is an accessible bucket
+	si := hrwTarget(strings.Join(apitems, "/"), ctx.smap)
 	assert(si != nil, "race NIY")
 
 	redirecturl := si.DirectURL + r.URL.Path

@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/golang/glog"
@@ -299,6 +300,20 @@ func (t *targetrunner) fqn(bucket, objname string) string {
 	return mpath + "/" + bucket + "/" + objname
 }
 
+func (t *targetrunner) splitfqn(fqn string) (mpath, bucket, objname string) {
+	for path, _ := range ctx.mountpaths {
+		if !strings.HasPrefix(fqn, path+"/") {
+			continue
+		}
+		bo := fqn[len(path+"/"):]
+		b_o := strings.SplitN(bo, "/", 2)
+		mpath, bucket, objname = path, b_o[0], b_o[1]
+		return
+	}
+	assert(false)
+	return
+}
+
 //===========================
 //
 // control plane
@@ -353,11 +368,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if apitems[0] == Rsyncsmap {
 			return
 		}
-		xact := t.xactinp.renewRebalance(t.smap.Version)
-		if xact == nil {
-			return
-		}
-		// TODO: rebalance
+		go t.runRebalance()
 		return
 	}
 

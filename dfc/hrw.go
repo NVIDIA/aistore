@@ -14,13 +14,13 @@ const LCG32 = 1103515245
 // aka highest random weight (HRW)
 
 // NOTE: read access to Smap - see sync.Map comment
-func hrwTarget(name string) (sid string) {
+func hrwTarget(name string, smap *Smap) (si *ServerInfo) {
 	var max uint32
-	for id, _ := range ctx.smap.Smap {
-		cs := xxhash.ChecksumString32S(name+id, LCG32)
+	for id, sinfo := range smap.Smap {
+		cs := xxhash.ChecksumString32S(id+":"+name, LCG32)
 		if cs > max {
 			max = cs
-			sid = id
+			si = sinfo
 		}
 	}
 	return
@@ -28,7 +28,7 @@ func hrwTarget(name string) (sid string) {
 func hrwMpath(name string) (mpath string) {
 	var max uint32
 	for path, _ := range ctx.mountpaths {
-		cs := xxhash.ChecksumString32S(name+path, LCG32)
+		cs := xxhash.ChecksumString32S(path+":"+name, LCG32)
 		if cs > max {
 			max = cs
 			mpath = path

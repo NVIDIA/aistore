@@ -90,7 +90,7 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup) error {
 	lructxmap[mpath] = &lructx{totsize: toevict}
 	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
 
-	if err := filepath.Walk(mpath, lruwalkfunc); err != nil {
+	if err := filepath.Walk(mpath, t.lruwalkfn); err != nil {
 		glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		return err
 	}
@@ -102,7 +102,7 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup) error {
 	return nil
 }
 
-func lruwalkfunc(fqn string, osfi os.FileInfo, err error) error {
+func (t *targetrunner) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
