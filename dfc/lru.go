@@ -147,8 +147,8 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		err = os.Remove(osfi.Name())
 		if err != nil {
 			glog.Errorf("Failed to delete file %s, err: %v", osfi.Name(), err)
-		} else {
-			glog.Infof("Succesfully deleted invalid file %s", osfi.Name())
+		} else if glog.V(3) {
+			glog.Infof("Deleted invalid file %s", osfi.Name())
 		}
 		return nil
 	}

@@ -9,24 +9,24 @@ and an arbitrary number of storage targets (aka targets):
 
 <img src="images/dfc-overview.png" alt="DFC overview" width="440">
 
-Users (i.e., http/https clients) connect to the proxy and execute RESTful 
+Users (i.e., http/https clients) connect to the proxy and execute RESTful
 commands. Data then moves directly between storage targets (that cache this data)
 and the requesting user.
 
 ## Getting Started
 
-If you've already installed Go and happen to have AWS or GCP account, getting 
+If you've already installed Go and happen to have AWS or GCP account, getting
 started with DFC takes about 30 seconds and consists in executing the following
 4 steps:
 
 ```
-$ go get -u -v github.com/NVIDIA/dfcpub
+$ go get -u -v github.com/NVIDIA/dfcpub/dfc
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
 $ make deploy
 $ go test -v -run=down -numfiles=2 -bucket=<your bucket name>
 ```
 
-The 1st command will install both the DFC source code and all its dependencies 
+The 1st command will install both the DFC source code and all its dependencies
 under your configured $GOPATH.
 
 The 3rd - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)).
@@ -111,6 +111,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Shutdown target | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
 | Shutdown DFC cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
 | Synchronize cluster map | PUT {"action": "syncsmap"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "syncsmap"}' http://192.168.176.128:8080/v1/cluster` |
+| Rebalance cluster | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
 | Get object | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (*) |
@@ -135,3 +136,9 @@ This single command causes execution of multiple `GET {"what": "stats"}` request
 When fed into any compatible JSON viewer, the printout may look something as follows:
 
 <img src="images/dfc-get-stats.png" alt="DFC GET stats" width="200">
+
+## Cache Rebalancing
+
+DFC rebalances its cached content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
+
+Thus, the rebalancing process is completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the content will get rebalanced via direct target-to-target transfers.

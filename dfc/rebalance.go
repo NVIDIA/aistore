@@ -82,6 +82,11 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 		if s := xreb.targetrunner.sendfile(http.MethodPut, bucket, objname, si); s != "" {
 			glog.Infof("Failed to rebalance [%s %s %s]: %s", mpath, bucket, objname, s)
 			glog.Flush()
+		} else {
+			// moved - remove the local one right away
+			if err := os.Remove(fqn); err != nil {
+				glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
+			}
 		}
 	}
 	return nil
