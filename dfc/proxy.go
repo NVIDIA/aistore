@@ -298,6 +298,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	case ActionSyncSmap:
 	case ActionRebalance:
 		// PUT '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
+		// PUT '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 		jsbytes, err := json.Marshal(ctx.smap)
 		assert(err == nil, err)
 		for _, si := range ctx.smap.Smap {

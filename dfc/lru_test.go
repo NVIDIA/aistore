@@ -17,6 +17,9 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
+
+	"github.com/golang/glog"
 )
 
 var dir string
@@ -51,8 +54,16 @@ func Test_lru(t *testing.T) {
 	fschkwg := &sync.WaitGroup{}
 	fschkwg.Add(1)
 
-	r := gettarget()
-	r.oneLRU(dir, fschkwg)
+	rtarget := gettarget()
+	xlru := rtarget.xactinp.renewLRU()
+	if xlru == nil {
+		return
+	}
+	rtarget.oneLRU(dir, fschkwg, xlru)
+	fschkwg.Wait()
+	xlru.etime = time.Now()
+	glog.Infoln(xlru.tostring())
+	rtarget.xactinp.del(xlru.id)
 
 	// check results
 	statfs = syscall.Statfs_t{}

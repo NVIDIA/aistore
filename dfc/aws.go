@@ -51,12 +51,11 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string,
 	objname string) (file *os.File, err error) {
 
 	var bytes int64
-	file, err = createfile(fqn)
+	file, err = initobj(fqn)
 	if err != nil {
-		glog.Errorf("Unable to create file %q, err: %v", fqn, err)
+		glog.Errorf("Failed to initialize file %s, err: %v", fqn, err)
 		return nil, err
 	}
-
 	sess := createsession()
 	s3Svc := s3.New(sess)
 
@@ -99,7 +98,13 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string,
 		glog.Infof("Object's %s MD5sum %v does MATCH with file(%s)'s MD5sum %v",
 			objname, omd5, fqn, fmd5)
 	}
-	glog.Infof("Downloaded bucket %s key %s fqn %q", bucket, objname, fqn)
+	glog.Infof("Downloaded bucket %s key %s file %s", bucket, objname, fqn)
+	err = finalizeobj(fqn, hashInBytes)
+	if err != nil {
+		glog.Errorf("Unable to finalize file %s, err: %v", fqn, err)
+		file.Close()
+		return nil, err
+	}
 	stats := getstorstats()
 	stats.add("bytesloaded", bytes)
 	return file, nil

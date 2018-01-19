@@ -31,7 +31,8 @@ type xactBase struct {
 
 type xactRebalance struct {
 	xactBase
-	curversion int64
+	curversion   int64
+	targetrunner *targetrunner
 }
 
 type xactLRU struct {
@@ -57,7 +58,12 @@ func (xact *xactBase) getkind() string {
 }
 
 func (xact *xactBase) tostring() string {
-	return fmt.Sprintf("xaction %d [stime %v, kind %s]", xact.id, xact.stime, xact.kind)
+	start := xact.stime.Format(time.RFC3339)
+	if xact.etime.IsZero() {
+		return fmt.Sprintf("xaction %s:%d %v", xact.kind, xact.id, start)
+	}
+	fin := xact.etime.Format(time.RFC3339)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
 }
 
 //===================
@@ -129,24 +135,26 @@ func (q *xactInProgress) del(by interface{}) {
 	q.xactinp = q.xactinp[:l-1]
 }
 
-func (q *xactInProgress) renewRebalance(curversion int64) *xactRebalance {
+func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xactRebalance {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	_, xx := q.find(ActionRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
-		assert(!(xreb.curversion > curversion))
-		if xreb.curversion == curversion {
-			glog.Infof("%s already running, nothing to do", xreb.tostring())
-			return nil
+		if xreb.etime.IsZero() {
+			assert(!(xreb.curversion > curversion))
+			if xreb.curversion == curversion {
+				glog.Infof("%s already running, nothing to do", xreb.tostring())
+				return nil
+			}
+			close(xreb.abrt) // abort
+			xreb.etime = time.Now()
+			glog.Infof("%s must be aborted", xreb.tostring())
 		}
-		close(xreb.abrt) // abort
-		xreb.etime = time.Now()
-		glog.Infof("%s aborted", xreb.tostring())
-		q.del(xreb.id)
 	}
 	id := q.uniqueid()
 	xreb := &xactRebalance{xactBase: *newxactBase(id, ActionRebalance), curversion: curversion}
+	xreb.targetrunner = t
 	q.add(xreb)
 	return xreb
 }
@@ -171,7 +179,12 @@ func (q *xactInProgress) renewLRU() *xactLRU {
 // xactRebalance
 //
 //===================
-
 func (xact *xactRebalance) tostring() string {
-	return fmt.Sprintf("xaction %d [stime %v, kind %s, version %d]", xact.id, xact.stime, xact.kind, xact.curversion)
+	start := xact.stime.Format(time.RFC3339)
+	if xact.etime.IsZero() {
+		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, start)
+	}
+	fin := xact.etime.Format(time.RFC3339)
+	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v",
+		xact.kind, xact.id, xact.curversion, start, fin)
 }

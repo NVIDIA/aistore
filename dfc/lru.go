@@ -6,6 +6,8 @@ package dfc
 
 import (
 	"container/heap"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,14 +40,14 @@ var lructxmap = make(map[string]*lructx)
 
 // FIXME: mountpath.enabled is never used
 func (t *targetrunner) runLRU() {
-	xact := t.xactinp.renewLRU()
-	if xact == nil {
+	xlru := t.xactinp.renewLRU()
+	if xlru == nil {
 		return
 	}
 	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
 	fsmap := make(map[syscall.Fsid]bool, mntcnt)
-	glog.Infof("%s started, num mp-s %d", xact.tostring(), mntcnt)
+	glog.Infof("%s started, num mp-s %d", xlru.tostring(), mntcnt)
 	for _, mountpath := range ctx.mountpaths {
 		_, ok := fsmap[mountpath.Fsid]
 		if ok {
@@ -54,15 +56,15 @@ func (t *targetrunner) runLRU() {
 		}
 		fsmap[mountpath.Fsid] = true
 		fschkwg.Add(1)
-		go t.oneLRU(mountpath.Path, fschkwg)
+		go t.oneLRU(mountpath.Path, fschkwg, xlru)
 	}
 	fschkwg.Wait()
-	xact.etime = time.Now()
-	glog.Infof("%s finished", xact.tostring())
-	t.xactinp.del(xact)
+	xlru.etime = time.Now()
+	glog.Infoln(xlru.tostring())
+	t.xactinp.del(xlru.id)
 }
 
-func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup) error {
+func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
 	hwm := ctx.config.Cache.FSHighWaterMark
 	lwm := ctx.config.Cache.FSLowWaterMark
@@ -90,7 +92,7 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup) error {
 	lructxmap[mpath] = &lructx{totsize: toevict}
 	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
 
-	if err := filepath.Walk(mpath, t.lruwalkfn); err != nil {
+	if err := filepath.Walk(mpath, xlru.lruwalkfn); err != nil {
 		glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		return err
 	}
@@ -102,13 +104,36 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup) error {
 	return nil
 }
 
-func (t *targetrunner) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
+// NOTE: the receiver xlru.lruwalkf()
+func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
 	}
 	// skip system files and directories
 	if strings.HasPrefix(osfi.Name(), ".") || osfi.Mode().IsDir() {
+		return nil
+	}
+
+	// abort?
+	select {
+	case <-xlru.abrt:
+		xlru.etime = time.Now()
+		return errors.New(fmt.Sprintf("%s aborted, exiting lruwalkfn", xlru.tostring()))
+	default:
+	}
+	if !xlru.etime.IsZero() {
+		return errors.New(fmt.Sprintf("%s aborted - exiting lruwalkfn", xlru.tostring()))
+	}
+
+	// Delete invalid object files.
+	if isinvalidobj(osfi.Name()) {
+		err = os.Remove(osfi.Name())
+		if err != nil {
+			glog.Errorf("Failed to delete file %s, err: %v", osfi.Name(), err)
+		} else {
+			glog.Infof("Succesfully deleted invalid file %s", osfi.Name())
+		}
 		return nil
 	}
 	stat := osfi.Sys().(*syscall.Stat_t)
