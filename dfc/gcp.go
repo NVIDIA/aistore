@@ -78,12 +78,12 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string,
 		return nil, webinterror(w, errstr)
 	}
 	defer rc.Close()
-	file, err = createfile(fqn)
+	file, err = initobj(fqn)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create file %q, err: %v", fqn, err)
+		errstr := fmt.Sprintf("Failed to initalize file %s, err: %v", fqn, err)
 		return nil, webinterror(w, errstr)
 	} else {
-		glog.Infof("Created file %q", fqn)
+		glog.Infof("Created and initialized file %s", fqn)
 	}
 	// Calculate MD5 Hash
 	hash := md5.New()
@@ -110,6 +110,12 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string,
 	} else {
 		glog.Infof("Object's %s MD5sum %v does MATCH with file(%s)'s MD5sum %v",
 			objname, omd5, fqn, fmd5)
+	}
+	err = finalizeobj(fqn, hashInBytes)
+	if err != nil {
+		fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
+		file.Close()
+		return nil, webinterror(w, errstr)
 	}
 
 	stats := getstorstats()

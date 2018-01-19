@@ -16,6 +16,13 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	objstateattr = "user.objstate" // Object's state
+	MD5attr      = "user.MD5"      // Object's MD5
+	invalid      = "0"
+	valid        = "1"
+)
+
 // TODO: AWS specific initialization
 type awsif struct {
 }
@@ -169,9 +176,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	fqn := t.fqn(bucket, objname)
 	var file *os.File
 	_, err := os.Stat(fqn)
-	if os.IsNotExist(err) {
+	if os.IsNotExist(err) || isinvalidobj(fqn) {
 		t.statsif.add("numcoldget", 1)
-		glog.Infof("Bucket %s key %s fqn %q is not cached", bucket, objname, fqn)
+		glog.Infof("Bucket %s key %s fqn %q is not cached or invalid", bucket, objname, fqn)
 		// TODO: do getcloudif().getobj() and write http response in parallel
 		if file, err = getcloudif().getobj(w, fqn, bucket, objname); err != nil {
 			return

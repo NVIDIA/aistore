@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"syscall"
 
 	"github.com/golang/glog"
 )
@@ -158,18 +159,62 @@ func createfile(fname string) (*os.File, error) {
 	// strips the last part from filepath
 	dirname := filepath.Dir(fname)
 	if err = CreateDir(dirname); err != nil {
-		glog.Errorf("Failed to create local dir %q, err: %s", dirname, err)
+		glog.Errorf("Failed to create local dir %s, err: %v", dirname, err)
 		checksetmounterror(fname)
 		return nil, err
 	}
 	file, err = os.Create(fname)
 	if err != nil {
-		glog.Errorf("Unable to create file %q, err: %v", fname, err)
+		glog.Errorf("Unable to create file %s, err: %v", fname, err)
 		checksetmounterror(fname)
 		return nil, err
 	}
 
 	return file, nil
+}
+
+// Get specific attribute for specified path.
+func getxattr(path, name string) ([]byte, error) {
+	// find size.
+	size, err := syscall.Getxattr(path, name, nil)
+	if err != nil {
+		glog.Errorf("Failed to get extended attr for path %s attr %s, err: %v",
+			path, name, err)
+		return nil, err
+	}
+	if size > 0 {
+		data := make([]byte, size)
+		read, err := syscall.Getxattr(path, name, data)
+		if err != nil {
+			glog.Errorf("Failed to get extended attr for path %s attr %s, err: %v",
+				path, name, err)
+			return nil, err
+		}
+		return data[:read], nil
+	}
+	return []byte{}, nil
+}
+
+// Set specific named attribute for specific path.
+func setxattr(path, name string, data []byte) error {
+	err := syscall.Setxattr(path, name, data, 0)
+	if err != nil {
+		glog.Errorf("Failed to set extended attr for path %s attr %s, err: %v",
+			path, name, err)
+		return err
+	}
+	return nil
+}
+
+// Delete specific named attribute for specific path.
+func deletexattr(path, name string) error {
+	err := syscall.Removexattr(path, name)
+	if err != nil {
+		glog.Errorf("Failed to remove extended attr for path %s attr %s, err: %v",
+			path, name, err)
+		return err
+	}
+	return nil
 }
 
 //===========================================================================

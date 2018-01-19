@@ -113,6 +113,16 @@ func walkfunc(fqn string, osfi os.FileInfo, err error) error {
 	if strings.HasPrefix(osfi.Name(), ".") || osfi.Mode().IsDir() {
 		return nil
 	}
+	// Delete invalid object files.
+	if isinvalidobj(osfi.Name()) {
+		err = os.Remove(osfi.Name())
+		if err != nil {
+			glog.Errorf("Failed to delete file %s, err: %v", osfi.Name(), err)
+		} else {
+			glog.Infof("Succesfully deleted invalid file %s", osfi.Name())
+		}
+		return nil
+	}
 	stat := osfi.Sys().(*syscall.Stat_t)
 	atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
 	mtime := time.Unix(int64(stat.Mtim.Sec), int64(stat.Mtim.Nsec))
