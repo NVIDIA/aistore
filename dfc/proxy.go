@@ -35,6 +35,7 @@ type Allstats struct {
 //===========================================================================
 type proxyrunner struct {
 	httprunner
+	starttime time.Time
 }
 
 // run
@@ -49,6 +50,7 @@ func (p *proxyrunner) run() error {
 	p.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Proxy %s is ready", p.si.DaemonID)
 	glog.Flush()
+	p.starttime = time.Now()
 	return p.httprunner.run()
 }
 
@@ -105,7 +107,15 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	// FIXME: validate that apitems[0] is an accessible bucket
+	bucket := apitems[0]
+	if strings.Contains(bucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name (contains '/')", bucket)
+		invalmsghdlr(w, r, s)
+		p.statsif.add("numerr", 1)
+		return
+	}
+	// FIXME: more bucket validation?
+
 	si := hrwTarget(strings.Join(apitems, "/"), ctx.smap)
 	assert(si != nil, "race NIY")
 
@@ -290,6 +300,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 		for _, si := range ctx.smap.Smap {
 			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
+			glog.Infof("%s: %s", msg.Action, url)
 			p.call(url, http.MethodPut, msgbytes)
 		}
 		time.Sleep(time.Second)
@@ -303,6 +314,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 		for _, si := range ctx.smap.Smap {
 			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + msg.Action
+			glog.Infof("%s: %s", msg.Action, url)
 			_, err := p.call(url, r.Method, jsbytes)
 			assert(err == nil, err)
 		}

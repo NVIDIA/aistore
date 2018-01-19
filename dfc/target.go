@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -44,9 +45,10 @@ type cinterface interface {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif cinterface // multi-cloud vendor support
-	smap    *Smap
-	xactinp *xactInProgress
+	cloudif   cinterface // multi-cloud vendor support
+	smap      *Smap
+	xactinp   *xactInProgress
+	starttime time.Time
 }
 
 // start target runner
@@ -105,6 +107,7 @@ func (t *targetrunner) run() error {
 	t.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
+	t.starttime = time.Now()
 	return t.httprunner.run()
 }
 
@@ -113,6 +116,7 @@ func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	t.unregister()
 	t.httprunner.stop(err)
+	t.xactinp.abortAll()
 }
 
 // target registration with proxy
@@ -164,6 +168,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	bucket, objname := apitems[0], ""
 	if len(apitems) > 1 {
 		objname = apitems[1]
+	}
+	if strings.Contains(bucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name (contains '/')", bucket)
+		invalmsghdlr(w, r, s)
+		t.statsif.add("numerr", 1)
+		return
 	}
 	t.statsif.add("numget", 1)
 	//
@@ -373,6 +383,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		assert(existentialQ)
 		t.smap = smap
 		if apitems[0] == Rsyncsmap {
+			// FIXME: must trigger delayed xactRebalance (TODO)
 			return
 		}
 		go t.runRebalance()

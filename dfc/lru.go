@@ -40,13 +40,20 @@ var lructxmap = make(map[string]*lructx)
 
 // FIXME: mountpath.enabled is never used
 func (t *targetrunner) runLRU() {
-	xlru := t.xactinp.renewLRU()
+	xlru := t.xactinp.renewLRU(t)
 	if xlru == nil {
 		return
 	}
 	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
 	fsmap := make(map[syscall.Fsid]bool, mntcnt)
+
+	// init context maps to avoid insert-key races
+	for mpath, _ := range ctx.mountpaths {
+		maxheapmap[mpath] = nil
+		lructxmap[mpath] = nil
+	}
+
 	glog.Infof("%s started, num mp-s %d", xlru.tostring(), mntcnt)
 	for _, mountpath := range ctx.mountpaths {
 		_, ok := fsmap[mountpath.Fsid]
@@ -93,7 +100,12 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactL
 	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
 
 	if err := filepath.Walk(mpath, xlru.lruwalkfn); err != nil {
-		glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+		s := err.Error()
+		if strings.Contains(s, "xaction") {
+			glog.Infof("Stopping mpath %q traversal: %s", mpath, s)
+		} else {
+			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+		}
 		return err
 	}
 
@@ -104,7 +116,8 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactL
 	return nil
 }
 
-// NOTE: the receiver xlru.lruwalkf()
+// the walking callback is execited by the LRU xaction
+// (notice the receiver)
 func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
@@ -118,11 +131,14 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	// abort?
 	select {
 	case <-xlru.abrt:
-		xlru.etime = time.Now()
-		return errors.New(fmt.Sprintf("%s aborted, exiting lruwalkfn", xlru.tostring()))
-	default:
+		s := fmt.Sprintf("%s aborted, exiting lruwalkfn", xlru.tostring())
+		glog.Infoln(s)
+		glog.Flush()
+		return errors.New(s)
+	case <-time.After(time.Millisecond):
+		break
 	}
-	if !xlru.etime.IsZero() {
+	if xlru.finished() {
 		return errors.New(fmt.Sprintf("%s aborted - exiting lruwalkfn", xlru.tostring()))
 	}
 

@@ -34,13 +34,19 @@ func (t *targetrunner) runRebalance() {
 
 func (t *targetrunner) oneRebalance(mpath string, xreb *xactRebalance) bool {
 	if err := filepath.Walk(mpath, xreb.rewalkf); err != nil {
-		glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+		s := err.Error()
+		if strings.Contains(s, "xaction") {
+			glog.Infof("Stopping mpath %q traversal: %s", mpath, s)
+		} else {
+			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+		}
 		return true
 	}
 	return false
 }
 
-// NOTE: the receiver xreb.rewalkf()
+// the walking callback is execited by the LRU xaction
+// (notice the receiver)
 func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("rewalkf callback invoked with err: %v", err)
@@ -54,11 +60,14 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 	// abort?
 	select {
 	case <-xreb.abrt:
-		xreb.etime = time.Now()
-		return errors.New(fmt.Sprintf("%s aborted, exiting rewalkf", xreb.tostring()))
-	default:
+		s := fmt.Sprintf("%s aborted, exiting rewalkf", xreb.tostring())
+		glog.Infoln(s)
+		glog.Flush()
+		return errors.New(s)
+	case <-time.After(time.Millisecond):
+		break
 	}
-	if !xreb.etime.IsZero() {
+	if xreb.finished() {
 		return errors.New(fmt.Sprintf("%s aborted - exiting rewalkf", xreb.tostring()))
 	}
 
@@ -71,7 +80,5 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 		glog.Flush()
 		return nil
 	}
-	glog.Infof("[%s %s %s] is located at its %s home", mpath, bucket, objname, t.si.DaemonID)
-	glog.Flush()
 	return nil
 }

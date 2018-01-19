@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
+//
+// xaction: Extended Action aka Transaction
+//
 package dfc
 
 import (
@@ -8,12 +15,12 @@ import (
 	"github.com/golang/glog"
 )
 
-// xaction: Extended (in time) Action -- Transaction
-
 type xactInterface interface {
 	getid() int64
 	getkind() string
 	tostring() string
+	abort()
+	finished() bool
 }
 
 type xactInProgress struct {
@@ -37,7 +44,7 @@ type xactRebalance struct {
 
 type xactLRU struct {
 	xactBase
-	// TODO
+	targetrunner *targetrunner
 }
 
 //====================
@@ -57,13 +64,17 @@ func (xact *xactBase) getkind() string {
 	return xact.kind
 }
 
-func (xact *xactBase) tostring() string {
-	start := xact.stime.Format(time.RFC3339)
-	if xact.etime.IsZero() {
-		return fmt.Sprintf("xaction %s:%d %v", xact.kind, xact.id, start)
-	}
-	fin := xact.etime.Format(time.RFC3339)
-	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
+func (xact *xactBase) tostring() string { assert(false, "must be implemented"); return "" }
+
+func (xact *xactBase) abort() {
+	xact.etime = time.Now()
+	var e struct{}
+	xact.abrt <- e
+	close(xact.abrt)
+}
+
+func (xact *xactBase) finished() bool {
+	return !xact.etime.IsZero()
 }
 
 //===================
@@ -147,9 +158,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 				glog.Infof("%s already running, nothing to do", xreb.tostring())
 				return nil
 			}
-			close(xreb.abrt) // abort
-			xreb.etime = time.Now()
-			glog.Infof("%s must be aborted", xreb.tostring())
+			xreb.abort()
 		}
 	}
 	id := q.uniqueid()
@@ -159,7 +168,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 	return xreb
 }
 
-func (q *xactInProgress) renewLRU() *xactLRU {
+func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	_, xx := q.find(ActionLRU)
@@ -170,8 +179,38 @@ func (q *xactInProgress) renewLRU() *xactLRU {
 	}
 	id := q.uniqueid()
 	xlru := &xactLRU{xactBase: *newxactBase(id, ActionLRU)}
+	xlru.targetrunner = t
 	q.add(xlru)
 	return xlru
+}
+
+func (q *xactInProgress) abortAll() {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	var sleep bool
+	for _, xact := range q.xactinp {
+		if !xact.finished() {
+			xact.abort()
+			sleep = true
+		}
+	}
+	if sleep {
+		time.Sleep(time.Millisecond * 100)
+	}
+}
+
+//===================
+//
+// xactLRU
+//
+//===================
+func (xact *xactLRU) tostring() string {
+	start := xact.stime.Sub(xact.targetrunner.starttime)
+	if !xact.finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+	}
+	fin := time.Since(xact.targetrunner.starttime)
+	return fmt.Sprintf("xaction %s:%d %v finished %v", xact.kind, xact.id, start, fin)
 }
 
 //===================
@@ -180,11 +219,15 @@ func (q *xactInProgress) renewLRU() *xactLRU {
 //
 //===================
 func (xact *xactRebalance) tostring() string {
-	start := xact.stime.Format(time.RFC3339)
-	if xact.etime.IsZero() {
+	start := xact.stime.Sub(xact.targetrunner.starttime)
+	if !xact.finished() {
 		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, start)
 	}
-	fin := xact.etime.Format(time.RFC3339)
-	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v",
-		xact.kind, xact.id, xact.curversion, start, fin)
+	fin := time.Since(xact.targetrunner.starttime)
+	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v", xact.kind, xact.id, xact.curversion, start, fin)
+}
+
+func (xact *xactRebalance) abort() {
+	xact.xactBase.abort()
+	glog.Infof("ABORT: " + xact.tostring())
 }

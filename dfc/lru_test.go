@@ -54,8 +54,9 @@ func Test_lru(t *testing.T) {
 	fschkwg := &sync.WaitGroup{}
 	fschkwg.Add(1)
 
-	rtarget := gettarget()
-	xlru := rtarget.xactinp.renewLRU()
+	rtarget := &targetrunner{starttime: time.Now()} // dummy target
+	rtarget.xactinp = newxactinp()
+	xlru := rtarget.xactinp.renewLRU(rtarget)
 	if xlru == nil {
 		return
 	}
