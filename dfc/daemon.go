@@ -31,37 +31,6 @@ const (
 //====================
 var ctx = &daemon{}
 
-//=========================================
-//
-// types: JSON-formatted control structures
-//
-//=========================================
-type ActionMsg struct {
-	Action string `json:"action"` // shutdown, restart - see the const below
-	Param1 string `json:"param1"` // action-specific params
-	Param2 string `json:"param2"`
-}
-
-// ActionMsg.Action enum
-const (
-	ActionShutdown  = "shutdown"
-	ActionSyncSmap  = "syncsmap"  // synchronize cluster map aka Smap across all targets
-	ActionRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
-	ActionLRU       = "lru"
-)
-
-type GetMsg struct {
-	What   string `json:"what"` // specifies what exactly are we getting
-	Param1 string `json:"param1"`
-	Param2 string `json:"param2"`
-}
-
-// GetMsg.What enum
-const (
-	GetConfig = "config"
-	GetStats  = "stats"
-)
-
 //======
 //
 // types

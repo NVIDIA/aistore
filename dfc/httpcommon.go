@@ -27,18 +27,6 @@ const (
 	requesttimeout = 5 * time.Second // http timeout
 )
 
-// RESTful URL path: /v1/....
-const (
-	Rversion  = "v1"
-	Rfiles    = "files"
-	Rcluster  = "cluster"
-	Rdaemon   = "daemon"
-	Rsyncsmap = ActionSyncSmap
-	Rebalance = ActionRebalance
-	Rfrom     = "from_id"
-	Rto       = "to_id"
-)
-
 // FIXME: revisit the following 3 methods, and make consistent
 func invalhdlr(w http.ResponseWriter, r *http.Request) {
 	s := errmsgRestApi(http.StatusText(http.StatusBadRequest), r)

@@ -5,11 +5,8 @@
 package dfc
 
 import (
-	"crypto/md5"
-	"encoding/hex"
-	"errors"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -29,7 +26,7 @@ func createsession() *session.Session {
 }
 
 func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
-	glog.Infof("listbucket : bucket = %s ", bucket)
+	glog.Infof("listbucket %s ", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
@@ -37,24 +34,28 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 	if err != nil {
 		return webinterror(w, err.Error())
 	}
-	// TODO: reimplement in JSON
+	// var msg GetMsg
+	var reslist = GetMetaResList{ResList: make([]*GetMetaRes, 0, 1000)}
 	for _, key := range resp.Contents {
-		glog.Infof("bucket = %s key = %s", bucket, *key.Key)
-		keystr := fmt.Sprintf("%s", *key.Key)
-		fmt.Fprintln(w, keystr)
+		entry := &GetMetaRes{}
+		entry.MetaName = *key.Key
+		reslist.ResList = append(reslist.ResList, entry)
 	}
+	if glog.V(3) {
+		glog.Infof("listbucket count %d", len(reslist.ResList))
+	}
+	jsbytes, err := json.Marshal(reslist)
+	assert(err == nil, err)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsbytes)
 	return nil
 }
 
 // This function download S3 object into local file.
-func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string,
-	objname string) (file *os.File, err error) {
-
-	var bytes int64
-	file, err = initobj(fqn)
-	if err != nil {
-		glog.Errorf("Failed to initialize file %s, err: %v", fqn, err)
-		return nil, err
+func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string, objname string) (file *os.File, err error) {
+	var errstr string
+	if file, errstr = initobj(fqn); errstr != "" {
+		return nil, webinterror(w, errstr)
 	}
 	sess := createsession()
 	s3Svc := s3.New(sess)
@@ -65,48 +66,19 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string,
 	})
 	defer obj.Body.Close()
 	if err != nil {
-		glog.Errorf("Failed to download key %s from bucket %s, err: %v", objname, bucket, err)
+		errstr := fmt.Sprintf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 		file.Close()
-		return nil, err
+		return nil, webinterror(w, errstr)
 	}
 	// Get ETag from object header
 	omd5, _ := strconv.Unquote(*obj.ETag)
 
-	hash := md5.New()
-	writer := io.MultiWriter(file, hash)
-	_, err = io.Copy(writer, obj.Body)
-	if err != nil {
-		glog.Errorf("Failed to copy obj err: %v", err)
-		checksetmounterror(fqn)
-		file.Close()
-		return nil, err
-
-	}
-	hashInBytes := hash.Sum(nil)[:16]
-	fmd5 := hex.EncodeToString(hashInBytes)
-	if omd5 != fmd5 {
-		errstr := fmt.Sprintf("Object's %s MD5sum %v does not match with file(%s)'s MD5sum %v",
-			objname, omd5, fqn, fmd5)
-		glog.Error(errstr)
-		err := os.Remove(fqn)
-		if err != nil {
-			glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
-		}
-		file.Close()
-		return nil, errors.New(errstr)
-	} else {
-		glog.Infof("Object's %s MD5sum %v does MATCH with file(%s)'s MD5sum %v",
-			objname, omd5, fqn, fmd5)
-	}
-	glog.Infof("Downloaded bucket %s key %s file %s", bucket, objname, fqn)
-	err = finalizeobj(fqn, hashInBytes)
-	if err != nil {
-		glog.Errorf("Unable to finalize file %s, err: %v", fqn, err)
-		file.Close()
-		return nil, err
+	size, errstr := getobjto_Md5(file, fqn, objname, omd5, obj.Body)
+	if errstr != "" {
+		return nil, webinterror(w, errstr)
 	}
 	stats := getstorstats()
-	stats.add("bytesloaded", bytes)
+	stats.add("bytesloaded", size)
 	return file, nil
 }
 

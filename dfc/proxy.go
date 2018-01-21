@@ -107,16 +107,27 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket, objname := apitems[0], ""
+	if len(apitems) > 1 {
+		objname = apitems[1]
+	}
 	if strings.Contains(bucket, "/") {
 		s := fmt.Sprintf("Invalid bucket name (contains '/')", bucket)
 		invalmsghdlr(w, r, s)
 		p.statsif.add("numerr", 1)
 		return
 	}
-	// FIXME: more bucket validation?
+	// FIXME: more bucket validation..
 
-	si := hrwTarget(strings.Join(apitems, "/"), ctx.smap)
+	var si *ServerInfo
+	// bucket listing? select a random target to execute the LIST op
+	if len(objname) == 0 {
+		for _, si = range ctx.smap.Smap { // see the spec for "map iteration order"
+			break
+		}
+	} else { // CH target selection to execute GET bucket/objname
+		si = hrwTarget(strings.Join(apitems, "/"), ctx.smap)
+	}
 	assert(si != nil, "race NIY")
 
 	redirecturl := si.DirectURL + r.URL.Path
@@ -198,13 +209,13 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	if p.readJson(w, r, &msg) != nil {
 		return
 	}
-	switch msg.What {
-	case GetConfig:
+	switch msg.GetWhat {
+	case GetWhatConfig:
 		jsbytes, err := json.Marshal(ctx.smap)
 		assert(err == nil)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsbytes)
-	case GetStats:
+	case GetWhatStats:
 		getstatsmsg, err := json.Marshal(msg) // same message to all targets
 		assert(err == nil, err)
 		p.httpclugetstats(w, r, getstatsmsg)

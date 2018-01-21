@@ -6,15 +6,16 @@ package dfc_test
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -35,21 +36,22 @@ const (
 	TestFile     = "/tmp/xattrfile"        // Test file for setting and getting xattr.
 )
 
+// globals
 var (
-	bucket     string
+	clibucket  string
 	numfiles   int
 	numworkers int
 	match      string
 )
 
-// Work result from each worker
+// worker's result
 type workres struct {
 	totfiles int
 	totbytes int64
 }
 
 func init() {
-	flag.StringVar(&bucket, "bucket", "shri-new", "AWS or GCP bucket")
+	flag.StringVar(&clibucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "regex match for the keyname")
@@ -78,47 +80,31 @@ func Test_download(t *testing.T) {
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		// false: read the response and drop it, true: write it to a file
-		go getAndCopyTmp(i, keyname_chans[i], t, wg, true, errch, result_chans[i])
+		go getAndCopyTmp(i, keyname_chans[i], t, wg, true, errch, result_chans[i], clibucket)
 	}
 
-	// Get the list for bucket
-	url := RestAPIGet + "/" + bucket
-	t.Logf("LIST %q", url)
-	r, err := http.Get(url)
-	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
+	// list the bucket
+	reslist := listbucket(t, clibucket)
+	if reslist == nil {
 		return
 	}
-
-	// Read the keynames from list, and share the keynames among the worker channels
-	reader := bufio.NewReader(r.Body)
-
-	// Compile the regular expression
 	re, rerr := regexp.Compile(match)
 	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
 		return
 	}
-
-	// Select only matched keynames
-	wrkrChosen := 0
-	numExpected := 0 // Track how many will be actually chosen for download
-
-	for i := 0; ; {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
+	// match
+	var num int
+	for _, entry := range reslist.ResList {
+		name := entry.MetaName
+		if !re.MatchString(name) {
+			continue
+		}
+		keyname_chans[num%numworkers] <- name
+		if num++; num >= numfiles {
 			break
 		}
-		keyname := strings.TrimSuffix(string(line), "\n")
-		if re.MatchString(keyname) {
-			keyname_chans[wrkrChosen%numworkers] <- keyname
-			wrkrChosen++
-			numExpected++
-			i++
-			if i >= numfiles {
-				break
-			}
-		}
 	}
-	t.Logf("Expecting %d files to be downloaded", numExpected)
+	t.Logf("Expecting to get %d files", num)
 
 	// Close the channels after the reading is done
 	for i := 0; i < numworkers; i++ {
@@ -140,8 +126,8 @@ func Test_download(t *testing.T) {
 	t.Logf("\nSummary: %d workers, %d files, total size %.2f MB (%d B)",
 		numworkers, sumtotfiles, float64(sumtotbytes/1000/1000), sumtotbytes)
 
-	if sumtotfiles != numExpected {
-		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", numExpected, sumtotfiles)
+	if sumtotfiles != num {
+		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", num, sumtotfiles)
 		t.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
@@ -155,7 +141,7 @@ func Test_download(t *testing.T) {
 }
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
-	errch chan error, resch chan workres) {
+	errch chan error, resch chan workres, bucket string) {
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -228,7 +214,7 @@ func Benchmark_one(b *testing.B) {
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		go get(keyname, b, wg, errch)
+		go get(keyname, b, wg, errch, clibucket)
 	}
 	wg.Wait()
 	select {
@@ -238,7 +224,7 @@ func Benchmark_one(b *testing.B) {
 	}
 }
 
-func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error) {
+func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error, bucket string) {
 	defer wg.Done()
 	url := RestAPIGet + "/" + bucket + "/" + keyname
 	r, err := http.Get(url)
@@ -270,43 +256,63 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error) {
 
 func Test_list(t *testing.T) {
 	flag.Parse()
-	listAndCopyTmp(t, false) // false: read the response and drop it; true: write to file
+	listAndCopyTmp(t, false, clibucket) // false: read the response and drop it; true: write to file
 }
 
-func listAndCopyTmp(t *testing.T, copy bool) {
+func listAndCopyTmp(t *testing.T, copy bool, bucket string) {
+	reslist := listbucket(t, bucket)
+	if reslist == nil {
+		return
+	}
+	if !copy {
+		for _, m := range reslist.ResList {
+			fmt.Fprintln(os.Stdout, m)
+		}
+		return
+	}
+	// alternatively, write to a local filename = bucket
+	fname := LocalRootDir + "/" + bucket
+	if err := dfc.CreateDir(LocalRootDir); err != nil {
+		t.Errorf("Failed to create dir %s, err: %v", LocalRootDir, err)
+		return
+	}
+	file, err := os.Create(fname)
+	if err != nil {
+		t.Errorf("Failed to create file %s, err: %v", fname, err)
+		return
+	}
+	for _, m := range reslist.ResList {
+		fmt.Fprintln(file, m)
+	}
+	t.Logf("ls bucket written to %s", bucket, fname)
+}
+
+func listbucket(t *testing.T, bucket string) *dfc.GetMetaResList {
 	url := RestAPIGet + "/" + bucket
 	t.Logf("LIST %q", url)
 	r, err := http.Get(url)
 	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
-		return
+		return nil
 	}
 	defer func() {
 		if r != nil {
 			r.Body.Close()
 		}
 	}()
-
-	if !copy {
-		reader := bufio.NewReader(r.Body)
-		for {
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				break
-			}
-			fmt.Fprintf(os.Stdout, string(line))
+	var reslist = &dfc.GetMetaResList{}
+	reslist.ResList = make([]*dfc.GetMetaRes, 0, 1000)
+	b, err := ioutil.ReadAll(r.Body)
+	if err == nil {
+		err = json.Unmarshal(b, reslist)
+		if err != nil {
+			t.Errorf("Failed to json-unmarshal, err: %v", err)
+			return nil
 		}
-		return
+	} else {
+		t.Errorf("Failed to read json, err: %v", err)
+		return nil
 	}
-
-	// alternatively, create a local copy
-	fname := LocalRootDir + "/" + bucket
-	written, err := dfc.ReceiveFile(fname, r.Body)
-	r.Body.Close()
-	if err != nil {
-		t.Errorf("Failed to write file, err: %v", err)
-		return
-	}
-	t.Logf("Got bucket list and copied %q (size %d B)", fname, written)
+	return reslist
 }
 
 func Test_xattr(t *testing.T) {

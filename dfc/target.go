@@ -184,7 +184,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//
-	// get from the bucket
+	// get objects from the bucket
 	//
 	fqn := t.fqn(bucket, objname)
 	var file *os.File
@@ -423,11 +423,11 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes []byte
 		err     error
 	)
-	switch msg.What {
-	case GetConfig:
+	switch msg.GetWhat {
+	case GetWhatConfig:
 		jsbytes, err = json.Marshal(t.si)
 		assert(err == nil, err)
-	case GetStats:
+	case GetWhatStats:
 		var stats Storstats
 		getstorstatsrunner().syncstats(&stats)
 		jsbytes, err = json.Marshal(stats)

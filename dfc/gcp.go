@@ -4,10 +4,9 @@
 package dfc
 
 import (
-	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 
@@ -37,24 +36,30 @@ func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 		glog.Fatal(err)
 	}
 	it := client.Bucket(bucket).Objects(gctx, nil)
+
+	// var msg GetMsg
+	var reslist = GetMetaResList{ResList: make([]*GetMetaRes, 0, 1000)}
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
 		}
-		if err != nil {
-			errstr := fmt.Sprintf("Failed to get bucket objects, err: %v", err)
-			return webinterror(w, errstr)
-		}
-		fmt.Fprintln(w, attrs.Name)
+		entry := &GetMetaRes{}
+		entry.MetaName = attrs.Name
+		reslist.ResList = append(reslist.ResList, entry)
 	}
+	if glog.V(3) {
+		glog.Infof("listbucket count %d", len(reslist.ResList))
+	}
+	jsbytes, err := json.Marshal(reslist)
+	assert(err == nil, err)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsbytes)
 	return nil
 }
 
 // FIXME: revisit error processing
-func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string,
-	objname string) (file *os.File, err error) {
-
+func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string, objname string) (file *os.File, err error) {
 	projid, errstr := getProjID()
 	if projid == "" {
 		return nil, webinterror(w, errstr)
@@ -78,48 +83,15 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string,
 		return nil, webinterror(w, errstr)
 	}
 	defer rc.Close()
-	file, err = initobj(fqn)
-	if err != nil {
-		errstr := fmt.Sprintf("Failed to initalize file %s, err: %v", fqn, err)
-		return nil, webinterror(w, errstr)
-	} else {
-		glog.Infof("Created and initialized file %s", fqn)
-	}
-	// Calculate MD5 Hash
-	hash := md5.New()
-	writer := io.MultiWriter(file, hash)
-	bytes, err := io.Copy(writer, rc)
-	//bytes, err := copyBuffer(writer, rc)
-	if err != nil {
-		file.Close()
-		errstr := fmt.Sprintf("Failed to download object %s to file %q, err: %v", objname, fqn, err)
-		return nil, webinterror(w, errstr)
-		// FIXME: checksetmounterror() - see aws.go
-	}
-	hashInBytes := hash.Sum(nil)[:16]
-	fmd5 := hex.EncodeToString(hashInBytes)
-	if omd5 != fmd5 {
-		errstr := fmt.Sprintf("Object's %s MD5sum %v does not match with file(%s)'s MD5sum %v",
-			objname, omd5, fqn, fmd5)
-		// Remove downloaded file.
-		err := os.Remove(fqn)
-		if err != nil {
-			glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
-		}
-		return nil, webinterror(w, errstr)
-	} else {
-		glog.Infof("Object's %s MD5sum %v does MATCH with file(%s)'s MD5sum %v",
-			objname, omd5, fqn, fmd5)
-	}
-	err = finalizeobj(fqn, hashInBytes)
-	if err != nil {
-		fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
-		file.Close()
+	if file, errstr = initobj(fqn); errstr != "" {
 		return nil, webinterror(w, errstr)
 	}
-
+	size, errstr := getobjto_Md5(file, fqn, objname, omd5, rc)
+	if errstr != "" {
+		return nil, webinterror(w, errstr)
+	}
 	stats := getstorstats()
-	stats.add("bytesloaded", bytes)
+	stats.add("bytesloaded", size)
 	return file, nil
 }
 
