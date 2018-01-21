@@ -35,14 +35,14 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 		return webinterror(w, err.Error())
 	}
 	// var msg GetMsg
-	var reslist = GetMetaResList{ResList: make([]*GetMetaRes, 0, 1000)}
+	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
 	for _, key := range resp.Contents {
-		entry := &GetMetaRes{}
-		entry.MetaName = *key.Key
-		reslist.ResList = append(reslist.ResList, entry)
+		entry := &BucketEntry{}
+		entry.Name = *key.Key
+		reslist.Entries = append(reslist.Entries, entry)
 	}
 	if glog.V(3) {
-		glog.Infof("listbucket count %d", len(reslist.ResList))
+		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)

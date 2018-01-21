@@ -94,8 +94,8 @@ func Test_download(t *testing.T) {
 	}
 	// match
 	var num int
-	for _, entry := range reslist.ResList {
-		name := entry.MetaName
+	for _, entry := range reslist.Entries {
+		name := entry.Name
 		if !re.MatchString(name) {
 			continue
 		}
@@ -265,7 +265,7 @@ func listAndCopyTmp(t *testing.T, copy bool, bucket string) {
 		return
 	}
 	if !copy {
-		for _, m := range reslist.ResList {
+		for _, m := range reslist.Entries {
 			fmt.Fprintln(os.Stdout, m)
 		}
 		return
@@ -281,13 +281,13 @@ func listAndCopyTmp(t *testing.T, copy bool, bucket string) {
 		t.Errorf("Failed to create file %s, err: %v", fname, err)
 		return
 	}
-	for _, m := range reslist.ResList {
+	for _, m := range reslist.Entries {
 		fmt.Fprintln(file, m)
 	}
 	t.Logf("ls bucket written to %s", bucket, fname)
 }
 
-func listbucket(t *testing.T, bucket string) *dfc.GetMetaResList {
+func listbucket(t *testing.T, bucket string) *dfc.BucketList {
 	url := RestAPIGet + "/" + bucket
 	t.Logf("LIST %q", url)
 	r, err := http.Get(url)
@@ -299,8 +299,8 @@ func listbucket(t *testing.T, bucket string) *dfc.GetMetaResList {
 			r.Body.Close()
 		}
 	}()
-	var reslist = &dfc.GetMetaResList{}
-	reslist.ResList = make([]*dfc.GetMetaRes, 0, 1000)
+	var reslist = &dfc.BucketList{}
+	reslist.Entries = make([]*dfc.BucketEntry, 0, 1000)
 	b, err := ioutil.ReadAll(r.Body)
 	if err == nil {
 		err = json.Unmarshal(b, reslist)

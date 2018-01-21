@@ -74,17 +74,17 @@ const (
 //===================
 
 // file and directory metadata in response to the GetMsg
-type GetMetaRes struct {
-	MetaName     string `json:"name"`     // name of the object - note: does not include the bucket name
-	MetaType     string `json:"type"`     // "file" | "directory"
-	MetaChecksum string `json:"checksum"` // checksum
-	MetaSize     int64  `json:"size"`     // size in bytes
-	MetaCTime    string `json:"ctime"`    // formatted as per GetMsg.GetTimeFormat
-	MetaATime    string `json:"atime"`    // ditto
+type BucketEntry struct {
+	Name     string `json:"name"`     // name of the object - note: does not include the bucket name
+	Type     string `json:"type"`     // "file" | "directory"
+	Checksum string `json:"checksum"` // checksum
+	Size     int64  `json:"size"`     // size in bytes
+	Ctime    string `json:"ctime"`    // formatted as per GetMsg.GetTimeFormat
+	Atime    string `json:"atime"`    // ditto
 }
 
-type GetMetaResList struct {
-	ResList []*GetMetaRes `json:"res_list"`
+type BucketList struct {
+	Entries []*BucketEntry `json:"entries"`
 }
 
 // RESTful URL path: /v1/....
