@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -25,7 +27,7 @@ func createsession() *session.Session {
 
 }
 
-func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
+func (obj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
 	glog.Infof("listbucket %s ", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
@@ -38,7 +40,26 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string) error {
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
 	for _, key := range resp.Contents {
 		entry := &BucketEntry{}
-		entry.Name = *key.Key
+		entry.Name = *(key.Key)
+		if strings.Contains(msg.GetProps, GetPropsSize) {
+			entry.Size = *(key.Size)
+		}
+		if strings.Contains(msg.GetProps, GetPropsCtime) {
+			t := *(key.LastModified)
+			switch msg.GetTimeFormat {
+			case "":
+				fallthrough
+			case RFC822:
+				entry.Ctime = t.Format(time.RFC822)
+			default:
+				entry.Ctime = t.Format(msg.GetTimeFormat)
+			}
+		}
+		if strings.Contains(msg.GetProps, GetPropsChecksum) {
+			omd5, _ := strconv.Unquote(*key.ETag)
+			entry.Checksum = omd5
+		}
+		// TODO: other GetMsg props TBD
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 	if glog.V(3) {
@@ -64,12 +85,12 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string, objn
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
 	})
-	defer obj.Body.Close()
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 		file.Close()
 		return nil, webinterror(w, errstr)
 	}
+	defer obj.Body.Close()
 	// Get ETag from object header
 	omd5, _ := strconv.Unquote(*obj.ETag)
 

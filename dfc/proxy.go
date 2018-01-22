@@ -94,8 +94,6 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 
 // e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
-	p.statsif.add("numget", 1)
-
 	if ctx.smap.count() < 1 {
 		s := errmsgRestApi("No registered targets yet", r)
 		glog.Errorln(s)
@@ -107,6 +105,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
+
 	bucket, objname := apitems[0], ""
 	if len(apitems) > 1 {
 		objname = apitems[1]
@@ -117,19 +116,17 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.statsif.add("numerr", 1)
 		return
 	}
-	// FIXME: more bucket validation..
-
 	var si *ServerInfo
-	// bucket listing? select a random target to execute the LIST op
+	// for bucket listing - any (random) target will do
 	if len(objname) == 0 {
+		p.statsif.add("numlist", 1)
 		for _, si = range ctx.smap.Smap { // see the spec for "map iteration order"
 			break
 		}
 	} else { // CH target selection to execute GET bucket/objname
+		p.statsif.add("numget", 1)
 		si = hrwTarget(strings.Join(apitems, "/"), ctx.smap)
 	}
-	assert(si != nil, "race NIY")
-
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s", r.URL.Path, si.DirectURL)
@@ -138,8 +135,14 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		glog.Infoln("Proxy will invoke the GET (ctx.config.Proxy.Passthru = false)")
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
-	// FIXME: https, HTTP2 here and elsewhere
-	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	if len(objname) != 0 {
+		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	} else {
+		// NOTE:
+		//       code 307 is the only way to http-redirect with the
+		//       original JSON payload (GetMsg - see REST.go)
+		http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	}
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)

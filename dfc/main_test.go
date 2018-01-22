@@ -6,6 +6,7 @@ package dfc_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -84,7 +85,13 @@ func Test_download(t *testing.T) {
 	}
 
 	// list the bucket
-	reslist := listbucket(t, clibucket)
+	var msg = &dfc.GetMsg{}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marshal failure, err: %v", err)
+		return
+	}
+	reslist := listbucket(t, clibucket, jsbytes)
 	if reslist == nil {
 		return
 	}
@@ -256,17 +263,25 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error, buc
 
 func Test_list(t *testing.T) {
 	flag.Parse()
-	listAndCopyTmp(t, false, clibucket) // false: read the response and drop it; true: write to file
-}
 
-func listAndCopyTmp(t *testing.T, copy bool, bucket string) {
-	reslist := listbucket(t, bucket)
+	// list the names, sizes, creation times and MD5 checksums
+	var msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marshal failure, err: %v", err)
+		return
+	}
+	bucket := clibucket
+	var copy bool
+	// copy = true
+
+	reslist := listbucket(t, bucket, jsbytes)
 	if reslist == nil {
 		return
 	}
 	if !copy {
 		for _, m := range reslist.Entries {
-			fmt.Fprintln(os.Stdout, m)
+			fmt.Fprintf(os.Stdout, "%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum[:8]+"...")
 		}
 		return
 	}
@@ -287,10 +302,27 @@ func listAndCopyTmp(t *testing.T, copy bool, bucket string) {
 	t.Logf("ls bucket written to %s", bucket, fname)
 }
 
-func listbucket(t *testing.T, bucket string) *dfc.BucketList {
-	url := RestAPIGet + "/" + bucket
+func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
+	var (
+		url     = RestAPIGet + "/" + bucket
+		err     error
+		request *http.Request
+		r       *http.Response
+	)
 	t.Logf("LIST %q", url)
-	r, err := http.Get(url)
+	if injson == nil || len(injson) == 0 {
+		r, err = http.Get(url)
+	} else {
+		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
+		if err == nil {
+			request.Header.Set("Content-Type", "application/json")
+			r, err = http.DefaultClient.Do(request)
+		}
+	}
+	if err != nil {
+		t.Errorf("Failed to GET %s, err: %v", url, err)
+		return nil
+	}
 	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
 		return nil
 	}

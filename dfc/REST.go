@@ -4,6 +4,8 @@
  */
 package dfc
 
+import "time"
+
 // JSON-formatted control structures
 type ActionMsg struct {
 	Action string `json:"action"` // shutdown, restart - see the const below
@@ -48,13 +50,13 @@ const (
 
 // GetMsg.GetTimeFormat enum
 const (
-	RFC822     = "RFC822"     // default
-	Stamp      = "Stamp"      // e.g. "Jan _2 15:04:05"
-	StampMilli = "StampMilli" // e.g. "Jan 12 15:04:05.000"
-	RFC822Z    = "RFC822Z"
-	RFC1123    = "RFC1123"
-	RFC1123Z   = "RFC1123Z"
-	RFC3339    = "RFC3339"
+	RFC822     = time.RFC822     // default
+	Stamp      = time.Stamp      // e.g. "Jan _2 15:04:05"
+	StampMilli = time.StampMilli // e.g. "Jan 12 15:04:05.000"
+	RFC822Z    = time.RFC822Z
+	RFC1123    = time.RFC1123
+	RFC1123Z   = time.RFC1123Z
+	RFC3339    = time.RFC3339
 )
 
 // GetMsg.GetProps enum
@@ -76,11 +78,12 @@ const (
 // file and directory metadata in response to the GetMsg
 type BucketEntry struct {
 	Name     string `json:"name"`     // name of the object - note: does not include the bucket name
-	Type     string `json:"type"`     // "file" | "directory"
-	Checksum string `json:"checksum"` // checksum
 	Size     int64  `json:"size"`     // size in bytes
 	Ctime    string `json:"ctime"`    // formatted as per GetMsg.GetTimeFormat
+	Checksum string `json:"checksum"` // checksum
+	Type     string `json:"type"`     // "file" OR "directory"
 	Atime    string `json:"atime"`    // ditto
+	Bucket   string `json:"bucket"`
 }
 
 type BucketList struct {

@@ -123,7 +123,7 @@ func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
 		// fmt.Fprintf(os.Stdout, "use io.ReadFrom\n")
 		return rt.ReadFrom(src)
 	}
-	buf := make([]byte, 1024*1024)    // buffer up to 1MB for reading (FIXME)
+	buf := make([]byte, 1024*128)     // buffer up to 128K for reading (FIXME)
 	bufwriter := bufio.NewWriter(dst) // use bufio for writing
 	for {
 		nr, er := src.Read(buf)

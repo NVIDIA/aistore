@@ -33,6 +33,7 @@ type Proxystats struct {
 	Numpost   int64 `json:"numpost"`
 	Numdelete int64 `json:"numdelete"`
 	Numerr    int64 `json:"numerr"`
+	Numlist   int64 `json:"numlist"`
 }
 
 // TODO: same
@@ -44,6 +45,7 @@ type Storstats struct {
 	Filesevicted int64 `json:"filesevicted"`
 	Numsendfile  int64 `json:"numsendfile"`
 	Numrecvfile  int64 `json:"numrecvfile"`
+	Numlist      int64 `json:"numlist"`
 }
 
 type statsrunner struct {
@@ -79,6 +81,8 @@ func (s *Proxystats) add(name string, val int64) {
 		v = &s.Numpost
 	case "numdelete":
 		v = &s.Numdelete
+	case "numlist":
+		v = &s.Numlist
 	case "numerr":
 		v = &s.Numerr
 	default:
@@ -111,6 +115,8 @@ func (s *Storstats) add(name string, val int64) {
 		v = &s.Numsendfile
 	case "numrecvfile":
 		v = &s.Numrecvfile
+	case "numlist":
+		v = &s.Numlist
 	default:
 		assert(false, "Invalid stats name "+name)
 	}

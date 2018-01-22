@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/golang/glog"
@@ -24,7 +26,7 @@ func getProjID() (string, string) {
 	return projectID, ""
 }
 
-func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
+func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
 	glog.Infof("listbucket %s", bucket)
 	projid, errstr := getProjID()
 	if projid == "" {
@@ -46,6 +48,28 @@ func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string) error {
 		}
 		entry := &BucketEntry{}
 		entry.Name = attrs.Name
+		if strings.Contains(msg.GetProps, GetPropsSize) {
+			entry.Size = attrs.Size
+		}
+		if strings.Contains(msg.GetProps, GetPropsBucket) {
+			entry.Bucket = attrs.Bucket
+		}
+		if strings.Contains(msg.GetProps, GetPropsCtime) {
+			t := attrs.Created
+			switch msg.GetTimeFormat {
+			case "":
+				fallthrough
+			case RFC822:
+				entry.Ctime = t.Format(time.RFC822)
+			default:
+				entry.Ctime = t.Format(msg.GetTimeFormat)
+			}
+		}
+		if strings.Contains(msg.GetProps, GetPropsChecksum) {
+			entry.Checksum = hex.EncodeToString(attrs.MD5)
+		}
+		// TODO: other GetMsg props TBD
+
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 	if glog.V(3) {

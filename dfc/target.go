@@ -25,17 +25,17 @@ const (
 	XAttrValid   = "1"
 )
 
+type cinterface interface {
+	listbucket(http.ResponseWriter, string, *GetMsg) error
+	getobj(http.ResponseWriter, string, string, string) (*os.File, error)
+}
+
 // TODO: AWS specific initialization
 type awsif struct {
 }
 
 // TODO: GCP specific initialization
 type gcpif struct {
-}
-
-type cinterface interface {
-	listbucket(http.ResponseWriter, string) error
-	getobj(http.ResponseWriter, string, string, string) (*os.File, error)
 }
 
 //===========================================================================
@@ -175,17 +175,20 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.statsif.add("numerr", 1)
 		return
 	}
-	t.statsif.add("numget", 1)
 	//
 	// list the bucket and return
 	//
 	if len(objname) == 0 {
-		getcloudif().listbucket(w, bucket)
+		t.statsif.add("numlist", 1)
+		var msg GetMsg
+		t.readJson(w, r, &msg)
+		getcloudif().listbucket(w, bucket, &msg)
 		return
 	}
 	//
-	// get objects from the bucket
+	// get the object from the bucket
 	//
+	t.statsif.add("numget", 1)
 	fqn := t.fqn(bucket, objname)
 	var file *os.File
 	_, err := os.Stat(fqn)
