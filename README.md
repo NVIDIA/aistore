@@ -115,12 +115,16 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Get cluster statistics | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
 | Get object | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (*) |
-| Get bucket contents | GET /v1/files/bucket | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket` |
-| Copy file | PUT /v1/files/from_id/to_id/bucket/object | `curl -i -X PUT http://192.168.176.128:8083/v1/files/from_id/15205:8083/to_id/15205:8081/myS3bucket/myS3object` (**) |
+| Get bucket (i.e., list objects and their properties) | GET properties-and-options /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` (**) |
+| Copy file | PUT /v1/files/from_id/to_id/bucket/object | `curl -i -X PUT http://192.168.176.128:8083/v1/files/from_id/15205:8083/to_id/15205:8081/myS3bucket/myS3object` (***) |
 
 > (*) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
-> (**) Note that the 'from' and 'to' target IDs are validated - cluster map must be synchronized prior to the copy operation.
+> (**) The API returns object names and, optionally, their properties including sizes, creation times, checksums, and more. The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see above). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata. Example: GET '{"props": "size, ctime, checksum"}' results in the output that looks as follows:
+
+> [{"name":"mnt/dfcstore6/dir1/abc","size":2147483584,"ctime":"06 Dec 17 23:20 UTC","checksum":"afb660f04f525df9f18d7e56a71acfa1","type":"","atime":"","bucket":""},{"name":"mnt/dfcstore9/dir3/xyz","size":4146481504,"ctime":"06 Dec 17 13:52 UTC","checksum":"9b17f6202a05293f915809bb1ecff3d8","type":"","atime":"","bucket":""}, ... ]
+
+> (***) Note that the 'from' and 'to' target IDs are validated - cluster map must be synchronized prior to the copy operation.
 
 ### Example: querying runtime statistics
 
