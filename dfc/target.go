@@ -26,10 +26,7 @@ const (
 	XAttrValid   = "1"
 )
 
-type cinterface interface {
-	listbucket(http.ResponseWriter, string, *GetMsg) error
-	getobj(http.ResponseWriter, string, string, string) (*os.File, error)
-}
+const directput = 5
 
 // TODO: AWS specific initialization
 type awsif struct {
@@ -37,6 +34,12 @@ type awsif struct {
 
 // TODO: GCP specific initialization
 type gcpif struct {
+}
+
+type cinterface interface {
+	listbucket(http.ResponseWriter, string, *GetMsg) error
+	getobj(http.ResponseWriter, string, string, string) (*os.File, error)
+	putobj(*http.Request, http.ResponseWriter, string, string, string, string) error
 }
 
 //===========================================================================
@@ -112,6 +115,9 @@ func (t *targetrunner) run() error {
 
 	} else {
 		t.cloudif = &gcpif{}
+	}
+	if ctx.config.LegacyMode {
+		glog.Infof("DFC Target is running in legacy Mode")
 	}
 	//
 	// REST API: register storage target's handler(s) and start listening
@@ -251,59 +257,84 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		written                           int64
 	)
 	apitems := t.restApiItems(r.URL.Path, 9)
-	if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	if apitems[0] != Rfrom || apitems[2] != Rto {
-		s = fmt.Sprintf("File copy: missing %s and/or %s in the URL: %+v", Rfrom, Rto, apitems)
-		goto merr
-	}
-	from, to, bucket, objname = apitems[1], apitems[3], apitems[4], apitems[5]
-	if glog.V(3) {
-		glog.Infof("File copy: from %q bucket %q objname %q => to %q", from, bucket, objname, to)
-	}
-	if t.si.DaemonID != from && t.si.DaemonID != to {
-		s = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
-			t.si.DaemonID, from, to)
-		goto merr
-	}
-	fqn = t.fqn(bucket, objname)
-	finfo, err = os.Stat(fqn)
-	if t.si.DaemonID == from {
-		//
-		// the source
-		//
-		if os.IsNotExist(err) {
-			s = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
-			goto merr
+	if len(apitems) == directput {
+		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+			return
 		}
-		si, ok := t.smap.Smap[to]
-		if !ok {
-			s = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
-			goto merr
+		bucket, objname = apitems[0], ""
+		if len(apitems) > 1 {
+			objname = strings.Join(apitems[1:], "/")
 		}
-		if s = t.sendfile(r.Method, bucket, objname, si); s != "" {
-			goto merr
-		}
+		fqn = t.fqn(bucket, objname)
+
 		if glog.V(3) {
-			glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
+			glog.Infof("Bucket %s objname %s MD5Sum %s", bucket, objname, r.Header.Get("Content-MD5"))
 		}
+		md5 := r.Header.Get("Content-MD5")
+		assert(md5 != "")
+		if err = getcloudif().putobj(r, w, fqn, bucket, objname, md5); err != nil {
+			return
+		}
+
 	} else {
-		//
-		// the destination
-		//
-		if os.IsExist(err) {
-			s = fmt.Sprintf("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
-			return // not an error, nothing to do
+
+		if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
+			return
 		}
-		if written, err = ReceiveFile(fqn, r.Body); err != nil {
-			s = fmt.Sprintf("File copy: failed to receive %q from %s", fqn, from)
+		if apitems[0] != Rfrom || apitems[2] != Rto {
+			s = fmt.Sprintf("File copy: missing %s and/or %s in the URL: %+v", Rfrom, Rto, apitems)
 			goto merr
 		}
+		from, to, bucket, objname = apitems[1], apitems[3], apitems[4], apitems[5]
 		if glog.V(3) {
-			glog.Infof("Received %q from %s (size %.2f MB)", fqn, from, float64(written)/1000/1000)
+			glog.Infof("File copy: from %q bucket %q objname %q => to %q", from, bucket, objname, to)
 		}
-		t.statsif.add("numrecvfile", 1)
+		if t.si.DaemonID != from && t.si.DaemonID != to {
+			s = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
+				t.si.DaemonID, from, to)
+			goto merr
+		}
+		fqn = t.fqn(bucket, objname)
+		finfo, err = os.Stat(fqn)
+		if t.si.DaemonID == from {
+			//
+			// the source
+			//
+			if os.IsNotExist(err) {
+				s = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
+				goto merr
+			}
+			si, ok := t.smap.Smap[to]
+			if !ok {
+				s = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
+				goto merr
+			}
+			if s = t.sendfile(r.Method, bucket, objname, si); s != "" {
+				goto merr
+			}
+			if glog.V(3) {
+				glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
+			}
+		} else {
+			//
+			// the destination
+			//
+			if os.IsExist(err) {
+				s = fmt.Sprintf("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
+				return // not an error, nothing to do
+			}
+
+			md5 := r.Header.Get("Content-MD5")
+			assert(md5 != "", err)
+			if written, err = ReceiveFile(fqn, r.Body, md5); err != nil {
+				s = fmt.Sprintf("File copy: failed to receive %q from %s", fqn, from)
+				goto merr
+			}
+			if glog.V(3) {
+				glog.Infof("Received %q from %s (size %.2f MB)", fqn, from, float64(written)/1000/1000)
+			}
+			t.statsif.add("numrecvfile", 1)
+		}
 	}
 	return
 merr:
@@ -322,8 +353,15 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
 	defer file.Close()
+	// calculate MD5 for file and send it as part of header
+	md5, errstr := CalculateMD5(file)
+	if errstr != "" {
+		return fmt.Sprintf("Failed to CalulateMD5, err: %v", errstr)
+	}
+
 	request, err := http.NewRequest(method, url, file)
 	assert(err == nil, err)
+	request.Header.Set("Content-MD5", md5)
 	response, err := t.httpclient.Do(request)
 	if err != nil {
 		return fmt.Sprintf("Failed to copy %q from %s, err: %v", t.si.DaemonID, fqn, err)

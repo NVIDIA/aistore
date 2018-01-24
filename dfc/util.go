@@ -7,6 +7,8 @@ package dfc
 import (
 	"bufio"
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -94,7 +96,7 @@ func CreateDir(dirname string) (err error) {
 }
 
 // NOTE: receives, flushes, and closes
-func ReceiveFile(fname string, rrbody io.ReadCloser) (written int64, err error) {
+func ReceiveFile(fname string, rrbody io.ReadCloser, md5sum string) (written int64, err error) {
 	dirname := filepath.Dir(fname)
 	if err = CreateDir(dirname); err != nil {
 		return 0, err
@@ -107,6 +109,12 @@ func ReceiveFile(fname string, rrbody io.ReadCloser) (written int64, err error) 
 	err2 := file.Close()
 	if err == nil && err2 != nil {
 		err = err2
+		return written, err
+	}
+	// set extended attributes
+	err = finalizeobj(fname, []byte(md5sum))
+	if err != nil {
+		return written, err
 	}
 	return
 }
@@ -176,47 +184,65 @@ func Createfile(fname string) (*os.File, error) {
 }
 
 // Get specific attribute for specified path.
-func Getxattr(path string, attrname string) ([]byte, error) {
+func Getxattr(path string, attrname string) ([]byte, string) {
 	// find size.
 	size, err := syscall.Getxattr(path, attrname, nil)
 	if err != nil {
-		glog.Errorf("Failed to get extended attr for path %s attr %s, err: %v",
+		errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
 			path, attrname, err)
-		return nil, err
+		return nil, errstr
 	}
 	if size > 0 {
 		data := make([]byte, size)
 		read, err := syscall.Getxattr(path, attrname, data)
 		if err != nil {
-			glog.Errorf("Failed to get extended attr for path %s attr %s, err: %v",
+			errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
 				path, attrname, err)
-			return nil, err
+			return nil, errstr
 		}
-		return data[:read], nil
+		return data[:read], ""
 	}
-	return []byte{}, nil
+	return []byte{}, ""
 }
 
 // Set specific named attribute for specific path.
-func Setxattr(path string, attrname string, data []byte) error {
+func Setxattr(path string, attrname string, data []byte) (errstr string) {
 	err := syscall.Setxattr(path, attrname, data, 0)
 	if err != nil {
-		glog.Errorf("Failed to set extended attr for path %s attr %s, err: %v",
+		errstr = fmt.Sprintf("Failed to set extended attr for path %s attr %s, err: %v",
 			path, attrname, err)
-		return err
+		return
 	}
-	return nil
+	return ""
 }
 
 // Delete specific named attribute for specific path.
-func Deletexattr(path string, attrname string) error {
+func Deletexattr(path string, attrname string) (errstr string) {
 	err := syscall.Removexattr(path, attrname)
 	if err != nil {
-		glog.Errorf("Failed to remove extended attr for path %s attr %s, err: %v",
+		errstr = fmt.Sprintf("Failed to remove extended attr for path %s attr %s, err: %v",
 			path, attrname, err)
-		return err
 	}
-	return nil
+	return ""
+}
+
+// Set DFC's legacy mode to specified mode.
+// True will imply no support for extended attributes.
+func SetLegacyMode(val bool) {
+	glog.Infof("Setting Target's Legacy Mode %v", val)
+	ctx.config.LegacyMode = val
+}
+
+func CalculateMD5(reader io.Reader) (csum string, errstr string) {
+	hash := md5.New()
+	_, err := copyBuffer(hash, reader)
+	if err != nil {
+		s := fmt.Sprintf("Failed to Copy buffer, err: %v", err)
+		return "", s
+	}
+	hashInBytes := hash.Sum(nil)[:16]
+	csum = hex.EncodeToString(hashInBytes)
+	return csum, ""
 }
 
 //===========================================================================

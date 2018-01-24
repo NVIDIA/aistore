@@ -6,7 +6,9 @@ package dfc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -104,22 +106,40 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string, objn
 }
 
 func (cobj *awsif) putobj(r *http.Request, w http.ResponseWriter,
-	bucket string, objname string) error {
+	fqn string, bucket string, objname string, md5sum string) error {
+	// create local copy
+	var err error
+	size := r.ContentLength
+	teebuf, b := maketeerw(r)
+
 	sess := createsession()
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploader(sess)
 	// Upload the file to S3.
-	_, err := uploader.Upload(&s3manager.UploadInput{
+	_, err = uploader.Upload(&s3manager.UploadInput{
 
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
-		Body:   r.Body,
+		Body:   teebuf,
 	})
 	if err != nil {
 		glog.Errorf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
 		return webinterror(w, err.Error())
 	} else {
 		glog.Infof("Uploaded key %s into bucket %s", objname, bucket)
+	}
+	r.Body = ioutil.NopCloser(b)
+	written, err := ReceiveFile(fqn, r.Body, md5sum)
+	if err != nil {
+		glog.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
+		return err
+	}
+	if size > 0 {
+		errstr := truncatefile(fqn, size)
+		if errstr != "" {
+			glog.Errorf(errstr)
+			return errors.New(errstr)
+		}
 	}
 	//TODO stats
 	return nil

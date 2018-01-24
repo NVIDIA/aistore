@@ -6,7 +6,9 @@ package dfc
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -120,8 +122,10 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string, objn
 }
 
 func (obj *gcpif) putobj(r *http.Request, w http.ResponseWriter,
-	bucket string, kname string) error {
+	fqn string, bucket string, kname string, md5sum string) error {
 
+	size := r.ContentLength
+	teebuf, b := maketeerw(r)
 	projid, errstr := getProjID()
 	if projid == "" {
 		return webinterror(w, errstr)
@@ -136,12 +140,24 @@ func (obj *gcpif) putobj(r *http.Request, w http.ResponseWriter,
 
 	wc := client.Bucket(bucket).Object(kname).NewWriter(gctx)
 	defer wc.Close()
-	//_, err = io.Copy(wc, r.Body)
-	_, err = copyBuffer(wc, r.Body)
+	_, err = copyBuffer(wc, teebuf)
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to upload object %s into bucket %s , err: %v",
 			kname, bucket, err)
 		return webinterror(w, errstr)
+	}
+	r.Body = ioutil.NopCloser(b)
+	written, err := ReceiveFile(fqn, r.Body, md5sum)
+	if err != nil {
+		glog.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
+		return err
+	}
+	if size > 0 {
+		errstr := truncatefile(fqn, size)
+		if errstr != "" {
+			glog.Errorf(errstr)
+			return errors.New(errstr)
+		}
 	}
 	//TODO stats
 	return nil

@@ -28,6 +28,7 @@ type dfconfig struct {
 	Proxy         proxyconfig   `json:"proxy"`
 	S3            s3config      `json:"s3"`
 	Cache         cacheconfig   `json:"cache"`
+	LegacyMode    bool          `json:"legacymode"`
 }
 
 const (
