@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -35,12 +36,52 @@ type Allstats struct {
 //===========================================================================
 type proxyrunner struct {
 	httprunner
-	starttime time.Time
+	starttime   time.Time
+	smapversion int64
+	confdir     string
+	xactinp     *xactInProgress
+	lbmap       *lbmap
 }
 
 // run
 func (p *proxyrunner) run() error {
 	p.httprunner.init(getproxystats())
+	p.xactinp = newxactinp()
+	// local (aka cache-only) buckets
+	p.lbmap = &lbmap{LBmap: make(map[string]string), mutex: &sync.Mutex{}}
+	lbpathname := p.confdir + "/" + ctx.config.LocalBuckets
+	p.lbmap.lock()
+	if localLoad(lbpathname, p.lbmap) != nil {
+		// create empty
+		p.lbmap.Version = 1
+		localSave(lbpathname, p.lbmap)
+	}
+	p.lbmap.unlock()
+
+	// startup:
+	// 	delayed sync local buckets and cluster map as soon as the latter
+	// 	stabilizes
+	go func() {
+		ctx.smap.lock()
+		smapversion := ctx.smap.version()
+		ctx.smap.unlock()
+		time.Sleep(time.Second * 5)
+		for {
+			ctx.smap.lock()
+			v := ctx.smap.version()
+			ctx.smap.unlock()
+			if smapversion != v {
+				smapversion = v
+				time.Sleep(time.Second * 3)
+				continue
+			}
+			p.httpfilput_lb()
+			p.httpcluput_smap(http.MethodPut, Rsyncsmap)
+			break
+		}
+
+	}()
+
 	//
 	// REST API: register proxy handlers and start listening
 	//
@@ -57,13 +98,18 @@ func (p *proxyrunner) run() error {
 // stop gracefully
 func (p *proxyrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", p.name, err)
+	p.xactinp.abortAll()
 	//
-	// give targets a limited chance to unregister
+	// give targets a limited time to unregister
 	//
+	ctx.smap.lock()
 	version := ctx.smap.version()
+	ctx.smap.unlock()
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Second)
+		ctx.smap.lock()
 		v := ctx.smap.version()
+		ctx.smap.unlock()
 		if version != v {
 			version = v
 			time.Sleep(time.Second)
@@ -87,9 +133,12 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		p.httpfilget(w, r)
 	case http.MethodPut:
 		p.httpfilput(w, r)
+	case http.MethodPost:
+		p.httpfilpost(w, r)
 	default:
 		invalhdlr(w, r)
 	}
+	glog.Flush()
 }
 
 // e.g.: GET /v1/files/bucket/object
@@ -111,12 +160,12 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		objname = apitems[1]
 	}
 	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name (contains '/')", bucket)
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
 		invalmsghdlr(w, r, s)
 		p.statsif.add("numerr", 1)
 		return
 	}
-	var si *ServerInfo
+	var si *daemonInfo
 	// for bucket listing - any (random) target will do
 	if len(objname) == 0 {
 		p.statsif.add("numlist", 1)
@@ -179,6 +228,86 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	assert(false, "NIY")
 }
 
+// { action } "/"+Rversion+"/"+Rfiles + "/" + localbucket
+func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restApiItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	lbucket := apitems[0]
+	if strings.Contains(lbucket, "/") {
+		s := fmt.Sprintf("Invalid local bucket name %s (contains '/')", lbucket)
+		invalmsghdlr(w, r, s)
+		p.statsif.add("numerr", 1)
+		return
+	}
+	var msg ActionMsg
+	if p.readJson(w, r, &msg) != nil {
+		return
+	}
+	lbpathname := p.confdir + "/" + ctx.config.LocalBuckets
+	switch msg.Action {
+	case ActCreateLB:
+		p.lbmap.lock()
+		if !p.lbmap.add(lbucket) {
+			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
+			invalmsghdlr(w, r, s)
+			p.statsif.add("numerr", 1)
+			p.lbmap.unlock()
+			return
+		}
+	case ActRemoveLB:
+		p.lbmap.lock()
+		if !p.lbmap.del(lbucket) {
+			s := fmt.Sprintf("Local bucket %s does not exist, nothing to remove", lbucket)
+			invalmsghdlr(w, r, s)
+			p.statsif.add("numerr", 1)
+			p.lbmap.unlock()
+			return
+		}
+	case ActSyncLB:
+		p.lbmap.lock()
+	default:
+		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		invalmsghdlr(w, r, s)
+		return
+	}
+	localSave(lbpathname, p.lbmap)
+	p.lbmap.unlock()
+
+	// delay bcast until both lbmap and smap stabilize
+	go func() {
+		p.lbmap.lock()
+		lbversion := p.lbmap.version()
+		p.lbmap.unlock()
+		ctx.smap.lock()
+		smapversion := ctx.smap.version()
+		ctx.smap.unlock()
+		time.Sleep(time.Second)
+		for {
+			p.lbmap.lock()
+			lbv := p.lbmap.version()
+			p.lbmap.unlock()
+			if lbversion != lbv {
+				lbversion = lbv
+				time.Sleep(time.Second * 3)
+				continue
+			}
+			ctx.smap.lock()
+			smv := ctx.smap.version()
+			ctx.smap.unlock()
+			if smapversion != smv {
+				smapversion = smv
+				time.Sleep(time.Second * 3)
+				continue
+			}
+			// finally
+			p.httpfilput_lb()
+			break
+		}
+	}()
+}
+
 //===========================
 //
 // control plane
@@ -231,7 +360,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 // FIXME: run this in a goroutine
 func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
 	var out Allstats
-	out.Storstats = make(map[string]*Storstats, len(ctx.smap.Smap))
+	out.Storstats = make(map[string]*Storstats, ctx.smap.count())
 	getproxystatsrunner().syncstats(&out.Proxystats)
 	for _, si := range ctx.smap.Smap {
 		stats := Storstats{}
@@ -254,7 +383,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
-	var si ServerInfo
+	var si daemonInfo
 	if p.readJson(w, r, &si) != nil {
 		return
 	}
@@ -266,12 +395,19 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.statsif.add("numpost", 1)
+	ctx.smap.lock()
 	if ctx.smap.get(si.DaemonID) != nil {
-		glog.Errorf("Duplicate target {%s}", si.DaemonID)
+		glog.Errorf("Warning: duplicate target ID %s", si.DaemonID)
+		// fall through
 	}
 	ctx.smap.add(&si)
+	ctx.smap.unlock()
+	//
+	// TODO: startup -- join -- (startup N + join 1 + shutdown + startup N+1)
+	// TODO: sync local buckets and cluster map, possibly rebalance as well
+	//
 	if glog.V(3) {
-		glog.Infof("Registered target {%s} (count %d)", si.DaemonID, ctx.smap.count())
+		glog.Infof("Registered target ID %s (count %d)", si.DaemonID, ctx.smap.count())
 	}
 }
 
@@ -288,16 +424,25 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := apitems[1]
 	p.statsif.add("numdelete", 1)
+	ctx.smap.lock()
 	if ctx.smap.get(sid) == nil {
-		glog.Errorf("Unknown target {%s}", sid)
+		glog.Errorf("Unknown target %s", sid)
+		ctx.smap.unlock()
 		return
 	}
 	ctx.smap.del(sid)
+	ctx.smap.unlock()
+	//
+	// TODO: startup -- leave --
+	//
 	if glog.V(3) {
 		glog.Infof("Unregistered target {%s} (count %d)", sid, ctx.smap.count())
 	}
 }
 
+// '{"action": "shutdown"}' /v1/cluster => (proxy) =>
+// '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
+// '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restApiItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
@@ -308,7 +453,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case ActionShutdown:
+	case ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		msgbytes, err := json.Marshal(msg) // same message -> this target
 		assert(err == nil, err)
@@ -320,21 +465,65 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
-	case ActionSyncSmap:
+	case ActSyncSmap:
+		fallthrough
 	case ActionRebalance:
-		// PUT '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
-		// PUT '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
-		jsbytes, err := json.Marshal(ctx.smap)
-		assert(err == nil, err)
-		for _, si := range ctx.smap.Smap {
-			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + msg.Action
-			glog.Infof("%s: %s", msg.Action, url)
-			_, err := p.call(url, r.Method, jsbytes)
-			assert(err == nil, err)
-		}
+		// delay bcast until smap stabilizes
+		go func() {
+			for {
+				ctx.smap.lock()
+				smapversion := ctx.smap.version()
+				ctx.smap.unlock()
+				time.Sleep(time.Second)
+				for {
+					ctx.smap.lock()
+					v := ctx.smap.version()
+					ctx.smap.unlock()
+					if smapversion != v {
+						smapversion = v
+						time.Sleep(time.Second * 3)
+						continue
+					}
+					p.httpcluput_smap(http.MethodPut, msg.Action)
+					break
+				}
+			}
+		}()
 
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
+	}
+}
+
+//========================
+//
+// delayed broadcasts
+//
+//========================
+func (p *proxyrunner) httpcluput_smap(method, action string) {
+	assert(action == Rebalance || action == Rsyncsmap)
+	ctx.smap.lock()
+	jsbytes, err := json.Marshal(ctx.smap)
+	ctx.smap.unlock()
+	assert(err == nil, err)
+	for _, si := range ctx.smap.Smap {
+		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + action
+		glog.Infof("%s: %s", action, url)
+		_, err := p.call(url, method, jsbytes)
+		assert(err == nil, err)
+	}
+}
+
+func (p *proxyrunner) httpfilput_lb() {
+	p.lbmap.lock()
+	jsbytes, err := json.Marshal(p.lbmap)
+	assert(err == nil, err)
+	p.lbmap.unlock()
+
+	for _, si := range ctx.smap.Smap {
+		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
+		glog.Infof("%s: %+v", url, p.lbmap)
+		p.call(url, http.MethodPut, jsbytes)
 	}
 }

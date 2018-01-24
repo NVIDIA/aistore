@@ -15,10 +15,13 @@ type ActionMsg struct {
 
 // ActionMsg.Action enum
 const (
-	ActionShutdown  = "shutdown"
-	ActionSyncSmap  = "syncsmap"  // synchronize cluster map aka Smap across all targets
+	ActShutdown     = "shutdown"
+	ActSyncSmap     = "syncsmap"  // synchronize cluster map aka Smap across all targets
 	ActionRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
-	ActionLRU       = "lru"
+	ActLRU          = "lru"
+	ActSyncLB       = "synclb"
+	ActCreateLB     = "createlb"
+	ActRemoveLB     = "removelb"
 )
 
 type GetMsg struct {
@@ -96,8 +99,9 @@ const (
 	Rfiles    = "files"
 	Rcluster  = "cluster"
 	Rdaemon   = "daemon"
-	Rsyncsmap = ActionSyncSmap
+	Rsyncsmap = ActSyncSmap
 	Rebalance = ActionRebalance
 	Rfrom     = "from_id"
 	Rto       = "to_id"
+	Rsynclb   = ActSyncLB
 )

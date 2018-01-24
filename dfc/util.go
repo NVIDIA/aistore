@@ -6,6 +6,8 @@ package dfc
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -233,4 +235,34 @@ func (w *dummywriter) Write(p []byte) (n int, err error) {
 func ReadToNull(r io.Reader) (int64, error) {
 	w := &dummywriter{}
 	return copyBuffer(w, r)
+}
+
+//===========================================================================
+//
+// local (config) save and restore
+//
+//===========================================================================
+func localSave(pathname string, v interface{}) error {
+	file, err := os.Create(pathname)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	b, err := json.MarshalIndent(v, "", "\t")
+	if err != nil {
+		return err
+	}
+	r := bytes.NewReader(b)
+	_, err = io.Copy(file, r)
+	assert(err == nil, err)
+	return err
+}
+
+func localLoad(pathname string, v interface{}) error {
+	file, err := os.Open(pathname)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return json.NewDecoder(file).Decode(v)
 }

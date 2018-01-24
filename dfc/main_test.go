@@ -348,21 +348,19 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 }
 
 func Test_xattr(t *testing.T) {
-
-	// Create test file
 	f := TestFile
 	file, err := dfc.Createfile(f)
 	if err != nil {
 		t.Errorf("Failed to create file %s, err:%v", f, err)
 		return
 	}
-	defer file.Close()
 	// Set objstate to valid
 	err = dfc.Setxattr(f, dfc.Objstateattr, []byte(dfc.XAttrInvalid))
 	if err != nil {
 		t.Errorf("Unable to set xattr %s to file %s, err: %v",
 			dfc.Objstateattr, f, err)
 		_ = os.Remove(f)
+		file.Close()
 		return
 	}
 	// Check if xattr got set correctly.
@@ -374,10 +372,10 @@ func Test_xattr(t *testing.T) {
 		t.Errorf("Failed to get file %s attr %s value %v, err %v",
 			f, dfc.Objstateattr, data, err)
 		_ = os.Remove(f)
+		file.Close()
 		return
 	}
 	t.Logf("Successfully set and retrieved xattr")
 	_ = os.Remove(f)
-	return
-
+	file.Close()
 }

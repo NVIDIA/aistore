@@ -6,7 +6,6 @@ package dfc
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"syscall"
 	"time"
@@ -51,7 +50,7 @@ type Storstats struct {
 type statsrunner struct {
 	namedrunner
 	statslogger
-	chsts chan os.Signal
+	chsts chan struct{}
 }
 
 type proxystatsrunner struct {
@@ -130,7 +129,7 @@ func (s *Storstats) add(name string, val int64) {
 //========================
 
 func (r *statsrunner) runcommon(logger statslogger) error {
-	r.chsts = make(chan os.Signal, 1)
+	r.chsts = make(chan struct{}, 1)
 
 	glog.Infof("Starting %s", r.name)
 	ticker := time.NewTicker(ctx.config.StatsTime)
@@ -147,6 +146,8 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 
 func (r *statsrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
+	var v struct{}
+	r.chsts <- v
 	close(r.chsts)
 }
 

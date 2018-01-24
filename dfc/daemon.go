@@ -8,8 +8,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -38,9 +38,9 @@ var ctx = &daemon{}
 //======
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smap struct {
-	Smap    map[string]*ServerInfo `json:"smap"`
+	Smap    map[string]*daemonInfo `json:"smap"`
 	Version int64                  `json:"version"`
-	lock    *sync.Mutex
+	mutex   *sync.Mutex
 }
 
 // daemon instance: proxy or storage target
@@ -52,11 +52,18 @@ type daemon struct {
 }
 
 // each daemon is represented by:
-type ServerInfo struct {
+type daemonInfo struct {
 	NodeIPAddr string `json:"node_ip_addr"`
 	DaemonPort string `json:"daemon_port"`
 	DaemonID   string `json:"daemon_id"`
 	DirectURL  string `json:"direct_url"`
+}
+
+// local (cache-only) bucket names and their TBD props
+type lbmap struct {
+	LBmap   map[string]string `json:"l_bmap"`
+	Version int64             `json:"version"`
+	mutex   *sync.Mutex
 }
 
 // runner if
@@ -88,34 +95,75 @@ type gstopError struct {
 
 //====================
 //
-// smap wrapper with prelim atomic versioning
+// smap wrapper - NOTE - caller must take the lock
 //
 //====================
-func (m *Smap) add(si *ServerInfo) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (m *Smap) add(si *daemonInfo) {
 	m.Smap[si.DaemonID] = si
 	m.Version++
 }
 
 func (m *Smap) del(sid string) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
 	delete(m.Smap, sid)
 	m.Version++
 }
 
-func (m *Smap) get(sid string) *ServerInfo {
-	si, _ := m.Smap[sid]
-	return si
+func (m *Smap) version() int64 {
+	return m.Version
 }
 
 func (m *Smap) count() int {
 	return len(m.Smap)
 }
 
-func (m *Smap) version() int64 {
-	return atomic.LoadInt64(&m.Version)
+func (m *Smap) get(sid string) *daemonInfo {
+	si, _ := m.Smap[sid]
+	return si
+}
+
+func (m *Smap) lock() {
+	m.mutex.Lock()
+}
+
+func (m *Smap) unlock() {
+	m.mutex.Unlock()
+}
+
+//====================
+//
+// lbmap wrapper - NOTE - caller must take the lock
+//
+//====================
+func (m *lbmap) add(b string) bool {
+	_, ok := m.LBmap[b]
+	if ok {
+		return false
+	}
+	m.LBmap[b] = ""
+	m.Version++
+	return true
+}
+
+func (m *lbmap) del(b string) bool {
+	_, ok := m.LBmap[b]
+	if !ok {
+		return false
+	}
+	delete(m.LBmap, b)
+	m.Version++
+	return true
+}
+
+func (m *lbmap) version() int64 {
+	return m.Version
+}
+
+func (m *lbmap) lock() {
+	m.mutex.Lock()
+}
+
+func (m *lbmap) unlock() {
+	m.mutex.Unlock()
 }
 
 //====================
@@ -206,8 +254,9 @@ func dfcinit() {
 		runmap: make(map[string]runner),
 	}
 	if role == xproxy {
-		ctx.smap = &Smap{Smap: make(map[string]*ServerInfo, 8), lock: &sync.Mutex{}}
-		ctx.rg.add(&proxyrunner{}, xproxy)
+		confdir := filepath.Dir(conffile)
+		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8), mutex: &sync.Mutex{}}
+		ctx.rg.add(&proxyrunner{confdir: confdir}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 	} else {
 		ctx.rg.add(&targetrunner{}, xtarget)

@@ -152,7 +152,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 	_, xx := q.find(ActionRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
-		if xreb.etime.IsZero() {
+		if !xreb.finished() {
 			assert(!(xreb.curversion > curversion))
 			if xreb.curversion == curversion {
 				glog.Infof("%s already running, nothing to do", xreb.tostring())
@@ -171,32 +171,29 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.find(ActionLRU)
+	_, xx := q.find(ActLRU)
 	if xx != nil {
 		xlru := xx.(*xactLRU)
 		glog.Infof("%s already running, nothing to do", xlru.tostring())
 		return nil
 	}
 	id := q.uniqueid()
-	xlru := &xactLRU{xactBase: *newxactBase(id, ActionLRU)}
+	xlru := &xactLRU{xactBase: *newxactBase(id, ActLRU)}
 	xlru.targetrunner = t
 	q.add(xlru)
 	return xlru
 }
 
-func (q *xactInProgress) abortAll() {
+func (q *xactInProgress) abortAll() (sleep bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	var sleep bool
 	for _, xact := range q.xactinp {
 		if !xact.finished() {
 			xact.abort()
 			sleep = true
 		}
 	}
-	if sleep {
-		time.Sleep(time.Millisecond * 100)
-	}
+	return
 }
 
 //===================

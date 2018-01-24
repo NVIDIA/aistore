@@ -21,6 +21,7 @@ type dfconfig struct {
 	Logdir        string        `json:"logdir"`
 	Loglevel      string        `json:"loglevel"`
 	CloudProvider string        `json:"cloudprovider"`
+	LocalBuckets  string        `json:"local_buckets"`
 	StatsTime     time.Duration `json:"stats_time"`
 	HttpTimeout   time.Duration `json:"http_timeout"`
 	Listen        listenconfig  `json:"listen"`

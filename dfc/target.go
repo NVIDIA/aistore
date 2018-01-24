@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -49,6 +50,7 @@ type targetrunner struct {
 	smap      *Smap
 	xactinp   *xactInProgress
 	starttime time.Time
+	lbmap     *lbmap
 }
 
 // start target runner
@@ -57,11 +59,24 @@ func (t *targetrunner) run() error {
 	t.httprunner.init(getstorstats())
 	t.smap = &Smap{}
 	t.xactinp = newxactinp()
+	// local (cache-only) buckets
+	t.lbmap = &lbmap{LBmap: make(map[string]string)}
 
-	// FIXME cleanup unreg
 	if err := t.register(); err != nil {
-		glog.Errorf("Failed to register with proxy, err: %v", err)
-		return err
+		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
+		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
+			glog.Errorf("Target %s: retrying registration ...", t.si.DaemonID)
+			time.Sleep(time.Second * 3)
+			if err = t.register(); err != nil {
+				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
+				glog.Errorf("Target %s is terminating", t.si.DaemonID)
+				return err
+			} else {
+				glog.Errorf("Success: target %s registered OK", t.si.DaemonID)
+			}
+		} else {
+			return err
+		}
 	}
 	// local mp-s have precedence over cachePath
 	var err error
@@ -114,9 +129,12 @@ func (t *targetrunner) run() error {
 // stop gracefully
 func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
+	sleep := t.xactinp.abortAll()
 	t.unregister()
 	t.httprunner.stop(err)
-	t.xactinp.abortAll()
+	if sleep {
+		time.Sleep(time.Second)
+	}
 }
 
 // target registration with proxy
@@ -170,7 +188,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		objname = apitems[1]
 	}
 	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name (contains '/')", bucket)
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
 		invalmsghdlr(w, r, s)
 		t.statsif.add("numerr", 1)
 		return
@@ -293,7 +311,7 @@ merr:
 	invalmsghdlr(w, r, s)
 }
 
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *ServerInfo) string {
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo) string {
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	fqn := t.fqn(bucket, objname)
 	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
@@ -367,50 +385,59 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
 	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
-		curversion := t.smap.Version
-		var smap *Smap
-		if t.readJson(w, r, &smap) != nil {
-			return
-		}
-		if curversion == smap.Version {
-			return
-		}
-		if curversion > smap.Version {
-			glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, smap.Version)
-			return
-		}
-		glog.Infof("%s: got new version %d (old %d)", apitems[0], smap.Version, curversion)
-		var existentialQ bool // to assert
-		for id, si := range smap.Smap {
-			if id == t.si.DaemonID {
-				existentialQ = true
-				glog.Infoln("target:", si, "<= self")
-			} else {
-				glog.Infoln("target:", si)
-			}
-		}
-		glog.Flush()
-		assert(existentialQ)
-		t.smap = smap
-		if apitems[0] == Rsyncsmap {
-			// FIXME: must trigger delayed xactRebalance (TODO)
-			return
-		}
-		go t.runRebalance()
+		t.httpdaeput_smap(w, r, apitems)
 		return
 	}
-
+	// PUT '{lbmap}' /v1/daemon/localbuckets
+	if len(apitems) > 0 && apitems[0] == Rsynclb {
+		t.readJson(w, r, t.lbmap)
+		glog.Infof("lbmap: %+v", t.lbmap)
+		return
+	}
 	var msg ActionMsg
 	if t.readJson(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
-	case ActionShutdown:
+	case ActShutdown:
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		invalmsghdlr(w, r, s)
 	}
+}
+func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, apitems []string) {
+	curversion := t.smap.Version
+	var smap *Smap
+	if t.readJson(w, r, &smap) != nil {
+		return
+	}
+	if curversion == smap.Version {
+		return
+	}
+	if curversion > smap.Version {
+		glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, smap.Version)
+		return
+	}
+	glog.Infof("%s: got new version %d (old %d)", apitems[0], smap.Version, curversion)
+	var existentialQ bool // to assert
+	for id, si := range smap.Smap {
+		if id == t.si.DaemonID {
+			existentialQ = true
+			glog.Infoln("target:", si, "<= self")
+		} else {
+			glog.Infoln("target:", si)
+		}
+	}
+	glog.Flush()
+	assert(existentialQ)
+	t.smap = smap
+	if apitems[0] == Rsyncsmap {
+		// FIXME: must trigger delayed xactRebalance (TODO)
+		return
+	}
+	// xaction
+	go t.runRebalance()
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
