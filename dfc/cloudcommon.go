@@ -5,15 +5,19 @@
 package dfc
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 
 	"github.com/golang/glog"
 )
 
+const fixedbufsize = 64 * 1024
 const (
 	emulateobjfailure = "/tmp/failobj"
 )
@@ -26,52 +30,63 @@ func initobj(fqn string) (file *os.File, errstr string) {
 		errstr = fmt.Sprintf("Unable to create file %s, err: %v", fqn, err)
 		return nil, errstr
 	}
-	err = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid))
-	if err != nil {
-		errstr = fmt.Sprintf("Unable to set xattr %s to file %s, err: %v", Objstateattr, fqn, err)
-		file.Close()
-		return nil, errstr
+	// Don't set xattribute for even new objects to maintain consistency.
+	if ctx.config.LegacyMode {
+		return file, ""
+	} else {
+		errstr = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid))
+		if errstr != "" {
+			glog.Errorf(errstr)
+			file.Close()
+			return nil, errstr
+		}
+		return file, ""
 	}
 	if glog.V(3) {
 		glog.Infof("Created and initialized file %s", fqn)
 	}
 	return file, ""
-
 }
 
 // Finalize object state.
 func finalizeobj(fqn string, md5sum []byte) error {
-	err := Setxattr(fqn, MD5attr, md5sum)
-	if err != nil {
-		glog.Errorf("Unable to set md5 xattr %s to file %s, err: %v",
-			MD5attr, fqn, err)
-		return err
+	if ctx.config.LegacyMode {
+		return nil
+	} else {
+		errstr := Setxattr(fqn, MD5attr, md5sum)
+		if errstr != "" {
+			glog.Errorf(errstr)
+			return errors.New(errstr)
+		}
+		errstr = Setxattr(fqn, Objstateattr, []byte(XAttrValid))
+		if errstr != "" {
+			glog.Errorf(errstr)
+			return errors.New(errstr)
+		}
+		return nil
 	}
-	err = Setxattr(fqn, Objstateattr, []byte(XAttrValid))
-	if err != nil {
-		glog.Errorf("Unable to set valid xattr %s to file %s, err: %v",
-			Objstateattr, fqn, err)
-		return err
-	}
-	return nil
 }
 
 // Return True for corrupted or invalid objects.
 func isinvalidobj(fqn string) bool {
-	// Existence of file will make all cached object(s) invalid.
-	_, err := os.Stat(emulateobjfailure)
-	if err == nil {
-		return true
-	} else {
-		data, err := Getxattr(fqn, Objstateattr)
-		if err != nil {
-			glog.Errorf("Unable to getxttr %s from file %s, err: %v", Objstateattr, fqn, err)
-			return true
-		}
-		if string(data) == XAttrInvalid {
-			return true
-		}
+	if ctx.config.LegacyMode {
 		return false
+	} else {
+		// Existence of file will make all cached object(s) invalid.
+		_, err := os.Stat(emulateobjfailure)
+		if err == nil {
+			return true
+		} else {
+			data, errstr := Getxattr(fqn, Objstateattr)
+			if errstr != "" {
+				glog.Errorf(errstr)
+				return true
+			}
+			if string(data) == XAttrInvalid {
+				return true
+			}
+			return false
+		}
 	}
 }
 
@@ -107,4 +122,31 @@ func getobjto_Md5(file *os.File, fqn, objname, omd5 string, reader io.Reader) (s
 		return 0, fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
 	}
 	return size, ""
+}
+
+func maketeerw(r *http.Request) (io.Reader, *bytes.Buffer) {
+	var bufsize int64
+	if r.ContentLength > 0 {
+		bufsize = fixedbufsize
+	} else {
+		bufsize = 0
+	}
+	buf := bytes.NewBuffer(make([]byte, bufsize))
+	rw := io.TeeReader(r.Body, buf)
+	return rw, buf
+}
+
+func truncatefile(fqn string, size int64) (errstr string) {
+	glog.Infof("Setting file %s size to %v", fqn, size)
+	err := os.Truncate(fqn, size)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to truncate file %s, err: %v", fqn, err)
+		// Remove corrupted object.
+		err1 := os.Remove(fqn)
+		if err1 != nil {
+			glog.Errorf("Failed to remove file %s, err: %v", fqn, err1)
+		}
+		return errstr
+	}
+	return ""
 }

@@ -38,6 +38,7 @@ HTTPTIMEOUTSEC=60
 DONTEVICTIMESEC=600
 FSLOWWATERMARK=65
 FSHIGHWATERMARK=80
+LEGACYMODE=false
 
 PROXYPORT=$(expr $PORT + 1)
 if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
@@ -114,7 +115,8 @@ do
 			"fslowwatermark":		${FSLOWWATERMARK},
 			"fshighwatermark":		${FSHIGHWATERMARK},
 			"dont_evict_time":		${DONTEVICTIMESEC}
-		}
+		},
+		"legacymode":				${LEGACYMODE}
 	}
 EOL
 done

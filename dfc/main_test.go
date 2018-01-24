@@ -33,7 +33,9 @@ import (
 const (
 	LocalRootDir = "/tmp/iocopy"           // client-side download destination
 	ProxyURL     = "http://localhost:8080" // assuming local proxy is listening on 8080
+	TargetURL    = "http://localhost:8081" // assuming local target is listening on 8081
 	RestAPIGet   = ProxyURL + "/v1/files"  // version = 1, resource = files
+	RestAPIPut   = TargetURL + "/v1/files" // version = 1, resource = files
 	TestFile     = "/tmp/xattrfile"        // Test file for setting and getting xattr.
 )
 
@@ -149,6 +151,7 @@ func Test_download(t *testing.T) {
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
 	errch chan error, resch chan workres, bucket string) {
+	var md5sum, errstr string
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -165,6 +168,11 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			}
 		}()
 		if !copy {
+			md5sum, errstr = dfc.CalculateMD5(r.Body)
+			if errstr != "" {
+				t.Errorf("Worker %2d: Failed to calculate MD5sum, err: %v", id, errstr)
+				return
+			}
 			bufreader := bufio.NewReader(r.Body)
 			bytes, err := dfc.ReadToNull(bufreader)
 			if err != nil {
@@ -177,7 +185,7 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 
 		// alternatively, create a local copy
 		fname := LocalRootDir + "/" + keyname
-		written, err := dfc.ReceiveFile(fname, r.Body)
+		written, err := dfc.ReceiveFile(fname, r.Body, md5sum)
 		r.Body.Close()
 		if err != nil {
 			t.Errorf("Worker %2d: Failed to write to file, err: %v", id, err)
@@ -358,21 +366,21 @@ func Test_xattr(t *testing.T) {
 	}
 	defer file.Close()
 	// Set objstate to valid
-	err = dfc.Setxattr(f, dfc.Objstateattr, []byte(dfc.XAttrInvalid))
-	if err != nil {
+	errstr := dfc.Setxattr(f, dfc.Objstateattr, []byte(dfc.XAttrInvalid))
+	if errstr != "" {
 		t.Errorf("Unable to set xattr %s to file %s, err: %v",
-			dfc.Objstateattr, f, err)
+			dfc.Objstateattr, f, errstr)
 		_ = os.Remove(f)
 		return
 	}
 	// Check if xattr got set correctly.
-	data, err := dfc.Getxattr(f, dfc.Objstateattr)
-	if string(data) == dfc.XAttrInvalid && err == nil {
+	data, errstr := dfc.Getxattr(f, dfc.Objstateattr)
+	if string(data) == dfc.XAttrInvalid && errstr == "" {
 		t.Logf("Successfully got file %s attr %s value %v",
 			f, dfc.Objstateattr, data)
 	} else {
 		t.Errorf("Failed to get file %s attr %s value %v, err %v",
-			f, dfc.Objstateattr, data, err)
+			f, dfc.Objstateattr, data, errstr)
 		_ = os.Remove(f)
 		return
 	}
@@ -380,4 +388,62 @@ func Test_xattr(t *testing.T) {
 	_ = os.Remove(f)
 	return
 
+}
+func Test_targetput(t *testing.T) {
+	flag.Parse()
+	var wg = &sync.WaitGroup{}
+	errch := make(chan error, 100)
+	for i := 0; i < numfiles; i++ {
+		wg.Add(1)
+		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
+		fname := "/" + keyname
+		go tgtput(fname, clibucket, keyname, t, wg, errch)
+	}
+	wg.Wait()
+	select {
+	case <-errch:
+		t.Fail()
+	default:
+	}
+}
+
+func tgtput(fname, bucket string, keyname string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+	var s string
+	var r *http.Response
+	var err error
+	defer wg.Done()
+	url := RestAPIPut + "/" + bucket + "/" + keyname
+	t.Logf("PUT %q", url)
+	file, err := os.Open(fname)
+	defer file.Close()
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodPut, url, file)
+	md5, errstr := dfc.CalculateMD5(file)
+	if errstr != "" {
+		s = fmt.Sprintf("Failed to calculate MD5 sum Bucket %s key %s, err: %v", bucket, keyname, err)
+		goto puterr
+	}
+	req.Header.Set("Content-MD5", md5)
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		s = fmt.Sprintf("Failed to seek Bucket %s key %s, err: %v", bucket, keyname, err)
+		goto puterr
+	}
+	r, err = client.Do(req)
+	if testfail(err, fmt.Sprintf("put key %s from bucket %s", keyname, bucket), r, errch, t) {
+		return
+	}
+	defer func() {
+		if r != nil {
+			ioutil.ReadAll(r.Body)
+			r.Body.Close()
+		}
+	}()
+	return
+puterr:
+	t.Error(s)
+	if errch != nil {
+		errch <- errors.New(s)
+	}
+	return
 }
