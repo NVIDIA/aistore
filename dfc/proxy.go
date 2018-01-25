@@ -224,9 +224,21 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	return err
 }
 
-// 3-way copy
 func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	assert(false, "NIY")
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket, objname := apitems[0], ""
+	objname = strings.Join(apitems[1:], "/")
+	if glog.V(3) {
+		glog.Infof("Bucket %s objname %s", bucket, objname)
+	}
+	si := hrwTarget(bucket+"/"+objname, ctx.smap)
+	redirecturl := si.DirectURL + r.URL.Path
+	glog.Infof("RedirectURL %s", redirecturl)
+	fmt.Fprintf(w, "%s", redirecturl)
+	return
 }
 
 // { action } "/"+Rversion+"/"+Rfiles + "/" + localbucket

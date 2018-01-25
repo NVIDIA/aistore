@@ -267,9 +267,6 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		}
 		fqn = t.fqn(bucket, objname)
 
-		if glog.V(3) {
-			glog.Infof("Bucket %s objname %s MD5Sum %s", bucket, objname, r.Header.Get("Content-MD5"))
-		}
 		md5 := r.Header.Get("Content-MD5")
 		assert(md5 != "")
 		if err = getcloudif().putobj(r, w, fqn, bucket, objname, md5); err != nil {
