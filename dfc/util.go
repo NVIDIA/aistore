@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -33,11 +34,6 @@ func assert(cond bool, args ...interface{}) {
 		}
 	}
 	glog.Fatalln(message)
-}
-
-func clearStruct(x interface{}) {
-	p := reflect.ValueOf(x).Elem()
-	p.Set(reflect.Zero(p.Type()))
 }
 
 func copyStruct(dst interface{}, src interface{}) {

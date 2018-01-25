@@ -1,8 +1,4 @@
-/*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
- *
- */
-
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 // Evict the specified directory to its current (filesystem) utilization - 5%
 // as in:
 // 	low-watermark = current-usage - 5%
@@ -10,6 +6,10 @@
 // Example run:
 // 	go test -v -run=lru -args -dir /tmp/eviction
 //
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc
 
 import (

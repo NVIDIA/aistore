@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -69,7 +70,7 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 		break
 	}
 	if xreb.finished() {
-		return errors.New(fmt.Sprintf("%s aborted - exiting rewalkf", xreb.tostring()))
+		return fmt.Errorf("%s aborted - exiting rewalkf", xreb.tostring())
 	}
 
 	// rebalance this fobject maybe

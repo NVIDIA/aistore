@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.  *
  */
@@ -121,9 +122,7 @@ func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string, objn
 	return file, nil
 }
 
-func (obj *gcpif) putobj(r *http.Request, w http.ResponseWriter,
-	fqn string, bucket string, kname string, md5sum string) error {
-
+func (cobj *gcpif) putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, objname, md5sum string) error {
 	size := r.ContentLength
 	teebuf, b := maketeerw(r)
 	projid, errstr := getProjID()
@@ -134,16 +133,15 @@ func (obj *gcpif) putobj(r *http.Request, w http.ResponseWriter,
 	client, err := storage.NewClient(gctx)
 	if err != nil {
 		errstr := fmt.Sprintf("Failed to create client for bucket %s object %s , err: %v",
-			bucket, kname, err)
+			bucket, objname, err)
 		return webinterror(w, errstr)
 	}
 
-	wc := client.Bucket(bucket).Object(kname).NewWriter(gctx)
+	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
 	defer wc.Close()
 	_, err = copyBuffer(wc, teebuf)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to upload object %s into bucket %s , err: %v",
-			kname, bucket, err)
+		errstr := fmt.Sprintf("Failed to upload object %s into bucket %s , err: %v", objname, bucket, err)
 		return webinterror(w, errstr)
 	}
 	r.Body = ioutil.NopCloser(b)

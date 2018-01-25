@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends._test
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -307,7 +308,7 @@ func Test_list(t *testing.T) {
 	for _, m := range reslist.Entries {
 		fmt.Fprintln(file, m)
 	}
-	t.Logf("ls bucket written to %s", bucket, fname)
+	t.Logf("ls bucket %s written to %s", bucket, fname)
 }
 
 func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {

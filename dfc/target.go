@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -37,9 +38,9 @@ type gcpif struct {
 }
 
 type cinterface interface {
-	listbucket(http.ResponseWriter, string, *GetMsg) error
-	getobj(http.ResponseWriter, string, string, string) (*os.File, error)
-	putobj(*http.Request, http.ResponseWriter, string, string, string, string) error
+	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error
+	getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error)
+	putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, objname, md5sum string) error
 }
 
 //===========================================================================
@@ -74,9 +75,8 @@ func (t *targetrunner) run() error {
 				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 				glog.Errorf("Target %s is terminating", t.si.DaemonID)
 				return err
-			} else {
-				glog.Errorf("Success: target %s registered OK", t.si.DaemonID)
 			}
+			glog.Errorf("Success: target %s registered OK", t.si.DaemonID)
 		} else {
 			return err
 		}
@@ -185,7 +185,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // checks if the object exists locally (if not, downloads it)
 // and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restApiItems(r.URL.Path, 5)
+	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
@@ -205,7 +205,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if len(objname) == 0 {
 		t.statsif.add("numlist", 1)
 		var msg GetMsg
-		t.readJson(w, r, &msg)
+		t.readJSON(w, r, &msg)
 		getcloudif().listbucket(w, bucket, &msg)
 		return
 	}
@@ -256,7 +256,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		finfo                             os.FileInfo
 		written                           int64
 	)
-	apitems := t.restApiItems(r.URL.Path, 9)
+	apitems := t.restAPIItems(r.URL.Path, 9)
 	if len(apitems) == directput {
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
@@ -384,7 +384,7 @@ func (t *targetrunner) fqn(bucket, objname string) string {
 }
 
 func (t *targetrunner) splitfqn(fqn string) (mpath, bucket, objname string) {
-	for path, _ := range ctx.mountpaths {
+	for path := range ctx.mountpaths {
 		if !strings.HasPrefix(fqn, path+"/") {
 			continue
 		}
@@ -417,7 +417,7 @@ func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restApiItems(r.URL.Path, 5)
+	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
@@ -428,12 +428,12 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{lbmap}' /v1/daemon/localbuckets
 	if len(apitems) > 0 && apitems[0] == Rsynclb {
-		t.readJson(w, r, t.lbmap)
+		t.readJSON(w, r, t.lbmap)
 		glog.Infof("lbmap: %+v", t.lbmap)
 		return
 	}
 	var msg ActionMsg
-	if t.readJson(w, r, &msg) != nil {
+	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -447,7 +447,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, apitems []string) {
 	curversion := t.smap.Version
 	var smap *Smap
-	if t.readJson(w, r, &smap) != nil {
+	if t.readJSON(w, r, &smap) != nil {
 		return
 	}
 	if curversion == smap.Version {
@@ -479,12 +479,12 @@ func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, a
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restApiItems(r.URL.Path, 5)
+	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
 	var msg GetMsg
-	if t.readJson(w, r, &msg) != nil {
+	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
 	var (

@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -144,13 +145,13 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if ctx.smap.count() < 1 {
-		s := errmsgRestApi("No registered targets yet", r)
+		s := errmsgRestAPI("No registered targets yet", r)
 		glog.Errorln(s)
 		http.Error(w, s, http.StatusServiceUnavailable)
 		p.statsif.add("numerr", 1)
 		return
 	}
-	apitems := p.restApiItems(r.URL.Path, 5)
+	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
@@ -174,7 +175,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		}
 	} else { // CH target selection to execute GET bucket/objname
 		p.statsif.add("numget", 1)
-		si = hrwTarget(strings.Join(apitems, "/"), ctx.smap)
+		si = hrwTarget(bucket+"/"+objname, ctx.smap)
 	}
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
@@ -230,7 +231,7 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 
 // { action } "/"+Rversion+"/"+Rfiles + "/" + localbucket
 func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restApiItems(r.URL.Path, 5)
+	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
@@ -242,7 +243,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var msg ActionMsg
-	if p.readJson(w, r, &msg) != nil {
+	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
 	lbpathname := p.confdir + "/" + ctx.config.LocalBuckets
@@ -333,12 +334,12 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 
 // gets target info
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restApiItems(r.URL.Path, 5)
+	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	var msg GetMsg
-	if p.readJson(w, r, &msg) != nil {
+	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.GetWhat {
@@ -379,17 +380,17 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 
 // registers a new target
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restApiItems(r.URL.Path, 5)
+	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	var si daemonInfo
-	if p.readJson(w, r, &si) != nil {
+	if p.readJSON(w, r, &si) != nil {
 		return
 	}
 	if net.ParseIP(si.NodeIPAddr) == nil {
 		s := "Cannot register: invalid target IP " + si.NodeIPAddr
-		s = errmsgRestApi(s, r)
+		s = errmsgRestAPI(s, r)
 		glog.Errorln(s)
 		http.Error(w, s, http.StatusBadRequest)
 		return
@@ -413,7 +414,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 // unregisters a target
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restApiItems(r.URL.Path, 5)
+	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
 		return
 	}
@@ -444,12 +445,12 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
 // '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restApiItems(r.URL.Path, 5)
+	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	var msg ActionMsg
-	if p.readJson(w, r, &msg) != nil {
+	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {

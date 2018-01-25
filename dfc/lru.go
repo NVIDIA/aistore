@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -49,7 +50,7 @@ func (t *targetrunner) runLRU() {
 	fsmap := make(map[syscall.Fsid]bool, mntcnt)
 
 	// init context maps to avoid insert-key races
-	for mpath, _ := range ctx.mountpaths {
+	for mpath := range ctx.mountpaths {
 		maxheapmap[mpath] = nil
 		lructxmap[mpath] = nil
 	}
@@ -139,7 +140,7 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		break
 	}
 	if xlru.finished() {
-		return errors.New(fmt.Sprintf("%s aborted - exiting lruwalkfn", xlru.tostring()))
+		return fmt.Errorf("%s aborted - exiting lruwalkfn", xlru.tostring())
 	}
 
 	// Delete invalid object files.

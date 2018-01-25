@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -333,7 +334,7 @@ func initusedstats() {
 	rr, ok := r.(*storstatsrunner)
 	assert(ok)
 	rr.used = make(map[string]int, len(ctx.mountpaths))
-	for path, _ := range ctx.mountpaths {
+	for path := range ctx.mountpaths {
 		rr.used[path] = 0
 	}
 }

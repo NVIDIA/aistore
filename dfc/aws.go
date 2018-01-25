@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -29,8 +30,8 @@ func createsession() *session.Session {
 
 }
 
-func (obj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
-	glog.Infof("listbucket %s ", bucket)
+func (cobj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
+	glog.Infof("listbucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
@@ -75,7 +76,7 @@ func (obj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) 
 }
 
 // This function download S3 object into local file.
-func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string, objname string) (file *os.File, err error) {
+func (cobj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error) {
 	var errstr string
 	if file, errstr = initobj(fqn); errstr != "" {
 		return nil, webinterror(w, errstr)
@@ -105,8 +106,7 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn string, bucket string, objn
 	return file, nil
 }
 
-func (cobj *awsif) putobj(r *http.Request, w http.ResponseWriter,
-	fqn string, bucket string, objname string, md5sum string) error {
+func (cobj *awsif) putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, objname, md5sum string) error {
 	// create local copy
 	var err error
 	size := r.ContentLength
@@ -125,9 +125,9 @@ func (cobj *awsif) putobj(r *http.Request, w http.ResponseWriter,
 	if err != nil {
 		glog.Errorf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
 		return webinterror(w, err.Error())
-	} else {
-		glog.Infof("Uploaded key %s into bucket %s", objname, bucket)
 	}
+	glog.Infof("Uploaded object %s into bucket %s", objname, bucket)
+
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {

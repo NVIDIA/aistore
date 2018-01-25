@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -29,12 +30,12 @@ const (
 
 // FIXME: revisit the following 3 methods, and make consistent
 func invalhdlr(w http.ResponseWriter, r *http.Request) {
-	s := errmsgRestApi(http.StatusText(http.StatusBadRequest), r)
+	s := errmsgRestAPI(http.StatusText(http.StatusBadRequest), r)
 	glog.Errorln(s)
 	http.Error(w, s, http.StatusBadRequest)
 }
 
-func errmsgRestApi(s string, r *http.Request) string {
+func errmsgRestAPI(s string, r *http.Request) string {
 	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
 	return s
 }
@@ -106,7 +107,7 @@ func (r *httprunner) init(s statsif) error {
 
 	// NOTE: generate and assign ID and URL here
 	split := strings.Split(ipaddr, ".")
-	cs := xxhash.ChecksumString32S(split[len(split)-1], LCG32)
+	cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
 	r.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
 	r.si.DirectURL = "http://" + r.si.NodeIPAddr + ":" + r.si.DaemonPort
 	return nil
@@ -132,7 +133,8 @@ func (r *httprunner) run() error {
 func (r *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 
-	contextwith, _ := context.WithTimeout(context.Background(), ctx.config.HttpTimeout)
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HttpTimeout)
+	defer cancel()
 
 	err = r.h.Shutdown(contextwith)
 	if err != nil {
@@ -186,7 +188,7 @@ func (r *httprunner) call(url string, method string, injson []byte) (outjson []b
 // http request parsing helpers
 //
 //=============================
-func (h *httprunner) restApiItems(unescapedpath string, maxsplit int) []string {
+func (r *httprunner) restAPIItems(unescapedpath string, maxsplit int) []string {
 	escaped := html.EscapeString(unescapedpath)
 	split := strings.SplitN(escaped, "/", maxsplit)
 	apitems := make([]string, 0, len(split))
@@ -227,7 +229,7 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	return apitems
 }
 
-func (h *httprunner) readJson(w http.ResponseWriter, r *http.Request, out interface{}) error {
+func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err == nil {

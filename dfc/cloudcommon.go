@@ -1,3 +1,4 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
  *
@@ -33,14 +34,11 @@ func initobj(fqn string) (file *os.File, errstr string) {
 	// Don't set xattribute for even new objects to maintain consistency.
 	if ctx.config.LegacyMode {
 		return file, ""
-	} else {
-		errstr = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid))
-		if errstr != "" {
-			glog.Errorf(errstr)
-			file.Close()
-			return nil, errstr
-		}
-		return file, ""
+	}
+	if errstr = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid)); errstr != "" {
+		glog.Errorf(errstr)
+		file.Close()
+		return nil, errstr
 	}
 	if glog.V(3) {
 		glog.Infof("Created and initialized file %s", fqn)
@@ -52,42 +50,39 @@ func initobj(fqn string) (file *os.File, errstr string) {
 func finalizeobj(fqn string, md5sum []byte) error {
 	if ctx.config.LegacyMode {
 		return nil
-	} else {
-		errstr := Setxattr(fqn, MD5attr, md5sum)
-		if errstr != "" {
-			glog.Errorf(errstr)
-			return errors.New(errstr)
-		}
-		errstr = Setxattr(fqn, Objstateattr, []byte(XAttrValid))
-		if errstr != "" {
-			glog.Errorf(errstr)
-			return errors.New(errstr)
-		}
-		return nil
 	}
+	errstr := Setxattr(fqn, MD5attr, md5sum)
+	if errstr != "" {
+		glog.Errorf(errstr)
+		return errors.New(errstr)
+	}
+	errstr = Setxattr(fqn, Objstateattr, []byte(XAttrValid))
+	if errstr != "" {
+		glog.Errorf(errstr)
+		return errors.New(errstr)
+	}
+	return nil
 }
 
 // Return True for corrupted or invalid objects.
 func isinvalidobj(fqn string) bool {
 	if ctx.config.LegacyMode {
 		return false
-	} else {
-		// Existence of file will make all cached object(s) invalid.
-		_, err := os.Stat(emulateobjfailure)
-		if err == nil {
-			return true
-		} else {
-			data, errstr := Getxattr(fqn, Objstateattr)
-			if errstr != "" {
-				glog.Errorf(errstr)
-				return true
-			}
-			if string(data) == XAttrInvalid {
-				return true
-			}
-			return false
-		}
 	}
+	// Existence of file will make all cached object(s) invalid.
+	_, err := os.Stat(emulateobjfailure)
+	if err == nil {
+		return true
+	}
+	data, errstr := Getxattr(fqn, Objstateattr)
+	if errstr != "" {
+		glog.Errorf(errstr)
+		return true
+	}
+	if string(data) == XAttrInvalid {
+		return true
+	}
+	return false
 }
 
 // on err closes and removes the file; othwerise returns the size (in bytes) while keeping the file open
