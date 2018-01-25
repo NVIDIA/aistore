@@ -32,7 +32,13 @@ under your configured $GOPATH.
 The 3rd - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)).
 
 Finally, the 4th command executes a smoke test to download 2 (two) files
-from your own named Amazon S3 or Google Cloud Storage bucket.
+from your own named Amazon S3 or Google Cloud Storage bucket. Here's another example:
+
+```
+$ go test -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS3bucket
+```
+This will download up to 100 objects from the bucket called myS3bucket.
+The names of those objects will match 'a\d+' regex.
 
 For more testing/running command line options, please refer to [the source](dfc/main_test.go).
 

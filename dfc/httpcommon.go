@@ -76,7 +76,7 @@ type httprunner struct {
 	mux        *http.ServeMux
 	h          *http.Server
 	glogger    *log.Logger
-	si         *ServerInfo
+	si         *daemonInfo
 	httpclient *http.Client // http client for intra-cluster comm
 	statsif    statsif
 }
@@ -99,8 +99,8 @@ func (r *httprunner) init(s statsif) error {
 		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
 		Timeout:   requesttimeout,
 	}
-	// init ServerInfo here
-	r.si = &ServerInfo{}
+	// init daemonInfo here
+	r.si = &daemonInfo{}
 	r.si.NodeIPAddr = ipaddr
 	r.si.DaemonPort = ctx.config.Listen.Port
 

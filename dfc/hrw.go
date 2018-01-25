@@ -13,8 +13,12 @@ const LCG32 = 1103515245
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-// NOTE: read access to Smap - see sync.Map comment
-func hrwTarget(name string, smap *Smap) (si *ServerInfo) {
+func hrwTarget(name string, smap *Smap) (si *daemonInfo) {
+	// NOTE: commented out on purpose - trading off read access to unlocked map
+	// 	 (that changes very rarely)
+	//       vs locking zillion times - use sync.Map otherwise
+	// smap.lock.Lock()
+	// defer smap.lock.Unlock()
 	var max uint32
 	for id, sinfo := range smap.Smap {
 		cs := xxhash.ChecksumString32S(id+":"+name, LCG32)
@@ -25,6 +29,7 @@ func hrwTarget(name string, smap *Smap) (si *ServerInfo) {
 	}
 	return
 }
+
 func hrwMpath(name string) (mpath string) {
 	var max uint32
 	for path, _ := range ctx.mountpaths {

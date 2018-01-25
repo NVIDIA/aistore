@@ -9,8 +9,6 @@
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 INSTANCEPREFIX="dfc"
 TMPDIR="/tmp/nvidia"
-CACHEDIR="cache"
-LOGDIR="log"
 PROXYURL="http://localhost:8080"
 PASSTHRU=true
 
@@ -25,6 +23,7 @@ DIRPATH="/tmp/nvidia/"
 # Verbosity: 0 (minimal) to 4 (max)
 LOGLEVEL="3"
 LOGDIR="/log"
+LOCALBUCKETS="localbuckets"
 CONFPATH="$HOME/.dfc"
 # CONFPATH="/etc/.dfc"
 INSTANCEPREFIX="dfc"
@@ -45,6 +44,16 @@ if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
 	echo "Error: TCP port $PROXYPORT is not open (check if DFC is already running)"
 	exit 1
 fi
+
+# (prelim and incomplete) test extended attrs
+TMPF=$(mktemp /tmp/dfc.XXXXXXXXX)
+touch $TMPF; setfattr -n user.comment -v comment $TMPF
+if [ $? -ne 0 ]; then
+	echo "Error: bad kernel configuration: extended attributes are not enabled"
+	rm $TMPF 2>/dev/null
+	exit 1
+fi
+rm $TMPF 2>/dev/null
 
 echo Enter number of cache servers:
 read servcount
@@ -93,6 +102,7 @@ do
 		"logdir":			"${DIRPATH}${CURINSTANCE}${LOGDIR}",
 		"loglevel": 			"${LOGLEVEL}",
 		"cloudprovider":		"${CLDPROVIDER}",
+		"local_buckets":		"${LOCALBUCKETS}",
 		"stats_time":			${STATSTIMESEC},
 		"http_timeout":			${HTTPTIMEOUTSEC},
 		"listen": {
