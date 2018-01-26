@@ -167,15 +167,14 @@ func (r *httprunner) call(url string, method string, injson []byte) (outjson []b
 		return nil, err
 	}
 	response, err = r.httpclient.Do(request)
-	if err != nil || response == nil {
+	if err != nil {
+		glog.Errorf("Failed to execute http call(%s), err: %v", url, err)
 		return nil, err
 	}
-	defer func() {
-		if response != nil {
-			err = response.Body.Close()
-		}
-	}()
-	// block until done (note: returned content is ignored and discarded)
+	assert(response != nil, "Unexpected: nil response in presense of no error")
+
+	// block until done (returned content is ignored and discarded)
+	defer func() { err = response.Body.Close() }()
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
 		glog.Errorf("Failed to read http, err: %v", err)
 		return nil, err

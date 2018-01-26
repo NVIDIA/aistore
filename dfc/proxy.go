@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -42,11 +43,14 @@ type proxyrunner struct {
 	confdir     string
 	xactinp     *xactInProgress
 	lbmap       *lbmap
+	syncmapinp  int64
+	keepalive   *keepalive
 }
 
 // run
 func (p *proxyrunner) run() error {
 	p.httprunner.init(getproxystats())
+	p.keepalive = getkeepaliverunner()
 	p.xactinp = newxactinp()
 	// local (aka cache-only) buckets
 	p.lbmap = &lbmap{LBmap: make(map[string]string), mutex: &sync.Mutex{}}
@@ -59,29 +63,8 @@ func (p *proxyrunner) run() error {
 	}
 	p.lbmap.unlock()
 
-	// startup:
-	// 	delayed sync local buckets and cluster map as soon as the latter
-	// 	stabilizes
-	go func() {
-		ctx.smap.lock()
-		smapversion := ctx.smap.version()
-		ctx.smap.unlock()
-		time.Sleep(time.Second * 5)
-		for {
-			ctx.smap.lock()
-			v := ctx.smap.version()
-			ctx.smap.unlock()
-			if smapversion != v {
-				smapversion = v
-				time.Sleep(time.Second * 3)
-				continue
-			}
-			p.httpfilput_lb()
-			p.httpcluput_smap(http.MethodPut, Rsyncsmap)
-			break
-		}
-
-	}()
+	// startup: sync local buckets and cluster map when the latter stabilizes
+	go p.synchronizeMaps(true)
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -93,6 +76,7 @@ func (p *proxyrunner) run() error {
 	glog.Infof("Proxy %s is ready", p.si.DaemonID)
 	glog.Flush()
 	p.starttime = time.Now()
+
 	return p.httprunner.run()
 }
 
@@ -103,14 +87,10 @@ func (p *proxyrunner) stop(err error) {
 	//
 	// give targets a limited time to unregister
 	//
-	ctx.smap.lock()
-	version := ctx.smap.version()
-	ctx.smap.unlock()
+	version := ctx.smap.versionLocked()
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Second)
-		ctx.smap.lock()
-		v := ctx.smap.version()
-		ctx.smap.unlock()
+		v := ctx.smap.versionLocked()
 		if version != v {
 			version = v
 			time.Sleep(time.Second)
@@ -288,37 +268,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	localSave(lbpathname, p.lbmap)
 	p.lbmap.unlock()
 
-	// delay bcast until both lbmap and smap stabilize
-	go func() {
-		p.lbmap.lock()
-		lbversion := p.lbmap.version()
-		p.lbmap.unlock()
-		ctx.smap.lock()
-		smapversion := ctx.smap.version()
-		ctx.smap.unlock()
-		time.Sleep(time.Second)
-		for {
-			p.lbmap.lock()
-			lbv := p.lbmap.version()
-			p.lbmap.unlock()
-			if lbversion != lbv {
-				lbversion = lbv
-				time.Sleep(time.Second * 3)
-				continue
-			}
-			ctx.smap.lock()
-			smv := ctx.smap.version()
-			ctx.smap.unlock()
-			if smapversion != smv {
-				smapversion = smv
-				time.Sleep(time.Second * 3)
-				continue
-			}
-			// finally
-			p.httpfilput_lb()
-			break
-		}
-	}()
+	go p.synchronizeMaps(false)
 }
 
 //===========================
@@ -380,7 +330,14 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 		out.Storstats[si.DaemonID] = &stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 		outjson, err := p.call(url, r.Method, getstatsmsg)
-		assert(err == nil, err)
+		if err != nil {
+			s := fmt.Sprintf("Failed to call target %s (is it alive?)", url)
+			p.statsif.add("numerr", 1)
+			http.Error(w, s, http.StatusGone)
+			// ask keepalive to work on it
+			p.keepalive.checknow <- err
+			return
+		}
 		err = json.Unmarshal(outjson, &stats)
 		assert(err == nil, err)
 	}
@@ -415,13 +372,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx.smap.add(&si)
 	ctx.smap.unlock()
-	//
-	// TODO: startup -- join -- (startup N + join 1 + shutdown + startup N+1)
-	// TODO: sync local buckets and cluster map, possibly rebalance as well
-	//
 	if glog.V(3) {
 		glog.Infof("Registered target ID %s (count %d)", si.DaemonID, ctx.smap.count())
 	}
+	go p.synchronizeMaps(false)
 }
 
 // unregisters a target
@@ -451,6 +405,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("Unregistered target {%s} (count %d)", sid, ctx.smap.count())
 	}
+	go p.synchronizeMaps(false)
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
@@ -481,27 +436,11 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	case ActSyncSmap:
 		fallthrough
 	case ActionRebalance:
-		// delay bcast until smap stabilizes
-		go func() {
-			for {
-				ctx.smap.lock()
-				smapversion := ctx.smap.version()
-				ctx.smap.unlock()
-				time.Sleep(time.Second)
-				for {
-					ctx.smap.lock()
-					v := ctx.smap.version()
-					ctx.smap.unlock()
-					if smapversion != v {
-						smapversion = v
-						time.Sleep(time.Second * 3)
-						continue
-					}
-					p.httpcluput_smap(http.MethodPut, msg.Action)
-					break
-				}
-			}
-		}()
+		if ctx.smap.syncversion == ctx.smap.Version {
+			glog.Infof("Smap (v%d) is already in sync with the targets", ctx.smap.syncversion)
+			return
+		}
+		go p.synchronizeMaps(false)
 
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
@@ -514,7 +453,84 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // delayed broadcasts
 //
 //========================
-func (p *proxyrunner) httpcluput_smap(method, action string) {
+const (
+	syncmapsdelay        = time.Second * 3
+	maxsyncmapsdelay     = time.Second * 10
+	syncmapsstartupdelay = time.Second * 7
+)
+
+//
+// TODO: startup -- join -- (startup N + join 1 + shutdown + startup N+1)
+// TODO: target got killed or crashed
+// TODO: sync local buckets and cluster map, possibly rebalance as well
+// TODO: proxy.stop() must terminate this routine
+//
+func (p *proxyrunner) synchronizeMaps(startingup bool) {
+	aval := time.Now().Unix()
+	if !atomic.CompareAndSwapInt64(&p.syncmapinp, 0, aval) {
+		glog.Infof("synchronizeMaps is already running")
+		return
+	}
+	defer atomic.CompareAndSwapInt64(&p.syncmapinp, aval, 0)
+
+	if startingup {
+		time.Sleep(syncmapsstartupdelay)
+	}
+	ctx.smap.lock()
+	p.lbmap.lock()
+	lbversion := p.lbmap.version()
+	smapversion := ctx.smap.version()
+	delay := syncmapsdelay
+	if lbversion == p.lbmap.syncversion && smapversion == ctx.smap.syncversion {
+		glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync with the targets",
+			smapversion, lbversion)
+		p.lbmap.unlock()
+		ctx.smap.unlock()
+		return
+	}
+	p.lbmap.unlock()
+	ctx.smap.unlock()
+	smapversion_orig := smapversion
+	time.Sleep(time.Second)
+	for {
+		lbv := p.lbmap.versionLocked()
+		if lbversion != lbv {
+			lbversion = lbv
+			time.Sleep(delay)
+			continue
+		}
+		smv := ctx.smap.versionLocked()
+		if smapversion != smv {
+			smapversion = smv
+			// NOTE: double the sleep when the targets keep (un)registering
+			//       - but only to a point
+			if delay < maxsyncmapsdelay {
+				delay += delay
+			}
+			time.Sleep(delay)
+			continue
+		}
+		// finally:
+		// change in the cluster map warrants the broadcast of every other config that
+		// must be shared across the cluster;
+		// the opposite it not true though, that's why the check below
+		p.httpfilput_lb()
+		if smapversion_orig != smapversion {
+			p.httpcluput_smap(Rsyncsmap)
+		}
+		break
+	}
+	ctx.smap.lock()
+	p.lbmap.lock()
+	ctx.smap.syncversion = smapversion
+	p.lbmap.syncversion = lbversion
+	p.lbmap.unlock()
+	ctx.smap.unlock()
+	glog.Infof("Smap (v%d) and lbmap (v%d) are now in sync with the targets", smapversion, lbversion)
+}
+
+func (p *proxyrunner) httpcluput_smap(action string) {
+	method := http.MethodPut
 	assert(action == Rebalance || action == Rsyncsmap)
 	ctx.smap.lock()
 	jsbytes, err := json.Marshal(ctx.smap)
@@ -524,8 +540,13 @@ func (p *proxyrunner) httpcluput_smap(method, action string) {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + action
 		glog.Infof("%s: %s", action, url)
 		_, err := p.call(url, method, jsbytes)
-		assert(err == nil, err)
+		if err != nil {
+			// ask keepalive to work on it
+			p.keepalive.checknow <- err
+			return
+		}
 	}
+	ctx.smap.syncversion = ctx.smap.Version
 }
 
 func (p *proxyrunner) httpfilput_lb() {
@@ -538,5 +559,11 @@ func (p *proxyrunner) httpfilput_lb() {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
 		glog.Infof("%s: %+v", url, p.lbmap)
 		p.call(url, http.MethodPut, jsbytes)
+		if err != nil {
+			// ask keepalive to work on it
+			p.keepalive.checknow <- err
+			return
+		}
 	}
+	p.lbmap.syncversion = p.lbmap.Version
 }

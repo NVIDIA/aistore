@@ -23,6 +23,7 @@ const (
 	xsignal     = "signal"
 	xproxystats = "proxystats"
 	xstorstats  = "storstats"
+	xkeepalive  = "keepalive"
 )
 
 //====================
@@ -39,9 +40,10 @@ var ctx = &daemon{}
 //======
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smap struct {
-	Smap    map[string]*daemonInfo `json:"smap"`
-	Version int64                  `json:"version"`
-	mutex   *sync.Mutex
+	Smap        map[string]*daemonInfo `json:"smap"`
+	Version     int64                  `json:"version"`
+	mutex       *sync.Mutex
+	syncversion int64
 }
 
 // daemon instance: proxy or storage target
@@ -62,9 +64,10 @@ type daemonInfo struct {
 
 // local (cache-only) bucket names and their TBD props
 type lbmap struct {
-	LBmap   map[string]string `json:"l_bmap"`
-	Version int64             `json:"version"`
-	mutex   *sync.Mutex
+	LBmap       map[string]string `json:"l_bmap"`
+	Version     int64             `json:"version"`
+	mutex       *sync.Mutex
+	syncversion int64
 }
 
 // runner if
@@ -113,6 +116,12 @@ func (m *Smap) version() int64 {
 	return m.Version
 }
 
+func (m *Smap) versionLocked() int64 {
+	m.lock()
+	defer m.unlock()
+	return m.Version
+}
+
 func (m *Smap) count() int {
 	return len(m.Smap)
 }
@@ -156,6 +165,12 @@ func (m *lbmap) del(b string) bool {
 }
 
 func (m *lbmap) version() int64 {
+	return m.Version
+}
+
+func (m *lbmap) versionLocked() int64 {
+	m.lock()
+	defer m.unlock()
 	return m.Version
 }
 
@@ -259,6 +274,7 @@ func dfcinit() {
 		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8), mutex: &sync.Mutex{}}
 		ctx.rg.add(&proxyrunner{confdir: confdir}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
+		ctx.rg.add(&keepalive{}, xkeepalive)
 	} else {
 		ctx.rg.add(&targetrunner{}, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
@@ -306,6 +322,13 @@ func getproxystats() *Proxystats {
 func getproxy() *proxyrunner {
 	r := ctx.rg.runmap[xproxy]
 	rr, ok := r.(*proxyrunner)
+	assert(ok)
+	return rr
+}
+
+func getkeepaliverunner() *keepalive {
+	r := ctx.rg.runmap[xkeepalive]
+	rr, ok := r.(*keepalive)
 	assert(ok)
 	return rr
 }
