@@ -50,7 +50,7 @@ type Smap struct {
 type daemon struct {
 	smap       *Smap
 	config     dfconfig
-	mountpaths map[string]mountPath
+	mountpaths map[string]*mountPath
 	rg         *rungroup
 }
 

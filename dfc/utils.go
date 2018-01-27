@@ -68,16 +68,6 @@ func getipaddr() (string, error) {
 	return ipaddr, err
 }
 
-// Check and Set MountPath error count and status.
-func checksetmounterror(path string) {
-	if getMountPathErrorCount(path) > ctx.config.Cache.ErrorThreshold {
-		setMountPathStatus(path, false)
-	} else {
-		incrMountPathErrorCount(path)
-	}
-
-}
-
 func CreateDir(dirname string) (err error) {
 	if _, err := os.Stat(dirname); err != nil {
 		if os.IsNotExist(err) {
@@ -166,13 +156,11 @@ func Createfile(fname string) (*os.File, error) {
 	dirname := filepath.Dir(fname)
 	if err = CreateDir(dirname); err != nil {
 		glog.Errorf("Failed to create local dir %s, err: %v", dirname, err)
-		checksetmounterror(fname)
 		return nil, err
 	}
 	file, err = os.Create(fname)
 	if err != nil {
 		glog.Errorf("Unable to create file %s, err: %v", fname, err)
-		checksetmounterror(fname)
 		return nil, err
 	}
 

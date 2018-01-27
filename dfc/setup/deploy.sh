@@ -7,8 +7,6 @@
 ############################################
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
-INSTANCEPREFIX="dfc"
-TMPDIR="/tmp/nvidia"
 PROXYURL="http://localhost:8080"
 PASSTHRU=true
 
@@ -19,24 +17,30 @@ PORT=8079
 ID=0
 
 PROTO="tcp"
-DIRPATH="/tmp/nvidia/"
-# Verbosity: 0 (minimal) to 4 (max)
-LOGLEVEL="3"
-LOGDIR="/log"
-LOCALBUCKETS="localbuckets"
+LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
+LOGROOT="/tmp/dfc/"
+###################################
+#
+# NOTE:
+# fspaths config is used if and only if test_fspaths.count == 0
+# existence of each fspath is checked at runtime
+#
+###################################
+TESTFSPATHROOT="/tmp/dfc/"
+CLOUDBUCKETS="cloud"
+LOCALBUCKETS="lb"
+LBCONF="localbuckets"
 CONFPATH="$HOME/.dfc"
 # CONFPATH="/etc/.dfc"
-INSTANCEPREFIX="dfc"
 MAXCONCURRENTDOWNLOAD=64
 MAXCONCURRENTUPLOAD=64
 MAXPARTSIZE=4294967296
-CACHEDIR="/cache"
-ERRORTHRESHOLD=5
+TESTFSPATHCOUNT=1
 STATSTIMESEC=10
 HTTPTIMEOUTSEC=60
 DONTEVICTIMESEC=600
-FSLOWWATERMARK=65
-FSHIGHWATERMARK=80
+LOWWATERMARK=75
+HIGHWATERMARK=90
 LEGACYMODE=false
 
 PROXYPORT=$(expr $PORT + 1)
@@ -55,7 +59,7 @@ if [ $? -ne 0 ]; then
 fi
 rm $TMPF 2>/dev/null
 
-echo Enter number of cache servers:
+echo Enter number of cache targets:
 read servcount
 if ! [[ "$servcount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$servcount' is not a number"; exit 1
@@ -63,12 +67,12 @@ fi
 START=0
 END=$servcount
 
-echo Enter number of mount points per server:
-read mntpointcount
-if ! [[ "$mntpointcount" =~ ^[0-9]+$ ]] ; then
-	echo "Error: '$mntpointcount' is not a number"; exit 1
+echo Test-only: enter number of local cache directories for each target:
+read testfspathcnt
+if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
+	echo "Error: '$testfspathcnt' is not a number"; exit 1
 fi
-CACHEPATHCOUNT=$mntpointcount
+TESTFSPATHCOUNT=$testfspathcnt
 
 echo Select Cloud Provider:
 echo  1: Amazon Cloud
@@ -95,47 +99,54 @@ for (( c=$START; c<=$END; c++ ))
 do
 	ID=$(expr $ID + 1)
 	PORT=$(expr $PORT + 1)
-	CURINSTANCE="$INSTANCEPREFIX$c"
-	CONFFILE="$CONFPATH/$CURINSTANCE.json"
+	CONFFILE="$CONFPATH/dfc$c.json"
+	LOGDIR="$LOGROOT/$c/log"
 	cat > $CONFFILE <<EOL
-	{
-		"logdir":			"${DIRPATH}${CURINSTANCE}${LOGDIR}",
-		"loglevel": 			"${LOGLEVEL}",
-		"cloudprovider":		"${CLDPROVIDER}",
-		"local_buckets":		"${LOCALBUCKETS}",
-		"stats_time":			${STATSTIMESEC},
-		"http_timeout":			${HTTPTIMEOUTSEC},
-		"listen": {
-			"proto": 		"${PROTO}",
-			"port":			"${PORT}"
-		},
-		"proxy": {
-			"url": 			"${PROXYURL}",
-			"passthru": 		${PASSTHRU}
-		},
-		"s3": {
-			"maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
-			"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
-			"maxpartsize":		${MAXPARTSIZE}
-		},
-		"cache": {
-			"cachepath":			"${DIRPATH}${CURINSTANCE}${CACHEDIR}",
-			"cachepathcount":		${CACHEPATHCOUNT},
-			"errorthreshold":		${ERRORTHRESHOLD},
-			"fslowwatermark":		${FSLOWWATERMARK},
-			"fshighwatermark":		${FSHIGHWATERMARK},
-			"dont_evict_time":		${DONTEVICTIMESEC}
-		},
-		"legacymode":				${LEGACYMODE}
-	}
+{
+	"logdir":			"$LOGDIR",
+	"loglevel": 			"${LOGLEVEL}",
+	"cloudprovider":		"${CLDPROVIDER}",
+	"cloud_buckets":		"${CLOUDBUCKETS}",
+	"local_buckets":		"${LOCALBUCKETS}",
+	"lb_conf":                	"${LBCONF}",
+	"stats_time":			${STATSTIMESEC},
+	"http_timeout":			${HTTPTIMEOUTSEC},
+	"listen": {
+		"proto": 		"${PROTO}",
+		"port":			"${PORT}"
+	},
+	"proxy": {
+		"url": 			"${PROXYURL}",
+		"passthru": 		${PASSTHRU}
+	},
+	"s3": {
+		"maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
+		"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
+		"maxpartsize":		${MAXPARTSIZE}
+	},
+	"cacheconfig": {
+		"lowwm":		${LOWWATERMARK},
+		"highwm":		${HIGHWATERMARK},
+		"dont_evict_time":	${DONTEVICTIMESEC}
+	},
+	"test_fspaths": {
+		"root":			"${TESTFSPATHROOT}",
+		"count":		$TESTFSPATHCOUNT,
+		"instance":		$c
+	},
+	"fspaths": {
+		"/zpools/vol1/a/b/c":	"",
+		"/zpools/vol2/m/n/p":	""
+	},
+	"legacymode":			${LEGACYMODE}
+}
 EOL
 done
 
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
-	CURINSTANCE="$INSTANCEPREFIX$c"
-	CONFFILE="$CONFPATH/$CURINSTANCE.json"
+	CONFFILE="$CONFPATH/dfc$c.json"
 	if [ $c -eq 0 ]
 	then
 			set -x
