@@ -74,8 +74,8 @@ func (t *targetrunner) runLRU() {
 
 func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
-	hwm := ctx.config.Cache.FSHighWaterMark
-	lwm := ctx.config.Cache.FSLowWaterMark
+	hwm := ctx.config.Cacheconfig.HighWM
+	lwm := ctx.config.Cacheconfig.LowWM
 
 	h := &maxheap{}
 	heap.Init(h)
@@ -162,7 +162,7 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		usetime = mtime
 	}
 	now := time.Now()
-	dontevictime := now.Add(-ctx.config.Cache.DontEvictTime)
+	dontevictime := now.Add(-ctx.config.Cacheconfig.DontEvictTime)
 	if usetime.After(dontevictime) {
 		return nil
 	}
@@ -221,7 +221,7 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 			statfs := syscall.Statfs_t{}
 			if err := syscall.Statfs(mpath, &statfs); err == nil {
 				u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-				if u <= uint64(ctx.config.Cache.FSLowWaterMark)+1 {
+				if u <= uint64(ctx.config.Cacheconfig.LowWM)+1 {
 					break
 				}
 			}
@@ -236,9 +236,9 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(mpath, &statfs); err == nil {
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-		if u > uint64(ctx.config.Cache.FSLowWaterMark)+1 {
+		if u > uint64(ctx.config.Cacheconfig.LowWM)+1 {
 			glog.Errorf("Failed to reach lwm %d for mpath %q: used %d%% rem-toevict %d",
-				ctx.config.Cache.FSLowWaterMark, mpath, u, toevict)
+				ctx.config.Cacheconfig.LowWM, mpath, u, toevict)
 		}
 	}
 	return nil

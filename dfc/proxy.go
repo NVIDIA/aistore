@@ -54,7 +54,7 @@ func (p *proxyrunner) run() error {
 	p.xactinp = newxactinp()
 	// local (aka cache-only) buckets
 	p.lbmap = &lbmap{LBmap: make(map[string]string), mutex: &sync.Mutex{}}
-	lbpathname := p.confdir + "/" + ctx.config.LocalBuckets
+	lbpathname := p.confdir + "/" + ctx.config.LBConf
 	p.lbmap.lock()
 	if localLoad(lbpathname, p.lbmap) != nil {
 		// create empty
@@ -161,8 +161,8 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s", r.URL.Path, si.DirectURL)
 	}
-	if !ctx.config.Proxy.Passthru {
-		glog.Infoln("Proxy will invoke the GET (ctx.config.Proxy.Passthru = false)")
+	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
+		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
 	if len(objname) != 0 {
@@ -238,7 +238,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
-	lbpathname := p.confdir + "/" + ctx.config.LocalBuckets
+	lbpathname := p.confdir + "/" + ctx.config.LBConf
 	switch msg.Action {
 	case ActCreateLB:
 		p.lbmap.lock()
@@ -459,12 +459,7 @@ const (
 	syncmapsstartupdelay = time.Second * 7
 )
 
-//
-// TODO: startup -- join -- (startup N + join 1 + shutdown + startup N+1)
-// TODO: target got killed or crashed
-// TODO: sync local buckets and cluster map, possibly rebalance as well
 // TODO: proxy.stop() must terminate this routine
-//
 func (p *proxyrunner) synchronizeMaps(startingup bool) {
 	aval := time.Now().Unix()
 	if !atomic.CompareAndSwapInt64(&p.syncmapinp, 0, aval) {
