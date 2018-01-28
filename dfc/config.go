@@ -29,10 +29,10 @@ type dfconfig struct {
 	Listen        listenconfig      `json:"listen"`
 	Proxy         proxyconfig       `json:"proxy"`
 	S3            s3config          `json:"s3"`
-	Cacheconfig   cacheconfig       `json:"cacheconfig"`
+	LRUConfig     lruconfig         `json:"lru_config"`
 	FSpaths       map[string]string `json:"fspaths"`
 	TestFSP       testfspathconf    `json:"test_fspaths"`
-	LegacyMode    bool              `json:"legacymode"`
+	NoXattrs      bool              `json:"no_xattrs"`
 }
 
 const (
@@ -48,7 +48,7 @@ type s3config struct {
 }
 
 // caching configuration
-type cacheconfig struct {
+type lruconfig struct {
 	LowWM         uint32        `json:"lowwm"`           // capacity usage low watermark
 	HighWM        uint32        `json:"highwm"`          // capacity usage high watermark
 	DontEvictTime time.Duration `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
@@ -88,6 +88,13 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 		glog.Infof("Logdir %q Proto %s Port %s ID %s loglevel %s",
 			ctx.config.Logdir, ctx.config.Listen.Proto,
 			ctx.config.Listen.Port, ctx.config.ID, ctx.config.Loglevel)
+	}
+	// Validate - TODO more validation
+	if ctx.config.LRUConfig.HighWM <= 0 || ctx.config.LRUConfig.LowWM <= 0 ||
+		ctx.config.LRUConfig.HighWM < ctx.config.LRUConfig.LowWM ||
+		ctx.config.LRUConfig.LowWM > 100 || ctx.config.LRUConfig.HighWM > 100 {
+		glog.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)
+		return nil
 	}
 	// CLI override
 	if statstime != 0 {

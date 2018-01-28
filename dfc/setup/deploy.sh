@@ -41,7 +41,7 @@ HTTPTIMEOUTSEC=60
 DONTEVICTIMESEC=600
 LOWWATERMARK=75
 HIGHWATERMARK=90
-LEGACYMODE=false
+NOXATTRS=false
 
 PROXYPORT=$(expr $PORT + 1)
 if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
@@ -124,7 +124,7 @@ do
 		"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
 		"maxpartsize":		${MAXPARTSIZE}
 	},
-	"cacheconfig": {
+	"lru_config": {
 		"lowwm":		${LOWWATERMARK},
 		"highwm":		${HIGHWATERMARK},
 		"dont_evict_time":	${DONTEVICTIMESEC}
@@ -138,7 +138,7 @@ do
 		"/zpools/vol1/a/b/c":	"",
 		"/zpools/vol2/m/n/p":	""
 	},
-	"legacymode":			${LEGACYMODE}
+	"no_xattrs":			${NOXATTRS}
 }
 EOL
 done

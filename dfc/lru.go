@@ -74,8 +74,8 @@ func (t *targetrunner) runLRU() {
 
 func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
-	hwm := ctx.config.Cacheconfig.HighWM
-	lwm := ctx.config.Cacheconfig.LowWM
+	hwm := ctx.config.LRUConfig.HighWM
+	lwm := ctx.config.LRUConfig.LowWM
 
 	h := &maxheap{}
 	heap.Init(h)
@@ -128,7 +128,12 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if strings.HasPrefix(osfi.Name(), ".") || osfi.Mode().IsDir() {
 		return nil
 	}
-
+	_, err = os.Stat(fqn)
+	if os.IsNotExist(err) {
+		glog.Infof("Warning (LRU race?): %s does not exist", fqn)
+		glog.Flush()
+		return nil
+	}
 	// abort?
 	select {
 	case <-xlru.abrt:
@@ -144,25 +149,26 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	// Delete invalid object files.
-	if isinvalidobj(osfi.Name()) {
-		err = os.Remove(osfi.Name())
+	if isinvalidobj(fqn) {
+		err = os.Remove(fqn)
 		if err != nil {
-			glog.Errorf("Failed to delete file %s, err: %v", osfi.Name(), err)
+			glog.Errorf("LRU: failed to delete file %s, err: %v", fqn, err)
 		} else if glog.V(3) {
-			glog.Infof("Deleted invalid file %s", osfi.Name())
+			glog.Infof("LRU: removed invalid file %s", fqn)
 		}
 		return nil
 	}
+	mtime := osfi.ModTime()
+	// access time - portable?
 	stat := osfi.Sys().(*syscall.Stat_t)
 	atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
-	mtime := time.Unix(int64(stat.Mtim.Sec), int64(stat.Mtim.Nsec))
 	// atime controversy, see e.g. https://en.wikipedia.org/wiki/Stat_(system_call)#Criticism_of_atime
 	usetime := atime
 	if mtime.After(atime) {
 		usetime = mtime
 	}
 	now := time.Now()
-	dontevictime := now.Add(-ctx.config.Cacheconfig.DontEvictTime)
+	dontevictime := now.Add(-ctx.config.LRUConfig.DontEvictTime)
 	if usetime.After(dontevictime) {
 		return nil
 	}
@@ -221,7 +227,7 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 			statfs := syscall.Statfs_t{}
 			if err := syscall.Statfs(mpath, &statfs); err == nil {
 				u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-				if u <= uint64(ctx.config.Cacheconfig.LowWM)+1 {
+				if u <= uint64(ctx.config.LRUConfig.LowWM)+1 {
 					break
 				}
 			}
@@ -236,9 +242,9 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(mpath, &statfs); err == nil {
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-		if u > uint64(ctx.config.Cacheconfig.LowWM)+1 {
-			glog.Errorf("Failed to reach lwm %d for mpath %q: used %d%% rem-toevict %d",
-				ctx.config.Cacheconfig.LowWM, mpath, u, toevict)
+		if u > uint64(ctx.config.LRUConfig.LowWM)+1 {
+			glog.Errorf("Failed to reach lwm %d%% for mpath %q: used %d%%, remains to evict %.2f MB",
+				ctx.config.LRUConfig.LowWM, mpath, u, float64(toevict)/1000/1000)
 		}
 	}
 	return nil
