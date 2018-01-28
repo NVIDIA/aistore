@@ -113,7 +113,8 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		p.httpfilget(w, r)
 	case http.MethodPut:
-		p.httpfilput(w, r)
+	case http.MethodDelete:
+		p.httpfilputdelete(w, r)
 	case http.MethodPost:
 		p.httpfilpost(w, r)
 	default:
@@ -204,7 +205,7 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	return err
 }
 
-func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpfilputdelete(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
 		return

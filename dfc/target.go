@@ -39,8 +39,9 @@ type gcpif struct {
 
 type cinterface interface {
 	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error
-	getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error)
-	putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, objname, md5sum string) error
+	getobj(fqn, bucket, objname string) (file *os.File, err error)
+	putobj(r *http.Request, fqn, bucket, objname, md5sum string) error
+	deleteobj(bucket, objname string) error
 }
 
 //===========================================================================
@@ -175,6 +176,8 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		t.httpfilget(w, r)
 	case http.MethodPut:
 		t.httpfilput(w, r)
+	case http.MethodDelete:
+		t.httpfildelete(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -220,7 +223,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.statsif.add("numcoldget", 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached or invalid", bucket, objname, fqn)
 		// TODO: do getcloudif().getobj() and write http response in parallel
-		if file, err = getcloudif().getobj(w, fqn, bucket, objname); err != nil {
+		if file, err = getcloudif().getobj(fqn, bucket, objname); err != nil {
+			glog.Errorf(err.Error())
+			webinterror(w, err.Error())
 			return
 		}
 		//
@@ -269,7 +274,10 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 
 		md5 := r.Header.Get("Content-MD5")
 		assert(md5 != "")
-		if err = getcloudif().putobj(r, w, fqn, bucket, objname, md5); err != nil {
+		err = getcloudif().putobj(r, fqn, bucket, objname, md5)
+		if err != nil {
+			glog.Errorf(err.Error())
+			webinterror(w, err.Error())
 			return
 		}
 
@@ -337,6 +345,26 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 merr:
 	t.statsif.add("numerr", 1)
 	invalmsghdlr(w, r, s)
+}
+
+// "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
+func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
+	var err error
+	var bucket, objname string
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket, objname = apitems[0], ""
+	if len(apitems) > 1 {
+		objname = strings.Join(apitems[1:], "/")
+	}
+	err = getcloudif().deleteobj(bucket, objname)
+	if err != nil {
+		glog.Errorf(err.Error())
+		webinterror(w, err.Error())
+		return
+	}
 }
 
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo) string {
