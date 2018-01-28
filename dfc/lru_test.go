@@ -48,8 +48,8 @@ func Test_lru(t *testing.T) {
 	hwm := usedpct - 1
 	t.Logf("Pre-eviction:  used %d%%, lwm %d%%, hwm %d%%", usedpct, lwm, hwm)
 
-	ctx.config.Cache.FSHighWaterMark = uint32(hwm)
-	ctx.config.Cache.FSLowWaterMark = uint32(lwm)
+	ctx.config.LRUConfig.HighWM = uint32(hwm)
+	ctx.config.LRUConfig.LowWM = uint32(lwm)
 
 	fschkwg := &sync.WaitGroup{}
 	fschkwg.Add(1)

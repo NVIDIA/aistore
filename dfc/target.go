@@ -7,12 +7,12 @@ package dfc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -83,26 +83,12 @@ func (t *targetrunner) run() error {
 		}
 	}
 	// local mp-s have precedence over cachePath
-	var err error
-	ctx.mountpaths = make(map[string]mountPath, 4)
-	if err = parseProcMounts(procMountsPath); err != nil {
-		glog.Errorf("Failed to parse %s, err: %v", procMountsPath, err)
-		return err
-	}
-	if len(ctx.mountpaths) == 0 {
-		glog.Infof("Warning: configuring %d mp-s for testing", ctx.config.Cache.CachePathCount)
-
-		// Use CachePath from config file if set
-		if ctx.config.Cache.CachePath == "" || ctx.config.Cache.CachePathCount < 1 {
-			errstr := fmt.Sprintf("Invalid configuration: CachePath %q CachePathCount %d",
-				ctx.config.Cache.CachePath, ctx.config.Cache.CachePathCount)
-			glog.Error(errstr)
-			err := errors.New(errstr)
-			return err
-		}
-		emulateCachepathMounts()
+	ctx.mountpaths = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	if ctx.config.TestFSP.Count == 0 {
+		fspath2mpath()
 	} else {
-		glog.Infof("Found %d mp-s", len(ctx.mountpaths))
+		glog.Infof("Warning: configuring %d mp-s for testing", ctx.config.TestFSP.Count)
+		testCachepathMounts()
 	}
 
 	// init per-mp usage stats
@@ -117,7 +103,7 @@ func (t *targetrunner) run() error {
 	} else {
 		t.cloudif = &gcpif{}
 	}
-	if ctx.config.LegacyMode {
+	if ctx.config.NoXattrs {
 		glog.Infof("DFC Target is running in legacy Mode")
 	}
 	//
@@ -241,7 +227,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	// NOTE: copyBuffer()
 	written, err := copyBuffer(w, file)
 	if err != nil {
 		glog.Errorf("Failed to copy %q to http, err: %v", fqn, err)
@@ -455,8 +440,10 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 0 && apitems[0] == Rsynclb {
 		t.readJSON(w, r, t.lbmap)
 		glog.Infof("lbmap: %+v", t.lbmap)
+		// TODO
 		return
 	}
+	// other PUT /daemon actions
 	var msg ActionMsg
 	if t.readJSON(w, r, &msg) != nil {
 		return
@@ -531,4 +518,54 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
+}
+
+//==============================================================================
+//
+// fspath -- mpath
+//
+//==============================================================================
+type mountPath struct {
+	Path string
+	Fsid syscall.Fsid
+}
+
+func fspath2mpath() {
+	for fp := range ctx.config.FSpaths {
+		if _, err := os.Stat(fp); err != nil {
+			glog.Fatalf("fspath %q does not exist, err: %v", fp, err)
+		}
+		statfs := syscall.Statfs_t{}
+		if err := syscall.Statfs(fp, &statfs); err != nil {
+			glog.Fatalf("Failed to statfs fspath %q, err: %v", fp, err)
+		}
+
+		instpath := fp
+		mpath := instpath + "/" + ctx.config.CloudBuckets
+		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
+		_, ok := ctx.mountpaths[mp.Path]
+		assert(!ok)
+		ctx.mountpaths[mp.Path] = mp
+	}
+}
+
+// create local directories to test multiple fspaths
+func testCachepathMounts() {
+	instpath := ctx.config.TestFSP.Root + strconv.Itoa(ctx.config.TestFSP.Instance)
+	for i := 0; i < ctx.config.TestFSP.Count; i++ {
+		mpath := instpath + "/" + ctx.config.CloudBuckets + "/" + strconv.Itoa(i)
+		if err := CreateDir(mpath); err != nil {
+			glog.Errorf("Failed to create test cache dir %q, err: %v", mpath, err)
+			return
+		}
+		statfs := syscall.Statfs_t{}
+		if err := syscall.Statfs(mpath, &statfs); err != nil {
+			glog.Fatalf("Failed to statfs mp %q, err: %v", mpath, err)
+			return
+		}
+		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
+		_, ok := ctx.mountpaths[mp.Path]
+		assert(!ok)
+		ctx.mountpaths[mp.Path] = mp
+	}
 }

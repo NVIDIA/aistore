@@ -18,9 +18,9 @@ import (
 	"github.com/golang/glog"
 )
 
-const fixedbufsize = 64 * 1024
 const (
-	emulateobjfailure = "/tmp/failobj"
+	fixedbufsize       = 64 * 1024
+	invalidateallcache = "/tmp/failobj"
 )
 
 // Create file and initialize object state.
@@ -32,7 +32,7 @@ func initobj(fqn string) (file *os.File, errstr string) {
 		return nil, errstr
 	}
 	// Don't set xattribute for even new objects to maintain consistency.
-	if ctx.config.LegacyMode {
+	if ctx.config.NoXattrs {
 		return file, ""
 	}
 	if errstr = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid)); errstr != "" {
@@ -48,7 +48,7 @@ func initobj(fqn string) (file *os.File, errstr string) {
 
 // Finalize object state.
 func finalizeobj(fqn string, md5sum []byte) error {
-	if ctx.config.LegacyMode {
+	if ctx.config.NoXattrs {
 		return nil
 	}
 	errstr := Setxattr(fqn, MD5attr, md5sum)
@@ -66,11 +66,11 @@ func finalizeobj(fqn string, md5sum []byte) error {
 
 // Return True for corrupted or invalid objects.
 func isinvalidobj(fqn string) bool {
-	if ctx.config.LegacyMode {
+	if ctx.config.NoXattrs {
 		return false
 	}
-	// Existence of file will make all cached object(s) invalid.
-	_, err := os.Stat(emulateobjfailure)
+	// FIXME: existence of this special file invalidates the entire cache - revisit
+	_, err := os.Stat(invalidateallcache)
 	if err == nil {
 		return true
 	}

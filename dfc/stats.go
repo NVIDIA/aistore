@@ -223,7 +223,7 @@ func (r *storstatsrunner) log() {
 			continue
 		}
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-		if u >= uint64(ctx.config.Cache.FSHighWaterMark) {
+		if u >= uint64(ctx.config.LRUConfig.HighWM) {
 			runlru = true
 		}
 		r.used[mountpath.Path], fsmap[mountpath.Fsid] = int(u), int(u)
