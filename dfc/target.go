@@ -103,7 +103,7 @@ func (t *targetrunner) run() error {
 	} else {
 		t.cloudif = &gcpif{}
 	}
-	if ctx.config.LegacyMode {
+	if ctx.config.NoXattrs {
 		glog.Infof("DFC Target is running in legacy Mode")
 	}
 	//

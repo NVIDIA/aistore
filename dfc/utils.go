@@ -212,9 +212,9 @@ func Deletexattr(path string, attrname string) (errstr string) {
 
 // Set DFC's legacy mode to specified mode.
 // True will imply no support for extended attributes.
-func SetLegacyMode(val bool) {
+func SetNoXattrs(val bool) {
 	glog.Infof("Setting Target's Legacy Mode %v", val)
-	ctx.config.LegacyMode = val
+	ctx.config.NoXattrs = val
 }
 
 func CalculateMD5(reader io.Reader) (csum string, errstr string) {
