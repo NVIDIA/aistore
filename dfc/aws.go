@@ -89,9 +89,8 @@ func (cobj *awsif) getobj(fqn, bucket, objname string) (file *os.File, err error
 		Key:    aws.String(objname),
 	})
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 		file.Close()
-		return nil, errors.New(errstr)
+		return nil, fmt.Errorf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 	}
 	defer obj.Body.Close()
 	// Get ETag from object header
@@ -124,16 +123,14 @@ func (cobj *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) 
 		Body:   teebuf,
 	})
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
-		return errors.New(errstr)
+		return fmt.Errorf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
 	}
 	glog.Infof("Uploaded object %s into bucket %s", objname, bucket)
 
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
-		return errors.New(errstr)
+		return fmt.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
 	}
 	if size > 0 {
 		errstr := truncatefile(fqn, size)
@@ -153,16 +150,7 @@ func (cobj *awsif) deleteobj(bucket, objname string) error {
 	// Delete the item
 	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to delete key %s from bucket %s, err: %v", objname, bucket, err)
-		return errors.New(errstr)
-	}
-	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(objname),
-	})
-	if err != nil {
-		errstr := fmt.Sprintf("Error occurred while waiting for object %q to be deleted, err: %v", objname, err)
-		return errors.New(errstr)
+		return fmt.Errorf("Failed to delete key %s from bucket %s, err: %v", objname, bucket, err)
 	}
 	if glog.V(3) {
 		glog.Infof("Deleted object %s from bucket %s", objname, bucket)

@@ -89,8 +89,7 @@ func createclient() (*storage.Client, context.Context, error) {
 	gctx := context.Background()
 	client, err := storage.NewClient(gctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create client, err: %v", err)
-		return nil, nil, errors.New(errstr)
+		return nil, nil, fmt.Errorf("Failed to create client, err: %v", err)
 	}
 	return client, gctx, nil
 }
@@ -105,18 +104,16 @@ func (cobj *gcpif) getobj(fqn string, bucket string, objname string) (file *os.F
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf(
+		return nil, fmt.Errorf(
 			"Failed to get attributes for object %s from bucket %s, err: %v",
 			objname, bucket, err)
-		return nil, errors.New(errstr)
 	}
 	omd5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf(
+		return nil, fmt.Errorf(
 			"Failed to create rc for object %s to file %s, err: %v",
 			objname, fqn, err)
-		return nil, errors.New(errstr)
 	}
 	defer rc.Close()
 	if file, errstr = initobj(fqn); errstr != "" {
@@ -146,17 +143,15 @@ func (cobj *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) 
 	defer wc.Close()
 	_, err = copyBuffer(wc, teebuf)
 	if err != nil {
-		errstr := fmt.Sprintf(
+		return fmt.Errorf(
 			"Failed to upload object %s into bucket %s , err: %v",
 			objname, bucket, err)
-		return errors.New(errstr)
 	}
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to write to file %s bytes written %v, err : %v",
+		return fmt.Errorf("Failed to write to file %s bytes written %v, err : %v",
 			fqn, written, err)
-		return errors.New(errstr)
 	}
 	if size > 0 {
 		errstr := truncatefile(fqn, size)
@@ -180,9 +175,8 @@ func (cobj *gcpif) deleteobj(bucket, objname string) error {
 	o := client.Bucket(bucket).Object(objname)
 	err = o.Delete(gctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to delete object %s from bucket %s, err: %v",
+		return fmt.Errorf("Failed to delete object %s from bucket %s, err: %v",
 			objname, bucket, err)
-		return errors.New(errstr)
 	}
 	//TODO stats
 	return nil
