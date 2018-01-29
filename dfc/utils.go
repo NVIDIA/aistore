@@ -229,6 +229,18 @@ func CalculateMD5(reader io.Reader) (csum string, errstr string) {
 	return csum, ""
 }
 
+func Maketeerw(size int64, body io.ReadCloser) (io.Reader, *bytes.Buffer) {
+	var bufsize int64
+	if size > 0 {
+		bufsize = fixedbufsize
+	} else {
+		bufsize = 0
+	}
+	buf := bytes.NewBuffer(make([]byte, bufsize))
+	rw := io.TeeReader(body, buf)
+	return rw, buf
+}
+
 //===========================================================================
 //
 // dummy io.Writer & ReadToNull() helper

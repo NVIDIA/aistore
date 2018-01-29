@@ -42,8 +42,8 @@ const (
 )
 
 const (
-	roleproxy  = "proxy"
-	roletarget = "target"
+	DeleteOP = "delete"
+	PutOP    = "put"
 )
 
 // globals
@@ -168,7 +168,9 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		url := RestAPIGet + "/" + bucket + "/" + keyname
 		t.Logf("Worker %2d: GET %q", id, url)
 		r, err := http.Get(url)
+		hmd5 := r.Header.Get("Content-MD5")
 		if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
+			t.Errorf("Failing test")
 			return
 		}
 		defer func() {
@@ -176,12 +178,18 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 				r.Body.Close()
 			}
 		}()
+		teebuf, b := dfc.Maketeerw(r.ContentLength, r.Body)
+		md5sum, errstr = dfc.CalculateMD5(teebuf)
+		if errstr != "" {
+			t.Errorf("Worker %2d: Failed to calculate MD5sum, err: %v", id, errstr)
+			return
+		}
+		r.Body = ioutil.NopCloser(b)
+		if hmd5 != md5sum {
+			t.Errorf("Worker %2d: Header MD5sum %v does not match with file's MD5 %v", hmd5, md5sum)
+			return
+		}
 		if !copy {
-			md5sum, errstr = dfc.CalculateMD5(r.Body)
-			if errstr != "" {
-				t.Errorf("Worker %2d: Failed to calculate MD5sum, err: %v", id, errstr)
-				return
-			}
 			bufreader := bufio.NewReader(r.Body)
 			bytes, err := dfc.ReadToNull(bufreader)
 			if err != nil {
@@ -191,7 +199,6 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			t.Logf("Worker %2d: Downloaded %q (size %.2f MB)", id, url, float64(bytes)/1000/1000)
 			return
 		}
-
 		// alternatively, create a local copy
 		fname := LocalRootDir + "/" + keyname
 		written, err := dfc.ReceiveFile(fname, r.Body, md5sum)
@@ -404,7 +411,7 @@ func Test_proxyput(t *testing.T) {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		fname := "/" + keyname
-		go proxyop(fname, clibucket, keyname, "put", t, wg, errch)
+		go proxyop(fname, clibucket, keyname, PutOP, t, wg, errch)
 	}
 	wg.Wait()
 	select {
@@ -420,7 +427,7 @@ func Test_proxydel(t *testing.T) {
 	for i := 0; i < numfiles; i++ {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		go proxyop("", clibucket, keyname, "delete", t, wg, errch)
+		go proxyop("", clibucket, keyname, DeleteOP, t, wg, errch)
 	}
 	wg.Wait()
 	select {

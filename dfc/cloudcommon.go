@@ -6,13 +6,11 @@
 package dfc
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 
 	"github.com/golang/glog"
@@ -117,18 +115,6 @@ func getobjto_Md5(file *os.File, fqn, objname, omd5 string, reader io.Reader) (s
 		return 0, fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
 	}
 	return size, ""
-}
-
-func maketeerw(r *http.Request) (io.Reader, *bytes.Buffer) {
-	var bufsize int64
-	if r.ContentLength > 0 {
-		bufsize = fixedbufsize
-	} else {
-		bufsize = 0
-	}
-	buf := bytes.NewBuffer(make([]byte, bufsize))
-	rw := io.TeeReader(r.Body, buf)
-	return rw, buf
 }
 
 func truncatefile(fqn string, size int64) (errstr string) {
