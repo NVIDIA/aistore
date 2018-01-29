@@ -76,10 +76,10 @@ func (cobj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg)
 }
 
 // This function download S3 object into local file.
-func (cobj *awsif) getobj(fqn, bucket, objname string) (file *os.File, err error) {
+func (cobj *awsif) getobj(fqn, bucket, objname string) (file *os.File, md5 string, err error) {
 	var errstr string
 	if file, errstr = initobj(fqn); errstr != "" {
-		return nil, errors.New(errstr)
+		return nil, "", errors.New(errstr)
 	}
 	sess := createsession()
 	s3Svc := s3.New(sess)
@@ -90,27 +90,27 @@ func (cobj *awsif) getobj(fqn, bucket, objname string) (file *os.File, err error
 	})
 	if err != nil {
 		file.Close()
-		return nil, fmt.Errorf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
+		return nil, "", fmt.Errorf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 	}
 	defer obj.Body.Close()
 	// Get ETag from object header
-	omd5, _ := strconv.Unquote(*obj.ETag)
+	md5, _ = strconv.Unquote(*obj.ETag)
 
-	size, errstr := getobjto_Md5(file, fqn, objname, omd5, obj.Body)
+	size, errstr := getobjto_Md5(file, fqn, objname, md5, obj.Body)
 	if errstr != "" {
 		file.Close()
-		return nil, errors.New(errstr)
+		return nil, "", errors.New(errstr)
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
-	return file, nil
+	return file, md5, nil
 }
 
 func (cobj *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {
 	// create local copy
 	var err error
 	size := r.ContentLength
-	teebuf, b := maketeerw(r)
+	teebuf, b := Maketeerw(size, r.Body)
 
 	sess := createsession()
 	// Create an uploader with the session and default options

@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -39,7 +40,7 @@ type gcpif struct {
 
 type cinterface interface {
 	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error
-	getobj(fqn, bucket, objname string) (file *os.File, err error)
+	getobj(fqn, bucket, objname string) (file *os.File, md5 string, err error)
 	putobj(r *http.Request, fqn, bucket, objname, md5sum string) error
 	deleteobj(bucket, objname string) error
 }
@@ -204,12 +205,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	t.statsif.add("numget", 1)
 	fqn := t.fqn(bucket, objname)
 	var file *os.File
+	var md5 string
 	_, err := os.Stat(fqn)
 	if os.IsNotExist(err) || isinvalidobj(fqn) {
 		t.statsif.add("numcoldget", 1)
 		glog.Infof("Bucket %s key %s fqn %q is not cached or invalid", bucket, objname, fqn)
 		// TODO: do getcloudif().getobj() and write http response in parallel
-		if file, err = getcloudif().getobj(fqn, bucket, objname); err != nil {
+		if file, md5, err = getcloudif().getobj(fqn, bucket, objname); err != nil {
 			glog.Errorf(err.Error())
 			webinterror(w, err.Error())
 			return
@@ -220,13 +222,26 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		ret, err := file.Seek(0, 0)
 		assert(ret == 0)
 		assert(err == nil)
-	} else if file, err = os.Open(fqn); err != nil {
-		s := fmt.Sprintf("Failed to open local file %q, err: %v", fqn, err)
-		t.statsif.add("numerr", 1)
-		invalmsghdlr(w, r, s)
-		return
+	} else {
+		file, err = os.Open(fqn)
+		if err != nil {
+			s := fmt.Sprintf("Failed to open local file %q, err: %v", fqn, err)
+			t.statsif.add("numerr", 1)
+			invalmsghdlr(w, r, s)
+			return
+		} else {
+			data, errstr := Getxattr(fqn, MD5attr)
+			if errstr != "" {
+				s := fmt.Sprintf("Failed to Get MD5 for local file %q, err: %v", fqn, errstr)
+				t.statsif.add("numerr", 1)
+				invalmsghdlr(w, r, s)
+				return
+			}
+			md5 = hex.EncodeToString(data)
+		}
 	}
 	defer file.Close()
+	w.Header().Add("Content-MD5", md5)
 	written, err := copyBuffer(w, file)
 	if err != nil {
 		glog.Errorf("Failed to copy %q to http, err: %v", fqn, err)
