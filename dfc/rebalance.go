@@ -75,18 +75,23 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 
 	// rebalance this fobject maybe
 	t := xreb.targetrunner
-	mpath, bucket, objname := t.splitfqn(fqn)
+	bucket, objname, ok := t.fqn2bckobj(fqn)
+	if !ok {
+		return fmt.Errorf("Warning: cannot rebalance [%s => %s %s]: configuration changed",
+			fqn, bucket, objname)
+
+	}
 	si := hrwTarget(bucket+"/"+objname, t.smap)
 	if si.DaemonID != t.si.DaemonID {
-		glog.Infof("rebalancing [%s %s %s] %s => %s", mpath, bucket, objname, t.si.DaemonID, si.DaemonID)
+		glog.Infof("rebalancing [%s %s] %s => %s", bucket, objname, t.si.DaemonID, si.DaemonID)
 		glog.Flush()
 		if s := xreb.targetrunner.sendfile(http.MethodPut, bucket, objname, si); s != "" {
-			glog.Infof("Failed to rebalance [%s %s %s]: %s", mpath, bucket, objname, s)
+			glog.Infof("Failed to rebalance [%s %s]: %s", bucket, objname, s)
 			glog.Flush()
 		} else {
-			// moved - remove the local one right away
+			// TODO: delay the removal or (even) rely on the LRU
 			if err := os.Remove(fqn); err != nil {
-				glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
+				glog.Errorf("Failed to delete the file %s that has moved, err: %v", fqn, err)
 			}
 		}
 	}

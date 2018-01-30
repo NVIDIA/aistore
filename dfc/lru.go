@@ -47,7 +47,7 @@ func (t *targetrunner) runLRU() {
 	}
 	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
-	fsmap := make(map[syscall.Fsid]bool, mntcnt)
+	fsmap := t.mpath2Fsid()
 
 	// init context maps to avoid insert-key races
 	for mpath := range ctx.mountpaths {
@@ -56,15 +56,9 @@ func (t *targetrunner) runLRU() {
 	}
 
 	glog.Infof("%s started, num mp-s %d", xlru.tostring(), mntcnt)
-	for _, mountpath := range ctx.mountpaths {
-		_, ok := fsmap[mountpath.Fsid]
-		if ok {
-			glog.Infof("LRU: duplicate FSID %v, mpath %q", mountpath.Fsid, mountpath.Path)
-			continue
-		}
-		fsmap[mountpath.Fsid] = true
+	for _, mpath := range fsmap {
 		fschkwg.Add(1)
-		go t.oneLRU(mountpath.Path, fschkwg, xlru)
+		go t.oneLRU(mpath, fschkwg, xlru)
 	}
 	fschkwg.Wait()
 	xlru.etime = time.Now()
@@ -72,6 +66,7 @@ func (t *targetrunner) runLRU() {
 	t.xactinp.del(xlru.id)
 }
 
+// TODO: local-buckets-first LRU policy
 func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
 	hwm := ctx.config.LRUConfig.HighWM

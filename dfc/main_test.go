@@ -12,7 +12,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
@@ -20,6 +22,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 )
@@ -39,11 +42,13 @@ const (
 	RestAPIProxyPut = ProxyURL + "/v1/files"  // version = 1, resource = files
 	RestAPITgtPut   = TargetURL + "/v1/files" // version = 1, resource = files
 	TestFile        = "/tmp/xattrfile"        // Test file for setting and getting xattr.
+	SmokeDir        = "/tmp/nvidia/smoke/"
 )
 
 const (
-	DeleteOP = "delete"
-	PutOP    = "put"
+	DeleteOP  = "delete"
+	PutOP     = "put"
+	blocksize = 1048576
 )
 
 // globals
@@ -51,8 +56,12 @@ var (
 	clibucket  string
 	numfiles   int
 	numworkers int
+	numops     int
 	match      string
 	role       string
+	fnlen      int
+	filesizes  = [3]int{131072, 1048576, 4194304}      // 128 KiB, 1MiB, 4 MiB
+	ratios     = [5]float32{0.1, 0.25, 0.5, 0.75, 0.9} // #puts / #gets
 )
 
 // worker's result
@@ -65,8 +74,68 @@ func init() {
 	flag.StringVar(&clibucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
+	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
+	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
 	flag.StringVar(&match, "match", ".*", "regex match for the keyname")
 	flag.StringVar(&role, "role", "proxy", "proxy or target")
+}
+
+func Test_smoke(t *testing.T) {
+	flag.Parse()
+	os.MkdirAll(SmokeDir, os.ModePerm) //rwxrwxrwx
+	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
+	for _, fs := range filesizes {
+		for _, r := range ratios {
+			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, fs, r, fp) })
+		}
+	}
+	close(fp)
+	//clean up all the files from the test
+	wg := &sync.WaitGroup{}
+	errch := make(chan error, 100)
+	for file := range fp {
+		err := os.Remove(SmokeDir + file)
+		if err != nil {
+			t.Error(err)
+		}
+		wg.Add(1)
+		go proxyop(SmokeDir+file, clibucket, "smoke/"+file, "delete", t, wg, errch)
+	}
+	wg.Wait()
+	select {
+	case err := <-errch:
+		t.Error(err)
+	default:
+	}
+}
+
+func oneSmoke(t *testing.T, filesize int, ratio float32, filesput chan string) {
+	// Start the worker pools
+	errch := make(chan error, 100)
+	var wg = &sync.WaitGroup{}
+	// Decide the number of each type
+	var (
+		nGet = int(float32(numworkers) * ratio)
+		nPut = numworkers - nGet
+	)
+	// Get the workers started
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		// false: read the response and drop it, true: write it to a file
+		if (i%2 == 0 && nPut > 0) || nGet == 0 {
+			go putRandomFiles(i, time.Now().UnixNano(), filesize, numops, t, wg, errch, filesput)
+			nPut--
+		} else {
+			go getRandomFiles(i, time.Now().UnixNano(), numops, t, wg, errch)
+			nGet--
+		}
+	}
+	wg.Wait()
+	select {
+	case err := <-errch:
+		t.Error(err)
+	default:
+	}
 }
 
 func Test_download(t *testing.T) {
@@ -158,6 +227,111 @@ func Test_download(t *testing.T) {
 	}
 }
 
+// fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
+const (
+	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+func fastRandomFilename(src *rand.Rand) string {
+	b := make([]byte, fnlen)
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := fnlen-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+	return string(b)
+}
+
+func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+	src := rand.NewSource(seed)
+	random := rand.New(src)
+	defer wg.Done()
+	getsGroup := &sync.WaitGroup{}
+	for i := 0; i < numGets; i++ {
+		getsGroup.Add(1)
+		var msg = &dfc.GetMsg{}
+		jsbytes, err := json.Marshal(msg)
+		if err != nil {
+			t.Errorf("Unexpected json-marshal failure, err: %v", err)
+			return
+		}
+		items := listbucket(t, clibucket, jsbytes)
+		if items == nil {
+			t.Fatal("Bucket has no items to get.")
+		}
+		files := make([]string, 0)
+		for _, it := range items.Entries {
+			// Directories retrieved from listbucket show up as files with '/' endings - this filters them out.
+			if it.Name[len(it.Name)-1] != '/' {
+				files = append(files, it.Name)
+			}
+		}
+
+		keyname := files[random.Intn(len(files)-1)]
+		t.Log("GET: " + keyname)
+		go get(keyname, getsGroup, errch, clibucket)
+	}
+	getsGroup.Wait()
+}
+
+func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand) (int, error) {
+	f, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
+	if err != nil {
+		return 0, err
+	}
+	nblocks := filesize / blocksize
+	tot := 0
+	var r int
+	for i := 0; i <= nblocks; i++ {
+		if blocksize < filesize-tot {
+			r = blocksize
+		} else {
+			r = filesize - tot
+		}
+		random.Read(bytes[0:r])
+		n, err := f.Write(bytes[0:r])
+		if err != nil {
+			return tot, err
+		} else if n < r {
+			return tot, io.ErrShortWrite
+		}
+		tot += n
+	}
+	return tot, f.Close()
+}
+
+func putRandomFiles(id int, seed int64, fileSize int, numPuts int, t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
+	src := rand.NewSource(seed)
+	random := rand.New(src)
+	defer wg.Done()
+	putsGroup := &sync.WaitGroup{}
+	buffer := make([]byte, blocksize)
+	for i := 0; i < numPuts; i++ {
+		putsGroup.Add(1)
+		//ioutil.Tempfile would be used here but it uses a mutex, which is undesirable behavior.
+		fname := fastRandomFilename(random)
+		_, err := writeRandomData(SmokeDir+fname, buffer, fileSize, random)
+		if err != nil {
+			t.Error(err)
+			errch <- err
+		}
+		// We could do Put operation while creating files, but that makes it begin all the puts immediately (because creating random files is fast compared to the listbucket call that getRandomFiles does)
+		proxyop(SmokeDir+fname, clibucket, "smoke/"+fname, "put", t, putsGroup, errch)
+		filesput <- fname
+	}
+	putsGroup.Wait()
+}
+
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
 	errch chan error, resch chan workres, bucket string) {
 	var md5sum, errstr string
@@ -245,17 +419,17 @@ func Benchmark_one(b *testing.B) {
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		go get(keyname, b, wg, errch, clibucket)
+		go get(keyname, wg, errch, clibucket)
 	}
 	wg.Wait()
 	select {
-	case <-errch:
-		b.Fail()
+	case err := <-errch:
+		b.Error(err)
 	default:
 	}
 }
 
-func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error, bucket string) {
+func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
 	defer wg.Done()
 	url := RestAPIGet + "/" + bucket + "/" + keyname
 	r, err := http.Get(url)
@@ -266,14 +440,12 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error, buc
 	}()
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
 		s := fmt.Sprintf("Failed to get key %s from bucket %s, http status %d", keyname, bucket, r.StatusCode)
-		b.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
 		}
 		return
 	}
 	if err != nil {
-		b.Error(err.Error())
 		if errch != nil {
 			errch <- err
 		}
@@ -281,7 +453,7 @@ func get(keyname string, b *testing.B, wg *sync.WaitGroup, errch chan error, buc
 	}
 	bufreader := bufio.NewReader(r.Body)
 	if _, err = dfc.ReadToNull(bufreader); err != nil {
-		b.Errorf("Failed to read http response, err: %v", err)
+		errch <- errors.New(fmt.Sprintf("Failed to read http response, err: %v", err))
 	}
 }
 
