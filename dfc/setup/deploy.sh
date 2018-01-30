@@ -18,7 +18,7 @@ ID=0
 
 PROTO="tcp"
 LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
-LOGROOT="/tmp/dfc/"
+LOGROOT="/tmp/dfc"
 ###################################
 #
 # NOTE:
@@ -28,7 +28,7 @@ LOGROOT="/tmp/dfc/"
 ###################################
 TESTFSPATHROOT="/tmp/dfc/"
 CLOUDBUCKETS="cloud"
-LOCALBUCKETS="lb"
+LOCALBUCKETS="local"
 LBCONF="localbuckets"
 CONFPATH="$HOME/.dfc"
 # CONFPATH="/etc/.dfc"
@@ -150,7 +150,7 @@ do
 	if [ $c -eq 0 ]
 	then
 			set -x
-			go run setup/dfc.go -config=$CONFFILE -role=proxy $1 $2 &
+			go run setup/dfc.go -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
 			{ set +x; } 2>/dev/null
 			# wait for the proxy to start up
 			sleep 2

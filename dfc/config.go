@@ -10,6 +10,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -73,8 +74,8 @@ type proxyconfig struct {
 }
 
 // Load and validate daemon's config
-func initconfigparam(configfile, loglevel, role string, statstime time.Duration) error {
-	getConfig(configfile)
+func initconfigparam() error {
+	getConfig(clivars.conffile)
 
 	err := flag.Lookup("log_dir").Value.Set(ctx.config.Logdir)
 	if err != nil {
@@ -90,19 +91,29 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 			ctx.config.Listen.Port, ctx.config.ID, ctx.config.Loglevel)
 	}
 	// Validate - TODO more validation
-	if ctx.config.LRUConfig.HighWM <= 0 || ctx.config.LRUConfig.LowWM <= 0 ||
-		ctx.config.LRUConfig.HighWM < ctx.config.LRUConfig.LowWM ||
-		ctx.config.LRUConfig.LowWM > 100 || ctx.config.LRUConfig.HighWM > 100 {
+	hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
+	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 		glog.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)
 		return nil
 	}
-	// CLI override
-	if statstime != 0 {
-		ctx.config.StatsTime = statstime
+	if ctx.config.TestFSP.Count == 0 {
+		for fp1 := range ctx.config.FSpaths {
+			for fp2 := range ctx.config.FSpaths {
+				if fp1 != fp2 && (strings.HasPrefix(fp1, fp2) || strings.HasPrefix(fp1, fp2)) {
+					glog.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q",
+						fp1, fp2)
+					return nil
+				}
+			}
+		}
 	}
-	if loglevel != "" {
-		err = flag.Lookup("v").Value.Set(loglevel)
-		ctx.config.Loglevel = loglevel
+	// CLI override
+	if clivars.statstime != 0 {
+		ctx.config.StatsTime = clivars.statstime
+	}
+	if clivars.loglevel != "" {
+		err = flag.Lookup("v").Value.Set(clivars.loglevel)
+		ctx.config.Loglevel = clivars.loglevel
 	} else {
 		err = flag.Lookup("v").Value.Set(ctx.config.Loglevel)
 	}
@@ -111,7 +122,7 @@ func initconfigparam(configfile, loglevel, role string, statstime time.Duration)
 		glog.Errorf("Failed to set loglevel %v", err)
 	}
 	glog.Infof("Verbosity: %s Config: %q Role: %s StatsTime %v",
-		ctx.config.Loglevel, configfile, role, ctx.config.StatsTime)
+		ctx.config.Loglevel, clivars.conffile, clivars.role, ctx.config.StatsTime)
 	return err
 }
 
