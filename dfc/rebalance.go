@@ -75,7 +75,12 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 
 	// rebalance this fobject maybe
 	t := xreb.targetrunner
-	bucket, objname := t.fqn2bckobj(fqn)
+	bucket, objname, ok := t.fqn2bckobj(fqn)
+	if !ok {
+		return fmt.Errorf("Warning: cannot rebalance [%s => %s %s]: configuration changed",
+			fqn, bucket, objname)
+
+	}
 	si := hrwTarget(bucket+"/"+objname, t.smap)
 	if si.DaemonID != t.si.DaemonID {
 		glog.Infof("rebalancing [%s %s] %s => %s", bucket, objname, t.si.DaemonID, si.DaemonID)

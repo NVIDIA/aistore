@@ -45,6 +45,11 @@ type cinterface interface {
 	deleteobj(bucket, objname string) error
 }
 
+type mountPath struct {
+	Path string
+	Fsid syscall.Fsid
+}
+
 //===========================================================================
 //
 // target runner
@@ -85,11 +90,12 @@ func (t *targetrunner) run() error {
 	}
 	// local mp-s have precedence over cachePath
 	ctx.mountpaths = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	if ctx.config.TestFSP.Count == 0 {
-		fspath2mpath()
+	if t.testingFSPpaths() {
+		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
+		t.testCachepathMounts()
 	} else {
-		glog.Infof("Warning: configuring %d mp-s for testing", ctx.config.TestFSP.Count)
-		testCachepathMounts()
+		t.fspath2mpath()
+		t.mpath2Fsid() // enforce FS uniqueness
 	}
 
 	// init per-mp usage stats
@@ -209,7 +215,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	_, err := os.Stat(fqn)
 	if os.IsNotExist(err) || isinvalidobj(fqn) {
 		t.statsif.add("numcoldget", 1)
-		glog.Infof("Bucket %s key %s fqn %q is not cached or invalid", bucket, objname, fqn)
+		glog.Infof("Cold GET: bucket %s object %s", bucket, objname)
 		// TODO: do getcloudif().getobj() and write http response in parallel
 		if file, md5, err = getcloudif().getobj(fqn, bucket, objname); err != nil {
 			glog.Errorf(err.Error())
@@ -248,7 +254,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		t.statsif.add("numerr", 1)
 	} else if glog.V(3) {
-		glog.Infof("Copied %q to http(%.2f MB)", fqn, float64(written)/1000/1000)
+		glog.Infof("GET: sent %q (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	glog.Flush()
 }
@@ -404,39 +410,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 //
 func (t *targetrunner) fqn(bucket, objname string) string {
 	mpath := hrwMpath(bucket + "/" + objname)
-	if t.islocal(bucket) {
+	if t.islocalBucket(bucket) {
 		return mpath + "/" + ctx.config.LocalBuckets + "/" + bucket + "/" + objname
 	}
 	return mpath + "/" + ctx.config.CloudBuckets + "/" + bucket + "/" + objname
-}
-
-func (t *targetrunner) islocal(bucket string) bool {
-	_, ok := t.lbmap.LBmap[bucket]
-	return ok
-}
-
-func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string) {
-	fn := func(path string) bool {
-		if strings.HasPrefix(fqn, path) {
-			rempath := fqn[len(path):]
-			items := strings.SplitN(rempath, "/", 2)
-			bucket, objname = items[0], items[1]
-			assert(len(objname) > 0)
-			return true
-		}
-		return false
-	}
-	for mpath := range ctx.mountpaths {
-		if fn(mpath + "/" + ctx.config.CloudBuckets + "/") {
-			return
-		}
-		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
-			assert(t.islocal(bucket))
-			return
-		}
-	}
-	assert(false)
-	return
 }
 
 //===========================
@@ -562,15 +539,43 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 //==============================================================================
 //
-// fspath -- mpath
+// target's utilities and helpers
 //
 //==============================================================================
-type mountPath struct {
-	Path string
-	Fsid syscall.Fsid
+func (t *targetrunner) islocalBucket(bucket string) bool {
+	_, ok := t.lbmap.LBmap[bucket]
+	return ok
 }
 
-func fspath2mpath() {
+func (t *targetrunner) testingFSPpaths() bool {
+	return ctx.config.TestFSP.Count > 0
+}
+
+func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) {
+	fn := func(path string) bool {
+		if strings.HasPrefix(fqn, path) {
+			rempath := fqn[len(path):]
+			items := strings.SplitN(rempath, "/", 2)
+			bucket, objname = items[0], items[1]
+			return true
+		}
+		return false
+	}
+	for mpath := range ctx.mountpaths {
+		if fn(mpath + "/" + ctx.config.CloudBuckets + "/") {
+			ok = len(objname) > 0
+			return
+		}
+		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
+			assert(t.islocalBucket(bucket))
+			ok = len(objname) > 0
+			return
+		}
+	}
+	return
+}
+
+func (t *targetrunner) fspath2mpath() {
 	for fp := range ctx.config.FSpaths {
 		if _, err := os.Stat(fp); err != nil {
 			glog.Fatalf("fspath %q does not exist, err: %v", fp, err)
@@ -588,7 +593,7 @@ func fspath2mpath() {
 }
 
 // create local directories to test multiple fspaths
-func testCachepathMounts() {
+func (t *targetrunner) testCachepathMounts() {
 	var instpath string
 	if ctx.config.TestFSP.Instance > 0 {
 		instpath = ctx.config.TestFSP.Root + strconv.Itoa(ctx.config.TestFSP.Instance) + "/"
@@ -597,7 +602,12 @@ func testCachepathMounts() {
 		instpath = ctx.config.TestFSP.Root
 	}
 	for i := 0; i < ctx.config.TestFSP.Count; i++ {
-		mpath := instpath + strconv.Itoa(i)
+		var mpath string
+		if ctx.config.TestFSP.Count > 1 {
+			mpath = instpath + strconv.Itoa(i+1)
+		} else {
+			mpath = instpath[0 : len(instpath)-1]
+		}
 		if err := CreateDir(mpath); err != nil {
 			glog.Errorf("Failed to create test cache dir %q, err: %v", mpath, err)
 			return
@@ -612,4 +622,19 @@ func testCachepathMounts() {
 		assert(!ok)
 		ctx.mountpaths[mp.Path] = mp
 	}
+}
+
+func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
+	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths))
+	for _, mountpath := range ctx.mountpaths {
+		mp2, ok := fsmap[mountpath.Fsid]
+		if ok {
+			if !t.testingFSPpaths() {
+				glog.Fatalf("Duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
+			}
+			continue
+		}
+		fsmap[mountpath.Fsid] = mountpath.Path
+	}
+	return
 }
