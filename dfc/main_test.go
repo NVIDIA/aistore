@@ -74,7 +74,7 @@ func init() {
 	flag.StringVar(&clibucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
-	flag.IntVar(&numops, "numops", 8, "Number of PUT/GET per worker")
+	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
 	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
 	flag.StringVar(&match, "match", ".*", "regex match for the keyname")
 	flag.StringVar(&role, "role", "proxy", "proxy or target")

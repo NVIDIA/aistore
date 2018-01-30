@@ -40,9 +40,6 @@ func initobj(fqn string) (file *os.File, errstr string) {
 		file.Close()
 		return nil, errstr
 	}
-	if glog.V(3) {
-		glog.Infof("Created and initialized file %s", fqn)
-	}
 	return file, ""
 }
 
@@ -106,7 +103,7 @@ func getobjto_Md5(file *os.File, fqn, objname, omd5 string, reader io.Reader) (s
 		}
 		return 0, fmt.Sprintf("Object's %s MD5 %s... does not match %s (MD5 %s...)", objname, omd5[:8], fqn, fmd5[:8])
 	} else if glog.V(3) {
-		glog.Infof("Downloaded and validated %s as %s", objname, fqn)
+		glog.Infof("GET: %s downloaded and validated", fqn)
 	}
 	if err = finalizeobj(fqn, hashInBytes); err != nil {
 		file.Close()

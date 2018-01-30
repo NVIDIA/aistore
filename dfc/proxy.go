@@ -457,12 +457,14 @@ const (
 // TODO: proxy.stop() must terminate this routine
 func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	aval := time.Now().Unix()
+	startingUp := ntargets > 0
+
 	if !atomic.CompareAndSwapInt64(&p.syncmapinp, 0, aval) {
 		glog.Infof("synchronizeMaps is already running")
 		return
 	}
 	defer atomic.CompareAndSwapInt64(&p.syncmapinp, aval, 0)
-	if ntargets > 0 {
+	if startingUp {
 		time.Sleep(syncmapsdelay)
 	}
 	ctx.smap.lock()
@@ -492,7 +494,7 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 		if smapversion != smv {
 			smapversion = smv
 			// if provided, use ntargets as a hint
-			if ntargets > 0 {
+			if startingUp {
 				ctx.smap.lock()
 				ntargets_cur = ctx.smap.count()
 				ctx.smap.unlock()
@@ -514,10 +516,10 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 		if action == Rebalance {
 			p.httpcluput_smap(Rebalance) // REST cmd
 		} else if ctx.smap.syncversion != smapversion {
-			if ntargets == 0 {
-				p.httpcluput_smap(Rebalance) // auto-rebalance
-			} else {
+			if startingUp {
 				p.httpcluput_smap(Rsyncsmap)
+			} else {
+				p.httpcluput_smap(Rebalance) // NOTE: auto-rebalance
 			}
 		}
 		break
