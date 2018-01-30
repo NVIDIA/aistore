@@ -121,7 +121,6 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, filesput chan string) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		// false: read the response and drop it, true: write it to a file
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			go putRandomFiles(i, baseseed+int64(i), filesize, numops, t, wg, errch, filesput)
 			nPut--
@@ -220,6 +219,63 @@ func Test_download(t *testing.T) {
 			errch <- errors.New(s)
 		}
 	}
+	select {
+	case <-errch:
+		t.Fail()
+	default:
+	}
+}
+
+func Test_delete(t *testing.T) {
+	flag.Parse()
+
+	// Declare one channel per worker to pass the keyname
+	keyname_chans := make([]chan string, numworkers)
+	for i := 0; i < numworkers; i++ {
+		// Allow a bunch of messages at a time to be written asynchronously to a channel
+		keyname_chans[i] = make(chan string, 100)
+	}
+	// Start the worker pools
+	errch := make(chan error, 100)
+	var wg = &sync.WaitGroup{}
+	// Get the workers started
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		go deleteFiles(keyname_chans[i], t, wg, errch, clibucket)
+	}
+
+	// list the bucket
+	var msg = &dfc.GetMsg{}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marshal failure, err: %v", err)
+		return
+	}
+	reslist := listbucket(t, clibucket, jsbytes)
+	if reslist == nil {
+		return
+	}
+	re, rerr := regexp.Compile(match)
+	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
+		return
+	}
+	// match
+	var num int
+	for _, entry := range reslist.Entries {
+		name := entry.Name
+		if !re.MatchString(name) {
+			continue
+		}
+		keyname_chans[num%numworkers] <- name
+		if num++; num >= numfiles {
+			break
+		}
+	}
+	// Close the channels after the reading is done
+	for i := 0; i < numworkers; i++ {
+		close(keyname_chans[i])
+	}
+	wg.Wait()
 	select {
 	case <-errch:
 		t.Fail()
@@ -389,6 +445,16 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 	// Send information back
 	resch <- res
 	close(resch)
+}
+
+func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch chan error, bucket string) {
+	defer wg.Done()
+	dwg := &sync.WaitGroup{}
+	for keyname := range keynames {
+		dwg.Add(1)
+		go proxyop(keyname, bucket, keyname, "delete", t, dwg, errch)
+	}
+	dwg.Wait()
 }
 
 func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
