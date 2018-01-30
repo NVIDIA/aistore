@@ -26,18 +26,19 @@ const (
 	xkeepalive  = "keepalive"
 )
 
-//====================
-//
-// global
-//
-//====================
-var ctx = &daemon{}
-
 //======
 //
 // types
 //
 //======
+type cliVars struct {
+	role      string
+	conffile  string
+	loglevel  string
+	statstime time.Duration
+	ntargets  int
+}
+
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smap struct {
 	Smap        map[string]*daemonInfo `json:"smap"`
@@ -96,6 +97,14 @@ type rungroup struct {
 
 type gstopError struct {
 }
+
+//====================
+//
+// globals
+//
+//====================
+var ctx = &daemon{}
+var clivars = &cliVars{}
 
 //====================
 //
@@ -242,35 +251,33 @@ func (ge *gstopError) Error() string {
 //==================
 func dfcinit() {
 	// CLI to override dfc JSON config
-	var (
-		role      string
-		conffile  string
-		loglevel  string
-		statstime time.Duration
-	)
-	flag.StringVar(&role, "role", "", "role: proxy OR target")
-	flag.StringVar(&conffile, "config", "", "config filename")
-	flag.StringVar(&loglevel, "loglevel", "", "glog loglevel")
-	flag.DurationVar(&statstime, "statstime", 0, "http and capacity utilization statistics log interval")
+	flag.StringVar(&clivars.role, "role", "", "role: proxy OR target")
+	flag.StringVar(&clivars.conffile, "config", "", "config filename")
+	flag.StringVar(&clivars.loglevel, "loglevel", "", "glog loglevel")
+	flag.DurationVar(&clivars.statstime, "statstime", 0, "http and capacity utilization statistics log interval")
+	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 
 	flag.Parse()
-	if conffile == "" {
+	if clivars.conffile == "" {
 		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|target> -config=<json> [...]\n")
 		os.Exit(2)
 	}
-	assert(role == xproxy || role == xtarget, "Invalid flag: role="+role)
-	if err := initconfigparam(conffile, loglevel, role, statstime); err != nil {
-		glog.Fatalf("Failed to initialize, config %q, err: %v", conffile, err)
+	if err := initconfigparam(); err != nil {
+		glog.Fatalf("Failed to initialize, config %q, err: %v", clivars.conffile, err)
 	}
-	assert(role == xproxy || role == xtarget, "Invalid configuration: role="+role)
 
 	// init daemon
 	ctx.rg = &rungroup{
 		runarr: make([]runner, 0, 4),
 		runmap: make(map[string]runner),
 	}
-	if role == xproxy {
-		confdir := filepath.Dir(conffile)
+	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
+	if clivars.role == xproxy {
+		if clivars.ntargets <= 0 {
+			glog.Fatalf("Unspecified or invalid number (%d) of storage targets (a hint for the http proxy)",
+				clivars.ntargets)
+		}
+		confdir := filepath.Dir(clivars.conffile)
 		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8), mutex: &sync.Mutex{}}
 		ctx.rg.add(&proxyrunner{confdir: confdir}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)

@@ -64,7 +64,7 @@ func (p *proxyrunner) run() error {
 	p.lbmap.unlock()
 
 	// startup: sync local buckets and cluster map when the latter stabilizes
-	go p.synchronizeMaps(true)
+	go p.synchronizeMaps(clivars.ntargets, "")
 
 	//
 	// REST API: register proxy handlers and start listening
@@ -269,7 +269,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	localSave(lbpathname, p.lbmap)
 	p.lbmap.unlock()
 
-	go p.synchronizeMaps(false)
+	go p.synchronizeMaps(0, "")
 }
 
 //===========================
@@ -376,7 +376,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("Registered target ID %s (count %d)", si.DaemonID, ctx.smap.count())
 	}
-	go p.synchronizeMaps(false)
+	go p.synchronizeMaps(0, "")
 }
 
 // unregisters a target
@@ -406,7 +406,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("Unregistered target {%s} (count %d)", sid, ctx.smap.count())
 	}
-	go p.synchronizeMaps(false)
+	go p.synchronizeMaps(0, "")
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
@@ -437,11 +437,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	case ActSyncSmap:
 		fallthrough
 	case ActionRebalance:
-		if ctx.smap.syncversion == ctx.smap.Version {
-			glog.Infof("Smap (v%d) is already in sync with the targets", ctx.smap.syncversion)
-			return
-		}
-		go p.synchronizeMaps(false)
+		go p.synchronizeMaps(0, msg.Action)
 
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
@@ -455,27 +451,25 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //
 //========================
 const (
-	syncmapsdelay        = time.Second * 3
-	maxsyncmapsdelay     = time.Second * 10
-	syncmapsstartupdelay = time.Second * 7
+	syncmapsdelay = time.Second * 3
 )
 
 // TODO: proxy.stop() must terminate this routine
-func (p *proxyrunner) synchronizeMaps(startingup bool) {
+func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	aval := time.Now().Unix()
 	if !atomic.CompareAndSwapInt64(&p.syncmapinp, 0, aval) {
 		glog.Infof("synchronizeMaps is already running")
 		return
 	}
 	defer atomic.CompareAndSwapInt64(&p.syncmapinp, aval, 0)
-
-	if startingup {
-		time.Sleep(syncmapsstartupdelay)
+	if ntargets > 0 {
+		time.Sleep(syncmapsdelay)
 	}
 	ctx.smap.lock()
 	p.lbmap.lock()
 	lbversion := p.lbmap.version()
 	smapversion := ctx.smap.version()
+	ntargets_cur := ctx.smap.count()
 	delay := syncmapsdelay
 	if lbversion == p.lbmap.syncversion && smapversion == ctx.smap.syncversion {
 		glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync with the targets",
@@ -486,7 +480,6 @@ func (p *proxyrunner) synchronizeMaps(startingup bool) {
 	}
 	p.lbmap.unlock()
 	ctx.smap.unlock()
-	smapversion_orig := smapversion
 	time.Sleep(time.Second)
 	for {
 		lbv := p.lbmap.versionLocked()
@@ -498,21 +491,34 @@ func (p *proxyrunner) synchronizeMaps(startingup bool) {
 		smv := ctx.smap.versionLocked()
 		if smapversion != smv {
 			smapversion = smv
-			// NOTE: double the sleep when the targets keep (un)registering
-			//       - but only to a point
-			if delay < maxsyncmapsdelay {
-				delay += delay
+			// if provided, use ntargets as a hint
+			if ntargets > 0 {
+				ctx.smap.lock()
+				ntargets_cur = ctx.smap.count()
+				ctx.smap.unlock()
+				if ntargets_cur >= ntargets {
+					glog.Infof("Reached the expected number %d (%d) of target registrations",
+						ntargets, ntargets_cur)
+					glog.Flush()
+				}
+			} else {
+				time.Sleep(delay)
+				continue
 			}
-			time.Sleep(delay)
-			continue
 		}
 		// finally:
 		// change in the cluster map warrants the broadcast of every other config that
 		// must be shared across the cluster;
 		// the opposite it not true though, that's why the check below
 		p.httpfilput_lb()
-		if smapversion_orig != smapversion {
-			p.httpcluput_smap(Rsyncsmap)
+		if action == Rebalance {
+			p.httpcluput_smap(Rebalance) // REST cmd
+		} else if ctx.smap.syncversion != smapversion {
+			if ntargets == 0 {
+				p.httpcluput_smap(Rebalance) // auto-rebalance
+			} else {
+				p.httpcluput_smap(Rsyncsmap)
+			}
 		}
 		break
 	}
@@ -542,7 +548,6 @@ func (p *proxyrunner) httpcluput_smap(action string) {
 			return
 		}
 	}
-	ctx.smap.syncversion = ctx.smap.Version
 }
 
 func (p *proxyrunner) httpfilput_lb() {
@@ -561,5 +566,4 @@ func (p *proxyrunner) httpfilput_lb() {
 			return
 		}
 	}
-	p.lbmap.syncversion = p.lbmap.Version
 }

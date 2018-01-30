@@ -72,6 +72,7 @@ func (t *targetrunner) runLRU() {
 	t.xactinp.del(xlru.id)
 }
 
+// TODO: local-buckets-first LRU policy
 func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
 	hwm := ctx.config.LRUConfig.HighWM
