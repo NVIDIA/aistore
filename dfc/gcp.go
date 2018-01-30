@@ -31,14 +31,9 @@ func getProjID() (string, string) {
 
 func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
 	glog.Infof("listbucket %s", bucket)
-	projid, errstr := getProjID()
-	if projid == "" {
-		return webinterror(w, errstr)
-	}
-	gctx := context.Background()
-	client, err := storage.NewClient(gctx)
+	client, gctx, err := createclient()
 	if err != nil {
-		glog.Fatal(err)
+		return err
 	}
 	it := client.Bucket(bucket).Objects(gctx, nil)
 
@@ -85,70 +80,78 @@ func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg)
 	return nil
 }
 
-// FIXME: revisit error processing
-func (cobj *gcpif) getobj(w http.ResponseWriter, fqn string, bucket string, objname string) (file *os.File, err error) {
+// Initialize and create storage client
+func createclient() (*storage.Client, context.Context, error) {
 	projid, errstr := getProjID()
 	if projid == "" {
-		return nil, webinterror(w, errstr)
+		return nil, nil, errors.New(errstr)
 	}
 	gctx := context.Background()
 	client, err := storage.NewClient(gctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to initialize client, err: %v", err)
-		return nil, webinterror(w, errstr)
+		return nil, nil, fmt.Errorf("Failed to create client, err: %v", err)
+	}
+	return client, gctx, nil
+}
+
+// FIXME: revisit error processing
+func (cobj *gcpif) getobj(fqn string, bucket string, objname string) (file *os.File, err error) {
+	var errstr string
+	client, gctx, err := createclient()
+	if err != nil {
+		return nil, err
 	}
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to get attributes for object %s from bucket %s, err: %v", objname, bucket, err)
-		return nil, webinterror(w, errstr)
+		return nil, fmt.Errorf(
+			"Failed to get attributes for object %s from bucket %s, err: %v",
+			objname, bucket, err)
 	}
 	omd5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create rc for object %s to file %q, err: %v", objname, fqn, err)
-		return nil, webinterror(w, errstr)
+		return nil, fmt.Errorf(
+			"Failed to create rc for object %s to file %s, err: %v",
+			objname, fqn, err)
 	}
 	defer rc.Close()
 	if file, errstr = initobj(fqn); errstr != "" {
-		return nil, webinterror(w, errstr)
+		return nil, errors.New(errstr)
 	}
 	size, errstr := getobjto_Md5(file, fqn, objname, omd5, rc)
 	if errstr != "" {
-		return nil, webinterror(w, errstr)
+		file.Close()
+		return nil, errors.New(errstr)
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
 	return file, nil
 }
 
-func (cobj *gcpif) putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, objname, md5sum string) error {
+func (cobj *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {
+	if glog.V(3) {
+		glog.Infof("Put bucket %s object %s", bucket, objname)
+	}
 	size := r.ContentLength
 	teebuf, b := maketeerw(r)
-	projid, errstr := getProjID()
-	if projid == "" {
-		return webinterror(w, errstr)
-	}
-	gctx := context.Background()
-	client, err := storage.NewClient(gctx)
+	client, gctx, err := createclient()
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to create client for bucket %s object %s , err: %v",
-			bucket, objname, err)
-		return webinterror(w, errstr)
+		return err
 	}
-
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
 	defer wc.Close()
 	_, err = copyBuffer(wc, teebuf)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to upload object %s into bucket %s , err: %v", objname, bucket, err)
-		return webinterror(w, errstr)
+		return fmt.Errorf(
+			"Failed to upload object %s into bucket %s , err: %v",
+			objname, bucket, err)
 	}
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {
-		glog.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
-		return err
+		return fmt.Errorf("Failed to write to file %s bytes written %v, err : %v",
+			fqn, written, err)
 	}
 	if size > 0 {
 		errstr := truncatefile(fqn, size)
@@ -156,6 +159,24 @@ func (cobj *gcpif) putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, o
 			glog.Errorf(errstr)
 			return errors.New(errstr)
 		}
+	}
+	//TODO stats
+	return nil
+}
+
+func (cobj *gcpif) deleteobj(bucket, objname string) error {
+	if glog.V(3) {
+		glog.Infof("Delete bucket %s object %s", bucket, objname)
+	}
+	client, gctx, err := createclient()
+	if err != nil {
+		return err
+	}
+	o := client.Bucket(bucket).Object(objname)
+	err = o.Delete(gctx)
+	if err != nil {
+		return fmt.Errorf("Failed to delete object %s from bucket %s, err: %v",
+			objname, bucket, err)
 	}
 	//TODO stats
 	return nil

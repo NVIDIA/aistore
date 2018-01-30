@@ -76,10 +76,10 @@ func (cobj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg)
 }
 
 // This function download S3 object into local file.
-func (cobj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (file *os.File, err error) {
+func (cobj *awsif) getobj(fqn, bucket, objname string) (file *os.File, err error) {
 	var errstr string
 	if file, errstr = initobj(fqn); errstr != "" {
-		return nil, webinterror(w, errstr)
+		return nil, errors.New(errstr)
 	}
 	sess := createsession()
 	s3Svc := s3.New(sess)
@@ -89,9 +89,8 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (f
 		Key:    aws.String(objname),
 	})
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 		file.Close()
-		return nil, webinterror(w, errstr)
+		return nil, fmt.Errorf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 	}
 	defer obj.Body.Close()
 	// Get ETag from object header
@@ -99,14 +98,15 @@ func (cobj *awsif) getobj(w http.ResponseWriter, fqn, bucket, objname string) (f
 
 	size, errstr := getobjto_Md5(file, fqn, objname, omd5, obj.Body)
 	if errstr != "" {
-		return nil, webinterror(w, errstr)
+		file.Close()
+		return nil, errors.New(errstr)
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
 	return file, nil
 }
 
-func (cobj *awsif) putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, objname, md5sum string) error {
+func (cobj *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {
 	// create local copy
 	var err error
 	size := r.ContentLength
@@ -123,23 +123,37 @@ func (cobj *awsif) putobj(r *http.Request, w http.ResponseWriter, fqn, bucket, o
 		Body:   teebuf,
 	})
 	if err != nil {
-		glog.Errorf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
-		return webinterror(w, err.Error())
+		return fmt.Errorf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
 	}
 	glog.Infof("Uploaded object %s into bucket %s", objname, bucket)
 
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {
-		glog.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
-		return err
+		return fmt.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
 	}
 	if size > 0 {
 		errstr := truncatefile(fqn, size)
 		if errstr != "" {
-			glog.Errorf(errstr)
 			return errors.New(errstr)
 		}
+	}
+	//TODO stats
+	return nil
+}
+func (cobj *awsif) deleteobj(bucket, objname string) error {
+	var err error
+
+	sess := createsession()
+	// Create S3 service client
+	svc := s3.New(sess)
+	// Delete the item
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
+	if err != nil {
+		return fmt.Errorf("Failed to delete key %s from bucket %s, err: %v", objname, bucket, err)
+	}
+	if glog.V(3) {
+		glog.Infof("Deleted object %s from bucket %s", objname, bucket)
 	}
 	//TODO stats
 	return nil

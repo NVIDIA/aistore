@@ -396,7 +396,7 @@ func Test_xattr(t *testing.T) {
 	_ = os.Remove(f)
 	file.Close()
 }
-func Test_put(t *testing.T) {
+func Test_proxyput(t *testing.T) {
 	flag.Parse()
 	var wg = &sync.WaitGroup{}
 	errch := make(chan error, 100)
@@ -404,7 +404,23 @@ func Test_put(t *testing.T) {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		fname := "/" + keyname
-		go put(fname, role, clibucket, keyname, t, wg, errch)
+		go proxyop(fname, clibucket, keyname, "put", t, wg, errch)
+	}
+	wg.Wait()
+	select {
+	case <-errch:
+		t.Fail()
+	default:
+	}
+}
+func Test_proxydel(t *testing.T) {
+	flag.Parse()
+	var wg = &sync.WaitGroup{}
+	errch := make(chan error, 100)
+	for i := 0; i < numfiles; i++ {
+		wg.Add(1)
+		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
+		go proxyop("", clibucket, keyname, "delete", t, wg, errch)
 	}
 	wg.Wait()
 	select {
@@ -414,59 +430,43 @@ func Test_put(t *testing.T) {
 	}
 }
 
-func put(fname, role, bucket string, keyname string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+//tgturl = RestAPITgtPut + "/" + bucket + "/" + keyname
+func proxyop(fname string, bucket string, keyname string, op string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	var tgturl, errstr string
 	defer wg.Done()
-	if role == roletarget {
-		tgturl = RestAPITgtPut + "/" + bucket + "/" + keyname
-	} else {
-		proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-		t.Logf("Proxy PUT %q", proxyurl)
-		tgturl, errstr = sendhttprq(fname, proxyurl, role)
-		if errstr != "" {
-			goto puterr
-		}
-		role = roletarget
-	}
-	_, errstr = sendhttprq(fname, tgturl, role)
+	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
+	t.Logf("Proxy URL %q", proxyurl)
+	tgturl, errstr = gettargeturl(proxyurl)
 	if errstr != "" {
-		goto puterr
+		goto proxyoperr
+	}
+	switch op {
+	case "put":
+		errstr = puttotgt(fname, tgturl)
+		if errstr != "" {
+			goto proxyoperr
+		}
+	case "delete":
+		errstr = deleteontgt(fname, tgturl)
+		if errstr != "" {
+			goto proxyoperr
+		}
 	}
 	return
-puterr:
+proxyoperr:
 	t.Error(errstr)
 	if errch != nil {
 		errch <- errors.New(errstr)
 	}
 	return
 }
-
-func sendhttprq(fname string, rqurl string, role string) (url string, errstr string) {
-	file, err := os.Open(fname)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to open file %s, err: %v", fname, err)
-		return "", errstr
-	}
-	defer file.Close()
+func gettargeturl(rqurl string) (url string, errstr string) {
 	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPut, rqurl, file)
+
+	req, err := http.NewRequest(http.MethodDelete, rqurl, nil)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to create new http request, err: %v", err)
 		return "", errstr
-	}
-	// Calculate MD5 only for target nodes
-	if role == roletarget {
-		md5, errstr1 := dfc.CalculateMD5(file)
-		if errstr1 != "" {
-			errstr = fmt.Sprintf("Failed to calculate MD5 sum for file %s", fname)
-			return "", errstr
-		}
-		req.Header.Set("Content-MD5", md5)
-		_, err = file.Seek(0, 0)
-		if err != nil {
-			errstr = fmt.Sprintf("Failed to seek file %s, err: %v", fname, err)
-			return "", errstr
-		}
 	}
 	r, err := client.Do(req)
 	if r != nil {
@@ -478,15 +478,72 @@ func sendhttprq(fname string, rqurl string, role string) (url string, errstr str
 			return
 		}
 		r.Body.Close()
-		if role == roleproxy {
-			url = string(returl)
-		} else {
-			url = ""
-		}
-		errstr = ""
+		url = string(returl)
 	} else {
-		errstr = fmt.Sprintf("Failed to get proxy put response, err %v", err)
+		errstr = fmt.Sprintf("Failed to get proxy response, err %v", err)
 		url = ""
 	}
 	return url, errstr
+}
+
+func puttotgt(fname string, rqurl string) (errstr string) {
+	errstr = ""
+	file, err := os.Open(fname)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to open file %s, err: %v", fname, err)
+		return errstr
+	}
+	defer file.Close()
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodPut, rqurl, file)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to create new http request, err: %v", err)
+		return errstr
+	}
+	md5, errstr1 := dfc.CalculateMD5(file)
+	if errstr1 != "" {
+		errstr = fmt.Sprintf("Failed to calculate MD5 sum for file %s, err: %s", fname, errstr1)
+		return errstr
+	}
+	req.Header.Set("Content-MD5", md5)
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to seek file %s, err: %v", fname, err)
+		return errstr
+	}
+	r, err := client.Do(req)
+	if r != nil {
+		_, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			errstr = fmt.Sprintf("Failed to read response content, err %v", err)
+			r.Body.Close()
+			return errstr
+		}
+		r.Body.Close()
+	} else {
+		errstr = fmt.Sprintf("Failed to get proxy put response, err %v", err)
+	}
+	return errstr
+}
+func deleteontgt(fname string, rqurl string) (errstr string) {
+	errstr = ""
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodDelete, rqurl, nil)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to create new http request, err: %v", err)
+		return errstr
+	}
+	r, err := client.Do(req)
+	if r != nil {
+		_, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			errstr = fmt.Sprintf("Failed to read response content, err %v", err)
+			r.Body.Close()
+			return errstr
+		}
+		r.Body.Close()
+	} else {
+		errstr = fmt.Sprintf("Failed to get delete response, err %v", err)
+	}
+	return errstr
 }
