@@ -84,9 +84,12 @@ func Test_smoke(t *testing.T) {
 	flag.Parse()
 	os.MkdirAll(SmokeDir, os.ModePerm) //rwxrwxrwx
 	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
+	bs := int64(baseseed)
 	for _, fs := range filesizes {
 		for _, r := range ratios {
-			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, fs, r, fp) })
+
+			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, fs, r, bs, fp) })
+			bs += int64(numworkers + 1)
 		}
 	}
 	close(fp)
@@ -109,7 +112,7 @@ func Test_smoke(t *testing.T) {
 	}
 }
 
-func oneSmoke(t *testing.T, filesize int, ratio float32, filesput chan string) {
+func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput chan string) {
 	// Start the worker pools
 	errch := make(chan error, 100)
 	var wg = &sync.WaitGroup{}
@@ -122,10 +125,10 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, filesput chan string) {
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
-			go putRandomFiles(i, baseseed+int64(i), filesize, numops, t, wg, errch, filesput)
+			go func(i int) { putRandomFiles(i, bseed+int64(i), filesize, numops, t, wg, errch, filesput) }(i)
 			nPut--
 		} else {
-			go getRandomFiles(i, baseseed+int64(i), numops, t, wg, errch)
+			go func(i int) { getRandomFiles(i, bseed+int64(i), numops, t, wg, errch) }(i)
 			nGet--
 		}
 	}
