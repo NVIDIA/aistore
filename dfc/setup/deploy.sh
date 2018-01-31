@@ -143,6 +143,16 @@ do
 EOL
 done
 
+# Set the following glog CLI to change the logging defaults:
+#
+# -logtostderr=false
+#	Logs are written to standard error instead of to files.
+# -alsologtostderr=false
+#	Logs are written to standard error as well as to files.
+# -stderrthreshold=ERROR
+#	Log events at or above this severity are logged to standard
+#	error as well as to files.
+
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do

@@ -33,6 +33,7 @@ func assert(cond bool, args ...interface{}) {
 			message += fmt.Sprintf("%#v ", args[i])
 		}
 	}
+	glog.Flush()
 	glog.Fatalln(message)
 }
 
@@ -92,12 +93,14 @@ func ReceiveFile(fname string, rrbody io.ReadCloser, md5sum string) (written int
 		return 0, err
 	}
 	written, err = copyBuffer(file, rrbody)
-	err2 := file.Close()
-	if err == nil && err2 != nil {
-		err = err2
+	errclose := file.Close()
+	if err == nil && errclose != nil {
+		err = errclose
+	}
+	if err != nil {
 		return written, err
 	}
-	// set extended attributes
+	// set xattr md5
 	err = finalizeobj(fname, []byte(md5sum))
 	if err != nil {
 		return written, err
@@ -169,28 +172,18 @@ func Createfile(fname string) (*os.File, error) {
 
 // Get specific attribute for specified path.
 func Getxattr(path string, attrname string) ([]byte, string) {
-	// find size.
-	size, err := syscall.Getxattr(path, attrname, nil)
+	data := make([]byte, 1024)
+	read, err := syscall.Getxattr(path, attrname, data)
+	assert(read < 1024) // FIXME:
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
-			path, attrname, err)
-		return nil, errstr
+		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, path, err)
 	}
-	if size > 0 {
-		data := make([]byte, size)
-		read, err := syscall.Getxattr(path, attrname, data)
-		if err != nil {
-			errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
-				path, attrname, err)
-			return nil, errstr
-		}
-		return data[:read], ""
-	}
-	return []byte{}, ""
+	return data[:read], ""
 }
 
 // Set specific named attribute for specific path.
 func Setxattr(path string, attrname string, data []byte) (errstr string) {
+	assert(len(data) < 1024) // FIXME: hardcode
 	err := syscall.Setxattr(path, attrname, data, 0)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to set extended attr for path %s attr %s, err: %v",

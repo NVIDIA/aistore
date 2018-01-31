@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -136,7 +137,6 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-
 	bucket, objname := apitems[0], ""
 	if len(apitems) > 1 {
 		objname = apitems[1]
@@ -148,9 +148,14 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var si *daemonInfo
-	// for bucket listing - any (random) target will do
 	if len(objname) == 0 {
 		p.statsif.add("numlist", 1)
+		// local bucket - proxy does the job
+		if p.islocalBucket(bucket) {
+			p.listbucket(w, r, bucket)
+			return
+		}
+		// cloud bucket - any (random) target will do
 		for _, si = range ctx.smap.Smap { // see the spec for "map iteration order"
 			break
 		}
@@ -174,6 +179,41 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		//       original JSON payload (GetMsg - see REST.go)
 		http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 	}
+}
+
+// FIXME: crude..
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+	var allentries = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
+	listmsgjson, err := ioutil.ReadAll(r.Body)
+	errclose := r.Body.Close()
+	assert(errclose == nil)
+
+	// FIXME: re-un-marshaling here and elsewhere
+	for _, si := range ctx.smap.Smap {
+		url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
+		outjson, err := p.call(url, r.Method, listmsgjson) // forward as is
+		if err != nil {
+			s := fmt.Sprintf("Failed to call target %s (is it alive?)", url)
+			invalmsghdlr(w, r, s)
+			p.statsif.add("numerr", 1)
+			return
+		}
+		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
+		if err = json.Unmarshal(outjson, &entries); err != nil {
+			invalmsghdlr(w, r, string(outjson))
+			p.statsif.add("numerr", 1)
+			return
+		}
+		if len(entries.Entries) == 0 {
+			continue
+		}
+		// FIXME: variadic may not scale well
+		allentries.Entries = append(allentries.Entries, entries.Entries...)
+	}
+	jsbytes, err := json.Marshal(&allentries)
+	assert(err == nil, err)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsbytes)
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)
@@ -339,8 +379,11 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 			p.keepalive.checknow <- err
 			return
 		}
-		err = json.Unmarshal(outjson, &stats)
-		assert(err == nil, err)
+		if err = json.Unmarshal(outjson, &stats); err != nil {
+			invalmsghdlr(w, r, string(outjson))
+			p.statsif.add("numerr", 1)
+			return
+		}
 	}
 	jsbytes, err := json.Marshal(&out)
 	assert(err == nil, err)
@@ -568,4 +611,13 @@ func (p *proxyrunner) httpfilput_lb() {
 			return
 		}
 	}
+}
+
+//===================
+//
+//===================
+// FIXME: move to httpcommon
+func (p *proxyrunner) islocalBucket(bucket string) bool {
+	_, ok := p.lbmap.LBmap[bucket]
+	return ok
 }

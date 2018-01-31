@@ -199,10 +199,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	// list the bucket and return
 	//
 	if len(objname) == 0 {
-		t.statsif.add("numlist", 1)
-		var msg GetMsg
-		t.readJSON(w, r, &msg)
-		getcloudif().listbucket(w, bucket, &msg)
+		t.listbucket(w, r, bucket)
 		return
 	}
 	//
@@ -257,6 +254,69 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("GET: sent %q (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	glog.Flush()
+}
+
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+	msg := &GetMsg{}
+	if t.readJSON(w, r, msg) != nil {
+		return
+	}
+	if !t.islocalBucket(bucket) {
+		getcloudif().listbucket(w, bucket, msg)
+		t.statsif.add("numlist", 1)
+		return
+	}
+	// local bucket
+	// TODO: subdirectories
+	allfinfos := make([]os.FileInfo, 0, 128)
+	for mpath := range ctx.mountpaths {
+		for bucket := range t.lbmap.LBmap {
+			localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
+			finfos, err := ioutil.ReadDir(localbucketfqn)
+			if err != nil {
+				glog.Errorf("Failed to read dir %s", localbucketfqn)
+			} else if len(finfos) > 0 {
+				// FIXME: variadic may not scale well
+				allfinfos = append(allfinfos, finfos...)
+			}
+		}
+	}
+	t.statsif.add("numlist", 1)
+	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(allfinfos))}
+	for _, fi := range allfinfos {
+		entry := &BucketEntry{}
+		entry.Name = fi.Name()
+		if strings.Contains(msg.GetProps, GetPropsSize) {
+			entry.Size = fi.Size()
+		}
+		if strings.Contains(msg.GetProps, GetPropsCtime) {
+			t := fi.ModTime()
+			switch msg.GetTimeFormat {
+			case "":
+				fallthrough
+			case RFC822:
+				entry.Ctime = t.Format(time.RFC822)
+			default:
+				entry.Ctime = t.Format(msg.GetTimeFormat)
+			}
+		}
+		if strings.Contains(msg.GetProps, GetPropsChecksum) {
+			fqn := t.fqn(bucket, fi.Name()) // FIXME: won't work for nested dirs
+			md5hex, errstr := Getxattr(fqn, MD5attr)
+			if errstr != "" {
+				glog.Infoln(errstr)
+			} else {
+				md5 := hex.EncodeToString(md5hex)
+				entry.Checksum = md5
+			}
+		}
+		// TODO: other GetMsg props TBD
+		reslist.Entries = append(reslist.Entries, entry)
+	}
+	jsbytes, err := json.Marshal(reslist)
+	assert(err == nil, err)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsbytes)
 }
 
 // "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
@@ -450,7 +510,9 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{lbmap}' /v1/daemon/localbuckets
 	if len(apitems) > 0 && apitems[0] == Rsynclb {
-		t.readJSON(w, r, t.lbmap)
+		if t.readJSON(w, r, t.lbmap) != nil {
+			return
+		}
 		glog.Infof("lbmap: %+v", t.lbmap)
 		for mpath := range ctx.mountpaths {
 			for bucket := range t.lbmap.LBmap {

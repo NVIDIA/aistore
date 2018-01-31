@@ -44,6 +44,7 @@ func invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string) {
 	s := http.StatusText(http.StatusBadRequest) + ": " + specific
 	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
 	glog.Errorln(s)
+	glog.Flush()
 	http.Error(w, s, http.StatusBadRequest)
 }
 
@@ -51,6 +52,7 @@ func invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string) {
 // FIXME: numerr - differentiate
 func webinterror(w http.ResponseWriter, errstr string) error {
 	glog.Errorln(errstr)
+	glog.Flush()
 	http.Error(w, errstr, http.StatusInternalServerError)
 	stats := getstorstats()
 	stats.add("numerr", 1)
@@ -168,7 +170,7 @@ func (r *httprunner) call(url string, method string, injson []byte) (outjson []b
 	}
 	response, err = r.httpclient.Do(request)
 	if err != nil {
-		glog.Errorf("Failed to execute http call(%s), err: %v", url, err)
+		glog.Errorf("Failed to execute http call(%s %s), err: %v", method, url, err)
 		return nil, err
 	}
 	assert(response != nil, "Unexpected: nil response in presense of no error")
@@ -230,7 +232,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 
 func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	b, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
+	errclose := r.Body.Close()
+	if err == nil && errclose != nil {
+		err = errclose
+	}
 	if err == nil {
 		err = json.Unmarshal(b, out)
 	}

@@ -465,7 +465,7 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
 			t.Fatalf("http connection refused - terminating")
 		}
-		s := fmt.Sprintf("Failed %s, err: %v", str, err)
+		s := fmt.Sprintf("%s, err: %v", str, err)
 		t.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
@@ -473,7 +473,7 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 		return true
 	}
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		s := fmt.Sprintf("Failed %s, http status %d", str, r.StatusCode)
+		s := fmt.Sprintf("%s, http status %d", str, r.StatusCode)
 		t.Error(s)
 		if errch != nil {
 			errch <- errors.New(s)
@@ -547,7 +547,11 @@ func Test_list(t *testing.T) {
 	}
 	if !copy {
 		for _, m := range reslist.Entries {
-			fmt.Fprintf(os.Stdout, "%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum[:8]+"...")
+			if len(m.Checksum) > 8 {
+				fmt.Fprintf(os.Stdout, "%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum[:8]+"...")
+			} else {
+				fmt.Fprintf(os.Stdout, "%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum)
+			}
 		}
 		return
 	}
@@ -600,10 +604,12 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 	var reslist = &dfc.BucketList{}
 	reslist.Entries = make([]*dfc.BucketEntry, 0, 1000)
 	b, err := ioutil.ReadAll(r.Body)
+	r.Body.Close()
+
 	if err == nil {
 		err = json.Unmarshal(b, reslist)
 		if err != nil {
-			t.Errorf("Failed to json-unmarshal, err: %v", err)
+			t.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
 			return nil
 		}
 	} else {
