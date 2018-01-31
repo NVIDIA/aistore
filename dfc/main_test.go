@@ -316,27 +316,28 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
+	var msg = &dfc.GetMsg{}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marshal failure, err: %v", err)
+		return
+	}
 	for i := 0; i < numGets; i++ {
-		var msg = &dfc.GetMsg{}
-		jsbytes, err := json.Marshal(msg)
-		if err != nil {
-			t.Errorf("Unexpected json-marshal failure, err: %v", err)
-			return
-		}
 		items := listbucket(t, clibucket, jsbytes)
 		if items == nil {
 			t.Fatal("Bucket has no items to get.")
 		}
 		files := make([]string, 0)
 		for _, it := range items.Entries {
-			// Directories retrieved from listbucket show up as files with '/' endings - this filters them out.
+			// Directories retrieved from listbucket show up as files with '/' endings -
+			// this filters them out.
 			if it.Name[len(it.Name)-1] != '/' {
 				files = append(files, it.Name)
 			}
 		}
 		keyname := files[random.Intn(len(files)-1)]
 		if testing.Verbose() {
-			fmt.Println("GET: " + keyname)
+			fmt.Fprintln(os.Stdout, "GET: "+keyname)
 		}
 		getsGroup.Add(1)
 		go get(keyname, getsGroup, errch, clibucket)
@@ -370,14 +371,14 @@ func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand
 	return tot, f.Close()
 }
 
-func putRandomFiles(id int, seed int64, fileSize int, numPuts int, t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
+func putRandomFiles(id int, seed int64, fileSize int, numPuts int,
+	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
 	defer wg.Done()
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	putsGroup := &sync.WaitGroup{}
 	buffer := make([]byte, blocksize)
 	for i := 0; i < numPuts; i++ {
-		//ioutil.Tempfile would be used here but it uses a mutex, which is undesirable behavior.
 		fname := fastRandomFilename(random)
 		_, err := writeRandomData(SmokeDir+fname, buffer, fileSize, random)
 		if err != nil {
@@ -385,7 +386,9 @@ func putRandomFiles(id int, seed int64, fileSize int, numPuts int, t *testing.T,
 			errch <- err
 		}
 		putsGroup.Add(1)
-		// We could do Put operation while creating files, but that makes it begin all the puts immediately (because creating random files is fast compared to the listbucket call that getRandomFiles does)
+		// We could PUT while creating files, but that makes it
+		// begin all the puts immediately (because creating random files is fast
+		// compared to the listbucket call that getRandomFiles does)
 		proxyop(SmokeDir+fname, clibucket, "smoke/"+fname, "put", t, putsGroup, errch)
 		filesput <- fname
 	}
@@ -691,7 +694,7 @@ func proxyop(fname string, bucket string, keyname string, op string, t *testing.
 	defer wg.Done()
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
 	if testing.Verbose() {
-		fmt.Printf("Proxy %s: %q\n", op, proxyurl)
+		fmt.Fprintf(os.Stdout, "Proxy %s: %q\n", op, proxyurl)
 	}
 	tgturl, errstr = gettargeturl(proxyurl)
 	if errstr != "" {
