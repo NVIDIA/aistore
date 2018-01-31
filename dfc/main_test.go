@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 )
@@ -49,6 +48,7 @@ const (
 	DeleteOP  = "delete"
 	PutOP     = "put"
 	blocksize = 1048576
+	baseseed  = 1062984096
 )
 
 // globals
@@ -61,7 +61,7 @@ var (
 	role       string
 	fnlen      int
 	filesizes  = [3]int{131072, 1048576, 4194304}      // 128 KiB, 1MiB, 4 MiB
-	ratios     = [5]float32{0.1, 0.25, 0.5, 0.75, 0.9} // #puts / #gets
+	ratios     = [5]float32{0.1, 0.25, 0.5, 0.75, 0.9} // #gets / #puts
 )
 
 // worker's result
@@ -121,12 +121,11 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, filesput chan string) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		// false: read the response and drop it, true: write it to a file
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
-			go putRandomFiles(i, time.Now().UnixNano(), filesize, numops, t, wg, errch, filesput)
+			go putRandomFiles(i, baseseed+int64(i), filesize, numops, t, wg, errch, filesput)
 			nPut--
 		} else {
-			go getRandomFiles(i, time.Now().UnixNano(), numops, t, wg, errch)
+			go getRandomFiles(i, baseseed+int64(i), numops, t, wg, errch)
 			nGet--
 		}
 	}
@@ -227,6 +226,63 @@ func Test_download(t *testing.T) {
 	}
 }
 
+func Test_delete(t *testing.T) {
+	flag.Parse()
+
+	// Declare one channel per worker to pass the keyname
+	keyname_chans := make([]chan string, numworkers)
+	for i := 0; i < numworkers; i++ {
+		// Allow a bunch of messages at a time to be written asynchronously to a channel
+		keyname_chans[i] = make(chan string, 100)
+	}
+	// Start the worker pools
+	errch := make(chan error, 100)
+	var wg = &sync.WaitGroup{}
+	// Get the workers started
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		go deleteFiles(keyname_chans[i], t, wg, errch, clibucket)
+	}
+
+	// list the bucket
+	var msg = &dfc.GetMsg{}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marshal failure, err: %v", err)
+		return
+	}
+	reslist := listbucket(t, clibucket, jsbytes)
+	if reslist == nil {
+		return
+	}
+	re, rerr := regexp.Compile(match)
+	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
+		return
+	}
+	// match
+	var num int
+	for _, entry := range reslist.Entries {
+		name := entry.Name
+		if !re.MatchString(name) {
+			continue
+		}
+		keyname_chans[num%numworkers] <- name
+		if num++; num >= numfiles {
+			break
+		}
+	}
+	// Close the channels after the reading is done
+	for i := 0; i < numworkers; i++ {
+		close(keyname_chans[i])
+	}
+	wg.Wait()
+	select {
+	case <-errch:
+		t.Fail()
+	default:
+	}
+}
+
 // fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
 const (
 	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -253,12 +309,11 @@ func fastRandomFilename(src *rand.Rand) string {
 }
 
 func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+	defer wg.Done()
 	src := rand.NewSource(seed)
 	random := rand.New(src)
-	defer wg.Done()
 	getsGroup := &sync.WaitGroup{}
 	for i := 0; i < numGets; i++ {
-		getsGroup.Add(1)
 		var msg = &dfc.GetMsg{}
 		jsbytes, err := json.Marshal(msg)
 		if err != nil {
@@ -276,9 +331,11 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 				files = append(files, it.Name)
 			}
 		}
-
 		keyname := files[random.Intn(len(files)-1)]
-		t.Log("GET: " + keyname)
+		if testing.Verbose() {
+			fmt.Println("GET: " + keyname)
+		}
+		getsGroup.Add(1)
 		go get(keyname, getsGroup, errch, clibucket)
 	}
 	getsGroup.Wait()
@@ -311,13 +368,12 @@ func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand
 }
 
 func putRandomFiles(id int, seed int64, fileSize int, numPuts int, t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
+	defer wg.Done()
 	src := rand.NewSource(seed)
 	random := rand.New(src)
-	defer wg.Done()
 	putsGroup := &sync.WaitGroup{}
 	buffer := make([]byte, blocksize)
 	for i := 0; i < numPuts; i++ {
-		putsGroup.Add(1)
 		//ioutil.Tempfile would be used here but it uses a mutex, which is undesirable behavior.
 		fname := fastRandomFilename(random)
 		_, err := writeRandomData(SmokeDir+fname, buffer, fileSize, random)
@@ -325,6 +381,7 @@ func putRandomFiles(id int, seed int64, fileSize int, numPuts int, t *testing.T,
 			t.Error(err)
 			errch <- err
 		}
+		putsGroup.Add(1)
 		// We could do Put operation while creating files, but that makes it begin all the puts immediately (because creating random files is fast compared to the listbucket call that getRandomFiles does)
 		proxyop(SmokeDir+fname, clibucket, "smoke/"+fname, "put", t, putsGroup, errch)
 		filesput <- fname
@@ -388,6 +445,16 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 	// Send information back
 	resch <- res
 	close(resch)
+}
+
+func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch chan error, bucket string) {
+	defer wg.Done()
+	dwg := &sync.WaitGroup{}
+	for keyname := range keynames {
+		dwg.Add(1)
+		go proxyop(keyname, bucket, keyname, "delete", t, dwg, errch)
+	}
+	dwg.Wait()
 }
 
 func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
@@ -614,7 +681,9 @@ func proxyop(fname string, bucket string, keyname string, op string, t *testing.
 	var tgturl, errstr string
 	defer wg.Done()
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-	t.Logf("Proxy URL %q", proxyurl)
+	if testing.Verbose() {
+		fmt.Printf("Proxy %s: %q\n", op, proxyurl)
+	}
 	tgturl, errstr = gettargeturl(proxyurl)
 	if errstr != "" {
 		goto proxyoperr
