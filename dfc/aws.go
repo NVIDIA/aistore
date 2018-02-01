@@ -76,34 +76,38 @@ func (cobj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg)
 }
 
 // This function download S3 object into local file.
-func (cobj *awsif) getobj(fqn, bucket, objname string) (file *os.File, md5 string, err error) {
-	var errstr string
+func (cobj *awsif) getobj(fqn, bucket, objname string) (errstr string) {
+	var (
+		file *os.File
+		size int64
+	)
 	if file, errstr = initobj(fqn); errstr != "" {
-		return nil, "", errors.New(errstr)
+		return
 	}
 	sess := createsession()
 	s3Svc := s3.New(sess)
-
 	obj, err := s3Svc.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
 	})
 	if err != nil {
 		file.Close()
-		return nil, "", fmt.Errorf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
+		return fmt.Sprintf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
 	}
 	defer obj.Body.Close()
-	// Get ETag from object header
-	md5, _ = strconv.Unquote(*obj.ETag)
-
-	size, errstr := getobjto_Md5(file, fqn, objname, md5, obj.Body)
-	if errstr != "" {
+	// ETag => MD5
+	md5, _ := strconv.Unquote(*obj.ETag)
+	if size, errstr = getobjto_Md5(file, fqn, objname, md5, obj.Body); errstr != "" {
 		file.Close()
-		return nil, "", errors.New(errstr)
+		return
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
-	return file, md5, nil
+
+	if err = file.Close(); err != nil {
+		return fmt.Sprintf("Failed to close downloaded file %s, err: %v", fqn, err)
+	}
+	return ""
 }
 
 func (cobj *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {

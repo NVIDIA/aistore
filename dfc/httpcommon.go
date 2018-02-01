@@ -40,12 +40,16 @@ func errmsgRestAPI(s string, r *http.Request) string {
 	return s
 }
 
-func invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string) {
+func invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string, other ...interface{}) {
 	s := http.StatusText(http.StatusBadRequest) + ": " + specific
 	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
 	glog.Errorln(s)
 	glog.Flush()
-	http.Error(w, s, http.StatusBadRequest)
+	status := http.StatusBadRequest
+	if len(other) > 0 {
+		status = other[0].(int)
+	}
+	http.Error(w, s, status)
 }
 
 // FIXME: http.StatusInternalServerError - here and elsewehere

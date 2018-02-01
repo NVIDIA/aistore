@@ -95,38 +95,42 @@ func createclient() (*storage.Client, context.Context, error) {
 }
 
 // FIXME: revisit error processing
-func (cobj *gcpif) getobj(fqn string, bucket string, objname string) (file *os.File, md5 string, err error) {
-	var errstr string
+func (cobj *gcpif) getobj(fqn string, bucket string, objname string) (errstr string) {
+	var (
+		file *os.File
+		size int64
+	)
 	client, gctx, err := createclient()
 	if err != nil {
-		return nil, "", err
+		return err.Error()
 	}
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		return nil, "", fmt.Errorf(
-			"Failed to get attributes for object %s from bucket %s, err: %v",
+		return fmt.Sprintf("Failed to get attributes for object %s from bucket %s, err: %v",
 			objname, bucket, err)
 	}
-	md5 = hex.EncodeToString(attrs.MD5)
+	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		return nil, "", fmt.Errorf(
-			"Failed to create rc for object %s to file %s, err: %v",
+		return fmt.Sprintf("Failed to create rc for object %s to file %s, err: %v",
 			objname, fqn, err)
 	}
 	defer rc.Close()
 	if file, errstr = initobj(fqn); errstr != "" {
-		return nil, "", errors.New(errstr)
+		return
 	}
-	size, errstr := getobjto_Md5(file, fqn, objname, md5, rc)
-	if errstr != "" {
+	if size, errstr = getobjto_Md5(file, fqn, objname, md5, rc); errstr != "" {
 		file.Close()
-		return nil, "", errors.New(errstr)
+		return
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
-	return file, md5, nil
+
+	if err = file.Close(); err != nil {
+		return fmt.Sprintf("Failed to close downloaded file %s, err: %v", fqn, err)
+	}
+	return ""
 }
 
 func (cobj *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {

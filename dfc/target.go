@@ -40,7 +40,7 @@ type gcpif struct {
 
 type cinterface interface {
 	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error
-	getobj(fqn, bucket, objname string) (file *os.File, md5 string, err error)
+	getobj(fqn, bucket, objname string) (errstr string)
 	putobj(r *http.Request, fqn, bucket, objname, md5sum string) error
 	deleteobj(bucket, objname string) error
 }
@@ -185,13 +185,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	bucket, objname := apitems[0], ""
+	bucket, objname, errstr := apitems[0], "", ""
 	if len(apitems) > 1 {
 		objname = apitems[1]
 	}
 	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		invalmsghdlr(w, r, s)
+		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		invalmsghdlr(w, r, errstr)
 		t.statsif.add("numerr", 1)
 		return
 	}
@@ -205,53 +205,71 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	//
 	// get the object from the bucket
 	//
-	t.statsif.add("numget", 1)
 	fqn := t.fqn(bucket, objname)
-	var file *os.File
-	var md5 string
+	coldget := false
 	_, err := os.Stat(fqn)
-	if os.IsNotExist(err) || isinvalidobj(fqn) {
-		t.statsif.add("numcoldget", 1)
-		glog.Infof("Cold GET: bucket %s object %s", bucket, objname)
-		// TODO: do getcloudif().getobj() and write http response in parallel
-		if file, md5, err = getcloudif().getobj(fqn, bucket, objname); err != nil {
-			glog.Errorf(err.Error())
-			webinterror(w, err.Error())
-			return
-		}
-		//
-		// NOTE: alternatively: close it, handle errors, and if ok reopen for read
-		//
-		ret, err := file.Seek(0, 0)
-		assert(ret == 0)
-		assert(err == nil)
-	} else {
-		file, err = os.Open(fqn)
-		if err != nil {
-			s := fmt.Sprintf("Failed to open local file %q, err: %v", fqn, err)
+	if err != nil {
+		switch {
+		case os.IsNotExist(err):
+			coldget = true
+		case os.IsPermission(err):
+			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
+			invalmsghdlr(w, r, errstr, http.StatusForbidden)
 			t.statsif.add("numerr", 1)
-			invalmsghdlr(w, r, s)
 			return
-		} else {
-			data, errstr := Getxattr(fqn, MD5attr)
-			if errstr != "" {
-				s := fmt.Sprintf("Failed to Get MD5 for local file %q, err: %v", fqn, errstr)
-				t.statsif.add("numerr", 1)
-				invalmsghdlr(w, r, s)
-				return
-			}
-			md5 = hex.EncodeToString(data)
+		default:
+			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
+			invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+			t.statsif.add("numerr", 1)
+			return
 		}
 	}
+	t.statsif.add("numget", 1)
+	if !coldget && isinvalidobj(fqn) {
+		glog.Warningf("Warning: %s has an invalid checksum and will be overridden", fqn)
+		coldget = true
+	}
+	if coldget {
+		t.statsif.add("numcoldget", 1)
+		glog.Infof("Cold GET: bucket %s object %s", bucket, objname)
+		if errstr := getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+			invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+			t.statsif.add("numerr", 1)
+			return
+		}
+	}
+	//
+	// sendfile
+	//
+	file, err := os.Open(fqn)
+	if err != nil {
+		if os.IsPermission(err) {
+			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
+			invalmsghdlr(w, r, errstr, http.StatusForbidden)
+		} else {
+			errstr = fmt.Sprintf("Failed to open local file %s, err: %v", fqn, err)
+			invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+		}
+		t.statsif.add("numerr", 1)
+		return
+	}
 	defer file.Close()
+	md5binary, errstr := Getxattr(fqn, MD5attr)
+	if errstr != "" {
+		s := fmt.Sprintf("Failed to Get MD5 for local file %q, err: %v", fqn, errstr)
+		t.statsif.add("numerr", 1)
+		invalmsghdlr(w, r, s)
+		return
+	}
+	md5 := hex.EncodeToString(md5binary)
 	w.Header().Add("Content-MD5", md5)
 	written, err := copyBuffer(w, file)
 	if err != nil {
-		glog.Errorf("Failed to copy %q to http, err: %v", fqn, err)
+		glog.Errorf("Failed to send file %s, err: %v", fqn, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		t.statsif.add("numerr", 1)
 	} else if glog.V(3) {
-		glog.Infof("GET: sent %q (%.2f MB)", fqn, float64(written)/1000/1000)
+		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	glog.Flush()
 }
