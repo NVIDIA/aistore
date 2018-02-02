@@ -88,7 +88,7 @@ func (t *targetrunner) run() error {
 			return err
 		}
 	}
-	// local mp-s have precedence over cachePath
+	// fill-in mpaths
 	ctx.mountpaths = make(map[string]*mountPath, len(ctx.config.FSpaths))
 	if t.testingFSPpaths() {
 		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
@@ -96,6 +96,16 @@ func (t *targetrunner) run() error {
 	} else {
 		t.fspath2mpath()
 		t.mpath2Fsid() // enforce FS uniqueness
+	}
+	for mpath := range ctx.mountpaths {
+		cloudbctsfqn := mpath + "/" + ctx.config.CloudBuckets
+		if err := CreateDir(cloudbctsfqn); err != nil {
+			glog.Fatalf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
+		}
+		localbctsfqn := mpath + "/" + ctx.config.LocalBuckets
+		if err := CreateDir(localbctsfqn); err != nil {
+			glog.Fatalf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
+		}
 	}
 
 	// init per-mp usage stats
@@ -559,31 +569,42 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 }
 func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, apitems []string) {
 	curversion := t.smap.Version
-	var smap *Smap
-	if t.readJSON(w, r, &smap) != nil {
+	var newsmap *Smap
+	if t.readJSON(w, r, &newsmap) != nil {
 		return
 	}
-	if curversion == smap.Version {
+	if curversion == newsmap.Version {
 		return
 	}
-	if curversion > smap.Version {
-		glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, smap.Version)
+	if curversion > newsmap.Version {
+		glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, newsmap.Version)
 		return
 	}
-	glog.Infof("%s: got new version %d (old %d)", apitems[0], smap.Version, curversion)
-	var existentialQ bool // to assert
-	for id, si := range smap.Smap {
+	glog.Infof("%s: new Smap version %d (old %d)", apitems[0], newsmap.Version, curversion)
+
+	// 1. check whether this target is present in the new Smap
+	// 2. log
+	// 3. nothing to rebalance if the new map is a strict subset of the old
+	existentialQ, isSubset := false, true
+	for id, si := range newsmap.Smap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
 			glog.Infoln("target:", si, "<= self")
 		} else {
 			glog.Infoln("target:", si)
 		}
+		if _, ok := t.smap.Smap[id]; !ok {
+			isSubset = false
+		}
 	}
-	glog.Flush()
 	assert(existentialQ)
-	t.smap = smap
+
+	t.smap = newsmap
 	if apitems[0] == Rsyncsmap {
+		return
+	}
+	if isSubset {
+		glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
 		return
 	}
 	// xaction
@@ -661,11 +682,11 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) 
 func (t *targetrunner) fspath2mpath() {
 	for fp := range ctx.config.FSpaths {
 		if _, err := os.Stat(fp); err != nil {
-			glog.Fatalf("fspath %q does not exist, err: %v", fp, err)
+			glog.Fatalf("FATAL: fspath %q does not exist, err: %v", fp, err)
 		}
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(fp, &statfs); err != nil {
-			glog.Fatalf("Failed to statfs fspath %q, err: %v", fp, err)
+			glog.Fatalf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
 		}
 
 		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
@@ -692,12 +713,12 @@ func (t *targetrunner) testCachepathMounts() {
 			mpath = instpath[0 : len(instpath)-1]
 		}
 		if err := CreateDir(mpath); err != nil {
-			glog.Errorf("Failed to create test cache dir %q, err: %v", mpath, err)
+			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
 			return
 		}
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(mpath, &statfs); err != nil {
-			glog.Fatalf("Failed to statfs mp %q, err: %v", mpath, err)
+			glog.Fatalf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
 			return
 		}
 		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
@@ -713,7 +734,7 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
 			if !t.testingFSPpaths() {
-				glog.Fatalf("Duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
+				glog.Fatalf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
 			}
 			continue
 		}
