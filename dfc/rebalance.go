@@ -23,8 +23,12 @@ func (t *targetrunner) runRebalance() {
 		return
 	}
 	glog.Infof("%s started", xreb.tostring())
-	for _, mountpath := range ctx.mountpaths {
-		aborted := t.oneRebalance(mountpath.Path, xreb)
+	for mpath := range ctx.mountpaths {
+		aborted := t.oneRebalance(mpath+"/"+ctx.config.CloudBuckets, xreb)
+		if aborted {
+			break
+		}
+		aborted = t.oneRebalance(mpath+"/"+ctx.config.LocalBuckets, xreb)
 		if aborted {
 			break
 		}
@@ -55,10 +59,9 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 		return err
 	}
 	// skip system files and directories
-	if strings.HasPrefix(osfi.Name(), ".") || osfi.Mode().IsDir() {
+	if osfi.Mode().IsDir() {
 		return nil
 	}
-
 	// abort?
 	select {
 	case <-xreb.abrt:
@@ -72,12 +75,11 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 	if xreb.finished() {
 		return fmt.Errorf("%s aborted - exiting rewalkf", xreb.tostring())
 	}
-
 	// rebalance this fobject maybe
 	t := xreb.targetrunner
 	bucket, objname, ok := t.fqn2bckobj(fqn)
 	if !ok {
-		return fmt.Errorf("Warning: cannot rebalance [%s => %s %s]: configuration changed",
+		return fmt.Errorf("Warning: cannot rebalance (%q => bucket=%s,object=%s) - fspath config changed?",
 			fqn, bucket, objname)
 
 	}
