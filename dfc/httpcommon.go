@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html"
 	"io/ioutil"
@@ -28,39 +27,28 @@ const (
 	requesttimeout = 5 * time.Second // http timeout
 )
 
-// FIXME: revisit the following 3 methods, and make consistent
+//===========
+//
+// interfaces
+//
+//===========
+type cloudif interface {
+	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string)
+	getobj(fqn, bucket, objname string) (errstr string)
+	putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string)
+	deleteobj(bucket, objname string) (errstr string)
+}
+
+//===========
+//
+// generic bad-request http handler
+//
+//===========
 func invalhdlr(w http.ResponseWriter, r *http.Request) {
-	s := errmsgRestAPI(http.StatusText(http.StatusBadRequest), r)
+	s := http.StatusText(http.StatusBadRequest)
+	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
 	glog.Errorln(s)
 	http.Error(w, s, http.StatusBadRequest)
-}
-
-func errmsgRestAPI(s string, r *http.Request) string {
-	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
-	return s
-}
-
-func invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string, other ...interface{}) {
-	s := http.StatusText(http.StatusBadRequest) + ": " + specific
-	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
-	glog.Errorln(s)
-	glog.Flush()
-	status := http.StatusBadRequest
-	if len(other) > 0 {
-		status = other[0].(int)
-	}
-	http.Error(w, s, status)
-}
-
-// FIXME: http.StatusInternalServerError - here and elsewehere
-// FIXME: numerr - differentiate
-func webinterror(w http.ResponseWriter, errstr string) error {
-	glog.Errorln(errstr)
-	glog.Flush()
-	http.Error(w, errstr, http.StatusInternalServerError)
-	stats := getstorstats()
-	stats.add("numerr", 1)
-	return errors.New(errstr)
 }
 
 //===========================================================================
@@ -210,8 +198,7 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	if len(apitems) > 0 && ver != "" {
 		if apitems[0] != ver {
 			s := fmt.Sprintf("Invalid API version: %s (expecting %s)", apitems[0], ver)
-			h.statsif.add("numerr", 1)
-			invalmsghdlr(w, r, s)
+			h.invalmsghdlr(w, r, s)
 			return nil
 		}
 		apitems = apitems[1:]
@@ -219,16 +206,14 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	if len(apitems) > 0 && res != "" {
 		if apitems[0] != res {
 			s := fmt.Sprintf("Invalid API resource: %s (expecting %s)", apitems[0], res)
-			h.statsif.add("numerr", 1)
-			invalmsghdlr(w, r, s)
+			h.invalmsghdlr(w, r, s)
 			return nil
 		}
 		apitems = apitems[1:]
 	}
 	if len(apitems) < n {
 		s := fmt.Sprintf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
-		h.statsif.add("numerr", 1)
-		invalmsghdlr(w, r, s)
+		h.invalmsghdlr(w, r, s)
 		return nil
 	}
 	return apitems
@@ -245,9 +230,26 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 	}
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		h.statsif.add("numerr", 1)
-		invalmsghdlr(w, r, s)
+		h.invalmsghdlr(w, r, s)
 		return err
 	}
 	return nil
+}
+
+//=================
+//
+// http err + spec message + code + stats
+//
+//=================
+func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string, other ...interface{}) {
+	s := http.StatusText(http.StatusBadRequest) + ": " + specific
+	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+	glog.Errorln(s)
+	glog.Flush()
+	status := http.StatusBadRequest
+	if len(other) > 0 {
+		status = other[0].(int)
+	}
+	http.Error(w, s, status)
+	h.statsif.add("numerr", 1)
 }

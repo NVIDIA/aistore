@@ -127,10 +127,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if ctx.smap.count() < 1 {
-		s := errmsgRestAPI("No registered targets yet", r)
-		glog.Errorln(s)
-		http.Error(w, s, http.StatusServiceUnavailable)
-		p.statsif.add("numerr", 1)
+		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
 	apitems := p.restAPIItems(r.URL.Path, 5)
@@ -143,8 +140,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.Contains(bucket, "/") {
 		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		invalmsghdlr(w, r, s)
-		p.statsif.add("numerr", 1)
+		p.invalmsghdlr(w, r, s)
 		return
 	}
 	var si *daemonInfo
@@ -194,14 +190,12 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		outjson, err := p.call(url, r.Method, listmsgjson) // forward as is
 		if err != nil {
 			s := fmt.Sprintf("Failed to call target %s (is it alive?)", url)
-			invalmsghdlr(w, r, s)
-			p.statsif.add("numerr", 1)
+			p.invalmsghdlr(w, r, s)
 			return
 		}
 		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
 		if err = json.Unmarshal(outjson, &entries); err != nil {
-			invalmsghdlr(w, r, string(outjson))
-			p.statsif.add("numerr", 1)
+			p.invalmsghdlr(w, r, string(outjson))
 			return
 		}
 		if len(entries.Entries) == 0 {
@@ -271,8 +265,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	lbucket := apitems[0]
 	if strings.Contains(lbucket, "/") {
 		s := fmt.Sprintf("Invalid local bucket name %s (contains '/')", lbucket)
-		invalmsghdlr(w, r, s)
-		p.statsif.add("numerr", 1)
+		p.invalmsghdlr(w, r, s)
 		return
 	}
 	var msg ActionMsg
@@ -285,8 +278,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 		p.lbmap.lock()
 		if !p.lbmap.add(lbucket) {
 			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
-			invalmsghdlr(w, r, s)
-			p.statsif.add("numerr", 1)
+			p.invalmsghdlr(w, r, s)
 			p.lbmap.unlock()
 			return
 		}
@@ -294,8 +286,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 		p.lbmap.lock()
 		if !p.lbmap.del(lbucket) {
 			s := fmt.Sprintf("Local bucket %s does not exist, nothing to remove", lbucket)
-			invalmsghdlr(w, r, s)
-			p.statsif.add("numerr", 1)
+			p.invalmsghdlr(w, r, s)
 			p.lbmap.unlock()
 			return
 		}
@@ -303,7 +294,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 		p.lbmap.lock()
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
-		invalmsghdlr(w, r, s)
+		p.invalmsghdlr(w, r, s)
 		return
 	}
 	localSave(lbpathname, p.lbmap)
@@ -357,7 +348,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		p.httpclugetstats(w, r, getstatsmsg)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
-		invalmsghdlr(w, r, s)
+		p.invalmsghdlr(w, r, s)
 	}
 }
 
@@ -380,8 +371,7 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 			return
 		}
 		if err = json.Unmarshal(outjson, &stats); err != nil {
-			invalmsghdlr(w, r, string(outjson))
-			p.statsif.add("numerr", 1)
+			p.invalmsghdlr(w, r, string(outjson))
 			return
 		}
 	}
@@ -402,10 +392,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if net.ParseIP(si.NodeIPAddr) == nil {
-		s := "Cannot register: invalid target IP " + si.NodeIPAddr
-		s = errmsgRestAPI(s, r)
-		glog.Errorln(s)
-		http.Error(w, s, http.StatusBadRequest)
+		s := fmt.Sprintf("cannot register target: invalid IP address %v", si.NodeIPAddr)
+		p.invalmsghdlr(w, r, s)
 		return
 	}
 	p.statsif.add("numpost", 1)
@@ -430,7 +418,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	}
 	if apitems[0] != Rdaemon {
 		s := fmt.Sprintf("Invalid API element: %s (expecting %s)", apitems[0], Rdaemon)
-		invalmsghdlr(w, r, s)
+		p.invalmsghdlr(w, r, s)
 		return
 	}
 	sid := apitems[1]
@@ -484,7 +472,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
-		invalmsghdlr(w, r, s)
+		p.invalmsghdlr(w, r, s)
 	}
 }
 

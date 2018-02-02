@@ -21,6 +21,7 @@ import (
 	"github.com/golang/glog"
 )
 
+// xattrs
 const (
 	Objstateattr = "user.objstate" // Object's state
 	MD5attr      = "user.MD5"      // Object's MD5
@@ -29,21 +30,6 @@ const (
 )
 
 const directput = 5
-
-// TODO: AWS specific initialization
-type awsif struct {
-}
-
-// TODO: GCP specific initialization
-type gcpif struct {
-}
-
-type cinterface interface {
-	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error
-	getobj(fqn, bucket, objname string) (errstr string)
-	putobj(r *http.Request, fqn, bucket, objname, md5sum string) error
-	deleteobj(bucket, objname string) error
-}
 
 type mountPath struct {
 	Path string
@@ -57,7 +43,7 @@ type mountPath struct {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif   cinterface // multi-cloud vendor support
+	cloudif   cloudif // multi-cloud vendor support
 	smap      *Smap
 	xactinp   *xactInProgress
 	starttime time.Time
@@ -112,16 +98,17 @@ func (t *targetrunner) run() error {
 	initusedstats()
 
 	// cloud provider
-	assert(ctx.config.CloudProvider == amazoncloud || ctx.config.CloudProvider == googlecloud)
 	if ctx.config.CloudProvider == amazoncloud {
-		// TODO: AWS initialization (sessions)
+		// TODO: sessions
 		t.cloudif = &awsif{}
 
 	} else {
+		assert(ctx.config.CloudProvider == googlecloud)
 		t.cloudif = &gcpif{}
 	}
 	if ctx.config.NoXattrs {
-		glog.Infof("DFC Target is running in legacy Mode")
+		glog.Infof("Warning: running with xattrs disabled")
+		glog.Flush()
 	}
 	//
 	// REST API: register storage target's handler(s) and start listening
@@ -201,8 +188,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.Contains(bucket, "/") {
 		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		invalmsghdlr(w, r, errstr)
-		t.statsif.add("numerr", 1)
+		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 	//
@@ -224,13 +210,11 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			coldget = true
 		case os.IsPermission(err):
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
-			invalmsghdlr(w, r, errstr, http.StatusForbidden)
-			t.statsif.add("numerr", 1)
+			t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
 			return
 		default:
 			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
-			invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-			t.statsif.add("numerr", 1)
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
 		}
 	}
@@ -243,8 +227,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.statsif.add("numcoldget", 1)
 		glog.Infof("Cold GET: bucket %s object %s", bucket, objname)
 		if errstr := getcloudif().getobj(fqn, bucket, objname); errstr != "" {
-			invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-			t.statsif.add("numerr", 1)
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
 		}
 	}
@@ -255,20 +238,18 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if os.IsPermission(err) {
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
-			invalmsghdlr(w, r, errstr, http.StatusForbidden)
+			t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
 		} else {
 			errstr = fmt.Sprintf("Failed to open local file %s, err: %v", fqn, err)
-			invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		}
-		t.statsif.add("numerr", 1)
 		return
 	}
 	defer file.Close()
 	md5binary, errstr := Getxattr(fqn, MD5attr)
 	if errstr != "" {
 		s := fmt.Sprintf("Failed to Get MD5 for local file %q, err: %v", fqn, errstr)
-		t.statsif.add("numerr", 1)
-		invalmsghdlr(w, r, s)
+		t.invalmsghdlr(w, r, s)
 		return
 	}
 	md5 := hex.EncodeToString(md5binary)
@@ -290,8 +271,12 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 	if !t.islocalBucket(bucket) {
-		getcloudif().listbucket(w, bucket, msg)
-		t.statsif.add("numlist", 1)
+		errstr := getcloudif().listbucket(w, bucket, msg)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		} else {
+			t.statsif.add("numlist", 1)
+		}
 		return
 	}
 	// local bucket
@@ -356,6 +341,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		written                           int64
 	)
 	apitems := t.restAPIItems(r.URL.Path, 9)
+	// case: PUT
 	if len(apitems) == directput {
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
@@ -368,82 +354,80 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 
 		md5 := r.Header.Get("Content-MD5")
 		assert(md5 != "")
-		err = getcloudif().putobj(r, fqn, bucket, objname, md5)
-		if err != nil {
-			glog.Errorf(err.Error())
-			webinterror(w, err.Error())
-			return
-		}
-
-	} else {
-
-		if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
-			return
-		}
-		if apitems[0] != Rfrom || apitems[2] != Rto {
-			s = fmt.Sprintf("File copy: missing %s and/or %s in the URL: %+v", Rfrom, Rto, apitems)
-			goto merr
-		}
-		from, to, bucket, objname = apitems[1], apitems[3], apitems[4], apitems[5]
-		if glog.V(3) {
-			glog.Infof("File copy: from %q bucket %q objname %q => to %q", from, bucket, objname, to)
-		}
-		if t.si.DaemonID != from && t.si.DaemonID != to {
-			s = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
-				t.si.DaemonID, from, to)
-			goto merr
-		}
-		fqn = t.fqn(bucket, objname)
-		finfo, err = os.Stat(fqn)
-		if t.si.DaemonID == from {
-			//
-			// the source
-			//
-			if os.IsNotExist(err) {
-				s = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
-				goto merr
-			}
-			si, ok := t.smap.Smap[to]
-			if !ok {
-				s = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
-				goto merr
-			}
-			if s = t.sendfile(r.Method, bucket, objname, si); s != "" {
-				goto merr
-			}
-			if glog.V(3) {
-				glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
-			}
+		errstr := getcloudif().putobj(r, fqn, bucket, objname, md5)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
 		} else {
-			//
-			// the destination
-			//
-			if os.IsExist(err) {
-				s = fmt.Sprintf("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
-				return // not an error, nothing to do
-			}
-
-			md5 := r.Header.Get("Content-MD5")
-			assert(md5 != "", err)
-			if written, err = ReceiveFile(fqn, r.Body, md5); err != nil {
-				s = fmt.Sprintf("File copy: failed to receive %q from %s", fqn, from)
-				goto merr
-			}
-			if glog.V(3) {
-				glog.Infof("Received %q from %s (size %.2f MB)", fqn, from, float64(written)/1000/1000)
-			}
-			t.statsif.add("numrecvfile", 1)
+			t.statsif.add("numput", 1)
 		}
+		return
+	}
+
+	// case: rebalance
+	if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	if apitems[0] != Rfrom || apitems[2] != Rto {
+		s = fmt.Sprintf("File copy: missing %s and/or %s in the URL: %+v", Rfrom, Rto, apitems)
+		goto merr
+	}
+	from, to, bucket, objname = apitems[1], apitems[3], apitems[4], apitems[5]
+	if glog.V(3) {
+		glog.Infof("File copy: from %q bucket %q objname %q => to %q", from, bucket, objname, to)
+	}
+	if t.si.DaemonID != from && t.si.DaemonID != to {
+		s = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
+			t.si.DaemonID, from, to)
+		goto merr
+	}
+	fqn = t.fqn(bucket, objname)
+	finfo, err = os.Stat(fqn)
+	if t.si.DaemonID == from {
+		//
+		// the source
+		//
+		if os.IsNotExist(err) {
+			s = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
+			goto merr
+		}
+		si, ok := t.smap.Smap[to]
+		if !ok {
+			s = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
+			goto merr
+		}
+		if s = t.sendfile(r.Method, bucket, objname, si); s != "" {
+			goto merr
+		}
+		if glog.V(3) {
+			glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
+		}
+	} else {
+		//
+		// the destination
+		//
+		if os.IsExist(err) {
+			s = fmt.Sprintf("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
+			return // not an error, nothing to do
+		}
+
+		md5 := r.Header.Get("Content-MD5")
+		assert(md5 != "", err)
+		if written, err = ReceiveFile(fqn, r.Body, md5); err != nil {
+			s = fmt.Sprintf("File copy: failed to receive %q from %s", fqn, from)
+			goto merr
+		}
+		if glog.V(3) {
+			glog.Infof("Received %q from %s (size %.2f MB)", fqn, from, float64(written)/1000/1000)
+		}
+		t.statsif.add("numrecvfile", 1)
 	}
 	return
 merr:
-	t.statsif.add("numerr", 1)
-	invalmsghdlr(w, r, s)
+	t.invalmsghdlr(w, r, s)
 }
 
 // "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
 func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
-	var err error
 	var bucket, objname string
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
@@ -453,11 +437,11 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
-	err = getcloudif().deleteobj(bucket, objname)
-	if err != nil {
-		glog.Errorf(err.Error())
-		webinterror(w, err.Error())
-		return
+	errstr := getcloudif().deleteobj(bucket, objname)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+	} else {
+		t.statsif.add("numdelete", 1)
 	}
 }
 
@@ -564,7 +548,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
-		invalmsghdlr(w, r, s)
+		t.invalmsghdlr(w, r, s)
 	}
 }
 func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, apitems []string) {
@@ -635,7 +619,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
-		invalmsghdlr(w, r, s)
+		t.invalmsghdlr(w, r, s)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)

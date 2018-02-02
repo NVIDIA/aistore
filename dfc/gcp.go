@@ -21,23 +21,37 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func getProjID() (string, string) {
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		return "", "Failed to get ProjectID from GCP"
-	}
-	return projectID, ""
+//======
+//
+// types
+//
+//======
+type gcpif struct {
 }
 
-func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
-	glog.Infof("listbucket %s", bucket)
+//======
+//
+// global - FIXME: environ
+//
+//======
+func getProjID() string {
+	return os.Getenv("GOOGLE_CLOUD_PROJECT")
+}
+
+//======
+//
+// methods
+//
+//======
+func (cloudif *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
+	glog.Infof("gcp listbucket %s", bucket)
 	client, gctx, err := createclient()
 	if err != nil {
-		return err
+		errstr = err.Error()
+		return
 	}
 	it := client.Bucket(bucket).Objects(gctx, nil)
 
-	// var msg GetMsg
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
 	for {
 		attrs, err := it.Next()
@@ -77,14 +91,14 @@ func (cobj *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg)
 	assert(err == nil, err)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
-	return nil
+	return
 }
 
 // Initialize and create storage client
 func createclient() (*storage.Client, context.Context, error) {
-	projid, errstr := getProjID()
+	projid := getProjID()
 	if projid == "" {
-		return nil, nil, errors.New(errstr)
+		return nil, nil, errors.New("Failed to get ProjectID from GCP")
 	}
 	gctx := context.Background()
 	client, err := storage.NewClient(gctx)
@@ -94,8 +108,7 @@ func createclient() (*storage.Client, context.Context, error) {
 	return client, gctx, nil
 }
 
-// FIXME: revisit error processing
-func (cobj *gcpif) getobj(fqn string, bucket string, objname string) (errstr string) {
+func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (errstr string) {
 	var (
 		file *os.File
 		size int64
@@ -133,55 +146,54 @@ func (cobj *gcpif) getobj(fqn string, bucket string, objname string) (errstr str
 	return ""
 }
 
-func (cobj *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {
-	if glog.V(3) {
-		glog.Infof("Put bucket %s object %s", bucket, objname)
-	}
+func (cloudif *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string) {
 	size := r.ContentLength
 	teebuf, b := Maketeerw(size, r.Body)
 	client, gctx, err := createclient()
 	if err != nil {
-		return err
+		errstr = fmt.Sprintf("gcp: cannot create client, err: %v", err)
+		return
 	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
-	defer wc.Close()
-	_, err = copyBuffer(wc, teebuf)
-	if err != nil {
-		return fmt.Errorf(
-			"Failed to upload object %s into bucket %s , err: %v",
+
+	if _, err = copyBuffer(wc, teebuf); err != nil {
+		errstr = fmt.Sprintf("gcp: failed to upload %s (bucket %s), err: %v", objname, bucket, err)
+		return
+	}
+	if err = wc.Close(); err != nil {
+		errstr = fmt.Sprintf("gcp: (UNEXPECTED:) close failure upon uploading %s (bucket %s), err: %v",
 			objname, bucket, err)
+		return
 	}
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {
-		return fmt.Errorf("Failed to write to file %s bytes written %v, err : %v",
-			fqn, written, err)
+		errstr = fmt.Sprintf("gcp: failed to receive %s (written %d), err : %v", fqn, written, err)
+		return
 	}
-	if size > 0 {
-		errstr := truncatefile(fqn, size)
-		if errstr != "" {
-			glog.Errorf(errstr)
-			return errors.New(errstr)
-		}
+	if errstr = truncatefile(fqn, size); errstr != "" {
+		return
 	}
-	//TODO stats
-	return nil
+	if glog.V(3) {
+		glog.Infof("gcp: PUT %s (bucket %s)", objname, bucket)
+	}
+	return
 }
 
-func (cobj *gcpif) deleteobj(bucket, objname string) error {
-	if glog.V(3) {
-		glog.Infof("Delete bucket %s object %s", bucket, objname)
-	}
+func (cloudif *gcpif) deleteobj(bucket, objname string) (errstr string) {
 	client, gctx, err := createclient()
 	if err != nil {
-		return err
+		errstr = fmt.Sprintf("gcp: failed to create client, err: %v", err)
+		return
 	}
 	o := client.Bucket(bucket).Object(objname)
 	err = o.Delete(gctx)
 	if err != nil {
-		return fmt.Errorf("Failed to delete object %s from bucket %s, err: %v",
-			objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: failed to delete %s (bucket %s), err: %v", objname, bucket, err)
+		return
 	}
-	//TODO stats
-	return nil
+	if glog.V(3) {
+		glog.Infof("gcp: deleted %s (bucket %s)", objname, bucket)
+	}
+	return
 }

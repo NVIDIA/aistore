@@ -418,12 +418,12 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		teebuf, b := dfc.Maketeerw(r.ContentLength, r.Body)
 		md5sum, errstr = dfc.CalculateMD5(teebuf)
 		if errstr != "" {
-			t.Errorf("Worker %2d: Failed to calculate MD5sum, err: %v", id, errstr)
+			t.Errorf("Worker %2d: failed to calculate MD5, err: %s", id, errstr)
 			return
 		}
 		r.Body = ioutil.NopCloser(b)
 		if hmd5 != md5sum {
-			t.Errorf("Worker %2d: Header MD5sum %v does not match with file's MD5 %v", hmd5, md5sum)
+			t.Errorf("Worker %2d: header MD5 %v doesn't match the file's MD5 %v", id, hmd5, md5sum)
 			return
 		}
 		if !copy {

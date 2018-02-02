@@ -115,16 +115,17 @@ func getobjto_Md5(file *os.File, fqn, objname, omd5 string, reader io.Reader) (s
 }
 
 func truncatefile(fqn string, size int64) (errstr string) {
-	glog.Infof("Setting file %s size to %v", fqn, size)
-	err := os.Truncate(fqn, size)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to truncate file %s, err: %v", fqn, err)
-		// Remove corrupted object.
+	if size < 0 {
+		return
+	}
+	if err := os.Truncate(fqn, size); err != nil {
+		errstr = fmt.Sprintf("Failed to truncate %s to size %d, err: %v", fqn, size, err)
 		err1 := os.Remove(fqn)
 		if err1 != nil {
-			glog.Errorf("Failed to remove file %s, err: %v", fqn, err1)
+			glog.Errorf("Failed to remove %s, err: %v", fqn, err1)
 		}
 		return errstr
 	}
-	return ""
+	glog.Infof("Truncated %s to %d B", fqn, size)
+	return
 }

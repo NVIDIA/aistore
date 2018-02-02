@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -23,6 +22,19 @@ import (
 	"github.com/golang/glog"
 )
 
+//======
+//
+// types
+//
+//======
+type awsif struct {
+}
+
+//======
+//
+// session FIXME: optimize
+//
+//======
 func createsession() *session.Session {
 	// TODO: avoid creating sessions for each request
 	return session.Must(session.NewSessionWithOptions(session.Options{
@@ -30,14 +42,20 @@ func createsession() *session.Session {
 
 }
 
-func (cobj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) error {
-	glog.Infof("listbucket %s", bucket)
+//======
+//
+// methods
+//
+//======
+func (cloudif *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
+	glog.Infof("aws listbucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
 	resp, err := svc.ListObjects(params)
 	if err != nil {
-		return webinterror(w, err.Error())
+		errstr = err.Error()
+		return
 	}
 	// var msg GetMsg
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
@@ -72,11 +90,10 @@ func (cobj *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg)
 	assert(err == nil, err)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
-	return nil
+	return
 }
 
-// This function download S3 object into local file.
-func (cobj *awsif) getobj(fqn, bucket, objname string) (errstr string) {
+func (cloudif *awsif) getobj(fqn, bucket, objname string) (errstr string) {
 	var (
 		file *os.File
 		size int64
@@ -110,55 +127,46 @@ func (cobj *awsif) getobj(fqn, bucket, objname string) (errstr string) {
 	return ""
 }
 
-func (cobj *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) error {
-	// create local copy
-	var err error
+func (cloudif *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string) {
 	size := r.ContentLength
-	teebuf, b := Maketeerw(size, r.Body)
-
+	teebuf, b := Maketeerw(size, r.Body) // local copy
 	sess := createsession()
-	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploader(sess)
-	// Upload the file to S3.
-	_, err = uploader.Upload(&s3manager.UploadInput{
 
+	uploader := s3manager.NewUploader(sess)
+	// do it
+	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
 		Body:   teebuf,
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to put key %s into bucket %s, err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("aws: failed to put %s (bucket %s), err: %v", objname, bucket, err)
+		return
 	}
-	glog.Infof("Uploaded object %s into bucket %s", objname, bucket)
-
 	r.Body = ioutil.NopCloser(b)
 	written, err := ReceiveFile(fqn, r.Body, md5sum)
 	if err != nil {
-		return fmt.Errorf("Failed to write to file %s bytes written %v, err : %v", fqn, written, err)
+		errstr = fmt.Sprintf("aws: failed to receive %s (written %d), err: %v", fqn, written, err)
+		return
 	}
-	if size > 0 {
-		errstr := truncatefile(fqn, size)
-		if errstr != "" {
-			return errors.New(errstr)
-		}
-	}
-	//TODO stats
-	return nil
-}
-func (cobj *awsif) deleteobj(bucket, objname string) error {
-	var err error
-
-	sess := createsession()
-	// Create S3 service client
-	svc := s3.New(sess)
-	// Delete the item
-	_, err = svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
-	if err != nil {
-		return fmt.Errorf("Failed to delete key %s from bucket %s, err: %v", objname, bucket, err)
+	if errstr = truncatefile(fqn, size); errstr != "" {
+		return
 	}
 	if glog.V(3) {
-		glog.Infof("Deleted object %s from bucket %s", objname, bucket)
+		glog.Infof("aws: PUT %s (bucket %s)", objname, bucket)
 	}
-	//TODO stats
-	return nil
+	return
+}
+func (cloudif *awsif) deleteobj(bucket, objname string) (errstr string) {
+	sess := createsession()
+	svc := s3.New(sess)
+	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
+	if err != nil {
+		errstr = fmt.Sprintf("aws: failed to delete %s (bucket %s), err: %v", objname, bucket, err)
+		return
+	}
+	if glog.V(3) {
+		glog.Infof("aws: deleted %s (bucket %s)", objname, bucket)
+	}
+	return
 }

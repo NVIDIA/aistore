@@ -376,7 +376,7 @@ func getusedstats() usedstats {
 	return rr.used
 }
 
-func getcloudif() cinterface {
+func getcloudif() cloudif {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
 	assert(ok)
