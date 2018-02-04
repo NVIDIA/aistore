@@ -7,7 +7,6 @@ package dfc
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -45,9 +44,8 @@ func getProjID() string {
 //======
 func (cloudif *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
 	glog.Infof("gcp listbucket %s", bucket)
-	client, gctx, err := createclient()
-	if err != nil {
-		errstr = err.Error()
+	client, gctx, errstr := createclient()
+	if errstr != "" {
 		return
 	}
 	it := client.Bucket(bucket).Objects(gctx, nil)
@@ -95,17 +93,16 @@ func (cloudif *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetM
 }
 
 // Initialize and create storage client
-func createclient() (*storage.Client, context.Context, error) {
-	projid := getProjID()
-	if projid == "" {
-		return nil, nil, errors.New("Failed to get ProjectID from GCP")
+func createclient() (*storage.Client, context.Context, string) {
+	if getProjID() == "" {
+		return nil, nil, "Failed to get ProjectID from GCP"
 	}
 	gctx := context.Background()
 	client, err := storage.NewClient(gctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to create client, err: %v", err)
+		return nil, nil, fmt.Sprintf("Failed to create client, err: %v", err)
 	}
-	return client, gctx, nil
+	return client, gctx, ""
 }
 
 func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (errstr string) {
@@ -113,9 +110,9 @@ func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (errstr 
 		file *os.File
 		size int64
 	)
-	client, gctx, err := createclient()
-	if err != nil {
-		return err.Error()
+	client, gctx, errstr := createclient()
+	if errstr != "" {
+		return
 	}
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
@@ -149,19 +146,18 @@ func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (errstr 
 func (cloudif *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string) {
 	size := r.ContentLength
 	teebuf, b := Maketeerw(size, r.Body)
-	client, gctx, err := createclient()
-	if err != nil {
-		errstr = fmt.Sprintf("gcp: cannot create client, err: %v", err)
+	client, gctx, errstr := createclient()
+	if errstr != "" {
 		return
 	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
 
-	if _, err = copyBuffer(wc, teebuf); err != nil {
+	if _, err := copyBuffer(wc, teebuf); err != nil {
 		errstr = fmt.Sprintf("gcp: failed to upload %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}
-	if err = wc.Close(); err != nil {
-		errstr = fmt.Sprintf("gcp: (UNEXPECTED:) close failure upon uploading %s (bucket %s), err: %v",
+	if err := wc.Close(); err != nil {
+		errstr = fmt.Sprintf("gcp: (UNEXPECTED) close failure upon uploading %s (bucket %s), err: %v",
 			objname, bucket, err)
 		return
 	}
@@ -181,13 +177,12 @@ func (cloudif *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum strin
 }
 
 func (cloudif *gcpif) deleteobj(bucket, objname string) (errstr string) {
-	client, gctx, err := createclient()
-	if err != nil {
-		errstr = fmt.Sprintf("gcp: failed to create client, err: %v", err)
+	client, gctx, errstr := createclient()
+	if errstr != "" {
 		return
 	}
 	o := client.Bucket(bucket).Object(objname)
-	err = o.Delete(gctx)
+	err := o.Delete(gctx)
 	if err != nil {
 		errstr = fmt.Sprintf("gcp: failed to delete %s (bucket %s), err: %v", objname, bucket, err)
 		return

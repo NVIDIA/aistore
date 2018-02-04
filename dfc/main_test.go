@@ -335,6 +335,9 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 				files = append(files, it.Name)
 			}
 		}
+		if len(files) == 0 {
+			continue
+		}
 		keyname := files[random.Intn(len(files)-1)]
 		if testing.Verbose() {
 			fmt.Fprintln(os.Stdout, "GET: "+keyname)

@@ -6,18 +6,21 @@
 package dfc
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
 )
 
@@ -35,6 +38,8 @@ type mountPath struct {
 	Path string
 	Fsid syscall.Fsid
 }
+
+type allfinfos []os.FileInfo
 
 //===========================================================================
 //
@@ -207,6 +212,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
+			if t.islocalBucket(bucket) {
+				errstr := fmt.Sprintf("GET local: file %s (local bucket %s, object %s) does not exist",
+					fqn, bucket, objname)
+				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+				return
+			}
 			coldget = true
 		case os.IsPermission(err):
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
@@ -220,6 +231,11 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	t.statsif.add("numget", 1)
 	if !coldget && isinvalidobj(fqn) {
+		if t.islocalBucket(bucket) {
+			errstr := fmt.Sprintf("GET local: bad checksum, file %s, local bucket %s", fqn, bucket)
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+			return
+		}
 		glog.Warningf("Warning: %s has an invalid checksum and will be overridden", fqn)
 		coldget = true
 	}
@@ -280,17 +296,12 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 	// local bucket
-	// TODO: subdirectories
-	allfinfos := make([]os.FileInfo, 0, 128)
+	allfinfos := allfinfos(make([]os.FileInfo, 0, 128))
 	for mpath := range ctx.mountpaths {
 		for bucket := range t.lbmap.LBmap {
 			localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-			finfos, err := ioutil.ReadDir(localbucketfqn)
-			if err != nil {
-				glog.Errorf("Failed to read dir %s", localbucketfqn)
-			} else if len(finfos) > 0 {
-				// FIXME: variadic may not scale well
-				allfinfos = append(allfinfos, finfos...)
+			if err := filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
+				glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 			}
 		}
 	}
@@ -332,6 +343,15 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	w.Write(jsbytes)
 }
 
+func (all allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
+	if err != nil {
+		glog.Errorf("listwalkf callback invoked with err: %v", err)
+		return err
+	}
+	all = append(all, osfi)
+	return nil
+}
+
 // "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	var (
@@ -351,10 +371,14 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			objname = strings.Join(apitems[1:], "/")
 		}
 		fqn = t.fqn(bucket, objname)
-
+		errstr := ""
 		md5 := r.Header.Get("Content-MD5")
 		assert(md5 != "")
-		errstr := getcloudif().putobj(r, fqn, bucket, objname, md5)
+		if t.islocalBucket(bucket) {
+			errstr = t.putlocal(r, fqn, md5)
+		} else {
+			errstr = getcloudif().putobj(r, fqn, bucket, objname, md5)
+		}
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		} else {
@@ -426,7 +450,21 @@ merr:
 	t.invalmsghdlr(w, r, s)
 }
 
-// "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
+func (t *targetrunner) putlocal(r *http.Request, fqn, omd5 string) (errstr string) {
+	xxhash := xxhash.New64() // FIXME: only if configured
+	written, err := ReceiveFile(fqn, r.Body, omd5, xxhash)
+	if err != nil {
+		return fmt.Sprintf("PUT local: failed to receive %q, err: %v", fqn, err)
+	}
+	xxsum := xxhash.Sum64()
+	xxbytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(xxbytes, xxsum) // FIXME: set xattr if needed
+	glog.Infof("PUT local: received %s (size %.2f MB, xxhash %s)",
+		fqn, float64(written)/1000/1000, hex.EncodeToString(xxbytes))
+	// FIXME: use omd5, finalize, etc.
+	return
+}
+
 func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	var bucket, objname string
 	apitems := t.restAPIItems(r.URL.Path, 5)
@@ -437,7 +475,15 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
-	errstr := getcloudif().deleteobj(bucket, objname)
+	var errstr string
+	if t.islocalBucket(bucket) {
+		fqn := t.fqn(bucket, objname)
+		if err := os.Remove(fqn); err != nil {
+			errstr = err.Error()
+		}
+	} else {
+		errstr = getcloudif().deleteobj(bucket, objname)
+	}
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	} else {
@@ -697,7 +743,7 @@ func (t *targetrunner) testCachepathMounts() {
 			mpath = instpath[0 : len(instpath)-1]
 		}
 		if err := CreateDir(mpath); err != nil {
-			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
+			glog.Fatalf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
 			return
 		}
 		statfs := syscall.Statfs_t{}

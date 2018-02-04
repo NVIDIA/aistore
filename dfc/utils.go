@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"io"
 	"net"
 	"os"
@@ -83,7 +84,7 @@ func CreateDir(dirname string) (err error) {
 }
 
 // NOTE: receives, flushes, and closes
-func ReceiveFile(fname string, rrbody io.ReadCloser, md5sum string) (written int64, err error) {
+func ReceiveFile(fname string, rrbody io.ReadCloser, omd5 string, hashes ...hash.Hash) (written int64, err error) {
 	dirname := filepath.Dir(fname)
 	if err = CreateDir(dirname); err != nil {
 		return 0, err
@@ -92,7 +93,17 @@ func ReceiveFile(fname string, rrbody io.ReadCloser, md5sum string) (written int
 	if err != nil {
 		return 0, err
 	}
-	written, err = copyBuffer(file, rrbody)
+	var writer io.Writer
+	if len(hashes) == 0 {
+		writer = file
+	} else {
+		hashwriters := make([]io.Writer, len(hashes))
+		for i, h := range hashes {
+			hashwriters[i] = h.(io.Writer)
+		}
+		writer = io.MultiWriter(hashwriters...)
+	}
+	written, err = copyBuffer(writer, rrbody)
 	errclose := file.Close()
 	if err == nil && errclose != nil {
 		err = errclose
@@ -101,7 +112,7 @@ func ReceiveFile(fname string, rrbody io.ReadCloser, md5sum string) (written int
 		return written, err
 	}
 	// set xattr md5
-	err = finalizeobj(fname, []byte(md5sum))
+	err = finalizeobj(fname, []byte(omd5))
 	if err != nil {
 		return written, err
 	}
