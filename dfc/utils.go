@@ -269,28 +269,29 @@ func ReadToNull(r io.Reader) (int64, error) {
 //
 //===========================================================================
 func localSave(pathname string, v interface{}) error {
-	file, err := os.Create(pathname + ".new")
+	pnew := pathname + ".new"
+	file, err := os.Create(pnew)
 	if err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(v, "", "\t")
 	if err != nil {
 		file.Close()
-		os.Remove(pathname + ".new")
+		os.Remove(pnew)
 		return err
 	}
 	r := bytes.NewReader(b)
 	_, err = io.Copy(file, r)
 	errclose := file.Close()
 	if err != nil {
-		os.Remove(pathname + ".new")
+		os.Remove(pnew)
 		return err
 	}
 	if errclose != nil {
-		os.Remove(pathname + ".new")
+		os.Remove(pnew)
 		return err
 	}
-	err = os.Rename(pathname+".new", pathname)
+	err = os.Rename(pnew)
 	return err
 }
 
