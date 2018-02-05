@@ -45,8 +45,6 @@ const (
 )
 
 const (
-	DeleteOP  = "delete"
-	PutOP     = "put"
 	blocksize = 1048576
 	baseseed  = 1062984096
 )
@@ -102,7 +100,7 @@ func Test_smoke(t *testing.T) {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go proxyop(SmokeDir+file, clibucket, "smoke/"+file, "delete", t, wg, errch)
+		go del(clibucket, "smoke/"+file, wg, errch)
 	}
 	wg.Wait()
 	select {
@@ -389,7 +387,7 @@ func putRandomFiles(id int, seed int64, fileSize int, numPuts int,
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		proxyop(SmokeDir+fname, clibucket, "smoke/"+fname, "put", t, putsGroup, errch)
+		put(SmokeDir+fname, clibucket, "smoke/"+fname, putsGroup, errch)
 		filesput <- fname
 	}
 	putsGroup.Wait()
@@ -458,7 +456,7 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go proxyop(keyname, bucket, keyname, "delete", t, dwg, errch)
+		go del(bucket, keyname, dwg, errch)
 	}
 	dwg.Wait()
 }
@@ -526,7 +524,7 @@ func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
 	}
 	bufreader := bufio.NewReader(r.Body)
 	if _, err = dfc.ReadToNull(bufreader); err != nil {
-		errch <- errors.New(fmt.Sprintf("Failed to read http response, err: %v", err))
+		errch <- fmt.Errorf("Failed to read http response, err: %v", err)
 	}
 }
 
@@ -582,7 +580,9 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 		request *http.Request
 		r       *http.Response
 	)
-	t.Logf("LIST %q", url)
+	if testing.Verbose() {
+		fmt.Printf("LIST %q", url)
+	}
 	if injson == nil || len(injson) == 0 {
 		r, err = http.Get(url)
 	} else {
@@ -662,7 +662,7 @@ func Test_proxyput(t *testing.T) {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
 		fname := "/" + keyname
-		go proxyop(fname, clibucket, keyname, PutOP, t, wg, errch)
+		go put(fname, clibucket, keyname, wg, errch)
 	}
 	wg.Wait()
 	select {
@@ -678,7 +678,7 @@ func Test_proxydel(t *testing.T) {
 	for i := 0; i < numfiles; i++ {
 		wg.Add(1)
 		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		go proxyop("", clibucket, keyname, DeleteOP, t, wg, errch)
+		go del(clibucket, keyname, wg, errch)
 	}
 	wg.Wait()
 	select {
@@ -688,122 +688,113 @@ func Test_proxydel(t *testing.T) {
 	}
 }
 
-//tgturl = RestAPITgtPut + "/" + bucket + "/" + keyname
-func proxyop(fname string, bucket string, keyname string, op string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
-	var tgturl, errstr string
+func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 	defer wg.Done()
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, "Proxy %s: %q\n", op, proxyurl)
-	}
-	tgturl, errstr = gettargeturl(proxyurl)
-	if errstr != "" {
-		goto proxyoperr
-	}
-	switch op {
-	case "put":
-		errstr = puttotgt(fname, tgturl)
-		if errstr != "" {
-			goto proxyoperr
-		}
-	case "delete":
-		errstr = deleteontgt(fname, tgturl)
-		if errstr != "" {
-			goto proxyoperr
-		}
-	}
-	return
-proxyoperr:
-	t.Error(errstr)
-	if errch != nil {
-		errch <- errors.New(errstr)
-	}
-	return
-}
-func gettargeturl(rqurl string) (url string, errstr string) {
 	client := &http.Client{}
-
-	req, err := http.NewRequest(http.MethodDelete, rqurl, nil)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to create new http request, err: %v", err)
-		return "", errstr
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stdout, "PUT: %s\n", keyname)
 	}
-	r, err := client.Do(req)
-	if r != nil {
-		returl, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			errstr = fmt.Sprintf("Failed to read response content, err %v", err)
-			url = ""
-			r.Body.Close()
-			return
-		}
-		r.Body.Close()
-		url = string(returl)
-	} else {
-		errstr = fmt.Sprintf("Failed to get proxy response, err %v", err)
-		url = ""
-	}
-	return url, errstr
-}
-
-func puttotgt(fname string, rqurl string) (errstr string) {
-	errstr = ""
 	file, err := os.Open(fname)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to open file %s, err: %v", fname, err)
-		return errstr
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
+		}
+		return
 	}
 	defer file.Close()
-	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPut, rqurl, file)
+	req, err := http.NewRequest(http.MethodPut, proxyurl, file)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to create new http request, err: %v", err)
-		return errstr
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
+		}
+		return
 	}
-	md5, errstr1 := dfc.CalculateMD5(file)
-	if errstr1 != "" {
-		errstr = fmt.Sprintf("Failed to calculate MD5 sum for file %s, err: %s", fname, errstr1)
-		return errstr
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return os.Open(fname)
+	}
+	md5, errstr := dfc.CalculateMD5(file)
+	if errstr != "" {
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to calculate MD5 sum for file %s, err: %s", fname, errstr)
+		}
+		return
 	}
 	req.Header.Set("Content-MD5", md5)
 	_, err = file.Seek(0, 0)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to seek file %s, err: %v", fname, err)
-		return errstr
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to seek file %s, err: %v", fname, err)
+		}
+		return
 	}
 	r, err := client.Do(req)
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
 	if r != nil {
+		if r.StatusCode >= http.StatusBadRequest {
+			if errch != nil {
+				errch <- fmt.Errorf("Bad status code: http status %d", r.StatusCode)
+			}
+			return
+		}
 		_, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			errstr = fmt.Sprintf("Failed to read response content, err %v", err)
-			r.Body.Close()
-			return errstr
+			if errch != nil {
+				errch <- fmt.Errorf("Failed to read response content, err %v", err)
+			}
+			return
 		}
-		r.Body.Close()
 	} else {
-		errstr = fmt.Sprintf("Failed to get proxy put response, err %v", err)
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to get proxy put response, err %v", err)
+		}
+		return
 	}
-	return errstr
 }
-func deleteontgt(fname string, rqurl string) (errstr string) {
-	errstr = ""
+func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
+	defer wg.Done()
+	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
 	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodDelete, rqurl, nil)
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stdout, "DEL: %s\n", keyname)
+	}
+	req, err := http.NewRequest(http.MethodDelete, proxyurl, nil)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to create new http request, err: %v", err)
-		return errstr
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
+		}
+		return
 	}
 	r, err := client.Do(req)
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
 	if r != nil {
+		if r.StatusCode >= http.StatusBadRequest {
+			if errch != nil {
+				errch <- fmt.Errorf("Bad status code: http status %d", r.StatusCode)
+			}
+			return
+		}
 		_, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			errstr = fmt.Sprintf("Failed to read response content, err %v", err)
-			r.Body.Close()
-			return errstr
+			if errch != nil {
+				errch <- fmt.Errorf("Failed to read response content, err %v", err)
+			}
+			return
 		}
-		r.Body.Close()
 	} else {
-		errstr = fmt.Sprintf("Failed to get delete response, err %v", err)
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to get delete response, err %v", err)
+		}
+		return
 	}
-	return errstr
 }

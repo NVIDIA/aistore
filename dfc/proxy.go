@@ -114,6 +114,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		p.httpfilget(w, r)
 	case http.MethodPut:
+		fallthrough
 	case http.MethodDelete:
 		p.httpfilputdelete(w, r)
 	case http.MethodPost:
@@ -251,8 +252,10 @@ func (p *proxyrunner) httpfilputdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	si := hrwTarget(bucket+"/"+objname, ctx.smap)
 	redirecturl := si.DirectURL + r.URL.Path
-	glog.Infof("RedirectURL %s", redirecturl)
-	fmt.Fprintf(w, "%s", redirecturl)
+	if glog.V(3) {
+		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	}
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 	return
 }
 
