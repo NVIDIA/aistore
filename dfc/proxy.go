@@ -113,10 +113,12 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpfilget(w, r)
+	case http.MethodPut:
+		fallthrough
 	case http.MethodDelete:
 		p.httpfilputdelete(w, r)
 	case http.MethodPost:
-		p.httpfilpost(w, r)
+		p.actionLocalBucket(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -238,53 +240,76 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	return err
 }
 
+// PUT bucket/file
+// DELETE bucket/file
+// DELETE lbucket
 func (p *proxyrunner) httpfilputdelete(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	bucket, objname := apitems[0], ""
-	objname = strings.Join(apitems[1:], "/")
+	bucket := apitems[0]
+	if len(apitems) == 1 {
+		if p.islocalBucket(bucket) {
+			p.actionLocalBucket(w, r)
+			return
+		}
+		p.invalmsghdlr(w, r, "Cannot "+r.Method+" non-local bucket")
+		return
+	}
+	//
+	// FIXME: add protection agaist putting into non-existing local bucket
+	//
+	objname := strings.Join(apitems[1:], "/")
 	if glog.V(3) {
-		glog.Infof("Bucket %s objname %s", bucket, objname)
+		glog.Infof("%s %s/%s", r.Method, bucket, objname)
 	}
 	si := hrwTarget(bucket+"/"+objname, ctx.smap)
 	redirecturl := si.DirectURL + r.URL.Path
-	glog.Infof("RedirectURL %s", redirecturl)
-	fmt.Fprintf(w, "%s", redirecturl)
+	if glog.V(3) {
+		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	}
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 	return
 }
 
 // { action } "/"+Rversion+"/"+Rfiles + "/" + localbucket
-func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) actionLocalBucket(w http.ResponseWriter, r *http.Request) {
+	var msg ActionMsg
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
 	lbucket := apitems[0]
+
+	if r.Method == http.MethodDelete {
+		p.lbmap.lock()
+		if !p.lbmap.del(lbucket) {
+			s := fmt.Sprintf("Local bucket %s does not exist, nothing to remove", lbucket)
+			p.invalmsghdlr(w, r, s)
+			p.lbmap.unlock()
+			return
+		}
+		goto synclbmap
+	}
+	if r.Method != http.MethodPost {
+		p.invalmsghdlr(w, r, "Unexpected method "+r.Method+" in action-local-bucket")
+		return
+	}
+	// from here on we are executing POST {action} lbucket
 	if strings.Contains(lbucket, "/") {
 		s := fmt.Sprintf("Invalid local bucket name %s (contains '/')", lbucket)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	var msg ActionMsg
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
-	lbpathname := p.confdir + "/" + ctx.config.LBConf
 	switch msg.Action {
 	case ActCreateLB:
 		p.lbmap.lock()
 		if !p.lbmap.add(lbucket) {
 			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
-			p.invalmsghdlr(w, r, s)
-			p.lbmap.unlock()
-			return
-		}
-	case ActDestroyLB:
-		p.lbmap.lock()
-		if !p.lbmap.del(lbucket) {
-			s := fmt.Sprintf("Local bucket %s does not exist, nothing to remove", lbucket)
 			p.invalmsghdlr(w, r, s)
 			p.lbmap.unlock()
 			return
@@ -296,6 +321,8 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, s)
 		return
 	}
+synclbmap:
+	lbpathname := p.confdir + "/" + ctx.config.LBConf
 	localSave(lbpathname, p.lbmap)
 	p.lbmap.unlock()
 
