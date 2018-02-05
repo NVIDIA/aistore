@@ -568,18 +568,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{lbmap}' /v1/daemon/localbuckets
 	if len(apitems) > 0 && apitems[0] == Rsynclb {
-		if t.readJSON(w, r, t.lbmap) != nil {
-			return
-		}
-		glog.Infof("lbmap: %+v", t.lbmap)
-		for mpath := range ctx.mountpaths {
-			for bucket := range t.lbmap.LBmap {
-				localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-				if err := CreateDir(localbucketfqn); err != nil {
-					glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
-				}
-			}
-		}
+		t.httpdaeput_lbmap(w, r, apitems)
 		return
 	}
 	//
@@ -639,6 +628,45 @@ func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, a
 	}
 	// xaction
 	go t.runRebalance()
+}
+
+func (t *targetrunner) httpdaeput_lbmap(w http.ResponseWriter, r *http.Request, apitems []string) {
+	curversion := t.lbmap.Version
+	newlbmap := &lbmap{LBmap: make(map[string]string)}
+	if t.readJSON(w, r, newlbmap) != nil {
+		return
+	}
+	if curversion == newlbmap.Version {
+		return
+	}
+	if curversion > newlbmap.Version {
+		glog.Errorf("Warning: attempt to downgrade lbmap verion %d to %d", curversion, newlbmap.Version)
+		return
+	}
+	glog.Infof("%s: new lbmap version %d (old %d)", apitems[0], newlbmap.Version, curversion)
+	// destroylb
+	for bucket := range t.lbmap.LBmap {
+		_, ok := newlbmap.LBmap[bucket]
+		if !ok {
+			glog.Infof("Destroy local bucket %s", bucket)
+			for mpath := range ctx.mountpaths {
+				localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
+				if err := os.RemoveAll(localbucketfqn); err != nil {
+					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
+				}
+			}
+		}
+	}
+	t.lbmap = newlbmap
+	for mpath := range ctx.mountpaths {
+		for bucket := range t.lbmap.LBmap {
+			localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
+			if err := CreateDir(localbucketfqn); err != nil {
+				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
+			}
+		}
+	}
+	return
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {

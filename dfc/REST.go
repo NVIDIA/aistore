@@ -22,7 +22,7 @@ const (
 	ActLRU          = "lru"
 	ActSyncLB       = "synclb"
 	ActCreateLB     = "createlb"
-	ActRemoveLB     = "removelb"
+	ActDestroyLB    = "destroylb"
 )
 
 type GetMsg struct {

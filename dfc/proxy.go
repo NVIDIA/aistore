@@ -113,7 +113,6 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpfilget(w, r)
-	case http.MethodPut:
 	case http.MethodDelete:
 		p.httpfilputdelete(w, r)
 	case http.MethodPost:
@@ -282,7 +281,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 			p.lbmap.unlock()
 			return
 		}
-	case ActRemoveLB:
+	case ActDestroyLB:
 		p.lbmap.lock()
 		if !p.lbmap.del(lbucket) {
 			s := fmt.Sprintf("Local bucket %s does not exist, nothing to remove", lbucket)
