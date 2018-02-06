@@ -579,6 +579,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
+	case ActSetConfig:
+		t.setconfig(w, r, msg.Name, msg.Value)
 	case ActShutdown:
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
@@ -586,6 +588,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, s)
 	}
 }
+
 func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, apitems []string) {
 	curversion := t.smap.Version
 	var newsmap *Smap

@@ -9,8 +9,10 @@ import "time"
 
 // JSON-formatted control structures
 type ActionMsg struct {
-	Action string `json:"action"` // shutdown, restart - see the const below
-	Param1 string `json:"param1"` // action-specific params
+	Action string `json:"action"` // shutdown, restart, setconfig - the enum below
+	Name   string `json:"name"`   // action-specific params
+	Value  string `json:"value"`
+	Param1 string `json:"param1"`
 	Param2 string `json:"param2"`
 }
 
@@ -23,6 +25,7 @@ const (
 	ActSyncLB       = "synclb"
 	ActCreateLB     = "createlb"
 	ActDestroyLB    = "destroylb"
+	ActSetConfig    = "setconfig"
 )
 
 type GetMsg struct {

@@ -238,6 +238,67 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 
 //=================
 //
+// commong set config
+//
+//=================
+func (h *httprunner) setconfig(w http.ResponseWriter, r *http.Request, name, value string) {
+	lm, hm := ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM
+	checkwm := false
+	atoi := func(value string) (uint32, error) {
+		v, err := strconv.Atoi(value)
+		return uint32(v), err
+	}
+	switch name {
+	case "stats_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse stats_time, err: %v", err))
+		} else {
+			ctx.config.StatsTime = v
+		}
+	case "dont_evict_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err))
+		} else {
+			ctx.config.LRUConfig.DontEvictTime = v
+		}
+	case "lowwm":
+		if v, err := atoi(value); err != nil {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to convert lowwm, err: %v", err))
+		} else {
+			ctx.config.LRUConfig.LowWM, checkwm = v, true
+		}
+	case "highwm":
+		if v, err := atoi(value); err != nil {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to convert highwm, err: %v", err))
+		} else {
+			ctx.config.LRUConfig.HighWM, checkwm = v, true
+		}
+	case "no_xattrs":
+		if v, err := strconv.ParseBool(value); err != nil {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse no_xattrs, err: %v", err))
+		} else {
+			ctx.config.NoXattrs = v
+		}
+	case "passthru":
+		if v, err := strconv.ParseBool(value); err != nil {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err))
+		} else {
+			ctx.config.Proxy.Passthru = v
+		}
+	default:
+		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name))
+	}
+	if checkwm {
+		hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
+		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
+			h.invalmsghdlr(w, r, fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig))
+			ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM = lm, hm
+		}
+	}
+}
+
+//=================
+//
 // http err + spec message + code + stats
 //
 //=================

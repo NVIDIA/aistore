@@ -341,6 +341,8 @@ func (p *proxyrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpdaeget(w, r)
+	case http.MethodPut:
+		p.httpdaeput(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -363,6 +365,27 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		w.Write(jsbytes)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
+		p.invalmsghdlr(w, r, s)
+	}
+}
+
+func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+		return
+	}
+	//
+	// other PUT /daemon actions
+	//
+	var msg ActionMsg
+	if p.readJSON(w, r, &msg) != nil {
+		return
+	}
+	switch msg.Action {
+	case ActSetConfig:
+		p.setconfig(w, r, msg.Name, msg.Value)
+	default:
+		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
