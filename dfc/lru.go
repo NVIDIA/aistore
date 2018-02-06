@@ -45,22 +45,29 @@ func (t *targetrunner) runLRU() {
 	if xlru == nil {
 		return
 	}
-	mntcnt := len(ctx.mountpaths)
 	fschkwg := &sync.WaitGroup{}
 	fsmap := t.mpath2Fsid()
 
 	// init context maps to avoid insert-key races
 	for mpath := range ctx.mountpaths {
-		maxheapmap[mpath] = nil
-		lructxmap[mpath] = nil
+		maxheapmap[mpath+"/"+ctx.config.CloudBuckets] = nil
+		lructxmap[mpath+"/"+ctx.config.CloudBuckets] = nil
+		maxheapmap[mpath+"/"+ctx.config.LocalBuckets] = nil
+		lructxmap[mpath+"/"+ctx.config.LocalBuckets] = nil
 	}
 
-	glog.Infof("%s started, num mp-s %d", xlru.tostring(), mntcnt)
+	glog.Infof("LRU: %s started", xlru.tostring())
 	for _, mpath := range fsmap {
 		fschkwg.Add(1)
-		go t.oneLRU(mpath, fschkwg, xlru)
+		go t.oneLRU(mpath+"/"+ctx.config.LocalBuckets, fschkwg, xlru)
 	}
 	fschkwg.Wait()
+	for _, mpath := range fsmap {
+		fschkwg.Add(1)
+		go t.oneLRU(mpath+"/"+ctx.config.CloudBuckets, fschkwg, xlru)
+	}
+	fschkwg.Wait()
+
 	xlru.etime = time.Now()
 	glog.Infoln(xlru.tostring())
 	t.xactinp.del(xlru.id)
@@ -84,12 +91,13 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactL
 	blocks, bavail, bsize := statfs.Blocks, statfs.Bavail, statfs.Bsize
 	used := blocks - bavail
 	usedpct := used * 100 / blocks
-	glog.Infof("Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", blocks, bavail, usedpct, hwm, lwm)
+	glog.Infof("LRU %s: used %d%% hwm %d%% lwm %d%%", mpath, usedpct, hwm, lwm)
 	if usedpct < uint64(hwm) {
 		return nil
 	}
 	lwmblocks := blocks * uint64(lwm) / 100
 	toevict := int64(used-lwmblocks) * bsize
+	glog.Infof("LRU %s: to evict %.2f MB", mpath, float64(toevict)/1000/1000)
 
 	// init LRU context
 	lructxmap[mpath] = &lructx{totsize: toevict}
@@ -98,15 +106,15 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactL
 	if err := filepath.Walk(mpath, xlru.lruwalkfn); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping mpath %q traversal: %s", mpath, s)
+			glog.Infof("Stopping %q traversal: %s", mpath, s)
 		} else {
-			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+			glog.Errorf("Failed to traverse %q, err: %v", mpath, err)
 		}
 		return err
 	}
 
 	if err := t.doLRU(toevict, mpath); err != nil {
-		glog.Errorf("Error do_LRU mpath %q, err: %v", mpath, err)
+		glog.Errorf("doLRU %q, err: %v", mpath, err)
 		return err
 	}
 	return nil
@@ -179,7 +187,7 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 			break
 		}
 	}
-	assert(h != nil && c != nil)
+	assert(h != nil && c != nil, fqn)
 	// partial optimization:
 	// 	do nothing if the heap's cursize >= totsize &&
 	// 	the file is more recent then the the heap's newest
@@ -213,6 +221,9 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}
+		if glog.V(3) {
+			glog.Infof("LRU %s: removed %q", mpath, fi.fqn)
+		}
 		toevict -= fi.size
 		bevicted += fi.size
 		fevicted++
@@ -238,7 +249,7 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 	if err := syscall.Statfs(mpath, &statfs); err == nil {
 		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
 		if u > uint64(ctx.config.LRUConfig.LowWM)+1 {
-			glog.Errorf("Failed to reach lwm %d%% for mpath %q: used %d%%, remains to evict %.2f MB",
+			glog.Warningf("Failed to reach lwm %d%% for mpath %q: used %d%%, remains to evict %.2f MB",
 				ctx.config.LRUConfig.LowWM, mpath, u, float64(toevict)/1000/1000)
 		}
 	}
