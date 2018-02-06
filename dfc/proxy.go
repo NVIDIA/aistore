@@ -71,6 +71,7 @@ func (p *proxyrunner) run() error {
 	// REST API: register proxy handlers and start listening
 	//
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", p.filehdlr)
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster+"/", p.clusterhdlr) // FIXME
 	p.httprunner.registerhdlr("/", invalhdlr)
@@ -335,6 +336,37 @@ synclbmap:
 //
 //===========================
 
+// "/"+Rversion+"/"+Rdaemon
+func (p *proxyrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		p.httpdaeget(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+		return
+	}
+	var msg GetMsg
+	if p.readJSON(w, r, &msg) != nil {
+		return
+	}
+	switch msg.GetWhat {
+	case GetWhatConfig:
+		jsbytes, err := json.Marshal(ctx.config)
+		assert(err == nil)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsbytes)
+	default:
+		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
+		p.invalmsghdlr(w, r, s)
+	}
+}
+
 // handler for: "/"+Rversion+"/"+Rcluster
 func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -363,7 +395,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.GetWhat {
-	case GetWhatConfig:
+	case GetWhatSmap:
 		jsbytes, err := json.Marshal(ctx.smap)
 		assert(err == nil)
 		w.Header().Set("Content-Type", "application/json")

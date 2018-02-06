@@ -684,6 +684,9 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	)
 	switch msg.GetWhat {
 	case GetWhatConfig:
+		jsbytes, err = json.Marshal(ctx.config)
+		assert(err == nil)
+	case GetWhatSmap:
 		jsbytes, err = json.Marshal(t.si)
 		assert(err == nil, err)
 	case GetWhatStats:

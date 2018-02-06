@@ -43,6 +43,7 @@ type GetMsg struct {
 const (
 	GetWhatFile   = "file" // { "what": "file" } is implied by default and can be omitted
 	GetWhatConfig = "config"
+	GetWhatSmap   = "smap"
 	GetWhatStats  = "stats"
 )
 

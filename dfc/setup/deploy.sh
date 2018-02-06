@@ -13,9 +13,6 @@ PASSTHRU=true
 # local daemon ports start from $PORT+1
 PORT=8079
 
-# Starting ID
-ID=0
-
 PROTO="tcp"
 LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
 LOGROOT="/tmp/dfc"
@@ -36,9 +33,9 @@ MAXCONCURRENTDOWNLOAD=64
 MAXCONCURRENTUPLOAD=64
 MAXPARTSIZE=4294967296
 TESTFSPATHCOUNT=1
-STATSTIMESEC=10
-HTTPTIMEOUTSEC=60
-DONTEVICTIMESEC=600
+STATSTIME="10s"
+HTTPTIMEOUT="60s"
+DONTEVICTIME="10m"
 LOWWATERMARK=75
 HIGHWATERMARK=90
 NOXATTRS=false
@@ -88,16 +85,11 @@ then
 else
 	echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
 fi
-# convert all timers to seconds
-let "STATSTIMESEC=$STATSTIMESEC*10**9"
-let "HTTPTIMEOUTSEC=$HTTPTIMEOUTSEC*10**9"
-let "DONTEVICTIMESEC=$DONTEVICTIMESEC*10**9"
 
 mkdir -p $CONFPATH
 
 for (( c=$START; c<=$END; c++ ))
 do
-	ID=$(expr $ID + 1)
 	PORT=$(expr $PORT + 1)
 	CONFFILE="$CONFPATH/dfc$c.json"
 	LOGDIR="$LOGROOT/$c/log"
@@ -109,8 +101,8 @@ do
 	"cloud_buckets":		"${CLOUDBUCKETS}",
 	"local_buckets":		"${LOCALBUCKETS}",
 	"lb_conf":                	"${LBCONF}",
-	"stats_time":			${STATSTIMESEC},
-	"http_timeout":			${HTTPTIMEOUTSEC},
+	"stats_time":			"${STATSTIME}",
+	"http_timeout":			"${HTTPTIMEOUT}",
 	"listen": {
 		"proto": 		"${PROTO}",
 		"port":			"${PORT}"
@@ -127,7 +119,7 @@ do
 	"lru_config": {
 		"lowwm":		${LOWWATERMARK},
 		"highwm":		${HIGHWATERMARK},
-		"dont_evict_time":	${DONTEVICTIMESEC}
+		"dont_evict_time":      "${DONTEVICTIME}"
 	},
 	"test_fspaths": {
 		"root":			"${TESTFSPATHROOT}",

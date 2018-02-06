@@ -18,22 +18,23 @@ import (
 
 // dfconfig specifies common daemon's configuration structure in JSON format.
 type dfconfig struct {
-	ID            string            `json:"id"`
-	Logdir        string            `json:"logdir"`
-	Loglevel      string            `json:"loglevel"`
-	CloudProvider string            `json:"cloudprovider"`
-	CloudBuckets  string            `json:"cloud_buckets"`
-	LocalBuckets  string            `json:"local_buckets"`
-	LBConf        string            `json:"lb_conf"`
-	StatsTime     time.Duration     `json:"stats_time"`
-	HttpTimeout   time.Duration     `json:"http_timeout"`
-	Listen        listenconfig      `json:"listen"`
-	Proxy         proxyconfig       `json:"proxy"`
-	S3            s3config          `json:"s3"`
-	LRUConfig     lruconfig         `json:"lru_config"`
-	FSpaths       map[string]string `json:"fspaths"`
-	TestFSP       testfspathconf    `json:"test_fspaths"`
-	NoXattrs      bool              `json:"no_xattrs"`
+	Logdir         string            `json:"logdir"`
+	Loglevel       string            `json:"loglevel"`
+	CloudProvider  string            `json:"cloudprovider"`
+	CloudBuckets   string            `json:"cloud_buckets"`
+	LocalBuckets   string            `json:"local_buckets"`
+	LBConf         string            `json:"lb_conf"`
+	StatsTimeStr   string            `json:"stats_time"`
+	StatsTime      time.Duration     `json:"-"` // omitempty
+	HttpTimeoutStr string            `json:"http_timeout"`
+	HttpTimeout    time.Duration     `json:"-"` // omitempty
+	Listen         listenconfig      `json:"listen"`
+	Proxy          proxyconfig       `json:"proxy"`
+	S3             s3config          `json:"s3"`
+	LRUConfig      lruconfig         `json:"lru_config"`
+	FSpaths        map[string]string `json:"fspaths"`
+	TestFSP        testfspathconf    `json:"test_fspaths"`
+	NoXattrs       bool              `json:"no_xattrs"`
 }
 
 const (
@@ -50,9 +51,10 @@ type s3config struct {
 
 // caching configuration
 type lruconfig struct {
-	LowWM         uint32        `json:"lowwm"`           // capacity usage low watermark
-	HighWM        uint32        `json:"highwm"`          // capacity usage high watermark
-	DontEvictTime time.Duration `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
+	LowWM            uint32        `json:"lowwm"`           // capacity usage low watermark
+	HighWM           uint32        `json:"highwm"`          // capacity usage high watermark
+	DontEvictTimeStr string        `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
+	DontEvictTime    time.Duration `json:"-"`               // omitempty
 }
 
 type testfspathconf struct {
@@ -85,11 +87,6 @@ func initconfigparam() error {
 		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Logdir, err)
 		return err
 	}
-	if glog.V(3) {
-		glog.Infof("Logdir %q Proto %s Port %s ID %s loglevel %s",
-			ctx.config.Logdir, ctx.config.Listen.Proto,
-			ctx.config.Listen.Port, ctx.config.ID, ctx.config.Loglevel)
-	}
 	// Validate - TODO more validation
 	hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
 	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
@@ -121,8 +118,9 @@ func initconfigparam() error {
 		//  Not fatal as it will use default logging level
 		glog.Errorf("Failed to set loglevel %v", err)
 	}
-	glog.Infof("Verbosity: %s Config: %q Role: %s StatsTime %v",
-		ctx.config.Loglevel, clivars.conffile, clivars.role, ctx.config.StatsTime)
+	glog.Infof("Logdir: %q Proto: %s Port: %s Verbosity: %s",
+		ctx.config.Logdir, ctx.config.Listen.Proto, ctx.config.Listen.Port, ctx.config.Loglevel)
+	glog.Infof("Config: %q Role: %s StatsTime: %v", clivars.conffile, clivars.role, ctx.config.StatsTime)
 	return err
 }
 
@@ -138,4 +136,19 @@ func getConfig(fpath string) {
 		glog.Errorf("Failed to json-unmarshal config %q, err: %v", fpath, err)
 		os.Exit(1)
 	}
+	// durations
+	if ctx.config.StatsTime, err = time.ParseDuration(ctx.config.StatsTimeStr); err != nil {
+		goto merr
+	}
+	if ctx.config.HttpTimeout, err = time.ParseDuration(ctx.config.HttpTimeoutStr); err != nil {
+		goto merr
+	}
+	if ctx.config.LRUConfig.DontEvictTime, err = time.ParseDuration(ctx.config.LRUConfig.DontEvictTimeStr); err != nil {
+		goto merr
+	}
+	return
+merr:
+	glog.Errorf("Bad time duration format [%s, %s, %s], err: %v",
+		ctx.config.StatsTimeStr, ctx.config.HttpTimeoutStr, ctx.config.LRUConfig.DontEvictTimeStr, err)
+	os.Exit(1)
 }

@@ -113,7 +113,8 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Operation | HTTP action | Example |
 |--- | --- | ---|
 |Unregister storage target| DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://192.168.176.128:8080/v1/cluster/daemon/15205:8081` |
-|Get cluster configuration| GET {"what": "config"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/cluster` |
+|Get cluster map | GET {"what": "smap"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "smap"}' http://192.168.176.128:8080/v1/cluster` |
+|Get proxy or target configuration| GET {"what": "config"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/daemon` |
 | Shutdown target | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
 | Shutdown DFC cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
 | Synchronize cluster map | PUT {"action": "syncsmap"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "syncsmap"}' http://192.168.176.128:8080/v1/cluster` |
