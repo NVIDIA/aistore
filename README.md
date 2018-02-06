@@ -124,7 +124,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Get bucket (i.e., list objects and their properties) | GET properties-and-options /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` (**) |
 | Copy file | PUT /v1/files/from_id/to_id/bucket/object | `curl -i -X PUT http://192.168.176.128:8083/v1/files/from_id/15205:8083/to_id/15205:8081/myS3bucket/myS3object` (***) |
 | Create local bucket | POST {"action": "createlb"} /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/files/abc` |
-| Destroy local bucket | POST {"action": "destroylb"} /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/files/abc` |
+| Destroy local bucket | DELETE /v1/files/bucket | `curl -i -X DELETE http://192.168.176.128:8080/v1/files/abc` |
 
 > (*) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
