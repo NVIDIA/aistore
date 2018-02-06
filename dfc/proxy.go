@@ -383,7 +383,9 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		p.setconfig(w, r, msg.Name, msg.Value)
+		if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+		}
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -524,6 +526,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
 // '{"action": "syncsmap"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/syncsmap => target(s)
 // '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
+// '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
@@ -534,9 +537,21 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
+	case ActSetConfig:
+		if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+		} else {
+			msgbytes, err := json.Marshal(msg) // same message -> all targets
+			assert(err == nil, err)
+			for _, si := range ctx.smap.Smap {
+				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
+				glog.Infof("%s: %s", msg.Action, url)
+				p.call(url, http.MethodPut, msgbytes)
+			}
+		}
 	case ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		msgbytes, err := json.Marshal(msg) // same message -> this target
+		msgbytes, err := json.Marshal(msg) // same message -> all targets
 		assert(err == nil, err)
 		for _, si := range ctx.smap.Smap {
 			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon

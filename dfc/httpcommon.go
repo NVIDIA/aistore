@@ -241,7 +241,7 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 // commong set config
 //
 //=================
-func (h *httprunner) setconfig(w http.ResponseWriter, r *http.Request, name, value string) {
+func (h *httprunner) setconfig(name, value string) string {
 	lm, hm := ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM
 	checkwm := false
 	atoi := func(value string) (uint32, error) {
@@ -251,50 +251,51 @@ func (h *httprunner) setconfig(w http.ResponseWriter, r *http.Request, name, val
 	switch name {
 	case "stats_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse stats_time, err: %v", err))
+			return fmt.Sprintf("Failed to parse stats_time, err: %v", err)
 		} else {
-			ctx.config.StatsTime = v
+			ctx.config.StatsTime, ctx.config.StatsTimeStr = v, value
 		}
 	case "dont_evict_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err))
+			return fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.DontEvictTime = v
+			ctx.config.LRUConfig.DontEvictTime, ctx.config.LRUConfig.DontEvictTimeStr = v, value
 		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to convert lowwm, err: %v", err))
+			return fmt.Sprintf("Failed to convert lowwm, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.LowWM, checkwm = v, true
 		}
 	case "highwm":
 		if v, err := atoi(value); err != nil {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to convert highwm, err: %v", err))
+			return fmt.Sprintf("Failed to convert highwm, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.HighWM, checkwm = v, true
 		}
 	case "no_xattrs":
 		if v, err := strconv.ParseBool(value); err != nil {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse no_xattrs, err: %v", err))
+			return fmt.Sprintf("Failed to parse no_xattrs, err: %v", err)
 		} else {
 			ctx.config.NoXattrs = v
 		}
 	case "passthru":
 		if v, err := strconv.ParseBool(value); err != nil {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err))
+			return fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
 		} else {
 			ctx.config.Proxy.Passthru = v
 		}
 	default:
-		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name))
+		return fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name)
 	}
 	if checkwm {
 		hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-			h.invalmsghdlr(w, r, fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig))
 			ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM = lm, hm
+			return fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig)
 		}
 	}
+	return ""
 }
 
 //=================

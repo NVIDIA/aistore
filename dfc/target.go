@@ -580,7 +580,9 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		t.setconfig(w, r, msg.Name, msg.Value)
+		if errstr := t.setconfig(msg.Name, msg.Value); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		}
 	case ActShutdown:
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
