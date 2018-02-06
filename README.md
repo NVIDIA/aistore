@@ -112,29 +112,30 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 
 | Operation | HTTP action | Example |
 |--- | --- | ---|
-|Unregister storage target| DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://192.168.176.128:8080/v1/cluster/daemon/15205:8081` |
-|Get cluster map | GET {"what": "smap"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "smap"}' http://192.168.176.128:8080/v1/cluster` |
+|Unregister storage target (proxy only) | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://192.168.176.128:8080/v1/cluster/daemon/15205:8081` |
+|Get cluster map (proxy only) | GET {"what": "smap"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "smap"}' http://192.168.176.128:8080/v1/cluster` |
 |Get proxy or target configuration| GET {"what": "config"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/daemon` |
 | Set proxy or target configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8081/v1/daemon` |
+| Set cluster configuration  (proxy only) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8080/v1/cluster` |
 | Shutdown target | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
-| Shutdown DFC cluster | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
-| Synchronize cluster map | PUT {"action": "syncsmap"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "syncsmap"}' http://192.168.176.128:8080/v1/cluster` |
-| Rebalance cluster | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
-| Get cluster statistics | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
+| Shutdown cluster (proxy only) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
+| Synchronize cluster map (proxy only) | PUT {"action": "syncsmap"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "syncsmap"}' http://192.168.176.128:8080/v1/cluster` |
+| Rebalance cluster (proxy only) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
+| Get cluster statistics (proxy only) | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
-| Get object | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (*) |
-| Get bucket (i.e., list objects and their properties) | GET properties-and-options /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` (**) |
-| Copy file | PUT /v1/files/from_id/to_id/bucket/object | `curl -i -X PUT http://192.168.176.128:8083/v1/files/from_id/15205:8083/to_id/15205:8081/myS3bucket/myS3object` (***) |
-| Create local bucket | POST {"action": "createlb"} /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/files/abc` |
-| Destroy local bucket | DELETE /v1/files/bucket | `curl -i -X DELETE http://192.168.176.128:8080/v1/files/abc` |
+| Get object (proxy only) | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (`*`) |
+| Get bucket (i.e., list objects and their properties) | GET properties-and-options /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` (`**`) |
+| Copy file | PUT /v1/files/from_id/to_id/bucket/object | `curl -i -X PUT http://192.168.176.128:8083/v1/files/from_id/15205:8083/to_id/15205:8081/myS3bucket/myS3object` (`***`) |
+| Create local bucket (proxy only) | POST {"action": "createlb"} /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/files/abc` |
+| Destroy local bucket (proxy only) | DELETE /v1/files/bucket | `curl -i -X DELETE http://192.168.176.128:8080/v1/files/abc` |
 
-> (*) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
+> (`*`) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
-> (**) The API returns object names and, optionally, their properties including sizes, creation times, checksums, and more. The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see above). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata. Example: GET '{"props": "size, ctime, checksum"}' results in the output that looks as follows:
+> (`**`) The API returns object names and, optionally, their properties including sizes, creation times, checksums, and more. The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see above). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata. Example: GET '{"props": "size, ctime, checksum"}' results in the output that looks as follows:
 
 > [{"name":"mnt/dfcstore6/dir1/abc","size":2147483584,"ctime":"06 Dec 17 23:20 UTC","checksum":"afb660f04f525df9f18d7e56a71acfa1","type":"","atime":"","bucket":""},{"name":"mnt/dfcstore9/dir3/xyz","size":4146481504,"ctime":"06 Dec 17 13:52 UTC","checksum":"9b17f6202a05293f915809bb1ecff3d8","type":"","atime":"","bucket":""}, ... ]
 
-> (***) Note that the 'from' and 'to' target IDs are validated - cluster map must be synchronized prior to the copy operation.
+> (`***`) Note that the 'from' and 'to' target IDs are validated - cluster map must be synchronized prior to the copy operation.
 
 ### Example: querying runtime statistics
 
