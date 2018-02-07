@@ -58,8 +58,8 @@ var (
 	match      string
 	role       string
 	fnlen      int
-	filesizes  = [3]int{131072, 1048576, 4194304}      // 128 KiB, 1MiB, 4 MiB
-	ratios     = [5]float32{0.1, 0.25, 0.5, 0.75, 0.9} // #gets / #puts
+	filesizes  = [3]int{131072, 1048576, 4194304}         // 128 KiB, 1MiB, 4 MiB
+	ratios     = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9} // #gets / #puts
 )
 
 // worker's result
@@ -322,9 +322,6 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 	}
 	for i := 0; i < numGets; i++ {
 		items := listbucket(t, clibucket, jsbytes)
-		if items == nil {
-			t.Fatal("Bucket has no items to get.")
-		}
 		files := make([]string, 0)
 		for _, it := range items.Entries {
 			// Directories retrieved from listbucket show up as files with '/' endings -
@@ -334,7 +331,7 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 			}
 		}
 		if len(files) == 0 {
-			continue
+			t.Fatalf("Cannot retrieve files from an empty bucket")
 		}
 		keyname := files[random.Intn(len(files)-1)]
 		if testing.Verbose() {
@@ -584,7 +581,7 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 		r       *http.Response
 	)
 	if testing.Verbose() {
-		fmt.Printf("LIST %q", url)
+		fmt.Printf("LIST %q\n", url)
 	}
 	if injson == nil || len(injson) == 0 {
 		r, err = http.Get(url)

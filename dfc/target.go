@@ -39,7 +39,14 @@ type mountPath struct {
 	Fsid syscall.Fsid
 }
 
-type allfinfos []os.FileInfo
+type fipair struct {
+	relname string
+	os.FileInfo
+}
+type allfinfos struct {
+	finfos     []fipair
+	rootLength int
+}
 
 //===========================================================================
 //
@@ -296,20 +303,21 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 	// local bucket
-	allfinfos := allfinfos(make([]os.FileInfo, 0, 128))
+	allfinfos := allfinfos{make([]fipair, 0, 128), 0}
 	for mpath := range ctx.mountpaths {
 		for bucket := range t.lbmap.LBmap {
 			localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
+			allfinfos.rootLength = len(localbucketfqn)
 			if err := filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
 				glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 			}
 		}
 	}
 	t.statsif.add("numlist", 1)
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(allfinfos))}
-	for _, fi := range allfinfos {
+	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(allfinfos.finfos))}
+	for _, fi := range allfinfos.finfos {
 		entry := &BucketEntry{}
-		entry.Name = fi.Name()
+		entry.Name = fi.relname
 		if strings.Contains(msg.GetProps, GetPropsSize) {
 			entry.Size = fi.Size()
 		}
@@ -325,7 +333,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 			}
 		}
 		if strings.Contains(msg.GetProps, GetPropsChecksum) {
-			fqn := t.fqn(bucket, fi.Name()) // FIXME: won't work for nested dirs
+			fqn := t.fqn(bucket, fi.relname)
 			md5hex, errstr := Getxattr(fqn, MD5attr)
 			if errstr != "" {
 				glog.Infoln(errstr)
@@ -343,12 +351,17 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	w.Write(jsbytes)
 }
 
-func (all allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
+func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("listwalkf callback invoked with err: %v", err)
 		return err
 	}
-	all = append(all, osfi)
+	if osfi.IsDir() {
+		// Listbucket doesn't need to return directories
+		return nil
+	}
+	relname := fqn[all.rootLength:]
+	all.finfos = append(all.finfos, fipair{relname, osfi})
 	return nil
 }
 
