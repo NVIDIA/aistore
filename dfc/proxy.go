@@ -26,12 +26,6 @@ import (
 // REST messaging by proxy
 //
 //===============
-// GET '{"what": "stats"}' /v1/cluster => client
-type Allstats struct {
-	Proxystats Proxystats            `json:"proxystats"`
-	Storstats  map[string]*Storstats `json:"storstats"`
-}
-
 //===========================================================================
 //
 // proxy runner
@@ -270,6 +264,11 @@ func (p *proxyrunner) httpfilputdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
+	if r.Method == http.MethodDelete {
+		p.statsif.add("numdelete", 1)
+	} else {
+		p.statsif.add("numput", 1)
+	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 	return
 }
@@ -435,30 +434,32 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// FIXME: run this in a goroutine
+// FIXME: read-lock
 func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
-	var out Allstats
-	out.Storstats = make(map[string]*Storstats, ctx.smap.count())
-	getproxystatsrunner().syncstats(&out.Proxystats)
+	out := newClusterStats()
 	for _, si := range ctx.smap.Smap {
-		stats := Storstats{}
-		out.Storstats[si.DaemonID] = &stats
+		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
+		out.Target[si.DaemonID] = stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 		outjson, err := p.call(url, r.Method, getstatsmsg)
 		if err != nil {
-			s := fmt.Sprintf("Failed to call target %s (is it alive?)", url)
-			p.statsif.add("numerr", 1)
-			http.Error(w, s, http.StatusGone)
+			s := fmt.Sprintf("Failed to call target %s (alive?)", url)
+			p.invalmsghdlr(w, r, s)
+
 			// ask keepalive to work on it
 			p.keepalive.checknow <- err
 			return
 		}
-		if err = json.Unmarshal(outjson, &stats); err != nil {
+		if err = json.Unmarshal(outjson, stats); err != nil {
 			p.invalmsghdlr(w, r, string(outjson))
 			return
 		}
 	}
-	jsbytes, err := json.Marshal(&out)
+	rr := getproxystatsrunner()
+	rr.lock.Lock()
+	out.Proxy = &rr.Core
+	jsbytes, err := json.Marshal(out)
+	rr.lock.Unlock()
 	assert(err == nil, err)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
@@ -505,7 +506,6 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sid := apitems[1]
-	p.statsif.add("numdelete", 1)
 	ctx.smap.lock()
 	if ctx.smap.get(sid) == nil {
 		glog.Errorf("Unknown target %s", sid)

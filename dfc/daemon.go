@@ -321,9 +321,9 @@ func getproxystatsrunner() *proxystatsrunner {
 	return rr
 }
 
-func getproxystats() *Proxystats {
+func getproxystats() *proxyCoreStats {
 	rr := getproxystatsrunner()
-	return &rr.stats
+	return &rr.Core
 }
 
 func getproxy() *proxyrunner {
@@ -354,26 +354,9 @@ func getstorstatsrunner() *storstatsrunner {
 	return rr
 }
 
-func getstorstats() *Storstats {
+func getstorstats() *targetCoreStats {
 	rr := getstorstatsrunner()
-	return &rr.stats
-}
-
-func initusedstats() {
-	r := ctx.rg.runmap[xstorstats]
-	rr, ok := r.(*storstatsrunner)
-	assert(ok)
-	rr.used = make(map[string]int, len(ctx.mountpaths))
-	for path := range ctx.mountpaths {
-		rr.used[path] = 0
-	}
-}
-
-func getusedstats() usedstats {
-	r := ctx.rg.runmap[xstorstats]
-	rr, ok := r.(*storstatsrunner)
-	assert(ok)
-	return rr.used
+	return &rr.Core
 }
 
 func getcloudif() cloudif {

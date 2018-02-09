@@ -28,10 +28,10 @@ const (
 	ActSetConfig    = "setconfig"
 )
 
+// TODO: sort and some props are TBD
 type GetMsg struct {
-	GetWhat       string `json:"what"`        // "config" | "stats"
+	GetWhat       string `json:"what"`        // "config" | "stats" ...
 	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
-	GetType       string `json:"type"`        // "file" | "directory"
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below
 }

@@ -106,9 +106,6 @@ func (t *targetrunner) run() error {
 		}
 	}
 
-	// init per-mp usage stats
-	initusedstats()
-
 	// cloud provider
 	if ctx.config.CloudProvider == amazoncloud {
 		// TODO: sessions
@@ -122,6 +119,9 @@ func (t *targetrunner) run() error {
 		glog.Infof("Warning: running with xattrs disabled")
 		glog.Flush()
 	}
+	// init capacity
+	rr := getstorstatsrunner()
+	rr.initCapacity()
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
@@ -708,9 +708,10 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = json.Marshal(t.si)
 		assert(err == nil, err)
 	case GetWhatStats:
-		var stats Storstats
-		getstorstatsrunner().syncstats(&stats)
-		jsbytes, err = json.Marshal(stats)
+		rr := getstorstatsrunner()
+		rr.lock.Lock()
+		jsbytes, err = json.Marshal(rr)
+		rr.lock.Unlock()
 		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
