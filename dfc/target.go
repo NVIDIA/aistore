@@ -305,12 +305,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	// local bucket
 	allfinfos := allfinfos{make([]fipair, 0, 128), 0}
 	for mpath := range ctx.mountpaths {
-		for bucket := range t.lbmap.LBmap {
-			localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-			allfinfos.rootLength = len(localbucketfqn)
-			if err := filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
-				glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
-			}
+		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
+		allfinfos.rootLength = len(localbucketfqn)
+		if err := filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
+			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		}
 	}
 	t.statsif.add("numlist", 1)

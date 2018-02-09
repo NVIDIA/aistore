@@ -123,10 +123,10 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
-			go func(i int) { putRandomFiles(i, bseed+int64(i), filesize, numops, t, wg, errch, filesput) }(i)
+			go func(i int) { putRandomFiles(i, bseed+int64(i), filesize, numops, clibucket, t, wg, errch, filesput) }(i)
 			nPut--
 		} else {
-			go func(i int) { getRandomFiles(i, bseed+int64(i), numops, t, wg, errch) }(i)
+			go func(i int) { getRandomFiles(i, bseed+int64(i), numops, clibucket, t, wg, errch) }(i)
 			nGet--
 		}
 	}
@@ -309,7 +309,7 @@ func fastRandomFilename(src *rand.Rand) string {
 	return string(b)
 }
 
-func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	defer wg.Done()
 	src := rand.NewSource(seed)
 	random := rand.New(src)
@@ -321,7 +321,11 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 		return
 	}
 	for i := 0; i < numGets; i++ {
-		items := listbucket(t, clibucket, jsbytes)
+		items := listbucket(t, bucket, jsbytes)
+		if items == nil {
+			errch <- fmt.Errorf("Nil listbucket response")
+			return
+		}
 		files := make([]string, 0)
 		for _, it := range items.Entries {
 			// Directories retrieved from listbucket show up as files with '/' endings -
@@ -331,14 +335,15 @@ func getRandomFiles(id int, seed int64, numGets int, t *testing.T, wg *sync.Wait
 			}
 		}
 		if len(files) == 0 {
-			t.Fatalf("Cannot retrieve files from an empty bucket")
+			errch <- fmt.Errorf("Cannot retrieve from an empty bucket")
+			return
 		}
 		keyname := files[random.Intn(len(files)-1)]
 		if testing.Verbose() {
 			fmt.Fprintln(os.Stdout, "GET: "+keyname)
 		}
 		getsGroup.Add(1)
-		go get(keyname, getsGroup, errch, clibucket)
+		go get(keyname, getsGroup, errch, bucket)
 	}
 	getsGroup.Wait()
 }
@@ -369,7 +374,7 @@ func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand
 	return tot, f.Close()
 }
 
-func putRandomFiles(id int, seed int64, fileSize int, numPuts int,
+func putRandomFiles(id int, seed int64, fileSize int, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
 	defer wg.Done()
 	src := rand.NewSource(seed)
@@ -387,7 +392,7 @@ func putRandomFiles(id int, seed int64, fileSize int, numPuts int,
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		put(SmokeDir+fname, clibucket, "smoke/"+fname, putsGroup, errch)
+		put(SmokeDir+fname, bucket, "smoke/"+fname, putsGroup, errch)
 		filesput <- fname
 	}
 	putsGroup.Wait()
