@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -99,10 +100,15 @@ func (r *httprunner) init(s statsif) error {
 	r.si.NodeIPAddr = ipaddr
 	r.si.DaemonPort = ctx.config.Listen.Port
 
-	// NOTE: generate and assign ID and URL here
-	split := strings.Split(ipaddr, ".")
-	cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
-	r.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
+	id := os.Getenv("DFCDAEMONID")
+	if id != "" {
+		r.si.DaemonID = id
+	} else {
+		split := strings.Split(ipaddr, ".")
+		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
+		r.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
+	}
+
 	r.si.DirectURL = "http://" + r.si.NodeIPAddr + ":" + r.si.DaemonPort
 	return nil
 }

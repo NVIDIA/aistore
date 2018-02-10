@@ -1,0 +1,22 @@
+version: '3'
+services:
+  dfcproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - aws.env
+    volumes:
+      - ../dfc:/go/src/github.com/NVIDIA/dfcpub/dfc
+  dfctarget:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ROLE=target
+    env_file:
+      - aws.env
+    volumes:
+      - ../dfc:/go/src/github.com/NVIDIA/dfcpub/dfc
