@@ -69,8 +69,8 @@ The following sequence downloads 100 objects from the bucket "myS3bucket", and t
 finds the corresponding cached files and generated logs:
 ```
 $ go test -v -run=down -bucket=myS3bucket
-$ find /tmp/nvidia/ -type f | grep cache
-$ find /tmp/nvidia/ -type f | grep log
+$ find /tmp/dfc/ -type f | grep cache
+$ find /tmp/dfc/ -type f | grep log
 ```
 
 Don't forget, though, to run 'make deploy' first. 
@@ -139,18 +139,13 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 
 ### Example: querying runtime statistics
 
-
 ```
 $ curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster
 ```
 
 This single command causes execution of multiple `GET {"what": "stats"}` requests within the DFC cluster, and results in a JSON-formatted consolidated output containing both summary and per-target counters, for example:
 
->{"proxystats":{"numget":95,"numpost":3,"numdelete":0,"numerr":0},"storstats":{"15205:8081":{"numget":26,"numcoldget":4,"bytesloaded":8388608,"bytesevicted":0,"filesevicted":0,"numerr":0},"15205:8082":{"numget":31,"numcoldget":2,"bytesloaded":4194304,"bytesevicted":0,"filesevicted":0,"numerr":0},"15205:8083":{"numget":38,"numcoldget":2,"bytesloaded":4194304,"bytesevicted":0,"filesevicted":0,"numerr":0}}}
-
-When fed into any compatible JSON viewer, the printout may look something as follows:
-
-<img src="images/dfc-get-stats.png" alt="DFC GET stats" width="200">
+>{"proxy":{"numget":140,"numput":44,"numpost":3,"numdelete":0,"numerr":0,"numlist":0},"target":{"15205:8081":{"core":{"numget":51,"numput":9,"numpost":0,"numdelete":0,"numerr":0,"numcoldget":0,"bytesloaded":0,"bytesevicted":0,"filesevicted":0,"numsendfile":0,"numrecvfile":0,"numlist":0},"capacity":{"/tmp/dfc/1/1":{"used":7997059072,"avail":5673299968,"usedpct":58},"/tmp/dfc/1/2":{"used":7997059072,"avail":5673299968,"usedpct":58}}},"15205:8082":{"core":{"numget":47,"numput":20,"numpost":0,"numdelete":0,"numerr":0,"numcoldget":0,"bytesloaded":0,"bytesevicted":0,"filesevicted":0,"numsendfile":0,"numrecvfile":0,"numlist":0},"capacity":{"/tmp/dfc/2/1":{"used":7997059072,"avail":5673299968,"usedpct":58},"/tmp/dfc/2/2":{"used":7997059072,"avail":5673299968,"usedpct":58}}},"15205:8083":{"core":{"numget":42,"numput":14,"numpost":0,"numdelete":0,"numerr":0,"numcoldget":0,"bytesloaded":0,"bytesevicted":0,"filesevicted":0,"numsendfile":0,"numrecvfile":0,"numlist":0},"capacity":{"/tmp/dfc/3/1":{"used":7997059072,"avail":5673299968,"usedpct":58},"/tmp/dfc/3/2":{"used":7997059072,"avail":5673299968,"usedpct":58}}}}}
 
 ## Cache Rebalancing
 
