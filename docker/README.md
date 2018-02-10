@@ -1,15 +1,19 @@
-## Getting Started - Docker
+## Getting Started: Docker
 
-DFC can be run as a cluster of Docker containers. You can run DFC in two modes:DEV and PROD. DEV mode is ideal if you are a developer and want a quick way to setup, debug and execute DFC from source. PROD mode is deal for production deployment environment.
+DFC can be run as a cluster of Docker containers. There are two supported modes of operation: development (-dev) and production (-prod). 
 
-For introduction to docker, [watch]( https://www.youtube.com/watch?v=V9IJj4MzZBc)
+in the development mode, all docker containers mount the same host's DFC source directory, and then execute from this single source. Upon restart (of the DFC cluster), all changes made in the host will, therefore, take an immediate effect. 
+
+For introduction to Docker, please watch [Docker 101 youtube](https://www.youtube.com/watch?v=V9IJj4MzZBc)
+
+This README documents the steps to install and run DFC 
 
 #### Install Docker
-1. Download install the docker installation script
+1. Download and install the docker:
 ```
 $ sudo wget -qO- https://get.docker.com/ | sh
 ```
-2. Add your current user to docker group if you are not the root user
+2. Add your current user to the docker group (but only if you are not the root)
 ```
 $ sudo usermod -aG docker $(whoami)
 ```
@@ -18,7 +22,7 @@ $ sudo usermod -aG docker $(whoami)
 $ sudo systemctl enable docker.service
 $ sudo systemctl start docker.service
 ```
-4. Verify if docker service is running using the status command
+4. Verify that docker service is running:
 ```
 sudo systemctl status docker.service
 ```
@@ -37,44 +41,37 @@ $ sudo apt-get install -y python-pip
 $ sudo pip install docker-compose
 ```
 
-#### Starting dfc
+#### Starting DFC
 1. If you have already installed go and configured $GOPATH execute the below command to download DFC source code and all its dependencies. 
 ```
 $ go get -u -v github.com/NVIDIA/dfcpub/dfc
 ```
-2. Create a aws.env file in with aws credentials in the below format. Make sure that the format is exactly as defined below.
+2. Create a file called "aws.env" with AWS credentials in the format specified below (make sure that the format is exactly as defined):
 ```
 $ vi aws.env
    AWS_ACCESS_KEY_ID=<Access_key>
    AWS_SECRET_ACCESS_KEY=<Secret_key>
    AWS_DEFAULT_REGION=<Default region>
 ```
-You will need to pass the path of aws.env with option -a <aws.env path> to deploy_docker.sh script.
+To run DFC docker containers, you will need to pass this aws.env file via -a <aws.env pathname> CLI.
 Example:
 ```
-./deploy_docker.sh -a /tmp/aws.env
+./deploy_docker.sh -a ~/.dfc/aws.env
 ```
-3. cd into the docker directory
-```
-$ cd $GOPATH/src/github.com/NVIDIA/dfcpub/docker
-```
-4. DFC can be launched in two modes and supports ubuntu and centos container images
-  * **dev** - This mounts the synced github source code into the containers. Dev mode is ideal for local development and debug use case. All changes made the made in /dfc folder source code will be reflected on the container. But, you will need to shut down the cluster and restart it for the changes to reflect in the DFC service.
+
+3. As stated above, DFC can be launched in two modes (dev | prod), and supports Ubuntu and CentOS container images.
+
 ```
 $ ./deploy_docker.sh -e dev -a <aws.env file path>
 ```
 
- * **prod** - This mode pulls the code directly from github master and runs the service.
- ```
- $ ./deploy_docker.sh -e prod -a <aws.env file path>
- ```
  * Select the container OS by passing -o parameter to deploy_docker.sh script with argument centos or ubuntu.
  ```
  $ ./deploy_docker.sh -e dev -o centos -a <aws.env file path>
  or
  $ ./deploy_docker.sh -e dev -o ubuntu -a <aws.env file path>
  ```
-Please note that if you are running the service for the first time image build process will take some time; the subsequent runs will use the cached images and be faster.
+Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 5. Scale up/down number of targets
 ```
