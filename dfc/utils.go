@@ -18,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"syscall"
 
 	"github.com/golang/glog"
 )
@@ -179,39 +178,6 @@ func Createfile(fname string) (*os.File, error) {
 	}
 
 	return file, nil
-}
-
-// Get specific attribute for specified path.
-func Getxattr(path string, attrname string) ([]byte, string) {
-	data := make([]byte, 1024)
-	read, err := syscall.Getxattr(path, attrname, data)
-	assert(read < 1024) // FIXME:
-	if err != nil {
-		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, path, err)
-	}
-	return data[:read], ""
-}
-
-// Set specific named attribute for specific path.
-func Setxattr(path string, attrname string, data []byte) (errstr string) {
-	assert(len(data) < 1024) // FIXME: hardcode
-	err := syscall.Setxattr(path, attrname, data, 0)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to set extended attr for path %s attr %s, err: %v",
-			path, attrname, err)
-		return
-	}
-	return ""
-}
-
-// Delete specific named attribute for specific path.
-func Deletexattr(path string, attrname string) (errstr string) {
-	err := syscall.Removexattr(path, attrname)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to remove extended attr for path %s attr %s, err: %v",
-			path, attrname, err)
-	}
-	return ""
 }
 
 // Set DFC's legacy mode to specified mode.

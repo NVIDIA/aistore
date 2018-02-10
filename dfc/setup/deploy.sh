@@ -48,7 +48,20 @@ fi
 
 # (prelim and incomplete) test extended attrs
 TMPF=$(mktemp /tmp/dfc.XXXXXXXXX)
-touch $TMPF; setfattr -n user.comment -v comment $TMPF
+touch $TMPF;
+OS=$(uname -s)
+case $OS in
+	Linux) #Linux
+		setfattr -n user.comment -v comment $TMPF
+		;;
+	Darwin) #macOS
+		xattr -w user.comment comment $TMPF
+		;;
+	*)
+		echo "Sorry " $OS " not supported "
+		rm $TMPF 2>/dev/null
+		exit 1
+esac
 if [ $? -ne 0 ]; then
 	echo "Error: bad kernel configuration: extended attributes are not enabled"
 	rm $TMPF 2>/dev/null

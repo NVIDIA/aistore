@@ -82,28 +82,17 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactL
 	h := &maxheap{}
 	heap.Init(h)
 	maxheapmap[mpath] = h
-
-	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(mpath, &statfs); err != nil {
-		glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
+	toevict, err := get_toevict(mpath, hwm, lwm)
+	if err != nil {
 		return err
 	}
-	blocks, bavail, bsize := statfs.Blocks, statfs.Bavail, statfs.Bsize
-	used := blocks - bavail
-	usedpct := used * 100 / blocks
-	glog.Infof("LRU %s: used %d%% hwm %d%% lwm %d%%", mpath, usedpct, hwm, lwm)
-	if usedpct < uint64(hwm) {
-		return nil
-	}
-	lwmblocks := blocks * uint64(lwm) / 100
-	toevict := int64(used-lwmblocks) * bsize
 	glog.Infof("LRU %s: to evict %.2f MB", mpath, float64(toevict)/1000/1000)
 
 	// init LRU context
 	lructxmap[mpath] = &lructx{totsize: toevict}
 	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
 
-	if err := filepath.Walk(mpath, xlru.lruwalkfn); err != nil {
+	if err = filepath.Walk(mpath, xlru.lruwalkfn); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
 			glog.Infof("Stopping %q traversal: %s", mpath, s)
@@ -161,11 +150,7 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		}
 		return nil
 	}
-	mtime := osfi.ModTime()
-	// access time - portable?
-	stat := osfi.Sys().(*syscall.Stat_t)
-	atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
-	// atime controversy, see e.g. https://en.wikipedia.org/wiki/Stat_(system_call)#Criticism_of_atime
+	atime, mtime, stat := get_amtimes(osfi)
 	usetime := atime
 	if mtime.After(atime) {
 		usetime = mtime
