@@ -34,14 +34,14 @@ import (
 // # go test -v -run=xxx -bench . -count 10
 
 const (
-	LocalRootDir    = "/tmp/iocopy"           // client-side download destination
+	LocalRootDir    = "/tmp/dfc/iocopy"       // client-side download destination
+	SmokeDir        = "/tmp/dfc/smoke"        // smoke test dir
 	ProxyURL        = "http://localhost:8080" // assuming local proxy is listening on 8080
 	TargetURL       = "http://localhost:8081" // assuming local target is listening on 8081
 	RestAPIGet      = ProxyURL + "/v1/files"  // version = 1, resource = files
 	RestAPIProxyPut = ProxyURL + "/v1/files"  // version = 1, resource = files
 	RestAPITgtPut   = TargetURL + "/v1/files" // version = 1, resource = files
-	TestFile        = "/tmp/xattrfile"        // Test file for setting and getting xattr.
-	SmokeDir        = "/tmp/nvidia/smoke/"
+	TestFile        = "/tmp/dfc/xattrfile"    // Test file for setting and getting xattr.
 )
 
 const (
@@ -58,8 +58,8 @@ var (
 	match      string
 	role       string
 	fnlen      int
-	filesizes  = [3]int{131072, 1048576, 4194304}         // 128 KiB, 1MiB, 4 MiB
-	ratios     = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9} // #gets / #puts
+	filesizes  = [3]int{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
+	ratios     = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}         // #gets / #puts
 )
 
 // worker's result
@@ -80,7 +80,12 @@ func init() {
 
 func Test_smoke(t *testing.T) {
 	flag.Parse()
-	os.MkdirAll(SmokeDir, os.ModePerm) //rwxrwxrwx
+	if err := dfc.CreateDir(LocalRootDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", LocalRootDir, err)
+	}
+	if err := dfc.CreateDir(SmokeDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
+	}
 	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
@@ -95,7 +100,7 @@ func Test_smoke(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	errch := make(chan error, 100)
 	for file := range fp {
-		err := os.Remove(SmokeDir + file)
+		err := os.Remove(SmokeDir + "/" + file)
 		if err != nil {
 			t.Error(err)
 		}
@@ -123,7 +128,9 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
-			go func(i int) { putRandomFiles(i, bseed+int64(i), filesize, numops, clibucket, t, wg, errch, filesput) }(i)
+			go func(i int) {
+				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput)
+			}(i)
 			nPut--
 		} else {
 			go func(i int) { getRandomFiles(i, bseed+int64(i), numops, clibucket, t, wg, errch) }(i)
@@ -310,7 +317,9 @@ func fastRandomFilename(src *rand.Rand) string {
 }
 
 func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
-	defer wg.Done()
+	if wg != nil {
+		defer wg.Done()
+	}
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
@@ -374,28 +383,29 @@ func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand
 	return tot, f.Close()
 }
 
-func putRandomFiles(id int, seed int64, fileSize int, numPuts int, bucket string,
+func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
-	defer wg.Done()
+	if wg != nil {
+		defer wg.Done()
+	}
 	src := rand.NewSource(seed)
 	random := rand.New(src)
-	putsGroup := &sync.WaitGroup{}
 	buffer := make([]byte, blocksize)
 	for i := 0; i < numPuts; i++ {
 		fname := fastRandomFilename(random)
-		_, err := writeRandomData(SmokeDir+fname, buffer, fileSize, random)
-		if err != nil {
+		if _, err := writeRandomData(SmokeDir+"/"+fname, buffer, int(fileSize), random); err != nil {
 			t.Error(err)
-			errch <- err
+			if errch != nil {
+				errch <- err
+			}
+			return
 		}
-		putsGroup.Add(1)
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		put(SmokeDir+fname, bucket, "smoke/"+fname, putsGroup, errch)
+		put(SmokeDir+"/"+fname, bucket, "smoke/"+fname, nil, errch)
 		filesput <- fname
 	}
-	putsGroup.Wait()
 }
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
@@ -694,7 +704,9 @@ func Test_proxydel(t *testing.T) {
 }
 
 func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
-	defer wg.Done()
+	if wg != nil {
+		defer wg.Done()
+	}
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
 	client := &http.Client{}
 	if testing.Verbose() {
@@ -703,6 +715,7 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	file, err := os.Open(fname)
 	if err != nil {
 		if errch != nil {
+			fmt.Fprintf(os.Stdout, "Failed to open file %s, err: %v\n", fname, err)
 			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
 		}
 		return
@@ -763,7 +776,9 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	}
 }
 func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
-	defer wg.Done()
+	if wg != nil {
+		defer wg.Done()
+	}
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
 	client := &http.Client{}
 	if testing.Verbose() {

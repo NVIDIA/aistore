@@ -303,3 +303,11 @@ func localLoad(pathname string, v interface{}) error {
 	defer file.Close()
 	return json.NewDecoder(file).Decode(v)
 }
+
+func osremove(prefix, fqn string) error {
+	if err := os.Remove(fqn); err != nil {
+		return err
+	}
+	glog.Infof("%s: removed %q", prefix, fqn)
+	return nil
+}

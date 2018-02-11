@@ -45,19 +45,29 @@ var (
 	configSettings = [6]string{"stats_time", "dont_evict_time", "lowwm", "highwm", "no_xattrs", "passthru"}
 	configValues   = [6]string{"20s", "20s", fmt.Sprint(LowWaterMark), fmt.Sprint(HighWaterMark), "true", "true"}
 	client         = &http.Client{}
+
+	abortonerr = false
 )
 
 func init() {
+	flag.BoolVar(&abortonerr, "abortonerr", abortonerr, "abort on error")
 }
 
 func Test_regression(t *testing.T) {
 	flag.Parse()
-
+	if err := dfc.CreateDir(LocalRootDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", LocalRootDir, err)
+	}
+	if err := dfc.CreateDir(SmokeDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
+	}
 	t.Run("Local Buckets", regressionLocalBuckets)
 	t.Run("Cloud Bucket", regressionCloudBuckets)
 	t.Run("Stats", regressionStats)
 	t.Run("Config", regressionConfig)
 	t.Run("Sync&Rebalance", regressionSyncRebalance)
+
+	// FIXME: LRU won't delete anything that is newer that (time.Now() - dontevicttime)
 	t.Run("LRU", regressionLRU)
 }
 
@@ -73,7 +83,7 @@ func regressionCloudBuckets(t *testing.T) {
 func regressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	createLocalBucket(client, t, bucket)
-	time.Sleep(1500 * time.Millisecond)
+	time.Sleep(time.Second * 2) // for the create-lb to propagate to all targets
 	regressionBucket(client, t, bucket)
 	destroyLocalBucket(client, t, bucket)
 }
@@ -83,18 +93,15 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		filesput = make(chan string, 10)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
+		numPuts  = 10
 	)
-	wg.Add(1)
-	go putRandomFiles(0, 0, 1024, 10, bucket, t, wg, errch, filesput)
-	wg.Wait()
-	selectErr(errch, t)
-	wg.Add(1)
-	close(filesput)
-	go getRandomFiles(0, 0, 10, bucket, t, wg, errch)
-	wg.Wait()
-	selectErr(errch, t)
+	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput)
+	close(filesput) // to exit for range
+	selectErr(errch, "put", t)
+	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
+	selectErr(errch, "get", t)
 	for file := range filesput {
-		err := os.Remove(SmokeDir + file)
+		err := os.Remove(SmokeDir + "/" + file)
 		if err != nil {
 			t.Error(err)
 		}
@@ -102,7 +109,8 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		go del(bucket, "smoke/"+file, wg, errch)
 	}
 	wg.Wait()
-	selectErr(errch, t)
+	selectErr(errch, "delete", t)
+	close(errch)
 }
 
 func regressionStats(t *testing.T) {
@@ -219,16 +227,15 @@ func regressionLRU(t *testing.T) {
 	wg.Add(1)
 	go getRandomFiles(0, 0, 10, clibucket, t, wg, errch)
 	wg.Wait()
-	selectErr(errch, t)
-	// Give time for the proxy to execute LRU
+	selectErr(errch, "get", t)
+	// Give time execute LRU
 	time.Sleep(20 * time.Second)
 	stats = getClusterStats(client, t)
 	for _, v := range stats.Target {
 		for _, c := range v.Capacity {
-			if c.Usedpct < lowwm {
-				t.Errorf("Usedpct %v, below low watermark %v", c.Usedpct, lowwm)
-			} else if c.Usedpct > highwm {
-				t.Errorf("Usedpct %v above high watermark %v", c.Usedpct, highwm)
+			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
+				t.Errorf("Failed to reach lwm %d%%, post eviction used %d%%", lowwm, c.Usedpct)
+				fmt.Fprintln(os.Stderr, "Note: LRU won't evict files that are newer than now-dontevicttime (see config)")
 			}
 		}
 	}
@@ -526,10 +533,14 @@ func min(a, b uint32) uint32 {
 	return b
 }
 
-func selectErr(errch chan error, t *testing.T) {
+func selectErr(errch chan error, verb string, t *testing.T) {
 	select {
 	case err := <-errch:
-		t.Errorf("Failed to put files: %v", err)
+		if abortonerr {
+			t.Fatalf("Failed to %s files: %v", verb, err)
+		} else {
+			t.Errorf("Failed to %s files: %v", verb, err)
+		}
 	default:
 	}
 }
