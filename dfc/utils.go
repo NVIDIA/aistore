@@ -22,6 +22,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	MAXATTRSIZE = 1024
+)
+
 func assert(cond bool, args ...interface{}) {
 	if cond {
 		return

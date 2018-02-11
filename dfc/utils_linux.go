@@ -12,28 +12,18 @@ import (
 
 // Get specific attribute for specified path.
 func Getxattr(path string, attrname string) ([]byte, string) {
-	// find size.
-	size, err := syscall.Getxattr(path, attrname, nil)
+	data := make([]byte, MAXATTRSIZE)
+	read, err := syscall.Getxattr(path, attrname, data)
+	assert(read < MAXATTRSIZE)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
-			path, attrname, err)
-		return nil, errstr
+		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, path, err)
 	}
-	if size > 0 {
-		data := make([]byte, size)
-		read, err := syscall.Getxattr(path, attrname, data)
-		if err != nil {
-			errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
-				path, attrname, err)
-			return nil, errstr
-		}
-		return data[:read], ""
-	}
-	return []byte{}, ""
+	return data[:read], ""
 }
 
 // Set specific named attribute for specific path.
 func Setxattr(path string, attrname string, data []byte) (errstr string) {
+	assert(len(data) < MAXATTRSIZE)
 	err := syscall.Setxattr(path, attrname, data, 0)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to set extended attr for path %s attr %s, err: %v",

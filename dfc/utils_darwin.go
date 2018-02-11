@@ -13,45 +13,29 @@ import (
 
 // Get specific attribute for specified path.
 func Getxattr(path string, attrname string) ([]byte, string) {
-	// find size.
-	sizestr, _, err := syscall.Syscall6(syscall.SYS_GETXATTR,
+	buf := make([]byte, MAXATTRSIZE)
+	// Read into buffer of that size.
+	readstr, _, err := syscall.Syscall6(syscall.SYS_GETXATTR,
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(path))),
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
-		uintptr(0), uintptr(0), uintptr(0), uintptr(0))
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(MAXATTRSIZE), uintptr(0), uintptr(0))
+	assert(int(readstr) < MAXATTRSIZE)
 	if err != syscall.Errno(0) {
 		errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
 			path, attrname, err)
 		return nil, errstr
 	}
-	size := int(sizestr)
-	if size > 0 {
-		buf := make([]byte, size)
-		// Read into buffer of that size.
-		readstr, _, err := syscall.Syscall6(syscall.SYS_GETXATTR,
-			uintptr(unsafe.Pointer(syscall.StringBytePtr(path))),
-			uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
-			uintptr(unsafe.Pointer(&buf[0])), uintptr(size), uintptr(0), uintptr(0))
-		if err != syscall.Errno(0) {
-			errstr := fmt.Sprintf("Failed to get extended attr for path %s attr %s, err: %v",
-				path, attrname, err)
-			return nil, errstr
-		}
-		return buf[:int(readstr)], ""
-	}
-	return []byte{}, ""
+	return buf[:int(readstr)], ""
 }
 
 // Set specific named attribute for specific path.
 func Setxattr(path string, attrname string, data []byte) (errstr string) {
-	var dataval *byte = nil
 	datalen := len(data)
-	if datalen > 0 {
-		dataval = &data[0]
-	}
+	assert(datalen < MAXATTRSIZE)
 	_, _, err := syscall.Syscall6(syscall.SYS_SETXATTR,
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(path))),
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
-		uintptr(unsafe.Pointer(dataval)),
+		uintptr(unsafe.Pointer(&data[0])),
 		uintptr(datalen), uintptr(0), uintptr(0))
 
 	if err != syscall.Errno(0) {
