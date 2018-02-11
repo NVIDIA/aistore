@@ -374,7 +374,6 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 9)
 	// case: PUT
 	if len(apitems) == directput {
-		glog.Infof("PUT: %s", fqn)
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
 		}
@@ -383,6 +382,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			objname = strings.Join(apitems[1:], "/")
 		}
 		fqn = t.fqn(bucket, objname)
+		glog.Infof("PUT: %s", fqn)
 		errstr := ""
 		md5 := r.Header.Get("Content-MD5")
 		assert(md5 != "")

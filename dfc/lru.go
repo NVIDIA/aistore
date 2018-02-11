@@ -56,7 +56,7 @@ func (t *targetrunner) runLRU() {
 		lructxmap[mpath+"/"+ctx.config.LocalBuckets] = nil
 	}
 
-	glog.Infof("LRU: %s started", xlru.tostring())
+	glog.Infof("LRU: %s started: dontevictime %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
 	for _, mpath := range fsmap {
 		fschkwg.Add(1)
 		go t.oneLRU(mpath+"/"+ctx.config.LocalBuckets, fschkwg, xlru)
@@ -148,6 +148,9 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	now := time.Now()
 	dontevictime := now.Add(-ctx.config.LRUConfig.DontEvictTime)
 	if usetime.After(dontevictime) {
+		if glog.V(3) {
+			glog.Infof("DEBUG: not evicting %s (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
+		}
 		return nil
 	}
 	// remove invalid object files.
@@ -178,6 +181,9 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	// 	the file is more recent then the the heap's newest
 	// full optimization (tbd) entails compacting the heap when its cursize >> totsize
 	if c.cursize >= c.totsize && usetime.After(c.newest) {
+		if glog.V(3) {
+			glog.Infof("DEBUG: use-time-after (usetime=%v, newest=%v) %s", usetime, c.newest, fqn)
+		}
 		return nil
 	}
 	// push and update the context

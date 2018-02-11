@@ -38,15 +38,21 @@ var (
 	GetSmapMsg           = dfc.GetMsg{GetWhat: dfc.GetWhatSmap}
 	SyncmapMsg           = dfc.ActionMsg{Action: dfc.ActSyncSmap}
 	RebalanceMsg         = dfc.ActionMsg{Action: dfc.ActionRebalance}
+	HighWaterMark        = uint32(80)
+	LowWaterMark         = uint32(60)
+	UpdTime              = time.Second * 20
+	configRegression     = map[string]string{
+		"stats_time":      fmt.Sprintf("%v", UpdTime),
+		"dont_evict_time": fmt.Sprintf("%v", UpdTime),
+		"lowwm":           fmt.Sprintf("%d", LowWaterMark),
+		"highwm":          fmt.Sprintf("%d", HighWaterMark),
+		"no_xattrs":       "false",
+		"passthru":        "true",
+	}
+	abortonerr       = true
+	regressionFailed = false
 
-	HighWaterMark = uint32(80)
-	LowWaterMark  = uint32(60)
-
-	configSettings = [6]string{"stats_time", "dont_evict_time", "lowwm", "highwm", "no_xattrs", "passthru"}
-	configValues   = [6]string{"20s", "20s", fmt.Sprint(LowWaterMark), fmt.Sprint(HighWaterMark), "true", "true"}
-	client         = &http.Client{}
-
-	abortonerr = false
+	client = &http.Client{}
 )
 
 func init() {
@@ -55,6 +61,9 @@ func init() {
 
 func Test_regression(t *testing.T) {
 	flag.Parse()
+
+	fmt.Fprintf(os.Stdout, "=== abortonerr = %v\n\n", abortonerr)
+
 	if err := dfc.CreateDir(LocalRootDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalRootDir, err)
 	}
@@ -83,9 +92,12 @@ func regressionCloudBuckets(t *testing.T) {
 func regressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	createLocalBucket(client, t, bucket)
-	time.Sleep(time.Second * 2) // for the create-lb to propagate to all targets
+	time.Sleep(time.Second * 2) // FIXME: must be deterministic
 	regressionBucket(client, t, bucket)
 	destroyLocalBucket(client, t, bucket)
+	if abortonerr && t.Failed() {
+		regressionFailed = true
+	}
 }
 
 func regressionBucket(client *http.Client, t *testing.T, bucket string) {
@@ -96,21 +108,24 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		numPuts  = 10
 	)
 	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput)
-	close(filesput) // to exit for range
+	close(filesput) // to exit for-range
 	selectErr(errch, "put", t)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
 	selectErr(errch, "get", t)
-	for file := range filesput {
-		err := os.Remove(SmokeDir + "/" + file)
+	for fname := range filesput {
+		err := os.Remove(SmokeDir + "/" + fname)
 		if err != nil {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go del(bucket, "smoke/"+file, wg, errch)
+		go del(bucket, "smoke/"+fname, wg, errch)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t)
 	close(errch)
+	if abortonerr && t.Failed() {
+		regressionFailed = true
+	}
 }
 
 func regressionStats(t *testing.T) {
@@ -145,105 +160,197 @@ func regressionStats(t *testing.T) {
 			}
 		}
 	}
+	if abortonerr && t.Failed() {
+		regressionFailed = true
+	}
 }
 
 func regressionConfig(t *testing.T) {
 	oconfig := getConfig(RestAPIDaemonPath, client, t)
-	_ = oconfig
+	olruconfig := oconfig["lru_config"].(map[string]interface{})
+	oproxyconfig := oconfig["proxy"].(map[string]interface{})
 
-	for i := 0; i < len(configSettings); i++ {
-		setConfig(configSettings[i], configValues[i], RestAPIDaemonPath, client, t)
+	for k, v := range configRegression {
+		setConfig(k, v, RestAPIClusterPath, client, t)
 	}
 
 	nconfig := getConfig(RestAPIDaemonPath, client, t)
-	lruconfig := nconfig["lru_config"].(map[string]interface{})
-	proxyconfig := nconfig["proxy"].(map[string]interface{})
+	nlruconfig := nconfig["lru_config"].(map[string]interface{})
+	nproxyconfig := nconfig["proxy"].(map[string]interface{})
 
-	if nconfig["stats_time"] != configValues[0] {
+	if nconfig["stats_time"] != configRegression["stats_time"] {
 		t.Errorf("StatsTime was not set properly: %v, should be: %v",
-			nconfig["stats_time"], configValues[0])
+			nconfig["stats_time"], configRegression["stats_time"])
+	} else {
+		o := oconfig["stats_time"].(string)
+		setConfig("stats_time", o, RestAPIClusterPath, client, t)
 	}
-	if lruconfig["dont_evict_time"] != configValues[1] {
+	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
-			lruconfig["dont_evict_time"], configValues[1])
+			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
+	} else {
+		o := olruconfig["dont_evict_time"].(string)
+		setConfig("dont_evict_time", o, RestAPIClusterPath, client, t)
 	}
-	if lw, err := strconv.ParseFloat(configValues[2], 64); err != nil {
+	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
-	} else if lruconfig["lowwm"] != lw {
-		t.Errorf("LowWatermark was not set properly: %v, should be: %v",
-			lruconfig["lowwm"], lw)
+	} else if nlruconfig["lowwm"] != float64(lw) {
+		t.Errorf("LowWatermark was not set properly: %d, should be: %d",
+			nlruconfig["lowwm"], lw)
+	} else {
+		o := olruconfig["lowwm"].(float64)
+		setConfig("lowwm", strconv.Itoa(int(o)), RestAPIClusterPath, client, t)
 	}
-	if hw, err := strconv.ParseFloat(configValues[3], 64); err != nil {
+	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
-	} else if lruconfig["highwm"] != hw {
-		t.Errorf("HighWatermark was not set properly: %v, should be: %v",
-			lruconfig["highwm"], hw)
+	} else if nlruconfig["highwm"] != float64(hw) {
+		t.Errorf("HighWatermark was not set properly: %d, should be: %d",
+			nlruconfig["highwm"], hw)
+	} else {
+		o := olruconfig["highwm"].(float64)
+		setConfig("highwm", strconv.Itoa(int(o)), RestAPIClusterPath, client, t)
 	}
-	if nx, err := strconv.ParseBool(configValues[4]); err != nil {
+	if nx, err := strconv.ParseBool(configRegression["no_xattrs"]); err != nil {
 		t.Fatalf("Error parsing NoXattrs: %v", err)
 	} else if nconfig["no_xattrs"] != nx {
 		t.Errorf("NoXattrs was not set properly: %v, should be: %v",
 			nconfig["no_xattrs"], nx)
+	} else {
+		o := oconfig["no_xattrs"].(bool)
+		setConfig("no_xattrs", strconv.FormatBool(o), RestAPIClusterPath, client, t)
 	}
-	if pt, err := strconv.ParseBool(configValues[5]); err != nil {
+	if pt, err := strconv.ParseBool(configRegression["passthru"]); err != nil {
 		t.Fatalf("Error parsing Passthru: %v", err)
-	} else if proxyconfig["passthru"] != pt {
+	} else if nproxyconfig["passthru"] != pt {
 		t.Errorf("Proxy Passthru was not set properly: %v, should be %v",
-			proxyconfig["passthru"], pt)
+			nproxyconfig["passthru"], pt)
+	} else {
+		o := oproxyconfig["passthru"].(bool)
+		setConfig("passthru", strconv.FormatBool(o), RestAPIClusterPath, client, t)
+	}
+
+	if abortonerr && t.Failed() {
+		regressionFailed = true
 	}
 }
 
 func regressionLRU(t *testing.T) {
 	var (
 		errch   = make(chan error, 100)
-		wg      = &sync.WaitGroup{}
 		usedpct = uint32(100)
 	)
+	//
+	// remember targets' watermarks
+	//
 	smap := getClusterMap(client, t)
-	lwms := make([]interface{}, len(smap.Smap))
-	hwms := make([]interface{}, len(smap.Smap))
-	i := 0
-	for _, di := range smap.Smap {
+	lwms := make(map[string]interface{})
+	hwms := make(map[string]interface{})
+	bytesEvictedOrig := make(map[string]int64)
+	filesEvictedOrig := make(map[string]int64)
+	for k, di := range smap.Smap {
 		cfg := getConfig(di.DirectURL+RestAPIDaemonSuffix, client, t)
 		lrucfg := cfg["lru_config"].(map[string]interface{})
-		lwms[i] = lrucfg["lowwm"]
-		hwms[i] = lrucfg["highwm"]
-		i++
+		lwms[k] = lrucfg["lowwm"]
+		hwms[k] = lrucfg["highwm"]
 	}
+	//
+	// add some files
+	//
+	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
+	selectErr(errch, "get", t)
+	if t.Failed() {
+		return
+	}
+	//
+	// find out min usage %% across all targets
+	//
 	stats := getClusterStats(client, t)
-	for _, v := range stats.Target {
+	for k, v := range stats.Target {
+		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Bytesevicted, v.Core.Filesevicted
 		for _, c := range v.Capacity {
 			usedpct = min(usedpct, c.Usedpct)
 		}
 	}
+	fmt.Fprintf(os.Stdout, "LRU: current min space usage in the cluster: %d%%\n", usedpct)
 	var (
-		lowwm  = usedpct - 3
+		lowwm  = usedpct - 5
 		highwm = usedpct - 1
 	)
-	for _, di := range smap.Smap {
-		setConfig("lowwm", fmt.Sprint(lowwm), di.DirectURL+RestAPIDaemonSuffix, client, t)
-		setConfig("highwm", fmt.Sprint(highwm), di.DirectURL+RestAPIDaemonSuffix, client, t)
+	if lowwm < 10 {
+		t.Errorf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
+		return
 	}
-	wg.Add(1)
-	go getRandomFiles(0, 0, 10, clibucket, t, wg, errch)
-	wg.Wait()
-	selectErr(errch, "get", t)
-	// Give time execute LRU
-	time.Sleep(20 * time.Second)
+	oconfig := getConfig(RestAPIDaemonPath, client, t)
+	if t.Failed() {
+		return
+	}
+	//
+	// all targets: set new watermarks; restore upon exit
+	//
+	olruconfig := oconfig["lru_config"].(map[string]interface{})
+	defer setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), RestAPIClusterPath, client, t)
+	defer func() {
+		for k, di := range smap.Smap {
+			setConfig("highwm", fmt.Sprint(hwms[k]), di.DirectURL+RestAPIDaemonSuffix, client, t)
+			setConfig("lowwm", fmt.Sprint(lwms[k]), di.DirectURL+RestAPIDaemonSuffix, client, t)
+		}
+	}()
+	//
+	// cluster-wide reduce dont-evict-time
+	//
+	dontevicttimestr := "1s"
+	sleeptime, err := time.ParseDuration(oconfig["stats_time"].(string)) // to make sure the stats get updated
+	if err != nil {
+		t.Fatalf("Failed to parse stats_time: %v", err)
+	}
+	setConfig("dont_evict_time", dontevicttimestr, RestAPIClusterPath, client, t) // NOTE: 1 second
+	if t.Failed() {
+		return
+	}
+	setConfig("lowwm", fmt.Sprint(lowwm), RestAPIClusterPath, client, t)
+	if t.Failed() {
+		return
+	}
+	setConfig("highwm", fmt.Sprint(highwm), RestAPIClusterPath, client, t)
+	if t.Failed() {
+		return
+	}
+	waitProgressBar("LRU: ", sleeptime)
+	//
+	// results
+	//
 	stats = getClusterStats(client, t)
-	for _, v := range stats.Target {
-		for _, c := range v.Capacity {
+	for k, v := range stats.Target {
+		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
+		fmt.Fprintf(os.Stdout, "Target %s: evicted %.2f MB (%dB) and %d files\n",
+			k, float64(bytes)/1000/1000, bytes, v.Core.Filesevicted-filesEvictedOrig[k])
+
+		for mpath, c := range v.Capacity {
 			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
-				t.Errorf("Failed to reach lwm %d%%, post eviction used %d%%", lowwm, c.Usedpct)
-				fmt.Fprintln(os.Stderr, "Note: LRU won't evict files that are newer than now-dontevicttime (see config)")
+				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s still uses %d%%", k, lowwm, mpath, c.Usedpct)
 			}
 		}
 	}
-	i = 0
-	for _, di := range smap.Smap {
-		setConfig("highwm", fmt.Sprint(hwms[i]), di.DirectURL+RestAPIDaemonSuffix, client, t)
-		setConfig("lowwm", fmt.Sprint(lwms[i]), di.DirectURL+RestAPIDaemonSuffix, client, t)
-		i++
+}
+
+// helper (likely to be used)
+func waitProgressBar(prefix string, wait time.Duration) {
+	ticker := time.NewTicker(time.Second * 5)
+	fmt.Fprintf(os.Stdout, prefix)
+waitloop:
+	for i := 1; ; i++ {
+		select {
+		case <-ticker.C:
+			if regressionFailed {
+				return
+			}
+			elapsed := time.Second * 2 * time.Duration(i)
+			if elapsed >= wait {
+				fmt.Fprintf(os.Stdout, "\n")
+				break waitloop
+			}
+			fmt.Fprintf(os.Stdout, "----%d%%", (elapsed * 100 / wait))
+		}
 	}
 }
 
