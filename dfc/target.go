@@ -374,6 +374,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 9)
 	// case: PUT
 	if len(apitems) == directput {
+		glog.Infof("PUT: %s", fqn)
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
 		}

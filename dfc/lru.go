@@ -140,16 +140,6 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		return fmt.Errorf("%s aborted - exiting lruwalkfn", xlru.tostring())
 	}
 
-	// Delete invalid object files.
-	if isinvalidobj(fqn) {
-		err = os.Remove(fqn)
-		if err != nil {
-			glog.Errorf("LRU: failed to delete file %s, err: %v", fqn, err)
-		} else if glog.V(3) {
-			glog.Infof("LRU: removed invalid file %s", fqn)
-		}
-		return nil
-	}
 	atime, mtime, stat := get_amtimes(osfi)
 	usetime := atime
 	if mtime.After(atime) {
@@ -158,6 +148,16 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	now := time.Now()
 	dontevictime := now.Add(-ctx.config.LRUConfig.DontEvictTime)
 	if usetime.After(dontevictime) {
+		return nil
+	}
+	// remove invalid object files.
+	if isinvalidobj(fqn) {
+		err = osremove("lru-invalid", fqn)
+		if err != nil {
+			glog.Errorf("LRU: failed to delete file %s, err: %v", fqn, err)
+		} else if glog.V(3) {
+			glog.Infof("LRU: removed invalid file %s", fqn)
+		}
 		return nil
 	}
 	var (
@@ -202,7 +202,7 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 	)
 	for h.Len() > 0 && toevict > 10 {
 		fi := heap.Pop(h).(*fileinfo)
-		if err := os.Remove(fi.fqn); err != nil {
+		if err := osremove("lru", fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}

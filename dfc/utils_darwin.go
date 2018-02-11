@@ -41,9 +41,8 @@ func Setxattr(path string, attrname string, data []byte) (errstr string) {
 	if err != syscall.Errno(0) {
 		errstr = fmt.Sprintf("Failed to set extended attr for path %s attr %s, err: %v",
 			path, attrname, err)
-		return errstr
 	}
-	return ""
+	return
 }
 
 // Delete specific named attribute for specific path.
@@ -56,5 +55,5 @@ func Deletexattr(path string, attrname string) (errstr string) {
 		errstr = fmt.Sprintf("Failed to remove extended attr for path %s attr %s, err: %v",
 			path, attrname, err)
 	}
-	return ""
+	return
 }
