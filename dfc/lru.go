@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/golang/glog"
@@ -41,6 +40,7 @@ var lructxmap = make(map[string]*lructx)
 
 // FIXME: mountpath.enabled is never used
 func (t *targetrunner) runLRU() {
+	// FIXME: if LRU config has changed we need to force new LRU transaction
 	xlru := t.xactinp.renewLRU(t)
 	if xlru == nil {
 		return
@@ -56,7 +56,7 @@ func (t *targetrunner) runLRU() {
 		lructxmap[mpath+"/"+ctx.config.LocalBuckets] = nil
 	}
 
-	glog.Infof("LRU: %s started: dontevictime %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
+	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
 	for _, mpath := range fsmap {
 		fschkwg.Add(1)
 		go t.oneLRU(mpath+"/"+ctx.config.LocalBuckets, fschkwg, xlru)
@@ -68,6 +68,16 @@ func (t *targetrunner) runLRU() {
 	}
 	fschkwg.Wait()
 
+	// final check
+	rr := getstorstatsrunner()
+	rr.updateCapacity()
+
+	for mpath := range ctx.mountpaths {
+		fscapacity := rr.Capacity[mpath]
+		if fscapacity.Usedpct > ctx.config.LRUConfig.LowWM+1 {
+			glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)", mpath, ctx.config.LRUConfig.LowWM, fscapacity.Usedpct)
+		}
+	}
 	xlru.etime = time.Now()
 	glog.Infoln(xlru.tostring())
 	t.xactinp.del(xlru.id)
@@ -76,13 +86,10 @@ func (t *targetrunner) runLRU() {
 // TODO: local-buckets-first LRU policy
 func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
-	hwm := ctx.config.LRUConfig.HighWM
-	lwm := ctx.config.LRUConfig.LowWM
-
 	h := &maxheap{}
 	heap.Init(h)
 	maxheapmap[mpath] = h
-	toevict, err := get_toevict(mpath, hwm, lwm)
+	toevict, err := get_toevict(mpath, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
 	if err != nil {
 		return err
 	}
@@ -204,7 +211,6 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 	h := maxheapmap[mpath]
 	var (
 		fevicted, bevicted int64
-		cnt                int
 	)
 	for h.Len() > 0 && toevict > 10 {
 		fi := heap.Pop(h).(*fileinfo)
@@ -218,31 +224,11 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 		toevict -= fi.size
 		bevicted += fi.size
 		fevicted++
-		cnt++
-		if cnt >= 10 { // check the space every so often to avoid overshooting
-			cnt = 0
-			statfs := syscall.Statfs_t{}
-			if err := syscall.Statfs(mpath, &statfs); err == nil {
-				u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-				if u <= uint64(ctx.config.LRUConfig.LowWM)+1 {
-					break
-				}
-			}
-		}
 	}
 	if ctx.rg != nil { // FIXME: for *_test only
 		stats := getstorstats()
 		stats.add("bytesevicted", bevicted)
 		stats.add("filesevicted", fevicted)
-	}
-	// final check
-	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(mpath, &statfs); err == nil {
-		u := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-		if u > uint64(ctx.config.LRUConfig.LowWM)+1 {
-			glog.Warningf("Failed to reach lwm %d%% for mpath %q: used %d%%, remains to evict %.2f MB",
-				ctx.config.LRUConfig.LowWM, mpath, u, float64(toevict)/1000/1000)
-		}
 	}
 	return nil
 }

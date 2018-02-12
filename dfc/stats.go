@@ -216,6 +216,7 @@ func (r *storstatsrunner) log() {
 	// nothing changed since the previous invocation
 	if r.Core.Numput == r.ccopy.Numput &&
 		r.Core.Numget == r.ccopy.Numget &&
+		r.Core.Numdelete == r.ccopy.Numdelete &&
 		r.Core.Bytesloaded == r.ccopy.Bytesloaded &&
 		r.Core.Bytesevicted == r.ccopy.Bytesevicted {
 		return

@@ -276,7 +276,7 @@ func regressionLRU(t *testing.T) {
 		lowwm  = usedpct - 5
 		highwm = usedpct - 1
 	)
-	if lowwm < 10 {
+	if int(lowwm) < 10 {
 		t.Errorf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
 		return
 	}
@@ -316,18 +316,20 @@ func regressionLRU(t *testing.T) {
 		return
 	}
 	waitProgressBar("LRU: ", sleeptime)
+	getRandomFiles(0, 0, 1, clibucket, t, nil, errch)
+	waitProgressBar("LRU: ", sleeptime)
 	//
 	// results
 	//
 	stats = getClusterStats(client, t)
 	for k, v := range stats.Target {
 		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
-		fmt.Fprintf(os.Stdout, "Target %s: evicted %.2f MB (%dB) and %d files\n",
-			k, float64(bytes)/1000/1000, bytes, v.Core.Filesevicted-filesEvictedOrig[k])
+		fmt.Fprintf(os.Stdout, "Target %s: evicted %d files - %.2f MB (%dB) total\n",
+			k, v.Core.Filesevicted-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
 
 		for mpath, c := range v.Capacity {
 			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
-				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s still uses %d%%", k, lowwm, mpath, c.Usedpct)
+				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s, used space %d%%", k, lowwm, mpath, c.Usedpct)
 			}
 		}
 	}
