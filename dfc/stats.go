@@ -52,6 +52,7 @@ type targetCoreStats struct {
 }
 
 type statsrunner struct {
+	sync.Mutex
 	namedrunner
 	statslogger
 	chsts chan struct{}
@@ -61,7 +62,6 @@ type proxystatsrunner struct {
 	statsrunner `json:"-"`
 	Core        proxyCoreStats `json:"core"`
 	ccopy       proxyCoreStats `json:"-"`
-	lock        *sync.Mutex    `json:"-"`
 }
 
 type storstatsrunner struct {
@@ -69,7 +69,6 @@ type storstatsrunner struct {
 	Core        targetCoreStats         `json:"core"`
 	Capacity    map[string]*fscapacity  `json:"capacity"`
 	ccopy       targetCoreStats         `json:"-"`
-	lock        *sync.Mutex             `json:"-"`
 	fsmap       map[syscall.Fsid]string `json:"-"`
 }
 
@@ -177,14 +176,13 @@ func (r *statsrunner) log() {
 }
 
 func (r *proxystatsrunner) run() error {
-	r.lock = &sync.Mutex{}
 	return r.runcommon(r)
 }
 
 func (r *proxystatsrunner) syncstats(stats *proxyCoreStats) {
-	r.lock.Lock()
+	r.Lock()
 	copyStruct(stats, &r.Core)
-	r.lock.Unlock()
+	r.Unlock()
 }
 
 // statslogger interface impl
@@ -202,14 +200,13 @@ func (r *proxystatsrunner) log() {
 }
 
 func (r *storstatsrunner) run() error {
-	r.lock = &sync.Mutex{}
 	return r.runcommon(r)
 }
 
 func (r *storstatsrunner) syncstats(stats *targetCoreStats) {
-	r.lock.Lock()
+	r.Lock()
 	copyStruct(stats, &r.Core)
-	r.lock.Unlock()
+	r.Unlock()
 }
 
 func (r *storstatsrunner) log() {
@@ -242,8 +239,8 @@ func (r *storstatsrunner) log() {
 }
 
 func (r *storstatsrunner) updateCapacity() (runlru bool) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	for _, mpath := range r.fsmap {
 		statfs := &syscall.Statfs_t{}
 		if err := syscall.Statfs(mpath, statfs); err != nil {

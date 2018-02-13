@@ -708,9 +708,9 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 	case GetWhatStats:
 		rr := getstorstatsrunner()
-		rr.lock.Lock()
+		rr.Lock()
 		jsbytes, err = json.Marshal(rr)
-		rr.lock.Unlock()
+		rr.Unlock()
 		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)

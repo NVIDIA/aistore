@@ -41,9 +41,9 @@ type cliVars struct {
 
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 type Smap struct {
+	sync.Mutex
 	Smap        map[string]*daemonInfo `json:"smap"`
 	Version     int64                  `json:"version"`
-	mutex       *sync.Mutex
 	syncversion int64
 }
 
@@ -65,9 +65,9 @@ type daemonInfo struct {
 
 // local (cache-only) bucket names and their TBD props
 type lbmap struct {
+	sync.Mutex
 	LBmap       map[string]string `json:"l_bmap"`
 	Version     int64             `json:"version"`
-	mutex       *sync.Mutex
 	syncversion int64
 }
 
@@ -141,11 +141,11 @@ func (m *Smap) get(sid string) *daemonInfo {
 }
 
 func (m *Smap) lock() {
-	m.mutex.Lock()
+	m.Lock()
 }
 
 func (m *Smap) unlock() {
-	m.mutex.Unlock()
+	m.Unlock()
 }
 
 //====================
@@ -184,11 +184,11 @@ func (m *lbmap) versionLocked() int64 {
 }
 
 func (m *lbmap) lock() {
-	m.mutex.Lock()
+	m.Lock()
 }
 
 func (m *lbmap) unlock() {
-	m.mutex.Unlock()
+	m.Unlock()
 }
 
 //====================
@@ -278,7 +278,7 @@ func dfcinit() {
 				clivars.ntargets)
 		}
 		confdir := filepath.Dir(clivars.conffile)
-		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8), mutex: &sync.Mutex{}}
+		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8)}
 		ctx.rg.add(&proxyrunner{confdir: confdir}, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 		ctx.rg.add(&keepalive{}, xkeepalive)

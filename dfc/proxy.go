@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -48,7 +47,7 @@ func (p *proxyrunner) run() error {
 	p.keepalive = getkeepaliverunner()
 	p.xactinp = newxactinp()
 	// local (aka cache-only) buckets
-	p.lbmap = &lbmap{LBmap: make(map[string]string), mutex: &sync.Mutex{}}
+	p.lbmap = &lbmap{LBmap: make(map[string]string)}
 	lbpathname := p.confdir + "/" + ctx.config.LBConf
 	p.lbmap.lock()
 	if localLoad(lbpathname, p.lbmap) != nil {
@@ -456,10 +455,10 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 		}
 	}
 	rr := getproxystatsrunner()
-	rr.lock.Lock()
+	rr.Lock()
 	out.Proxy = &rr.Core
 	jsbytes, err := json.Marshal(out)
-	rr.lock.Unlock()
+	rr.Unlock()
 	assert(err == nil, err)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
