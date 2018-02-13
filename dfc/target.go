@@ -60,6 +60,7 @@ type targetrunner struct {
 	xactinp   *xactInProgress
 	starttime time.Time
 	lbmap     *lbmap
+	dmap      *dmap
 }
 
 // start target runner
@@ -70,6 +71,8 @@ func (t *targetrunner) run() error {
 	t.xactinp = newxactinp()
 	// local (cache-only) buckets
 	t.lbmap = &lbmap{LBmap: make(map[string]string)}
+	// decongested protected map: in-progress requests; FIXME size
+	t.dmap = newdmap(128)
 
 	if err := t.register(); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
@@ -139,6 +142,7 @@ func (t *targetrunner) run() error {
 func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	sleep := t.xactinp.abortAll()
+	close(t.dmap.abrt)
 	t.unregister()
 	t.httprunner.stop(err)
 	if sleep {
@@ -236,6 +240,11 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// serialize on the name
+	fqnhash := t.dmap.lockname(fqn, &pendinginfo{time.Now(), "get"}, time.Second)
+	defer t.dmap.unlockname(fqn, fqnhash)
+
 	t.statsif.add("numget", 1)
 	if !coldget && isinvalidobj(fqn) {
 		if t.islocalBucket(bucket) {
@@ -382,6 +391,11 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			objname = strings.Join(apitems[1:], "/")
 		}
 		fqn = t.fqn(bucket, objname)
+
+		// serialize on the name
+		fqnhash := t.dmap.lockname(fqn, &pendinginfo{time.Now(), "put"}, time.Second)
+		defer t.dmap.unlockname(fqn, fqnhash)
+
 		glog.Infof("PUT: %s", fqn)
 		errstr := ""
 		md5 := r.Header.Get("Content-MD5")
@@ -488,8 +502,12 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 		objname = strings.Join(apitems[1:], "/")
 	}
 	var errstr string
+
+	fqn := t.fqn(bucket, objname)
+	fqnhash := t.dmap.lockname(fqn, &pendinginfo{time.Now(), "delete"}, time.Second)
+	defer t.dmap.unlockname(fqn, fqnhash)
+
 	if t.islocalBucket(bucket) {
-		fqn := t.fqn(bucket, objname)
 		if err := os.Remove(fqn); err != nil {
 			errstr = err.Error()
 		}

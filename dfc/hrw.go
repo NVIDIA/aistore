@@ -20,9 +20,9 @@ func hrwTarget(name string, smap *Smap) (si *daemonInfo) {
 	//       vs locking zillion times - use sync.Map otherwise
 	// smap.lock.Lock()
 	// defer smap.lock.Unlock()
-	var max uint32
+	var max uint64
 	for id, sinfo := range smap.Smap {
-		cs := xxhash.ChecksumString32S(id+":"+name, mLCG32)
+		cs := xxhash.ChecksumString64S(id+":"+name, mLCG32)
 		if cs > max {
 			max = cs
 			si = sinfo
@@ -32,9 +32,9 @@ func hrwTarget(name string, smap *Smap) (si *daemonInfo) {
 }
 
 func hrwMpath(name string) (mpath string) {
-	var max uint32
+	var max uint64
 	for path := range ctx.mountpaths {
-		cs := xxhash.ChecksumString32S(path+":"+name, mLCG32)
+		cs := xxhash.ChecksumString64S(path+":"+name, mLCG32)
 		if cs > max {
 			max = cs
 			mpath = path
