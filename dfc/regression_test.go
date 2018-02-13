@@ -61,7 +61,6 @@ func init() {
 
 func Test_regression(t *testing.T) {
 	flag.Parse()
-
 	fmt.Fprintf(os.Stdout, "=== abortonerr = %v\n\n", abortonerr)
 
 	if err := dfc.CreateDir(LocalRootDir); err != nil {
@@ -76,7 +75,6 @@ func Test_regression(t *testing.T) {
 	t.Run("Config", regressionConfig)
 	t.Run("Sync&Rebalance", regressionSyncRebalance)
 
-	// FIXME: LRU won't delete anything that is newer that (time.Now() - dontevicttime)
 	t.Run("LRU", regressionLRU)
 }
 
@@ -315,18 +313,23 @@ func regressionLRU(t *testing.T) {
 	if t.Failed() {
 		return
 	}
-	waitProgressBar("LRU: ", sleeptime)
 	getRandomFiles(0, 0, 1, clibucket, t, nil, errch)
 	waitProgressBar("LRU: ", sleeptime)
 	//
 	// results
 	//
 	stats = getClusterStats(client, t)
+	test_fspaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
 		fmt.Fprintf(os.Stdout, "Target %s: evicted %d files - %.2f MB (%dB) total\n",
 			k, v.Core.Filesevicted-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
-
+		//
+		// testingFSPpaths() - cannot reliably verify space utilization by tmpfs
+		//
+		if test_fspaths["count"].(float64) > 0 {
+			continue
+		}
 		for mpath, c := range v.Capacity {
 			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
 				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s, used space %d%%", k, lowwm, mpath, c.Usedpct)

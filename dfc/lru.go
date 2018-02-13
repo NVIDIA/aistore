@@ -26,17 +26,15 @@ type fileinfo struct {
 	index   int
 }
 
+type maxheap []*fileinfo
+
 type lructx struct {
 	cursize int64
 	totsize int64
 	newest  time.Time
+	xlru    *xactLRU
+	h       *maxheap
 }
-
-type maxheap []*fileinfo
-
-// globals
-var maxheapmap = make(map[string]*maxheap)
-var lructxmap = make(map[string]*lructx)
 
 // FIXME: mountpath.enabled is never used
 func (t *targetrunner) runLRU() {
@@ -46,23 +44,14 @@ func (t *targetrunner) runLRU() {
 		return
 	}
 	fschkwg := &sync.WaitGroup{}
-	fsmap := t.mpath2Fsid()
-
-	// init context maps to avoid insert-key races
-	for mpath := range ctx.mountpaths {
-		maxheapmap[mpath+"/"+ctx.config.CloudBuckets] = nil
-		lructxmap[mpath+"/"+ctx.config.CloudBuckets] = nil
-		maxheapmap[mpath+"/"+ctx.config.LocalBuckets] = nil
-		lructxmap[mpath+"/"+ctx.config.LocalBuckets] = nil
-	}
 
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
-	for _, mpath := range fsmap {
+	for mpath := range ctx.mountpaths {
 		fschkwg.Add(1)
 		go t.oneLRU(mpath+"/"+ctx.config.LocalBuckets, fschkwg, xlru)
 	}
 	fschkwg.Wait()
-	for _, mpath := range fsmap {
+	for mpath := range ctx.mountpaths {
 		fschkwg.Add(1)
 		go t.oneLRU(mpath+"/"+ctx.config.CloudBuckets, fschkwg, xlru)
 	}
@@ -84,33 +73,32 @@ func (t *targetrunner) runLRU() {
 }
 
 // TODO: local-buckets-first LRU policy
-func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
+func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
 	defer fschkwg.Done()
 	h := &maxheap{}
 	heap.Init(h)
-	maxheapmap[mpath] = h
-	toevict, err := get_toevict(mpath, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
+
+	toevict, err := get_toevict(bucketdir, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
 	if err != nil {
 		return err
 	}
-	glog.Infof("LRU %s: to evict %.2f MB", mpath, float64(toevict)/1000/1000)
+	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1000/1000)
 
 	// init LRU context
-	lructxmap[mpath] = &lructx{totsize: toevict}
-	defer func() { maxheapmap[mpath], lructxmap[mpath] = nil, nil }() // GC
+	lctx := &lructx{totsize: toevict, xlru: xlru, h: h}
 
-	if err = filepath.Walk(mpath, xlru.lruwalkfn); err != nil {
+	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping %q traversal: %s", mpath, s)
+			glog.Infof("Stopping %q traversal: %s", bucketdir, s)
 		} else {
-			glog.Errorf("Failed to traverse %q, err: %v", mpath, err)
+			glog.Errorf("Failed to traverse %q, err: %v", bucketdir, err)
 		}
 		return err
 	}
 
-	if err := t.doLRU(toevict, mpath); err != nil {
-		glog.Errorf("doLRU %q, err: %v", mpath, err)
+	if err := t.doLRU(toevict, bucketdir, lctx); err != nil {
+		glog.Errorf("doLRU %q, err: %v", bucketdir, err)
 		return err
 	}
 	return nil
@@ -118,7 +106,8 @@ func (t *targetrunner) oneLRU(mpath string, fschkwg *sync.WaitGroup, xlru *xactL
 
 // the walking callback is execited by the LRU xaction
 // (notice the receiver)
-func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
+func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
+	xlru, h := lctx.xlru, lctx.h
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
@@ -170,26 +159,13 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		}
 		return nil
 	}
-	var (
-		h *maxheap
-		c *lructx
-	)
-	for mpath, hh := range maxheapmap {
-		rel, err := filepath.Rel(mpath, fqn)
-		if err == nil && !strings.HasPrefix(rel, "../") {
-			h = hh
-			c = lructxmap[mpath]
-			break
-		}
-	}
-	assert(h != nil && c != nil, fqn)
 	// partial optimization:
 	// 	do nothing if the heap's cursize >= totsize &&
 	// 	the file is more recent then the the heap's newest
 	// full optimization (tbd) entails compacting the heap when its cursize >> totsize
-	if c.cursize >= c.totsize && usetime.After(c.newest) {
+	if lctx.cursize >= lctx.totsize && usetime.After(lctx.newest) {
 		if glog.V(3) {
-			glog.Infof("DEBUG: use-time-after (usetime=%v, newest=%v) %s", usetime, c.newest, fqn)
+			glog.Infof("DEBUG: use-time-after (usetime=%v, newest=%v) %s", usetime, lctx.newest, fqn)
 		}
 		return nil
 	}
@@ -200,15 +176,15 @@ func (xlru *xactLRU) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		size:    stat.Size,
 	}
 	heap.Push(h, fi)
-	c.cursize += fi.size
-	if usetime.After(c.newest) {
-		c.newest = usetime
+	lctx.cursize += fi.size
+	if usetime.After(lctx.newest) {
+		lctx.newest = usetime
 	}
 	return nil
 }
 
-func (t *targetrunner) doLRU(toevict int64, mpath string) error {
-	h := maxheapmap[mpath]
+func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) error {
+	h := lctx.h
 	var (
 		fevicted, bevicted int64
 	)
@@ -219,7 +195,7 @@ func (t *targetrunner) doLRU(toevict int64, mpath string) error {
 			continue
 		}
 		if glog.V(3) {
-			glog.Infof("LRU %s: removed %q", mpath, fi.fqn)
+			glog.Infof("LRU %s: removed %q", bucketdir, fi.fqn)
 		}
 		toevict -= fi.size
 		bevicted += fi.size
