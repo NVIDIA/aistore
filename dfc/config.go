@@ -54,6 +54,7 @@ type lruconfig struct {
 	LowWM            uint32        `json:"lowwm"`           // capacity usage low watermark
 	HighWM           uint32        `json:"highwm"`          // capacity usage high watermark
 	DontEvictTimeStr string        `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
+	LRUEnabled       bool          `json:"lru_enabled"`     // LRU will only run when LRUEnabled is true
 	DontEvictTime    time.Duration `json:"-"`               // omitempty
 }
 

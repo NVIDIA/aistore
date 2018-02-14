@@ -232,7 +232,7 @@ func (r *storstatsrunner) log() {
 
 	r.syncstats(&r.ccopy)
 	// 4. LRU
-	if runlru {
+	if runlru && ctx.config.LRUConfig.LRUEnabled {
 		t := gettarget()
 		go t.runLRU()
 	}

@@ -48,6 +48,7 @@ var (
 		"highwm":          fmt.Sprintf("%d", HighWaterMark),
 		"no_xattrs":       "false",
 		"passthru":        "true",
+		"lru_enabled":     "true",
 	}
 	abortonerr       = true
 	regressionFailed = false
@@ -69,12 +70,12 @@ func Test_regression(t *testing.T) {
 	if err := dfc.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
+
 	t.Run("Local Buckets", regressionLocalBuckets)
 	t.Run("Cloud Bucket", regressionCloudBuckets)
 	t.Run("Stats", regressionStats)
 	t.Run("Config", regressionConfig)
 	t.Run("Sync&Rebalance", regressionSyncRebalance)
-
 	t.Run("LRU", regressionLRU)
 }
 
@@ -190,23 +191,23 @@ func regressionConfig(t *testing.T) {
 		o := olruconfig["dont_evict_time"].(string)
 		setConfig("dont_evict_time", o, RestAPIClusterPath, client, t)
 	}
-	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
-		t.Fatalf("Error parsing LowWM: %v", err)
-	} else if nlruconfig["lowwm"] != float64(lw) {
-		t.Errorf("LowWatermark was not set properly: %d, should be: %d",
-			nlruconfig["lowwm"], lw)
-	} else {
-		o := olruconfig["lowwm"].(float64)
-		setConfig("lowwm", strconv.Itoa(int(o)), RestAPIClusterPath, client, t)
-	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
 	} else if nlruconfig["highwm"] != float64(hw) {
-		t.Errorf("HighWatermark was not set properly: %d, should be: %d",
+		t.Errorf("HighWatermark was not set properly: %.0f, should be: %d",
 			nlruconfig["highwm"], hw)
 	} else {
 		o := olruconfig["highwm"].(float64)
 		setConfig("highwm", strconv.Itoa(int(o)), RestAPIClusterPath, client, t)
+	}
+	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
+		t.Fatalf("Error parsing LowWM: %v", err)
+	} else if nlruconfig["lowwm"] != float64(lw) {
+		t.Errorf("LowWatermark was not set properly: %.0f, should be: %d",
+			nlruconfig["lowwm"], lw)
+	} else {
+		o := olruconfig["lowwm"].(float64)
+		setConfig("lowwm", strconv.Itoa(int(o)), RestAPIClusterPath, client, t)
 	}
 	if nx, err := strconv.ParseBool(configRegression["no_xattrs"]); err != nil {
 		t.Fatalf("Error parsing NoXattrs: %v", err)
@@ -225,6 +226,15 @@ func regressionConfig(t *testing.T) {
 	} else {
 		o := oproxyconfig["passthru"].(bool)
 		setConfig("passthru", strconv.FormatBool(o), RestAPIClusterPath, client, t)
+	}
+	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
+		t.Fatalf("Error parsing LRUEnabled: %v", err)
+	} else if nlruconfig["lru_enabled"] != pt {
+		t.Errorf("LRUEnabled was not set properly: %v, should be %v",
+			nlruconfig["lru_enabled"], pt)
+	} else {
+		o := olruconfig["lru_enabled"].(bool)
+		setConfig("lru_enabled", strconv.FormatBool(o), RestAPIClusterPath, client, t)
 	}
 
 	if abortonerr && t.Failed() {
@@ -286,7 +296,11 @@ func regressionLRU(t *testing.T) {
 	// all targets: set new watermarks; restore upon exit
 	//
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
-	defer setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), RestAPIClusterPath, client, t)
+	defer func() {
+		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), RestAPIClusterPath, client, t)
+		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), RestAPIClusterPath, client, t)
+		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), RestAPIClusterPath, client, t)
+	}()
 	defer func() {
 		for k, di := range smap.Smap {
 			setConfig("highwm", fmt.Sprint(hwms[k]), di.DirectURL+RestAPIDaemonSuffix, client, t)

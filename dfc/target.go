@@ -619,6 +619,15 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if errstr := t.setconfig(msg.Name, msg.Value); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		}
+		if msg.Name == "lru_enabled" && msg.Value == "false" {
+			_, lruxact := t.xactinp.find(ActLRU)
+			if lruxact != nil {
+				if glog.V(3) {
+					glog.Infof("Aborting LRU due to lru_enabled config change")
+				}
+				lruxact.abort()
+			}
+		}
 	case ActShutdown:
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
