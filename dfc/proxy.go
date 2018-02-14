@@ -384,6 +384,15 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		}
+		if msg.Name == "lru_enabled" && msg.Value == "false" {
+			_, lruxact := p.xactinp.find(ActLRU)
+			if lruxact != nil {
+				if glog.V(3) {
+					glog.Infof("Aborting LRU due to lru_enabled config change")
+				}
+				lruxact.abort()
+			}
+		}
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)

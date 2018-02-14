@@ -39,6 +39,7 @@ DONTEVICTIME="30m"
 LOWWATERMARK=75
 HIGHWATERMARK=90
 NOXATTRS=false
+LRUENABLED=true
 
 PROXYPORT=$(expr $PORT + 1)
 if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
@@ -132,7 +133,8 @@ do
 	"lru_config": {
 		"lowwm":		${LOWWATERMARK},
 		"highwm":		${HIGHWATERMARK},
-		"dont_evict_time":      "${DONTEVICTIME}"
+		"dont_evict_time":      "${DONTEVICTIME}",
+        "lru_enabled":  ${LRUENABLED}
 	},
 	"test_fspaths": {
 		"root":			"${TESTFSPATHROOT}",

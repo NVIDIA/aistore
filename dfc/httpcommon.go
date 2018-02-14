@@ -291,6 +291,12 @@ func (h *httprunner) setconfig(name, value string) string {
 		} else {
 			ctx.config.Proxy.Passthru = v
 		}
+	case "lru_enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			return fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
+		} else {
+			ctx.config.LRUConfig.LRUEnabled = v
+		}
 	default:
 		return fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name)
 	}
