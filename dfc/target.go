@@ -60,7 +60,7 @@ type targetrunner struct {
 	xactinp   *xactInProgress
 	starttime time.Time
 	lbmap     *lbmap
-	rtnamemap      *rtnamemap
+	rtnamemap *rtnamemap
 }
 
 // start target runner
@@ -243,8 +243,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 
 	// serialize on the name
 	uname := bucket + objname
-	t.rtnamemap.lockname(uname, coldget, &pendinginfo{time.Now(), "get"}, time.Second)
-	defer t.rtnamemap.unlockname(uname, coldget)
+	exclusive := coldget
+	t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, exclusive)
 
 	t.statsif.add("numget", 1)
 	if !coldget && isinvalidobj(fqn) {
@@ -395,7 +396,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 
 		// serialize on the name
 		uname := bucket + objname
-		t.rtnamemap.lockname(uname, true, &pendinginfo{time.Now(), "put"}, time.Second)
+		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 		defer t.rtnamemap.unlockname(uname, true)
 
 		glog.Infof("PUT: %s", fqn)
@@ -508,12 +509,12 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 	var errstr string
 
+	fqn := t.fqn(bucket, objname)
 	uname := bucket + objname
-	t.rtnamemap.lockname(uname, true, &pendinginfo{time.Now(), "delete"}, time.Second)
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
 	if t.islocalBucket(bucket) {
-		fqn := t.fqn(bucket, objname)
 		if err := os.Remove(fqn); err != nil {
 			errstr = err.Error()
 		}
