@@ -60,7 +60,7 @@ type targetrunner struct {
 	xactinp   *xactInProgress
 	starttime time.Time
 	lbmap     *lbmap
-	dmap      *dmap
+	rtnamemap      *rtnamemap
 }
 
 // start target runner
@@ -72,7 +72,7 @@ func (t *targetrunner) run() error {
 	// local (cache-only) buckets
 	t.lbmap = &lbmap{LBmap: make(map[string]string)}
 	// decongested protected map: in-progress requests; FIXME size
-	t.dmap = newdmap(128)
+	t.rtnamemap = newrtnamemap(128)
 
 	if err := t.register(); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
@@ -142,7 +142,7 @@ func (t *targetrunner) run() error {
 func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	sleep := t.xactinp.abortAll()
-	close(t.dmap.abrt)
+	close(t.rtnamemap.abrt)
 	t.unregister()
 	t.httprunner.stop(err)
 	if sleep {
@@ -242,8 +242,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// serialize on the name
-	fqnhash := t.dmap.lockname(fqn, &pendinginfo{time.Now(), "get"}, time.Second)
-	defer t.dmap.unlockname(fqn, fqnhash)
+	uname := bucket + objname
+	t.rtnamemap.lockname(uname, coldget, &pendinginfo{time.Now(), "get"}, time.Second)
+	defer t.rtnamemap.unlockname(uname, coldget)
 
 	t.statsif.add("numget", 1)
 	if !coldget && isinvalidobj(fqn) {
@@ -393,8 +394,9 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		fqn = t.fqn(bucket, objname)
 
 		// serialize on the name
-		fqnhash := t.dmap.lockname(fqn, &pendinginfo{time.Now(), "put"}, time.Second)
-		defer t.dmap.unlockname(fqn, fqnhash)
+		uname := bucket + objname
+		t.rtnamemap.lockname(uname, true, &pendinginfo{time.Now(), "put"}, time.Second)
+		defer t.rtnamemap.unlockname(uname, true)
 
 		glog.Infof("PUT: %s", fqn)
 		errstr := ""
@@ -432,6 +434,9 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	}
 	fqn = t.fqn(bucket, objname)
 	finfo, err = os.Stat(fqn)
+
+	// FIXME: TODO: serialize on the name
+
 	if t.si.DaemonID == from {
 		//
 		// the source
@@ -503,11 +508,12 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 	var errstr string
 
-	fqn := t.fqn(bucket, objname)
-	fqnhash := t.dmap.lockname(fqn, &pendinginfo{time.Now(), "delete"}, time.Second)
-	defer t.dmap.unlockname(fqn, fqnhash)
+	uname := bucket + objname
+	t.rtnamemap.lockname(uname, true, &pendinginfo{time.Now(), "delete"}, time.Second)
+	defer t.rtnamemap.unlockname(uname, true)
 
 	if t.islocalBucket(bucket) {
+		fqn := t.fqn(bucket, objname)
 		if err := os.Remove(fqn); err != nil {
 			errstr = err.Error()
 		}
