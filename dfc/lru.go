@@ -151,13 +151,19 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	}
 	// remove invalid object files.
 	if isinvalidobj(fqn) {
-		err = osRemove("lru-invalid", fqn)
-		if err != nil {
-			glog.Errorf("LRU: failed to delete file %s, err: %v", fqn, err)
-		} else if glog.V(3) {
-			glog.Infof("LRU: removed invalid file %s", fqn)
+		//
+		// FIXME: temp patch to prevent setconfig(1s) --> PUT/LRU scenario
+		//
+		dontevictimeInvalid := now.Add(-time.Minute * 30)
+		if usetime.Before(dontevictimeInvalid) {
+			err = osRemove("lru-invalid", fqn)
+			if err != nil {
+				glog.Errorf("LRU: failed to delete invalid %s, err: %v", fqn, err)
+			} else if glog.V(3) {
+				glog.Infof("LRU: removed invalid %s", fqn)
+			}
+			return nil
 		}
-		return nil
 	}
 	// partial optimization:
 	// 	do nothing if the heap's cursize >= totsize &&

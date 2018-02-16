@@ -310,7 +310,7 @@ func regressionLRU(t *testing.T) {
 	//
 	// cluster-wide reduce dont-evict-time
 	//
-	dontevicttimestr := "1s"
+	dontevicttimestr := "20s"                                            // 2 * stats_time; FIXME: race vs smoke test
 	sleeptime, err := time.ParseDuration(oconfig["stats_time"].(string)) // to make sure the stats get updated
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
@@ -327,6 +327,7 @@ func regressionLRU(t *testing.T) {
 	if t.Failed() {
 		return
 	}
+	waitProgressBar("LRU: ", sleeptime)
 	getRandomFiles(0, 0, 1, clibucket, t, nil, errch)
 	waitProgressBar("LRU: ", sleeptime)
 	//

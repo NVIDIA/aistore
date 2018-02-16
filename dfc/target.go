@@ -388,9 +388,8 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	// case: rebalance
-	if apitems[0] == Rfrom || apitems[2] == Rto {
-		// "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
+	if len(apitems) > 2 && apitems[0] == Rfrom || apitems[2] == Rto {
+		// case: rebalance "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
 		apitems := t.restAPIItems(r.URL.Path, 6)
 		if apitems := t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
 			return
@@ -403,7 +402,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		}
 		t.statsif.add("numrecvfile", 1)
 	} else {
-		// case : PUT
+		// case: PUT
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
 		}
@@ -434,42 +433,47 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	if hdhash == "" {
 		glog.Infof("Warning: empty Content-HASH")
 	}
-	defer func() {
-		r.Body.Close()
-		if errstr == "" {
-			return
-		}
-		if err = os.Remove(putfqn); err != nil {
-			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, putfqn, err)
-		}
-	}()
+
+	defer r.Body.Close()
 	glog.Infof("PUT: %s => %s", fqn, putfqn)
+
+	// optimize the new PUT out if the checksums match
 	if hdhash != "" && !isinvalidobj(fqn) {
 		file, err := os.Open(fqn)
-		// Write new object in error case.(Non critical)
 		if err == nil {
 			md5 := md5.New()
 			md5hash, _ = CalculateMD5(file, md5)
-			// Not a critical error
+			// not a critical error
 			if err = file.Close(); err != nil {
-				glog.Infof("Failed to close %s, err: %v", fqn, err)
+				glog.Warningf("Unexpected failure to close %s once md5-ed, err: %v", fqn, err)
 			}
 			if md5hash == hdhash {
-				glog.Infof("Existing fqn %s is valid", fqn)
+				glog.Infof("Existing %s is valid: new PUT is a no-op", fqn)
 				return
 			}
+		} else {
+			glog.Warningf("Unexpected failure to open local valid %s, err: %v", fqn, err)
 		}
 	}
 	if _, md5hash, errstr = ReceiveFileAndFinalize(putfqn, objname, hdhash, r.Body); errstr != "" {
 		return
 	}
+	// putfqn is received
+	defer func() {
+		if errstr != "" {
+			if err = os.Remove(putfqn); err != nil {
+				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, putfqn, err)
+			}
+		}
+	}()
+
 	if hdhash != "" && md5hash != hdhash {
 		errstr = fmt.Sprintf("Invalid checksum: %s md5 %s... does not match user's %s...", fqn, md5hash[:8], hdhash[:8])
 		return
 	}
 	if !t.islocalBucket(bucket) {
 		if file, err = os.Open(putfqn); err != nil {
-			errstr = fmt.Sprintf("Failed to re-open file %s err: %v", putfqn, err)
+			errstr = fmt.Sprintf("Failed to re-open %s err: %v", putfqn, err)
 			return
 		}
 		if errstr = getcloudif().putobj(file, bucket, objname); errstr != "" {
@@ -477,7 +481,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			return
 		}
 		if err = file.Close(); err != nil {
-			glog.Errorf("UNEXPECTED failure to close an already PUT file %s, err: %v", putfqn, err)
+			glog.Errorf("Unexpected failure to close an already PUT file %s, err: %v", putfqn, err)
 		}
 	}
 
@@ -485,7 +489,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	uname := bucket + objname
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	if err = os.Rename(putfqn, fqn); err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to rename an already PUT %s => %s, err: %v", putfqn, fqn, err)
+		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", putfqn, fqn, err)
 	} else {
 		glog.Infof("PUT done: %s <= %s", fqn, putfqn)
 		t.statsif.add("numput", 1)
