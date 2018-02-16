@@ -214,10 +214,21 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.listbucket(w, r, bucket)
 		return
 	}
+
+	//
+	// serialize on the name
+	//
+	fqn := t.fqn(bucket, objname)
+	uname := bucket + objname
+	exclusive := true
+	t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer func(locktype *bool) {
+		t.rtnamemap.unlockname(uname, *locktype)
+	}(&exclusive)
+
 	//
 	// get the object from the bucket
 	//
-	fqn := t.fqn(bucket, objname)
 	coldget := false
 	_, err := os.Stat(fqn)
 	if err != nil {
@@ -240,12 +251,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	//FIXME
-	// serialize on the name
-	//uname := bucket + objname
-	//exclusive := coldget
-	//t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	//defer t.rtnamemap.unlockname(uname, exclusive)
 
 	if !coldget && isinvalidobj(fqn) {
 		if t.islocalBucket(bucket) {
@@ -263,6 +268,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		}
 		t.statsif.add("numcoldget", 1)
 	}
+	//
+	// downgrade lock(name)
+	//
+	exclusive = false
+	t.rtnamemap.downgradelock(uname)
+
 	//
 	// sendfile
 	//
@@ -418,21 +429,21 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 		hdhash  string
 	)
 	fqn := t.fqn(bucket, objname)
+	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
 	hdhash = r.Header.Get("Content-HASH")
 	if hdhash == "" {
 		glog.Infof("Warning: empty Content-HASH")
 	}
-
 	defer func() {
 		r.Body.Close()
 		if errstr == "" {
 			return
 		}
-		if err = os.Remove(fqn); err != nil {
-			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, fqn, err)
+		if err = os.Remove(putfqn); err != nil {
+			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, putfqn, err)
 		}
 	}()
-	glog.Infof("PUT: %s", fqn)
+	glog.Infof("PUT: %s => %s", fqn, putfqn)
 	if hdhash != "" && !isinvalidobj(fqn) {
 		file, err := os.Open(fqn)
 		// Write new object in error case.(Non critical)
@@ -449,34 +460,37 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			}
 		}
 	}
-
-	// serialize on the name
-	uname := bucket + objname
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, true)
-
-	if _, md5hash, errstr = ReceiveFileAndFinalize(fqn, objname, hdhash, r.Body); errstr != "" {
+	if _, md5hash, errstr = ReceiveFileAndFinalize(putfqn, objname, hdhash, r.Body); errstr != "" {
 		return
 	}
 	if hdhash != "" && md5hash != hdhash {
 		errstr = fmt.Sprintf("Invalid checksum: %s md5 %s... does not match user's %s...", fqn, md5hash[:8], hdhash[:8])
 		return
 	}
-	if t.islocalBucket(bucket) {
-		return
+	if !t.islocalBucket(bucket) {
+		if file, err = os.Open(putfqn); err != nil {
+			errstr = fmt.Sprintf("Failed to re-open file %s err: %v", putfqn, err)
+			return
+		}
+		if errstr = getcloudif().putobj(file, bucket, objname); errstr != "" {
+			file.Close()
+			return
+		}
+		if err = file.Close(); err != nil {
+			glog.Errorf("UNEXPECTED failure to close an already PUT file %s, err: %v", putfqn, err)
+		}
 	}
-	file, err = os.Open(fqn)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to re-open file %s err: %v", fqn, err)
-		return
+
+	// serialize on the name - and rename
+	uname := bucket + objname
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	if err = os.Rename(putfqn, fqn); err != nil {
+		errstr = fmt.Sprintf("Unexpected failure to rename an already PUT %s => %s, err: %v", putfqn, fqn, err)
+	} else {
+		glog.Infof("PUT done: %s <= %s", fqn, putfqn)
+		t.statsif.add("numput", 1)
 	}
-	if errstr = getcloudif().putobj(file, bucket, objname); errstr != "" {
-		file.Close()
-		return
-	}
-	if err = file.Close(); err != nil {
-		glog.Errorf("UNEXPECTED failure to close an already PUT file %s, err: %v", fqn, err)
-	}
+	t.rtnamemap.unlockname(uname, true)
 	return
 }
 

@@ -150,7 +150,7 @@ func (cloudif *gcpif) putobj(file *os.File, bucket, objname string) (errstr stri
 		return
 	}
 	if err := wc.Close(); err != nil {
-		errstr = fmt.Sprintf("gcp: Failed to close wc (object %s, bucket %s), err: %v",
+		errstr = fmt.Sprintf("gcp: Unexpected failure to close wc upon uploading %s (bucket %s), err: %v",
 			objname, bucket, err)
 		return
 	}
