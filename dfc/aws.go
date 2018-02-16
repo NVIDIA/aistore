@@ -8,7 +8,6 @@ package dfc
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -93,14 +92,11 @@ func (cloudif *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetM
 	return
 }
 
-func (cloudif *awsif) getobj(fqn, bucket, objname string) (errstr string) {
+func (cloudif *awsif) getobj(fqn, bucket, objname string) (md5hash string, errstr string) {
 	var (
-		file *os.File
 		size int64
+		omd5 string
 	)
-	if file, errstr = initobj(fqn); errstr != "" {
-		return
-	}
 	sess := createsession()
 	s3Svc := s3.New(sess)
 	obj, err := s3Svc.GetObject(&s3.GetObjectInput{
@@ -108,48 +104,34 @@ func (cloudif *awsif) getobj(fqn, bucket, objname string) (errstr string) {
 		Key:    aws.String(objname),
 	})
 	if err != nil {
-		file.Close()
-		return fmt.Sprintf("Failed to download object %s from bucket %s, err: %v", objname, bucket, err)
+		return "", fmt.Sprintf("aws: Failed to get %s from bucket %s, err: %v", objname, bucket, err)
 	}
 	defer obj.Body.Close()
-	// ETag => MD5
-	md5, _ := strconv.Unquote(*obj.ETag)
-	if size, errstr = getobjto_Md5(file, fqn, objname, md5, obj.Body); errstr != "" {
-		file.Close()
-		return
+
+	// the object is multipart?
+	omd5, _ = strconv.Unquote(*obj.ETag)
+	if size, md5hash, errstr = ReceiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
+		return "", errstr
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
-
-	if err = file.Close(); err != nil {
-		return fmt.Sprintf("Failed to close downloaded file %s, err: %v", fqn, err)
+	if glog.V(3) {
+		glog.Infof("aws: GET %s (bucket %s)", objname, bucket)
 	}
-	return ""
+	return
+
 }
 
-func (cloudif *awsif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string) {
-	size := r.ContentLength
-	teebuf, b := Maketeerw(size, r.Body) // local copy
+func (cloudif *awsif) putobj(file *os.File, bucket, objname string) (errstr string) {
 	sess := createsession()
-
 	uploader := s3manager.NewUploader(sess)
-	// do it
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
-		Body:   teebuf,
+		Body:   file,
 	})
 	if err != nil {
-		errstr = fmt.Sprintf("aws: failed to put %s (bucket %s), err: %v", objname, bucket, err)
-		return
-	}
-	r.Body = ioutil.NopCloser(b)
-	written, err := ReceiveFile(fqn, r.Body, md5sum)
-	if err != nil {
-		errstr = fmt.Sprintf("aws: failed to receive %s (written %d), err: %v", fqn, written, err)
-		return
-	}
-	if errstr = truncatefile(fqn, size); errstr != "" {
+		errstr = fmt.Sprintf("aws: Failed to put %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}
 	if glog.V(3) {
@@ -162,7 +144,7 @@ func (cloudif *awsif) deleteobj(bucket, objname string) (errstr string) {
 	svc := s3.New(sess)
 	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
 	if err != nil {
-		errstr = fmt.Sprintf("aws: failed to delete %s (bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("aws: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}
 	if glog.V(3) {

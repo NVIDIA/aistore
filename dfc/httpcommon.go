@@ -35,8 +35,8 @@ const (
 //===========
 type cloudif interface {
 	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string)
-	getobj(fqn, bucket, objname string) (errstr string)
-	putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string)
+	getobj(fqn, bucket, objname string) (hash string, errstr string)
+	putobj(file *os.File, bucket, objname string) (errstr string)
 	deleteobj(bucket, objname string) (errstr string)
 }
 

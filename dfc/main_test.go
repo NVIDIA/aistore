@@ -8,6 +8,7 @@ package dfc_test
 import (
 	"bufio"
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -34,14 +35,15 @@ import (
 // # go test -v -run=xxx -bench . -count 10
 
 const (
-	LocalRootDir    = "/tmp/dfc/iocopy"       // client-side download destination
-	SmokeDir        = "/tmp/dfc/smoke"        // smoke test dir
-	ProxyURL        = "http://localhost:8080" // assuming local proxy is listening on 8080
-	TargetURL       = "http://localhost:8081" // assuming local target is listening on 8081
-	RestAPIGet      = ProxyURL + "/v1/files"  // version = 1, resource = files
-	RestAPIProxyPut = ProxyURL + "/v1/files"  // version = 1, resource = files
-	RestAPITgtPut   = TargetURL + "/v1/files" // version = 1, resource = files
-	TestFile        = "/tmp/dfc/xattrfile"    // Test file for setting and getting xattr.
+	LocalRootDir    = "/tmp/dfc/iocopy"        // client-side download destination
+	SmokeDir        = "/tmp/dfc/smoke"         // smoke test dir
+	ProxyURL        = "http://localhost:8080"  // assuming local proxy is listening on 8080
+	TargetURL       = "http://localhost:8081"  // assuming local target is listening on 8081
+	RestAPIGet      = ProxyURL + "/v1/files"   // version = 1, resource = files
+	RestAPIProxyPut = ProxyURL + "/v1/files"   // version = 1, resource = files
+	RestAPITgtPut   = TargetURL + "/v1/files"  // version = 1, resource = files
+	RestAPICluster  = ProxyURL + "/v1/cluster" // version = 1, resource= cluster
+	TestFile        = "/tmp/dfc/xattrfile"     // Test file for setting and getting xattr.
 )
 
 const (
@@ -57,6 +59,8 @@ var (
 	numops     int
 	match      string
 	role       string
+	prop       string
+	value      string
 	fnlen      int
 	filesizes  = [3]int{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
 	ratios     = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}         // #gets / #puts
@@ -410,7 +414,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
 	errch chan error, resch chan workres, bucket string) {
-	var md5sum, errstr string
+	var md5hash string
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -418,7 +422,7 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		url := RestAPIGet + "/" + bucket + "/" + keyname
 		t.Logf("Worker %2d: GET %q", id, url)
 		r, err := http.Get(url)
-		hmd5 := r.Header.Get("Content-MD5")
+		hdhash := r.Header.Get("Content-HASH")
 		if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
 			t.Errorf("Failing test")
 			return
@@ -428,17 +432,6 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 				r.Body.Close()
 			}
 		}()
-		teebuf, b := dfc.Maketeerw(r.ContentLength, r.Body)
-		md5sum, errstr = dfc.CalculateMD5(teebuf)
-		if errstr != "" {
-			t.Errorf("Worker %2d: failed to calculate MD5, err: %s", id, errstr)
-			return
-		}
-		r.Body = ioutil.NopCloser(b)
-		if hmd5 != md5sum {
-			t.Errorf("Worker %2d: header MD5 %v doesn't match the file's MD5 %v", id, hmd5, md5sum)
-			return
-		}
 		if !copy {
 			bufreader := bufio.NewReader(r.Body)
 			bytes, err := dfc.ReadToNull(bufreader)
@@ -451,15 +444,33 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		}
 		// alternatively, create a local copy
 		fname := LocalRootDir + "/" + keyname
-		written, err := dfc.ReceiveFile(fname, r.Body, md5sum)
-		r.Body.Close()
+		file, err := dfc.Createfile(fname)
 		if err != nil {
-			t.Errorf("Worker %2d: Failed to write to file, err: %v", id, err)
+			t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
 			return
-		} else {
-			res.totfiles += 1
-			res.totbytes += written
 		}
+		md5 := md5.New()
+		written, errstr := dfc.ReceiveFile(file, r.Body, md5)
+		if errstr != "" {
+			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+			return
+		}
+		md5hash, errstr = dfc.CalculateMD5(nil, md5)
+		if errstr != "" {
+			t.Errorf("Worker %2d: failed to calculate XXHash, err: %s", id, errstr)
+			return
+		}
+
+		if hdhash != md5hash {
+			t.Errorf("Worker %2d: header's MD5Hash %v doesn't match the file's MD5Hash %v", id, hdhash, md5hash)
+			resch <- res
+			close(resch)
+			return
+		}
+		r.Body.Close()
+		res.totfiles += 1
+		res.totbytes += written
+		file.Close()
 	}
 	// Send information back
 	resch <- res
@@ -645,22 +656,22 @@ func Test_xattr(t *testing.T) {
 		return
 	}
 	// Set objstate to valid
-	errstr := dfc.Setxattr(f, dfc.Objstateattr, []byte(dfc.XAttrInvalid))
+	errstr := dfc.Setxattr(f, dfc.ObjstateAttr, []byte(dfc.XAttrInvalid))
 	if errstr != "" {
 		t.Errorf("Unable to set xattr %s to file %s, err: %v",
-			dfc.Objstateattr, f, errstr)
+			dfc.ObjstateAttr, f, errstr)
 		_ = os.Remove(f)
 		file.Close()
 		return
 	}
 	// Check if xattr got set correctly.
-	data, errstr := dfc.Getxattr(f, dfc.Objstateattr)
+	data, errstr := dfc.Getxattr(f, dfc.ObjstateAttr)
 	if string(data) == dfc.XAttrInvalid && errstr == "" {
 		t.Logf("Successfully got file %s attr %s value %v",
-			f, dfc.Objstateattr, data)
+			f, dfc.ObjstateAttr, data)
 	} else {
 		t.Errorf("Failed to get file %s attr %s value %v, err %v",
-			f, dfc.Objstateattr, data, errstr)
+			f, dfc.ObjstateAttr, data, errstr)
 		_ = os.Remove(f)
 		file.Close()
 		return
@@ -702,7 +713,6 @@ func Test_proxydel(t *testing.T) {
 	default:
 	}
 }
-
 func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
@@ -710,10 +720,11 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
 	client := &http.Client{}
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, "PUT: %s\n", keyname)
+		fmt.Fprintf(os.Stdout, "PUT: %s fname %s\n", keyname, fname)
 	}
 	file, err := os.Open(fname)
 	if err != nil {
+		fmt.Printf("Failed to open file %s, err: %v", fname, err)
 		if errch != nil {
 			fmt.Fprintf(os.Stdout, "Failed to open file %s, err: %v\n", fname, err)
 			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
@@ -733,14 +744,16 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	req.GetBody = func() (io.ReadCloser, error) {
 		return os.Open(fname)
 	}
-	md5, errstr := dfc.CalculateMD5(file)
+
+	md5 := md5.New()
+	md5hash, errstr := dfc.CalculateMD5(file, md5)
 	if errstr != "" {
 		if errch != nil {
-			errch <- fmt.Errorf("Failed to calculate MD5 sum for file %s, err: %s", fname, errstr)
+			errch <- fmt.Errorf("Failed to calculate MD5Hash sum for file %s, err: %s", fname, errstr)
 		}
 		return
 	}
-	req.Header.Set("Content-MD5", md5)
+	req.Header.Set("Content-HASH", md5hash)
 	_, err = file.Seek(0, 0)
 	if err != nil {
 		if errch != nil {

@@ -6,12 +6,10 @@
 package dfc
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
+	"strings"
 
 	"github.com/golang/glog"
 )
@@ -19,6 +17,7 @@ import (
 const (
 	fixedbufsize       = 64 * 1024
 	invalidateallcache = "/tmp/failobj"
+	NotExists          = "no such file or directory"
 )
 
 // Create file and initialize object state.
@@ -31,11 +30,13 @@ func initobj(fqn string) (file *os.File, errstr string) {
 	}
 	// Don't set xattribute for even new objects to maintain consistency.
 	if ctx.config.NoXattrs {
-		return file, ""
+		return
 	}
-	if errstr = Setxattr(fqn, Objstateattr, []byte(XAttrInvalid)); errstr != "" {
+	if errstr = Setxattr(fqn, ObjstateAttr, []byte(XAttrInvalid)); errstr != "" {
 		glog.Errorf(errstr)
+		// Ignoring errors
 		file.Close()
+		os.Remove(fqn)
 		return nil, errstr
 	}
 	return file, ""
@@ -46,12 +47,12 @@ func finalizeobj(fqn string, md5sum []byte) error {
 	if ctx.config.NoXattrs {
 		return nil
 	}
-	errstr := Setxattr(fqn, MD5attr, md5sum)
+	errstr := Setxattr(fqn, HashAttr, md5sum)
 	if errstr != "" {
 		glog.Errorf(errstr)
 		return errors.New(errstr)
 	}
-	errstr = Setxattr(fqn, Objstateattr, []byte(XAttrValid))
+	errstr = Setxattr(fqn, ObjstateAttr, []byte(XAttrValid))
 	if errstr != "" {
 		glog.Errorf(errstr)
 		return errors.New(errstr)
@@ -60,6 +61,7 @@ func finalizeobj(fqn string, md5sum []byte) error {
 }
 
 // Return True for corrupted or invalid objects.
+// Return True even for non existent object.
 func isinvalidobj(fqn string) bool {
 	if ctx.config.NoXattrs {
 		return false
@@ -69,63 +71,17 @@ func isinvalidobj(fqn string) bool {
 	if err == nil {
 		return true
 	}
-	data, errstr := Getxattr(fqn, Objstateattr)
+	data, errstr := Getxattr(fqn, ObjstateAttr)
 	if errstr != "" {
-		glog.Errorf(errstr)
-		return true
+		if strings.Contains(errstr, NotExists) {
+			return true
+		} else {
+			glog.Errorf("%s", errstr)
+			return true
+		}
 	}
 	if string(data) == XAttrInvalid {
 		return true
 	}
 	return false
-}
-
-// on err closes and removes the file; othwerise returns the size (in bytes) while keeping the file open
-func getobjto_Md5(file *os.File, fqn, objname, omd5 string, reader io.Reader) (size int64, errstr string) {
-	hash := md5.New()
-	writer := io.MultiWriter(file, hash)
-
-	// was: size, err := io.Copy(writer, reader)
-	size, err := copyBuffer(writer, reader)
-	if err != nil {
-		file.Close()
-		return 0, fmt.Sprintf("Failed to download object %s as file %q, err: %v", objname, fqn, err)
-	}
-	hashInBytes := hash.Sum(nil)[:16]
-	fmd5 := hex.EncodeToString(hashInBytes)
-	if omd5 != fmd5 {
-		file.Close()
-		// and discard right away
-		if err = os.Remove(fqn); err != nil {
-			glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
-		}
-		return 0, fmt.Sprintf("Object's %s MD5 %s... does not match %s (MD5 %s...)", objname, omd5[:8], fqn, fmd5[:8])
-	} else if glog.V(3) {
-		glog.Infof("GET: %s downloaded and validated", fqn)
-	}
-	if err = finalizeobj(fqn, hashInBytes); err != nil {
-		file.Close()
-		// FIXME: more logic TBD to maybe not discard
-		if err = os.Remove(fqn); err != nil {
-			glog.Errorf("Failed to delete file %s, err: %v", fqn, err)
-		}
-		return 0, fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
-	}
-	return size, ""
-}
-
-func truncatefile(fqn string, size int64) (errstr string) {
-	if size < 0 {
-		return
-	}
-	if err := os.Truncate(fqn, size); err != nil {
-		errstr = fmt.Sprintf("Failed to truncate %s to size %d, err: %v", fqn, size, err)
-		err1 := os.Remove(fqn)
-		if err1 != nil {
-			glog.Errorf("Failed to remove %s, err: %v", fqn, err1)
-		}
-		return errstr
-	}
-	glog.Infof("Truncated %s to %d B", fqn, size)
-	return
 }

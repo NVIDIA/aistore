@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	MAXATTRSIZE = 1024
+	MAXATTRSIZE      = 1024
+	MAX_COPYBUF_SIZE = 128 * 1024 // 128 KB
 )
 
 func assert(cond bool, args ...interface{}) {
@@ -87,37 +88,68 @@ func CreateDir(dirname string) (err error) {
 }
 
 // NOTE: receives, flushes, and closes
-func ReceiveFile(fname string, rrbody io.ReadCloser, omd5 string, hashes ...hash.Hash) (written int64, err error) {
-	dirname := filepath.Dir(fname)
-	if err = CreateDir(dirname); err != nil {
-		return 0, err
-	}
-	file, err := os.Create(fname)
-	if err != nil {
-		return 0, err
-	}
+func ReceiveFile(file *os.File, rrbody io.Reader, hashes ...hash.Hash) (written int64, errstr string) {
 	var writer io.Writer
+	assert(file != nil)
 	if len(hashes) == 0 {
 		writer = file
 	} else {
-		hashwriters := make([]io.Writer, len(hashes))
+		hashwriters := make([]io.Writer, len(hashes)+1)
 		for i, h := range hashes {
 			hashwriters[i] = h.(io.Writer)
 		}
+		hashwriters[len(hashes)] = file
 		writer = io.MultiWriter(hashwriters...)
 	}
-	written, err = copyBuffer(writer, rrbody)
-	errclose := file.Close()
-	if err == nil && errclose != nil {
-		err = errclose
-	}
+	written, err := copyBuffer(writer, rrbody)
 	if err != nil {
-		return written, err
+		return written, err.Error()
 	}
-	// set xattr md5
-	err = finalizeobj(fname, []byte(omd5))
-	if err != nil {
-		return written, err
+	return
+}
+
+// on err closes and removes the file; othwerise returns the size (in bytes).
+// omd5 can be empty for multipart object or in context of put.
+func ReceiveFileAndFinalize(fqn, objname, omd5 string, reader io.ReadCloser) (written int64, md5hash string, errstr string) {
+	var (
+		err  error
+		file *os.File
+	)
+	if file, errstr = initobj(fqn); errstr != "" {
+		errstr = fmt.Sprintf("Failed to create and initialize %s, err: %s", fqn, errstr)
+		return
+	}
+	defer func() {
+		if errstr == "" {
+			return
+		}
+		if err = file.Close(); err != nil {
+			glog.Errorf("Failed to close file %s, err: %v", fqn, err)
+		}
+		if err = os.Remove(fqn); err != nil {
+			glog.Errorf("Nested error %s => (remove %s => err: %v", errstr, fqn, err)
+		}
+	}()
+
+	md5 := md5.New()
+	if written, errstr = ReceiveFile(file, reader, md5); errstr != "" {
+		return
+	}
+	if md5hash, errstr = CalculateMD5(nil, md5); errstr != "" {
+		return
+	}
+	if omd5 != md5hash {
+		errstr = fmt.Sprintf("Object's %s MD5 %s... does not match %s (MD5 %s...)",
+			objname, omd5[:8], fqn, md5hash[:8])
+		return
+	}
+	if err = finalizeobj(fqn, []byte(md5hash)); err != nil {
+		errstr = fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
+		return
+	}
+	// close file
+	if err = file.Close(); err != nil {
+		errstr = fmt.Sprintf("Failed to close file %s, err: %v", fqn, err)
 	}
 	return
 }
@@ -125,6 +157,7 @@ func ReceiveFile(fname string, rrbody io.ReadCloser, omd5 string, hashes ...hash
 // copy-paste from the Go io package with a larger buffer on the read side,
 // and bufio on the write (FIXME copy-paste)
 func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
+	var buf []byte
 	// If the reader has a WriteTo method, use it to do the copy.
 	// Avoids an allocation and a copy.
 	if wt, ok := src.(io.WriterTo); ok {
@@ -136,8 +169,8 @@ func copyBuffer(dst io.Writer, src io.Reader) (written int64, err error) {
 		// fmt.Fprintf(os.Stdout, "use io.ReadFrom\n")
 		return rt.ReadFrom(src)
 	}
-	buf := make([]byte, 1024*128)     // buffer up to 128K for reading (FIXME)
-	bufwriter := bufio.NewWriter(dst) // use bufio for writing
+	buf = make([]byte, MAX_COPYBUF_SIZE) // buffer up to 128K for reading (FIXME)
+	bufwriter := bufio.NewWriter(dst)    // use bufio for writing
 	for {
 		nr, er := src.Read(buf)
 		if nr > 0 {
@@ -191,28 +224,18 @@ func SetNoXattrs(val bool) {
 	ctx.config.NoXattrs = val
 }
 
-func CalculateMD5(reader io.Reader) (csum string, errstr string) {
-	hash := md5.New()
-	_, err := copyBuffer(hash, reader)
-	if err != nil {
-		s := fmt.Sprintf("Failed to Copy buffer, err: %v", err)
-		return "", s
+func CalculateMD5(reader io.Reader, md5 hash.Hash) (csum string, errstr string) {
+	if reader != nil {
+		_, err := copyBuffer(md5.(io.Writer), reader)
+		if err != nil {
+			s := fmt.Sprintf("Failed to Copy buffer, err: %v", err)
+			return "", s
+		}
 	}
-	hashInBytes := hash.Sum(nil)[:16]
+	assert(md5 != nil)
+	hashInBytes := md5.Sum(nil)[:16]
 	csum = hex.EncodeToString(hashInBytes)
 	return csum, ""
-}
-
-func Maketeerw(size int64, body io.ReadCloser) (io.Reader, *bytes.Buffer) {
-	var bufsize int64
-	if size > 0 {
-		bufsize = fixedbufsize
-	} else {
-		bufsize = 0
-	}
-	buf := bytes.NewBuffer(make([]byte, bufsize))
-	rw := io.TeeReader(body, buf)
-	return rw, buf
 }
 
 //===========================================================================

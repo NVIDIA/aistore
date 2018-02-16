@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -105,9 +104,9 @@ func createclient() (*storage.Client, context.Context, string) {
 	return client, gctx, ""
 }
 
-func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (errstr string) {
+// FIXME: revisit error processing
+func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (md5hash string, errstr string) {
 	var (
-		file *os.File
 		size int64
 	)
 	client, gctx, errstr := createclient()
@@ -117,61 +116,46 @@ func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (errstr 
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		return fmt.Sprintf("Failed to get attributes for object %s from bucket %s, err: %v",
+		return "", fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v",
 			objname, bucket, err)
 	}
-	md5 := hex.EncodeToString(attrs.MD5)
+	omd5 := hex.EncodeToString(attrs.MD5)
+
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		return fmt.Sprintf("Failed to create rc for object %s to file %s, err: %v",
-			objname, fqn, err)
+		return "", fmt.Sprintf("gcp: Failed to create rc (object %s, bucket %s), err: %v",
+			objname, bucket, err)
 	}
 	defer rc.Close()
-	if file, errstr = initobj(fqn); errstr != "" {
-		return
-	}
-	if size, errstr = getobjto_Md5(file, fqn, objname, md5, rc); errstr != "" {
-		file.Close()
-		return
+	if size, md5hash, errstr = ReceiveFileAndFinalize(fqn, objname, omd5, rc); errstr != "" {
+		return "", errstr
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
-
-	if err = file.Close(); err != nil {
-		return fmt.Sprintf("Failed to close downloaded file %s, err: %v", fqn, err)
+	if glog.V(3) {
+		glog.Infof("gcp: GET %s (bucket %s)", objname, bucket)
 	}
-	return ""
+	return
 }
 
-func (cloudif *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum string) (errstr string) {
-	size := r.ContentLength
-	teebuf, b := Maketeerw(size, r.Body)
+func (cloudif *gcpif) putobj(file *os.File, bucket, objname string) (errstr string) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
 	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
-
-	if _, err := copyBuffer(wc, teebuf); err != nil {
-		errstr = fmt.Sprintf("gcp: failed to upload %s (bucket %s), err: %v", objname, bucket, err)
+	_, err := copyBuffer(wc, file)
+	if err != nil {
+		errstr = fmt.Sprintf("gcp: Failed to copy-buffer (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
 	}
 	if err := wc.Close(); err != nil {
-		errstr = fmt.Sprintf("gcp: (UNEXPECTED) close failure upon uploading %s (bucket %s), err: %v",
+		errstr = fmt.Sprintf("gcp: Failed to close wc (object %s, bucket %s), err: %v",
 			objname, bucket, err)
 		return
 	}
-	r.Body = ioutil.NopCloser(b)
-	written, err := ReceiveFile(fqn, r.Body, md5sum)
-	if err != nil {
-		errstr = fmt.Sprintf("gcp: failed to receive %s (written %d), err : %v", fqn, written, err)
-		return
-	}
-	if errstr = truncatefile(fqn, size); errstr != "" {
-		return
-	}
 	if glog.V(3) {
-		glog.Infof("gcp: PUT %s (bucket %s)", objname, bucket)
+		glog.Infof("gcp: PUT %s (bucket %s) ", objname, bucket)
 	}
 	return
 }
@@ -184,7 +168,7 @@ func (cloudif *gcpif) deleteobj(bucket, objname string) (errstr string) {
 	o := client.Bucket(bucket).Object(objname)
 	err := o.Delete(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("gcp: failed to delete %s (bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}
 	if glog.V(3) {

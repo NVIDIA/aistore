@@ -6,7 +6,7 @@
 package dfc
 
 import (
-	"encoding/binary"
+	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,19 +20,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
 )
 
 // xattrs
 const (
-	Objstateattr = "user.objstate" // Object's state
-	MD5attr      = "user.MD5"      // Object's MD5
+	ObjstateAttr = "user.obj.isvalid" // Object's state
+	HashAttr     = "user.obj.dfchash" // Object's XXHash
 	XAttrInvalid = "0"
 	XAttrValid   = "1"
 )
 
-const directput = 5
+const DFC_CONTENT_HASH = "Content-HASH"
 
 type mountPath struct {
 	Path string
@@ -194,6 +193,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // checks if the object exists locally (if not, downloads it)
 // and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
+	var md5hash string
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
@@ -240,14 +240,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
+	//FIXME
 	// serialize on the name
-	uname := bucket + objname
-	exclusive := coldget
-	t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, exclusive)
+	//uname := bucket + objname
+	//exclusive := coldget
+	//t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	//defer t.rtnamemap.unlockname(uname, exclusive)
 
-	t.statsif.add("numget", 1)
 	if !coldget && isinvalidobj(fqn) {
 		if t.islocalBucket(bucket) {
 			errstr := fmt.Sprintf("GET local: bad checksum, file %s, local bucket %s", fqn, bucket)
@@ -258,12 +257,11 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		coldget = true
 	}
 	if coldget {
-		t.statsif.add("numcoldget", 1)
-		glog.Infof("Cold GET: bucket %s object %s", bucket, objname)
-		if errstr := getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+		if md5hash, errstr = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
 		}
+		t.statsif.add("numcoldget", 1)
 	}
 	//
 	// sendfile
@@ -280,22 +278,25 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	md5binary, errstr := Getxattr(fqn, MD5attr)
-	if errstr != "" {
-		s := fmt.Sprintf("Failed to Get MD5 for local file %q, err: %v", fqn, errstr)
-		t.invalmsghdlr(w, r, s)
-		return
+	if !coldget {
+		md5binary, errstr := Getxattr(fqn, HashAttr)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+		md5hash = string(md5binary)
 	}
-	md5 := hex.EncodeToString(md5binary)
-	w.Header().Add("Content-MD5", md5)
+	if md5hash != "" {
+		w.Header().Add(DFC_CONTENT_HASH, md5hash)
+	}
 	written, err := copyBuffer(w, file)
 	if err != nil {
-		glog.Errorf("Failed to send file %s, err: %v", fqn, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		t.statsif.add("numerr", 1)
+		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
+		t.invalmsghdlr(w, r, errstr)
 	} else if glog.V(3) {
 		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
+	t.statsif.add("numget", 1)
 	glog.Flush()
 }
 
@@ -343,7 +344,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		}
 		if strings.Contains(msg.GetProps, GetPropsChecksum) {
 			fqn := t.fqn(bucket, fi.relname)
-			md5hex, errstr := Getxattr(fqn, MD5attr)
+			md5hex, errstr := Getxattr(fqn, HashAttr)
 			if errstr != "" {
 				glog.Infoln(errstr)
 			} else {
@@ -374,67 +375,122 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
-// "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	var (
-		s, fqn, from, to, bucket, objname string
-		err                               error
-		finfo                             os.FileInfo
-		written                           int64
-	)
-	apitems := t.restAPIItems(r.URL.Path, 9)
-	// case: PUT
-	if len(apitems) == directput {
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	// case: rebalance
+	if apitems[0] == Rfrom || apitems[2] == Rto {
+		// "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
+		apitems := t.restAPIItems(r.URL.Path, 6)
+		if apitems := t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
+			return
+		}
+		from, to, bucket, objname := apitems[1], apitems[3], apitems[4], apitems[5]
+		errstr := t.dorebalance(r, from, to, bucket, objname)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+		t.statsif.add("numrecvfile", 1)
+	} else {
+		// case : PUT
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
 		}
-		bucket, objname = apitems[0], ""
+		bucket, objname := apitems[0], ""
 		if len(apitems) > 1 {
 			objname = strings.Join(apitems[1:], "/")
 		}
-		fqn = t.fqn(bucket, objname)
-
-		// serialize on the name
-		uname := bucket + objname
-		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-		defer t.rtnamemap.unlockname(uname, true)
-
-		glog.Infof("PUT: %s", fqn)
-		errstr := ""
-		md5 := r.Header.Get("Content-MD5")
-		assert(md5 != "")
-		if t.islocalBucket(bucket) {
-			errstr = t.putlocal(r, fqn, md5)
-		} else {
-			errstr = getcloudif().putobj(r, fqn, bucket, objname, md5)
-		}
+		errstr := t.doput(w, r, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
-		} else {
-			t.statsif.add("numput", 1)
+			return
 		}
-		return
+		t.statsif.add("numput", 1)
+	}
+	return
+}
+
+func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket string, objname string) (errstr string) {
+	var (
+		err     error
+		file    *os.File
+		md5hash string
+		hdhash  string
+	)
+	fqn := t.fqn(bucket, objname)
+	hdhash = r.Header.Get("Content-HASH")
+	if hdhash == "" {
+		glog.Infof("Warning: empty Content-HASH")
 	}
 
-	// case: rebalance
-	if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
+	defer func() {
+		r.Body.Close()
+		if errstr == "" {
+			return
+		}
+		if err = os.Remove(fqn); err != nil {
+			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, fqn, err)
+		}
+	}()
+	glog.Infof("PUT: %s", fqn)
+	if hdhash != "" && !isinvalidobj(fqn) {
+		file, err := os.Open(fqn)
+		// Write new object in error case.(Non critical)
+		if err == nil {
+			md5 := md5.New()
+			md5hash, _ = CalculateMD5(file, md5)
+			// Not a critical error
+			if err = file.Close(); err != nil {
+				glog.Infof("Failed to close %s, err: %v", fqn, err)
+			}
+			if md5hash == hdhash {
+				glog.Infof("Existing fqn %s is valid", fqn)
+				return
+			}
+		}
+	}
+
+	// serialize on the name
+	uname := bucket + objname
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, true)
+
+	if _, md5hash, errstr = ReceiveFileAndFinalize(fqn, objname, hdhash, r.Body); errstr != "" {
 		return
 	}
-	if apitems[0] != Rfrom || apitems[2] != Rto {
-		s = fmt.Sprintf("File copy: missing %s and/or %s in the URL: %+v", Rfrom, Rto, apitems)
-		goto merr
+	if hdhash != "" && md5hash != hdhash {
+		errstr = fmt.Sprintf("Invalid checksum: %s md5 %s... does not match user's %s...", fqn, md5hash[:8], hdhash[:8])
+		return
 	}
-	from, to, bucket, objname = apitems[1], apitems[3], apitems[4], apitems[5]
+	if t.islocalBucket(bucket) {
+		return
+	}
+	file, err = os.Open(fqn)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to re-open file %s err: %v", fqn, err)
+		return
+	}
+	if errstr = getcloudif().putobj(file, bucket, objname); errstr != "" {
+		file.Close()
+		return
+	}
+	if err = file.Close(); err != nil {
+		glog.Errorf("UNEXPECTED failure to close an already PUT file %s, err: %v", fqn, err)
+	}
+	return
+}
+
+func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname string) (errstr string) {
 	if glog.V(3) {
 		glog.Infof("File copy: from %q bucket %q objname %q => to %q", from, bucket, objname, to)
 	}
 	if t.si.DaemonID != from && t.si.DaemonID != to {
-		s = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
+		errstr = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
 			t.si.DaemonID, from, to)
-		goto merr
+		return
 	}
-	fqn = t.fqn(bucket, objname)
-	finfo, err = os.Stat(fqn)
+	fqn := t.fqn(bucket, objname)
+	finfo, err := os.Stat(fqn)
 
 	// FIXME: TODO: serialize on the name
 
@@ -442,17 +498,17 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		//
 		// the source
 		//
-		if os.IsNotExist(err) {
-			s = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
-			goto merr
+		if err != nil && os.IsNotExist(err) {
+			errstr = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
+			return
 		}
 		si, ok := t.smap.Smap[to]
 		if !ok {
-			s = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
-			goto merr
+			errstr = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
+			return
 		}
-		if s = t.sendfile(r.Method, bucket, objname, si); s != "" {
-			goto merr
+		if errstr = t.sendfile(r.Method, bucket, objname, si); errstr != "" {
+			return
 		}
 		if glog.V(3) {
 			glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
@@ -461,39 +517,15 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		//
 		// the destination
 		//
-		if os.IsExist(err) {
-			s = fmt.Sprintf("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
+		if err != nil && os.IsExist(err) && !isinvalidobj(fqn) {
+			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
 		}
-
-		md5 := r.Header.Get("Content-MD5")
-		assert(md5 != "", err)
-		if written, err = ReceiveFile(fqn, r.Body, md5); err != nil {
-			s = fmt.Sprintf("File copy: failed to receive %q from %s", fqn, from)
-			goto merr
+		// write file with extended attributes .
+		if _, _, errstr = ReceiveFileAndFinalize(fqn, objname, "", r.Body); errstr != "" {
+			return
 		}
-		if glog.V(3) {
-			glog.Infof("Received %q from %s (size %.2f MB)", fqn, from, float64(written)/1000/1000)
-		}
-		t.statsif.add("numrecvfile", 1)
 	}
-	return
-merr:
-	t.invalmsghdlr(w, r, s)
-}
-
-func (t *targetrunner) putlocal(r *http.Request, fqn, omd5 string) (errstr string) {
-	xxhash := xxhash.New64() // FIXME: only if configured
-	written, err := ReceiveFile(fqn, r.Body, omd5, xxhash)
-	if err != nil {
-		return fmt.Sprintf("PUT local: failed to receive %q, err: %v", fqn, err)
-	}
-	xxsum := xxhash.Sum64()
-	xxbytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(xxbytes, xxsum) // FIXME: set xattr if needed
-	glog.Infof("PUT local: received %s (size %.2f MB, xxhash %s)",
-		fqn, float64(written)/1000/1000, hex.EncodeToString(xxbytes))
-	// FIXME: use omd5, finalize, etc.
 	return
 }
 
@@ -507,28 +539,44 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
-	var errstr string
 
 	fqn := t.fqn(bucket, objname)
 	uname := bucket + objname
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
-	if t.islocalBucket(bucket) {
-		if err := os.Remove(fqn); err != nil {
-			errstr = err.Error()
-		}
-	} else {
+	var errstr string
+	if !t.islocalBucket(bucket) {
 		errstr = getcloudif().deleteobj(bucket, objname)
 	}
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
-	} else {
-		t.statsif.add("numdelete", 1)
+		return
 	}
+	_, err := os.Stat(fqn)
+	if err != nil {
+		// Non existent object is error for LB.
+		if os.IsNotExist(err) && t.islocalBucket(bucket) {
+			errstr = fmt.Sprintf("DELETE local: file %s (local bucket %s, object %s) does not exist",
+				fqn, bucket, objname)
+		}
+	} else {
+
+		if err := os.Remove(fqn); err != nil {
+			errstr = err.Error()
+		}
+	}
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	t.statsif.add("numdelete", 1)
 }
 
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo) string {
+	var (
+		md5hash, errstr string
+	)
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	fqn := t.fqn(bucket, objname)
 	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
@@ -539,18 +587,17 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
 	defer file.Close()
-	// calculate MD5 for file and send it as part of header
-	md5, errstr := CalculateMD5(file)
+	// calculate HASH for file and send it as part of header
+	md5 := md5.New()
+	md5hash, errstr = CalculateMD5(file, md5)
 	if errstr != "" {
-		return fmt.Sprintf("Failed to CalulateMD5, err: %v", errstr)
+		return fmt.Sprintf("Failed to Calulate MD5Hash, err: %v", errstr)
 	}
 	_, err = file.Seek(0, 0)
-	// FIXME: prior to sending, compare the checksum with the one stored locally -
-	//        if xattrs enabled
 	assert(err == nil, err)
 	request, err := http.NewRequest(method, url, file)
 	assert(err == nil, err)
-	request.Header.Set("Content-MD5", md5)
+	request.Header.Set("Content-HASH", md5hash)
 	response, err := t.httpclient.Do(request)
 	if err != nil {
 		return fmt.Sprintf("Failed to copy %q from %s, err: %v", t.si.DaemonID, fqn, err)
