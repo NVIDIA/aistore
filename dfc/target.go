@@ -215,9 +215,19 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//
-	// get the object from the bucket
+	// serialize on the name
 	//
 	fqn := t.fqn(bucket, objname)
+	uname := bucket + objname
+	exclusive := true
+	t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer func(locktype *bool) {
+		t.rtnamemap.unlockname(uname, *locktype)
+	}(&exclusive)
+
+	//
+	// get the object from the bucket
+	//
 	coldget := false
 	_, err := os.Stat(fqn)
 	if err != nil {
@@ -241,12 +251,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// serialize on the name
-	uname := bucket + objname
-	exclusive := coldget
-	t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, exclusive)
-
 	t.statsif.add("numget", 1)
 	if !coldget && isinvalidobj(fqn) {
 		if t.islocalBucket(bucket) {
@@ -265,6 +269,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	//
+	// downgrade lock(name)
+	//
+	exclusive = false
+	t.rtnamemap.downgradelock(uname)
+
 	//
 	// sendfile
 	//
@@ -393,26 +403,34 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			objname = strings.Join(apitems[1:], "/")
 		}
 		fqn = t.fqn(bucket, objname)
+		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
 
-		// serialize on the name
-		uname := bucket + objname
-		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-		defer t.rtnamemap.unlockname(uname, true)
-
-		glog.Infof("PUT: %s", fqn)
+		glog.Infof("PUT: %s => %s", fqn, putfqn)
 		errstr := ""
 		md5 := r.Header.Get("Content-MD5")
 		assert(md5 != "")
 		if t.islocalBucket(bucket) {
-			errstr = t.putlocal(r, fqn, md5)
+			errstr = t.putlocal(r, putfqn, md5)
 		} else {
-			errstr = getcloudif().putobj(r, fqn, bucket, objname, md5)
+			errstr = getcloudif().putobj(r, putfqn, bucket, objname, md5)
 		}
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+		// serialize on the name - and rename
+		uname := bucket + objname
+		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+		err = os.Rename(putfqn, fqn)
+		if err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected failure to rename an already PUT %s => %s, err: %v", putfqn, fqn))
+			os.Remove(putfqn)
 		} else {
+			glog.Infof("PUT done: %s <= %s", fqn, putfqn)
 			t.statsif.add("numput", 1)
 		}
+		t.rtnamemap.unlockname(uname, true)
+
 		return
 	}
 

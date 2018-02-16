@@ -274,7 +274,7 @@ func localLoad(pathname string, v interface{}) error {
 	return json.NewDecoder(file).Decode(v)
 }
 
-func osremove(prefix, fqn string) error {
+func osRemove(prefix, fqn string) error {
 	if err := os.Remove(fqn); err != nil {
 		return err
 	}

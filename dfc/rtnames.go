@@ -60,6 +60,18 @@ func (rtnamemap *rtnamemap) trylockname(name string, exclusive bool, info *pendi
 	return true
 }
 
+func (rtnamemap *rtnamemap) downgradelock(name string) {
+	rtnamemap.Lock()
+	defer rtnamemap.Unlock()
+
+	info, found := rtnamemap.m[name]
+	assert(found)
+	info.Unlock()
+	info.RLock()
+	info.rc++
+	assert(info.rc == 1)
+}
+
 func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
 	rtnamemap.Lock()
 	defer rtnamemap.Unlock()

@@ -151,7 +151,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	}
 	// remove invalid object files.
 	if isinvalidobj(fqn) {
-		err = osremove("lru-invalid", fqn)
+		err = osRemove("lru-invalid", fqn)
 		if err != nil {
 			glog.Errorf("LRU: failed to delete file %s, err: %v", fqn, err)
 		} else if glog.V(3) {
@@ -190,7 +190,7 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 	)
 	for h.Len() > 0 && toevict > 10 {
 		fi := heap.Pop(h).(*fileinfo)
-		if err := osremove("lru", fi.fqn); err != nil {
+		if err := t.osRemove(fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}
@@ -206,6 +206,28 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 		stats.add("bytesevicted", bevicted)
 		stats.add("filesevicted", fevicted)
 	}
+	return nil
+}
+
+func (t *targetrunner) osRemove(fqn string) error {
+	bucket, objname, ok := t.fqn2bckobj(fqn)
+	if !ok {
+		glog.Errorf("Cannot convert (%q => bucket %s, object %s) - fspath config changed?", fqn, bucket, objname)
+		glog.Errorf("Evicting %q anyway...", fqn)
+		if err := os.Remove(fqn); err != nil {
+			return err
+		}
+		glog.Infof("lru: removed %q", fqn)
+		return nil
+	}
+	uname := bucket + objname
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, true)
+
+	if err := os.Remove(fqn); err != nil {
+		return err
+	}
+	glog.Infof("lru: removed %q", fqn)
 	return nil
 }
 

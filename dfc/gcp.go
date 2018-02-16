@@ -157,7 +157,7 @@ func (cloudif *gcpif) putobj(r *http.Request, fqn, bucket, objname, md5sum strin
 		return
 	}
 	if err := wc.Close(); err != nil {
-		errstr = fmt.Sprintf("gcp: (UNEXPECTED) close failure upon uploading %s (bucket %s), err: %v",
+		errstr = fmt.Sprintf("gcp: Unexpected failure to close wc upon uploading %s (bucket %s), err: %v",
 			objname, bucket, err)
 		return
 	}
