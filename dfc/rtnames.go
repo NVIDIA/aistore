@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -21,10 +22,10 @@ type rtnamemap struct {
 
 // in-progress file/object GETs, PUTs and DELETEs
 type pendinginfo struct {
-	sync.RWMutex
 	time.Time
-	rc  int
-	fqn string
+	fqn       string
+	rc        int
+	exclusive bool
 }
 
 //
@@ -42,21 +43,31 @@ func newrtnamemap(size int) *rtnamemap {
 func (rtnamemap *rtnamemap) trylockname(name string, exclusive bool, info *pendinginfo) bool {
 	rtnamemap.Lock()
 	defer rtnamemap.Unlock()
-	var found bool
-	if _, found = rtnamemap.m[name]; found && exclusive {
+
+	_, found := rtnamemap.m[name]
+	if found && exclusive {
 		return false
 	}
 	if exclusive {
 		rtnamemap.m[name] = info
-		info.Lock() // lock the name
+		info.exclusive = true
+		info.rc = 0
 		return true
 	}
-	if !found {
+	// rlock
+	var realinfo *pendinginfo
+	if found {
+		realinfo = rtnamemap.m[name]
+		if realinfo.exclusive {
+			return false
+		}
+	} else {
 		rtnamemap.m[name] = info // the 1st rlock
+		realinfo = info
+		realinfo.exclusive = false
+		realinfo.rc = 0
 	}
-	realinfo := rtnamemap.m[name]
-	realinfo.RLock() // rlock the name
-	realinfo.rc++    // upon success
+	realinfo.rc++
 	return true
 }
 
@@ -66,8 +77,7 @@ func (rtnamemap *rtnamemap) downgradelock(name string) {
 
 	info, found := rtnamemap.m[name]
 	assert(found)
-	info.Unlock()
-	info.RLock()
+	info.exclusive = false
 	info.rc++
 	assert(info.rc == 1)
 }
@@ -75,23 +85,21 @@ func (rtnamemap *rtnamemap) downgradelock(name string) {
 func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
 	rtnamemap.Lock()
 	defer rtnamemap.Unlock()
-	if _, ok := rtnamemap.m[name]; !ok {
-		assert(false)
-	}
-	info := rtnamemap.m[name]
+
+	info, ok := rtnamemap.m[name]
+	assert(ok)
 	if exclusive {
-		assert(info.rc == 0)
-		info.Unlock()
+		assert(info.exclusive)
 		delete(rtnamemap.m, name)
 		return
 	}
-	info.RUnlock()
 	info.rc--
 	if info.rc == 0 {
 		delete(rtnamemap.m, name)
 	}
 }
 
+// FIXME: TODO: support timeout
 func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendinginfo, poll time.Duration) {
 	if rtnamemap.trylockname(name, exclusive, info) {
 		return
@@ -106,6 +114,7 @@ func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendingi
 				return
 			}
 			glog.Infof("rtnamemap: lockname %s (%v) - retrying...", info.fqn, exclusive)
+			time.Sleep(time.Millisecond * time.Duration(rand.Intn(10)+1))
 		case <-rtnamemap.abrt:
 			return
 		}
