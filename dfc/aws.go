@@ -26,7 +26,8 @@ import (
 // types
 //
 //======
-type awsif struct {
+type awsimpl struct {
+	t *targetrunner
 }
 
 //======
@@ -46,7 +47,7 @@ func createsession() *session.Session {
 // methods
 //
 //======
-func (cloudif *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
+func (awsimpl *awsimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
 	glog.Infof("aws listbucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
@@ -92,7 +93,7 @@ func (cloudif *awsif) listbucket(w http.ResponseWriter, bucket string, msg *GetM
 	return
 }
 
-func (cloudif *awsif) getobj(fqn, bucket, objname string) (md5hash string, errstr string) {
+func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, errstr string) {
 	var (
 		size int64
 		omd5 string
@@ -110,7 +111,7 @@ func (cloudif *awsif) getobj(fqn, bucket, objname string) (md5hash string, errst
 
 	// the object is multipart?
 	omd5, _ = strconv.Unquote(*obj.ETag)
-	if size, md5hash, errstr = ReceiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
+	if size, md5hash, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
 		return "", errstr
 	}
 	stats := getstorstats()
@@ -122,9 +123,12 @@ func (cloudif *awsif) getobj(fqn, bucket, objname string) (md5hash string, errst
 
 }
 
-func (cloudif *awsif) putobj(file *os.File, bucket, objname string) (errstr string) {
+func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string) (errstr string) {
 	sess := createsession()
 	uploader := s3manager.NewUploader(sess)
+	//
+	// FIXME: use uploader.UploadWithContext() for larger files
+	//
 	_, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
@@ -139,7 +143,8 @@ func (cloudif *awsif) putobj(file *os.File, bucket, objname string) (errstr stri
 	}
 	return
 }
-func (cloudif *awsif) deleteobj(bucket, objname string) (errstr string) {
+
+func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string) {
 	sess := createsession()
 	svc := s3.New(sess)
 	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})

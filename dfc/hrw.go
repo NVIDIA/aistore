@@ -20,6 +20,7 @@ func hrwTarget(name string, smap *Smap) (si *daemonInfo) {
 	//       vs locking zillion times - use sync.Map otherwise
 	// smap.lock.Lock()
 	// defer smap.lock.Unlock()
+	assert(len(smap.Smap) > 0, "Fatal: cluster map is empty")
 	var max uint64
 	for id, sinfo := range smap.Smap {
 		cs := xxhash.ChecksumString64S(id+":"+name, mLCG32)

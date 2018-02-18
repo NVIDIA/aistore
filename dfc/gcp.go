@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -24,7 +25,8 @@ import (
 // types
 //
 //======
-type gcpif struct {
+type gcpimpl struct {
+	t *targetrunner
 }
 
 //======
@@ -41,7 +43,7 @@ func getProjID() string {
 // methods
 //
 //======
-func (cloudif *gcpif) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
+func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
 	glog.Infof("gcp listbucket %s", bucket)
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -105,7 +107,7 @@ func createclient() (*storage.Client, context.Context, string) {
 }
 
 // FIXME: revisit error processing
-func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (md5hash string, errstr string) {
+func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5hash string, errstr string) {
 	var (
 		size int64
 	)
@@ -127,7 +129,7 @@ func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (md5hash
 			objname, bucket, err)
 	}
 	defer rc.Close()
-	if size, md5hash, errstr = ReceiveFileAndFinalize(fqn, objname, omd5, rc); errstr != "" {
+	if size, md5hash, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, omd5, rc); errstr != "" {
 		return "", errstr
 	}
 	stats := getstorstats()
@@ -138,13 +140,15 @@ func (cloudif *gcpif) getobj(fqn string, bucket string, objname string) (md5hash
 	return
 }
 
-func (cloudif *gcpif) putobj(file *os.File, bucket, objname string) (errstr string) {
+func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string) (errstr string) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
 	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
-	_, err := copyBuffer(wc, file)
+	buf := gcpimpl.t.buffers.alloc()
+	defer gcpimpl.t.buffers.free(buf)
+	written, err := io.CopyBuffer(wc, file, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("gcp: Failed to copy-buffer (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
@@ -155,12 +159,12 @@ func (cloudif *gcpif) putobj(file *os.File, bucket, objname string) (errstr stri
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("gcp: PUT %s (bucket %s) ", objname, bucket)
+		glog.Infof("gcp: PUT %s (bucket %s, size %d) ", objname, bucket, written)
 	}
 	return
 }
 
-func (cloudif *gcpif) deleteobj(bucket, objname string) (errstr string) {
+func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return

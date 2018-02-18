@@ -1,5 +1,7 @@
 *.log
 *.test
 *.csv
+*.svg
 .*.swp
 tags
+FlameGraph/

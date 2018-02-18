@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -60,18 +61,17 @@ type targetrunner struct {
 	starttime time.Time
 	lbmap     *lbmap
 	rtnamemap *rtnamemap
+	buffers   *buffers
 }
 
 // start target runner
 func (t *targetrunner) run() error {
-	// init
 	t.httprunner.init(getstorstats())
-	t.smap = &Smap{}
-	t.xactinp = newxactinp()
-	// local (cache-only) buckets
-	t.lbmap = &lbmap{LBmap: make(map[string]string)}
-	// decongested protected map: in-progress requests; FIXME size
-	t.rtnamemap = newrtnamemap(128)
+	t.smap = &Smap{}                                 // cluster map
+	t.xactinp = newxactinp()                         // extended actions
+	t.lbmap = &lbmap{LBmap: make(map[string]string)} // local (cache-only) buckets
+	t.rtnamemap = newrtnamemap(128)                  // lock/unlock name
+	t.buffers = newbuffers(128 * 1024)               // 128K buffer pool
 
 	if err := t.register(); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
@@ -111,11 +111,11 @@ func (t *targetrunner) run() error {
 	// cloud provider
 	if ctx.config.CloudProvider == amazoncloud {
 		// TODO: sessions
-		t.cloudif = &awsif{}
+		t.cloudif = &awsimpl{t}
 
 	} else {
 		assert(ctx.config.CloudProvider == googlecloud)
-		t.cloudif = &gcpif{}
+		t.cloudif = &gcpimpl{t}
 	}
 	if ctx.config.NoXattrs {
 		glog.Infof("Warning: running with xattrs disabled")
@@ -300,7 +300,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if md5hash != "" {
 		w.Header().Add(DFC_CONTENT_HASH, md5hash)
 	}
-	written, err := copyBuffer(w, file)
+	buf := t.buffers.alloc()
+	defer t.buffers.free(buf)
+	written, err := io.CopyBuffer(w, file, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
 		t.invalmsghdlr(w, r, errstr)
@@ -308,7 +310,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	t.statsif.add("numget", 1)
-	glog.Flush()
 }
 
 func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
@@ -437,12 +438,14 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	defer r.Body.Close()
 	glog.Infof("PUT: %s => %s", fqn, putfqn)
 
-	// optimize the new PUT out if the checksums match
+	// optimize out if the checksums do match
 	if hdhash != "" && !isinvalidobj(fqn) {
 		file, err := os.Open(fqn)
 		if err == nil {
 			md5 := md5.New()
-			md5hash, _ = CalculateMD5(file, md5)
+			buf := t.buffers.alloc()
+			md5hash, _ = ComputeFileMD5(file, buf, md5)
+			t.buffers.free(buf)
 			// not a critical error
 			if err = file.Close(); err != nil {
 				glog.Warningf("Unexpected failure to close %s once md5-ed, err: %v", fqn, err)
@@ -455,7 +458,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			glog.Warningf("Unexpected failure to open local valid %s, err: %v", fqn, err)
 		}
 	}
-	if _, md5hash, errstr = ReceiveFileAndFinalize(putfqn, objname, hdhash, r.Body); errstr != "" {
+	if _, md5hash, errstr = t.receiveFileAndFinalize(putfqn, objname, hdhash, r.Body); errstr != "" {
 		return
 	}
 	// putfqn is received
@@ -540,7 +543,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			return // not an error, nothing to do
 		}
 		// write file with extended attributes .
-		if _, _, errstr = ReceiveFileAndFinalize(fqn, objname, "", r.Body); errstr != "" {
+		if _, _, errstr = t.receiveFileAndFinalize(fqn, objname, "", r.Body); errstr != "" {
 			return
 		}
 	}
@@ -605,9 +608,11 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
 	defer file.Close()
-	// calculate HASH for file and send it as part of header
+	// md5 as part of the header  - FIXME: use xxhash here and elsewhere
 	md5 := md5.New()
-	md5hash, errstr = CalculateMD5(file, md5)
+	buf := t.buffers.alloc()
+	md5hash, errstr = ComputeFileMD5(file, buf, md5)
+	t.buffers.free(buf)
 	if errstr != "" {
 		return fmt.Sprintf("Failed to Calulate MD5Hash, err: %v", errstr)
 	}
@@ -917,6 +922,54 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 			continue
 		}
 		fsmap[mountpath.Fsid] = mountpath.Path
+	}
+	return
+}
+
+// on err closes and removes the file; othwerise returns the size (in bytes).
+// omd5 can be empty for multipart object or in context of put.
+func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader io.ReadCloser) (written int64, md5hash string, errstr string) {
+	var (
+		err  error
+		file *os.File
+	)
+	if file, errstr = initobj(fqn); errstr != "" {
+		errstr = fmt.Sprintf("Failed to create and initialize %s, err: %s", fqn, errstr)
+		return
+	}
+	defer func() {
+		if errstr == "" {
+			return
+		}
+		if err = file.Close(); err != nil {
+			glog.Errorf("Failed to close file %s, err: %v", fqn, err)
+		}
+		if err = os.Remove(fqn); err != nil {
+			glog.Errorf("Nested error %s => (remove %s => err: %v", errstr, fqn, err)
+		}
+	}()
+
+	md5 := md5.New()
+	buf := t.buffers.alloc()
+	if written, errstr = ReceiveFile(file, reader, buf, md5); errstr != "" {
+		t.buffers.free(buf)
+		return
+	}
+	hashInBytes := md5.Sum(nil)[:16]
+	t.buffers.free(buf)
+	md5hash = hex.EncodeToString(hashInBytes)
+	if omd5 != md5hash {
+		errstr = fmt.Sprintf("Object's %s MD5 %s... does not match %s (MD5 %s...)",
+			objname, omd5[:8], fqn, md5hash[:8])
+		return
+	}
+	if err = finalizeobj(fqn, []byte(md5hash)); err != nil {
+		errstr = fmt.Sprintf("Unable to finalize file %s, err: %v", fqn, err)
+		return
+	}
+	// close file
+	if err = file.Close(); err != nil {
+		errstr = fmt.Sprintf("Failed to close file %s, err: %v", fqn, err)
 	}
 	return
 }

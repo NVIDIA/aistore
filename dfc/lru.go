@@ -34,6 +34,7 @@ type lructx struct {
 	newest  time.Time
 	xlru    *xactLRU
 	h       *maxheap
+	t       *targetrunner
 }
 
 // FIXME: mountpath.enabled is never used
@@ -85,7 +86,7 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1000/1000)
 
 	// init LRU context
-	lctx := &lructx{totsize: toevict, xlru: xlru, h: h}
+	lctx := &lructx{totsize: toevict, xlru: xlru, h: h, t: t}
 
 	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
 		s := err.Error()
@@ -156,7 +157,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		//
 		dontevictimeInvalid := now.Add(-time.Minute * 30)
 		if usetime.Before(dontevictimeInvalid) {
-			err = osRemove("lru-invalid", fqn)
+			err = lctx.t.lrufilRemove("lru-invalid", fqn)
 			if err != nil {
 				glog.Errorf("LRU: failed to delete invalid %s, err: %v", fqn, err)
 			} else if glog.V(3) {
@@ -196,7 +197,7 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 	)
 	for h.Len() > 0 && toevict > 10 {
 		fi := heap.Pop(h).(*fileinfo)
-		if err := t.osRemove(fi.fqn); err != nil {
+		if err := t.lrufilRemove("lru", fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}
@@ -215,7 +216,7 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 	return nil
 }
 
-func (t *targetrunner) osRemove(fqn string) error {
+func (t *targetrunner) lrufilRemove(prefix, fqn string) error {
 	bucket, objname, ok := t.fqn2bckobj(fqn)
 	if !ok {
 		glog.Errorf("Cannot convert (%q => bucket %s, object %s) - fspath config changed?", fqn, bucket, objname)
@@ -223,7 +224,7 @@ func (t *targetrunner) osRemove(fqn string) error {
 		if err := os.Remove(fqn); err != nil {
 			return err
 		}
-		glog.Infof("lru: removed %q", fqn)
+		glog.Infof("%s: removed %q", prefix, fqn)
 		return nil
 	}
 	uname := bucket + objname

@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -450,12 +451,13 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			return
 		}
 		md5 := md5.New()
-		written, errstr := dfc.ReceiveFile(file, r.Body, md5)
+		written, errstr := dfc.ReceiveFile(file, r.Body, nil, md5)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			return
 		}
-		md5hash, errstr = dfc.CalculateMD5(nil, md5)
+		hashInBytes := md5.Sum(nil)[:16]
+		md5hash = hex.EncodeToString(hashInBytes)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to calculate XXHash, err: %s", id, errstr)
 			return
@@ -746,7 +748,8 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	}
 
 	md5 := md5.New()
-	md5hash, errstr := dfc.CalculateMD5(file, md5)
+	// FIXME: the client must compute xxhash not md5
+	md5hash, errstr := dfc.ComputeFileMD5(file, nil, md5)
 	if errstr != "" {
 		if errch != nil {
 			errch <- fmt.Errorf("Failed to calculate MD5Hash sum for file %s, err: %s", fname, errstr)
