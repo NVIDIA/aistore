@@ -290,7 +290,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	} else if size > t.buffers4k.fixedsize {
 		buffs = t.buffers32k
 	} else {
-		assert(size != 0)
+		assert(size != 0, "Unexpected: zero size "+fqn)
 		buffs = t.buffers4k
 	}
 	buf := buffs.alloc()
@@ -409,22 +409,22 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 }
 
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
+	apitems := t.restAPIItems(r.URL.Path, 6)
 	if len(apitems) > 2 && apitems[0] == Rfrom || apitems[2] == Rto {
-		// case: rebalance "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
-		apitems := t.restAPIItems(r.URL.Path, 6)
+		// Rebalance: "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
 		if apitems := t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
 			return
 		}
 		from, to, bucket, objname := apitems[1], apitems[3], apitems[4], apitems[5]
-		errstr := t.dorebalance(r, from, to, bucket, objname)
+		size, errstr := t.dorebalance(r, from, to, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		t.statsif.add("numrecvfile", 1)
+		t.statsif.add("numrecvfiles", 1)
+		t.statsif.add("numrecvbytes", size)
 	} else {
-		// case: PUT
+		// PUT: "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+objname
 		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 			return
 		}
@@ -505,27 +505,28 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			return
 		}
 		if err = file.Close(); err != nil {
+			// not failing as the cloud part is done
 			glog.Errorf("Unexpected failure to close an already PUT file %s, err: %v", putfqn, err)
 		}
 	}
-
 	// serialize on the name - and rename
+	errstr = t.safeRename(bucket, objname, putfqn, fqn)
+	return
+}
+
+func (t *targetrunner) safeRename(bucket, objname, putfqn, fqn string) (errstr string) {
 	uname := bucket + objname
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	if err = os.Rename(putfqn, fqn); err != nil {
+	if err := os.Rename(putfqn, fqn); err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", putfqn, fqn, err)
 	} else {
 		glog.Infof("PUT done: %s <= %s", fqn, putfqn)
-		t.statsif.add("numput", 1)
 	}
 	t.rtnamemap.unlockname(uname, true)
 	return
 }
 
-func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname string) (errstr string) {
-	if glog.V(3) {
-		glog.Infof("File copy: from %q bucket %q objname %q => to %q", from, bucket, objname, to)
-	}
+func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname string) (size int64, errstr string) {
 	if t.si.DaemonID != from && t.si.DaemonID != to {
 		errstr = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
 			t.si.DaemonID, from, to)
@@ -534,12 +535,13 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 	fqn := t.fqn(bucket, objname)
 	finfo, err := os.Stat(fqn)
 
-	// FIXME: TODO: serialize on the name
-
 	if t.si.DaemonID == from {
 		//
 		// the source
 		//
+		if glog.V(3) {
+			glog.Infof("Rebalace from %q: bucket %q objname %q => to %q", from, bucket, objname, to)
+		}
 		if err != nil && os.IsNotExist(err) {
 			errstr = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
 			return
@@ -549,7 +551,8 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			errstr = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
 			return
 		}
-		if errstr = t.sendfile(r.Method, bucket, objname, si); errstr != "" {
+		size = finfo.Size()
+		if errstr = t.sendfile(r.Method, bucket, objname, si, size); errstr != "" {
 			return
 		}
 		if glog.V(3) {
@@ -559,14 +562,19 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		//
 		// the destination
 		//
+		if glog.V(3) {
+			glog.Infof("Rebalace to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
+		}
+		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
 		if err != nil && os.IsExist(err) && !isinvalidobj(fqn) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
 		}
 		// write file with extended attributes .
-		if _, _, errstr = t.receiveFileAndFinalize(fqn, objname, "", r.Body); errstr != "" {
+		if _, size, errstr = t.receiveFileAndFinalize(putfqn, objname, "", r.Body); errstr != "" {
 			return
 		}
+		errstr = t.safeRename(bucket, objname, putfqn, fqn)
 	}
 	return
 }
@@ -615,42 +623,60 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	t.statsif.add("numdelete", 1)
 }
 
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo) string {
-	var (
-		md5hash, errstr string
-	)
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64) string {
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	fqn := t.fqn(bucket, objname)
 	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
 	url += Rfrom + "/" + fromid + "/" + Rto + "/" + toid + "/"
 	url += bucket + "/" + objname
+
+	fqn, uname := t.fqn(bucket, objname), bucket+objname
+	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, false)
+
 	file, err := os.Open(fqn)
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
 	defer file.Close()
-	// md5 as part of the header  - FIXME: use xxhash here and elsewhere
+
+	// md5 - FIXME: use xxhash here and elsewhere - FIXME: must be configurable and optional
+	// + buffer pooling
 	md5 := md5.New()
-	buf := t.buffers.alloc()
-	md5hash, errstr = ComputeFileMD5(file, buf, md5)
-	t.buffers.free(buf)
+	var buffs buffif
+	if size > t.buffers32k.fixedsize {
+		buffs = t.buffers
+	} else if size > t.buffers4k.fixedsize {
+		buffs = t.buffers32k
+	} else {
+		assert(size != 0, "Unexpected: zero size "+fqn)
+		buffs = t.buffers4k
+	}
+	buf := buffs.alloc()
+	md5hash, errstr := ComputeFileMD5(file, buf, md5)
+	buffs.free(buf)
 	if errstr != "" {
-		return fmt.Sprintf("Failed to Calulate MD5Hash, err: %v", errstr)
+		return errstr
 	}
 	_, err = file.Seek(0, 0)
-	assert(err == nil, err)
+	if err != nil {
+		return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si.DaemonID, err)
+	}
+	//
+	// do send
+	//
 	request, err := http.NewRequest(method, url, file)
 	assert(err == nil, err)
 	request.Header.Set("Content-HASH", md5hash)
 	response, err := t.httpclient.Do(request)
 	if err != nil {
-		return fmt.Sprintf("Failed to copy %q from %s, err: %v", t.si.DaemonID, fqn, err)
+		return fmt.Sprintf("Failed to send %q from %s, err: %v", t.si.DaemonID, fqn, err)
 	}
 	if response != nil {
 		ioutil.ReadAll(response.Body)
 		response.Body.Close()
 	}
-	t.statsif.add("numsendfile", 1)
+	t.statsif.add("numsentfiles", 1)
+	t.statsif.add("numsentbytes", size)
 	return ""
 }
 
@@ -947,8 +973,9 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 	return
 }
 
-// on err closes and removes the file; othwerise returns the size (in bytes).
-// omd5 can be empty for multipart object or in context of put.
+// on err closes and removes the file; othwerise closes and returns the size
+// FIXME: md5 must be optional/configurable as well as xxhash
+// omd5 can be empty for multipart object or when PUTting
 func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader io.ReadCloser) (md5hash string, written int64, errstr string) {
 	var (
 		err  error

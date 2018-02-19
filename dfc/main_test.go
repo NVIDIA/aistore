@@ -459,12 +459,12 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		hashInBytes := md5.Sum(nil)[:16]
 		md5hash = hex.EncodeToString(hashInBytes)
 		if errstr != "" {
-			t.Errorf("Worker %2d: failed to calculate XXHash, err: %s", id, errstr)
+			t.Errorf("Worker %2d: failed to compute xxhash, err: %s", id, errstr)
 			return
 		}
 
 		if hdhash != md5hash {
-			t.Errorf("Worker %2d: header's MD5Hash %v doesn't match the file's MD5Hash %v", id, hdhash, md5hash)
+			t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s", id, hdhash, md5hash)
 			resch <- res
 			close(resch)
 			return
@@ -752,7 +752,7 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	md5hash, errstr := dfc.ComputeFileMD5(file, nil, md5)
 	if errstr != "" {
 		if errch != nil {
-			errch <- fmt.Errorf("Failed to calculate MD5Hash sum for file %s, err: %s", fname, errstr)
+			errch <- fmt.Errorf("Failed to compute md5 for file %s, err: %s", fname, errstr)
 		}
 		return
 	}
