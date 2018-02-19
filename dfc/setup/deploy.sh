@@ -160,6 +160,12 @@ done
 #	Log events at or above this severity are logged to standard
 #	error as well as to files.
 
+# build
+go build && go install && GOBIN=$GOPATH/bin go install setup/dfc.go
+if [ $? -ne 0 ]; then
+	exit 1
+fi
+
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
@@ -167,13 +173,13 @@ do
 	if [ $c -eq 0 ]
 	then
 			set -x
-			go run setup/dfc.go -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
+			$GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
 			{ set +x; } 2>/dev/null
 			# wait for the proxy to start up
 			sleep 2
 	else
 			set -x
-			go run setup/dfc.go -config=$CONFFILE -role=target $1 $2 &
+			$GOPATH/bin/dfc -config=$CONFFILE -role=target $1 $2 &
 			{ set +x; } 2>/dev/null
 	fi
 done
