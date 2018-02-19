@@ -9,12 +9,17 @@ import (
 	"sync"
 )
 
-type buffers struct {
-	pool      *sync.Pool
-	fixedsize int
+type buffif interface {
+	alloc() []byte
+	free(buf []byte)
 }
 
-func newbuffers(fixedsize int) *buffers {
+type buffers struct {
+	pool      *sync.Pool
+	fixedsize int64
+}
+
+func newbuffers(fixedsize int64) *buffers {
 	pool := &sync.Pool{
 		New: func() interface{} {
 			return make([]byte, fixedsize)

@@ -22,7 +22,7 @@ import (
 
 //======
 //
-// types
+// implements cloudif
 //
 //======
 type gcpimpl struct {
@@ -107,10 +107,7 @@ func createclient() (*storage.Client, context.Context, string) {
 }
 
 // FIXME: revisit error processing
-func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5hash string, errstr string) {
-	var (
-		size int64
-	)
+func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5hash string, size int64, errstr string) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
@@ -118,19 +115,18 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5ha
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		return "", fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v",
-			objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v", objname, bucket, err)
+		return
 	}
 	omd5 := hex.EncodeToString(attrs.MD5)
-
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		return "", fmt.Sprintf("gcp: Failed to create rc (object %s, bucket %s), err: %v",
-			objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: Failed to create rc (object %s, bucket %s), err: %v", objname, bucket, err)
+		return
 	}
 	defer rc.Close()
-	if size, md5hash, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, omd5, rc); errstr != "" {
-		return "", errstr
+	if md5hash, size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, omd5, rc); errstr != "" {
+		return
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)

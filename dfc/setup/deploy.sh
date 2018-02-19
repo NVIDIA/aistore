@@ -78,7 +78,7 @@ fi
 START=0
 END=$servcount
 
-echo Test-only: enter number of local cache directories for each target:
+echo "Number of local cache directories: (0 - use preconfigured filesystems)"
 read testfspathcnt
 if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$testfspathcnt' is not a number"; exit 1
@@ -142,8 +142,8 @@ do
 		"instance":		$c
 	},
 	"fspaths": {
-		"/zpools/vol1/a/b/c":	"",
-		"/zpools/vol2/m/n/p":	""
+		"/tmp/dfc":	"",
+		"/disk2/dfc":	""
 	},
 	"no_xattrs":			${NOXATTRS}
 }

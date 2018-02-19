@@ -23,7 +23,7 @@ import (
 
 //======
 //
-// types
+// implements cloudif
 //
 //======
 type awsimpl struct {
@@ -93,11 +93,8 @@ func (awsimpl *awsimpl) listbucket(w http.ResponseWriter, bucket string, msg *Ge
 	return
 }
 
-func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, errstr string) {
-	var (
-		size int64
-		omd5 string
-	)
+func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, size int64, errstr string) {
+	var omd5 string
 	sess := createsession()
 	s3Svc := s3.New(sess)
 	obj, err := s3Svc.GetObject(&s3.GetObjectInput{
@@ -105,14 +102,15 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, err
 		Key:    aws.String(objname),
 	})
 	if err != nil {
-		return "", fmt.Sprintf("aws: Failed to get %s from bucket %s, err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("aws: Failed to get %s from bucket %s, err: %v", objname, bucket, err)
+		return
 	}
 	defer obj.Body.Close()
 
-	// the object is multipart?
+	// FIXME: the object is multipart?
 	omd5, _ = strconv.Unquote(*obj.ETag)
-	if size, md5hash, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
-		return "", errstr
+	if md5hash, size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
+		return
 	}
 	stats := getstorstats()
 	stats.add("bytesloaded", size)
