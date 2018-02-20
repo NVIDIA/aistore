@@ -62,7 +62,7 @@ func init() {
 
 func Test_regression(t *testing.T) {
 	flag.Parse()
-	fmt.Fprintf(os.Stdout, "=== abortonerr = %v\n\n", abortonerr)
+	fmt.Printf("=== abortonerr = %v\n\n", abortonerr)
 
 	if err := dfc.CreateDir(LocalRootDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalRootDir, err)
@@ -103,9 +103,9 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 	)
 	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput)
 	close(filesput) // to exit for-range
-	selectErr(errch, "put", t)
+	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
-	selectErr(errch, "get", t)
+	selectErr(errch, "get", t, false)
 	for fname := range filesput {
 		err := os.Remove(SmokeDir + "/" + fname)
 		if err != nil {
@@ -115,7 +115,7 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		go del(bucket, "smoke/"+fname, wg, errch)
 	}
 	wg.Wait()
-	selectErr(errch, "delete", t)
+	selectErr(errch, "delete", t, abortonerr)
 	close(errch)
 	if abortonerr && t.Failed() {
 		regressionFailed = true
@@ -260,7 +260,7 @@ func regressionLRU(t *testing.T) {
 	// add some files
 	//
 	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
-	selectErr(errch, "get", t)
+	selectErr(errch, "get", t, true)
 	if t.Failed() {
 		return
 	}
@@ -274,7 +274,7 @@ func regressionLRU(t *testing.T) {
 			usedpct = min(usedpct, c.Usedpct)
 		}
 	}
-	fmt.Fprintf(os.Stdout, "LRU: current min space usage in the cluster: %d%%\n", usedpct)
+	fmt.Printf("LRU: current min space usage in the cluster: %d%%\n", usedpct)
 	var (
 		lowwm  = usedpct - 5
 		highwm = usedpct - 1
@@ -332,7 +332,7 @@ func regressionLRU(t *testing.T) {
 	test_fspaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
-		fmt.Fprintf(os.Stdout, "Target %s: evicted %d files - %.2f MB (%dB) total\n",
+		fmt.Printf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
 			k, v.Core.Filesevicted-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
 		//
 		// testingFSPpaths() - cannot reliably verify space utilization by tmpfs
@@ -351,7 +351,7 @@ func regressionLRU(t *testing.T) {
 // helper (likely to be used)
 func waitProgressBar(prefix string, wait time.Duration) {
 	ticker := time.NewTicker(time.Second * 5)
-	fmt.Fprintf(os.Stdout, prefix)
+	fmt.Printf(prefix)
 waitloop:
 	for i := 1; ; i++ {
 		select {
@@ -361,48 +361,34 @@ waitloop:
 			}
 			elapsed := time.Second * 2 * time.Duration(i)
 			if elapsed >= wait {
-				fmt.Fprintf(os.Stdout, "\n")
+				fmt.Printf("\n")
 				break waitloop
 			}
-			fmt.Fprintf(os.Stdout, "----%d%%", (elapsed * 100 / wait))
+			fmt.Printf("----%d%%", (elapsed * 100 / wait))
 		}
-	}
-}
-
-func syncSmaps(client *http.Client, t *testing.T) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
-	)
-	injson, err = json.Marshal(SyncmapMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal SyncmapMsg: %v", err)
-	}
-	req, err = http.NewRequest("PUT", RestAPIClusterPath, bytes.NewBuffer(injson))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-	r, err = client.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	if testfail(err, "Synchronize Smaps", r, nil, t) {
-		return
 	}
 }
 
 func regressionRebalance(t *testing.T) {
 	var (
-		req   *http.Request
-		r     *http.Response
-		err   error
-		sid   string
-		onerr bool
+		req      *http.Request
+		r        *http.Response
+		err      error
+		sid      string
+		numPuts  = 30
+		filesput = make(chan string, numPuts)
+		errch    = make(chan error, 100)
+		wg       = &sync.WaitGroup{}
 	)
+	filesSentOrig := make(map[string]int64)
+	bytesSentOrig := make(map[string]int64)
+	filesRecvOrig := make(map[string]int64)
+	bytesRecvOrig := make(map[string]int64)
+	stats := getClusterStats(client, t)
+	for k, v := range stats.Target {
+		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
+			v.Core.Numsentbytes, v.Core.Numsentfiles, v.Core.Numrecvbytes, v.Core.Numrecvfiles
+	}
 	smap := getClusterMap(client, t)
 	l := len(smap.Smap)
 	if l < 2 {
@@ -418,10 +404,6 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 1. unregister random target
 	//
-	onerr = abortonerr
-	defer func() { abortonerr = onerr }()
-	abortonerr = false
-
 	req, err = http.NewRequest("DELETE", RestAPIClusterPath+"/"+"daemon"+"/"+sid, nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
@@ -434,22 +416,15 @@ func regressionRebalance(t *testing.T) {
 		return
 	}
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, "Unregistered %s: current cluster size=%d\n", sid, l-1)
+		fmt.Printf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
 	}
 	time.Sleep(time.Second * 3)
 
 	//
 	// step 2. put random files => (cluster - 1)
 	//
-	var (
-		numPuts  = 30
-		filesput = make(chan string, numPuts)
-		errch    = make(chan error, 100)
-		wg       = &sync.WaitGroup{}
-	)
-	putRandomFiles(0, 0, uint64(1024), numPuts, clibucket, t, nil, errch, filesput)
-	close(filesput) // to exit for-range
-	selectErr(errch, "put", t)
+	putRandomFiles(0, 0, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput)
+	selectErr(errch, "put", t, false)
 
 	//
 	// step 3. register back
@@ -463,20 +438,45 @@ func regressionRebalance(t *testing.T) {
 	if r != nil {
 		r.Body.Close()
 	}
-	if testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
+	if t.Failed() || testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
 		return
-	}
-	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, "Re-registered %s: the cluster is back to %d targets\n", sid, l)
 	}
 	//
 	// step 4. wait for rebalance to run its course
 	//
-	waitProgressBar("Rebalance: ", time.Second*20)
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+		smap = getClusterMap(client, t)
+		if len(smap.Smap) == l {
+			break
+		}
+	}
+	if len(smap.Smap) != l {
+		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", sid, l)
+		return
+	}
+	if testing.Verbose() {
+		fmt.Printf("Re-registered %s: the cluster is now back to %d targets\n", sid, l)
+	}
+
+	waitProgressBar("Rebalance: ", time.Second*10)
 
 	//
-	// step 5. cleanup
+	// step 5. statistics
 	//
+	stats = getClusterStats(client, t)
+	var bsent, fsent, brecv, frecv int64
+	for k, v := range stats.Target {
+		bsent += v.Core.Numsentbytes - bytesSentOrig[k]
+		fsent += v.Core.Numsentfiles - filesSentOrig[k]
+		brecv += v.Core.Numrecvbytes - bytesRecvOrig[k]
+		frecv += v.Core.Numrecvfiles - filesRecvOrig[k]
+	}
+
+	//
+	// step 6. cleanup
+	//
+	close(filesput) // to exit for-range
 	for fname := range filesput {
 		err := os.Remove(SmokeDir + "/" + fname)
 		if err != nil {
@@ -486,8 +486,13 @@ func regressionRebalance(t *testing.T) {
 		go del(clibucket, "smoke/"+fname, wg, errch)
 	}
 	wg.Wait()
-	selectErr(errch, "delete", t)
+	selectErr(errch, "delete", t, abortonerr)
 	close(errch)
+
+	if !t.Failed() {
+		fmt.Printf("Rebalance: sent     %.2f MB in %d files\n", float64(bsent)/1000/1000, fsent)
+		fmt.Printf("           received %.2f MB in %d files\n", float64(brecv)/1000/1000, frecv)
+	}
 }
 
 func createLocalBucket(client *http.Client, t *testing.T, bucket string) {
@@ -721,10 +726,10 @@ func min(a, b uint32) uint32 {
 	return b
 }
 
-func selectErr(errch chan error, verb string, t *testing.T) {
+func selectErr(errch chan error, verb string, t *testing.T, errisfatal bool) {
 	select {
 	case err := <-errch:
-		if abortonerr {
+		if errisfatal {
 			t.Fatalf("Failed to %s files: %v", verb, err)
 		} else {
 			t.Errorf("Failed to %s files: %v", verb, err)

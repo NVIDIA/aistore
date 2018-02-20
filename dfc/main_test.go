@@ -354,7 +354,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		}
 		keyname := files[random.Intn(len(files)-1)]
 		if testing.Verbose() {
-			fmt.Fprintln(os.Stdout, "GET: "+keyname)
+			fmt.Println("GET: " + keyname)
 		}
 		getsGroup.Add(1)
 		go get(keyname, getsGroup, errch, bucket)
@@ -400,6 +400,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		fname := fastRandomFilename(random)
 		if _, err := writeRandomData(SmokeDir+"/"+fname, buffer, int(fileSize), random); err != nil {
 			t.Error(err)
+			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n", err)
 			if errch != nil {
 				errch <- err
 			}
@@ -577,9 +578,9 @@ func Test_list(t *testing.T) {
 	if !copy {
 		for _, m := range reslist.Entries {
 			if len(m.Checksum) > 8 {
-				fmt.Fprintf(os.Stdout, "%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum[:8]+"...")
+				fmt.Printf("%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum[:8]+"...")
 			} else {
-				fmt.Fprintf(os.Stdout, "%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum)
+				fmt.Printf("%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum)
 			}
 		}
 		return
@@ -715,20 +716,23 @@ func Test_proxydel(t *testing.T) {
 	default:
 	}
 }
+
 func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
+	//
+	// FIXME: one client per what exactly?
+	//
 	client := &http.Client{}
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, "PUT: %s fname %s\n", keyname, fname)
+		fmt.Printf("PUT: %s fname %s\n", keyname, fname)
 	}
 	file, err := os.Open(fname)
 	if err != nil {
-		fmt.Printf("Failed to open file %s, err: %v", fname, err)
+		fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
 		if errch != nil {
-			fmt.Fprintf(os.Stdout, "Failed to open file %s, err: %v\n", fname, err)
 			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
 		}
 		return
@@ -796,9 +800,12 @@ func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 		defer wg.Done()
 	}
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
+	//
+	// FIXME: one client per what exactly?
+	//
 	client := &http.Client{}
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stdout, "DEL: %s\n", keyname)
+		fmt.Printf("DEL: %s\n", keyname)
 	}
 	req, err := http.NewRequest(http.MethodDelete, proxyurl, nil)
 	if err != nil {
