@@ -409,13 +409,10 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 }
 
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 6)
-	if len(apitems) > 2 && apitems[0] == Rfrom || apitems[2] == Rto {
+	apitems := t.restAPIItems(r.URL.Path, 9)
+	if len(apitems) > 5 && apitems[2] == Rfrom || apitems[4] == Rto {
 		// Rebalance: "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
-		if apitems := t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
-			return
-		}
-		from, to, bucket, objname := apitems[1], apitems[3], apitems[4], apitems[5]
+		from, to, bucket, objname := apitems[3], apitems[5], apitems[6], apitems[7]
 		size, errstr := t.dorebalance(r, from, to, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -1007,7 +1004,7 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader 
 	hashInBytes := md5.Sum(nil)[:16]
 	t.buffers.free(buf)
 	md5hash = hex.EncodeToString(hashInBytes)
-	if omd5 != md5hash {
+	if omd5 != "" && omd5 != md5hash {
 		errstr = fmt.Sprintf("Checksum mismatch: object %s MD5 %s... != received file %s MD5 %s...)",
 			objname, omd5[:8], fqn, md5hash[:8])
 		return
