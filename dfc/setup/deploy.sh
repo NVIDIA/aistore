@@ -78,7 +78,7 @@ fi
 START=0
 END=$servcount
 
-echo "Number of local cache directories: (0 - use preconfigured filesystems)"
+echo "Enter number of local cache directories (0 to use preconfigured filesystems):"
 read testfspathcnt
 if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$testfspathcnt' is not a number"; exit 1

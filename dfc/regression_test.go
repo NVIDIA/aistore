@@ -75,13 +75,8 @@ func Test_regression(t *testing.T) {
 	t.Run("Cloud Bucket", regressionCloudBuckets)
 	t.Run("Stats", regressionStats)
 	t.Run("Config", regressionConfig)
-	t.Run("Sync&Rebalance", regressionSyncRebalance)
+	t.Run("Rebalance", regressionRebalance)
 	t.Run("LRU", regressionLRU)
-}
-
-func regressionSyncRebalance(t *testing.T) {
-	syncSmaps(client, t)
-	rebalanceCluster(client, t)
 }
 
 func regressionCloudBuckets(t *testing.T) {
@@ -101,10 +96,10 @@ func regressionLocalBuckets(t *testing.T) {
 
 func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 	var (
-		filesput = make(chan string, 10)
+		numPuts  = 10
+		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
-		numPuts  = 10
 	)
 	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput)
 	close(filesput) // to exit for-range
@@ -395,36 +390,106 @@ func syncSmaps(client *http.Client, t *testing.T) {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Synchronize Smaps"), r, nil, t) {
+	if testfail(err, "Synchronize Smaps", r, nil, t) {
 		return
 	}
 }
 
-func rebalanceCluster(client *http.Client, t *testing.T) {
+func regressionRebalance(t *testing.T) {
 	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
+		req   *http.Request
+		r     *http.Response
+		err   error
+		sid   string
+		onerr bool
 	)
-	injson, err = json.Marshal(RebalanceMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal RebalanceMsg: %v", err)
+	smap := getClusterMap(client, t)
+	l := len(smap.Smap)
+	if l < 2 {
+		if l == 0 {
+			t.Fatalf("DFC cluster is empty - zero targets", l)
+		} else {
+			t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
+		}
 	}
-	req, err = http.NewRequest("PUT", RestAPIClusterPath, bytes.NewBuffer(injson))
+	for sid = range smap.Smap {
+		break
+	}
+	//
+	// step 1. unregister random target
+	//
+	onerr = abortonerr
+	defer func() { abortonerr = onerr }()
+	abortonerr = false
+
+	req, err = http.NewRequest("DELETE", RestAPIClusterPath+"/"+"daemon"+"/"+sid, nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 	r, err = client.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	if testfail(err, fmt.Sprintf("Initiate Rebalance"), r, nil, t) {
+	if r != nil {
+		r.Body.Close()
+	}
+	if testfail(err, fmt.Sprintf("Unregister target %s", sid), r, nil, t) {
 		return
 	}
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stdout, "Unregistered %s: current cluster size=%d\n", sid, l-1)
+	}
+	time.Sleep(time.Second * 3)
+
+	//
+	// step 2. put random files => (cluster - 1)
+	//
+	var (
+		numPuts  = 30
+		filesput = make(chan string, numPuts)
+		errch    = make(chan error, 100)
+		wg       = &sync.WaitGroup{}
+	)
+	putRandomFiles(0, 0, uint64(1024), numPuts, clibucket, t, nil, errch, filesput)
+	close(filesput) // to exit for-range
+	selectErr(errch, "put", t)
+
+	//
+	// step 3. register back
+	//
+	si := smap.Smap[sid]
+	req, err = http.NewRequest("POST", si.DirectURL+"/v1/daemon", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	r, err = client.Do(req)
+	if r != nil {
+		r.Body.Close()
+	}
+	if testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
+		return
+	}
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stdout, "Re-registered %s: the cluster is back to %d targets\n", sid, l)
+	}
+	//
+	// step 4. wait for rebalance to run its course
+	//
+	waitProgressBar("Rebalance: ", time.Second*20)
+
+	//
+	// step 5. cleanup
+	//
+	for fname := range filesput {
+		err := os.Remove(SmokeDir + "/" + fname)
+		if err != nil {
+			t.Error(err)
+		}
+		wg.Add(1)
+		go del(clibucket, "smoke/"+fname, wg, errch)
+	}
+	wg.Wait()
+	selectErr(errch, "delete", t)
+	close(errch)
 }
+
 func createLocalBucket(client *http.Client, t *testing.T, bucket string) {
 	var (
 		req    *http.Request
@@ -446,7 +511,7 @@ func createLocalBucket(client *http.Client, t *testing.T, bucket string) {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Create Local Bucket"), r, nil, t) {
+	if testfail(err, "Create Local Bucket", r, nil, t) {
 		return
 	}
 }
@@ -467,7 +532,7 @@ func destroyLocalBucket(client *http.Client, t *testing.T, bucket string) {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Delete Local Bucket"), r, nil, t) {
+	if testfail(err, "Delete Local Bucket", r, nil, t) {
 		return
 	}
 }
@@ -493,7 +558,7 @@ func getClusterStats(client *http.Client, t *testing.T) (stats dfc.ClusterStats)
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Get configuration"), r, nil, t) {
+	if testfail(err, "Get configuration", r, nil, t) {
 		return
 	}
 	var b []byte
@@ -529,7 +594,7 @@ func getDaemonStats(client *http.Client, t *testing.T, URL string) (stats map[st
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Get configuration"), r, nil, t) {
+	if testfail(err, "Get configuration", r, nil, t) {
 		return
 	}
 	var b []byte
@@ -568,7 +633,7 @@ func getClusterMap(client *http.Client, t *testing.T) (smap dfc.Smap) {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Get configuration"), r, nil, t) {
+	if testfail(err, "Get configuration", r, nil, t) {
 		return
 	}
 	var b []byte
@@ -604,7 +669,7 @@ func getConfig(URL string, client *http.Client, t *testing.T) (dfcfg map[string]
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, fmt.Sprintf("Get configuration"), r, nil, t) {
+	if testfail(err, "Get configuration", r, nil, t) {
 		return
 	}
 
@@ -614,13 +679,11 @@ func getConfig(URL string, client *http.Client, t *testing.T) (dfcfg map[string]
 		t.Errorf("Failed to read response body")
 		return
 	}
-
 	err = json.Unmarshal(b, &dfcfg)
 	if err != nil {
-		t.Errorf("Failed to unmarshal Dfconfig: %v", err)
+		t.Errorf("Failed to unmarshal config: %v", err)
 		return
 	}
-
 	return
 }
 func setConfig(name, value, URL string, client *http.Client, t *testing.T) {
@@ -634,7 +697,6 @@ func setConfig(name, value, URL string, client *http.Client, t *testing.T) {
 		t.Errorf("Failed to marshal SetConfig Message: %v", err)
 		return
 	}
-
 	req, err := http.NewRequest("PUT", URL, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Errorf("Failed to create request: %v", err)
@@ -650,7 +712,6 @@ func setConfig(name, value, URL string, client *http.Client, t *testing.T) {
 		t.Errorf("Failed to execute SetConfig request: %v", err)
 		return
 	}
-
 }
 
 func min(a, b uint32) uint32 {

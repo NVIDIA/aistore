@@ -410,9 +410,19 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 9)
-	if len(apitems) > 5 && apitems[2] == Rfrom || apitems[4] == Rto {
+	if len(apitems) > 4 && apitems[2] == Rfrom || apitems[4] == Rto {
+		//
 		// Rebalance: "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
-		from, to, bucket, objname := apitems[3], apitems[5], apitems[6], apitems[7]
+		//
+		if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
+			return
+		}
+		from, to, bucket, objname := apitems[1], apitems[3], apitems[4], apitems[5]
+		if len(apitems) > 6 {
+			objname = strings.Join(apitems[5:], "/")
+		}
+		glog.Infoln("apitems: ", apitems, ", objname: ", objname) // AA: debug
+		glog.Flush()
 		size, errstr := t.dorebalance(r, from, to, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -701,6 +711,8 @@ func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 		t.httpdaeget(w, r)
 	case http.MethodPut:
 		t.httpdaeput(w, r)
+	case http.MethodPost:
+		t.httpdaepost(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -866,6 +878,22 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsbytes)
+}
+
+// management interface to register (unregistered) self
+func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+		return
+	}
+	if err := t.register(); err != nil {
+		s := fmt.Sprintf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+	if glog.V(3) {
+		glog.Infof("Registered self %s", t.si.DaemonID)
+	}
 }
 
 //==============================================================================
