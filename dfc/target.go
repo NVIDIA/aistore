@@ -187,6 +187,8 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		t.httpfilput(w, r)
 	case http.MethodDelete:
 		t.httpfildelete(w, r)
+	case http.MethodPost:
+		t.httpfilrename(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -618,7 +620,6 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 				fqn, bucket, objname)
 		}
 	} else {
-
 		if err := os.Remove(fqn); err != nil {
 			errstr = err.Error()
 		}
@@ -628,6 +629,53 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.statsif.add("numdelete", 1)
+}
+
+func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {
+	var (
+		msg    ActionMsg
+		errstr string
+	)
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
+	if t.readJSON(w, r, &msg) != nil {
+		return
+	}
+	assert(msg.Action == ActRename) // FIXME
+	newobjname := msg.Name
+	fqn, uname := t.fqn(bucket, objname), bucket+objname
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, true)
+
+	_, err := os.Stat(fqn)
+	if err != nil {
+		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (local bucket %s, object %s), err: %v",
+			fqn, bucket, objname, err)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	si := hrwTarget(bucket+"/"+newobjname, t.smap)
+	// local rename
+	if si.DaemonID == t.si.DaemonID {
+		newfqn := t.fqn(bucket, newobjname)
+		if err := os.Rename(fqn, newfqn); err != nil {
+			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
+			t.invalmsghdlr(w, r, errstr)
+		} else {
+			t.statsif.add("numrename", 1)
+			if glog.V(3) {
+				glog.Infof("Renamed %s => %s", fqn, newfqn)
+			}
+		}
+		return
+	}
+	// rename + rebalance
+	glog.Infof("Rename/move: rebalancing [%s %s => %s] %s => %s", bucket, objname, newobjname, t.si.DaemonID, si.DaemonID)
+	// TODO
+	// errstr = t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size())
 }
 
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64) string {

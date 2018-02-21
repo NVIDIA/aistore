@@ -36,6 +36,7 @@ type proxyCoreStats struct {
 	Numput    int64 `json:"numput"`
 	Numpost   int64 `json:"numpost"`
 	Numdelete int64 `json:"numdelete"`
+	Numrename int64 `json:"numrename"`
 	Numerr    int64 `json:"numerr"`
 	Numlist   int64 `json:"numlist"`
 }
@@ -101,6 +102,8 @@ func (s *proxyCoreStats) add(name string, val int64) {
 		v = &s.Numpost
 	case "numdelete":
 		v = &s.Numdelete
+	case "numrename":
+		v = &s.Numrename
 	case "numlist":
 		v = &s.Numlist
 	case "numerr":
@@ -121,6 +124,8 @@ func (s *targetCoreStats) add(name string, val int64) {
 		v = &s.Numpost
 	case "numdelete":
 		v = &s.Numdelete
+	case "numrename":
+		v = &s.Numrename
 	case "numerr":
 		v = &s.Numerr
 	case "numcoldget":

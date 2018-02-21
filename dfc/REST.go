@@ -12,8 +12,6 @@ type ActionMsg struct {
 	Action string `json:"action"` // shutdown, restart, setconfig - the enum below
 	Name   string `json:"name"`   // action-specific params
 	Value  string `json:"value"`
-	Param1 string `json:"param1"`
-	Param2 string `json:"param2"`
 }
 
 // ActionMsg.Action enum
@@ -26,6 +24,7 @@ const (
 	ActCreateLB     = "createlb"
 	ActDestroyLB    = "destroylb"
 	ActSetConfig    = "setconfig"
+	ActRename       = "rename"
 )
 
 // TODO: sort and some props are TBD

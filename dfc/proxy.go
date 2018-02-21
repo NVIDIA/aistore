@@ -156,7 +156,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s", r.URL.Path, si.DirectURL)
+		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
 	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
@@ -315,6 +315,9 @@ func (p *proxyrunner) actionLocalBucket(w http.ResponseWriter, r *http.Request) 
 		}
 	case ActSyncLB:
 		p.lbmap.lock()
+	case ActRename:
+		p.filrename(w, r, &msg)
+		return
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -326,6 +329,33 @@ synclbmap:
 	p.lbmap.unlock()
 
 	go p.synchronizeMaps(0, "")
+}
+
+func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *ActionMsg) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	lbucket, objname := apitems[0], strings.Join(apitems[1:], "/")
+	p.lbmap.lock()
+	if !p.islocalBucket(lbucket) {
+		s := fmt.Sprintf("Rename/move is supported only for cache-only buckets (%s does not appear to be local)", lbucket)
+		p.invalmsghdlr(w, r, s)
+		p.lbmap.unlock()
+		return
+	}
+	p.lbmap.unlock()
+
+	si := hrwTarget(lbucket+"/"+objname, ctx.smap)
+	redirecturl := si.DirectURL + r.URL.Path
+	if glog.V(3) {
+		glog.Infof("Redirecting %q to %s (rename)", r.URL.Path, si.DirectURL)
+	}
+	p.statsif.add("numrename", 1)
+	// NOTE:
+	//       code 307 is the only way to http-redirect with the
+	//       original JSON payload (GetMsg - see REST.go)
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
 //===========================
