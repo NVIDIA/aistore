@@ -134,7 +134,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			go func(i int) {
-				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput)
+				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput, "smoke")
 			}(i)
 			nPut--
 		} else {
@@ -389,7 +389,7 @@ func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand
 }
 
 func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
-	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string) {
+	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string, dir string) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -398,7 +398,11 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 	buffer := make([]byte, blocksize)
 	for i := 0; i < numPuts; i++ {
 		fname := fastRandomFilename(random)
-		if _, err := writeRandomData(SmokeDir+"/"+fname, buffer, int(fileSize), random); err != nil {
+		size := fileSize
+		if size == 0 {
+			size = uint64(random.Intn(1024)+1) * 1024
+		}
+		if _, err := writeRandomData(SmokeDir+"/"+fname, buffer, int(size), random); err != nil {
 			t.Error(err)
 			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n", err)
 			if errch != nil {
@@ -409,7 +413,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		put(SmokeDir+"/"+fname, bucket, "smoke/"+fname, nil, errch)
+		put(SmokeDir+"/"+fname, bucket, dir+"/"+fname, nil, errch)
 		filesput <- fname
 	}
 }
@@ -530,7 +534,9 @@ func Benchmark_one(b *testing.B) {
 }
 
 func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
-	defer wg.Done()
+	if wg != nil {
+		defer wg.Done()
+	}
 	url := RestAPIGet + "/" + bucket + "/" + keyname
 	r, err := http.Get(url)
 	defer func() {

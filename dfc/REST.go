@@ -18,7 +18,7 @@ type ActionMsg struct {
 const (
 	ActShutdown     = "shutdown"
 	ActSyncSmap     = "syncsmap"  // synchronize cluster map aka Smap across all targets
-	ActionRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
+	ActRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
 	ActLRU          = "lru"
 	ActSyncLB       = "synclb"
 	ActCreateLB     = "createlb"
@@ -105,7 +105,7 @@ const (
 	Rcluster  = "cluster"
 	Rdaemon   = "daemon"
 	Rsyncsmap = ActSyncSmap
-	Rebalance = ActionRebalance
+	Rebalance = ActRebalance
 	Rfrom     = "from_id"
 	Rto       = "to_id"
 	Rsynclb   = ActSyncLB

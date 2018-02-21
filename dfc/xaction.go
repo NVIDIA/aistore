@@ -150,7 +150,7 @@ func (q *xactInProgress) del(by interface{}) {
 func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xactRebalance {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.find(ActionRebalance)
+	_, xx := q.find(ActRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
@@ -163,7 +163,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 		}
 	}
 	id := q.uniqueid()
-	xreb := &xactRebalance{xactBase: *newxactBase(id, ActionRebalance), curversion: curversion}
+	xreb := &xactRebalance{xactBase: *newxactBase(id, ActRebalance), curversion: curversion}
 	xreb.targetrunner = t
 	q.add(xreb)
 	return xreb

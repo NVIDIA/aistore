@@ -601,7 +601,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 
 	case ActSyncSmap:
 		fallthrough
-	case ActionRebalance:
+	case ActRebalance:
 		go p.synchronizeMaps(0, msg.Action)
 
 	default:

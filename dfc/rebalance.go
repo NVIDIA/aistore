@@ -86,7 +86,7 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 	si := hrwTarget(bucket+"/"+objname, t.smap)
 	if si.DaemonID != t.si.DaemonID {
 		glog.Infof("rebalancing [%s %s] %s => %s", bucket, objname, t.si.DaemonID, si.DaemonID)
-		if s := xreb.targetrunner.sendfile(http.MethodPut, bucket, objname, si, osfi.Size()); s != "" {
+		if s := xreb.targetrunner.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), ""); s != "" {
 			glog.Infof("Failed to rebalance [%s %s]: %s", bucket, objname, s)
 		} else {
 			// FIXME: TODO: delay the removal or (even) rely on the LRU

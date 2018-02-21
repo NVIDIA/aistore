@@ -260,7 +260,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	exclusive = false
 	t.rtnamemap.downgradelock(uname)
 	//
-	// sendfile
+	// local file => http response
 	//
 	file, err := os.Open(fqn)
 	if err != nil {
@@ -423,8 +423,6 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		if len(apitems) > 6 {
 			objname = strings.Join(apitems[5:], "/")
 		}
-		glog.Infoln("apitems: ", apitems, ", objname: ", objname) // AA: debug
-		glog.Flush()
 		size, errstr := t.dorebalance(r, from, to, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -542,14 +540,18 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		return
 	}
 	fqn := t.fqn(bucket, objname)
-	finfo, err := os.Stat(fqn)
 
 	if t.si.DaemonID == from {
 		//
 		// the source
 		//
+		uname := bucket + objname
+		t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+		defer t.rtnamemap.unlockname(uname, false)
+
+		finfo, err := os.Stat(fqn)
 		if glog.V(3) {
-			glog.Infof("Rebalace from %q: bucket %q objname %q => to %q", from, bucket, objname, to)
+			glog.Infof("Rebalance from %q: bucket %q objname %q => to %q", from, bucket, objname, to)
 		}
 		if err != nil && os.IsNotExist(err) {
 			errstr = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
@@ -561,7 +563,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			return
 		}
 		size = finfo.Size()
-		if errstr = t.sendfile(r.Method, bucket, objname, si, size); errstr != "" {
+		if errstr = t.sendfile(r.Method, bucket, objname, si, size, ""); errstr != "" {
 			return
 		}
 		if glog.V(3) {
@@ -572,9 +574,10 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		// the destination
 		//
 		if glog.V(3) {
-			glog.Infof("Rebalace to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
+			glog.Infof("Rebalance to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
 		}
 		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
+		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) && !isinvalidobj(fqn) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
@@ -658,13 +661,16 @@ func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {
 	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
-	assert(msg.Action == ActRename) // FIXME
+	if msg.Action != ActRename {
+		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
+		return
+	}
 	newobjname := msg.Name
 	fqn, uname := t.fqn(bucket, objname), bucket+objname
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
-	_, err := os.Stat(fqn)
+	finfo, err := os.Stat(fqn)
 	if err != nil {
 		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (local bucket %s, object %s), err: %v",
 			fqn, bucket, objname, err)
@@ -686,22 +692,24 @@ func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	// rename + rebalance
-	glog.Infof("Rename/move: rebalancing [%s %s => %s] %s => %s", bucket, objname, newobjname, t.si.DaemonID, si.DaemonID)
-	// TODO
-	// errstr = t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size())
+	// move/migrate
+	glog.Infof("Migrating [%s %s => %s] %s => %s", bucket, objname, newobjname, t.si.DaemonID, si.DaemonID)
+
+	if errstr = t.sendfile(http.MethodPut, bucket, objname, si, finfo.Size(), newobjname); errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+	}
 }
 
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64) string {
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newobjname string) string {
+	if newobjname == "" {
+		newobjname = objname
+	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
 	url += Rfrom + "/" + fromid + "/" + Rto + "/" + toid + "/"
-	url += bucket + "/" + objname
+	url += bucket + "/" + newobjname
 
-	fqn, uname := t.fqn(bucket, objname), bucket+objname
-	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, false)
-
+	fqn := t.fqn(bucket, objname)
 	file, err := os.Open(fqn)
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
