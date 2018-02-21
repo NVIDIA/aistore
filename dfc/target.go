@@ -589,7 +589,11 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 }
 
 func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
-	var bucket, objname string
+	var (
+		bucket, objname, errstr string
+		msg                     ActionMsg
+		evict                   bool
+	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
@@ -598,37 +602,47 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
-
 	fqn := t.fqn(bucket, objname)
 	uname := bucket + objname
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
-	var errstr string
 	if !t.islocalBucket(bucket) {
-		errstr = getcloudif().deleteobj(bucket, objname)
+		b, err := ioutil.ReadAll(r.Body)
+		r.Body.Close()
+		if err == nil && len(b) > 0 {
+			err = json.Unmarshal(b, &msg)
+			if err == nil {
+				evict = (msg.Action == ActEvict)
+			}
+		}
+		if !evict {
+			errstr = getcloudif().deleteobj(bucket, objname)
+			t.statsif.add("numdelete", 1)
+		}
 	}
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	_, err := os.Stat(fqn)
+	finfo, err := os.Stat(fqn)
 	if err != nil {
-		// Non existent object is error for LB.
-		if os.IsNotExist(err) && t.islocalBucket(bucket) {
+		if os.IsNotExist(err) && t.islocalBucket(bucket) && !evict {
 			errstr = fmt.Sprintf("DELETE local: file %s (local bucket %s, object %s) does not exist",
 				fqn, bucket, objname)
 		}
 	} else {
 		if err := os.Remove(fqn); err != nil {
 			errstr = err.Error()
+		} else if evict {
+			t.statsif.add("bytesevicted", finfo.Size())
+			t.statsif.add("filesevicted", 1)
 		}
 	}
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	t.statsif.add("numdelete", 1)
 }
 
 func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {

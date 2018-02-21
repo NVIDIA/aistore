@@ -25,6 +25,7 @@ const (
 	ActDestroyLB    = "destroylb"
 	ActSetConfig    = "setconfig"
 	ActRename       = "rename"
+	ActEvict        = "evict"
 )
 
 // TODO: sort and some props are TBD
