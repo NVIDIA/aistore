@@ -146,9 +146,9 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 $ curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster
 ```
 
-This single command causes execution of multiple `GET {"what": "stats"}` requests within the DFC cluster, and results in a JSON-formatted consolidated output containing both summary and per-target counters, for example:
+This single command causes execution of multiple `GET {"what": "stats"}` requests within the DFC cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
 
->{"proxy":{"numget":140,"numput":44,"numpost":3,"numdelete":0,"numerr":0,"numlist":0},"target":{"15205:8081":{"core":{"numget":51,"numput":9,"numpost":0,"numdelete":0,"numerr":0,"numcoldget":0,"bytesloaded":0,"bytesevicted":0,"filesevicted":0,"numsendfile":0,"numrecvfile":0,"numlist":0},"capacity":{"/tmp/dfc/1/1":{"used":7997059072,"avail":5673299968,"usedpct":58},"/tmp/dfc/1/2":{"used":7997059072,"avail":5673299968,"usedpct":58}}},"15205:8082":{"core":{"numget":47,"numput":20,"numpost":0,"numdelete":0,"numerr":0,"numcoldget":0,"bytesloaded":0,"bytesevicted":0,"filesevicted":0,"numsendfile":0,"numrecvfile":0,"numlist":0},"capacity":{"/tmp/dfc/2/1":{"used":7997059072,"avail":5673299968,"usedpct":58},"/tmp/dfc/2/2":{"used":7997059072,"avail":5673299968,"usedpct":58}}},"15205:8083":{"core":{"numget":42,"numput":14,"numpost":0,"numdelete":0,"numerr":0,"numcoldget":0,"bytesloaded":0,"bytesevicted":0,"filesevicted":0,"numsendfile":0,"numrecvfile":0,"numlist":0},"capacity":{"/tmp/dfc/3/1":{"used":7997059072,"avail":5673299968,"usedpct":58},"/tmp/dfc/3/2":{"used":7997059072,"avail":5673299968,"usedpct":58}}}}}
+<img src="images/dfc-get-stats.png" alt="DFC statistics" width="440">
 
 ## Cache Rebalancing
 
