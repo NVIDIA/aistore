@@ -17,6 +17,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 )
 
@@ -38,12 +39,20 @@ func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
 }
 
+func gcpErrorToHttp(gcpError error) int {
+	if gcperror, ok := gcpError.(*googleapi.Error); ok {
+		return gcperror.Code
+	}
+
+	return http.StatusInternalServerError
+}
+
 //======
 //
 // methods
 //
 //======
-func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
+func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string, errcode int) {
 	glog.Infof("gcp listbucket %s", bucket)
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -56,6 +65,10 @@ func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *Ge
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
+		}
+		if err != nil {
+			errcode = gcpErrorToHttp(err)
+			errstr = fmt.Sprintf("gcp: Failed to list objects of bucket %s, err: %v", bucket, err)
 		}
 		entry := &BucketEntry{}
 		entry.Name = attrs.Name
@@ -107,7 +120,7 @@ func createclient() (*storage.Client, context.Context, string) {
 }
 
 // FIXME: revisit error processing
-func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5hash string, size int64, errstr string) {
+func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5hash string, size int64, errstr string, errcode int) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
@@ -115,6 +128,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5ha
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
+		errcode = gcpErrorToHttp(err)
 		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
 	}
@@ -136,7 +150,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5ha
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string) (errstr string) {
+func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string) (errstr string, errcode int) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
@@ -160,7 +174,7 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string) (errstr st
 	return
 }
 
-func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string) {
+func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string, errcode int) {
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
@@ -168,6 +182,7 @@ func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string) {
 	o := client.Bucket(bucket).Object(objname)
 	err := o.Delete(gctx)
 	if err != nil {
+		errcode = gcpErrorToHttp(err)
 		errstr = fmt.Sprintf("gcp: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}

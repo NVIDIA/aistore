@@ -34,10 +34,10 @@ const (
 //
 //===========
 type cloudif interface {
-	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string)
-	getobj(fqn, bucket, objname string) (hash string, size int64, errstr string)
-	putobj(file *os.File, bucket, objname string) (errstr string)
-	deleteobj(bucket, objname string) (errstr string)
+	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string, errcode int)
+	getobj(fqn, bucket, objname string) (hash string, size int64, errstr string, errcode int)
+	putobj(file *os.File, bucket, objname string) (errstr string, errcode int)
+	deleteobj(bucket, objname string) (errstr string, errcode int)
 }
 
 //===========
@@ -322,14 +322,14 @@ func (h *httprunner) setconfig(name, value string) string {
 //
 //=================
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string, other ...interface{}) {
-	s := http.StatusText(http.StatusBadRequest) + ": " + specific
-	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
-	glog.Errorln(s)
-	glog.Flush()
 	status := http.StatusBadRequest
 	if len(other) > 0 {
 		status = other[0].(int)
 	}
+	s := http.StatusText(status) + ": " + specific
+	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+	glog.Errorln(s)
+	glog.Flush()
 	http.Error(w, s, status)
 	h.statsif.add("numerr", 1)
 }

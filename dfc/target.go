@@ -203,6 +203,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		coldget, exclusive                  bool
 		bucket, objname, fqn, uname, errstr string
 		size                                int64
+		errcode                             int
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
@@ -238,8 +239,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if coldget {
-		if md5hash, size, errstr = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+		if md5hash, size, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
 			return
 		}
 		t.statsif.add("numcoldget", 1)
@@ -331,9 +336,13 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 	if !t.islocalBucket(bucket) {
-		errstr := getcloudif().listbucket(w, bucket, msg)
+		errstr, errcode := getcloudif().listbucket(w, bucket, msg)
 		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
 		} else {
 			t.statsif.add("numlist", 1)
 		}
@@ -429,9 +438,13 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		if len(apitems) > 1 {
 			objname = strings.Join(apitems[1:], "/")
 		}
-		errstr := t.doput(w, r, bucket, objname)
+		errstr, errcode := t.doput(w, r, bucket, objname)
 		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
 			return
 		}
 		t.statsif.add("numput", 1)
@@ -439,7 +452,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket string, objname string) (errstr string) {
+func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket string, objname string) (errstr string, errcode int) {
 	var (
 		err     error
 		file    *os.File
@@ -497,7 +510,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			errstr = fmt.Sprintf("Failed to re-open %s err: %v", putfqn, err)
 			return
 		}
-		if errstr = getcloudif().putobj(file, bucket, objname); errstr != "" {
+		if errstr, errcode = getcloudif().putobj(file, bucket, objname); errstr != "" {
 			file.Close()
 			return
 		}
@@ -586,6 +599,7 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 		bucket, objname, errstr string
 		msg                     ActionMsg
 		evict                   bool
+		errcode                 int
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
@@ -610,12 +624,16 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !evict {
-			errstr = getcloudif().deleteobj(bucket, objname)
+			errstr, errcode = getcloudif().deleteobj(bucket, objname)
 			t.statsif.add("numdelete", 1)
 		}
 	}
 	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+		if errcode == 0 {
+			t.invalmsghdlr(w, r, errstr)
+		} else {
+			t.invalmsghdlr(w, r, errstr, errcode)
+		}
 		return
 	}
 	finfo, err := os.Stat(fqn)

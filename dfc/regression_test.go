@@ -780,6 +780,7 @@ func regressionRename(t *testing.T) {
 		}
 		s := fmt.Sprintf("Rename smoke/%s => %s", fname, RenameMsg.Name)
 		if testfail(err, s, r, nil, t) {
+			destroyLocalBucket(client, t, bucket)
 			return
 		}
 		if testing.Verbose() {

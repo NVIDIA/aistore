@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -46,12 +47,20 @@ func createsession() *session.Session {
 
 }
 
+func awsErrorToHttp(awsError error) int {
+	if reqErr, ok := awsError.(awserr.RequestFailure); ok {
+		return reqErr.StatusCode()
+	}
+
+	return http.StatusInternalServerError
+}
+
 //======
 //
 // methods
 //
 //======
-func (awsimpl *awsimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string) {
+func (awsimpl *awsimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string, errcode int) {
 	glog.Infof("aws listbucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
@@ -59,6 +68,7 @@ func (awsimpl *awsimpl) listbucket(w http.ResponseWriter, bucket string, msg *Ge
 	resp, err := svc.ListObjects(params)
 	if err != nil {
 		errstr = err.Error()
+		errcode = awsErrorToHttp(err)
 		return
 	}
 	// var msg GetMsg
@@ -97,7 +107,7 @@ func (awsimpl *awsimpl) listbucket(w http.ResponseWriter, bucket string, msg *Ge
 	return
 }
 
-func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, size int64, errstr string) {
+func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, size int64, errstr string, errcode int) {
 	var omd5 string
 	sess := createsession()
 	s3Svc := s3.New(sess)
@@ -106,6 +116,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, siz
 		Key:    aws.String(objname),
 	})
 	if err != nil {
+		errcode = awsErrorToHttp(err)
 		errstr = fmt.Sprintf("aws: Failed to get %s from bucket %s, err: %v", objname, bucket, err)
 		return
 	}
@@ -133,7 +144,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, siz
 
 }
 
-func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string) (errstr string) {
+func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string) (errstr string, errcode int) {
 	sess := createsession()
 	uploader := s3manager.NewUploader(sess)
 	//
@@ -145,6 +156,7 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string) (errstr st
 		Body:   file,
 	})
 	if err != nil {
+		errcode = awsErrorToHttp(err)
 		errstr = fmt.Sprintf("aws: Failed to put %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}
@@ -154,11 +166,12 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string) (errstr st
 	return
 }
 
-func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string) {
+func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string, errcode int) {
 	sess := createsession()
 	svc := s3.New(sess)
 	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
 	if err != nil {
+		errcode = awsErrorToHttp(err)
 		errstr = fmt.Sprintf("aws: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}
