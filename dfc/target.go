@@ -681,7 +681,11 @@ func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		newfqn := t.fqn(bucket, newobjname)
-		if err := os.Rename(fqn, newfqn); err != nil {
+		dirname := filepath.Dir(newfqn)
+		if err := CreateDir(dirname); err != nil {
+			errstr = fmt.Sprintf("Unexpected failure to create local dir %s, err: %v", dirname, err)
+			t.invalmsghdlr(w, r, errstr)
+		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 			t.invalmsghdlr(w, r, errstr)
 		} else {
