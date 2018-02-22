@@ -21,6 +21,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	AWS_MULTI_PART_DELIMITER = "-"
+)
+
 //======
 //
 // implements cloudif
@@ -107,8 +111,16 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, siz
 	}
 	defer obj.Body.Close()
 
-	// FIXME: the object is multipart?
 	omd5, _ = strconv.Unquote(*obj.ETag)
+	// Check for MultiPart
+	if strings.Contains(omd5, AWS_MULTI_PART_DELIMITER) {
+		if glog.V(3) {
+			glog.Infof("MultiPart object (bucket %s key %s) download and validation not supported",
+				bucket, objname)
+		}
+		// Ignore ETag
+		omd5 = ""
+	}
 	if md5hash, size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
 		return
 	}

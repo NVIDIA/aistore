@@ -32,6 +32,7 @@ type dfconfig struct {
 	Proxy          proxyconfig       `json:"proxy"`
 	S3             s3config          `json:"s3"`
 	LRUConfig      lruconfig         `json:"lru_config"`
+	CksumConfig    cksumconfig       `json:"cksum_config"`
 	FSpaths        map[string]string `json:"fspaths"`
 	TestFSP        testfspathconf    `json:"test_fspaths"`
 	NoXattrs       bool              `json:"no_xattrs"`
@@ -74,6 +75,11 @@ type listenconfig struct {
 type proxyconfig struct {
 	URL      string `json:"url"`      // used to register caching servers
 	Passthru bool   `json:"passthru"` // false: get then redirect, true (default): redirect right away
+}
+
+type cksumconfig struct {
+	// True enables MD5 validation for COLD GET.
+	ValidateColdGet bool `json:"validate_cold_get"`
 }
 
 // Load and validate daemon's config

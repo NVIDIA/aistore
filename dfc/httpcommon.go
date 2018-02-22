@@ -297,6 +297,12 @@ func (h *httprunner) setconfig(name, value string) string {
 		} else {
 			ctx.config.LRUConfig.LRUEnabled = v
 		}
+	case "validate_cold_get":
+		if v, err := strconv.ParseBool(value); err != nil {
+			return fmt.Sprintf("Failed to parse validate_cold_get, err: %v", err)
+		} else {
+			ctx.config.CksumConfig.ValidateColdGet = v
+		}
 	default:
 		return fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name)
 	}

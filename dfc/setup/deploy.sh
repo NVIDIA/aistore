@@ -40,6 +40,7 @@ LOWWATERMARK=75
 HIGHWATERMARK=90
 NOXATTRS=false
 LRUENABLED=true
+VALIDATECOLDGET=true
 
 PROXYPORT=$(expr $PORT + 1)
 if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
@@ -129,6 +130,9 @@ do
 		"maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
 		"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
 		"maxpartsize":		${MAXPARTSIZE}
+	},
+	"cksum_config": {
+                 "validate_cold_get":             ${VALIDATECOLDGET}
 	},
 	"lru_config": {
 		"lowwm":		${LOWWATERMARK},

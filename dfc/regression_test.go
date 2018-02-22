@@ -63,8 +63,8 @@ func Test_regression(t *testing.T) {
 	flag.Parse()
 	fmt.Printf("=== abortonerr = %v\n\n", abortonerr)
 
-	if err := dfc.CreateDir(LocalRootDir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", LocalRootDir, err)
+	if err := dfc.CreateDir(LocalDestDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
 	if err := dfc.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
@@ -101,7 +101,7 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
 	)
-	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput, "smoke")
+	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr)
 	close(filesput) // to exit for-range
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
@@ -121,7 +121,6 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		regressionFailed = true
 	}
 }
-
 func regressionStats(t *testing.T) {
 	smap := getClusterMap(client, t)
 	stats := getClusterStats(client, t)
@@ -423,7 +422,7 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 2. put random files => (cluster - 1)
 	//
-	putRandomFiles(0, 0, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, "smoke")
+	putRandomFiles(0, 0, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr)
 	selectErr(errch, "put", t, false)
 
 	//
@@ -756,7 +755,7 @@ func regressionRename(t *testing.T) {
 
 	time.Sleep(time.Second * 5)
 
-	putRandomFiles(0, 1, 0, numPuts, bucket, t, nil, nil, filesput, "smoke")
+	putRandomFiles(0, 1, 0, numPuts, bucket, t, nil, nil, filesput, SmokeDir, smokestr)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {

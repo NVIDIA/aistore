@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 )
@@ -36,20 +37,24 @@ import (
 // # go test -v -run=xxx -bench . -count 10
 
 const (
-	LocalRootDir    = "/tmp/dfc/iocopy"        // client-side download destination
+	LocalDestDir    = "/tmp/dfc/dest"          // client-side download destination
+	LocalSrcDir     = "/tmp/dfc/src"           // client-side src directory for upload
 	SmokeDir        = "/tmp/dfc/smoke"         // smoke test dir
 	ProxyURL        = "http://localhost:8080"  // assuming local proxy is listening on 8080
 	TargetURL       = "http://localhost:8081"  // assuming local target is listening on 8081
 	RestAPIGet      = ProxyURL + "/v1/files"   // version = 1, resource = files
 	RestAPIProxyPut = ProxyURL + "/v1/files"   // version = 1, resource = files
-	RestAPITgtPut   = TargetURL + "/v1/files"  // version = 1, resource = files
+	RestAPIProxyDel = ProxyURL + "/v1/files"   // version = 1, resource = files
 	RestAPICluster  = ProxyURL + "/v1/cluster" // version = 1, resource= cluster
 	TestFile        = "/tmp/dfc/xattrfile"     // Test file for setting and getting xattr.
+	smokestr        = "smoke"
+	coldvalidstr    = "coldvalid"
 )
 
 const (
-	blocksize = 1048576
-	baseseed  = 1062984096
+	blocksize     = 1048576
+	baseseed      = 1062984096
+	largefilesize = 16 * 1024 * 1024
 )
 
 // globals
@@ -60,8 +65,6 @@ var (
 	numops     int
 	match      string
 	role       string
-	prop       string
-	value      string
 	fnlen      int
 	filesizes  = [3]int{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
 	ratios     = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}         // #gets / #puts
@@ -79,14 +82,14 @@ func init() {
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
 	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
-	flag.StringVar(&match, "match", ".*", "regex match for the keyname")
+	flag.StringVar(&match, "match", ".*", "object name regex")
 	flag.StringVar(&role, "role", "proxy", "proxy or target")
 }
 
 func Test_smoke(t *testing.T) {
 	flag.Parse()
-	if err := dfc.CreateDir(LocalRootDir); err != nil {
-		t.Fatalf("Failed to create dir %s, err: %v", LocalRootDir, err)
+	if err := dfc.CreateDir(LocalDestDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
 	if err := dfc.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
@@ -134,7 +137,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			go func(i int) {
-				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput, "smoke")
+				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput, SmokeDir, smokestr)
 			}(i)
 			nPut--
 		} else {
@@ -389,7 +392,7 @@ func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand
 }
 
 func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
-	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string, dir string) {
+	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string, dir, keystr string) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -402,7 +405,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		if size == 0 {
 			size = uint64(random.Intn(1024)+1) * 1024
 		}
-		if _, err := writeRandomData(SmokeDir+"/"+fname, buffer, int(size), random); err != nil {
+		if _, err := writeRandomData(dir+"/"+fname, buffer, int(size), random); err != nil {
 			t.Error(err)
 			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n", err)
 			if errch != nil {
@@ -413,7 +416,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		put(SmokeDir+"/"+fname, bucket, dir+"/"+fname, nil, errch)
+		put(dir+"/"+fname, bucket, keystr+"/"+fname, nil, errch)
 		filesput <- fname
 	}
 }
@@ -421,6 +424,8 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, copy bool,
 	errch chan error, resch chan workres, bucket string) {
 	var md5hash string
+	var written int64
+	var errstr string
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -449,30 +454,42 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			return
 		}
 		// alternatively, create a local copy
-		fname := LocalRootDir + "/" + keyname
+		fname := LocalDestDir + "/" + keyname
 		file, err := dfc.Createfile(fname)
 		if err != nil {
 			t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
 			return
 		}
-		md5 := md5.New()
-		written, errstr := dfc.ReceiveFile(file, r.Body, nil, md5)
-		if errstr != "" {
-			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
-			return
-		}
-		hashInBytes := md5.Sum(nil)[:16]
-		md5hash = hex.EncodeToString(hashInBytes)
-		if errstr != "" {
-			t.Errorf("Worker %2d: failed to compute xxhash, err: %s", id, errstr)
-			return
-		}
+		config := getConfig(RestAPIDaemonPath, client, t)
+		cksumconfig := config["cksum_config"].(map[string]interface{})
+		bcoldget := cksumconfig["validate_cold_get"].(bool)
+		if bcoldget {
+			md5 := md5.New()
+			written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
+			if errstr != "" {
+				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+				return
+			}
+			hashInBytes := md5.Sum(nil)[:16]
+			md5hash = hex.EncodeToString(hashInBytes)
+			if errstr != "" {
+				t.Errorf("Worker %2d: failed to compute xxhash, err: %s", id, errstr)
+				return
+			}
 
-		if hdhash != md5hash {
-			t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s", id, hdhash, md5hash)
-			resch <- res
-			close(resch)
-			return
+			if hdhash != md5hash {
+				t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s", id, hdhash, md5hash)
+				resch <- res
+				close(resch)
+				return
+			}
+		} else {
+			written, errstr = dfc.ReceiveFile(file, r.Body, nil)
+			if errstr != "" {
+				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+				return
+			}
+
 		}
 		r.Body.Close()
 		res.totfiles += 1
@@ -545,7 +562,7 @@ func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
 		}
 	}()
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		s := fmt.Sprintf("Failed to get key %s from bucket %s, http status %d", keyname, bucket, r.StatusCode)
+		s := fmt.Sprintf("Failed to get object %s from bucket %s, http status %d", keyname, bucket, r.StatusCode)
 		if errch != nil {
 			errch <- errors.New(s)
 		}
@@ -592,9 +609,9 @@ func Test_list(t *testing.T) {
 		return
 	}
 	// alternatively, write to a local filename = bucket
-	fname := LocalRootDir + "/" + bucket
-	if err := dfc.CreateDir(LocalRootDir); err != nil {
-		t.Errorf("Failed to create dir %s, err: %v", LocalRootDir, err)
+	fname := LocalDestDir + "/" + bucket
+	if err := dfc.CreateDir(LocalDestDir); err != nil {
+		t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
 		return
 	}
 	file, err := os.Create(fname)
@@ -657,72 +674,6 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 	return reslist
 }
 
-func Test_xattr(t *testing.T) {
-	f := TestFile
-	file, err := dfc.Createfile(f)
-	if err != nil {
-		t.Errorf("Failed to create file %s, err:%v", f, err)
-		return
-	}
-	// Set objstate to valid
-	errstr := dfc.Setxattr(f, dfc.ObjstateAttr, []byte(dfc.XAttrInvalid))
-	if errstr != "" {
-		t.Errorf("Unable to set xattr %s to file %s, err: %v",
-			dfc.ObjstateAttr, f, errstr)
-		_ = os.Remove(f)
-		file.Close()
-		return
-	}
-	// Check if xattr got set correctly.
-	data, errstr := dfc.Getxattr(f, dfc.ObjstateAttr)
-	if string(data) == dfc.XAttrInvalid && errstr == "" {
-		t.Logf("Successfully got file %s attr %s value %v",
-			f, dfc.ObjstateAttr, data)
-	} else {
-		t.Errorf("Failed to get file %s attr %s value %v, err %v",
-			f, dfc.ObjstateAttr, data, errstr)
-		_ = os.Remove(f)
-		file.Close()
-		return
-	}
-	t.Logf("Successfully set and retrieved xattr")
-	_ = os.Remove(f)
-	file.Close()
-}
-func Test_proxyput(t *testing.T) {
-	flag.Parse()
-	var wg = &sync.WaitGroup{}
-	errch := make(chan error, 100)
-	for i := 0; i < numfiles; i++ {
-		wg.Add(1)
-		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		fname := "/" + keyname
-		go put(fname, clibucket, keyname, wg, errch)
-	}
-	wg.Wait()
-	select {
-	case <-errch:
-		t.Fail()
-	default:
-	}
-}
-func Test_proxydel(t *testing.T) {
-	flag.Parse()
-	var wg = &sync.WaitGroup{}
-	errch := make(chan error, 100)
-	for i := 0; i < numfiles; i++ {
-		wg.Add(1)
-		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		go del(clibucket, keyname, wg, errch)
-	}
-	wg.Wait()
-	select {
-	case <-errch:
-		t.Fail()
-	default:
-	}
-}
-
 func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
@@ -733,7 +684,7 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 	//
 	client := &http.Client{}
 	if testing.Verbose() {
-		fmt.Printf("PUT: %s fname %s\n", keyname, fname)
+		fmt.Printf("PUT: object %s fname %s\n", keyname, fname)
 	}
 	file, err := os.Open(fname)
 	if err != nil {
@@ -801,6 +752,7 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 		return
 	}
 }
+
 func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
@@ -845,5 +797,108 @@ func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 			errch <- fmt.Errorf("Failed to get delete response, err %v", err)
 		}
 		return
+	}
+}
+func Test_coldgetvalidation(t *testing.T) {
+	var (
+		filesput  = make(chan string, numfiles)
+		fileslist = make([]string, 0, 100)
+		errch     = make(chan error, 100)
+		wg        = &sync.WaitGroup{}
+		numfiles  = 5
+		numPuts   = numfiles
+		bucket    = clibucket
+		totalsize = (numPuts * largefilesize) / (1024 * 1024)
+	)
+	ldir := LocalSrcDir + "/" + coldvalidstr
+	if err := dfc.CreateDir(ldir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
+	}
+	putRandomFiles(0, 0, uint64(largefilesize), numPuts, bucket, t, nil, errch, filesput, ldir, coldvalidstr)
+	selectErr(errch, "put", t, false)
+	close(filesput) // to exit for-range
+	for fname := range filesput {
+		if fname != "" {
+			fileslist = append(fileslist, coldvalidstr+"/"+fname)
+		}
+	}
+	evictobjects(t, fileslist)
+	// Disable Cold Get Validation
+	setConfig("validate_cold_get", fmt.Sprint("false"), RestAPIClusterPath, client, t)
+	if t.Failed() {
+		return
+	}
+	start := time.Now()
+	getfromfilelist(t, bucket, errch, fileslist)
+	curr := time.Now()
+	duration := curr.Sub(start)
+	fmt.Fprintf(os.Stdout, "Time taken to GET %v MB without  MD5 validation is  %v seconds \n ", totalsize, duration)
+	selectErr(errch, "get", t, false)
+	evictobjects(t, fileslist)
+	// Enable Cold Get Validation
+	setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, client, t)
+	if t.Failed() {
+		return
+	}
+	start = time.Now()
+	getfromfilelist(t, bucket, errch, fileslist)
+	curr = time.Now()
+	duration = curr.Sub(start)
+	fmt.Fprintf(os.Stdout, "Time taken to GET %v MB with  MD5 validation is  %v seconds \n ", totalsize, duration)
+	selectErr(errch, "get", t, false)
+	// Delete local file and objects from bucket
+	for _, fn := range fileslist {
+		err := os.Remove(LocalSrcDir + "/" + fn)
+		if err != nil {
+			t.Error(err)
+		}
+		wg.Add(1)
+		go del(bucket, fn, wg, errch)
+	}
+	wg.Wait()
+	selectErr(errch, "delete", t, false)
+	close(errch)
+	if abortonerr && t.Failed() {
+		fmt.Fprintf(os.Stdout, "Test failed \n")
+	}
+}
+
+func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {
+	getsGroup := &sync.WaitGroup{}
+	for i := 0; i < len(fileslist); i++ {
+		if fileslist[i] != "" {
+			getsGroup.Add(1)
+			go get(fileslist[i], getsGroup, errch, bucket)
+		}
+	}
+	getsGroup.Wait()
+}
+
+func evictobjects(t *testing.T, fileslist []string) {
+	var (
+		req    *http.Request
+		r      *http.Response
+		injson []byte
+		err    error
+		bucket = clibucket
+	)
+	EvictMsg := dfc.ActionMsg{Action: dfc.ActEvict}
+	for _, fname := range fileslist {
+		EvictMsg.Name = bucket + "/" + fname
+		injson, err = json.Marshal(EvictMsg)
+		if err != nil {
+			t.Fatalf("Failed to marshal EvictMsg: %v", err)
+		}
+		req, err = http.NewRequest("DELETE", RestAPIProxyDel+"/"+bucket+"/"+fname, bytes.NewBuffer(injson))
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		r, err = client.Do(req)
+		if r != nil {
+			r.Body.Close()
+		}
+		if testfail(err, EvictMsg.Name, r, nil, t) {
+			return
+		}
 	}
 }

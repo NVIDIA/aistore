@@ -26,7 +26,6 @@ import (
 
 // xattrs
 const (
-	ObjstateAttr = "user.obj.isvalid" // Object's state
 	HashAttr     = "user.obj.dfchash" // Object's XXHash
 	XAttrInvalid = "0"
 	XAttrValid   = "1"
@@ -237,15 +236,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	//
 	if coldget, size, errstr = t.getchecklocal(w, r, bucket, objname, fqn); errstr != "" {
 		return
-	}
-	if !coldget && isinvalidobj(fqn) {
-		if t.islocalBucket(bucket) {
-			errstr := fmt.Sprintf("GET local: bad checksum, file %s, local bucket %s", fqn, bucket)
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-			return
-		}
-		glog.Warningf("Warning: %s has an invalid checksum and will be overridden", fqn)
-		coldget = true
 	}
 	if coldget {
 		if md5hash, size, errstr = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
@@ -467,7 +457,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	glog.Infof("PUT: %s => %s", fqn, putfqn)
 
 	// optimize out if the checksums do match
-	if hdhash != "" && !isinvalidobj(fqn) {
+	if hdhash != "" {
 		file, err := os.Open(fqn)
 		if err == nil {
 			md5 := md5.New()
@@ -498,7 +488,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 		}
 	}()
 
-	if hdhash != "" && md5hash != hdhash {
+	if hdhash != "" && md5hash != "" && md5hash != hdhash {
 		errstr = fmt.Sprintf("Invalid checksum: %s md5 %s... does not match user's %s...", fqn, md5hash[:8], hdhash[:8])
 		return
 	}
@@ -578,7 +568,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
 		_, err := os.Stat(fqn)
-		if err != nil && os.IsExist(err) && !isinvalidobj(fqn) {
+		if err != nil && os.IsExist(err) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
 		}
@@ -1084,7 +1074,9 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader 
 		errstr = fmt.Sprintf("Failed to create and initialize %s, err: %s", fqn, errstr)
 		return
 	}
+	buf := t.buffers.alloc()
 	defer func() {
+		t.buffers.free(buf)
 		if errstr == "" {
 			return
 		}
@@ -1096,27 +1088,52 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader 
 			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, fqn, err)
 		}
 	}()
-
-	md5 := md5.New()
-	buf := t.buffers.alloc()
-	if written, errstr = ReceiveFile(file, reader, buf, md5); errstr != "" {
-		t.buffers.free(buf)
-		return
+	if ctx.config.CksumConfig.ValidateColdGet {
+		md5 := md5.New()
+		if written, errstr = ReceiveFile(file, reader, buf, md5); errstr != "" {
+			return
+		}
+		hashInBytes := md5.Sum(nil)[:16]
+		md5hash = hex.EncodeToString(hashInBytes)
+		if omd5 != "" && omd5 != md5hash {
+			errstr = fmt.Sprintf("Checksum mismatch: object %s MD5 %s... != received file %s MD5 %s...)",
+				objname, omd5[:8], fqn, md5hash[:8])
+			return
+		}
+	} else {
+		if written, errstr = ReceiveFile(file, reader, buf); errstr != "" {
+			return
+		}
 	}
-	hashInBytes := md5.Sum(nil)[:16]
-	t.buffers.free(buf)
-	md5hash = hex.EncodeToString(hashInBytes)
-	if omd5 != "" && omd5 != md5hash {
-		errstr = fmt.Sprintf("Checksum mismatch: object %s MD5 %s... != received file %s MD5 %s...)",
-			objname, omd5[:8], fqn, md5hash[:8])
-		return
-	}
-	if err = finalizeobj(fqn, []byte(md5hash)); err != nil {
-		errstr = fmt.Sprintf("Unable to finalize received file %s, err: %v", fqn, err)
+	if errstr = finalizeobj(fqn, []byte(md5hash)); errstr != "" {
 		return
 	}
 	if err = file.Close(); err != nil {
 		errstr = fmt.Sprintf("Failed to close received file %s, err: %v", fqn, err)
 	}
+	return
+}
+
+//
+// pre- and post- wrappers
+//
+func initobj(fqn string) (file *os.File, errstr string) {
+	var err error
+	file, err = Createfile(fqn)
+	if err != nil {
+		errstr = fmt.Sprintf("Unable to create file %s, err: %v", fqn, err)
+		return nil, errstr
+	}
+	return file, ""
+}
+
+func finalizeobj(fqn string, md5sum []byte) (errstr string) {
+	if ctx.config.NoXattrs {
+		return
+	}
+	if len(md5sum) == 0 {
+		return
+	}
+	errstr = Setxattr(fqn, HashAttr, md5sum)
 	return
 }
