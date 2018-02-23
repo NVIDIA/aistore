@@ -22,13 +22,20 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc"
 )
 
+type Test struct {
+	name   string
+	method func(*testing.T)
+}
+
 const (
-	RestAPIDaemonDelete    = ProxyURL + "/v1/cluster/daemon/"
 	RestAPIClusterPath     = ProxyURL + "/v1/cluster"
 	RestAPIDaemonPath      = ProxyURL + "/v1/daemon"
 	RestAPILocalBucketPath = ProxyURL + "/v1/files/"
 	RestAPIDaemonSuffix    = "/v1/daemon"
 	TestLocalBucketName    = "TESTLOCALBUCKET"
+	RenameLocalBucketName  = "renamebucket"
+	RenameDir              = "/tmp/dfc/rename"
+	RenameStr              = "rename"
 )
 
 var (
@@ -49,10 +56,17 @@ var (
 		"passthru":        "true",
 		"lru_enabled":     "true",
 	}
-	abortonerr       = true
-	regressionFailed = false
-
-	client = &http.Client{}
+	abortonerr = true
+	client     = &http.Client{}
+	tests      = []Test{
+		Test{"Local Bucket", regressionLocalBuckets},
+		Test{"Cloud Bucket", regressionCloudBuckets},
+		Test{"Stats", regressionStats},
+		Test{"Config", regressionConfig},
+		Test{"Rebalance", regressionRebalance},
+		Test{"LRU", regressionLRU},
+		Test{"Rename", regressionRename},
+	}
 )
 
 func init() {
@@ -61,7 +75,7 @@ func init() {
 
 func Test_regression(t *testing.T) {
 	flag.Parse()
-	fmt.Printf("=== abortonerr = %v\n\n", abortonerr)
+	tlogf("=== abortonerr = %v\n\n", abortonerr)
 
 	if err := dfc.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
@@ -70,13 +84,12 @@ func Test_regression(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
 
-	t.Run("Local Buckets", regressionLocalBuckets)
-	t.Run("Cloud Bucket", regressionCloudBuckets)
-	t.Run("Stats", regressionStats)
-	t.Run("Config", regressionConfig)
-	t.Run("Rebalance", regressionRebalance)
-	t.Run("LRU", regressionLRU)
-	t.Run("Rename", regressionRename)
+	for _, test := range tests {
+		t.Run(test.name, test.method)
+		if t.Failed() && abortonerr {
+			t.FailNow()
+		}
+	}
 }
 
 func regressionCloudBuckets(t *testing.T) {
@@ -89,9 +102,6 @@ func regressionLocalBuckets(t *testing.T) {
 	time.Sleep(time.Second * 2) // FIXME: must be deterministic
 	regressionBucket(client, t, bucket)
 	destroyLocalBucket(client, t, bucket)
-	if abortonerr && t.Failed() {
-		regressionFailed = true
-	}
 }
 
 func regressionBucket(client *http.Client, t *testing.T, bucket string) {
@@ -101,7 +111,7 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
 	)
-	putRandomFiles(0, 0, uint64(1024), numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr)
+	putRandomFiles(0, baseseed+2, uint64(1024), numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr)
 	close(filesput) // to exit for-range
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
@@ -117,10 +127,8 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
 	close(errch)
-	if abortonerr && t.Failed() {
-		regressionFailed = true
-	}
 }
+
 func regressionStats(t *testing.T) {
 	smap := getClusterMap(client, t)
 	stats := getClusterStats(client, t)
@@ -152,9 +160,6 @@ func regressionStats(t *testing.T) {
 				t.Error("Used Percentage above High Watermark")
 			}
 		}
-	}
-	if abortonerr && t.Failed() {
-		regressionFailed = true
 	}
 }
 
@@ -230,10 +235,6 @@ func regressionConfig(t *testing.T) {
 		o := olruconfig["lru_enabled"].(bool)
 		setConfig("lru_enabled", strconv.FormatBool(o), RestAPIClusterPath, client, t)
 	}
-
-	if abortonerr && t.Failed() {
-		regressionFailed = true
-	}
 }
 
 func regressionLRU(t *testing.T) {
@@ -260,9 +261,6 @@ func regressionLRU(t *testing.T) {
 	//
 	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
 	selectErr(errch, "get", t, true)
-	if t.Failed() {
-		return
-	}
 	//
 	// find out min usage %% across all targets
 	//
@@ -273,13 +271,13 @@ func regressionLRU(t *testing.T) {
 			usedpct = min(usedpct, c.Usedpct)
 		}
 	}
-	fmt.Printf("LRU: current min space usage in the cluster: %d%%\n", usedpct)
+	tlogf("LRU: current min space usage in the cluster: %d%%\n", usedpct)
 	var (
 		lowwm  = usedpct - 5
 		highwm = usedpct - 1
 	)
 	if int(lowwm) < 10 {
-		t.Errorf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
+		t.Skipf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
 		return
 	}
 	oconfig := getConfig(RestAPIDaemonPath, client, t)
@@ -294,8 +292,6 @@ func regressionLRU(t *testing.T) {
 		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), RestAPIClusterPath, client, t)
 		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), RestAPIClusterPath, client, t)
 		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), RestAPIClusterPath, client, t)
-	}()
-	defer func() {
 		for k, di := range smap.Smap {
 			setConfig("highwm", fmt.Sprint(hwms[k]), di.DirectURL+RestAPIDaemonSuffix, client, t)
 			setConfig("lowwm", fmt.Sprint(lwms[k]), di.DirectURL+RestAPIDaemonSuffix, client, t)
@@ -331,7 +327,7 @@ func regressionLRU(t *testing.T) {
 	test_fspaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
-		fmt.Printf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
+		tlogf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
 			k, v.Core.Filesevicted-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
 		//
 		// testingFSPpaths() - cannot reliably verify space utilization by tmpfs
@@ -347,32 +343,8 @@ func regressionLRU(t *testing.T) {
 	}
 }
 
-// helper (likely to be used)
-func waitProgressBar(prefix string, wait time.Duration) {
-	ticker := time.NewTicker(time.Second * 5)
-	fmt.Printf(prefix)
-waitloop:
-	for i := 1; ; i++ {
-		select {
-		case <-ticker.C:
-			if regressionFailed {
-				return
-			}
-			elapsed := time.Second * 2 * time.Duration(i)
-			if elapsed >= wait {
-				fmt.Printf("\n")
-				break waitloop
-			}
-			fmt.Printf("----%d%%", (elapsed * 100 / wait))
-		}
-	}
-}
-
 func regressionRebalance(t *testing.T) {
 	var (
-		req      *http.Request
-		r        *http.Response
-		err      error
 		sid      string
 		numPuts  = 30
 		filesput = make(chan string, numPuts)
@@ -388,11 +360,14 @@ func regressionRebalance(t *testing.T) {
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
 			v.Core.Numsentbytes, v.Core.Numsentfiles, v.Core.Numrecvbytes, v.Core.Numrecvfiles
 	}
+	//
+	// step 1. unregister random target
+	//
 	smap := getClusterMap(client, t)
 	l := len(smap.Smap)
 	if l < 2 {
 		if l == 0 {
-			t.Fatalf("DFC cluster is empty - zero targets", l)
+			t.Fatalf("DFC cluster is empty - zero targets")
 		} else {
 			t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 		}
@@ -400,49 +375,18 @@ func regressionRebalance(t *testing.T) {
 	for sid = range smap.Smap {
 		break
 	}
-	//
-	// step 1. unregister random target
-	//
-	req, err = http.NewRequest("DELETE", RestAPIClusterPath+"/"+"daemon"+"/"+sid, nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-	r, err = client.Do(req)
-	if r != nil {
-		r.Body.Close()
-	}
-	if testfail(err, fmt.Sprintf("Unregister target %s", sid), r, nil, t) {
-		return
-	}
-	if testing.Verbose() {
-		fmt.Printf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
-	}
-	time.Sleep(time.Second * 3)
-
+	unregisterTarget(sid, t)
+	tlogf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
 	//
 	// step 2. put random files => (cluster - 1)
 	//
-	putRandomFiles(0, 0, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr)
+	putRandomFiles(0, baseseed, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr)
 	selectErr(errch, "put", t, false)
 
 	//
 	// step 3. register back
 	//
-	si := smap.Smap[sid]
-	req, err = http.NewRequest("POST", si.DirectURL+"/v1/daemon", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-	r, err = client.Do(req)
-	if r != nil {
-		r.Body.Close()
-	}
-	if t.Failed() || testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
-		return
-	}
-	//
-	// step 4. wait for rebalance to run its course
-	//
+	registerTarget(sid, &smap, t)
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(client, t)
@@ -454,12 +398,11 @@ func regressionRebalance(t *testing.T) {
 		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", sid, l)
 		return
 	}
-	if testing.Verbose() {
-		fmt.Printf("Re-registered %s: the cluster is now back to %d targets\n", sid, l)
-	}
-
+	tlogf("Re-registered %s: the cluster is now back to %d targets\n", sid, l)
+	//
+	// step 4. wait for rebalance to run its course
+	//
 	waitProgressBar("Rebalance: ", time.Second*10)
-
 	//
 	// step 5. statistics
 	//
@@ -487,10 +430,143 @@ func regressionRebalance(t *testing.T) {
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
 	close(errch)
-
-	if !t.Failed() {
+	if !t.Failed() && testing.Verbose() {
 		fmt.Printf("Rebalance: sent     %.2f MB in %d files\n", float64(bsent)/1000/1000, fsent)
 		fmt.Printf("           received %.2f MB in %d files\n", float64(brecv)/1000/1000, frecv)
+	}
+}
+
+func regressionRename(t *testing.T) {
+	var (
+		req       *http.Request
+		r         *http.Response
+		injson    []byte
+		err       error
+		numPuts   = 10
+		filesput  = make(chan string, numPuts)
+		errch     = make(chan error, numPuts)
+		basenames = make([]string, 0, numPuts) // basenames generated by putRandomFiles
+		bnewnames = make([]string, 0, numPuts) // new basenames
+	)
+	// create & put
+	createLocalBucket(client, t, RenameLocalBucketName)
+	defer func() {
+		// cleanup
+		wg := &sync.WaitGroup{}
+		for _, fname := range bnewnames {
+			wg.Add(1)
+			go del(RenameLocalBucketName, RenameStr+"/"+fname, wg, errch)
+		}
+		for _, fname := range basenames {
+			err = os.Remove(RenameDir + "/" + fname)
+			if err != nil {
+				t.Errorf("Failed to remove file %s: %v", fname, err)
+			}
+		}
+		wg.Wait()
+		selectErr(errch, "delete", t, false)
+		close(errch)
+		destroyLocalBucket(client, t, RenameLocalBucketName)
+	}()
+
+	time.Sleep(time.Second * 5)
+
+	if err = dfc.CreateDir(RenameDir); err != nil {
+		t.Errorf("Error creating dir: %v", err)
+	}
+	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr)
+	selectErr(errch, "put", t, false)
+	close(filesput)
+	for fname := range filesput {
+		basenames = append(basenames, fname)
+	}
+
+	// rename
+	for _, fname := range basenames {
+		RenameMsg.Name = RenameStr + "/" + fname + ".renamed" // objname
+		bnewnames = append(bnewnames, fname+".renamed")       // base name
+		injson, err = json.Marshal(RenameMsg)
+		if err != nil {
+			t.Fatalf("Failed to marshal RenameMsg: %v", err)
+		}
+		req, err = http.NewRequest("POST", RestAPILocalBucketPath+RenameLocalBucketName+"/"+RenameStr+"/"+fname, bytes.NewBuffer(injson))
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		r, err = client.Do(req)
+		if r != nil {
+			r.Body.Close()
+		}
+		s := fmt.Sprintf("Rename %s/%s => %s", RenameStr, fname, RenameMsg.Name)
+		if testfail(err, s, r, nil, t) {
+			destroyLocalBucket(client, t, RenameLocalBucketName)
+			return
+		}
+		tlogln(s)
+	}
+
+	// get renamed objects
+	waitProgressBar("Rename/move: ", time.Second*5)
+	for _, fname := range bnewnames {
+		get(RenameStr+"/"+fname, nil, errch, RenameLocalBucketName)
+	}
+	selectErr(errch, "get", t, false)
+}
+
+// helper (likely to be used)
+func waitProgressBar(prefix string, wait time.Duration) {
+	ticker := time.NewTicker(time.Second * 5)
+	tlogf(prefix)
+	idx := 1
+waitloop:
+	for range ticker.C {
+		elapsed := time.Second * 2 * time.Duration(idx)
+		if elapsed >= wait {
+			tlogln("")
+			break waitloop
+		}
+		tlogf("----%d%%", (elapsed * 100 / wait))
+		idx++
+	}
+}
+
+func unregisterTarget(sid string, t *testing.T) {
+	var (
+		req *http.Request
+		r   *http.Response
+		err error
+	)
+	req, err = http.NewRequest("DELETE", RestAPIClusterPath+"/"+"daemon"+"/"+sid, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	r, err = client.Do(req)
+	if r != nil {
+		r.Body.Close()
+	}
+	if testfail(err, fmt.Sprintf("Unregister target %s", sid), r, nil, t) {
+		return
+	}
+	time.Sleep(time.Second * 3)
+}
+
+func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
+	var (
+		req *http.Request
+		r   *http.Response
+		err error
+	)
+	si := smap.Smap[sid]
+	req, err = http.NewRequest("POST", si.DirectURL+"/v1/daemon", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	r, err = client.Do(req)
+	if r != nil {
+		r.Body.Close()
+	}
+	if t.Failed() || testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
+		return
 	}
 }
 
@@ -737,70 +813,12 @@ func selectErr(errch chan error, verb string, t *testing.T, errisfatal bool) {
 	}
 }
 
-func regressionRename(t *testing.T) {
-	var (
-		req       *http.Request
-		r         *http.Response
-		injson    []byte
-		err       error
-		numPuts   = 10
-		filesput  = make(chan string, numPuts)
-		errch     = make(chan error, numPuts)
-		basenames = make([]string, 0, numPuts) // basenames generated by putRandomFiles
-		bnewnames = make([]string, 0, numPuts) // new basenames
-	)
-	// create & put
-	bucket := "renamebucket"
-	createLocalBucket(client, t, bucket)
-
-	time.Sleep(time.Second * 5)
-
-	putRandomFiles(0, 1, 0, numPuts, bucket, t, nil, nil, filesput, SmokeDir, smokestr)
-	selectErr(errch, "put", t, false)
-	close(filesput)
-	for fname := range filesput {
-		basenames = append(basenames, fname)
+func tlogf(msg string, args ...interface{}) {
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stdout, msg, args...)
 	}
+}
 
-	// rename
-	for _, fname := range basenames {
-		RenameMsg.Name = "smoke/" + fname + ".renamed"  // objname
-		bnewnames = append(bnewnames, fname+".renamed") // base name
-		injson, err = json.Marshal(RenameMsg)
-		if err != nil {
-			t.Fatalf("Failed to marshal RenameMsg: %v", err)
-		}
-		req, err = http.NewRequest("POST", RestAPILocalBucketPath+bucket+"/smoke/"+fname, bytes.NewBuffer(injson))
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		r, err = client.Do(req)
-		if r != nil {
-			r.Body.Close()
-		}
-		s := fmt.Sprintf("Rename smoke/%s => %s", fname, RenameMsg.Name)
-		if testfail(err, s, r, nil, t) {
-			destroyLocalBucket(client, t, bucket)
-			return
-		}
-		if testing.Verbose() {
-			fmt.Println(s)
-		}
-	}
-
-	// get renamed objects
-	waitProgressBar("Rename/move: ", time.Second*5)
-	for _, fname := range bnewnames {
-		get("smoke/"+fname, nil, errch, bucket)
-	}
-	selectErr(errch, "get", t, false)
-
-	// cleanup
-	for _, fname := range bnewnames {
-		del(bucket, "smoke/"+fname, nil, errch)
-	}
-	selectErr(errch, "delete", t, false)
-	close(errch)
-
-	destroyLocalBucket(client, t, bucket)
+func tlogln(msg string) {
+	tlogf(msg + "\n")
 }
