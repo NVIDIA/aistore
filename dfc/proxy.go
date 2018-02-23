@@ -416,17 +416,10 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
+		if msg.Name != "stats_time" && msg.Name != "passthru" {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid setconfig request: Proxy does not support this configuration variable: %s", msg.Name))
+		} else if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
-		}
-		if msg.Name == "lru_enabled" && msg.Value == "false" {
-			_, lruxact := p.xactinp.find(ActLRU)
-			if lruxact != nil {
-				if glog.V(3) {
-					glog.Infof("Aborting LRU due to lru_enabled config change")
-				}
-				lruxact.abort()
-			}
 		}
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
