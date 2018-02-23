@@ -367,7 +367,7 @@ func regressionRebalance(t *testing.T) {
 	l := len(smap.Smap)
 	if l < 2 {
 		if l == 0 {
-			t.Fatalf("DFC cluster is empty - zero targets")
+			t.Fatal("DFC cluster is empty - zero targets")
 		} else {
 			t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 		}

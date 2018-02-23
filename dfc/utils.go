@@ -55,22 +55,26 @@ func copyStruct(dst interface{}, src interface{}) {
 }
 
 // FIXME: pick the first random IPv4 that is not loopback
-func getipaddr() (string, error) {
-	var ipaddr string
+func getipaddr() (ipaddr string, errstr string) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		glog.Errorf("Failed to get host unicast IPs, err: %v", err)
-		return ipaddr, err
+		errstr = fmt.Sprintf("Failed to get host unicast IPs, err: %v", err)
+		return
 	}
+	found := false
 	for _, a := range addrs {
 		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
 				ipaddr = ipnet.IP.String()
+				found = true
 				break
 			}
 		}
 	}
-	return ipaddr, err
+	if !found {
+		errstr = "The host does not have any IPv4 addresses"
+	}
+	return
 }
 
 func CreateDir(dirname string) (err error) {
@@ -169,32 +173,33 @@ func localSave(pathname string, v interface{}) error {
 	}
 	b, err := json.MarshalIndent(v, "", "\t")
 	if err != nil {
-		file.Close()
-		os.Remove(tmp)
+		_ = file.Close()
+		_ = os.Remove(tmp)
 		return err
 	}
 	r := bytes.NewReader(b)
 	_, err = io.Copy(file, r)
 	errclose := file.Close()
 	if err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	if errclose != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	err = os.Rename(tmp, pathname)
 	return err
 }
 
-func localLoad(pathname string, v interface{}) error {
+func localLoad(pathname string, v interface{}) (err error) {
 	file, err := os.Open(pathname)
 	if err != nil {
-		return err
+		return
 	}
-	defer file.Close()
-	return json.NewDecoder(file).Decode(v)
+	err = json.NewDecoder(file).Decode(v)
+	_ = file.Close()
+	return
 }
 
 func osRemove(prefix, fqn string) error {

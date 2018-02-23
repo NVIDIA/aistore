@@ -74,14 +74,14 @@ func (t *targetrunner) runLRU() {
 }
 
 // TODO: local-buckets-first LRU policy
-func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) error {
+func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
 	defer fschkwg.Done()
 	h := &maxheap{}
 	heap.Init(h)
 
 	toevict, err := get_toevict(bucketdir, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
 	if err != nil {
-		return err
+		return
 	}
 	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1000/1000)
 
@@ -95,14 +95,11 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 		} else {
 			glog.Errorf("Failed to traverse %q, err: %v", bucketdir, err)
 		}
-		return err
+		return
 	}
-
 	if err := t.doLRU(toevict, bucketdir, lctx); err != nil {
 		glog.Errorf("doLRU %q, err: %v", bucketdir, err)
-		return err
 	}
-	return nil
 }
 
 // the walking callback is execited by the LRU xaction

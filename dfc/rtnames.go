@@ -119,7 +119,6 @@ func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendingi
 			return
 		}
 	}
-	return
 }
 
 // log pending

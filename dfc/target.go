@@ -145,7 +145,7 @@ func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	sleep := t.xactinp.abortAll()
 	close(t.rtnamemap.abrt)
-	t.unregister()
+	_ = t.unregister() // ignore errors
 	t.httprunner.stop(err)
 	if sleep {
 		time.Sleep(time.Second)
@@ -336,7 +336,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 	if !t.islocalBucket(bucket) {
-		errstr, errcode := getcloudif().listbucket(w, bucket, msg)
+		jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
 		if errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
@@ -344,7 +344,9 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 				t.invalmsghdlr(w, r, errstr, errcode)
 			}
 		} else {
-			t.statsif.add("numlist", 1)
+			if errstr := t.writeJSON(w, r, jsbytes, "listbucket"); errstr == "" {
+				t.statsif.add("numlist", 1)
+			}
 		}
 		return
 	}
@@ -391,8 +393,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	}
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsbytes)
+	_ = t.writeJSON(w, r, jsbytes, "listbucket")
 }
 
 func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
@@ -511,7 +512,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			return
 		}
 		if errstr, errcode = getcloudif().putobj(file, bucket, objname); errstr != "" {
-			file.Close()
+			_ = file.Close()
 			return
 		}
 		if err = file.Close(); err != nil {
@@ -838,7 +839,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case ActShutdown:
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
@@ -944,7 +945,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	switch msg.GetWhat {
 	case GetWhatConfig:
 		jsbytes, err = json.Marshal(ctx.config)
-		assert(err == nil)
+		assert(err == nil, err)
 	case GetWhatSmap:
 		jsbytes, err = json.Marshal(t.si)
 		assert(err == nil, err)
@@ -958,8 +959,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsbytes)
+	_ = t.writeJSON(w, r, jsbytes, "httpdaeget")
 }
 
 // management interface to register (unregistered) self

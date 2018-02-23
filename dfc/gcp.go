@@ -39,7 +39,7 @@ func getProjID() string {
 	return os.Getenv("GOOGLE_CLOUD_PROJECT")
 }
 
-func gcpErrorToHttp(gcpError error) int {
+func gcpErrorToHTTP(gcpError error) int {
 	if gcperror, ok := gcpError.(*googleapi.Error); ok {
 		return gcperror.Code
 	}
@@ -52,7 +52,7 @@ func gcpErrorToHttp(gcpError error) int {
 // methods
 //
 //======
-func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string, errcode int) {
+func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
 	glog.Infof("gcp listbucket %s", bucket)
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -67,7 +67,7 @@ func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *Ge
 			break
 		}
 		if err != nil {
-			errcode = gcpErrorToHttp(err)
+			errcode = gcpErrorToHTTP(err)
 			errstr = fmt.Sprintf("gcp: Failed to list objects of bucket %s, err: %v", bucket, err)
 		}
 		entry := &BucketEntry{}
@@ -101,8 +101,6 @@ func (gcpimpl *gcpimpl) listbucket(w http.ResponseWriter, bucket string, msg *Ge
 	}
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsbytes)
 	return
 }
 
@@ -128,7 +126,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5ha
 	o := client.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
-		errcode = gcpErrorToHttp(err)
+		errcode = gcpErrorToHTTP(err)
 		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
 	}
@@ -182,7 +180,7 @@ func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string, errcod
 	o := client.Bucket(bucket).Object(objname)
 	err := o.Delete(gctx)
 	if err != nil {
-		errcode = gcpErrorToHttp(err)
+		errcode = gcpErrorToHTTP(err)
 		errstr = fmt.Sprintf("gcp: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
 		return
 	}

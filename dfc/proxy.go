@@ -53,7 +53,9 @@ func (p *proxyrunner) run() error {
 	if localLoad(lbpathname, p.lbmap) != nil {
 		// create empty
 		p.lbmap.Version = 1
-		localSave(lbpathname, p.lbmap)
+		if err := localSave(lbpathname, p.lbmap); err != nil {
+			glog.Fatalf("FATAL: cannot store localbucket config, err: %v", err)
+		}
 	}
 	p.lbmap.unlock()
 
@@ -160,7 +162,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
-		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
+		_ = p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
 	if len(objname) != 0 {
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
@@ -201,8 +203,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	}
 	jsbytes, err := json.Marshal(&allentries)
 	assert(err == nil, err)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsbytes)
+	_ = p.writeJSON(w, r, jsbytes, "listbucket")
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)
@@ -325,7 +326,12 @@ func (p *proxyrunner) actionLocalBucket(w http.ResponseWriter, r *http.Request) 
 	}
 synclbmap:
 	lbpathname := p.confdir + "/" + ctx.config.LBConf
-	localSave(lbpathname, p.lbmap)
+	if err := localSave(lbpathname, p.lbmap); err != nil {
+		s := fmt.Sprintf("Failed to store localbucket config %s, err: %v", lbpathname, err)
+		p.invalmsghdlr(w, r, s)
+		p.lbmap.unlock()
+		return
+	}
 	p.lbmap.unlock()
 
 	go p.synchronizeMaps(0, "")
@@ -389,8 +395,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatConfig:
 		jsbytes, err := json.Marshal(ctx.config)
 		assert(err == nil)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsbytes)
+		_ = p.writeJSON(w, r, jsbytes, "httpdaeget")
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -459,9 +464,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	switch msg.GetWhat {
 	case GetWhatSmap:
 		jsbytes, err := json.Marshal(ctx.smap)
-		assert(err == nil)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsbytes)
+		assert(err == nil, err)
+		_ = p.writeJSON(w, r, jsbytes, "httpcluget")
 	case GetWhatStats:
 		getstatsmsg, err := json.Marshal(msg) // same message to all targets
 		assert(err == nil, err)
@@ -499,8 +503,7 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 	jsbytes, err := json.Marshal(out)
 	rr.Unlock()
 	assert(err == nil, err)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jsbytes)
+	_ = p.writeJSON(w, r, jsbytes, "httpclugetstats")
 }
 
 // registers a new target
@@ -584,7 +587,13 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			for _, si := range ctx.smap.Smap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 				glog.Infof("%s: %s", msg.Action, url)
-				p.call(url, http.MethodPut, msgbytes)
+				if _, err = p.call(url, http.MethodPut, msgbytes); err != nil {
+					// ask keepalive to check connectivity
+					p.keepalive.checknow <- err
+					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %v",
+						msg.Action, msg.Name, msg.Value, err))
+					break
+				}
 			}
 		}
 	case ActShutdown:
@@ -594,10 +603,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		for _, si := range ctx.smap.Smap {
 			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 			glog.Infof("%s: %s", msg.Action, url)
-			p.call(url, http.MethodPut, msgbytes)
+			_, _ = p.call(url, http.MethodPut, msgbytes) // ignore errors
 		}
 		time.Sleep(time.Second)
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
 	case ActSyncSmap:
 		fallthrough
@@ -708,8 +717,7 @@ func (p *proxyrunner) httpcluput_smap(action string) {
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + action
 		glog.Infof("%s: %s", action, url)
-		_, err := p.call(url, method, jsbytes)
-		if err != nil {
+		if _, err := p.call(url, method, jsbytes); err != nil {
 			// ask keepalive to work on it
 			p.keepalive.checknow <- err
 			return
@@ -726,8 +734,7 @@ func (p *proxyrunner) httpfilput_lb() {
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
 		glog.Infof("%s: %+v", url, p.lbmap)
-		p.call(url, http.MethodPut, jsbytes)
-		if err != nil {
+		if _, err = p.call(url, http.MethodPut, jsbytes); err != nil {
 			// ask keepalive to work on it
 			p.keepalive.checknow <- err
 			return

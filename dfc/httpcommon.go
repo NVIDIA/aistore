@@ -34,7 +34,7 @@ const (
 //
 //===========
 type cloudif interface {
-	listbucket(w http.ResponseWriter, bucket string, msg *GetMsg) (errstr string, errcode int)
+	listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
 	getobj(fqn, bucket, objname string) (hash string, size int64, errstr string, errcode int)
 	putobj(file *os.File, bucket, objname string) (errstr string, errcode int)
 	deleteobj(bucket, objname string) (errstr string, errcode int)
@@ -84,11 +84,11 @@ func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 	r.mux.HandleFunc(path, handler)
 }
 
-func (r *httprunner) init(s statsif) error {
+func (r *httprunner) init(s statsif) {
 	r.statsif = s
-	ipaddr, err := getipaddr() // FIXME: this must change
-	if err != nil {
-		return err
+	ipaddr, errstr := getipaddr() // FIXME: this must change
+	if errstr != "" {
+		glog.Fatalf("FATAL: %s", errstr)
 	}
 	// http client
 	r.httpclient = &http.Client{
@@ -110,7 +110,7 @@ func (r *httprunner) init(s statsif) error {
 	}
 
 	r.si.DirectURL = "http://" + r.si.NodeIPAddr + ":" + r.si.DaemonPort
-	return nil
+	return
 }
 
 func (r *httprunner) run() error {
@@ -133,7 +133,7 @@ func (r *httprunner) run() error {
 func (r *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HttpTimeout)
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTPTimeout)
 	defer cancel()
 
 	err = r.h.Shutdown(contextwith)
@@ -242,12 +242,21 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 	return nil
 }
 
+func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (errstr string) {
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(jsbytes); err != nil {
+		errstr = fmt.Sprintf("%s: Unexpected failure to write json to HTTP reply, err: %v", tag, err)
+		h.invalmsghdlr(w, r, errstr)
+	}
+	return
+}
+
 //=================
 //
 // commong set config
 //
 //=================
-func (h *httprunner) setconfig(name, value string) string {
+func (h *httprunner) setconfig(name, value string) (errstr string) {
 	lm, hm := ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM
 	checkwm := false
 	atoi := func(value string) (uint32, error) {
@@ -257,63 +266,63 @@ func (h *httprunner) setconfig(name, value string) string {
 	switch name {
 	case "stats_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			return fmt.Sprintf("Failed to parse stats_time, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)
 		} else {
 			ctx.config.StatsTime, ctx.config.StatsTimeStr = v, value
 		}
 	case "dont_evict_time":
 		if v, err := time.ParseDuration(value); err != nil {
-			return fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.DontEvictTime, ctx.config.LRUConfig.DontEvictTimeStr = v, value
 		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
-			return fmt.Sprintf("Failed to convert lowwm, err: %v", err)
+			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.LowWM, checkwm = v, true
 		}
 	case "highwm":
 		if v, err := atoi(value); err != nil {
-			return fmt.Sprintf("Failed to convert highwm, err: %v", err)
+			errstr = fmt.Sprintf("Failed to convert highwm, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.HighWM, checkwm = v, true
 		}
 	case "no_xattrs":
 		if v, err := strconv.ParseBool(value); err != nil {
-			return fmt.Sprintf("Failed to parse no_xattrs, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse no_xattrs, err: %v", err)
 		} else {
 			ctx.config.NoXattrs = v
 		}
 	case "passthru":
 		if v, err := strconv.ParseBool(value); err != nil {
-			return fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
 		} else {
 			ctx.config.Proxy.Passthru = v
 		}
 	case "lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
-			return fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.LRUEnabled = v
 		}
 	case "validate_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
-			return fmt.Sprintf("Failed to parse validate_cold_get, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse validate_cold_get, err: %v", err)
 		} else {
 			ctx.config.CksumConfig.ValidateColdGet = v
 		}
 	default:
-		return fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name)
+		errstr = fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name)
 	}
 	if checkwm {
 		hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 			ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM = lm, hm
-			return fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig)
+			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig)
 		}
 	}
-	return ""
+	return
 }
 
 //=================

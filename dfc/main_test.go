@@ -42,7 +42,7 @@ const (
 	RestAPIGet      = ProxyURL + "/v1/files"  // version = 1, resource = files
 	RestAPIProxyPut = ProxyURL + "/v1/files"  // version = 1, resource = files
 	RestAPIProxyDel = ProxyURL + "/v1/files"  // version = 1, resource = files
-	ColdValidStr    = "coldvalid"
+	ColdValidStr    = "coldmd5"
 	DeleteDir       = "/tmp/dfc/delete"
 	DeleteStr       = "delete"
 )
@@ -234,14 +234,13 @@ func Test_list(t *testing.T) {
 	t.Logf("ls bucket %s written to %s", bucket, fname)
 }
 
-func Test_coldgetvalidation(t *testing.T) {
+func Test_coldgetmd5(t *testing.T) {
 	var (
-		filesput  = make(chan string, numfiles)
+		numPuts   = 5
+		filesput  = make(chan string, numPuts)
 		fileslist = make([]string, 0, 100)
 		errch     = make(chan error, 100)
 		wg        = &sync.WaitGroup{}
-		numfiles  = 5
-		numPuts   = numfiles
 		bucket    = clibucket
 		totalsize = (numPuts * largefilesize) / (1024 * 1024)
 	)
@@ -249,53 +248,53 @@ func Test_coldgetvalidation(t *testing.T) {
 	if err := dfc.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
+
+	config := getConfig(RestAPIDaemonPath, client, t)
+	cksumconfig := config["cksum_config"].(map[string]interface{})
+	bcoldget := cksumconfig["validate_cold_get"].(bool)
+
 	putRandomFiles(0, baseseed, uint64(largefilesize), numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
-		if fname != "" {
-			fileslist = append(fileslist, ColdValidStr+"/"+fname)
-		}
+		fileslist = append(fileslist, ColdValidStr+"/"+fname)
 	}
 	evictobjects(t, fileslist)
 	// Disable Cold Get Validation
-	setConfig("validate_cold_get", fmt.Sprint("false"), RestAPIClusterPath, client, t)
-	if t.Failed() {
-		return
+	if bcoldget {
+		setConfig("validate_cold_get", strconv.FormatBool(false), RestAPIClusterPath, client, t)
 	}
 	start := time.Now()
 	getfromfilelist(t, bucket, errch, fileslist)
 	curr := time.Now()
 	duration := curr.Sub(start)
-	tlogf("Time taken to GET %v MB without  MD5 validation is  %v seconds \n ", totalsize, duration)
+	if t.Failed() {
+		goto cleanup
+	}
+	tlogf("GET %d MB without MD5 validation: %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, client, t)
+	setConfig("validate_cold_get", strconv.FormatBool(true), RestAPIClusterPath, client, t)
 	if t.Failed() {
-		return
+		goto cleanup
 	}
 	start = time.Now()
 	getfromfilelist(t, bucket, errch, fileslist)
 	curr = time.Now()
 	duration = curr.Sub(start)
-	tlogf("Time taken to GET %v MB with  MD5 validation is  %v seconds \n ", totalsize, duration)
+	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
-	// Delete local file and objects from bucket
+cleanup:
+	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), RestAPIClusterPath, client, t)
 	for _, fn := range fileslist {
-		err := os.Remove(LocalSrcDir + "/" + fn)
-		if err != nil {
-			t.Error(err)
-		}
+		_ = os.Remove(LocalSrcDir + "/" + fn)
 		wg.Add(1)
 		go del(bucket, fn, wg, errch)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
 	close(errch)
-	if abortonerr && t.Failed() {
-		fmt.Fprintf(os.Stdout, "Test failed \n")
-	}
 }
 
 func Benchmark_get(b *testing.B) {

@@ -62,6 +62,7 @@ func (r *keepalive) alltargets(err error) (stopped bool) {
 
 	msg := &GetMsg{GetWhat: GetWhatStats}
 	jsbytes, err := json.Marshal(msg)
+	assert(err == nil, err)
 	for sid, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 		_, err := r.p.call(url, http.MethodGet, jsbytes)
