@@ -62,17 +62,17 @@ type statsrunner struct {
 }
 
 type proxystatsrunner struct {
-	statsrunner
-	Core  proxyCoreStats `json:"core"`
-	ccopy proxyCoreStats
+	statsrunner `json:"-"`
+	Core        proxyCoreStats `json:"core"`
+	ccopy       proxyCoreStats `json:"-"`
 }
 
 type storstatsrunner struct {
-	statsrunner
-	Core     targetCoreStats        `json:"core"`
-	Capacity map[string]*fscapacity `json:"capacity"`
-	ccopy    targetCoreStats
-	fsmap    map[syscall.Fsid]string
+	statsrunner `json:"-"`
+	Core        targetCoreStats         `json:"core"`
+	Capacity    map[string]*fscapacity  `json:"capacity"`
+	ccopy       targetCoreStats         `json:"-"`
+	fsmap       map[syscall.Fsid]string `json:"-"`
 }
 
 type ClusterStats struct {
