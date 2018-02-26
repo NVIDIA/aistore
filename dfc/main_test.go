@@ -36,6 +36,7 @@ import (
 // # go test -v -run=xxx -bench . -count 10
 
 const (
+	baseDir         = "/tmp/dfc"
 	LocalDestDir    = "/tmp/dfc/dest"         // client-side download destination
 	LocalSrcDir     = "/tmp/dfc/src"          // client-side src directory for upload
 	ProxyURL        = "http://localhost:8080" // assuming local proxy is listening on 8080
@@ -59,6 +60,22 @@ var (
 type workres struct {
 	totfiles int
 	totbytes int64
+}
+
+type reqError struct {
+	code    int
+	message string
+}
+
+func (err reqError) Error() string {
+	return err.message
+}
+
+func newReqError(msg string, code int) reqError {
+	return reqError{
+		code:    code,
+		message: msg,
+	}
 }
 
 func init() {
@@ -464,12 +481,7 @@ func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
 		}
 	}()
 	err = discardResponse(r, err, fmt.Sprintf("object %s from bucket %s", keyname, bucket))
-	if err != nil {
-		if errch != nil {
-			errch <- err
-		}
-		return
-	}
+	emitError(r, err, errch)
 }
 
 func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
@@ -570,11 +582,20 @@ func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch 
 			r.Body.Close()
 		}
 	}()
-	discardResponse(r, err, "put")
-	if err != nil {
-		if errch != nil {
-			errch <- err
-		}
+	err = discardResponse(r, err, "put")
+	emitError(r, err, errch)
+}
+
+func emitError(r *http.Response, err error, errch chan error) {
+	if err == nil || errch == nil {
+		return
+	}
+
+	if r != nil {
+		errObj := newReqError(err.Error(), r.StatusCode)
+		errch <- errObj
+	} else {
+		errch <- err
 	}
 }
 
@@ -613,10 +634,7 @@ func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
 		}
 	}()
 	err = discardResponse(r, err, "delete")
-	if err != nil {
-		errch <- err
-		return
-	}
+	emitError(r, err, errch)
 }
 
 func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {

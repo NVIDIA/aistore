@@ -66,6 +66,7 @@ var (
 		Test{"Rebalance", regressionRebalance},
 		Test{"LRU", regressionLRU},
 		Test{"Rename", regressionRename},
+		Test{"RW stress", regressionRWStress},
 	}
 )
 
