@@ -1,7 +1,7 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 //
 // Example run:
-// 	go test -v -run=rwstress -args -numfiles=10 -cycles=10 -sync -nodel
+// 	go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel
 //
 /*
  * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
@@ -23,7 +23,7 @@ import (
 
 const (
 	rwdir    = "rwstress"
-	fileSize = 1024 * 32 // file size of read from command line args
+	fileSize = 1024 * 32 // file size
 
 	// time to sleep if there is no object created yet in milliseconds
 	// del time is slightly greater than get one to allow get work faster
@@ -34,15 +34,16 @@ const (
 	FileCreated = true
 	FileExists  = true
 	FileDeleted = false
+	RunNormal   = false
+	RunCleanUp  = true
 )
 
 type fileLock struct {
-	locked int
+	locked bool
 	exists bool
 }
 
 var (
-	dosync  bool
 	cycles  int
 	skipdel bool
 
@@ -55,8 +56,9 @@ var (
 	numFiles int
 )
 
+// default number of files is 100, default number of loops to write files is 15
+// it results in 230-260 seconds long test
 func init() {
-	flag.BoolVar(&dosync, "sync", false, "Run operations synchronously")
 	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
 	flag.IntVar(&cycles, "cycles", 15, "Number of PUT cycles")
 }
@@ -66,11 +68,11 @@ func tryLockFile(idx int) bool {
 	defer rwstressMtx.Unlock()
 
 	info := fileLocks[idx]
-	if info.locked != 0 {
+	if info.locked {
 		return false
 	}
 
-	fileLocks[idx].locked = 1
+	fileLocks[idx].locked = true
 	return true
 }
 
@@ -82,8 +84,8 @@ func tryLockNextAvailFile(idx int) (int, bool) {
 	defer rwstressMtx.Unlock()
 
 	info := fileLocks[idx]
-	if info.locked == 0 && info.exists {
-		fileLocks[idx].locked = 1
+	if !info.locked && info.exists {
+		fileLocks[idx].locked = true
 		return idx, true
 	}
 
@@ -95,8 +97,8 @@ func tryLockNextAvailFile(idx int) (int, bool) {
 		}
 
 		info = fileLocks[nextIdx]
-		if info.locked == 0 && info.exists {
-			fileLocks[nextIdx].locked = 1
+		if !info.locked && info.exists {
+			fileLocks[nextIdx].locked = true
 			return nextIdx, true
 		}
 
@@ -111,7 +113,7 @@ func tryUnlockFile(idx int, fileExists bool) bool {
 	rwstressMtx.Lock()
 	defer rwstressMtx.Unlock()
 
-	fileLocks[idx].locked = 0
+	fileLocks[idx].locked = false
 	fileLocks[idx].exists = fileExists
 	return true
 }
@@ -169,7 +171,9 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 
 	// emit signals for DEL and GET loops
 	doneCh <- 1
-	doneCh <- 1
+	if !skipdel {
+		doneCh <- 1
+	}
 
 	if taskGrp != nil {
 		taskGrp.Done()
@@ -178,7 +182,7 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	fmt.Fprintf(os.Stdout, "PUT total %d [missed PUT %d]\n", totalOps, putMissed)
 }
 
-func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
+func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
 	done := false
 	var delMissed, totalOps, currIdx int
 	errch := make(chan error, 10)
@@ -188,12 +192,17 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			del(clibucket, keyname, nil, errch)
 			tryUnlockFile(idx, FileDeleted)
+
 			currIdx = idx + 1
 			if currIdx >= len(fileNames) {
 				currIdx = 0
 			}
 			totalOps++
 		} else {
+			if doCleanUp {
+				fmt.Printf("Cleanup finished\n")
+				break
+			}
 			delMissed++
 			time.Sleep(delSleep * time.Millisecond)
 		}
@@ -209,7 +218,11 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		taskGrp.Done()
 	}
 
-	fmt.Fprintf(os.Stdout, "DEL %d files [missed DEL %d]\n", totalOps, delMissed)
+	if doCleanUp {
+		fmt.Fprintf(os.Stdout, "DEL cleaned up %d files\n", totalOps)
+	} else {
+		fmt.Fprintf(os.Stdout, "DEL %d files [missed DEL %d]\n", totalOps, delMissed)
+	}
 }
 
 func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
@@ -222,6 +235,7 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			get(keyname, nil, errch, clibucket)
 			tryUnlockFile(idx, FileExists)
+
 			currIdx = idx + 1
 			if currIdx >= len(fileNames) {
 				currIdx = 0
@@ -261,25 +275,33 @@ func rwstress(t *testing.T) {
 	doneCh := make(chan int, 2)
 	wg.Add(1)
 	go rwPutLoop(t, fileNames, wg, doneCh, buf)
-	if dosync {
-		wg.Wait()
-	}
 	wg.Add(1)
 	go rwGetLoop(t, fileNames, wg, doneCh)
-	if dosync || skipdel {
+	if skipdel {
+		wg.Wait()
+	} else {
+		wg.Add(1)
+		go rwDelLoop(t, fileNames, wg, doneCh, RunNormal)
 		wg.Wait()
 	}
-	wg.Add(1)
-	go rwDelLoop(t, fileNames, wg, doneCh)
-	wg.Wait()
 
-	if !dosync && !skipdel {
-		fmt.Fprintf(os.Stdout, "Cleaning up...\n")
-		go rwDelLoop(t, fileNames, nil, doneCh)
-		doneCh <- 1
+	fmt.Fprintf(os.Stdout, "Cleaning up...\n")
+	rwDelLoop(t, fileNames, nil, doneCh, RunCleanUp)
+
+	rwstress_cleanup(t)
+}
+
+func rwstress_cleanup(t *testing.T) {
+	fileDir := fmt.Sprintf("%s/%s", baseDir, rwdir)
+	e := os.RemoveAll(fileDir)
+	if e != nil {
+		fmt.Printf("Failed to remove directory %s: %v\n", fileDir, e)
+		t.Error(e)
 	}
 }
 
+// The regression verions of the test should run around 30 seconds
+// 25 files written 8 times takes 20-25 seconds
 func regressionRWStress(t *testing.T) {
 	numFiles = 25
 	numLoops = 8
