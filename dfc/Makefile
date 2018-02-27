@@ -6,7 +6,8 @@ BUILD := `git rev-parse HEAD`
 LDFLAGS=-ldflags "-X=dfc.Version=$(VERSION) -X=dfc.Build=$(BUILD)"
 
 build:
-	@go build && go install && GOBIN=$GOPATH/bin go install setup/dfc.go
+	GOBIN=${GOPATH}/bin go build && go install
+	GOBIN=${GOPATH}/bin go install setup/dfc.go
 
 kill:
 	@pkill -SIGINT dfc 2>/dev/null; sleep 1; true

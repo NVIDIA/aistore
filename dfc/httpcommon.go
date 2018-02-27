@@ -75,6 +75,7 @@ type httprunner struct {
 	si         *daemonInfo
 	httpclient *http.Client // http client for intra-cluster comm
 	statsif    statsif
+	kalive     kaliveif
 }
 
 func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -136,21 +137,26 @@ func (r *httprunner) stop(err error) {
 	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTPTimeout)
 	defer cancel()
 
+	if r.h == nil {
+		return
+	}
 	err = r.h.Shutdown(contextwith)
 	if err != nil {
 		glog.Infof("Stopped %s, err: %v", r.name, err)
 	}
 }
 
-// intra-cluster IPC, control plane
-// http-REST calls another target or a proxy
-// optionally, sends a json-encoded content to the callee
-// expects only OK or FAIL in the return
-func (r *httprunner) call(url string, method string, injson []byte) (outjson []byte, err error) {
+// intra-cluster IPC, control plane; calls (via http) another target or a proxy
+// optionally, sends a json-encoded body to the callee
+func (r *httprunner) call(si *daemonInfo, url string, method string, injson []byte) (outjson []byte, err error, errstr string, status int) {
 	var (
 		request  *http.Request
 		response *http.Response
+		sid      = "unknown"
 	)
+	if si != nil {
+		sid = si.DaemonID
+	}
 	if injson == nil || len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
 		if glog.V(3) {
@@ -163,23 +169,30 @@ func (r *httprunner) call(url string, method string, injson []byte) (outjson []b
 		}
 	}
 	if err != nil {
-		glog.Errorf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
-		return nil, err
+		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
+		return
 	}
 	response, err = r.httpclient.Do(request)
 	if err != nil {
-		glog.Errorf("Failed to execute http call(%s %s), err: %v", method, url, err)
-		return nil, err
+		if response != nil && response.StatusCode > 0 {
+			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, method, url, response.Status, err)
+			status = response.StatusCode
+			return
+		}
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, method, url, err)
+		return
 	}
-	assert(response != nil, "Unexpected: nil response in presense of no error")
-
-	// block until done (returned content is ignored and discarded)
+	assert(response != nil, "Unexpected: nil response with no error")
 	defer func() { err = response.Body.Close() }()
+
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
-		glog.Errorf("Failed to read http, err: %v", err)
-		return nil, err
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): Unexpected failure to read response body: %v", sid, method, url, err)
+		return
 	}
-	return outjson, err
+	if sid != "unknown" {
+		r.kalive.timestamp(sid)
+	}
+	return
 }
 
 //=============================

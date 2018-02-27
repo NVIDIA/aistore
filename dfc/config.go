@@ -18,24 +18,26 @@ import (
 
 // dfconfig specifies common daemon's configuration structure in JSON format.
 type dfconfig struct {
-	Logdir         string            `json:"logdir"`
-	Loglevel       string            `json:"loglevel"`
-	CloudProvider  string            `json:"cloudprovider"`
-	CloudBuckets   string            `json:"cloud_buckets"`
-	LocalBuckets   string            `json:"local_buckets"`
-	LBConf         string            `json:"lb_conf"`
-	StatsTimeStr   string            `json:"stats_time"`
-	StatsTime      time.Duration     `json:"-"` // omitempty
-	HTTPTimeoutStr string            `json:"http_timeout"`
-	HTTPTimeout    time.Duration     `json:"-"` // omitempty
-	Listen         listenconfig      `json:"listen"`
-	Proxy          proxyconfig       `json:"proxy"`
-	S3             s3config          `json:"s3"`
-	LRUConfig      lruconfig         `json:"lru_config"`
-	CksumConfig    cksumconfig       `json:"cksum_config"`
-	FSpaths        map[string]string `json:"fspaths"`
-	TestFSP        testfspathconf    `json:"test_fspaths"`
-	NoXattrs       bool              `json:"no_xattrs"`
+	Logdir           string            `json:"logdir"`
+	Loglevel         string            `json:"loglevel"`
+	CloudProvider    string            `json:"cloudprovider"`
+	CloudBuckets     string            `json:"cloud_buckets"`
+	LocalBuckets     string            `json:"local_buckets"`
+	LBConf           string            `json:"lb_conf"`
+	StatsTimeStr     string            `json:"stats_time"`
+	StatsTime        time.Duration     `json:"-"` // omitempty
+	HTTPTimeoutStr   string            `json:"http_timeout"`
+	HTTPTimeout      time.Duration     `json:"-"` // omitempty
+	KeepAliveTimeStr string            `json:"keep_alive_time"`
+	KeepAliveTime    time.Duration     `json:"-"` // omitempty
+	Listen           listenconfig      `json:"listen"`
+	Proxy            proxyconfig       `json:"proxy"`
+	S3               s3config          `json:"s3"`
+	LRUConfig        lruconfig         `json:"lru_config"`
+	CksumConfig      cksumconfig       `json:"cksum_config"`
+	FSpaths          map[string]string `json:"fspaths"`
+	TestFSP          testfspathconf    `json:"test_fspaths"`
+	NoXattrs         bool              `json:"no_xattrs"`
 }
 
 const (
@@ -150,12 +152,16 @@ func getConfig(fpath string) {
 	if ctx.config.HTTPTimeout, err = time.ParseDuration(ctx.config.HTTPTimeoutStr); err != nil {
 		goto merr
 	}
+	if ctx.config.KeepAliveTime, err = time.ParseDuration(ctx.config.KeepAliveTimeStr); err != nil {
+		goto merr
+	}
 	if ctx.config.LRUConfig.DontEvictTime, err = time.ParseDuration(ctx.config.LRUConfig.DontEvictTimeStr); err != nil {
 		goto merr
 	}
 	return
 merr:
-	glog.Errorf("Bad time duration format [%s, %s, %s], err: %v",
-		ctx.config.StatsTimeStr, ctx.config.HTTPTimeoutStr, ctx.config.LRUConfig.DontEvictTimeStr, err)
+	glog.Errorf("Bad time duration format [%s, %s, %s, %s], err: %v",
+		ctx.config.StatsTimeStr, ctx.config.HTTPTimeoutStr,
+		ctx.config.LRUConfig.DontEvictTimeStr, ctx.config.KeepAliveTimeStr, err)
 	os.Exit(1)
 }

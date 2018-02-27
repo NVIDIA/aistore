@@ -56,7 +56,7 @@ var (
 		"passthru":        "true",
 		"lru_enabled":     "true",
 	}
-	abortonerr = true
+	abortonerr = false
 	client     = &http.Client{}
 	tests      = []Test{
 		Test{"Local Bucket", regressionLocalBuckets},

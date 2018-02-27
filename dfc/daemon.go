@@ -18,12 +18,13 @@ import (
 
 // runners
 const (
-	xproxy      = "proxy"
-	xtarget     = "target"
-	xsignal     = "signal"
-	xproxystats = "proxystats"
-	xstorstats  = "storstats"
-	xkeepalive  = "keepalive"
+	xproxy        = "proxy"
+	xtarget       = "target"
+	xsignal       = "signal"
+	xproxystats   = "proxystats"
+	xstorstats    = "storstats"
+	xproxykalive  = "proxykalive"
+	xtargetkalive = "targetkalive"
 )
 
 //======
@@ -43,6 +44,7 @@ type cliVars struct {
 type Smap struct {
 	sync.Mutex
 	Smap        map[string]*daemonInfo `json:"smap"`
+	ProxySI     *daemonInfo            `json:"proxy_si"`
 	Version     int64                  `json:"version"`
 	syncversion int64
 }
@@ -279,12 +281,15 @@ func dfcinit() {
 		}
 		confdir := filepath.Dir(clivars.conffile)
 		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8)}
-		ctx.rg.add(&proxyrunner{confdir: confdir}, xproxy)
+		p := &proxyrunner{confdir: confdir}
+		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
-		ctx.rg.add(&keepalive{}, xkeepalive)
+		ctx.rg.add(newproxykalive(p), xproxykalive)
 	} else {
-		ctx.rg.add(&targetrunner{}, xtarget)
+		t := &targetrunner{}
+		ctx.rg.add(t, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
+		ctx.rg.add(newtargetkalive(t), xtargetkalive)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
@@ -302,8 +307,9 @@ func Run() {
 	if ok {
 		goto m
 	}
-	// dump stack trace and exit
-	glog.Fatalf("Terminated with err: %v\n", err)
+	glog.Errorln()
+	glog.Errorf("Terminated with err: %v\n", err)
+	os.Exit(1)
 m:
 	glog.Infoln("Terminated OK")
 	glog.Flush()
@@ -333,9 +339,9 @@ func getproxy() *proxyrunner {
 	return rr
 }
 
-func getkeepaliverunner() *keepalive {
-	r := ctx.rg.runmap[xkeepalive]
-	rr, ok := r.(*keepalive)
+func getproxykalive() *proxykalive {
+	r := ctx.rg.runmap[xproxykalive]
+	rr, ok := r.(*proxykalive)
 	assert(ok)
 	return rr
 }
@@ -343,6 +349,13 @@ func getkeepaliverunner() *keepalive {
 func gettarget() *targetrunner {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
+	assert(ok)
+	return rr
+}
+
+func gettargetkalive() *targetkalive {
+	r := ctx.rg.runmap[xtargetkalive]
+	rr, ok := r.(*targetkalive)
 	assert(ok)
 	return rr
 }

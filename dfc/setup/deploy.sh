@@ -35,6 +35,7 @@ MAXPARTSIZE=4294967296
 TESTFSPATHCOUNT=1
 STATSTIME="10s"
 HTTPTIMEOUT="60s"
+KEEPALIVETIME="120s"
 DONTEVICTIME="30m"
 LOWWATERMARK=75
 HIGHWATERMARK=90
@@ -118,6 +119,7 @@ do
 	"lb_conf":                	"${LBCONF}",
 	"stats_time":			"${STATSTIME}",
 	"http_timeout":			"${HTTPTIMEOUT}",
+	"keep_alive_time":		"${KEEPALIVETIME}",
 	"listen": {
 		"proto": 		"${PROTO}",
 		"port":			"${PORT}"

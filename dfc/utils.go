@@ -14,9 +14,11 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
+	"syscall"
 
 	"github.com/golang/glog"
 )
@@ -208,4 +210,18 @@ func osRemove(prefix, fqn string) error {
 	}
 	glog.Infof("%s: removed %q", prefix, fqn)
 	return nil
+}
+
+// as of 1.9 net/http does not appear to provide any better way..
+func IsErrConnectionRefused(err error) (yes bool) {
+	if uerr, ok := err.(*url.Error); ok {
+		if noerr, ok := uerr.Err.(*net.OpError); ok {
+			if scerr, ok := noerr.Err.(*os.SyscallError); ok {
+				if scerr.Err == syscall.ECONNREFUSED {
+					yes = true
+				}
+			}
+		}
+	}
+	return
 }

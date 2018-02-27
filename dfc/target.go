@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -56,6 +55,7 @@ type targetrunner struct {
 	httprunner
 	cloudif    cloudif // multi-cloud vendor support
 	smap       *Smap
+	proxysi    *daemonInfo
 	xactinp    *xactInProgress
 	starttime  time.Time
 	lbmap      *lbmap
@@ -68,6 +68,7 @@ type targetrunner struct {
 // start target runner
 func (t *targetrunner) run() error {
 	t.httprunner.init(getstorstats())
+	t.httprunner.kalive = gettargetkalive()
 	t.smap = &Smap{}                                 // cluster map
 	t.xactinp = newxactinp()                         // extended actions
 	t.lbmap = &lbmap{LBmap: make(map[string]string)} // local (cache-only) buckets
@@ -76,17 +77,17 @@ func (t *targetrunner) run() error {
 	t.buffers32k = newbuffers(32 * 1024)
 	t.buffers4k = newbuffers(4 * 1024)
 
-	if err := t.register(); err != nil {
+	if err, status := t.register(); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
-		if match, _ := regexp.MatchString("connection refused", err.Error()); match {
-			glog.Errorf("Target %s: retrying registration ...", t.si.DaemonID)
+		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout { // AA: use status
+			glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 			time.Sleep(time.Second * 3)
-			if err = t.register(); err != nil {
+			if err, status = t.register(); err != nil {
 				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 				glog.Errorf("Target %s is terminating", t.si.DaemonID)
 				return err
 			}
-			glog.Errorf("Success: target %s registered OK", t.si.DaemonID)
+			glog.Errorf("Success: target %s joined the cluster", t.si.DaemonID)
 		} else {
 			return err
 		}
@@ -145,7 +146,9 @@ func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	sleep := t.xactinp.abortAll()
 	close(t.rtnamemap.abrt)
-	_ = t.unregister() // ignore errors
+	if t.httprunner.h != nil {
+		t.unregister() // ignore errors
+	}
 	t.httprunner.stop(err)
 	if sleep {
 		time.Sleep(time.Second)
@@ -153,22 +156,21 @@ func (t *targetrunner) stop(err error) {
 }
 
 // target registration with proxy
-func (t *targetrunner) register() error {
+func (t *targetrunner) register() (err error, status int) {
 	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
-		glog.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
-		return err
+		return fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err), 0
 	}
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
-	_, err = t.call(url, http.MethodPost, jsbytes)
-	return err
+	_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes)
+	return
 }
 
-func (t *targetrunner) unregister() error {
+func (t *targetrunner) unregister() (err error, status int) {
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
 	url += "/" + Rdaemon + "/" + t.si.DaemonID
-	_, err := t.call(url, http.MethodDelete, nil)
-	return err
+	_, err, _, status = t.call(t.proxysi, url, http.MethodDelete, nil)
+	return
 }
 
 //==============
@@ -861,9 +863,10 @@ func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, a
 	}
 	glog.Infof("%s: new Smap version %d (old %d)", apitems[0], newsmap.Version, curversion)
 
-	// 1. check whether this target is present in the new Smap
-	// 2. log
-	// 3. nothing to rebalance if the new map is a strict subset of the old
+	// check whether this target is present in the new Smap
+	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
+	// assign proxysi
+	// log
 	existentialQ, isSubset := false, true
 	for id, si := range newsmap.Smap { // log
 		if id == t.si.DaemonID {
@@ -878,7 +881,7 @@ func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, a
 	}
 	assert(existentialQ)
 
-	t.smap = newsmap
+	t.smap, t.proxysi = newsmap, newsmap.ProxySI
 	if apitems[0] == Rsyncsmap {
 		return
 	}
@@ -968,8 +971,8 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-	if err := t.register(); err != nil {
-		s := fmt.Sprintf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
+	if err, status := t.register(); err != nil {
+		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}

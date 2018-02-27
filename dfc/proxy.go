@@ -38,13 +38,14 @@ type proxyrunner struct {
 	xactinp     *xactInProgress
 	lbmap       *lbmap
 	syncmapinp  int64
-	keepalive   *keepalive
 }
 
-// run
+// start proxy runner
 func (p *proxyrunner) run() error {
 	p.httprunner.init(getproxystats())
-	p.keepalive = getkeepaliverunner()
+	ctx.smap.ProxySI = p.si
+	p.httprunner.kalive = getproxykalive()
+
 	p.xactinp = newxactinp()
 	// local (aka cache-only) buckets
 	p.lbmap = &lbmap{LBmap: make(map[string]string)}
@@ -184,10 +185,10 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	// FIXME: re-un-marshaling here and elsewhere
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
-		outjson, err := p.call(url, r.Method, listmsgjson) // forward as is
+		outjson, err, errstr, status := p.call(si, url, r.Method, listmsgjson) // forward as is
 		if err != nil {
-			s := fmt.Sprintf("Failed to call target %s (is it alive?)", url)
-			p.invalmsghdlr(w, r, s)
+			p.invalmsghdlr(w, r, errstr)
+			p.kalive.onerr(err, status)
 			return
 		}
 		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
@@ -476,13 +477,10 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 		out.Target[si.DaemonID] = stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		outjson, err := p.call(url, r.Method, getstatsmsg)
+		outjson, err, errstr, status := p.call(si, url, r.Method, getstatsmsg)
 		if err != nil {
-			s := fmt.Sprintf("Failed to call target %s (alive?)", url)
-			p.invalmsghdlr(w, r, s)
-
-			// ask keepalive to work on it
-			p.keepalive.checknow <- err
+			p.invalmsghdlr(w, r, errstr)
+			p.kalive.onerr(err, status)
 			return
 		}
 		if err = json.Unmarshal(outjson, stats); err != nil {
@@ -579,12 +577,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			assert(err == nil, err)
 			for _, si := range ctx.smap.Smap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-				glog.Infof("%s: %s", msg.Action, url)
-				if _, err = p.call(url, http.MethodPut, msgbytes); err != nil {
-					// ask keepalive to check connectivity
-					p.keepalive.checknow <- err
-					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %v",
-						msg.Action, msg.Name, msg.Value, err))
+				if _, err, errstr, status := p.call(si, url, http.MethodPut, msgbytes); err != nil {
+					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, msg.Value, errstr))
+					p.kalive.onerr(err, status)
 					break
 				}
 			}
@@ -596,7 +591,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		for _, si := range ctx.smap.Smap {
 			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 			glog.Infof("%s: %s", msg.Action, url)
-			_, _ = p.call(url, http.MethodPut, msgbytes) // ignore errors
+			p.call(si, url, http.MethodPut, msgbytes) // ignore errors
 		}
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
@@ -710,9 +705,8 @@ func (p *proxyrunner) httpcluput_smap(action string) {
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + action
 		glog.Infof("%s: %s", action, url)
-		if _, err := p.call(url, method, jsbytes); err != nil {
-			// ask keepalive to work on it
-			p.keepalive.checknow <- err
+		if _, err, errstr, status := p.call(si, url, method, jsbytes); errstr != "" {
+			p.kalive.onerr(err, status)
 			return
 		}
 	}
@@ -727,9 +721,8 @@ func (p *proxyrunner) httpfilput_lb() {
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
 		glog.Infof("%s: %+v", url, p.lbmap)
-		if _, err = p.call(url, http.MethodPut, jsbytes); err != nil {
-			// ask keepalive to work on it
-			p.keepalive.checknow <- err
+		if _, err, _, status := p.call(si, url, http.MethodPut, jsbytes); err != nil {
+			p.kalive.onerr(err, status)
 			return
 		}
 	}
