@@ -16,16 +16,16 @@ type ActionMsg struct {
 
 // ActionMsg.Action enum
 const (
-	ActShutdown     = "shutdown"
-	ActSyncSmap     = "syncsmap"  // synchronize cluster map aka Smap across all targets
+	ActShutdown  = "shutdown"
+	ActSyncSmap  = "syncsmap"  // synchronize cluster map aka Smap across all targets
 	ActRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
-	ActLRU          = "lru"
-	ActSyncLB       = "synclb"
-	ActCreateLB     = "createlb"
-	ActDestroyLB    = "destroylb"
-	ActSetConfig    = "setconfig"
-	ActRename       = "rename"
-	ActEvict        = "evict"
+	ActLRU       = "lru"
+	ActSyncLB    = "synclb"
+	ActCreateLB  = "createlb"
+	ActDestroyLB = "destroylb"
+	ActSetConfig = "setconfig"
+	ActRename    = "rename"
+	ActEvict     = "evict"
 )
 
 // TODO: sort and some props are TBD
@@ -34,6 +34,7 @@ type GetMsg struct {
 	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below
+	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 }
 
 //===================

@@ -58,7 +58,12 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	if errstr != "" {
 		return
 	}
-	it := client.Bucket(bucket).Objects(gctx, nil)
+
+	var query *storage.Query = nil
+	if msg.GetPrefix != "" {
+		query = &storage.Query{Prefix: msg.GetPrefix}
+	}
+	it := client.Bucket(bucket).Objects(gctx, query)
 
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
 	for {

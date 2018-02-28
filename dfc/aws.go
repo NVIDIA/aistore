@@ -64,13 +64,18 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	glog.Infof("aws listbucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
+
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
+	if msg.GetPrefix != "" {
+		params.Prefix = &msg.GetPrefix
+	}
 	resp, err := svc.ListObjects(params)
 	if err != nil {
 		errstr = err.Error()
 		errcode = awsErrorToHTTP(err)
 		return
 	}
+
 	// var msg GetMsg
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
 	for _, key := range resp.Contents {

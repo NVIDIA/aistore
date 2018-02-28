@@ -210,6 +210,9 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		select {
 		case <-doneCh:
 			done = true
+		case e := <-errch:
+			fmt.Fprintf(os.Stdout, "DEL FAIL: %s\n", e)
+			t.Fail()
 		default:
 		}
 	}
@@ -277,13 +280,11 @@ func rwstress(t *testing.T) {
 	go rwPutLoop(t, fileNames, wg, doneCh, buf)
 	wg.Add(1)
 	go rwGetLoop(t, fileNames, wg, doneCh)
-	if skipdel {
-		wg.Wait()
-	} else {
+	if !skipdel {
 		wg.Add(1)
 		go rwDelLoop(t, fileNames, wg, doneCh, RunNormal)
-		wg.Wait()
 	}
+	wg.Wait()
 
 	fmt.Fprintf(os.Stdout, "Cleaning up...\n")
 	rwDelLoop(t, fileNames, nil, doneCh, RunCleanUp)
@@ -293,10 +294,13 @@ func rwstress(t *testing.T) {
 
 func rwstress_cleanup(t *testing.T) {
 	fileDir := fmt.Sprintf("%s/%s", baseDir, rwdir)
-	e := os.RemoveAll(fileDir)
-	if e != nil {
-		fmt.Printf("Failed to remove directory %s: %v\n", fileDir, e)
-		t.Error(e)
+
+	for _, fileName := range fileNames {
+		e := os.Remove(fmt.Sprintf("%s/%s", fileDir, fileName))
+		if e != nil {
+			fmt.Printf("Failed to remove file %s: %v\n", fileName, e)
+			t.Error(e)
+		}
 	}
 }
 

@@ -364,8 +364,13 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	t.statsif.add("numlist", 1)
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(allfinfos.finfos))}
 	for _, fi := range allfinfos.finfos {
+		if msg.GetPrefix != "" && !strings.HasPrefix(fi.relname, msg.GetPrefix) {
+			continue
+		}
+
 		entry := &BucketEntry{}
 		entry.Name = fi.relname
+
 		if strings.Contains(msg.GetProps, GetPropsSize) {
 			entry.Size = fi.Size()
 		}
