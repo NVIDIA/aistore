@@ -150,6 +150,22 @@ This single command causes execution of multiple `GET {"what": "stats"}` request
 
 <img src="images/dfc-get-stats.png" alt="DFC statistics" width="440">
 
+More usage examples can be found in the [the source](dfc/regression_test.go).
+
+### Example: listing local and Cloud buckets
+
+To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
+
+```
+$ curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size, checksum", "prefix": "smoke/"}' http://192.168.176.128:8080/v1/files/myBucket
+```
+
+This request will produce an output that (in part) may look as follows:
+
+<img src="images/dfc-ls-subdir.png" alt="DFC list directory" width="440">
+
+For many more examples, please refer to the dfc/*_test.go files in the repository.
+
 ## Cache Rebalancing
 
 DFC rebalances its cached content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.

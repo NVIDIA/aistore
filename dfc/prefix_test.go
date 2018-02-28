@@ -26,6 +26,25 @@ func init() {
 	flag.StringVar(&prefix, "prefix", "", "Object name prefix")
 }
 
+// if the prefix flag is set via command line the test looks only for the prefix
+// and checks if the number of items equals the number of files with
+// the names starting with the prefix;
+// otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
+func Test_prefix(t *testing.T) {
+	flag.Parse()
+	fmt.Printf("Looking for files with prefix [%s]\n", prefix)
+
+	if err := dfc.CreateDir(fmt.Sprintf("%s/%s", baseDir, prefixDir)); err != nil {
+		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, prefixDir, err)
+	}
+
+	prefixFileNumber = numfiles
+
+	prefixCreateFiles(t)
+	prefixLookup(t)
+	prefixCleanup(t)
+}
+
 func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir string) int {
 	numFiles := 0
 	for _, fileName := range fileNames {
@@ -36,7 +55,6 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir st
 			numFiles++
 		}
 	}
-
 	return numFiles
 }
 
@@ -156,25 +174,4 @@ func prefixCleanup(t *testing.T) {
 		t.Fail()
 	default:
 	}
-}
-
-// if prefix flag is set via command line then the test looks only for the prefix
-// and checks if the number of items equals to the real number of file which
-// name starts with the prefix
-// if prefix flag is omiited or empty then the test creates files and runs the
-// search from 'a*' through 'z*'. Letters that retun 0 number of files are not
-// displayed in the log
-func Test_prefix(t *testing.T) {
-	flag.Parse()
-	fmt.Printf("Looking for files with prefix [%s]\n", prefix)
-
-	if err := dfc.CreateDir(fmt.Sprintf("%s/%s", baseDir, prefixDir)); err != nil {
-		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, prefixDir, err)
-	}
-
-	prefixFileNumber = numfiles
-
-	prefixCreateFiles(t)
-	prefixLookup(t)
-	prefixCleanup(t)
 }
