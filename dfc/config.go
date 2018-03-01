@@ -38,6 +38,7 @@ type dfconfig struct {
 	FSpaths          map[string]string `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	NoXattrs         bool              `json:"no_xattrs"`
+	H2c              bool              `json:"h2c"`
 }
 
 const (

@@ -134,6 +134,7 @@ func (t *targetrunner) run() error {
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", t.filehdlr)
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, t.daemonhdlr)
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", t.daemonhdlr) // FIXME
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Rpush+"/", t.pushhdlr)
 	t.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
@@ -270,6 +271,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	defer file.Close()
 	if !coldget {
 		md5binary, errstr := Getxattr(fqn, HashAttr)
@@ -330,6 +332,54 @@ func (t *targetrunner) getchecklocal(w http.ResponseWriter, r *http.Request, buc
 		size = finfo.Size()
 	}
 	return
+}
+
+// "/"+Rversion+"/"+Rpush+"/"+bucket
+func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, "push"); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+
+	if strings.Contains(bucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		t.invalmsghdlr(w, r, s)
+		t.statsif.add("numerr", 1)
+		return
+	}
+
+	if pusher, ok := w.(http.Pusher); ok {
+		objnamebytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s := fmt.Sprintf("Could not read Request Body: %v", err)
+			t.invalmsghdlr(w, r, s)
+			t.statsif.add("numerr", 1)
+			return
+		}
+
+		objnames := make([]string, 0)
+		err = json.Unmarshal(objnamebytes, &objnames)
+		if err != nil {
+			s := fmt.Sprintf("Could not unmarshal objnames: %v", err)
+			t.invalmsghdlr(w, r, s)
+			t.statsif.add("numerr", 1)
+			return
+		}
+
+		for _, objname := range objnames {
+			err := pusher.Push("/v1/files/"+bucket+"/"+objname, nil)
+			if err != nil {
+				t.invalmsghdlr(w, r, "Error Pushing "+"/v1/files/"+bucket+"/"+objname+": "+err.Error())
+				return
+			}
+		}
+	} else {
+		t.invalmsghdlr(w, r, "Pusher Unavailable - could not push files.")
+		return
+	}
+
+	w.Write([]byte("Pushed Object List "))
 }
 
 func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {

@@ -1,0 +1,2 @@
+#!/bin/bash
+curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://$1/v1/files/$2

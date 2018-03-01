@@ -107,6 +107,7 @@ AWSENVFILE="aws.env"
 LOWWATERMARK=75
 HIGHWATERMARK=90
 NOXATTRS=false
+H2C=false
 
 
 
@@ -179,7 +180,8 @@ cat > $CONFFILE <<EOL
 			"/zpools/vol1/a/b/c":	"",
 			"/zpools/vol2/m/n/p":	""
 		},
-		"no_xattrs":			${NOXATTRS}
+		"no_xattrs":			${NOXATTRS},
+        "h2c":                  ${H2C}
   }
 EOL
 

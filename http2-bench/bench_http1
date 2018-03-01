@@ -1,0 +1,14 @@
+#!/bin/bash
+U=$1
+B=$2
+N=$3
+C=$4
+
+uris=""
+prefix="http://$U/v1/files/$B/__bench/l"
+suffix=" "
+for i in `seq $N`; do 
+    uris=$uris$prefix$i$suffix; 
+done;
+
+h2load -n $N -c $C -p http/1.1 --header=':method:GET' $uris

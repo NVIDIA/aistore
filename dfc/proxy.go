@@ -271,7 +271,6 @@ func (p *proxyrunner) httpfilputdelete(w http.ResponseWriter, r *http.Request) {
 		p.statsif.add("numput", 1)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
-	return
 }
 
 // { action } "/"+Rversion+"/"+Rfiles + "/" + localbucket

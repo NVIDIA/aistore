@@ -42,6 +42,7 @@ HIGHWATERMARK=90
 NOXATTRS=false
 LRUENABLED=true
 VALIDATECOLDGET=true
+H2C=false
 
 PROXYPORT=$(expr $PORT + 1)
 if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
@@ -151,7 +152,8 @@ do
 		"/tmp/dfc":	"",
 		"/disk2/dfc":	""
 	},
-	"no_xattrs":			${NOXATTRS}
+	"no_xattrs":			${NOXATTRS},
+    "h2c": ${H2C}
 }
 EOL
 done

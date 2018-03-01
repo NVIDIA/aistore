@@ -21,6 +21,7 @@ import (
 
 	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
+	"github.com/hkwi/h2c"
 )
 
 const (
@@ -118,9 +119,14 @@ func (r *httprunner) run() error {
 	// a wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	r.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
+	var handler http.Handler
+	handler = r.mux
+	if ctx.config.H2c {
+		handler = h2c.Server{Handler: handler}
+	}
 
 	portstring := ":" + ctx.config.Listen.Port
-	r.h = &http.Server{Addr: portstring, Handler: r.mux, ErrorLog: r.glogger}
+	r.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: r.glogger}
 	if err := r.h.ListenAndServe(); err != nil {
 		if err != http.ErrServerClosed {
 			glog.Errorf("Terminated %s with err: %v", r.name, err)

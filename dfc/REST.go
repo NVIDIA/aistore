@@ -110,4 +110,5 @@ const (
 	Rfrom     = "from_id"
 	Rto       = "to_id"
 	Rsynclb   = ActSyncLB
+	Rpush     = "push"
 )

@@ -1,0 +1,17 @@
+#!/bin/bash
+U=$1
+B=$2
+N=$3
+create_files_list() {
+    echo -n "[" > $2;
+    for i in `seq $(($1 - 1))`; do 
+        echo -n "\"__bench/l$i\","; 
+    done >> $2;
+    echo -n "\"__bench/l$1\"" >> $2;
+    echo "]" >> $2;
+}
+
+file=$(mktemp)
+create_files_list $N $file
+nghttp -ns --header=':method:GET' --max-concurrent-streams=$N --data="$file" "http://$U/v1/push/$B"
+rm $file

@@ -317,16 +317,18 @@ cleanup:
 func Benchmark_get(b *testing.B) {
 	var wg = &sync.WaitGroup{}
 	errch := make(chan error, 100)
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-		go get(keyname, wg, errch, clibucket)
-	}
-	wg.Wait()
-	select {
-	case err := <-errch:
-		b.Error(err)
-	default:
+	for j := 0; j < b.N; j++ {
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
+			go get(keyname, wg, errch, clibucket)
+		}
+		wg.Wait()
+		select {
+		case err := <-errch:
+			b.Error(err)
+		default:
+		}
 	}
 }
 
@@ -474,7 +476,7 @@ func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
 		defer wg.Done()
 	}
 	url := RestAPIGet + "/" + bucket + "/" + keyname
-	r, err := http.Get(url)
+	r, err := client.Get(url)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
@@ -493,12 +495,12 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 	)
 	tlogf("LIST %q\n", url)
 	if len(injson) == 0 {
-		r, err = http.Get(url)
+		r, err = client.Get(url)
 	} else {
 		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
-			r, err = http.DefaultClient.Do(request)
+			r, err = client.Do(request)
 		}
 	}
 	if err != nil {
