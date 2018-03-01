@@ -1,3 +1,12 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+//
+// Example run:
+// 	go test -v -run=prefix -args -numfiles=50 -prefix="filter/a"
+//
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc_test
 
 import (
@@ -79,7 +88,7 @@ func prefixCreateFiles(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go put(filePath, clibucket, keyName, wg, errch)
+		go put(filePath, clibucket, keyName, wg, errch, true)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()
@@ -159,7 +168,7 @@ func prefixCleanup(t *testing.T) {
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go del(clibucket, keyName, wg, errch)
+		go del(clibucket, keyName, wg, errch, true)
 
 		if err := os.Remove(fmt.Sprintf("%s/%s", baseDir, keyName)); err != nil {
 			fmt.Printf("Failed to delete file: %v\n", err)

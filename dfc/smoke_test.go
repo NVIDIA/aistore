@@ -65,7 +65,7 @@ func Test_smoke(t *testing.T) {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go del(clibucket, "smoke/"+file, wg, errch)
+		go del(clibucket, "smoke/"+file, wg, errch, false)
 	}
 	wg.Wait()
 	select {
@@ -164,7 +164,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		keyname := files[random.Intn(len(files)-1)]
 		tlogln("GET: " + keyname)
 		getsGroup.Add(1)
-		go get(keyname, getsGroup, errch, bucket)
+		go get(bucket, keyname, getsGroup, errch, false)
 	}
 	getsGroup.Wait()
 }
@@ -221,7 +221,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		put(dir+"/"+fname, bucket, keystr+"/"+fname, nil, errch)
+		put(dir+"/"+fname, bucket, keystr+"/"+fname, nil, errch, false)
 		filesput <- fname
 	}
 }

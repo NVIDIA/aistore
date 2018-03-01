@@ -89,15 +89,15 @@ func Test_download(t *testing.T) {
 	flag.Parse()
 
 	// Declare one channel per worker to pass the keyname
-	keyname_chans := make([]chan string, numworkers)
-	result_chans := make([]chan workres, numworkers)
-	files_created := make(chan string, numfiles)
+	keynameChans := make([]chan string, numworkers)
+	resultChans := make([]chan workres, numworkers)
+	filesCreated := make(chan string, numfiles)
 
 	defer func() {
 		//Delete files created by getAndCopyTmp
-		close(files_created)
+		close(filesCreated)
 		var err error
-		for file := range files_created {
+		for file := range filesCreated {
 			e := os.Remove(LocalDestDir + "/" + file)
 			if e != nil {
 				err = e
@@ -110,10 +110,10 @@ func Test_download(t *testing.T) {
 
 	for i := 0; i < numworkers; i++ {
 		// Allow a bunch of messages at a time to be written asynchronously to a channel
-		keyname_chans[i] = make(chan string, 100)
+		keynameChans[i] = make(chan string, 100)
 
 		// Initialize number of files downloaded
-		result_chans[i] = make(chan workres, 100)
+		resultChans[i] = make(chan workres, 100)
 	}
 
 	// Start the worker pools
@@ -124,25 +124,25 @@ func Test_download(t *testing.T) {
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		// Read the response and write it to a file
-		go getAndCopyTmp(i, keyname_chans[i], t, wg, errch, result_chans[i], clibucket)
+		go getAndCopyTmp(i, keynameChans[i], t, wg, errch, resultChans[i], clibucket)
 	}
 
-	num := getMatchingKeys(match, clibucket, keyname_chans, files_created, t)
+	num := getMatchingKeys(match, clibucket, keynameChans, filesCreated, t)
 
 	t.Logf("Expecting to get %d keys\n", num)
 
 	// Close the channels after the reading is done
 	for i := 0; i < numworkers; i++ {
-		close(keyname_chans[i])
+		close(keynameChans[i])
 	}
 
 	wg.Wait()
 
 	// Now find the total number of files and data downloaed
-	var sumtotfiles int = 0
-	var sumtotbytes int64 = 0
+	var sumtotfiles int
+	var sumtotbytes int64
 	for i := 0; i < numworkers; i++ {
-		res := <-result_chans[i]
+		res := <-resultChans[i]
 		sumtotbytes += res.totbytes
 		sumtotfiles += res.totfiles
 		t.Logf("Worker #%d: %d files, size %.2f MB (%d B)",
@@ -178,29 +178,29 @@ func Test_delete(t *testing.T) {
 	close(filesput)
 
 	// Declare one channel per worker to pass the keyname
-	keyname_chans := make([]chan string, numworkers)
+	keynameChans := make([]chan string, numworkers)
 	for i := 0; i < numworkers; i++ {
 		// Allow a bunch of messages at a time to be written asynchronously to a channel
-		keyname_chans[i] = make(chan string, 100)
+		keynameChans[i] = make(chan string, 100)
 	}
 	// Start the worker pools
 	var wg = &sync.WaitGroup{}
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(keyname_chans[i], t, wg, errch, clibucket)
+		go deleteFiles(keynameChans[i], t, wg, errch, clibucket)
 	}
 
 	num := 0
 	for name := range filesput {
 		os.Remove(DeleteDir + "/" + name)
-		keyname_chans[num%numworkers] <- DeleteStr + "/" + name
-		num += 1
+		keynameChans[num%numworkers] <- DeleteStr + "/" + name
+		num++
 	}
 
 	// Close the channels after the reading is done
 	for i := 0; i < numworkers; i++ {
-		close(keyname_chans[i])
+		close(keynameChans[i])
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
@@ -307,7 +307,7 @@ cleanup:
 	for _, fn := range fileslist {
 		_ = os.Remove(LocalSrcDir + "/" + fn)
 		wg.Add(1)
-		go del(bucket, fn, wg, errch)
+		go del(bucket, fn, wg, errch, false)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
@@ -321,7 +321,7 @@ func Benchmark_get(b *testing.B) {
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
 			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-			go get(keyname, wg, errch, clibucket)
+			go get(clibucket, keyname, wg, errch, false)
 		}
 		wg.Wait()
 		select {
@@ -344,16 +344,14 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		url := RestAPIGet + "/" + bucket + "/" + keyname
 		t.Logf("Worker %2d: GET %q", id, url)
 		r, err := http.Get(url)
-		hdhash := r.Header.Get("Content-HASH")
 		if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
 			t.Errorf("Failing test")
 			return
 		}
 		defer func(r *http.Response) {
-			if r != nil {
-				r.Body.Close()
-			}
+			r.Body.Close()
 		}(r)
+		hdhash := r.Header.Get("Content-HASH")
 		// Create a local copy
 		fname := LocalDestDir + "/" + keyname
 		file, err := dfc.Createfile(fname)
@@ -361,6 +359,12 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
 			return
 		}
+		defer func() {
+			if err := file.Close(); err != nil {
+				errstr = fmt.Sprintf("Failed to close file, err: %s", err)
+				t.Errorf("Worker %2d: %s", id, errstr)
+			}
+		}()
 		config := getConfig(RestAPIDaemonPath, client, t)
 		cksumconfig := config["cksum_config"].(map[string]interface{})
 		bcoldget := cksumconfig["validate_cold_get"].(bool)
@@ -392,10 +396,8 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			}
 
 		}
-		r.Body.Close()
-		res.totfiles += 1
+		res.totfiles++
 		res.totbytes += written
-		file.Close()
 	}
 	// Send information back
 	resch <- res
@@ -407,12 +409,12 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go del(bucket, keyname, dwg, errch)
+		go del(bucket, keyname, dwg, errch, false)
 	}
 	dwg.Wait()
 }
 
-func getMatchingKeys(regexmatch, bucket string, keyname_chans []chan string, output_chan chan string, t *testing.T) int {
+func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
 	// list the bucket
 	var msg = &dfc.GetMsg{}
 	jsbytes, err := json.Marshal(msg)
@@ -430,15 +432,15 @@ func getMatchingKeys(regexmatch, bucket string, keyname_chans []chan string, out
 	}
 	// match
 	num := 0
-	numchans := len(keyname_chans)
+	numchans := len(keynameChans)
 	for _, entry := range reslist.Entries {
 		name := entry.Name
 		if !re.MatchString(name) {
 			continue
 		}
-		keyname_chans[num%numchans] <- name
-		if output_chan != nil {
-			output_chan <- name
+		keynameChans[num%numchans] <- name
+		if outputChan != nil {
+			outputChan <- name
 		}
 		if num++; num >= numfiles {
 			break
@@ -471,12 +473,15 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 	return false
 }
 
-func get(keyname string, wg *sync.WaitGroup, errch chan error, bucket string) {
+func get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	url := RestAPIGet + "/" + bucket + "/" + keyname
-	r, err := client.Get(url)
+	if !silent {
+		tlogf("GET: object %s\n", keyname)
+	}
+	r, err := http.Get(url)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
@@ -533,12 +538,14 @@ func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 	return reslist
 }
 
-func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
+func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-	tlogf("PUT: object %s fname %s\n", keyname, fname)
+	if !silent {
+		tlogf("PUT: object %s fname %s\n", keyname, fname)
+	}
 	file, err := os.Open(fname)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
@@ -616,12 +623,14 @@ func discardResponse(r *http.Response, err error, src string) error {
 	return nil
 }
 
-func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error) {
+func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-	tlogf("DEL: %s\n", keyname)
+	if !silent {
+		tlogf("DEL: %s\n", keyname)
+	}
 	req, err := http.NewRequest(http.MethodDelete, proxyurl, nil)
 	if err != nil {
 		if errch != nil {
@@ -644,7 +653,7 @@ func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go get(fileslist[i], getsGroup, errch, bucket)
+			go get(bucket, fileslist[i], getsGroup, errch, false)
 		}
 	}
 	getsGroup.Wait()

@@ -123,7 +123,7 @@ func regressionBucket(client *http.Client, t *testing.T, bucket string) {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go del(bucket, "smoke/"+fname, wg, errch)
+		go del(bucket, "smoke/"+fname, wg, errch, false)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -426,7 +426,7 @@ func regressionRebalance(t *testing.T) {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go del(clibucket, "smoke/"+fname, wg, errch)
+		go del(clibucket, "smoke/"+fname, wg, errch, false)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -456,7 +456,7 @@ func regressionRename(t *testing.T) {
 		wg := &sync.WaitGroup{}
 		for _, fname := range bnewnames {
 			wg.Add(1)
-			go del(RenameLocalBucketName, RenameStr+"/"+fname, wg, errch)
+			go del(RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, false)
 		}
 		for _, fname := range basenames {
 			err = os.Remove(RenameDir + "/" + fname)
@@ -509,7 +509,7 @@ func regressionRename(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
-		get(RenameStr+"/"+fname, nil, errch, RenameLocalBucketName)
+		get(RenameLocalBucketName, RenameStr+"/"+fname, nil, errch, false)
 	}
 	selectErr(errch, "get", t, false)
 }

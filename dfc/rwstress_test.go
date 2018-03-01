@@ -1,10 +1,10 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 //
 // Example run:
-// 	go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel
+// 	go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel -numops=5
 //
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc_test
@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,29 +32,35 @@ const (
 	getSleep = 5
 	delSleep = 10
 
-	FileCreated = true
-	FileExists  = true
-	FileDeleted = false
-	RunNormal   = false
-	RunCleanUp  = true
+	rwFileCreated = true
+	rwFileExists  = true
+	rwFileDeleted = false
+	rwRunNormal   = false
+	rwRunCleanUp  = true
 )
 
 type fileLock struct {
 	locked bool
 	exists bool
 }
+type fileLocks struct {
+	mtx   sync.Mutex
+	files []fileLock
+}
 
 var (
 	cycles  int
 	skipdel bool
 
-	rwstressMtx sync.Mutex
-	fileLocks   []fileLock
-	fileNames   []string
-	buf         []byte
+	fileNames []string
+	buf       []byte
+	filelock  fileLocks
 
-	numLoops int
-	numFiles int
+	numLoops   int
+	numFiles   int
+	putCounter int64
+	getCounter int64
+	delCounter int64
 )
 
 // default number of files is 100, default number of loops to write files is 15
@@ -64,15 +71,15 @@ func init() {
 }
 
 func tryLockFile(idx int) bool {
-	rwstressMtx.Lock()
-	defer rwstressMtx.Unlock()
+	filelock.mtx.Lock()
+	defer filelock.mtx.Unlock()
 
-	info := fileLocks[idx]
+	info := filelock.files[idx]
 	if info.locked {
 		return false
 	}
 
-	fileLocks[idx].locked = true
+	filelock.files[idx].locked = true
 	return true
 }
 
@@ -80,12 +87,12 @@ func tryLockFile(idx int) bool {
 // found it returns the id of the file and true. Returns 0 and false otherwise.
 // idx is the preferred file id - a starting point to look for a file
 func tryLockNextAvailFile(idx int) (int, bool) {
-	rwstressMtx.Lock()
-	defer rwstressMtx.Unlock()
+	filelock.mtx.Lock()
+	defer filelock.mtx.Unlock()
 
-	info := fileLocks[idx]
+	info := filelock.files[idx]
 	if !info.locked && info.exists {
-		fileLocks[idx].locked = true
+		filelock.files[idx].locked = true
 		return idx, true
 	}
 
@@ -96,9 +103,9 @@ func tryLockNextAvailFile(idx int) (int, bool) {
 			continue
 		}
 
-		info = fileLocks[nextIdx]
+		info = filelock.files[nextIdx]
 		if !info.locked && info.exists {
-			fileLocks[nextIdx].locked = true
+			filelock.files[nextIdx].locked = true
 			return nextIdx, true
 		}
 
@@ -108,14 +115,14 @@ func tryLockNextAvailFile(idx int) (int, bool) {
 	return 0, false
 }
 
-// tryUnlockFile unlocks the file and marks if the file exists or not
-func tryUnlockFile(idx int, fileExists bool) bool {
-	rwstressMtx.Lock()
-	defer rwstressMtx.Unlock()
+// unlockFile unlocks the file and marks if the file exists or not
+func unlockFile(idx int, fileExists bool) {
+	filelock.mtx.Lock()
+	defer filelock.mtx.Unlock()
 
-	fileLocks[idx].locked = false
-	fileLocks[idx].exists = fileExists
-	return true
+	filelock.files[idx].locked = false
+	filelock.files[idx].exists = fileExists
+	return
 }
 
 // generates a list of random file names and a buffer to keep random data for filling up files
@@ -131,17 +138,30 @@ func generateRandomData(t *testing.T, seed int64, fileCount int) {
 	buf = make([]byte, blocksize)
 }
 
+// rwCanRunAsync limits the number of extra goroutines simultaneously
+// running. '+1' is used to take into account the main thread, so if numops
+// equals 1 then all operations run one by one non-concurrently
+func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
+	return currAsyncOps+1 < int64(maxAsycOps)
+}
+
 func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, buf []byte) {
 	errch := make(chan error, 10)
 	fileCount := len(fileNames)
-	var putMissed, totalOps int
+	var totalOps int
 
 	src := rand.NewSource(time.Now().UTC().UnixNano())
 	random := rand.New(src)
+	var wg = &sync.WaitGroup{}
+
+	var prc int
+	fmt.Printf("Running stress test...0%%")
+	totalCount := fileCount * numLoops
+	filesPut := 0
 
 	for i := 0; i < numLoops; i++ {
-		for i := 0; i < fileCount; i++ {
-			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[i])
+		for idx := 0; idx < fileCount; idx++ {
+			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			fname := fmt.Sprintf("%s/%s", baseDir, keyname)
 
 			if _, err := writeRandomData(fname, buf, int(fileSize), random); err != nil {
@@ -152,12 +172,29 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				}
 				return
 			}
-			if ok := tryLockFile(i); ok {
-				put(fname, clibucket, keyname, nil, errch)
-				tryUnlockFile(i, FileCreated)
+			if ok := tryLockFile(idx); ok {
+				n := atomic.LoadInt64(&putCounter)
+				if rwCanRunAsync(n, numops) {
+					atomic.AddInt64(&putCounter, 1)
+					wg.Add(1)
+					localIdx := idx
+					go func() {
+						put(fname, clibucket, keyname, wg, errch, true)
+						unlockFile(localIdx, rwFileCreated)
+						atomic.AddInt64(&putCounter, -1)
+					}()
+				} else {
+					put(fname, clibucket, keyname, nil, errch, true)
+					unlockFile(idx, rwFileCreated)
+				}
 				totalOps++
-			} else {
-				putMissed++
+			}
+
+			filesPut++
+			newPrc := 100 * filesPut / totalCount
+			if prc != newPrc {
+				fmt.Printf("\rRunning stress test...%d%%", prc)
+				prc = newPrc
 			}
 
 			select {
@@ -168,6 +205,8 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			}
 		}
 	}
+	wg.Wait()
+	fmt.Printf("\rRunning stress test...100%%\n")
 
 	// emit signals for DEL and GET loops
 	doneCh <- 1
@@ -179,19 +218,32 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		taskGrp.Done()
 	}
 
-	fmt.Fprintf(os.Stdout, "PUT total %d [missed PUT %d]\n", totalOps, putMissed)
+	fmt.Printf("PUT %6d files\n", totalOps)
 }
 
 func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
 	done := false
-	var delMissed, totalOps, currIdx int
+	var totalOps, currIdx int
 	errch := make(chan error, 10)
+	var wg = &sync.WaitGroup{}
 
 	for !done {
 		if idx, ok := tryLockNextAvailFile(currIdx); ok {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-			del(clibucket, keyname, nil, errch)
-			tryUnlockFile(idx, FileDeleted)
+			n := atomic.LoadInt64(&delCounter)
+			if rwCanRunAsync(n, numops) {
+				atomic.AddInt64(&delCounter, 1)
+				wg.Add(1)
+				localIdx := idx
+				go func() {
+					del(clibucket, keyname, wg, errch, true)
+					unlockFile(localIdx, rwFileDeleted)
+					atomic.AddInt64(&delCounter, -1)
+				}()
+			} else {
+				del(clibucket, keyname, nil, errch, true)
+				unlockFile(idx, rwFileDeleted)
+			}
 
 			currIdx = idx + 1
 			if currIdx >= len(fileNames) {
@@ -203,7 +255,6 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				fmt.Printf("Cleanup finished\n")
 				break
 			}
-			delMissed++
 			time.Sleep(delSleep * time.Millisecond)
 		}
 
@@ -216,28 +267,42 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		default:
 		}
 	}
+	wg.Wait()
 
 	if taskGrp != nil {
 		taskGrp.Done()
 	}
 
 	if doCleanUp {
-		fmt.Fprintf(os.Stdout, "DEL cleaned up %d files\n", totalOps)
+		fmt.Printf("DEL cleaned up %d files\n", totalOps)
 	} else {
-		fmt.Fprintf(os.Stdout, "DEL %d files [missed DEL %d]\n", totalOps, delMissed)
+		fmt.Printf("DEL %6d files\n", totalOps)
 	}
 }
 
 func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	done := false
-	var currIdx, getMissed, totalOps int
+	var currIdx, totalOps int
 	errch := make(chan error, 10)
+	var wg = &sync.WaitGroup{}
 
 	for !done {
 		if idx, ok := tryLockNextAvailFile(currIdx); ok {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-			get(keyname, nil, errch, clibucket)
-			tryUnlockFile(idx, FileExists)
+			n := atomic.LoadInt64(&getCounter)
+			if rwCanRunAsync(n, numops) {
+				atomic.AddInt64(&getCounter, 1)
+				wg.Add(1)
+				localIdx := idx
+				go func() {
+					get(clibucket, keyname, wg, errch, true)
+					unlockFile(localIdx, rwFileExists)
+					atomic.AddInt64(&getCounter, -1)
+				}()
+			} else {
+				get(clibucket, keyname, nil, errch, true)
+				unlockFile(idx, rwFileExists)
+			}
 
 			currIdx = idx + 1
 			if currIdx >= len(fileNames) {
@@ -245,7 +310,6 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			}
 			totalOps++
 		} else {
-			getMissed++
 			time.Sleep(getSleep * time.Millisecond)
 		}
 
@@ -255,12 +319,13 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		default:
 		}
 	}
+	wg.Wait()
 
 	if taskGrp != nil {
 		taskGrp.Done()
 	}
 
-	fmt.Fprintf(os.Stdout, "GET %d files [missed GET %d]\n", totalOps, getMissed)
+	fmt.Printf("GET %6d files\n", totalOps)
 }
 
 func rwstress(t *testing.T) {
@@ -268,10 +333,10 @@ func rwstress(t *testing.T) {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 
-	fileLocks = make([]fileLock, numFiles, numFiles)
+	filelock.files = make([]fileLock, numFiles, numFiles)
 
 	generateRandomData(t, baseseed+10000, numFiles)
-	fmt.Printf("PUT files: %v x %v times\n", len(fileNames), numLoops)
+	fmt.Printf("PUT %v files x %v times\n", len(fileNames), numLoops)
 
 	var wg = &sync.WaitGroup{}
 
@@ -282,17 +347,17 @@ func rwstress(t *testing.T) {
 	go rwGetLoop(t, fileNames, wg, doneCh)
 	if !skipdel {
 		wg.Add(1)
-		go rwDelLoop(t, fileNames, wg, doneCh, RunNormal)
+		go rwDelLoop(t, fileNames, wg, doneCh, rwRunNormal)
 	}
 	wg.Wait()
 
 	fmt.Fprintf(os.Stdout, "Cleaning up...\n")
-	rwDelLoop(t, fileNames, nil, doneCh, RunCleanUp)
+	rwDelLoop(t, fileNames, nil, doneCh, rwRunCleanUp)
 
-	rwstress_cleanup(t)
+	rwstressCleanup(t)
 }
 
-func rwstress_cleanup(t *testing.T) {
+func rwstressCleanup(t *testing.T) {
 	fileDir := fmt.Sprintf("%s/%s", baseDir, rwdir)
 
 	for _, fileName := range fileNames {
