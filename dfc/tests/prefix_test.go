@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 const (
@@ -77,18 +78,18 @@ func prefixCreateFiles(t *testing.T) {
 	var wg = &sync.WaitGroup{}
 
 	for i := 0; i < prefixFileNumber; i++ {
-		fileName := fastRandomFilename(random)
+		fileName := client.FastRandomFilename(random, fnlen)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		filePath := fmt.Sprintf("%s/%s", baseDir, keyName)
 		tlogf("Creating file at: %s\n", filePath)
-		if _, err := writeRandomData(filePath, buf, int(fileSize), random); err != nil {
+		if _, err := client.WriteRandomData(filePath, buf, int(fileSize), blocksize, random); err != nil {
 			fmt.Fprintf(os.Stdout, "File create fail: %v\n", err)
 			t.Error(err)
 			return
 		}
 
 		wg.Add(1)
-		go put(filePath, clibucket, keyName, wg, errch, true)
+		go client.Put(filePath, clibucket, keyName, wg, errch, true)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()
@@ -110,7 +111,11 @@ func prefixLookupOne(t *testing.T) {
 	}
 
 	numFiles := 0
-	objList := listbucket(t, clibucket, jsbytes)
+	objList, err := client.ListBucket(clibucket, jsbytes)
+	if testfail(err, "List files with prefix failed", nil, nil, t) {
+		return
+	}
+
 	for _, entry := range objList.Entries {
 		tlogf("Found object: %s\n", entry.Name)
 		numFiles++
@@ -138,7 +143,11 @@ func prefixLookupDefault(t *testing.T) {
 			return
 		}
 
-		objList := listbucket(t, clibucket, jsbytes)
+		objList, err := client.ListBucket(clibucket, jsbytes)
+		if testfail(err, "List files with prefix failed", nil, nil, t) {
+			return
+		}
+
 		numFiles := len(objList.Entries)
 		realNumFiles := numberOfFilesWithPrefix(fileNames, key, prefix)
 
@@ -168,7 +177,7 @@ func prefixCleanup(t *testing.T) {
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go del(clibucket, keyName, wg, errch, true)
+		go client.Del(clibucket, keyName, wg, errch, true)
 
 		if err := os.Remove(fmt.Sprintf("%s/%s", baseDir, keyName)); err != nil {
 			fmt.Printf("Failed to delete file: %v\n", err)

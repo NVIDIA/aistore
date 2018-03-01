@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 const (
@@ -65,7 +65,7 @@ func Test_smoke(t *testing.T) {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go del(clibucket, "smoke/"+file, wg, errch, false)
+		go client.Del(clibucket, "smoke/"+file, wg, errch, false)
 	}
 	wg.Wait()
 	select {
@@ -105,31 +105,6 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	}
 }
 
-// fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
-const (
-	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
-
-func fastRandomFilename(src *rand.Rand) string {
-	b := make([]byte, fnlen)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := fnlen-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-	return string(b)
-}
-
 func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
@@ -144,7 +119,11 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		return
 	}
 	for i := 0; i < numGets; i++ {
-		items := listbucket(t, bucket, jsbytes)
+		items, cerr := client.ListBucket(bucket, jsbytes)
+		if testfail(cerr, "List files with prefix failed", nil, errch, t) {
+			return
+		}
+
 		if items == nil {
 			errch <- fmt.Errorf("Nil listbucket response")
 			return
@@ -164,35 +143,9 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		keyname := files[random.Intn(len(files)-1)]
 		tlogln("GET: " + keyname)
 		getsGroup.Add(1)
-		go get(bucket, keyname, getsGroup, errch, false)
+		go client.Get(bucket, keyname, getsGroup, errch, false)
 	}
 	getsGroup.Wait()
-}
-
-func writeRandomData(fname string, bytes []byte, filesize int, random *rand.Rand) (int, error) {
-	f, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
-	if err != nil {
-		return 0, err
-	}
-	nblocks := filesize / blocksize
-	tot := 0
-	var r int
-	for i := 0; i <= nblocks; i++ {
-		if blocksize < filesize-tot {
-			r = blocksize
-		} else {
-			r = filesize - tot
-		}
-		random.Read(bytes[0:r])
-		n, err := f.Write(bytes[0:r])
-		if err != nil {
-			return tot, err
-		} else if n < r {
-			return tot, io.ErrShortWrite
-		}
-		tot += n
-	}
-	return tot, f.Close()
 }
 
 func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
@@ -204,12 +157,12 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 	random := rand.New(src)
 	buffer := make([]byte, blocksize)
 	for i := 0; i < numPuts; i++ {
-		fname := fastRandomFilename(random)
+		fname := client.FastRandomFilename(random, fnlen)
 		size := fileSize
 		if size == 0 {
 			size = uint64(random.Intn(1024)+1) * 1024
 		}
-		if _, err := writeRandomData(dir+"/"+fname, buffer, int(size), random); err != nil {
+		if _, err := client.WriteRandomData(dir+"/"+fname, buffer, int(size), blocksize, random); err != nil {
 			t.Error(err)
 			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n",
 				dir+"/"+fname, err)
@@ -221,7 +174,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		put(dir+"/"+fname, bucket, keystr+"/"+fname, nil, errch, false)
+		client.Put(dir+"/"+fname, bucket, keystr+"/"+fname, nil, errch, false)
 		filesput <- fname
 	}
 }

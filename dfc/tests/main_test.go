@@ -6,16 +6,12 @@
 package dfc_test
 
 import (
-	"bufio"
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
@@ -26,6 +22,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 // commandline examples:
@@ -220,7 +217,7 @@ func Test_list(t *testing.T) {
 	var copy bool
 	// copy = true
 
-	reslist := listbucket(t, bucket, jsbytes)
+	reslist := testListBucket(t, bucket, jsbytes)
 	if reslist == nil {
 		return
 	}
@@ -266,7 +263,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(RestAPIDaemonPath, client, t)
+	config := getConfig(RestAPIDaemonPath, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
@@ -279,7 +276,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_cold_get", strconv.FormatBool(false), RestAPIClusterPath, client, t)
+		setConfig("validate_cold_get", strconv.FormatBool(false), RestAPIClusterPath, httpclient, t)
 	}
 	start := time.Now()
 	getfromfilelist(t, bucket, errch, fileslist)
@@ -292,7 +289,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_cold_get", strconv.FormatBool(true), RestAPIClusterPath, client, t)
+	setConfig("validate_cold_get", strconv.FormatBool(true), RestAPIClusterPath, httpclient, t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -303,11 +300,11 @@ func Test_coldgetmd5(t *testing.T) {
 	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
 cleanup:
-	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), RestAPIClusterPath, client, t)
+	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), RestAPIClusterPath, httpclient, t)
 	for _, fn := range fileslist {
 		_ = os.Remove(LocalSrcDir + "/" + fn)
 		wg.Add(1)
-		go del(bucket, fn, wg, errch, false)
+		go client.Del(bucket, fn, wg, errch, false)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
@@ -321,7 +318,7 @@ func Benchmark_get(b *testing.B) {
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
 			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-			go get(clibucket, keyname, wg, errch, false)
+			go client.Get(clibucket, keyname, wg, errch, false)
 		}
 		wg.Wait()
 		select {
@@ -365,7 +362,7 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 				t.Errorf("Worker %2d: %s", id, errstr)
 			}
 		}()
-		config := getConfig(RestAPIDaemonPath, client, t)
+		config := getConfig(RestAPIDaemonPath, httpclient, t)
 		cksumconfig := config["cksum_config"].(map[string]interface{})
 		bcoldget := cksumconfig["validate_cold_get"].(bool)
 		if bcoldget {
@@ -409,7 +406,7 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go del(bucket, keyname, dwg, errch, false)
+		go client.Del(bucket, keyname, dwg, errch, false)
 	}
 	dwg.Wait()
 }
@@ -422,7 +419,7 @@ func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outp
 		t.Errorf("Unexpected json-marshal failure, err: %v", err)
 		return 0
 	}
-	reslist := listbucket(t, bucket, jsbytes)
+	reslist := testListBucket(t, bucket, jsbytes)
 	if reslist == nil {
 		return 0
 	}
@@ -473,126 +470,17 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 	return false
 }
 
-func get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) {
-	if wg != nil {
-		defer wg.Done()
-	}
-	url := RestAPIGet + "/" + bucket + "/" + keyname
-	if !silent {
-		tlogf("GET: object %s\n", keyname)
-	}
-	r, err := http.Get(url)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	err = discardResponse(r, err, fmt.Sprintf("object %s from bucket %s", keyname, bucket))
-	emitError(r, err, errch)
-}
-
-func listbucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
+func testListBucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 	var (
-		url     = RestAPIGet + "/" + bucket
-		err     error
-		request *http.Request
-		r       *http.Response
+		url = RestAPIGet + "/" + bucket
 	)
 	tlogf("LIST %q\n", url)
-	if len(injson) == 0 {
-		r, err = client.Get(url)
-	} else {
-		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
-		if err == nil {
-			request.Header.Set("Content-Type", "application/json")
-			r, err = client.Do(request)
-		}
-	}
-	if err != nil {
-		t.Errorf("Failed to GET %s, err: %v", url, err)
+	reslist, err := client.ListBucket(bucket, injson)
+	if testfail(err, fmt.Sprintf("List bucket %s failed", bucket), nil, nil, t) {
 		return nil
 	}
-	if testfail(err, fmt.Sprintf("list bucket %s", bucket), r, nil, t) {
-		return nil
-	}
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	var reslist = &dfc.BucketList{}
-	reslist.Entries = make([]*dfc.BucketEntry, 0, 1000)
-	b, err := ioutil.ReadAll(r.Body)
-	r.Body.Close()
 
-	if err == nil {
-		err = json.Unmarshal(b, reslist)
-		if err != nil {
-			t.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
-			return nil
-		}
-	} else {
-		t.Errorf("Failed to read json, err: %v", err)
-		return nil
-	}
 	return reslist
-}
-
-func put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) {
-	if wg != nil {
-		defer wg.Done()
-	}
-	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-	if !silent {
-		tlogf("PUT: object %s fname %s\n", keyname, fname)
-	}
-	file, err := os.Open(fname)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
-		}
-		return
-	}
-	defer file.Close()
-	req, err := http.NewRequest(http.MethodPut, proxyurl, file)
-	if err != nil {
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
-		}
-		return
-	}
-	// The HTTP package doesn't automatically set this for files, so it has to be done manually
-	// If it wasn't set, we would need to deal with the redirect manually.
-	req.GetBody = func() (io.ReadCloser, error) {
-		return os.Open(fname)
-	}
-
-	md5 := md5.New()
-	// FIXME: the client must compute xxhash not md5
-	md5hash, errstr := dfc.ComputeFileMD5(file, nil, md5)
-	if errstr != "" {
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to compute md5 for file %s, err: %s", fname, errstr)
-		}
-		return
-	}
-	req.Header.Set("Content-HASH", md5hash)
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to seek file %s, err: %v", fname, err)
-		}
-		return
-	}
-	r, err := client.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	err = discardResponse(r, err, "put")
-	emitError(r, err, errch)
 }
 
 func emitError(r *http.Response, err error, errch chan error) {
@@ -608,52 +496,12 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func discardResponse(r *http.Response, err error, src string) error {
-	if err == nil {
-		if r.StatusCode >= http.StatusBadRequest {
-			return fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
-		}
-		bufreader := bufio.NewReader(r.Body)
-		if _, err = dfc.ReadToNull(bufreader); err != nil {
-			return fmt.Errorf("Failed to read http response, err: %v", err)
-		}
-	} else {
-		return fmt.Errorf("Failed to get response from %s, err %v", src, err)
-	}
-	return nil
-}
-
-func del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) {
-	if wg != nil {
-		defer wg.Done()
-	}
-	proxyurl := RestAPIProxyPut + "/" + bucket + "/" + keyname
-	if !silent {
-		tlogf("DEL: %s\n", keyname)
-	}
-	req, err := http.NewRequest(http.MethodDelete, proxyurl, nil)
-	if err != nil {
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
-		}
-		return
-	}
-	r, err := client.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	err = discardResponse(r, err, "delete")
-	emitError(r, err, errch)
-}
-
 func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {
 	getsGroup := &sync.WaitGroup{}
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go get(bucket, fileslist[i], getsGroup, errch, false)
+			go client.Get(bucket, fileslist[i], getsGroup, errch, false)
 		}
 	}
 	getsGroup.Wait()
@@ -661,29 +509,10 @@ func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []
 
 func evictobjects(t *testing.T, fileslist []string) {
 	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
 		bucket = clibucket
 	)
-	EvictMsg := dfc.ActionMsg{Action: dfc.ActEvict}
-	for _, fname := range fileslist {
-		EvictMsg.Name = bucket + "/" + fname
-		injson, err = json.Marshal(EvictMsg)
-		if err != nil {
-			t.Fatalf("Failed to marshal EvictMsg: %v", err)
-		}
-		req, err = http.NewRequest("DELETE", RestAPIProxyDel+"/"+bucket+"/"+fname, bytes.NewBuffer(injson))
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
-		}
-		r, err = client.Do(req)
-		if r != nil {
-			r.Body.Close()
-		}
-		if testfail(err, EvictMsg.Name, r, nil, t) {
-			return
-		}
+	err := client.EvictObjects(bucket, fileslist)
+	if testfail(err, bucket, nil, nil, t) {
+		return
 	}
 }

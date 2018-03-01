@@ -23,7 +23,7 @@ started with DFC takes about 30 seconds and consists in executing the following
 $ go get -u -v github.com/NVIDIA/dfcpub/dfc
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
 $ make deploy
-$ go test -v -run=down -numfiles=2 -bucket=<your bucket name>
+$ go test ./tests -v -run=down -numfiles=2 -bucket=<your bucket name>
 ```
 
 The 1st command will install both the DFC source code and all its dependencies
@@ -35,12 +35,12 @@ Finally, the 4th command executes a smoke test to download 2 (two) files
 from your own named Amazon S3 or Google Cloud Storage bucket. Here's another example:
 
 ```
-$ go test -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS3bucket
+$ go test ./tests -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS3bucket
 ```
 This will download up to 100 objects from the bucket called myS3bucket.
 The names of those objects will match 'a\d+' regex.
 
-For more testing/running command line options, please refer to [the source](dfc/main_test.go).
+For more testing/running command line options, please refer to [the source](dfc/tests/main_test.go).
 
 For other useful commands, see the [Makefile](dfc/Makefile).
 
@@ -73,7 +73,7 @@ $ find /tmp/dfc/ -type f | grep cache
 $ find /tmp/dfc/ -type f | grep log
 ```
 
-Don't forget, though, to run 'make deploy' first. 
+Don't forget, though, to run 'make deploy' first.
 
 To terminate a running DFC service and cleanup local caches, run:
 ```
@@ -150,7 +150,7 @@ This single command causes execution of multiple `GET {"what": "stats"}` request
 
 <img src="images/dfc-get-stats.png" alt="DFC statistics" width="440">
 
-More usage examples can be found in the [the source](dfc/regression_test.go).
+More usage examples can be found in the [the source](dfc/tests/regression_test.go).
 
 ### Example: listing local and Cloud buckets
 
@@ -164,7 +164,7 @@ This request will produce an output that (in part) may look as follows:
 
 <img src="images/dfc-ls-subdir.png" alt="DFC list directory" width="440">
 
-For many more examples, please refer to the dfc/*_test.go files in the repository.
+For many more examples, please refer to the dfc/tests/*_test.go files in the repository.
 
 ## Cache Rebalancing
 

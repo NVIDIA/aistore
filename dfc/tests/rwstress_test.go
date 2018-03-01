@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 const (
@@ -132,7 +133,7 @@ func generateRandomData(t *testing.T, seed int64, fileCount int) {
 	fileNames = make([]string, fileCount)
 
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = fastRandomFilename(random)
+		fileNames[i] = client.FastRandomFilename(random, fnlen)
 	}
 
 	buf = make([]byte, blocksize)
@@ -150,6 +151,10 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	fileCount := len(fileNames)
 	var totalOps int
 
+	if taskGrp != nil {
+		defer taskGrp.Done()
+	}
+
 	src := rand.NewSource(time.Now().UTC().UnixNano())
 	random := rand.New(src)
 	var wg = &sync.WaitGroup{}
@@ -164,7 +169,7 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			fname := fmt.Sprintf("%s/%s", baseDir, keyname)
 
-			if _, err := writeRandomData(fname, buf, int(fileSize), random); err != nil {
+			if _, err := client.WriteRandomData(fname, buf, int(fileSize), blocksize, random); err != nil {
 				fmt.Fprintf(os.Stdout, "PUT write FAIL: %v\n", err)
 				t.Error(err)
 				if errch != nil {
@@ -179,12 +184,12 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						put(fname, clibucket, keyname, wg, errch, true)
+						client.Put(fname, clibucket, keyname, wg, errch, true)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					put(fname, clibucket, keyname, nil, errch, true)
+					client.Put(fname, clibucket, keyname, nil, errch, true)
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
@@ -214,10 +219,6 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		doneCh <- 1
 	}
 
-	if taskGrp != nil {
-		taskGrp.Done()
-	}
-
 	fmt.Printf("PUT %6d files\n", totalOps)
 }
 
@@ -226,6 +227,10 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	var totalOps, currIdx int
 	errch := make(chan error, 10)
 	var wg = &sync.WaitGroup{}
+
+	if taskGrp != nil {
+		defer taskGrp.Done()
+	}
 
 	for !done {
 		if idx, ok := tryLockNextAvailFile(currIdx); ok {
@@ -236,12 +241,12 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					del(clibucket, keyname, wg, errch, true)
+					client.Del(clibucket, keyname, wg, errch, true)
 					unlockFile(localIdx, rwFileDeleted)
 					atomic.AddInt64(&delCounter, -1)
 				}()
 			} else {
-				del(clibucket, keyname, nil, errch, true)
+				client.Del(clibucket, keyname, nil, errch, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 
@@ -269,10 +274,6 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	}
 	wg.Wait()
 
-	if taskGrp != nil {
-		taskGrp.Done()
-	}
-
 	if doCleanUp {
 		fmt.Printf("DEL cleaned up %d files\n", totalOps)
 	} else {
@@ -286,6 +287,10 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	errch := make(chan error, 10)
 	var wg = &sync.WaitGroup{}
 
+	if taskGrp != nil {
+		defer taskGrp.Done()
+	}
+
 	for !done {
 		if idx, ok := tryLockNextAvailFile(currIdx); ok {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
@@ -295,12 +300,12 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					get(clibucket, keyname, wg, errch, true)
+					client.Get(clibucket, keyname, wg, errch, true)
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
 				}()
 			} else {
-				get(clibucket, keyname, nil, errch, true)
+				client.Get(clibucket, keyname, nil, errch, true)
 				unlockFile(idx, rwFileExists)
 			}
 
@@ -320,10 +325,6 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		}
 	}
 	wg.Wait()
-
-	if taskGrp != nil {
-		taskGrp.Done()
-	}
 
 	fmt.Printf("GET %6d files\n", totalOps)
 }
