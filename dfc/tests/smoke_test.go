@@ -18,7 +18,6 @@ const (
 	smokestr        = "smoke"
 	blocksize       = 1048576
 	defaultbaseseed = 1062984096
-	largefilesize   = 16 * 1024 * 1024
 )
 
 var (
@@ -89,7 +88,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			go func(i int) {
-				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput, SmokeDir, smokestr)
+				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput, SmokeDir, smokestr, "", false)
 			}(i)
 			nPut--
 		} else {
@@ -143,13 +142,13 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		keyname := files[random.Intn(len(files)-1)]
 		tlogln("GET: " + keyname)
 		getsGroup.Add(1)
-		go client.Get(bucket, keyname, getsGroup, errch, false)
+		go client.Get(bucket, keyname, getsGroup, errch, false, false)
 	}
 	getsGroup.Wait()
 }
 
 func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
-	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string, dir, keystr string) {
+	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string, dir, keystr, htype string, silent bool) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -174,7 +173,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		client.Put(dir+"/"+fname, bucket, keystr+"/"+fname, nil, errch, false)
+		client.Put(dir+"/"+fname, bucket, keystr+"/"+fname, htype, nil, errch, silent)
 		filesput <- fname
 	}
 }

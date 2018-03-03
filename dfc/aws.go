@@ -23,7 +23,11 @@ import (
 )
 
 const (
-	AWS_MULTI_PART_DELIMITER = "-"
+	AWS_META_DATA_PUT_DFC_HASH_TYPE = "x-amz-meta-dfc-hash-type"
+	AWS_META_DATA_PUT_DFC_HASH      = "x-amz-meta-dfc-hash"
+	AWS_META_DATA_GET_DFC_HASH_TYPE = "X-Amz-Meta-Dfc-Hash-Type"
+	AWS_META_DATA_GET_DFC_HASH      = "X-Amz-Meta-Dfc-Hash"
+	AWS_MULTI_PART_DELIMITER        = "-"
 )
 
 //======
@@ -110,11 +114,11 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
-func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, size int64, errstr string, errcode int) {
-	var omd5 string
+func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int) {
+	var v cksumvalue
 	sess := createsession()
-	s3Svc := s3.New(sess)
-	obj, err := s3Svc.GetObject(&s3.GetObjectInput{
+	svc := s3.New(sess)
+	obj, err := svc.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(objname),
 	})
@@ -124,39 +128,50 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (md5hash string, siz
 		return
 	}
 	defer obj.Body.Close()
-
-	omd5, _ = strconv.Unquote(*obj.ETag)
+	// object may not have dfc metadata.
+	if val, ok := obj.Metadata[AWS_META_DATA_GET_DFC_HASH_TYPE]; ok {
+		v = newcksumvalue(*val, *obj.Metadata[AWS_META_DATA_GET_DFC_HASH])
+	}
+	md5, _ := strconv.Unquote(*obj.ETag)
 	// Check for MultiPart
-	if strings.Contains(omd5, AWS_MULTI_PART_DELIMITER) {
+	if strings.Contains(md5, AWS_MULTI_PART_DELIMITER) {
 		if glog.V(3) {
 			glog.Infof("MultiPart object (bucket %s key %s) download and validation not supported",
 				bucket, objname)
 		}
 		// Ignore ETag
-		omd5 = ""
+		md5 = ""
 	}
-	if md5hash, size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, omd5, obj.Body); errstr != "" {
+	// cloudhobj may be nil for legacy objects.
+	// md5 will be empty for Multipart objects.
+	if nhobj, size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, obj.Body); errstr != "" {
 		return
 	}
-	stats := getstorstats()
-	stats.add("bytesloaded", size)
 	if glog.V(3) {
 		glog.Infof("aws: GET %s (bucket %s)", objname, bucket)
 	}
 	return
-
 }
 
-func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string) (errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksumvalue) (errstr string, errcode int) {
+	var (
+		err         error
+		htype, hval string
+		md          map[string]*string
+	)
+	if ohash != nil {
+		htype, hval = ohash.get()
+		md = make(map[string]*string)
+		md[AWS_META_DATA_PUT_DFC_HASH_TYPE] = aws.String(htype)
+		md[AWS_META_DATA_PUT_DFC_HASH] = aws.String(hval)
+	}
 	sess := createsession()
 	uploader := s3manager.NewUploader(sess)
-	//
-	// FIXME: use uploader.UploadWithContext() for larger files
-	//
-	_, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(objname),
-		Body:   file,
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(objname),
+		Body:     file,
+		Metadata: md,
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)

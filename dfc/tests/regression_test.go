@@ -113,7 +113,7 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
 	)
-	putRandomFiles(0, baseseed+2, uint64(1024), numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr)
+	putRandomFiles(0, baseseed+2, uint64(1024), numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false)
 	close(filesput) // to exit for-range
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
@@ -382,7 +382,7 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 2. put random files => (cluster - 1)
 	//
-	putRandomFiles(0, baseseed, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr)
+	putRandomFiles(0, baseseed, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false)
 	selectErr(errch, "put", t, false)
 
 	//
@@ -476,7 +476,7 @@ func regressionRename(t *testing.T) {
 	if err = dfc.CreateDir(RenameDir); err != nil {
 		t.Errorf("Error creating dir: %v", err)
 	}
-	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr)
+	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {
@@ -510,7 +510,7 @@ func regressionRename(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
-		client.Get(RenameLocalBucketName, RenameStr+"/"+fname, nil, errch, false)
+		client.Get(RenameLocalBucketName, RenameStr+"/"+fname, nil, errch, false, false)
 	}
 	selectErr(errch, "get", t, false)
 }

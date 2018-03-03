@@ -82,7 +82,8 @@ type proxyconfig struct {
 
 type cksumconfig struct {
 	// True enables MD5 validation for COLD GET.
-	ValidateColdGet bool `json:"validate_cold_get"`
+	ValidateColdGet bool   `json:"validate_cold_get"`
+	Checksum        string `json:"checksum"`
 }
 
 // Load and validate daemon's config

@@ -7,6 +7,7 @@ package dfc_test
 
 import (
 	"crypto/md5"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/OneOfOne/xxhash"
 )
 
 // commandline examples:
@@ -41,8 +43,14 @@ const (
 	RestAPIProxyPut = ProxyURL + "/v1/files"  // version = 1, resource = files
 	RestAPIProxyDel = ProxyURL + "/v1/files"  // version = 1, resource = files
 	ColdValidStr    = "coldmd5"
+	ChksumValidStr  = "chksum"
+	AllHashstr      = "all"
+	Xxhashstr       = "xxhash"
+	ColdMD5str      = "coldmd5"
+	Nonestr         = "none"
 	DeleteDir       = "/tmp/dfc/delete"
 	DeleteStr       = "delete"
+	largefilesize   = 16 // in MB
 )
 
 // globals
@@ -51,6 +59,8 @@ var (
 	numfiles   int
 	numworkers int
 	match      string
+	validation string
+	totalio    int64
 )
 
 // worker's result
@@ -80,6 +90,8 @@ func init() {
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")
+	flag.StringVar(&validation, "validation", AllHashstr, "all,xxhash or coldmd5")
+	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
 }
 
 func Test_download(t *testing.T) {
@@ -171,7 +183,7 @@ func Test_delete(t *testing.T) {
 
 	errch := make(chan error, numfiles)
 	filesput := make(chan string, numfiles)
-	putRandomFiles(0, baseseed, 512*1024, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr)
+	putRandomFiles(0, baseseed, 512*1024, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false)
 	close(filesput)
 
 	// Declare one channel per worker to pass the keyname
@@ -256,7 +268,7 @@ func Test_coldgetmd5(t *testing.T) {
 		errch     = make(chan error, 100)
 		wg        = &sync.WaitGroup{}
 		bucket    = clibucket
-		totalsize = (numPuts * largefilesize) / (1024 * 1024)
+		totalsize = numPuts * largefilesize
 	)
 	ldir := LocalSrcDir + "/" + ColdValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
@@ -267,7 +279,7 @@ func Test_coldgetmd5(t *testing.T) {
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
-	putRandomFiles(0, baseseed, uint64(largefilesize), numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr)
+	putRandomFiles(0, baseseed, uint64(largefilesize*1024*1024), numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -279,7 +291,7 @@ func Test_coldgetmd5(t *testing.T) {
 		setConfig("validate_cold_get", strconv.FormatBool(false), RestAPIClusterPath, httpclient, t)
 	}
 	start := time.Now()
-	getfromfilelist(t, bucket, errch, fileslist)
+	getfromfilelist(t, bucket, errch, fileslist, false)
 	curr := time.Now()
 	duration := curr.Sub(start)
 	if t.Failed() {
@@ -294,7 +306,7 @@ func Test_coldgetmd5(t *testing.T) {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, bucket, errch, fileslist)
+	getfromfilelist(t, bucket, errch, fileslist, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
@@ -318,7 +330,7 @@ func Benchmark_get(b *testing.B) {
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
 			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-			go client.Get(clibucket, keyname, wg, errch, false)
+			go client.Get(clibucket, keyname, wg, errch, false, false)
 		}
 		wg.Wait()
 		select {
@@ -331,7 +343,6 @@ func Benchmark_get(b *testing.B) {
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
 	errch chan error, resch chan workres, bucket string) {
-	var md5hash string
 	var written int64
 	var errstr string
 	res := workres{0, 0}
@@ -341,6 +352,8 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		url := RestAPIGet + "/" + bucket + "/" + keyname
 		t.Logf("Worker %2d: GET %q", id, url)
 		r, err := http.Get(url)
+		hdhash := r.Header.Get("Content-HASH")
+		hdhashtype := r.Header.Get("Content-HASH-Type")
 		if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
 			t.Errorf("Failing test")
 			return
@@ -348,7 +361,6 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		defer func(r *http.Response) {
 			r.Body.Close()
 		}(r)
-		hdhash := r.Header.Get("Content-HASH")
 		// Create a local copy
 		fname := LocalDestDir + "/" + keyname
 		file, err := dfc.Createfile(fname)
@@ -362,10 +374,26 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 				t.Errorf("Worker %2d: %s", id, errstr)
 			}
 		}()
-		config := getConfig(RestAPIDaemonPath, httpclient, t)
-		cksumconfig := config["cksum_config"].(map[string]interface{})
-		bcoldget := cksumconfig["validate_cold_get"].(bool)
-		if bcoldget {
+		if hdhashtype == "xxhash" {
+			xx := xxhash.New64()
+			written, errstr = dfc.ReceiveFile(file, r.Body, nil, xx)
+			if errstr != "" {
+				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+				return
+			}
+			hashIn64 := xx.Sum64()
+			hashInBytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+			hash := hex.EncodeToString(hashInBytes)
+			if hdhash != hash {
+				t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s \n", id, hdhash, hash)
+				resch <- res
+				close(resch)
+				return
+			} else {
+				tlogf("Worker %2d: header's hash %s does match the file's %s \n", id, hdhash, hash)
+			}
+		} else if hdhashtype == "md5" {
 			md5 := md5.New()
 			written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
 			if errstr != "" {
@@ -373,17 +401,19 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 				return
 			}
 			hashInBytes := md5.Sum(nil)[:16]
-			md5hash = hex.EncodeToString(hashInBytes)
+			md5hash := hex.EncodeToString(hashInBytes)
 			if errstr != "" {
 				t.Errorf("Worker %2d: failed to compute xxhash, err: %s", id, errstr)
 				return
 			}
 
 			if hdhash != md5hash {
-				t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s", id, hdhash, md5hash)
+				t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s \n", id, hdhash, md5hash)
 				resch <- res
 				close(resch)
 				return
+			} else {
+				tlogf("Worker %2d: header's md5 %s does match the file's %s \n", id, hdhash, md5hash)
 			}
 		} else {
 			written, errstr = dfc.ReceiveFile(file, r.Body, nil)
@@ -496,12 +526,134 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {
+func Test_chksumvalidation(t *testing.T) {
+	var (
+		filesput    = make(chan string, 100)
+		fileslist   = make([]string, 0, 100)
+		errch       = make(chan error, 100)
+		bucket      = clibucket
+		start, curr time.Time
+		duration    time.Duration
+		numfiles    int64
+		htype       string
+	)
+	if totalio%largefilesize > 0 {
+		numfiles = totalio/largefilesize + 1
+	} else {
+		numfiles = totalio / largefilesize
+	}
+	if numfiles > 100 {
+		numfiles = 100
+	}
+	numfiles = 5
+	numPuts := numfiles
+	totalio := (numPuts * largefilesize)
+
+	ldir := LocalSrcDir + "/" + ChksumValidStr
+	if err := dfc.CreateDir(ldir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
+	}
+	//Get Current Config
+	config := getConfig(RestAPIDaemonPath, httpclient, t)
+	cksumconfig := config["cksum_config"].(map[string]interface{})
+	ocoldget := cksumconfig["validate_cold_get"].(bool)
+	ochksum := cksumconfig["checksum"].(string)
+	if ochksum == "xxhash" {
+		htype = ochksum
+	}
+	putRandomFiles(0, 0, uint64(largefilesize*1024*1024), int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true)
+	selectErr(errch, "put", t, false)
+	close(filesput) // to exit for-range
+	for fname := range filesput {
+		if fname != "" {
+			fileslist = append(fileslist, ChksumValidStr+"/"+fname)
+		}
+	}
+	// Delete it from cache.
+	evictobjects(t, fileslist)
+	// Disable checkum
+	if ochksum != Nonestr {
+		setConfig("checksum", fmt.Sprint("none"), RestAPIClusterPath, httpclient, t)
+	}
+	if t.Failed() {
+		goto cleanup
+	}
+	// Disable Cold Get Validation
+	if ocoldget {
+		setConfig("validate_cold_get", fmt.Sprint("false"), RestAPIClusterPath, httpclient, t)
+	}
+	if t.Failed() {
+		goto cleanup
+	}
+	start = time.Now()
+	getfromfilelist(t, bucket, errch, fileslist, false)
+	curr = time.Now()
+	duration = curr.Sub(start)
+	if t.Failed() {
+		goto cleanup
+	}
+	tlogf("GET %d MB without any validation: %v\n", totalio, duration)
+	selectErr(errch, "get", t, false)
+	evictobjects(t, fileslist)
+	switch validation {
+	case AllHashstr:
+		setConfig("checksum", fmt.Sprint("xxhash"), RestAPIClusterPath, httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, httpclient, t)
+		if t.Failed() {
+			goto cleanup
+		}
+	case Xxhashstr:
+		setConfig("checksum", fmt.Sprint("xxhash"), RestAPIClusterPath, httpclient, t)
+		if t.Failed() {
+			goto cleanup
+		}
+	case ColdMD5str:
+		setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, httpclient, t)
+		if t.Failed() {
+			goto cleanup
+		}
+	case Nonestr:
+		//do nothing as its been already disabled.
+		tlogf("Checksum validation has been disabled \n")
+		goto cleanup
+	default:
+		fmt.Fprintf(os.Stdout, "Validation is either not set or invalid, Set -validation=[all|xxhash|coldmd5|none] \n")
+		goto cleanup
+	}
+	start = time.Now()
+	getfromfilelist(t, bucket, errch, fileslist, true)
+	curr = time.Now()
+	duration = curr.Sub(start)
+	tlogf("GET %d MB with validation type %s:    %v\n", totalio, validation, duration)
+	selectErr(errch, "get", t, false)
+cleanup:
+	deletefromfilelist(t, bucket, errch, fileslist)
+	// restore old config
+	setConfig("checksum", fmt.Sprint(ochksum), RestAPIClusterPath, httpclient, t)
+	setConfig("validate_cold_get", fmt.Sprint(ocoldget), RestAPIClusterPath, httpclient, t)
+	return
+}
+func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {
+	wg := &sync.WaitGroup{}
+	// Delete local file and objects from bucket
+	for _, fn := range fileslist {
+		err := os.Remove(LocalSrcDir + "/" + fn)
+		if err != nil {
+			t.Error(err)
+		}
+		wg.Add(1)
+		go client.Del(bucket, fn, wg, errch, true)
+	}
+	wg.Wait()
+	selectErr(errch, "delete", t, false)
+	close(errch)
+}
+func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string, validate bool) {
 	getsGroup := &sync.WaitGroup{}
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go client.Get(bucket, fileslist[i], getsGroup, errch, false)
+			go client.Get(bucket, fileslist[i], getsGroup, errch, false, validate)
 		}
 	}
 	getsGroup.Wait()

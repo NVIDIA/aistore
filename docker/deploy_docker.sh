@@ -107,6 +107,8 @@ AWSENVFILE="aws.env"
 LOWWATERMARK=75
 HIGHWATERMARK=90
 NOXATTRS=false
+VALIDATECOLDGET=true
+CHECKSUM="xxhash"
 H2C=false
 
 
@@ -144,45 +146,49 @@ fi
 
 CONFFILE="dfc.json"
 cat > $CONFFILE <<EOL
-  {
-    "logdir":			"${LOGDIR}",
-    "loglevel": 			"${LOGLEVEL}",
-    "cloudprovider":		"${CLDPROVIDER}",
-		"cloud_buckets":		"${CLOUDBUCKETS}",
-		"local_buckets":		"${LOCALBUCKETS}",
-		"lb_conf":                	"${LBCONF}",
-		"stats_time":			"${STATSTIME}",
-		"http_timeout":			"${HTTPTIMEOUT}",
-    "listen": {
-      "proto": 		"${PROTO}",
-      "port":			"${PORT}"
-    },
-    "proxy": {
-      "url": 			"${PROXYURL}",
-      "passthru": 		${PASSTHRU}
-    },
-    "s3": {
-      "maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
-      "maxconcurrupld":	${MAXCONCURRENTUPLOAD},
-      "maxpartsize":		${MAXPARTSIZE}
-    },
-		"lru_config": {
-			"lowwm":		${LOWWATERMARK},
-			"highwm":		${HIGHWATERMARK},
-			"dont_evict_time":	"${DONTEVICTIME}"
-		},
-		"test_fspaths": {
-			"root":			"${TESTFSPATHROOT}",
-			"count":		$TESTFSPATHCOUNT,
-			"instance":		0
-		},
-		"fspaths": {
-			"/zpools/vol1/a/b/c":	"",
-			"/zpools/vol2/m/n/p":	""
-		},
-		"no_xattrs":			${NOXATTRS},
-        "h2c":                  ${H2C}
-  }
+{
+	"logdir":			"${LOGDIR}",
+	"loglevel": 			"${LOGLEVEL}",
+	"cloudprovider":		"${CLDPROVIDER}",
+	"cloud_buckets":		"${CLOUDBUCKETS}",
+	"local_buckets":		"${LOCALBUCKETS}",
+	"lb_conf":                	"${LBCONF}",
+	"stats_time":			"${STATSTIME}",
+	"http_timeout":			"${HTTPTIMEOUT}",
+	"listen": {
+		"proto": 		"${PROTO}",
+		"port":			"${PORT}"
+	},
+	"proxy": {
+		"url": 			"${PROXYURL}",
+		"passthru": 		${PASSTHRU}
+	},
+	"s3": {
+		"maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
+		"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
+		"maxpartsize":		${MAXPARTSIZE}
+	},
+	"cksum_config": {
+		"validate_cold_get":    ${VALIDATECOLDGET},
+		"checksum":             "${CHECKSUM}"
+	},
+	"lru_config": {
+		"lowwm":		${LOWWATERMARK},
+		"highwm":		${HIGHWATERMARK},
+		"dont_evict_time":	"${DONTEVICTIME}"
+	},
+	"test_fspaths": {
+		"root":			"${TESTFSPATHROOT}",
+		"count":		$TESTFSPATHCOUNT,
+		"instance":		0
+	},
+	"fspaths": {
+		"/zpools/vol1/a/b/c":	"",
+		"/zpools/vol2/m/n/p":	""
+	},
+	"no_xattrs":			${NOXATTRS},
+	"h2c":                  	${H2C}
+}
 EOL
 
 echo Stoping running  cluster..

@@ -21,6 +21,11 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+const (
+	GOOG_META_DATA_DFC_HASH_TYPE = "x-goog-meta-dfc-hash-type"
+	GOOG_META_DATA_DFC_HASH      = "x-goog-meta-dfc-hash"
+)
+
 //======
 //
 // implements cloudif
@@ -47,6 +52,18 @@ func gcpErrorToHTTP(gcpError error) int {
 	return http.StatusInternalServerError
 }
 
+func createclient() (*storage.Client, context.Context, string) {
+	if getProjID() == "" {
+		return nil, nil, "Failed to get ProjectID from GCP"
+	}
+	gctx := context.Background()
+	client, err := storage.NewClient(gctx)
+	if err != nil {
+		return nil, nil, fmt.Sprintf("Failed to create client, err: %v", err)
+	}
+	return client, gctx, ""
+}
+
 //======
 //
 // methods
@@ -58,7 +75,6 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	if errstr != "" {
 		return
 	}
-
 	var query *storage.Query = nil
 	if msg.GetPrefix != "" {
 		query = &storage.Query{Prefix: msg.GetPrefix}
@@ -109,21 +125,8 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
-// Initialize and create storage client
-func createclient() (*storage.Client, context.Context, string) {
-	if getProjID() == "" {
-		return nil, nil, "Failed to get ProjectID from GCP"
-	}
-	gctx := context.Background()
-	client, err := storage.NewClient(gctx)
-	if err != nil {
-		return nil, nil, fmt.Sprintf("Failed to create client, err: %v", err)
-	}
-	return client, gctx, ""
-}
-
-// FIXME: revisit error processing
-func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5hash string, size int64, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int) {
+	var v cksumvalue
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
@@ -135,30 +138,42 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (md5ha
 		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
 	}
-	omd5 := hex.EncodeToString(attrs.MD5)
+	v = newcksumvalue(attrs.Metadata[GOOG_META_DATA_DFC_HASH_TYPE], attrs.Metadata[GOOG_META_DATA_DFC_HASH])
+	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
 		errstr = fmt.Sprintf("gcp: Failed to create rc (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
 	}
 	defer rc.Close()
-	if md5hash, size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, omd5, rc); errstr != "" {
+	// hashtype and hash could be empty for legacy objects.
+	if nhobj, size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, rc); errstr != "" {
 		return
 	}
-	stats := getstorstats()
-	stats.add("bytesloaded", size)
 	if glog.V(3) {
 		glog.Infof("gcp: GET %s (bucket %s)", objname, bucket)
 	}
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string) (errstr string, errcode int) {
+func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksumvalue) (errstr string, errcode int) {
+	var (
+		htype, hval string
+		md          map[string]string
+	)
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
 	}
+	if ohash != nil {
+		htype, hval = ohash.get()
+		md = make(map[string]string)
+		md[GOOG_META_DATA_DFC_HASH_TYPE] = htype
+		md[GOOG_META_DATA_DFC_HASH] = hval
+	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
+	wc.Metadata = md
+
 	buf := gcpimpl.t.buffers.alloc()
 	defer gcpimpl.t.buffers.free(buf)
 	written, err := io.CopyBuffer(wc, file, buf)

@@ -8,8 +8,8 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/OneOfOne/xxhash"
 )
 
 var (
@@ -82,93 +83,104 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) error {
+func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool, validate bool) error {
+	var (
+		hash, hdhash, hdhashtype string
+		errstr                   string
+	)
 	if wg != nil {
 		defer wg.Done()
 	}
-
 	url := ProxyURL() + "/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("GET: object %s\n", keyname)
 	}
-
 	r, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-
 	defer func() {
-		r.Body.Close()
+		if r != nil {
+			r.Body.Close()
+		}
 	}()
+	if validate && err == nil {
+		hdhash = r.Header.Get("Content-HASH")
+		hdhashtype = r.Header.Get("Content-HASH-Type")
+		if hdhashtype == "xxhash" {
+			xx := xxhash.New64()
+			if hash, errstr = dfc.ComputeXXHash(r.Body, nil, xx); errstr != "" {
+				errch <- errors.New(errstr)
+			}
+			if hdhash != hash {
+				s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
+				if errch != nil {
+					errch <- errors.New(s)
+				}
+			} else {
+				if !silent {
+					fmt.Printf("Header's hash %s match the file's %s \n", hdhash, hash)
+				}
+			}
+		}
+	}
 	err = discardResponse(r, err, fmt.Sprintf("object %s from bucket %s", keyname, bucket))
 	emitError(r, err, errch)
-
 	return err
 }
-
-func Put(fname string, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+	var (
+		hash   string
+		errstr string
+	)
 	if wg != nil {
 		defer wg.Done()
 	}
-
 	proxyurl := ProxyURL() + "/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("PUT: object %s fname %s\n", keyname, fname)
 	}
-
-	file, oserr := os.Open(fname)
-	if oserr != nil {
-		err = fmt.Errorf("Failed to open file %s, err: %v", fname, oserr)
-		fmt.Fprintf(os.Stderr, "%v", err)
-		emitError(nil, err, errch)
-		return err
-	}
-
-	defer func() {
-		if e := file.Close(); e != nil {
-			err = fmt.Errorf("Failed to close file: %s", e)
+	file, err := os.Open(fname)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
 		}
-	}()
-
-	req, httperr := http.NewRequest(http.MethodPut, proxyurl, file)
-	if httperr != nil {
-		err = fmt.Errorf("Failed to create new http request, err: %v", err)
-		emitError(nil, err, errch)
-		return err
+		return
 	}
+	defer file.Close()
 
+	req, err := http.NewRequest(http.MethodPut, proxyurl, file)
+	if err != nil {
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
+		}
+		return
+	}
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
 	// If it wasn't set, we would need to deal with the redirect manually.
 	req.GetBody = func() (io.ReadCloser, error) {
 		return os.Open(fname)
 	}
-
-	md5 := md5.New()
-	// FIXME: the client must compute xxhash not md5
-	md5hash, errstr := dfc.ComputeFileMD5(file, nil, md5)
-	if errstr != "" {
-		err = fmt.Errorf("Failed to compute md5 for file %s, err: %s", fname, errstr)
-		emitError(nil, err, errch)
-		return err
+	if htype == "xxhash" {
+		xx := xxhash.New64()
+		hash, errstr = dfc.ComputeXXHash(file, nil, xx)
+		if errstr != "" {
+			errch <- fmt.Errorf("Failed to compute xxhash file %s, err: %v", fname, errstr)
+			return
+		}
+		req.Header.Set("Content-HASH-Type", htype)
+		req.Header.Set("Content-HASH", hash)
 	}
-
-	req.Header.Set("Content-HASH", md5hash)
-	_, oserr = file.Seek(0, 0)
-	if oserr != nil {
-		err = fmt.Errorf("Failed to seek file %s, err: %v", fname, err)
-		emitError(nil, err, errch)
-		return err
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		if errch != nil {
+			errch <- fmt.Errorf("Failed to seek file %s, err: %v", fname, err)
+		}
+		return
 	}
-
-	r, httperr := httpclient.Do(req)
-	if httperr != nil {
-		err = fmt.Errorf("Failed to put file, err: %v", err)
-		emitError(nil, err, errch)
-		return err
-	}
-
+	r, err := httpclient.Do(req)
 	defer func() {
-		r.Body.Close()
+		if r != nil {
+			r.Body.Close()
+		}
 	}()
 	err = discardResponse(r, err, "put")
 	emitError(r, err, errch)

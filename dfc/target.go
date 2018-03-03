@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"crypto/md5"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,23 +21,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
 )
 
 // xattrs
 const (
-	HashAttr     = "user.obj.dfchash" // Object's XXHash
-	XAttrInvalid = "0"
-	XAttrValid   = "1"
+	XXHASH_XATTR          = "user.obj.dfchash"
+	DFC_CONTENT_HASH_TYPE = "Content-HASH-Type"
+	DFC_CONTENT_HASH      = "Content-HASH"
 )
-
-const DFC_CONTENT_HASH = "Content-HASH"
 
 type mountPath struct {
 	Path string
 	Fsid syscall.Fsid
 }
-
 type fipair struct {
 	relname string
 	os.FileInfo
@@ -202,12 +201,13 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	var (
-		md5hash                             string
+		nhobj                               cksumvalue
 		coldget, exclusive                  bool
 		bucket, objname, fqn, uname, errstr string
 		size                                int64
 		errcode                             int
 	)
+	csumcfg := &ctx.config.CksumConfig
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
@@ -242,7 +242,8 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if coldget {
-		if md5hash, size, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+		if nhobj, size, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
 			} else {
@@ -251,6 +252,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.statsif.add("numcoldget", 1)
+		t.statsif.add("bytesloaded", size)
 	}
 	//
 	// downgrade lock(name)
@@ -273,16 +275,16 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer file.Close()
-	if !coldget {
-		md5binary, errstr := Getxattr(fqn, HashAttr)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-			return
+	if !coldget && csumcfg.Checksum != "none" {
+		hashbinary, errstr := Getxattr(fqn, XXHASH_XATTR)
+		if errstr == "" && hashbinary != nil {
+			nhobj = newcksumvalue(csumcfg.Checksum, string(hashbinary))
 		}
-		md5hash = string(md5binary)
 	}
-	if md5hash != "" {
-		w.Header().Add(DFC_CONTENT_HASH, md5hash)
+	if nhobj != nil {
+		htype, hval := nhobj.get()
+		w.Header().Add(DFC_CONTENT_HASH_TYPE, htype)
+		w.Header().Add(DFC_CONTENT_HASH, hval)
 	}
 	// buffer pooling
 	var buffs buffif
@@ -437,12 +439,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		}
 		if strings.Contains(msg.GetProps, GetPropsChecksum) {
 			fqn := t.fqn(bucket, fi.relname)
-			md5hex, errstr := Getxattr(fqn, HashAttr)
-			if errstr != "" {
-				glog.Infoln(errstr)
-			} else {
-				md5 := hex.EncodeToString(md5hex)
-				entry.Checksum = md5
+			xxhex, errstr := Getxattr(fqn, XXHASH_XATTR)
+			// see XXHASH_XATTR comment above
+			if errstr == "" {
+				entry.Checksum = hex.EncodeToString(xxhex)
 			}
 		}
 		// TODO: other GetMsg props TBD
@@ -512,42 +512,53 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket string, objname string) (errstr string, errcode int) {
 	var (
-		err     error
-		file    *os.File
-		md5hash string
-		hdhash  string
+		err                      error
+		file                     *os.File
+		hdhobj, nhobj            cksumvalue
+		hash, htype, hval, nhval string
 	)
+	csumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
 	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
-	hdhash = r.Header.Get("Content-HASH")
-	if hdhash == "" {
-		glog.Infof("Warning: empty Content-HASH")
-	}
-
 	defer r.Body.Close()
 	glog.Infof("PUT: %s => %s", fqn, putfqn)
-
+	hdhobj = newcksumvalue(r.Header.Get("Content-HASH-TYPE"), r.Header.Get("Content-HASH"))
+	if hdhobj != nil {
+		htype, hval = hdhobj.get()
+		if htype == "" || hval == "" {
+			glog.Infof("Warning: empty Content-HASH")
+			htype = ""
+			hval = ""
+		}
+	}
 	// optimize out if the checksums do match
-	if hdhash != "" {
+	if hdhobj != nil && csumcfg.Checksum != "none" {
 		file, err := os.Open(fqn)
+		// File exists in local cache.
 		if err == nil {
-			md5 := md5.New()
 			buf := t.buffers.alloc()
-			md5hash, _ = ComputeFileMD5(file, buf, md5)
+			if htype == "xxhash" {
+				xx := xxhash.New64()
+				hash, errstr = ComputeXXHash(file, buf, xx)
+			} else {
+				errstr = fmt.Sprintf("Unsupported hash type %s", htype)
+			}
+			// not a critical error
+			if errstr != "" {
+				glog.Warningf("Could not compute or invalid hash for %s  errstr: %v", fqn, errstr)
+			}
 			t.buffers.free(buf)
 			// not a critical error
 			if err = file.Close(); err != nil {
-				glog.Warningf("Unexpected failure to close %s once md5-ed, err: %v", fqn, err)
+				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
 			}
-			if md5hash == hdhash {
+			if errstr == "" && hash == hval {
 				glog.Infof("Existing %s is valid: new PUT is a no-op", fqn)
 				return
 			}
-		} else {
-			glog.Warningf("Unexpected failure to open local valid %s, err: %v", fqn, err)
 		}
 	}
-	if md5hash, _, errstr = t.receiveFileAndFinalize(putfqn, objname, hdhash, r.Body); errstr != "" {
+	if nhobj, _, errstr = t.receiveFileAndFinalize(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
 	// putfqn is received
@@ -558,9 +569,13 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			}
 		}
 	}()
-
-	if hdhash != "" && md5hash != "" && md5hash != hdhash {
-		errstr = fmt.Sprintf("Invalid checksum: %s md5 %s... does not match user's %s...", fqn, md5hash[:8], hdhash[:8])
+	if nhobj != nil {
+		_, nhval = nhobj.get()
+	}
+	// hdhash may not be provided by client.
+	// hash may not have been computed due to DFC config settings.
+	if hval != "" && nhval != "" && hval != nhval {
+		errstr = fmt.Sprintf("Invalid checksum: %s hash %s... does not match user's %s...", fqn, nhval, hval)
 		return
 	}
 	if !t.islocalBucket(bucket) {
@@ -568,7 +583,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			errstr = fmt.Sprintf("Failed to re-open %s err: %v", putfqn, err)
 			return
 		}
-		if errstr, errcode = getcloudif().putobj(file, bucket, objname); errstr != "" {
+		if errstr, errcode = getcloudif().putobj(file, bucket, objname, nhobj); errstr != "" {
 			_ = file.Close()
 			return
 		}
@@ -644,7 +659,8 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			return // not an error, nothing to do
 		}
 		// write file with extended attributes .
-		if _, size, errstr = t.receiveFileAndFinalize(putfqn, objname, "", r.Body); errstr != "" {
+		var nhobj cksumvalue
+		if _, size, errstr = t.receiveFileAndFinalize(putfqn, objname, "", nhobj, r.Body); errstr != "" {
 			return
 		}
 		errstr = t.safeRename(bucket, objname, putfqn, fqn)
@@ -771,6 +787,12 @@ func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newobjname string) string {
+	var (
+		hash   string
+		errstr string
+		buffs  buffif
+	)
+	csumcfg := &ctx.config.CksumConfig
 	if newobjname == "" {
 		newobjname = objname
 	}
@@ -786,10 +808,6 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	defer file.Close()
 
-	// md5 - FIXME: use xxhash here and elsewhere - FIXME: must be configurable and optional
-	// + buffer pooling
-	md5 := md5.New()
-	var buffs buffif
 	if size > t.buffers32k.fixedsize {
 		buffs = t.buffers
 	} else if size > t.buffers4k.fixedsize {
@@ -798,11 +816,15 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		assert(size != 0, "Unexpected: zero size "+fqn)
 		buffs = t.buffers4k
 	}
-	buf := buffs.alloc()
-	md5hash, errstr := ComputeFileMD5(file, buf, md5)
-	buffs.free(buf)
-	if errstr != "" {
-		return errstr
+	if csumcfg.Checksum != "none" {
+		assert(csumcfg.Checksum == "xxhash")
+		buf := buffs.alloc()
+		xx := xxhash.New64()
+		if hash, errstr = ComputeXXHash(file, buf, xx); errstr != "" {
+			buffs.free(buf)
+			return errstr
+		}
+		buffs.free(buf)
 	}
 	_, err = file.Seek(0, 0)
 	if err != nil {
@@ -813,7 +835,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	//
 	request, err := http.NewRequest(method, url, file)
 	assert(err == nil, err)
-	request.Header.Set("Content-HASH", md5hash)
+	if hash != "" {
+		request.Header.Set("Content-HASH-Type", "xxhash")
+		request.Header.Set("Content-HASH", hash)
+	}
 	response, err := t.httpclient.Do(request)
 	if err != nil {
 		return fmt.Sprintf("Failed to send %q from %s, err: %v", t.si.DaemonID, fqn, err)
@@ -1139,13 +1164,15 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 }
 
 // on err closes and removes the file; othwerise closes and returns the size
-// FIXME: md5 must be optional/configurable as well as xxhash
-// omd5 can be empty for multipart object or when PUTting
-func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader io.ReadCloser) (md5hash string, written int64, errstr string) {
+// omd5 or oxxhash can be empty depending on configuration and operation.
+func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj cksumvalue,
+	reader io.ReadCloser) (nhobj cksumvalue, written int64, errstr string) {
 	var (
-		err  error
-		file *os.File
+		err                  error
+		file                 *os.File
+		ohtype, ohval, nhval string
 	)
+	csumcfg := &ctx.config.CksumConfig
 	if file, errstr = initobj(fqn); errstr != "" {
 		errstr = fmt.Sprintf("Failed to create and initialize %s, err: %s", fqn, errstr)
 		return
@@ -1164,14 +1191,41 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader 
 			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, fqn, err)
 		}
 	}()
-	if ctx.config.CksumConfig.ValidateColdGet {
+	// xxhash is always preferred over md5
+	if csumcfg.Checksum != "none" {
+		assert(csumcfg.Checksum == "xxhash")
+		if ohobj != nil {
+			ohtype, ohval = ohobj.get()
+			assert(ohtype == "xxhash")
+		}
+		xx := xxhash.New64()
+		if written, errstr = ReceiveFile(file, reader, buf, xx); errstr != "" {
+			return
+		}
+		hashIn64 := xx.Sum64()
+		hashInBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+		nhval = hex.EncodeToString(hashInBytes)
+		nhobj = newcksumvalue("xxhash", nhval)
+		// Legacy objects may not have chksum.
+		if ohobj != nil {
+			ohtype, ohval = ohobj.get()
+			assert(ohtype == "xxhash")
+			if ohval != nhval {
+				errstr = fmt.Sprintf("Checksum mismatch: object %s XXHASH %s... != received file %s XXHASH %s...)",
+					objname, ohval, fqn, nhval)
+				return
+			}
+		}
+	} else if omd5 != "" && csumcfg.ValidateColdGet {
+		// MD5 hash is only computed for validation(not stored).
 		md5 := md5.New()
 		if written, errstr = ReceiveFile(file, reader, buf, md5); errstr != "" {
 			return
 		}
 		hashInBytes := md5.Sum(nil)[:16]
-		md5hash = hex.EncodeToString(hashInBytes)
-		if omd5 != "" && omd5 != md5hash {
+		md5hash := hex.EncodeToString(hashInBytes)
+		if omd5 != md5hash {
 			errstr = fmt.Sprintf("Checksum mismatch: object %s MD5 %s... != received file %s MD5 %s...)",
 				objname, omd5[:8], fqn, md5hash[:8])
 			return
@@ -1181,8 +1235,11 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, reader 
 			return
 		}
 	}
-	if errstr = finalizeobj(fqn, []byte(md5hash)); errstr != "" {
-		return
+	if nhobj != nil {
+		assert(nhval != "")
+		if errstr = finalizeobj(fqn, nhval); errstr != "" {
+			return
+		}
 	}
 	if err = file.Close(); err != nil {
 		errstr = fmt.Sprintf("Failed to close received file %s, err: %v", fqn, err)
@@ -1203,13 +1260,14 @@ func initobj(fqn string) (file *os.File, errstr string) {
 	return file, ""
 }
 
-func finalizeobj(fqn string, md5sum []byte) (errstr string) {
+// FIXME: does only xxhash
+func finalizeobj(fqn string, hash string) (errstr string) {
 	if ctx.config.NoXattrs {
 		return
 	}
-	if len(md5sum) == 0 {
+	if len(hash) == 0 {
 		return
 	}
-	errstr = Setxattr(fqn, HashAttr, md5sum)
+	errstr = Setxattr(fqn, XXHASH_XATTR, []byte(hash))
 	return
 }

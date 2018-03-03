@@ -42,6 +42,7 @@ HIGHWATERMARK=90
 NOXATTRS=false
 LRUENABLED=true
 VALIDATECOLDGET=true
+CHECKSUM="xxhash"
 H2C=false
 
 PROXYPORT=$(expr $PORT + 1)
@@ -135,13 +136,14 @@ do
 		"maxpartsize":		${MAXPARTSIZE}
 	},
 	"cksum_config": {
-                 "validate_cold_get":             ${VALIDATECOLDGET}
+                 "validate_cold_get":    ${VALIDATECOLDGET},
+                 "checksum":             "${CHECKSUM}"
 	},
 	"lru_config": {
 		"lowwm":		${LOWWATERMARK},
 		"highwm":		${HIGHWATERMARK},
 		"dont_evict_time":      "${DONTEVICTIME}",
-        "lru_enabled":  ${LRUENABLED}
+        	"lru_enabled":  	${LRUENABLED}
 	},
 	"test_fspaths": {
 		"root":			"${TESTFSPATHROOT}",
@@ -149,11 +151,11 @@ do
 		"instance":		$c
 	},
 	"fspaths": {
-		"/tmp/dfc":	"",
-		"/disk2/dfc":	""
+		"/tmp/dfc":		"",
+		"/disk2/dfc":		""
 	},
 	"no_xattrs":			${NOXATTRS},
-    "h2c": ${H2C}
+	"h2c": 				${H2C}
 }
 EOL
 done

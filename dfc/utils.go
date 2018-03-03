@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -120,7 +121,6 @@ func ReceiveFile(file *os.File, rrbody io.Reader, buf []byte, hashes ...hash.Has
 }
 
 func Createfile(fname string) (*os.File, error) {
-
 	var file *os.File
 	var err error
 	// strips the last part from filepath
@@ -134,21 +134,37 @@ func Createfile(fname string) (*os.File, error) {
 		glog.Errorf("Unable to create file %s, err: %v", fname, err)
 		return nil, err
 	}
-
 	return file, nil
 }
 
-func ComputeFileMD5(file *os.File, buf []byte, md5 hash.Hash) (csum string, errstr string) {
+func ComputeMD5(reader io.Reader, buf []byte, md5 hash.Hash) (csum string, errstr string) {
 	var err error
 	if buf == nil {
-		_, err = io.Copy(md5.(io.Writer), file)
+		_, err = io.Copy(md5.(io.Writer), reader)
 	} else {
-		_, err = io.CopyBuffer(md5.(io.Writer), file, buf)
+		_, err = io.CopyBuffer(md5.(io.Writer), reader, buf)
 	}
 	if err != nil {
 		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
 	}
 	hashInBytes := md5.Sum(nil)[:16]
+	csum = hex.EncodeToString(hashInBytes)
+	return csum, ""
+}
+
+func ComputeXXHash(reader io.Reader, buf []byte, xx hash.Hash64) (csum string, errstr string) {
+	var err error
+	if buf == nil {
+		_, err = io.Copy(xx.(io.Writer), reader)
+	} else {
+		_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
+	}
+	if err != nil {
+		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
+	}
+	hashIn64 := xx.Sum64()
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
 	csum = hex.EncodeToString(hashInBytes)
 	return csum, ""
 }
@@ -161,6 +177,40 @@ func ComputeFileMD5(file *os.File, buf []byte, md5 hash.Hash) (csum string, errs
 func ReadToNull(r io.Reader) (int64, error) {
 	return io.Copy(ioutil.Discard, r)
 }
+
+//===========================================================================
+//
+// typed checksum value
+//
+//===========================================================================
+type cksumvalue interface {
+	get() (string, string)
+}
+
+type cksumvalxxhash struct {
+	tag string
+	val string
+}
+
+type cksumvalmd5 struct {
+	tag string
+	val string
+}
+
+func newcksumvalue(kind string, val string) cksumvalue {
+	if kind == "" || val == "" {
+		return nil
+	}
+	if kind == "xxhash" {
+		return &cksumvalxxhash{kind, val}
+	}
+	assert(kind == "md5")
+	return &cksumvalmd5{kind, val}
+}
+
+func (v *cksumvalxxhash) get() (string, string) { return v.tag, v.val }
+
+func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
 
 //===========================================================================
 //

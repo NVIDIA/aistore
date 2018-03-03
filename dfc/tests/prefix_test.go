@@ -89,7 +89,7 @@ func prefixCreateFiles(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.Put(filePath, clibucket, keyName, wg, errch, true)
+		go client.Put(filePath, clibucket, keyName, "", wg, errch, true)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()

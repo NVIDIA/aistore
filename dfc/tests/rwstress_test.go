@@ -184,12 +184,12 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.Put(fname, clibucket, keyname, wg, errch, true)
+						client.Put(fname, clibucket, keyname, "", wg, errch, true)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					client.Put(fname, clibucket, keyname, nil, errch, true)
+					client.Put(fname, clibucket, keyname, "", nil, errch, true)
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
@@ -300,15 +300,14 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Get(clibucket, keyname, wg, errch, true)
+					client.Get(clibucket, keyname, wg, errch, true, false)
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
 				}()
 			} else {
-				client.Get(clibucket, keyname, nil, errch, true)
+				client.Get(clibucket, keyname, nil, errch, true, false)
 				unlockFile(idx, rwFileExists)
 			}
-
 			currIdx = idx + 1
 			if currIdx >= len(fileNames) {
 				currIdx = 0

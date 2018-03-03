@@ -10,34 +10,42 @@ import (
 	"syscall"
 )
 
-// Get specific attribute for specified path.
-func Getxattr(path string, attrname string) ([]byte, string) {
+const (
+	ENODATA = 61
+)
+
+// Get specific attribute for specified fqn.
+func Getxattr(fqn string, attrname string) ([]byte, string) {
 	data := make([]byte, MAXATTRSIZE)
-	read, err := syscall.Getxattr(path, attrname, data)
+	read, err := syscall.Getxattr(fqn, attrname, data)
 	assert(read < MAXATTRSIZE)
-	if err != nil {
-		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, path, err)
+	if err != nil && err != syscall.Errno(ENODATA) {
+		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, fqn, err)
 	}
-	return data[:read], ""
+	if read > 0 {
+		return data[:read], ""
+	} else {
+		return nil, ""
+	}
 }
 
-// Set specific named attribute for specific path.
-func Setxattr(path string, attrname string, data []byte) (errstr string) {
+// Set specific named attribute for specific fqn.
+func Setxattr(fqn string, attrname string, data []byte) (errstr string) {
 	assert(len(data) < MAXATTRSIZE)
-	err := syscall.Setxattr(path, attrname, data, 0)
+	err := syscall.Setxattr(fqn, attrname, data, 0)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to set extended attr for path %s attr %s, err: %v",
-			path, attrname, err)
+		errstr = fmt.Sprintf("Failed to set extended attr for fqn %s attr %s, err: %v",
+			fqn, attrname, err)
 	}
 	return
 }
 
-// Delete specific named attribute for specific path.
-func Deletexattr(path string, attrname string) (errstr string) {
-	err := syscall.Removexattr(path, attrname)
+// Delete specific named attribute for specific fqn.
+func Deletexattr(fqn string, attrname string) (errstr string) {
+	err := syscall.Removexattr(fqn, attrname)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to remove extended attr for path %s attr %s, err: %v",
-			path, attrname, err)
+		errstr = fmt.Sprintf("Failed to remove extended attr for fqn %s attr %s, err: %v",
+			fqn, attrname, err)
 	}
 	return
 }

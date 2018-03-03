@@ -36,8 +36,8 @@ const (
 //===========
 type cloudif interface {
 	listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
-	getobj(fqn, bucket, objname string) (hash string, size int64, errstr string, errcode int)
-	putobj(file *os.File, bucket, objname string) (errstr string, errcode int)
+	getobj(fqn, bucket, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int)
+	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (errstr string, errcode int)
 	deleteobj(bucket, objname string) (errstr string, errcode int)
 }
 
@@ -331,8 +331,14 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.CksumConfig.ValidateColdGet = v
 		}
+	case "checksum":
+		if value == "xxhash" || value == "none" {
+			ctx.config.CksumConfig.Checksum = value
+		} else {
+			return fmt.Sprintf("Invalid %s type %s - expecting xxhash or none", name, value)
+		}
 	default:
-		errstr = fmt.Sprintf("Cannot set config var %s - readonly or unsupported", name)
+		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)
 	}
 	if checkwm {
 		hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
