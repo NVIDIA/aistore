@@ -48,16 +48,16 @@ if [ ! -z "$scale" ]; then
    echo "Scaling cluster "
    cp /tmp/dfc_backup/* .
    sudo docker-compose -f $environment"_docker-compose.yml" up --no-recreate --scale dfctarget=$scale -d dfctarget
-   rm aws.env 
-   rm dfc.json 
-   rm Dockerfile 
-   sudo docker ps 
-   echo Done 
+   rm aws.env
+   rm dfc.json
+   rm Dockerfile
+   sudo docker ps
+   echo Done
    exit 0
 fi
 
 if [ -z "$aws_env" ]; then
-   echo -a is a required parameter.Provide the path for aws.env file 
+   echo -a is a required parameter.Provide the path for aws.env file
    usage
 fi
 
@@ -69,7 +69,7 @@ if [ $os == "ubuntu" ]; then
 else
    echo "Usind rpm packaging for the docker container"
    cp Dockerfile.rpm Dockerfile
-fi 
+fi
 
 TMPDIR="/tmp/nvidia"
 PROXYURL="http://dfcproxy:8080"
@@ -92,7 +92,7 @@ TESTFSPATHROOT="/tmp/dfc/"
 # Verbosity: 0 (minimal) to 4 (max)
 LOGLEVEL="3"
 
-# Use log logir /var/log/dfc in produciton 
+# Use log logir /var/log/dfc in produciton
 LOGDIR="/tmp/dfc/log"
 CLOUDBUCKETS="cloud"
 LOCALBUCKETS="local"
@@ -107,6 +107,7 @@ AWSENVFILE="aws.env"
 LOWWATERMARK=75
 HIGHWATERMARK=90
 NOXATTRS=false
+LRUENABLED=true
 VALIDATECOLDGET=true
 CHECKSUM="xxhash"
 H2C=false
@@ -176,6 +177,7 @@ cat > $CONFFILE <<EOL
 		"lowwm":		${LOWWATERMARK},
 		"highwm":		${HIGHWATERMARK},
 		"dont_evict_time":	"${DONTEVICTIME}"
+		"lru_enabled":  	${LRUENABLED}
 	},
 	"test_fspaths": {
 		"root":			"${TESTFSPATHROOT}",
@@ -198,11 +200,10 @@ sudo docker-compose -f $environment"_docker-compose.yml" build
 echo Starting cluster ..
 sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale dfctarget=$servcount
 sleep 3
-sudo docker ps 
+sudo docker ps
 echo "Cleaning up files.."
 mkdir -p /tmp/dfc_backup
 mv aws.env /tmp/dfc_backup/
 mv dfc.json /tmp/dfc_backup/
 mv Dockerfile /tmp/dfc_backup/
 echo done
-

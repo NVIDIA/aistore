@@ -332,10 +332,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 			ctx.config.CksumConfig.ValidateColdGet = v
 		}
 	case "checksum":
-		if value == "xxhash" || value == "none" {
+		if value == ChecksumXXHash || value == ChecksumNone {
 			ctx.config.CksumConfig.Checksum = value
 		} else {
-			return fmt.Sprintf("Invalid %s type %s - expecting xxhash or none", name, value)
+			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, ChecksumXXHash, ChecksumNone)
 		}
 	default:
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)

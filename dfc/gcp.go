@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	GOOG_META_DATA_DFC_HASH_TYPE = "x-goog-meta-dfc-hash-type"
-	GOOG_META_DATA_DFC_HASH      = "x-goog-meta-dfc-hash"
+	gcpDfcHashType = "x-goog-meta-dfc-hash-type"
+	gcpDfcHashVal  = "x-goog-meta-dfc-hash-val"
 )
 
 //======
@@ -138,7 +138,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (nhobj
 		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v", objname, bucket, err)
 		return
 	}
-	v = newcksumvalue(attrs.Metadata[GOOG_META_DATA_DFC_HASH_TYPE], attrs.Metadata[GOOG_META_DATA_DFC_HASH])
+	v = newcksumvalue(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
@@ -168,8 +168,8 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	if ohash != nil {
 		htype, hval = ohash.get()
 		md = make(map[string]string)
-		md[GOOG_META_DATA_DFC_HASH_TYPE] = htype
-		md[GOOG_META_DATA_DFC_HASH] = hval
+		md[gcpDfcHashType] = htype
+		md[gcpDfcHashVal] = hval
 	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
 	wc.Metadata = md

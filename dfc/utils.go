@@ -201,10 +201,10 @@ func newcksumvalue(kind string, val string) cksumvalue {
 	if kind == "" || val == "" {
 		return nil
 	}
-	if kind == "xxhash" {
+	if kind == ChecksumXXHash {
 		return &cksumvalxxhash{kind, val}
 	}
-	assert(kind == "md5")
+	assert(kind == ChecksumMD5)
 	return &cksumvalmd5{kind, val}
 }
 

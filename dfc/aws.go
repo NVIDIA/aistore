@@ -23,11 +23,11 @@ import (
 )
 
 const (
-	AWS_META_DATA_PUT_DFC_HASH_TYPE = "x-amz-meta-dfc-hash-type"
-	AWS_META_DATA_PUT_DFC_HASH      = "x-amz-meta-dfc-hash"
-	AWS_META_DATA_GET_DFC_HASH_TYPE = "X-Amz-Meta-Dfc-Hash-Type"
-	AWS_META_DATA_GET_DFC_HASH      = "X-Amz-Meta-Dfc-Hash"
-	AWS_MULTI_PART_DELIMITER        = "-"
+	awsPutDfcHashType = "x-amz-meta-dfc-hash-type"
+	awsPutDfcHashVal  = "x-amz-meta-dfc-hash-val"
+	awsGetDfcHashType = "X-Amz-Meta-Dfc-Hash-Type"
+	awsGetDfcHashVal  = "X-Amz-Meta-Dfc-Hash-Val"
+	awsMultipartDelim = "-"
 )
 
 //======
@@ -128,22 +128,20 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (nhobj cksumvalue, s
 		return
 	}
 	defer obj.Body.Close()
-	// object may not have dfc metadata.
-	if val, ok := obj.Metadata[AWS_META_DATA_GET_DFC_HASH_TYPE]; ok {
-		v = newcksumvalue(*val, *obj.Metadata[AWS_META_DATA_GET_DFC_HASH])
+	// object may not have dfc metadata
+	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
+		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
+			v = newcksumvalue(*htype, *hval)
+		}
 	}
 	md5, _ := strconv.Unquote(*obj.ETag)
-	// Check for MultiPart
-	if strings.Contains(md5, AWS_MULTI_PART_DELIMITER) {
+	// FIXME: multipart
+	if strings.Contains(md5, awsMultipartDelim) {
 		if glog.V(3) {
-			glog.Infof("MultiPart object (bucket %s key %s) download and validation not supported",
-				bucket, objname)
+			glog.Infof("Multipart object %s (bucket %s) - not validating checksum", objname, bucket)
 		}
-		// Ignore ETag
 		md5 = ""
 	}
-	// cloudhobj may be nil for legacy objects.
-	// md5 will be empty for Multipart objects.
 	if nhobj, size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, obj.Body); errstr != "" {
 		return
 	}
@@ -162,8 +160,8 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	if ohash != nil {
 		htype, hval = ohash.get()
 		md = make(map[string]*string)
-		md[AWS_META_DATA_PUT_DFC_HASH_TYPE] = aws.String(htype)
-		md[AWS_META_DATA_PUT_DFC_HASH] = aws.String(hval)
+		md[awsPutDfcHashType] = aws.String(htype)
+		md[awsPutDfcHashVal] = aws.String(hval)
 	}
 	sess := createsession()
 	uploader := s3manager.NewUploader(sess)

@@ -143,7 +143,7 @@ do
 		"lowwm":		${LOWWATERMARK},
 		"highwm":		${HIGHWATERMARK},
 		"dont_evict_time":      "${DONTEVICTIME}",
-        	"lru_enabled":  	${LRUENABLED}
+		"lru_enabled":  	${LRUENABLED}
 	},
 	"test_fspaths": {
 		"root":			"${TESTFSPATHROOT}",

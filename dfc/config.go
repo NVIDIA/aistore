@@ -8,12 +8,29 @@ package dfc
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/golang/glog"
+)
+
+const (
+	amazoncloud = "aws"
+	googlecloud = "gcp"
+)
+
+// checksums: xattr, http header, and config
+const (
+	xattrXXHashVal = "user.obj.dfchash"
+
+	HeaderDfcChecksumType = "HeaderDfcChecksumType"
+	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"
+	ChecksumNone          = "none"
+	ChecksumXXHash        = "xxhash"
+	ChecksumMD5           = "md5"
 )
 
 // dfconfig specifies common daemon's configuration structure in JSON format.
@@ -40,11 +57,6 @@ type dfconfig struct {
 	NoXattrs         bool              `json:"no_xattrs"`
 	H2c              bool              `json:"h2c"`
 }
-
-const (
-	amazoncloud = "aws"
-	googlecloud = "gcp"
-)
 
 // s3config specifies  Amazon S3 specific configuration parameters
 type s3config struct {
@@ -101,20 +113,22 @@ func initconfigparam() error {
 	// Validate - TODO more validation
 	hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
 	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-		glog.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)
-		return nil
+		return fmt.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)
 	}
 	if ctx.config.TestFSP.Count == 0 {
 		for fp1 := range ctx.config.FSpaths {
 			for fp2 := range ctx.config.FSpaths {
 				if fp1 != fp2 && (strings.HasPrefix(fp1, fp2) || strings.HasPrefix(fp2, fp1)) {
-					glog.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q",
+					fmt.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q",
 						fp1, fp2)
-					return nil
 				}
 			}
 		}
 	}
+	if ctx.config.CksumConfig.Checksum != ChecksumXXHash && ctx.config.CksumConfig.Checksum != ChecksumNone {
+		fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.CksumConfig.Checksum, ChecksumXXHash, ChecksumNone)
+	}
+
 	// CLI override
 	if clivars.statstime != 0 {
 		ctx.config.StatsTime = clivars.statstime

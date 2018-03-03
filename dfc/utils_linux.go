@@ -10,16 +10,12 @@ import (
 	"syscall"
 )
 
-const (
-	ENODATA = 61
-)
-
 // Get specific attribute for specified fqn.
 func Getxattr(fqn string, attrname string) ([]byte, string) {
 	data := make([]byte, MAXATTRSIZE)
 	read, err := syscall.Getxattr(fqn, attrname, data)
 	assert(read < MAXATTRSIZE)
-	if err != nil && err != syscall.Errno(ENODATA) {
+	if err != nil && err != syscall.ENODATA {
 		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, fqn, err)
 	}
 	if read > 0 {

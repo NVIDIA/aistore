@@ -20,7 +20,7 @@ func Getxattr(fqn string, attrname string) ([]byte, string) {
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
 		uintptr(unsafe.Pointer(&buf[0])), uintptr(MAXATTRSIZE), uintptr(0), uintptr(0))
 	assert(int(readstr) < MAXATTRSIZE)
-	if err != syscall.Errno(0) && err != syscall.Errno(ENODATA) {
+	if err != syscall.Errno(0) && err != syscall.ENODATA {
 		errstr := fmt.Sprintf("Failed to get extended attr for fqn %s attr %s, err: %v",
 			fqn, attrname, err)
 		return nil, errstr

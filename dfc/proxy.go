@@ -20,11 +20,10 @@ import (
 	"github.com/golang/glog"
 )
 
-//===============
-//
-// REST messaging by proxy
-//
-//===============
+const (
+	syncmapsdelay = time.Second * 3
+)
+
 //===========================================================================
 //
 // proxy runner
@@ -611,10 +610,6 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // delayed broadcasts
 //
 //========================
-const (
-	syncmapsdelay = time.Second * 3
-)
-
 // TODO: proxy.stop() must terminate this routine
 func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	aval := time.Now().Unix()

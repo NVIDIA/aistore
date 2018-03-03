@@ -102,9 +102,9 @@ func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 		}
 	}()
 	if validate && err == nil {
-		hdhash = r.Header.Get("Content-HASH")
-		hdhashtype = r.Header.Get("Content-HASH-Type")
-		if hdhashtype == "xxhash" {
+		hdhash = r.Header.Get(dfc.HeaderDfcChecksumVal)
+		hdhashtype = r.Header.Get(dfc.HeaderDfcChecksumType)
+		if hdhashtype == dfc.ChecksumXXHash {
 			xx := xxhash.New64()
 			if hash, errstr = dfc.ComputeXXHash(r.Body, nil, xx); errstr != "" {
 				errch <- errors.New(errstr)
@@ -116,7 +116,7 @@ func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 				}
 			} else {
 				if !silent {
-					fmt.Printf("Header's hash %s match the file's %s \n", hdhash, hash)
+					fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
 				}
 			}
 		}
@@ -159,15 +159,15 @@ func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan er
 	req.GetBody = func() (io.ReadCloser, error) {
 		return os.Open(fname)
 	}
-	if htype == "xxhash" {
+	if htype == dfc.ChecksumXXHash {
 		xx := xxhash.New64()
 		hash, errstr = dfc.ComputeXXHash(file, nil, xx)
 		if errstr != "" {
 			errch <- fmt.Errorf("Failed to compute xxhash file %s, err: %v", fname, errstr)
 			return
 		}
-		req.Header.Set("Content-HASH-Type", htype)
-		req.Header.Set("Content-HASH", hash)
+		req.Header.Set(dfc.HeaderDfcChecksumType, htype)
+		req.Header.Set(dfc.HeaderDfcChecksumVal, hash)
 	}
 	_, err = file.Seek(0, 0)
 	if err != nil {

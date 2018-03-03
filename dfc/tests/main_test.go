@@ -27,12 +27,12 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-// commandline examples:
-// # go test -v -run=down -args -numfiles=10
-// # go test -v -run=down -args -bucket=mybucket
-// # go test -v -run=down -args -bucket=mybucket -numworkers 5
-// # go test -v -run=list
-// # go test -v -run=xxx -bench . -count 10
+// usage examples:
+// # go test ./tests -v -run=regression
+// # go test ./tests -v -run=down -args -bucket=mybucket
+// # go test ./tests -v -run=list -bucket=otherbucket
+// # go test ./tests -v -run=smoke -numworkers=4
+// # go test ./tests -v -run=xxx -bench . -count 10
 
 const (
 	baseDir         = "/tmp/dfc"
@@ -44,23 +44,20 @@ const (
 	RestAPIProxyDel = ProxyURL + "/v1/files"  // version = 1, resource = files
 	ColdValidStr    = "coldmd5"
 	ChksumValidStr  = "chksum"
-	AllHashstr      = "all"
-	Xxhashstr       = "xxhash"
 	ColdMD5str      = "coldmd5"
-	Nonestr         = "none"
 	DeleteDir       = "/tmp/dfc/delete"
 	DeleteStr       = "delete"
-	largefilesize   = 16 // in MB
+	largefilesize   = 4 // in MB
 )
 
 // globals
 var (
-	clibucket  string
-	numfiles   int
-	numworkers int
-	match      string
-	validation string
-	totalio    int64
+	clibucket   string
+	numfiles    int
+	numworkers  int
+	match       string
+	clichecksum string
+	totalio     int64
 )
 
 // worker's result
@@ -90,7 +87,7 @@ func init() {
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")
-	flag.StringVar(&validation, "validation", AllHashstr, "all,xxhash or coldmd5")
+	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
 }
 
@@ -352,8 +349,8 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		url := RestAPIGet + "/" + bucket + "/" + keyname
 		t.Logf("Worker %2d: GET %q", id, url)
 		r, err := http.Get(url)
-		hdhash := r.Header.Get("Content-HASH")
-		hdhashtype := r.Header.Get("Content-HASH-Type")
+		hdhash := r.Header.Get(dfc.HeaderDfcChecksumVal)
+		hdhashtype := r.Header.Get(dfc.HeaderDfcChecksumType)
 		if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
 			t.Errorf("Failing test")
 			return
@@ -374,7 +371,7 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 				t.Errorf("Worker %2d: %s", id, errstr)
 			}
 		}()
-		if hdhashtype == "xxhash" {
+		if hdhashtype == dfc.ChecksumXXHash {
 			xx := xxhash.New64()
 			written, errstr = dfc.ReceiveFile(file, r.Body, nil, xx)
 			if errstr != "" {
@@ -393,7 +390,7 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			} else {
 				tlogf("Worker %2d: header's hash %s does match the file's %s \n", id, hdhash, hash)
 			}
-		} else if hdhashtype == "md5" {
+		} else if hdhashtype == dfc.ChecksumMD5 {
 			md5 := md5.New()
 			written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
 			if errstr != "" {
@@ -526,7 +523,7 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Test_chksumvalidation(t *testing.T) {
+func Test_checksum(t *testing.T) {
 	var (
 		filesput    = make(chan string, 100)
 		fileslist   = make([]string, 0, 100)
@@ -534,31 +531,21 @@ func Test_chksumvalidation(t *testing.T) {
 		bucket      = clibucket
 		start, curr time.Time
 		duration    time.Duration
-		numfiles    int64
 		htype       string
+		numPuts     = 5
 	)
-	if totalio%largefilesize > 0 {
-		numfiles = totalio/largefilesize + 1
-	} else {
-		numfiles = totalio / largefilesize
-	}
-	if numfiles > 100 {
-		numfiles = 100
-	}
-	numfiles = 5
-	numPuts := numfiles
 	totalio := (numPuts * largefilesize)
 
 	ldir := LocalSrcDir + "/" + ChksumValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
-	//Get Current Config
+	// Get Current Config
 	config := getConfig(RestAPIDaemonPath, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
-	if ochksum == "xxhash" {
+	if ochksum == dfc.ChecksumXXHash {
 		htype = ochksum
 	}
 	putRandomFiles(0, 0, uint64(largefilesize*1024*1024), int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true)
@@ -572,8 +559,8 @@ func Test_chksumvalidation(t *testing.T) {
 	// Delete it from cache.
 	evictobjects(t, fileslist)
 	// Disable checkum
-	if ochksum != Nonestr {
-		setConfig("checksum", fmt.Sprint("none"), RestAPIClusterPath, httpclient, t)
+	if ochksum != dfc.ChecksumNone {
+		setConfig("checksum", dfc.ChecksumNone, RestAPIClusterPath, httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -592,18 +579,18 @@ func Test_chksumvalidation(t *testing.T) {
 	if t.Failed() {
 		goto cleanup
 	}
-	tlogf("GET %d MB without any validation: %v\n", totalio, duration)
+	tlogf("GET %d MB without any checksum validation: %v\n", totalio, duration)
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
-	switch validation {
-	case AllHashstr:
-		setConfig("checksum", fmt.Sprint("xxhash"), RestAPIClusterPath, httpclient, t)
+	switch clichecksum {
+	case "all":
+		setConfig("checksum", dfc.ChecksumXXHash, RestAPIClusterPath, httpclient, t)
 		setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
-	case Xxhashstr:
-		setConfig("checksum", fmt.Sprint("xxhash"), RestAPIClusterPath, httpclient, t)
+	case dfc.ChecksumXXHash:
+		setConfig("checksum", dfc.ChecksumXXHash, RestAPIClusterPath, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -612,19 +599,19 @@ func Test_chksumvalidation(t *testing.T) {
 		if t.Failed() {
 			goto cleanup
 		}
-	case Nonestr:
-		//do nothing as its been already disabled.
+	case dfc.ChecksumNone:
+		// do nothing
 		tlogf("Checksum validation has been disabled \n")
 		goto cleanup
 	default:
-		fmt.Fprintf(os.Stdout, "Validation is either not set or invalid, Set -validation=[all|xxhash|coldmd5|none] \n")
+		fmt.Fprintf(os.Stdout, "Checksum is either not set or invalid\n")
 		goto cleanup
 	}
 	start = time.Now()
 	getfromfilelist(t, bucket, errch, fileslist, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
-	tlogf("GET %d MB with validation type %s:    %v\n", totalio, validation, duration)
+	tlogf("GET %d MB and validate checksum (%s): %v\n", totalio, clichecksum, duration)
 	selectErr(errch, "get", t, false)
 cleanup:
 	deletefromfilelist(t, bucket, errch, fileslist)
