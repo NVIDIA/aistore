@@ -24,11 +24,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const (
-	MAXATTRSIZE      = 1024
-	MAX_COPYBUF_SIZE = 128 * 1024 // 128 KB
-)
-
 func assert(cond bool, args ...interface{}) {
 	if cond {
 		return

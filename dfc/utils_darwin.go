@@ -11,15 +11,19 @@ import (
 	"unsafe"
 )
 
-// Get specific attribute for specified fqn.
+const (
+	maxAttrSize = 1024
+)
+
+// Getxattr returns specific attribute for specified fqn.
 func Getxattr(fqn string, attrname string) ([]byte, string) {
-	buf := make([]byte, MAXATTRSIZE)
+	buf := make([]byte, maxAttrSize)
 	// Read into buffer of that size.
 	readstr, _, err := syscall.Syscall6(syscall.SYS_GETXATTR,
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(fqn))),
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
-		uintptr(unsafe.Pointer(&buf[0])), uintptr(MAXATTRSIZE), uintptr(0), uintptr(0))
-	assert(int(readstr) < MAXATTRSIZE)
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(maxAttrSize), uintptr(0), uintptr(0))
+	assert(int(readstr) < maxAttrSize)
 	if err != syscall.Errno(0) && err != syscall.ENODATA {
 		errstr := fmt.Sprintf("Failed to get extended attr for fqn %s attr %s, err: %v",
 			fqn, attrname, err)
@@ -27,15 +31,15 @@ func Getxattr(fqn string, attrname string) ([]byte, string) {
 	}
 	if int(readstr) > 0 {
 		return buf[:int(readstr)], ""
-	} else {
-		return nil, ""
 	}
+
+	return nil, ""
 }
 
-// Set specific named attribute for specific fqn.
+// Setxattr sets specific named attribute for specific fqn.
 func Setxattr(fqn string, attrname string, data []byte) (errstr string) {
 	datalen := len(data)
-	assert(datalen < MAXATTRSIZE)
+	assert(datalen < maxAttrSize)
 	_, _, err := syscall.Syscall6(syscall.SYS_SETXATTR,
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(fqn))),
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
@@ -49,7 +53,7 @@ func Setxattr(fqn string, attrname string, data []byte) (errstr string) {
 	return
 }
 
-// Delete specific named attribute for specific fqn.
+// Deletexattr deletes specific named attribute for specific fqn.
 func Deletexattr(fqn string, attrname string) (errstr string) {
 	_, _, err := syscall.Syscall(syscall.SYS_REMOVEXATTR,
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(fqn))),

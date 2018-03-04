@@ -119,14 +119,13 @@ func initconfigparam() error {
 		for fp1 := range ctx.config.FSpaths {
 			for fp2 := range ctx.config.FSpaths {
 				if fp1 != fp2 && (strings.HasPrefix(fp1, fp2) || strings.HasPrefix(fp2, fp1)) {
-					fmt.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q",
-						fp1, fp2)
+					return fmt.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q", fp1, fp2)
 				}
 			}
 		}
 	}
 	if ctx.config.CksumConfig.Checksum != ChecksumXXHash && ctx.config.CksumConfig.Checksum != ChecksumNone {
-		fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.CksumConfig.Checksum, ChecksumXXHash, ChecksumNone)
+		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.CksumConfig.Checksum, ChecksumXXHash, ChecksumNone)
 	}
 
 	// CLI override
