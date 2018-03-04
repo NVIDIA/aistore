@@ -8,50 +8,23 @@
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 PROXYURL="http://localhost:8080"
-PASSTHRU=true
-
-# local daemon ports start from $PORT+1
 PORT=8079
-
-PROTO="tcp"
 LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
 LOGROOT="/tmp/dfc"
 ###################################
 #
-# NOTE:
 # fspaths config is used if and only if test_fspaths.count == 0
 # existence of each fspath is checked at runtime
 #
 ###################################
-TESTFSPATHROOT="/tmp/dfc/"
-CLOUDBUCKETS="cloud"
-LOCALBUCKETS="local"
-LBCONF="localbuckets"
 CONFPATH="$HOME/.dfc"
-# CONFPATH="/etc/.dfc"
-MAXCONCURRENTDOWNLOAD=64
-MAXCONCURRENTUPLOAD=64
-MAXPARTSIZE=4294967296
 TESTFSPATHCOUNT=1
-STATSTIME="10s"
-HTTPTIMEOUT="60s"
-KEEPALIVETIME="120s"
-DONTEVICTIME="30m"
-LOWWATERMARK=75
-HIGHWATERMARK=90
-NOXATTRS=false
-LRUENABLED=true
-VALIDATECOLDGET=true
-CHECKSUM="xxhash"
-H2C=false
 
 PROXYPORT=$(expr $PORT + 1)
 if lsof -Pi :$PROXYPORT -sTCP:LISTEN -t >/dev/null; then
 	echo "Error: TCP port $PROXYPORT is not open (check if DFC is already running)"
 	exit 1
 fi
-
-# (prelim and incomplete) test extended attrs
 TMPF=$(mktemp /tmp/dfc.XXXXXXXXX)
 touch $TMPF;
 OS=$(uname -s)
@@ -63,7 +36,7 @@ case $OS in
 		xattr -w user.comment comment $TMPF
 		;;
 	*)
-		echo "Sorry " $OS " not supported "
+		echo "Error: '$OS' is not supported"
 		rm $TMPF 2>/dev/null
 		exit 1
 esac
@@ -105,71 +78,21 @@ else
 fi
 
 mkdir -p $CONFPATH
-
+#
+# generate conf file(s) based on the settings/selections above
+#
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 for (( c=$START; c<=$END; c++ ))
 do
 	PORT=$(expr $PORT + 1)
 	CONFFILE="$CONFPATH/dfc$c.json"
 	LOGDIR="$LOGROOT/$c/log"
-	cat > $CONFFILE <<EOL
-{
-	"logdir":			"$LOGDIR",
-	"loglevel": 			"${LOGLEVEL}",
-	"cloudprovider":		"${CLDPROVIDER}",
-	"cloud_buckets":		"${CLOUDBUCKETS}",
-	"local_buckets":		"${LOCALBUCKETS}",
-	"lb_conf":                	"${LBCONF}",
-	"stats_time":			"${STATSTIME}",
-	"http_timeout":			"${HTTPTIMEOUT}",
-	"keep_alive_time":		"${KEEPALIVETIME}",
-	"listen": {
-		"proto": 		"${PROTO}",
-		"port":			"${PORT}"
-	},
-	"proxy": {
-		"url": 			"${PROXYURL}",
-		"passthru": 		${PASSTHRU}
-	},
-	"s3": {
-		"maxconcurrdownld":	${MAXCONCURRENTDOWNLOAD},
-		"maxconcurrupld":	${MAXCONCURRENTUPLOAD},
-		"maxpartsize":		${MAXPARTSIZE}
-	},
-	"cksum_config": {
-                 "validate_cold_get":    ${VALIDATECOLDGET},
-                 "checksum":             "${CHECKSUM}"
-	},
-	"lru_config": {
-		"lowwm":		${LOWWATERMARK},
-		"highwm":		${HIGHWATERMARK},
-		"dont_evict_time":      "${DONTEVICTIME}",
-		"lru_enabled":  	${LRUENABLED}
-	},
-	"test_fspaths": {
-		"root":			"${TESTFSPATHROOT}",
-		"count":		$TESTFSPATHCOUNT,
-		"instance":		$c
-	},
-	"fspaths": {
-		"/tmp/dfc":		"",
-		"/disk2/dfc":		""
-	},
-	"no_xattrs":			${NOXATTRS},
-	"h2c": 				${H2C}
-}
-EOL
+	source $DIR/config.sh
 done
 
-# Set the following glog CLI to change the logging defaults:
-#
-# -logtostderr=false
-#	Logs are written to standard error instead of to files.
-# -alsologtostderr=false
-#	Logs are written to standard error as well as to files.
-# -stderrthreshold=ERROR
-#	Log events at or above this severity are logged to standard
-#	error as well as to files.
-
+# -logtostderr=false 		# Logs are written to standard error
+# -alsologtostderr=false 	# Logs are written to standard error and files
+# -stderrthreshold=ERROR 	# Log errors and above are written to stderr and files
 # build
 go build && go install && GOBIN=$GOPATH/bin go install setup/dfc.go
 if [ $? -ne 0 ]; then
