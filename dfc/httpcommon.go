@@ -154,11 +154,14 @@ func (r *httprunner) stop(err error) {
 
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
 // optionally, sends a json-encoded body to the callee
-func (r *httprunner) call(si *daemonInfo, url string, method string, injson []byte) (outjson []byte, err error, errstr string, status int) {
+func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
+	timeout ...time.Duration) (outjson []byte, err error, errstr string, status int) {
 	var (
 		request  *http.Request
 		response *http.Response
 		sid      = "unknown"
+		timer    *time.Timer
+		cancelch chan struct{}
 	)
 	if si != nil {
 		sid = si.DaemonID
@@ -178,7 +181,20 @@ func (r *httprunner) call(si *daemonInfo, url string, method string, injson []by
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
 		return
 	}
+	if len(timeout) > 0 {
+		cancelch = make(chan struct{})
+		timer = time.AfterFunc(timeout[0], func() {
+			close(cancelch)
+			cancelch = nil
+		})
+		request.Cancel = cancelch
+	}
 	response, err = r.httpclient.Do(request)
+	// For a timer created with AfterFunc(d, f), if t.Stop returns false, then the timer
+	// has already expired and the function f has been started in its own goroutine (time/sleep.go)
+	if timer != nil && timer.Stop() && cancelch != nil {
+		close(cancelch)
+	}
 	if err != nil {
 		if response != nil && response.StatusCode > 0 {
 			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, method, url, response.Status, err)

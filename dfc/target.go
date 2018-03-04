@@ -157,8 +157,10 @@ func (t *targetrunner) register(keepalive bool) (err error, status int) {
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
 	if keepalive {
 		url += "/" + Rkeepalive
+		_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes, kalivetimeout)
+	} else {
+		_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes)
 	}
-	_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes)
 	return
 }
 
@@ -933,7 +935,9 @@ func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, a
 		return
 	}
 	if curversion > newsmap.Version {
-		glog.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, newsmap.Version)
+		err := fmt.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, newsmap.Version)
+		glog.Errorln(err)
+		t.kalive.onerr(err, 0)
 		return
 	}
 	glog.Infof("%s: new Smap version %d (old %d)", apitems[0], newsmap.Version, curversion)

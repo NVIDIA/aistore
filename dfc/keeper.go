@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	errorpollival = time.Second
-	errorpollmaxc = 5
+	proxypollival = time.Second * 3
+	targetpollivl = time.Second * 10
+	kalivetimeout = time.Second * 2
+	proxypollmaxc = 3
 )
 
 type kaliveif interface {
@@ -69,11 +71,6 @@ func newtargetkalive(t *targetrunner) *targetkalive {
 // common methods
 //
 //=========================================================
-func (r *kalive) httpcall(si *daemonInfo, url string, method string, injson []byte) (err error, status int) {
-	_, err, _, status = r.h.call(si, url, method, injson)
-	return
-}
-
 func (r *kalive) onerr(err error, status int) {
 	if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 		r.checknow <- err
@@ -99,41 +96,25 @@ func (r *kalive) run() error {
 	r.checknow = make(chan error, 16)
 	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(ctx.config.KeepAliveTime)
+	lastcheck := time.Time{}
 	for {
 		select {
 		case <-ticker.C:
+			lastcheck = time.Now()
 			r.k.keepalive(nil)
 		case err := <-r.checknow:
-			if stopped := r.k.keepalive(err); stopped {
-				ticker.Stop()
-				return nil
+			if time.Now().Sub(lastcheck) >= proxypollival {
+				lastcheck = time.Now()
+				if stopped := r.k.keepalive(err); stopped {
+					ticker.Stop()
+					return nil
+				}
 			}
 		case <-r.chstop:
 			ticker.Stop()
 			return nil
 		}
 	}
-}
-
-func (r *kalive) poll(si *daemonInfo, url string, jsbytes []byte) (responded, stopped bool) {
-	poller := time.NewTicker(errorpollival)
-	defer poller.Stop()
-	for i := 0; i < errorpollmaxc; i++ {
-		select {
-		case <-poller.C:
-			err, status := r.httpcall(si, url, http.MethodGet, jsbytes)
-			if err == nil {
-				return true, false
-			}
-			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-				continue
-			}
-			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
-		case <-r.chstop:
-			return false, true
-		}
-	}
-	return false, false
 }
 
 func (r *kalive) stop(err error) {
@@ -195,6 +176,27 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	return false
 }
 
+func (r *proxykalive) poll(si *daemonInfo, url string, jsbytes []byte) (responded, stopped bool) {
+	poller := time.NewTicker(proxypollival)
+	defer poller.Stop()
+	for i := 0; i < proxypollmaxc; i++ {
+		select {
+		case <-poller.C:
+			_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes, kalivetimeout)
+			if err == nil {
+				return true, false
+			}
+			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+				continue
+			}
+			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
+		case <-r.chstop:
+			return false, true
+		}
+	}
+	return false, false
+}
+
 //==========================================
 //
 // targetkalive - implements keepaliveinterace
@@ -204,6 +206,33 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
 		return
 	}
-	err, _ = r.t.register(true)
-	return
+	err, status := r.t.register(true)
+	if err == nil {
+		return
+	}
+	if status > 0 {
+		glog.Infof("Warning: keepalive failed with status %d, err: %v", status, err)
+	} else {
+		glog.Infof("Warning: keepalive failed, err: %v", err)
+	}
+	// until success or stop
+	poller := time.NewTicker(targetpollivl)
+	defer poller.Stop()
+	for {
+		select {
+		case <-poller.C:
+			err, status := r.t.register(true)
+			if err == nil {
+				glog.Infoln("keepalive: successfully re-registered")
+				return
+			}
+			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+				continue
+			}
+			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
+		case <-r.chstop:
+			stopped = true
+			return
+		}
+	}
 }
