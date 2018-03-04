@@ -203,8 +203,7 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			}
 
 			select {
-			case e := <-errch:
-				fmt.Fprintf(os.Stdout, "PUT FAIL: %s\n", e)
+			case <-errch:
 				t.Fail()
 			default:
 			}
@@ -266,8 +265,7 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		select {
 		case <-doneCh:
 			done = true
-		case e := <-errch:
-			fmt.Fprintf(os.Stdout, "DEL FAIL: %s\n", e)
+		case <-errch:
 			t.Fail()
 		default:
 		}

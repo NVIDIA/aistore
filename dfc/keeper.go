@@ -204,22 +204,6 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
 		return
 	}
-	msg := GetMsg{GetWhat: GetWhatSmap}
-	jsbytes, err := json.Marshal(&msg)
-	if err != nil {
-		glog.Errorf("Unexpected failure to json-marshal %v, err: %v", msg, err)
-		return
-	}
-	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
-	_, err, _, status := r.t.call(r.t.proxysi, url, http.MethodGet, jsbytes)
-	if err == nil {
-		return
-	}
-	if status > 0 {
-		glog.Infof("Warning: proxy %s fails keepalive with status %d, err: %v", r.t.proxysi.DaemonID, status, err)
-	} else {
-		glog.Infof("Warning: proxy %s fails keepalive, err: %v", r.t.proxysi.DaemonID, err)
-	}
-	r.poll(r.t.proxysi, url, jsbytes)
+	err, _ = r.t.register(true)
 	return
 }

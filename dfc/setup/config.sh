@@ -8,7 +8,7 @@
 	"lb_conf":                	"localbuckets",
 	"stats_time":			"10s",
 	"http_timeout":			"60s",
-	"keep_alive_time":		"120s",
+	"keep_alive_time":		"30s",
 	"listen": {
 		"proto": 		"tcp",
 		"port":			"${PORT}"
@@ -29,7 +29,7 @@
 	"lru_config": {
 		"lowwm":		75,
 		"highwm":		90,
-		"dont_evict_time":      "30m",
+		"dont_evict_time":      "120m",
 		"lru_enabled":  	true
 	},
 	"test_fspaths": {

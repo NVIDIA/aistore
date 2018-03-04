@@ -65,7 +65,7 @@ func discardResponse(r *http.Response, err error, src string) error {
 			return fmt.Errorf("Failed to read http response, err: %v", err)
 		}
 	} else {
-		return fmt.Errorf("Failed to get response from %s, err %v", src, err)
+		return fmt.Errorf("%s failed, err: %v", src, err)
 	}
 	return nil
 }
@@ -121,7 +121,7 @@ func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 			}
 		}
 	}
-	err = discardResponse(r, err, fmt.Sprintf("object %s from bucket %s", keyname, bucket))
+	err = discardResponse(r, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
 	emitError(r, err, errch)
 	return err
 }
@@ -182,7 +182,7 @@ func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan er
 			r.Body.Close()
 		}
 	}()
-	err = discardResponse(r, err, "put")
+	err = discardResponse(r, err, "PUT")
 	emitError(r, err, errch)
 	return err
 }
@@ -213,7 +213,7 @@ func Del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 	defer func() {
 		r.Body.Close()
 	}()
-	err = discardResponse(r, err, "delete")
+	err = discardResponse(r, err, "DELETE")
 	emitError(r, err, errch)
 	return err
 }

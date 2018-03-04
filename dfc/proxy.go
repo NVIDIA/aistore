@@ -495,31 +495,53 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 	_ = p.writeJSON(w, r, jsbytes, "httpclugetstats")
 }
 
-// registers a new target
+// register|keepalive target
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
+	var (
+		osi       *daemonInfo
+		nsi       daemonInfo
+		keepalive bool
+	)
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
-	var si daemonInfo
-	if p.readJSON(w, r, &si) != nil {
+	if len(apitems) > 0 {
+		keepalive = (apitems[0] == Rkeepalive)
+	}
+	if p.readJSON(w, r, &nsi) != nil {
 		return
 	}
-	if net.ParseIP(si.NodeIPAddr) == nil {
-		s := fmt.Sprintf("cannot register target: invalid IP address %v", si.NodeIPAddr)
+	if net.ParseIP(nsi.NodeIPAddr) == nil {
+		s := fmt.Sprintf("register target %s: invalid IP address %v", nsi.DaemonID, nsi.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
 	p.statsif.add("numpost", 1)
 	ctx.smap.lock()
-	if ctx.smap.get(si.DaemonID) != nil {
-		glog.Errorf("Warning: duplicate target ID %s", si.DaemonID)
+	osi = ctx.smap.get(nsi.DaemonID)
+	if keepalive {
+		if osi == nil {
+			glog.Warningf("register/keepalive target %s: adding back to the cluster map", nsi.DaemonID)
+			goto add
+		}
+		if osi.NodeIPAddr != nsi.NodeIPAddr || osi.DaemonPort != nsi.DaemonPort {
+			glog.Warningf("register/keepalive target %s: info changed - renewing", nsi.DaemonID)
+			goto add
+		}
+		ctx.smap.unlock()
+		p.kalive.timestamp(nsi.DaemonID)
+		return
+	}
+	if osi != nil {
+		glog.Errorf("register target: duplicate target ID %s - renewing anyway", nsi.DaemonID)
 		// fall through
 	}
-	ctx.smap.add(&si)
+add:
+	ctx.smap.add(&nsi)
 	ctx.smap.unlock()
 	if glog.V(3) {
-		glog.Infof("Registered target ID %s (count %d)", si.DaemonID, ctx.smap.count())
+		glog.Infof("register target %s (count %d)", nsi.DaemonID, ctx.smap.count())
 	}
 	go p.synchronizeMaps(0, "")
 }

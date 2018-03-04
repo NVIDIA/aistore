@@ -101,14 +101,15 @@ type BucketList struct {
 
 // RESTful URL path: /v1/....
 const (
-	Rversion  = "v1"
-	Rfiles    = "files"
-	Rcluster  = "cluster"
-	Rdaemon   = "daemon"
-	Rsyncsmap = ActSyncSmap
-	Rebalance = ActRebalance
-	Rfrom     = "from_id"
-	Rto       = "to_id"
-	Rsynclb   = ActSyncLB
-	Rpush     = "push"
+	Rversion   = "v1"
+	Rfiles     = "files"
+	Rcluster   = "cluster"
+	Rdaemon    = "daemon"
+	Rsyncsmap  = ActSyncSmap
+	Rebalance  = ActRebalance
+	Rfrom      = "from_id"
+	Rto        = "to_id"
+	Rsynclb    = ActSyncLB
+	Rpush      = "push"
+	Rkeepalive = "keepalive"
 )

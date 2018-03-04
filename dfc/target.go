@@ -69,12 +69,12 @@ func (t *targetrunner) run() error {
 	t.buffers32k = newbuffers(32 * 1024)
 	t.buffers4k = newbuffers(4 * 1024)
 
-	if err, status := t.register(); err != nil {
+	if err, status := t.register(false); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout { // AA: use status
 			glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 			time.Sleep(time.Second * 3)
-			if err, status = t.register(); err != nil {
+			if err, status = t.register(false); err != nil {
 				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 				glog.Errorf("Target %s is terminating", t.si.DaemonID)
 				return err
@@ -149,12 +149,15 @@ func (t *targetrunner) stop(err error) {
 }
 
 // target registration with proxy
-func (t *targetrunner) register() (err error, status int) {
+func (t *targetrunner) register(keepalive bool) (err error, status int) {
 	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
 		return fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err), 0
 	}
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
+	if keepalive {
+		url += "/" + Rkeepalive
+	}
 	_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes)
 	return
 }
@@ -1043,7 +1046,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-	if err, status := t.register(); err != nil {
+	if err, status := t.register(false); err != nil {
 		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
