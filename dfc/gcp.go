@@ -75,7 +75,9 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	if errstr != "" {
 		return
 	}
-	var query *storage.Query = nil
+
+	var query *storage.Query
+
 	if msg.GetPrefix != "" {
 		query = &storage.Query{Prefix: msg.GetPrefix}
 	}

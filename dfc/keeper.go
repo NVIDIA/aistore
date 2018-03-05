@@ -206,7 +206,7 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
 		return
 	}
-	err, status := r.t.register(true)
+	status, err := r.t.register(true)
 	if err == nil {
 		return
 	}
@@ -221,7 +221,7 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	for {
 		select {
 		case <-poller.C:
-			err, status := r.t.register(true)
+			status, err := r.t.register(true)
 			if err == nil {
 				glog.Infoln("keepalive: successfully re-registered")
 				return

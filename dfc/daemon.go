@@ -105,8 +105,10 @@ type gstopError struct {
 // globals
 //
 //====================
-var ctx = &daemon{}
-var clivars = &cliVars{}
+var (
+	ctx     = &daemon{}
+	clivars = &cliVars{}
+)
 
 //====================
 //
@@ -294,7 +296,7 @@ func dfcinit() {
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
 
-// main
+// Run is the 'main' where everything gets started
 func Run() {
 	dfcinit()
 	var ok bool
