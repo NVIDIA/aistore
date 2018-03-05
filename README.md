@@ -63,6 +63,17 @@ For other useful commands, see the [Makefile](dfc/Makefile).
 
 * [AWS S3 Tutorial For Beginners](https://www.youtube.com/watch?v=LfBn5Y1X0vE)
 
+
+## Configuration
+
+DFC configuration is consolidated in a single [JSON file](dfc/setup/config.sh) where all of the knobs must be self-explanatory and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
+
+<img src="images/dfc-config-1.png" alt="DFC configuration: TCP port and URL" width="512">
+
+and
+
+<img src="images/dfc-config-2-commented.png" alt="DFC configuration: local filesystems" width="548">
+
 ## Miscellaneous
 
 The following sequence downloads 100 objects from the bucket "myS3bucket", and then
@@ -165,7 +176,7 @@ This request will produce an output that (in part) may look as follows:
 <img src="images/dfc-ls-subdir.png" alt="DFC list directory" width="440">
 
 For many more examples, please refer to the dfc/tests/*_test.go files in the repository.
-
+ 
 ## Cache Rebalancing
 
 DFC rebalances its cached content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
