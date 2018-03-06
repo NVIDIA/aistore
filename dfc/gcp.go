@@ -70,12 +70,13 @@ func createclient() (*storage.Client, context.Context, string) {
 //
 //======
 func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
-	glog.Infof("gcp listbucket %s", bucket)
+	glog.Infof("gcp: listbucket %s", bucket)
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
 	}
-	var query *storage.Query = nil
+	var query *storage.Query
+
 	if msg.GetPrefix != "" {
 		query = &storage.Query{Prefix: msg.GetPrefix}
 	}

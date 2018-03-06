@@ -65,7 +65,7 @@ func awsErrorToHTTP(awsError error) int {
 //
 //======
 func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
-	glog.Infof("aws listbucket %s", bucket)
+	glog.Infof("aws: listbucket %s", bucket)
 	sess := createsession()
 	svc := s3.New(sess)
 

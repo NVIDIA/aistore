@@ -12,9 +12,9 @@ import (
 
 // Get specific attribute for specified fqn.
 func Getxattr(fqn string, attrname string) ([]byte, string) {
-	data := make([]byte, MAXATTRSIZE)
+	data := make([]byte, maxAttrSize)
 	read, err := syscall.Getxattr(fqn, attrname, data)
-	assert(read < MAXATTRSIZE)
+	assert(read < maxAttrSize)
 	if err != nil && err != syscall.ENODATA {
 		return nil, fmt.Sprintf("Failed to get xattr %s for %s, err: %v", attrname, fqn, err)
 	}
@@ -27,7 +27,7 @@ func Getxattr(fqn string, attrname string) ([]byte, string) {
 
 // Set specific named attribute for specific fqn.
 func Setxattr(fqn string, attrname string, data []byte) (errstr string) {
-	assert(len(data) < MAXATTRSIZE)
+	assert(len(data) < maxAttrSize)
 	err := syscall.Setxattr(fqn, attrname, data, 0)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to set extended attr for fqn %s attr %s, err: %v",
