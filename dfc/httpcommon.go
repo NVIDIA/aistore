@@ -323,12 +323,6 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.LRUConfig.HighWM, checkwm = v, true
 		}
-	case "no_xattrs":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse no_xattrs, err: %v", err)
-		} else {
-			ctx.config.NoXattrs = v
-		}
 	case "passthru":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)

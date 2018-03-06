@@ -54,7 +54,6 @@ type dfconfig struct {
 	CksumConfig      cksumconfig       `json:"cksum_config"`
 	FSpaths          map[string]string `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
-	NoXattrs         bool              `json:"no_xattrs"`
 	H2c              bool              `json:"h2c"`
 }
 
@@ -110,24 +109,9 @@ func initconfigparam() error {
 		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Logdir, err)
 		return err
 	}
-	// Validate - TODO more validation
-	hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
-	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-		return fmt.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)
+	if err = validateconf(); err != nil {
+		return err
 	}
-	if ctx.config.TestFSP.Count == 0 {
-		for fp1 := range ctx.config.FSpaths {
-			for fp2 := range ctx.config.FSpaths {
-				if fp1 != fp2 && (strings.HasPrefix(fp1, fp2) || strings.HasPrefix(fp2, fp1)) {
-					return fmt.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q", fp1, fp2)
-				}
-			}
-		}
-	}
-	if ctx.config.CksumConfig.Checksum != ChecksumXXHash && ctx.config.CksumConfig.Checksum != ChecksumNone {
-		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.CksumConfig.Checksum, ChecksumXXHash, ChecksumNone)
-	}
-
 	// CLI override
 	if clivars.statstime != 0 {
 		ctx.config.StatsTime = clivars.statstime
@@ -160,23 +144,37 @@ func getConfig(fpath string) {
 		glog.Errorf("Failed to json-unmarshal config %q, err: %v", fpath, err)
 		os.Exit(1)
 	}
+}
+
+func validateconf() (err error) {
 	// durations
 	if ctx.config.StatsTime, err = time.ParseDuration(ctx.config.StatsTimeStr); err != nil {
-		goto merr
+		return fmt.Errorf("Bad stats-time format %s, err: %v", ctx.config.StatsTimeStr, err)
 	}
 	if ctx.config.HTTPTimeout, err = time.ParseDuration(ctx.config.HTTPTimeoutStr); err != nil {
-		goto merr
+		return fmt.Errorf("Bad http-timeout format %s, err: %v", ctx.config.HTTPTimeoutStr, err)
 	}
 	if ctx.config.KeepAliveTime, err = time.ParseDuration(ctx.config.KeepAliveTimeStr); err != nil {
-		goto merr
+		return fmt.Errorf("Bad keep-alive format %s, err: %v", ctx.config.KeepAliveTimeStr, err)
 	}
 	if ctx.config.LRUConfig.DontEvictTime, err = time.ParseDuration(ctx.config.LRUConfig.DontEvictTimeStr); err != nil {
-		goto merr
+		return fmt.Errorf("Bad dont-evict-time format %s, err: %v", ctx.config.LRUConfig.DontEvictTimeStr, err)
 	}
-	return
-merr:
-	glog.Errorf("Bad time duration format [%s, %s, %s, %s], err: %v",
-		ctx.config.StatsTimeStr, ctx.config.HTTPTimeoutStr,
-		ctx.config.LRUConfig.DontEvictTimeStr, ctx.config.KeepAliveTimeStr, err)
-	os.Exit(1)
+	hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
+	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
+		return fmt.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)
+	}
+	if ctx.config.TestFSP.Count == 0 {
+		for fp1 := range ctx.config.FSpaths {
+			for fp2 := range ctx.config.FSpaths {
+				if fp1 != fp2 && (strings.HasPrefix(fp1, fp2) || strings.HasPrefix(fp2, fp1)) {
+					return fmt.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q", fp1, fp2)
+				}
+			}
+		}
+	}
+	if ctx.config.CksumConfig.Checksum != ChecksumXXHash && ctx.config.CksumConfig.Checksum != ChecksumNone {
+		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.CksumConfig.Checksum, ChecksumXXHash, ChecksumNone)
+	}
+	return nil
 }

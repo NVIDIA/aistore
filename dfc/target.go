@@ -113,10 +113,6 @@ func (t *targetrunner) run() error {
 		assert(ctx.config.CloudProvider == googlecloud)
 		t.cloudif = &gcpimpl{t}
 	}
-	if ctx.config.NoXattrs {
-		glog.Infof("Warning: running with xattrs disabled")
-		glog.Flush()
-	}
 	// init capacity
 	rr := getstorstatsrunner()
 	rr.initCapacity()
@@ -1257,9 +1253,6 @@ func initobj(fqn string) (file *os.File, errstr string) {
 
 // FIXME: does only xxhash
 func finalizeobj(fqn string, hash string) (errstr string) {
-	if ctx.config.NoXattrs {
-		return
-	}
 	if len(hash) == 0 {
 		return
 	}

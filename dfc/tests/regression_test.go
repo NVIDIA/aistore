@@ -53,7 +53,6 @@ var (
 		"dont_evict_time": fmt.Sprintf("%v", UpdTime),
 		"lowwm":           fmt.Sprintf("%d", LowWaterMark),
 		"highwm":          fmt.Sprintf("%d", HighWaterMark),
-		"no_xattrs":       "false",
 		"passthru":        "true",
 		"lru_enabled":     "true",
 	}
@@ -209,15 +208,6 @@ func regressionConfig(t *testing.T) {
 	} else {
 		o := olruconfig["lowwm"].(float64)
 		setConfig("lowwm", strconv.Itoa(int(o)), RestAPIClusterPath, httpclient, t)
-	}
-	if nx, err := strconv.ParseBool(configRegression["no_xattrs"]); err != nil {
-		t.Fatalf("Error parsing NoXattrs: %v", err)
-	} else if nconfig["no_xattrs"] != nx {
-		t.Errorf("NoXattrs was not set properly: %v, should be: %v",
-			nconfig["no_xattrs"], nx)
-	} else {
-		o := oconfig["no_xattrs"].(bool)
-		setConfig("no_xattrs", strconv.FormatBool(o), RestAPIClusterPath, httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["passthru"]); err != nil {
 		t.Fatalf("Error parsing Passthru: %v", err)

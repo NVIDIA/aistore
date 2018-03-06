@@ -41,7 +41,6 @@
 		"/tmp/dfc":		"",
 		"/disk2/dfc":		""
 	},
-	"no_xattrs":			false,
 	"h2c": 				false
 }
 EOL
