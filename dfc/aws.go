@@ -71,7 +71,7 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 
 	params := &s3.ListObjectsInput{Bucket: aws.String(bucket)}
 	if msg.GetPrefix != "" {
-		params.Prefix = &msg.GetPrefix
+		params.Prefix = aws.String(msg.GetPrefix)
 	}
 	resp, err := svc.ListObjects(params)
 	if err != nil {
@@ -80,8 +80,30 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		return
 	}
 
+	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
+	if msg.GetPrefix != "" {
+		verParams.Prefix = aws.String(msg.GetPrefix)
+	}
+
+	var versions map[string]*string
+	if strings.Contains(msg.GetProps, GetPropsVersion) {
+		verResp, err := svc.ListObjectVersions(verParams)
+		if err != nil {
+			errstr = err.Error()
+			errcode = awsErrorToHTTP(err)
+			return
+		}
+
+		versions := make(map[string]*string, initialBucketListSize)
+		for _, vers := range verResp.Versions {
+			if *(vers.IsLatest) && vers.VersionId != nil {
+				versions[*(vers.Key)] = vers.VersionId
+			}
+		}
+	}
+
 	// var msg GetMsg
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
+	var reslist = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
 	for _, key := range resp.Contents {
 		entry := &BucketEntry{}
 		entry.Name = *(key.Key)
@@ -102,6 +124,11 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		if strings.Contains(msg.GetProps, GetPropsChecksum) {
 			omd5, _ := strconv.Unquote(*key.ETag)
 			entry.Checksum = omd5
+		}
+		if strings.Contains(msg.GetProps, GetPropsVersion) {
+			if val, ok := versions[*(key.Key)]; ok {
+				entry.Version = *val
+			}
 		}
 		// TODO: other GetMsg props TBD
 		reslist.Entries = append(reslist.Entries, entry)

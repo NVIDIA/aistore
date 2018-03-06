@@ -82,7 +82,7 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	}
 	it := client.Bucket(bucket).Objects(gctx, query)
 
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
+	var reslist = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
@@ -102,6 +102,9 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		}
 		if strings.Contains(msg.GetProps, GetPropsCtime) {
 			t := attrs.Created
+			if !attrs.Updated.IsZero() {
+				t = attrs.Updated
+			}
 			switch msg.GetTimeFormat {
 			case "":
 				fallthrough
@@ -113,6 +116,9 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		}
 		if strings.Contains(msg.GetProps, GetPropsChecksum) {
 			entry.Checksum = hex.EncodeToString(attrs.MD5)
+		}
+		if strings.Contains(msg.GetProps, GetPropsVersion) {
+			entry.Version = fmt.Sprintf("%d", attrs.Generation)
 		}
 		// TODO: other GetMsg props TBD
 

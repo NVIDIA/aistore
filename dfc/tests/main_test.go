@@ -216,7 +216,7 @@ func Test_list(t *testing.T) {
 	flag.Parse()
 
 	// list the names, sizes, creation times and MD5 checksums
-	var msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum}
+	var msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion}
 	jsbytes, err := json.Marshal(msg)
 	if err != nil {
 		t.Errorf("Unexpected json-marshal failure, err: %v", err)
@@ -233,9 +233,9 @@ func Test_list(t *testing.T) {
 	if !copy {
 		for _, m := range reslist.Entries {
 			if len(m.Checksum) > 8 {
-				tlogf("%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum[:8]+"...")
+				tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum[:8]+"...")
 			} else {
-				tlogf("%s %d %s %s\n", m.Name, m.Size, m.Ctime, m.Checksum)
+				tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum)
 			}
 		}
 		return

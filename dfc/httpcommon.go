@@ -28,6 +28,9 @@ const (
 	maxidleconns   = 20              // max num idle connections
 	requesttimeout = 5 * time.Second // http timeout
 )
+const (
+	initialBucketListSize = 512
+)
 
 //===========
 //

@@ -76,6 +76,7 @@ const (
 	GetPropsCtime    = "ctime"
 	GetPropsIsCached = "iscached"
 	GetPropsBucket   = "bucket"
+	GetPropsVersion  = "version"
 )
 
 //===================
@@ -91,8 +92,9 @@ type BucketEntry struct {
 	Ctime    string `json:"ctime"`    // formatted as per GetMsg.GetTimeFormat
 	Checksum string `json:"checksum"` // checksum
 	Type     string `json:"type"`     // "file" OR "directory"
-	Atime    string `json:"atime"`    // ditto
-	Bucket   string `json:"bucket"`
+	Atime    string `json:"atime"`    // formatted as per GetMsg.GetTimeFormat
+	Bucket   string `json:"bucket"`   // parent bucket name
+	Version  string `json:"version"`  // version/generation ID. In GCP it is int64, in AWS it is a string
 }
 
 type BucketList struct {

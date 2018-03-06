@@ -176,7 +176,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 
 // FIXME: crude..
 func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
-	var allentries = BucketList{Entries: make([]*BucketEntry, 0, 1000)}
+	var allentries = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
 	listmsgjson, err := ioutil.ReadAll(r.Body)
 	errclose := r.Body.Close()
 	assert(errclose == nil)
