@@ -14,8 +14,10 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/NVIDIA/dfcpub/dfc"
@@ -24,12 +26,6 @@ import (
 
 var (
 	httpclient = &http.Client{}
-
-	ProxyProto      = "http"
-	ProxyIP         = "localhost"
-	ProxyPort       = 8080
-	RestAPIVersion  = "v1"
-	RestAPIResource = "files"
 )
 
 type reqError struct {
@@ -48,11 +44,16 @@ func newReqError(msg string, code int) reqError {
 	}
 }
 
-func ProxyURL() string {
-	if ProxyPort == 0 {
-		return fmt.Sprintf("%s://%s/%s/%s", ProxyProto, ProxyIP, RestAPIVersion, RestAPIResource)
+func Tcping(url string) (err error) {
+	addr := strings.TrimPrefix(url, "http://")
+	if addr == url {
+		addr = strings.TrimPrefix(url, "https://")
 	}
-	return fmt.Sprintf("%s://%s:%d/%s/%s", ProxyProto, ProxyIP, ProxyPort, RestAPIVersion, RestAPIResource)
+	conn, err := net.Dial("tcp", addr)
+	if err == nil {
+		conn.Close()
+	}
+	return
 }
 
 func discardResponse(r *http.Response, err error, src string) error {
@@ -83,7 +84,7 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool, validate bool) error {
+func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool, validate bool) error {
 	var (
 		hash, hdhash, hdhashtype string
 		errstr                   string
@@ -91,7 +92,7 @@ func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 	if wg != nil {
 		defer wg.Done()
 	}
-	url := ProxyURL() + "/" + bucket + "/" + keyname
+	url := proxyurl + "/v1/files/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("GET: object %s\n", keyname)
 	}
@@ -125,7 +126,7 @@ func Get(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 	emitError(r, err, errch)
 	return err
 }
-func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+func Put(proxyurl, fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
 	var (
 		hash   string
 		errstr string
@@ -133,7 +134,7 @@ func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan er
 	if wg != nil {
 		defer wg.Done()
 	}
-	proxyurl := ProxyURL() + "/" + bucket + "/" + keyname
+	puturl := proxyurl + "/v1/files/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("PUT: object %s fname %s\n", keyname, fname)
 	}
@@ -147,7 +148,7 @@ func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan er
 	}
 	defer file.Close()
 
-	req, err := http.NewRequest(http.MethodPut, proxyurl, file)
+	req, err := http.NewRequest(http.MethodPut, puturl, file)
 	if err != nil {
 		if errch != nil {
 			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
@@ -187,16 +188,16 @@ func Put(fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan er
 	return err
 }
 
-func Del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
 	if wg != nil {
 		defer wg.Done()
 	}
 
-	proxyurl := ProxyURL() + "/" + bucket + "/" + keyname
+	delurl := proxyurl + "/v1/files/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("DEL: %s\n", keyname)
 	}
-	req, httperr := http.NewRequest(http.MethodDelete, proxyurl, nil)
+	req, httperr := http.NewRequest(http.MethodDelete, delurl, nil)
 	if httperr != nil {
 		err = fmt.Errorf("Failed to create new http request, err: %v", err)
 		emitError(nil, err, errch)
@@ -218,9 +219,9 @@ func Del(bucket string, keyname string, wg *sync.WaitGroup, errch chan error, si
 	return err
 }
 
-func ListBucket(bucket string, injson []byte) (*dfc.BucketList, error) {
+func ListBucket(proxyurl, bucket string, injson []byte) (*dfc.BucketList, error) {
 	var (
-		url     = fmt.Sprintf("%s/%s", ProxyURL(), bucket)
+		url     = proxyurl + "/v1/files/" + bucket
 		err     error
 		request *http.Request
 		r       *http.Response
@@ -260,14 +261,13 @@ func ListBucket(bucket string, injson []byte) (*dfc.BucketList, error) {
 	return reslist, nil
 }
 
-func EvictObjects(bucket string, fileslist []string) error {
+func EvictObjects(proxyurl, bucket string, fileslist []string) error {
 	var (
 		req    *http.Request
 		r      *http.Response
 		injson []byte
 		err    error
 	)
-
 	EvictMsg := dfc.ActionMsg{Action: dfc.ActEvict}
 	for _, fname := range fileslist {
 		EvictMsg.Name = bucket + "/" + fname
@@ -276,7 +276,7 @@ func EvictObjects(bucket string, fileslist []string) error {
 			return fmt.Errorf("Failed to marshal EvictMsg: %v", err)
 		}
 
-		req, err = http.NewRequest("DELETE", ProxyURL()+"/"+bucket+"/"+fname, bytes.NewBuffer(injson))
+		req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket+"/"+fname, bytes.NewBuffer(injson))
 		if err != nil {
 			return fmt.Errorf("Failed to create request: %v", err)
 		}

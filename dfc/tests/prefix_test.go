@@ -42,6 +42,11 @@ func init() {
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func Test_prefix(t *testing.T) {
 	flag.Parse()
+	if err := client.Tcping(proxyurl); err != nil {
+		tlogf("%s: %v\n", proxyurl, err)
+		os.Exit(1)
+	}
+
 	fmt.Printf("Looking for files with prefix [%s]\n", prefix)
 
 	if err := dfc.CreateDir(fmt.Sprintf("%s/%s", baseDir, prefixDir)); err != nil {
@@ -89,7 +94,7 @@ func prefixCreateFiles(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.Put(filePath, clibucket, keyName, "", wg, errch, true)
+		go client.Put(proxyurl, filePath, clibucket, keyName, "", wg, errch, true)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()
@@ -111,7 +116,7 @@ func prefixLookupOne(t *testing.T) {
 	}
 
 	numFiles := 0
-	objList, err := client.ListBucket(clibucket, jsbytes)
+	objList, err := client.ListBucket(proxyurl, clibucket, jsbytes)
 	if testfail(err, "List files with prefix failed", nil, nil, t) {
 		return
 	}
@@ -143,7 +148,7 @@ func prefixLookupDefault(t *testing.T) {
 			return
 		}
 
-		objList, err := client.ListBucket(clibucket, jsbytes)
+		objList, err := client.ListBucket(proxyurl, clibucket, jsbytes)
 		if testfail(err, "List files with prefix failed", nil, nil, t) {
 			return
 		}
@@ -177,7 +182,7 @@ func prefixCleanup(t *testing.T) {
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go client.Del(clibucket, keyName, wg, errch, true)
+		go client.Del(proxyurl, clibucket, keyName, wg, errch, true)
 
 		if err := os.Remove(fmt.Sprintf("%s/%s", baseDir, keyName)); err != nil {
 			fmt.Printf("Failed to delete file: %v\n", err)

@@ -39,6 +39,12 @@ func init() {
 
 func Test_smoke(t *testing.T) {
 	flag.Parse()
+
+	if err := client.Tcping(proxyurl); err != nil {
+		tlogf("%s: %v\n", proxyurl, err)
+		os.Exit(1)
+	}
+
 	if err := dfc.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
@@ -64,7 +70,7 @@ func Test_smoke(t *testing.T) {
 			t.Error(err)
 		}
 		wg.Add(1)
-		go client.Del(clibucket, "smoke/"+file, wg, errch, false)
+		go client.Del(proxyurl, clibucket, "smoke/"+file, wg, errch, false)
 	}
 	wg.Wait()
 	select {
@@ -118,7 +124,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		return
 	}
 	for i := 0; i < numGets; i++ {
-		items, cerr := client.ListBucket(bucket, jsbytes)
+		items, cerr := client.ListBucket(proxyurl, bucket, jsbytes)
 		if testfail(cerr, "List files with prefix failed", nil, errch, t) {
 			return
 		}
@@ -142,7 +148,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		keyname := files[random.Intn(len(files)-1)]
 		tlogln("GET: " + keyname)
 		getsGroup.Add(1)
-		go client.Get(bucket, keyname, getsGroup, errch, false, false)
+		go client.Get(proxyurl, bucket, keyname, getsGroup, errch, false, false)
 	}
 	getsGroup.Wait()
 }
@@ -173,7 +179,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		client.Put(dir+"/"+fname, bucket, keystr+"/"+fname, htype, nil, errch, silent)
+		client.Put(proxyurl, dir+"/"+fname, bucket, keystr+"/"+fname, htype, nil, errch, silent)
 		filesput <- fname
 	}
 }

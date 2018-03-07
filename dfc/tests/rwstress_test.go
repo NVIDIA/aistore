@@ -184,12 +184,12 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.Put(fname, clibucket, keyname, "", wg, errch, true)
+						client.Put(proxyurl, fname, clibucket, keyname, "", wg, errch, true)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					client.Put(fname, clibucket, keyname, "", nil, errch, true)
+					client.Put(proxyurl, fname, clibucket, keyname, "", nil, errch, true)
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
@@ -240,12 +240,12 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Del(clibucket, keyname, wg, errch, true)
+					client.Del(proxyurl, clibucket, keyname, wg, errch, true)
 					unlockFile(localIdx, rwFileDeleted)
 					atomic.AddInt64(&delCounter, -1)
 				}()
 			} else {
-				client.Del(clibucket, keyname, nil, errch, true)
+				client.Del(proxyurl, clibucket, keyname, nil, errch, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 
@@ -298,12 +298,12 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Get(clibucket, keyname, wg, errch, true, false)
+					client.Get(proxyurl, clibucket, keyname, wg, errch, true, false)
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
 				}()
 			} else {
-				client.Get(clibucket, keyname, nil, errch, true, false)
+				client.Get(proxyurl, clibucket, keyname, nil, errch, true, false)
 				unlockFile(idx, rwFileExists)
 			}
 			currIdx = idx + 1
@@ -386,6 +386,12 @@ func regressionRWStress(t *testing.T) {
 //    test finishes it executes extra loop to delete all files
 func Test_rwstress(t *testing.T) {
 	flag.Parse()
+
+	if err := client.Tcping(proxyurl); err != nil {
+		tlogf("%s: %v\n", proxyurl, err)
+		os.Exit(1)
+	}
+
 	numLoops = cycles
 	numFiles = numfiles
 

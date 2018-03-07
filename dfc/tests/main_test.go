@@ -35,19 +35,16 @@ import (
 // # go test ./tests -v -run=xxx -bench . -count 10
 
 const (
-	baseDir         = "/tmp/dfc"
-	LocalDestDir    = "/tmp/dfc/dest"         // client-side download destination
-	LocalSrcDir     = "/tmp/dfc/src"          // client-side src directory for upload
-	ProxyURL        = "http://localhost:8080" // assuming local proxy is listening on 8080
-	RestAPIGet      = ProxyURL + "/v1/files"  // version = 1, resource = files
-	RestAPIProxyPut = ProxyURL + "/v1/files"  // version = 1, resource = files
-	RestAPIProxyDel = ProxyURL + "/v1/files"  // version = 1, resource = files
-	ColdValidStr    = "coldmd5"
-	ChksumValidStr  = "chksum"
-	ColdMD5str      = "coldmd5"
-	DeleteDir       = "/tmp/dfc/delete"
-	DeleteStr       = "delete"
-	largefilesize   = 4 // in MB
+	baseDir        = "/tmp/dfc"
+	LocalDestDir   = "/tmp/dfc/dest"         // client-side download destination
+	LocalSrcDir    = "/tmp/dfc/src"          // client-side src directory for upload
+	ProxyURL       = "http://localhost:8080" // assuming local proxy is listening on 8080
+	ColdValidStr   = "coldmd5"
+	ChksumValidStr = "chksum"
+	ColdMD5str     = "coldmd5"
+	DeleteDir      = "/tmp/dfc/delete"
+	DeleteStr      = "delete"
+	largefilesize  = 4 // in MB
 )
 
 // globals
@@ -58,6 +55,7 @@ var (
 	match       string
 	clichecksum string
 	totalio     int64
+	proxyurl    string
 )
 
 // worker's result
@@ -83,6 +81,7 @@ func newReqError(msg string, code int) reqError {
 }
 
 func init() {
+	flag.StringVar(&proxyurl, "proxyurl", ProxyURL, "Proxy URL")
 	flag.StringVar(&clibucket, "bucket", "shri-new", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
@@ -93,6 +92,11 @@ func init() {
 
 func Test_download(t *testing.T) {
 	flag.Parse()
+
+	if err := client.Tcping(proxyurl); err != nil {
+		tlogf("%s: %v\n", proxyurl, err)
+		os.Exit(1)
+	}
 
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
@@ -272,7 +276,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(RestAPIDaemonPath, httpclient, t)
+	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
@@ -285,7 +289,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_cold_get", strconv.FormatBool(false), RestAPIClusterPath, httpclient, t)
+		setConfig("validate_cold_get", strconv.FormatBool(false), proxyurl+"/v1/cluster", httpclient, t)
 	}
 	start := time.Now()
 	getfromfilelist(t, bucket, errch, fileslist, false)
@@ -298,7 +302,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_cold_get", strconv.FormatBool(true), RestAPIClusterPath, httpclient, t)
+	setConfig("validate_cold_get", strconv.FormatBool(true), proxyurl+"/v1/cluster", httpclient, t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -309,11 +313,11 @@ func Test_coldgetmd5(t *testing.T) {
 	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
 cleanup:
-	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), RestAPIClusterPath, httpclient, t)
+	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/v1/cluster", httpclient, t)
 	for _, fn := range fileslist {
 		_ = os.Remove(LocalSrcDir + "/" + fn)
 		wg.Add(1)
-		go client.Del(bucket, fn, wg, errch, false)
+		go client.Del(proxyurl, bucket, fn, wg, errch, false)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
@@ -327,7 +331,7 @@ func Benchmark_get(b *testing.B) {
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
 			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-			go client.Get(clibucket, keyname, wg, errch, false, false)
+			go client.Get(proxyurl, clibucket, keyname, wg, errch, false, false)
 		}
 		wg.Wait()
 		select {
@@ -340,13 +344,16 @@ func Benchmark_get(b *testing.B) {
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
 	errch chan error, resch chan workres, bucket string) {
-	var written int64
-	var errstr string
+	var (
+		written int64
+		errstr  string
+		geturl  = proxyurl + "/v1/files"
+	)
 	res := workres{0, 0}
 	defer wg.Done()
 
 	for keyname := range keynames {
-		url := RestAPIGet + "/" + bucket + "/" + keyname
+		url := geturl + "/" + bucket + "/" + keyname
 		t.Logf("Worker %2d: GET %q", id, url)
 		r, err := http.Get(url)
 		hdhash := r.Header.Get(dfc.HeaderDfcChecksumVal)
@@ -433,7 +440,7 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go client.Del(bucket, keyname, dwg, errch, false)
+		go client.Del(proxyurl, bucket, keyname, dwg, errch, false)
 	}
 	dwg.Wait()
 }
@@ -499,10 +506,10 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 
 func testListBucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
 	var (
-		url = RestAPIGet + "/" + bucket
+		url = proxyurl + "/v1/files/" + bucket
 	)
 	tlogf("LIST %q\n", url)
-	reslist, err := client.ListBucket(bucket, injson)
+	reslist, err := client.ListBucket(proxyurl, bucket, injson)
 	if testfail(err, fmt.Sprintf("List bucket %s failed", bucket), nil, nil, t) {
 		return nil
 	}
@@ -541,7 +548,7 @@ func Test_checksum(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 	// Get Current Config
-	config := getConfig(RestAPIDaemonPath, httpclient, t)
+	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
@@ -560,14 +567,14 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable checkum
 	if ochksum != dfc.ChecksumNone {
-		setConfig("checksum", dfc.ChecksumNone, RestAPIClusterPath, httpclient, t)
+		setConfig("checksum", dfc.ChecksumNone, proxyurl+"/v1/cluster", httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_cold_get", fmt.Sprint("false"), RestAPIClusterPath, httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("false"), proxyurl+"/v1/cluster", httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -584,18 +591,18 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, fileslist)
 	switch clichecksum {
 	case "all":
-		setConfig("checksum", dfc.ChecksumXXHash, RestAPIClusterPath, httpclient, t)
-		setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, httpclient, t)
+		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/v1/cluster", httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case dfc.ChecksumXXHash:
-		setConfig("checksum", dfc.ChecksumXXHash, RestAPIClusterPath, httpclient, t)
+		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/v1/cluster", httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_cold_get", fmt.Sprint("true"), RestAPIClusterPath, httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/v1/cluster", httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -616,8 +623,8 @@ func Test_checksum(t *testing.T) {
 cleanup:
 	deletefromfilelist(t, bucket, errch, fileslist)
 	// restore old config
-	setConfig("checksum", fmt.Sprint(ochksum), RestAPIClusterPath, httpclient, t)
-	setConfig("validate_cold_get", fmt.Sprint(ocoldget), RestAPIClusterPath, httpclient, t)
+	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/v1/cluster", httpclient, t)
 	return
 }
 func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {
@@ -629,7 +636,7 @@ func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist
 			t.Error(err)
 		}
 		wg.Add(1)
-		go client.Del(bucket, fn, wg, errch, true)
+		go client.Del(proxyurl, bucket, fn, wg, errch, true)
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
@@ -640,7 +647,7 @@ func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go client.Get(bucket, fileslist[i], getsGroup, errch, false, validate)
+			go client.Get(proxyurl, bucket, fileslist[i], getsGroup, errch, false, validate)
 		}
 	}
 	getsGroup.Wait()
@@ -650,7 +657,7 @@ func evictobjects(t *testing.T, fileslist []string) {
 	var (
 		bucket = clibucket
 	)
-	err := client.EvictObjects(bucket, fileslist)
+	err := client.EvictObjects(proxyurl, bucket, fileslist)
 	if testfail(err, bucket, nil, nil, t) {
 		return
 	}
