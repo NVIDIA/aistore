@@ -203,7 +203,8 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			}
 
 			select {
-			case <-errch:
+			case e := <-errch:
+				fmt.Printf("PUT failed: %v\n", e.Error())
 				t.Fail()
 			default:
 			}
@@ -265,7 +266,8 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		select {
 		case <-doneCh:
 			done = true
-		case <-errch:
+		case e := <-errch:
+			fmt.Printf("DEL failed: %v\n", e.Error())
 			t.Fail()
 		default:
 		}
@@ -318,6 +320,9 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 		select {
 		case <-doneCh:
 			done = true
+		case e := <-errch:
+			fmt.Printf("GET failed: %v\n", e.Error())
+			t.Fail()
 		default:
 		}
 	}
@@ -349,7 +354,7 @@ func rwstress(t *testing.T) {
 	}
 	wg.Wait()
 
-	fmt.Fprintf(os.Stdout, "Cleaning up...\n")
+	fmt.Printf("Cleaning up...\n")
 	rwDelLoop(t, fileNames, nil, doneCh, rwRunCleanUp)
 
 	rwstressCleanup(t)

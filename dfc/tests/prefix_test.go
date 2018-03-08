@@ -79,7 +79,7 @@ func prefixCreateFiles(t *testing.T) {
 	random := rand.New(src)
 	buf := make([]byte, blocksize)
 	fileNames = make([]string, 0, prefixFileNumber)
-	errch := make(chan error, 10)
+	errch := make(chan error, numfiles)
 	var wg = &sync.WaitGroup{}
 
 	for i := 0; i < prefixFileNumber; i++ {
@@ -98,9 +98,10 @@ func prefixCreateFiles(t *testing.T) {
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()
+
 	select {
 	case e := <-errch:
-		fmt.Fprintf(os.Stdout, "PUT FAIL: %s\n", e)
+		fmt.Printf("Failed to PUT: %s\n", e)
 		t.Fail()
 	default:
 	}
@@ -176,7 +177,7 @@ func prefixLookup(t *testing.T) {
 
 func prefixCleanup(t *testing.T) {
 	fmt.Printf("Cleaning up...\n")
-	errch := make(chan error, 10)
+	errch := make(chan error, numfiles)
 	var wg = &sync.WaitGroup{}
 
 	for _, fileName := range fileNames {
@@ -193,7 +194,7 @@ func prefixCleanup(t *testing.T) {
 
 	select {
 	case e := <-errch:
-		fmt.Fprintf(os.Stdout, "DEL FAIL: %s\n", e)
+		fmt.Printf("Failed to DEL: %s\n", e)
 		t.Fail()
 	default:
 	}

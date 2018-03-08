@@ -319,7 +319,7 @@ func regressionLRU(t *testing.T) {
 	// results
 	//
 	stats = getClusterStats(httpclient, t)
-	test_fspaths := oconfig["test_fspaths"].(map[string]interface{})
+	testFsPaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
 		tlogf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
@@ -327,7 +327,7 @@ func regressionLRU(t *testing.T) {
 		//
 		// testingFSPpaths() - cannot reliably verify space utilization by tmpfs
 		//
-		if test_fspaths["count"].(float64) > 0 {
+		if testFsPaths["count"].(float64) > 0 {
 			continue
 		}
 		for mpath, c := range v.Capacity {
