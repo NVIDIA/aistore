@@ -9,9 +9,9 @@ import "time"
 
 // JSON-formatted control structures
 type ActionMsg struct {
-	Action string `json:"action"` // shutdown, restart, setconfig - the enum below
-	Name   string `json:"name"`   // action-specific params
-	Value  string `json:"value"`
+	Action string      `json:"action"` // shutdown, restart, setconfig - the enum below
+	Name   string      `json:"name"`   // action-specific params
+	Value  interface{} `json:"value"`
 }
 
 // ActionMsg.Action enum
@@ -26,6 +26,7 @@ const (
 	ActSetConfig = "setconfig"
 	ActRename    = "rename"
 	ActEvict     = "evict"
+	ActPrefetch  = "prefetch"
 )
 
 // TODO: sort and some props are TBD
@@ -35,6 +36,24 @@ type GetMsg struct {
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below
 	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
+}
+
+type PrefetchMsgBase struct {
+	Deadline time.Duration `json:"deadline,omitempty"`
+	Wait     bool          `json:"wait,omitempty"`
+}
+
+// PrefetchMsg contains a list of files and a duration within which to get them
+type PrefetchMsg struct {
+	PrefetchMsgBase
+	Objnames []string `json:"objnames"`
+}
+
+type PrefetchRangeMsg struct {
+	PrefetchMsgBase
+	Prefix string `json:"prefix"`
+	Regex  string `json:"regex"`
+	Range  string `json:"range"`
 }
 
 //===================

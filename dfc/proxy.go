@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -318,6 +319,9 @@ func (p *proxyrunner) actionLocalBucket(w http.ResponseWriter, r *http.Request) 
 	case ActRename:
 		p.filrename(w, r, &msg)
 		return
+	case ActPrefetch:
+		p.filprefetch(w, r, &msg)
+		return
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -361,6 +365,64 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	//       code 307 is the only way to http-redirect with the
 	//       original JSON payload (GetMsg - see REST.go)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+}
+
+func (p *proxyrunner) filprefetch(w http.ResponseWriter, r *http.Request, actionMsg *ActionMsg) {
+	var (
+		err error
+	)
+
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	wait := false
+	if actionMsg.Action == ActPrefetch {
+		if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
+			p.statsif.add("numerr", 1)
+			glog.Errorf("Failed to unmarshal JSMAP: Not a map[string]interface")
+			return
+		} else if w, ok := jsmap["wait"]; ok {
+			if wait, ok = w.(bool); !ok {
+				p.statsif.add("numerr", 1)
+				glog.Errorf("Failed to read PrefetchMsgBase Wait: Not a bool")
+				return
+			}
+		}
+	}
+	// Send json message to all
+	jsonbytes, err := json.Marshal(actionMsg)
+	if err != nil {
+		p.statsif.add("numerr", 1)
+		glog.Errorf("Failed to re-marshal Prefetch JSON: %v", err)
+		return
+	}
+	wg := &sync.WaitGroup{}
+	for _, si := range ctx.smap.Smap {
+		wg.Add(1)
+		go func(si *daemonInfo) {
+			defer wg.Done()
+			var (
+				err     error
+				errstr  string
+				errcode int
+				url     = si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
+			)
+			if wait {
+				_, err, errstr, errcode = p.call(si, url, http.MethodPost, jsonbytes, 0)
+			} else {
+				_, err, errstr, errcode = p.call(si, url, http.MethodPost, jsonbytes)
+			}
+			if err != nil {
+				p.statsif.add("numerr", 1)
+				glog.Errorf("Failed to execute Prefetch request: %v (%d: %s)", err, errcode, errstr)
+				return
+			}
+		}(si)
+	}
+	wg.Wait()
+	glog.Infoln("Completed sending Prefetch ActionMsg to all targets")
 }
 
 //===========================
@@ -415,9 +477,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		if msg.Name != "stats_time" && msg.Name != "passthru" {
+		if value, ok := msg.Value.(string); !ok {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
+		} else if msg.Name != "stats_time" && msg.Name != "passthru" {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid setconfig request: Proxy does not support this configuration variable: %s", msg.Name))
-		} else if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
+		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		}
 	default:
@@ -590,7 +654,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		if errstr := p.setconfig(msg.Name, msg.Value); errstr != "" {
+		if value, ok := msg.Value.(string); !ok {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
+		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
 			msgbytes, err := json.Marshal(msg) // same message -> all targets
@@ -598,7 +664,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			for _, si := range ctx.smap.Smap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 				if _, err, errstr, status := p.call(si, url, http.MethodPut, msgbytes); err != nil {
-					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, msg.Value, errstr))
+					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, errstr))
 					p.kalive.onerr(err, status)
 					break
 				}

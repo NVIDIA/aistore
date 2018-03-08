@@ -14,7 +14,9 @@ import (
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -53,7 +55,6 @@ var (
 		"passthru":        "true",
 		"lru_enabled":     "true",
 	}
-	abortonerr = false
 	httpclient = &http.Client{}
 	tests      = []Test{
 		Test{"Local Bucket", regressionLocalBuckets},
@@ -64,11 +65,21 @@ var (
 		Test{"LRU", regressionLRU},
 		Test{"Rename", regressionRename},
 		Test{"RW stress", regressionRWStress},
+		Test{"Prefetch", regressionPrefetch},
+		Test{"PrefetchRange", regressionPrefetchRange},
 	}
+
+	abortonerr     = false
+	prefetchPrefix = "__bench/test-"
+	prefetchRegex  = "^\\d22\\d"
+	prefetchRange  = "0:2000"
 )
 
 func init() {
 	flag.BoolVar(&abortonerr, "abortonerr", abortonerr, "abort on error")
+	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
+	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
+	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
 }
 
 func Test_regression(t *testing.T) {
@@ -508,7 +519,148 @@ func regressionRename(t *testing.T) {
 	selectErr(errch, "get", t, false)
 }
 
-// helper (likely to be used)
+func regressionPrefetch(t *testing.T) {
+	var (
+		toprefetch    = make(chan string, numfiles)
+		netprefetches = int64(0)
+		err           error
+	)
+
+	// 1. Get initial number of prefetches
+	smap := getClusterMap(httpclient, t)
+	for _, v := range smap.Smap {
+		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		corestats := stats["core"].(map[string]interface{})
+		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		if err != nil {
+			t.Fatalf("Could not decode target stats: numprefetch")
+		}
+		netprefetches -= npf
+	}
+
+	// 2. Get keys to prefetch
+	n := int64(getMatchingKeys(match, clibucket, []chan string{toprefetch}, nil, t))
+	close(toprefetch) // to exit for-range
+	files := make([]string, 0)
+	for i := range toprefetch {
+		files = append(files, i)
+	}
+
+	// 3. Evict those objects from the cache and prefetch them
+	tlogf("Evicting and Prefetching %d objects\n", len(files))
+	err = client.EvictObjects(proxyurl, clibucket, files)
+	if err != nil {
+		t.Error(err)
+	}
+	err = client.Prefetch(proxyurl, clibucket, files, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 5. Ensure that all the prefetches occurred.
+	for _, v := range smap.Smap {
+		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		corestats := stats["core"].(map[string]interface{})
+		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		if err != nil {
+			t.Fatalf("Could not decode target stats: numprefetch")
+		}
+		netprefetches += npf
+	}
+	if netprefetches != n {
+		t.Errorf("Did not prefetch all files: Missing %d of %d\n", (n - netprefetches), n)
+	}
+}
+
+func regressionPrefetchRange(t *testing.T) {
+	var (
+		netprefetches = int64(0)
+		err           error
+		rmin, rmax    int64
+		re            *regexp.Regexp
+	)
+
+	// 1. Get initial number of prefetches
+	smap := getClusterMap(httpclient, t)
+	for _, v := range smap.Smap {
+		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		corestats := stats["core"].(map[string]interface{})
+		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		if err != nil {
+			t.Fatalf("Could not decode target stats: numprefetch")
+		}
+		netprefetches -= npf
+	}
+
+	// 2. Parse arguments
+	if prefetchRange != "" {
+		ranges := strings.Split(prefetchRange, ":")
+		if rmin, err = strconv.ParseInt(ranges[0], 10, 64); err != nil {
+			t.Errorf("Error parsing range min: %v", err)
+		}
+		if rmax, err = strconv.ParseInt(ranges[1], 10, 64); err != nil {
+			t.Errorf("Error parsing range max: %v", err)
+		}
+	}
+
+	// 3. Discover the number of items we expect to be prefetched
+	if re, err = regexp.Compile(prefetchRegex); err != nil {
+		t.Errorf("Error compiling regex: %v", err)
+	}
+	msg := &dfc.GetMsg{}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marhsal failure, err: %v", err)
+	}
+	objsToFilter := testListBucket(t, clibucket, jsbytes)
+	files := make([]string, 0)
+	for _, be := range objsToFilter.Entries {
+		if oname := strings.TrimPrefix(be.Name, prefetchPrefix); oname != be.Name {
+			s := re.FindStringSubmatch(oname)
+			if s == nil {
+				continue
+			}
+			if i, err := strconv.ParseInt(s[0], 10, 64); err != nil && s[0] != "" {
+				continue
+			} else if s[0] == "" || (rmin == 0 && rmax == 0) || (i >= rmin && i <= rmax) {
+				files = append(files, be.Name)
+			}
+		}
+	}
+
+	// 4. Evict those objects from the cache, and then prefetch them.
+	tlogf("Evicting and Prefetching %d objects\n", len(files))
+	err = client.EvictObjects(proxyurl, clibucket, files)
+	if err != nil {
+		t.Error(err)
+	}
+	err = client.PrefetchRange(proxyurl, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 5. Ensure that all the prefetches occurred.
+	for _, v := range smap.Smap {
+		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		corestats := stats["core"].(map[string]interface{})
+		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		if err != nil {
+			t.Fatalf("Could not decode target stats: numprefetch")
+		}
+		netprefetches += npf
+	}
+	if netprefetches != int64(len(files)) {
+		t.Errorf("Did not prefetch all files: Missing %d of %d\n",
+			(int64(len(files)) - netprefetches), len(files))
+	}
+}
+
+//========
+//
+// Helpers
+//
+//========
+
 func waitProgressBar(prefix string, wait time.Duration) {
 	ticker := time.NewTicker(time.Second * 5)
 	tlogf(prefix)

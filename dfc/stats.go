@@ -22,7 +22,8 @@ type fscapacity struct {
 
 // implemented by the stats runners
 type statslogger interface {
-	log()
+	log() (runlru bool)
+	housekeep(bool)
 }
 
 // implemented by the ***CoreStats types
@@ -43,15 +44,17 @@ type proxyCoreStats struct {
 
 type targetCoreStats struct {
 	proxyCoreStats
-	Numcoldget   int64 `json:"numcoldget"`
-	Bytesloaded  int64 `json:"bytesloaded"`
-	Bytesevicted int64 `json:"bytesevicted"`
-	Filesevicted int64 `json:"filesevicted"`
-	Numsentfiles int64 `json:"numsentfiles"`
-	Numsentbytes int64 `json:"numsentbytes"`
-	Numrecvfiles int64 `json:"numrecvfiles"`
-	Numrecvbytes int64 `json:"numrecvbytes"`
-	Numlist      int64 `json:"numlist"`
+	Numcoldget      int64 `json:"numcoldget"`
+	Bytesloaded     int64 `json:"bytesloaded"`
+	Bytesevicted    int64 `json:"bytesevicted"`
+	Filesevicted    int64 `json:"filesevicted"`
+	Numsentfiles    int64 `json:"numsentfiles"`
+	Numsentbytes    int64 `json:"numsentbytes"`
+	Numrecvfiles    int64 `json:"numrecvfiles"`
+	Numrecvbytes    int64 `json:"numrecvbytes"`
+	Numlist         int64 `json:"numlist"`
+	Numprefetch     int64 `json:"numprefetch"`
+	Bytesprefetched int64 `json:"bytesprefetched"`
 }
 
 type statsrunner struct {
@@ -146,6 +149,10 @@ func (s *targetCoreStats) add(name string, val int64) {
 		v = &s.Numrecvbytes
 	case "numlist":
 		v = &s.Numlist
+	case "numprefetch":
+		v = &s.Numprefetch
+	case "bytesprefetched":
+		v = &s.Bytesprefetched
 	default:
 		assert(false, "Invalid stats name "+name)
 	}
@@ -166,7 +173,8 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	for {
 		select {
 		case <-ticker.C:
-			logger.log()
+			runlru := logger.log()
+			logger.housekeep(runlru)
 		case <-r.chsts:
 			ticker.Stop()
 			return nil
@@ -182,8 +190,13 @@ func (r *statsrunner) stop(err error) {
 }
 
 // statslogger interface impl
-func (r *statsrunner) log() {
+func (r *statsrunner) log() (runlru bool) {
 	assert(false)
+	return false
+}
+
+func (r *statsrunner) housekeep(bool) {
+	return
 }
 
 func (r *proxystatsrunner) run() error {
@@ -197,17 +210,18 @@ func (r *proxystatsrunner) syncstats(stats *proxyCoreStats) {
 }
 
 // statslogger interface impl
-func (r *proxystatsrunner) log() {
+func (r *proxystatsrunner) log() (runlru bool) {
 	// nothing changed since the previous invocation
 	if r.Core.Numput == r.ccopy.Numput &&
 		r.Core.Numget == r.ccopy.Numget &&
 		r.Core.Numpost == r.ccopy.Numpost &&
 		r.Core.Numdelete == r.ccopy.Numdelete {
-		return
+		return false
 	}
 	s := fmt.Sprintf("%s: %+v", r.name, r.Core)
 	r.syncstats(&r.ccopy)
 	glog.Infoln(s)
+	return false
 }
 
 func (r *storstatsrunner) run() error {
@@ -220,20 +234,20 @@ func (r *storstatsrunner) syncstats(stats *targetCoreStats) {
 	r.Unlock()
 }
 
-func (r *storstatsrunner) log() {
+func (r *storstatsrunner) log() (runlru bool) {
 	// nothing changed since the previous invocation
 	if r.Core.Numput == r.ccopy.Numput &&
 		r.Core.Numget == r.ccopy.Numget &&
 		r.Core.Numdelete == r.ccopy.Numdelete &&
 		r.Core.Bytesloaded == r.ccopy.Bytesloaded &&
 		r.Core.Bytesevicted == r.ccopy.Bytesevicted {
-		return
+		return false
 	}
 	// 1. core stats
 	glog.Infof("%s: %+v", r.name, r.Core)
 
 	// 2. capacity
-	runlru := r.updateCapacity()
+	runlru = r.updateCapacity()
 
 	// 3. format and log usage %%
 	for _, mpath := range r.fsmap {
@@ -242,10 +256,19 @@ func (r *storstatsrunner) log() {
 	}
 
 	r.syncstats(&r.ccopy)
-	// 4. LRU
+	return runlru
+}
+
+func (r *storstatsrunner) housekeep(runlru bool) {
+	t := gettarget()
+
 	if runlru && ctx.config.LRUConfig.LRUEnabled {
-		t := gettarget()
 		go t.runLRU()
+	}
+
+	// Run prefetch operation if there are items to be prefetched
+	if len(t.prefetchQueue) > 0 {
+		go t.doPrefetch()
 	}
 }
 

@@ -19,13 +19,21 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/OneOfOne/xxhash"
 )
 
 var (
-	httpclient = &http.Client{}
+	httpclient          = &http.Client{}
+	httpclientNoTimeout = &http.Client{Timeout: 0}
+
+	ProxyProto      = "http"
+	ProxyIP         = "localhost"
+	ProxyPort       = 8080
+	RestAPIVersion  = "v1"
+	RestAPIResource = "files"
 )
 
 type reqError struct {
@@ -292,6 +300,46 @@ func EvictObjects(proxyurl, bucket string, fileslist []string) error {
 	}
 
 	return nil
+}
+
+func doPrefetch(proxyurl, bucket string, prefetchmsg interface{}, wait bool) error {
+	var (
+		req    *http.Request
+		r      *http.Response
+		injson []byte
+		err    error
+	)
+	actionMsg := dfc.ActionMsg{Action: dfc.ActPrefetch, Value: prefetchmsg}
+	injson, err = json.Marshal(actionMsg)
+	if err != nil {
+		return fmt.Errorf("Failed to marhsal ActionMsg: %v", err)
+	}
+	req, err = http.NewRequest("POST", proxyurl+"/v1/files/"+bucket+"/", bytes.NewBuffer(injson))
+	if err != nil {
+		return fmt.Errorf("Failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if wait {
+		r, err = httpclientNoTimeout.Do(req)
+	} else {
+		r, err = httpclient.Do(req)
+	}
+	if r != nil {
+		r.Body.Close()
+	}
+	return err
+}
+
+func Prefetch(proxyurl, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+	prefetchMsgBase := dfc.PrefetchMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := dfc.PrefetchMsg{Objnames: fileslist, PrefetchMsgBase: prefetchMsgBase}
+	return doPrefetch(proxyurl, bucket, prefetchMsg, wait)
+}
+
+func PrefetchRange(proxyurl, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+	prefetchMsgBase := dfc.PrefetchMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := dfc.PrefetchRangeMsg{Prefix: prefix, Regex: regex, Range: rng, PrefetchMsgBase: prefetchMsgBase}
+	return doPrefetch(proxyurl, bucket, prefetchMsg, wait)
 }
 
 // fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang

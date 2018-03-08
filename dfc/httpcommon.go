@@ -25,8 +25,7 @@ import (
 )
 
 const (
-	maxidleconns   = 20              // max num idle connections
-	requesttimeout = 5 * time.Second // http timeout
+	maxidleconns = 20 // max num idle connections
 )
 const (
 	initialBucketListSize = 512
@@ -73,13 +72,14 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 
 type httprunner struct {
 	namedrunner
-	mux        *http.ServeMux
-	h          *http.Server
-	glogger    *log.Logger
-	si         *daemonInfo
-	httpclient *http.Client // http client for intra-cluster comm
-	statsif    statsif
-	kalive     kaliveif
+	mux                 *http.ServeMux
+	h                   *http.Server
+	glogger             *log.Logger
+	si                  *daemonInfo
+	httpclient          *http.Client // http client for intra-cluster comm
+	httpclientNoTimeout *http.Client // http client for long-wait intra-cluster comm
+	statsif             statsif
+	kalive              kaliveif
 }
 
 func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -98,7 +98,11 @@ func (r *httprunner) init(s statsif) {
 	// http client
 	r.httpclient = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
-		Timeout:   requesttimeout,
+		Timeout:   ctx.config.HTTPTimeout,
+	}
+	r.httpclientNoTimeout = &http.Client{
+		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Timeout:   0,
 	}
 	// init daemonInfo here
 	r.si = &daemonInfo{}
@@ -184,7 +188,9 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
 		return
 	}
-	if len(timeout) > 0 {
+
+	// Explitily specifying a 0 timeout means the client wants no timeout.
+	if len(timeout) > 0 && timeout[0] != 0 {
 		cancelch = make(chan struct{})
 		timer = time.AfterFunc(timeout[0], func() {
 			close(cancelch)
@@ -192,7 +198,11 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		})
 		request.Cancel = cancelch
 	}
-	response, err = r.httpclient.Do(request)
+	if len(timeout) > 0 && timeout[0] == 0 {
+		response, err = r.httpclientNoTimeout.Do(request)
+	} else {
+		response, err = r.httpclient.Do(request)
+	}
 	// For a timer created with AfterFunc(d, f), if t.Stop returns false, then the timer
 	// has already expired and the function f has been started in its own goroutine (time/sleep.go)
 	if timer != nil && timer.Stop() && cancelch != nil {

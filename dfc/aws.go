@@ -80,6 +80,10 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		return
 	}
 
+	if *resp.IsTruncated {
+		glog.Warning("AWS ListBucket response was truncated - there are unretrieved keys.")
+	}
+
 	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
 	if msg.GetPrefix != "" {
 		verParams.Prefix = aws.String(msg.GetPrefix)

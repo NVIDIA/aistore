@@ -81,7 +81,7 @@ func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket s
 		}
 		wg.Add(1)
 		pool <- func() {
-			client.Put(smokeDir+"/"+fname, bucket, "__bench/"+fname, wg, errch, false)
+			client.Put(smokeDir+"/"+fname, bucket, "__bench/"+fname, "", wg, errch, false)
 		}
 
 		filesput <- fname

@@ -45,16 +45,17 @@ type allfinfos struct {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif    cloudif // multi-cloud vendor support
-	smap       *Smap
-	proxysi    *daemonInfo
-	xactinp    *xactInProgress
-	starttime  time.Time
-	lbmap      *lbmap
-	rtnamemap  *rtnamemap
-	buffers    *buffers // 128K default
-	buffers32k *buffers // 32K
-	buffers4k  *buffers // 4K
+	cloudif       cloudif // multi-cloud vendor support
+	smap          *Smap
+	proxysi       *daemonInfo
+	xactinp       *xactInProgress
+	starttime     time.Time
+	lbmap         *lbmap
+	rtnamemap     *rtnamemap
+	buffers       *buffers // 128K default
+	buffers32k    *buffers // 32K
+	buffers4k     *buffers // 4K
+	prefetchQueue chan filesWithDeadline
 }
 
 // start target runner
@@ -116,6 +117,9 @@ func (t *targetrunner) run() error {
 	// init capacity
 	rr := getstorstatsrunner()
 	rr.initCapacity()
+	// prefetch
+	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
+
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
@@ -183,7 +187,7 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpfildelete(w, r)
 	case http.MethodPost:
-		t.httpfilrename(w, r)
+		t.httpfilpost(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -232,7 +236,8 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	//
 	// get the object from the bucket
 	//
-	if coldget, size, errstr = t.getchecklocal(w, r, bucket, objname, fqn); errstr != "" {
+	if coldget, size, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
+		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		return
 	}
 	if coldget {
@@ -303,7 +308,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	t.statsif.add("numget", 1)
 }
 
-func (t *targetrunner) getchecklocal(w http.ResponseWriter, r *http.Request, bucket, objname, fqn string) (coldget bool, size int64, errstr string) {
+func (t *targetrunner) getchecklocal(bucket, objname, fqn string) (coldget bool, size int64, errstr string) {
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		switch {
@@ -311,17 +316,14 @@ func (t *targetrunner) getchecklocal(w http.ResponseWriter, r *http.Request, buc
 			if t.islocalBucket(bucket) {
 				errstr = fmt.Sprintf("GET local: file %s (local bucket %s, object %s) does not exist",
 					fqn, bucket, objname)
-				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				return
 			}
 			coldget = true
 		case os.IsPermission(err):
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
-			t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
 			return
 		default:
 			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
 		}
 	} else {
@@ -723,23 +725,47 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpfilrename(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	var (
 		msg    ActionMsg
 		errstr string
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
-	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
-	if t.readJSON(w, r, &msg) != nil {
+	if msg.Action == ActPrefetch {
+		jsmap, ok := msg.Value.(map[string]interface{})
+		if !ok {
+			t.invalmsghdlr(w, r, "Could not parse PrefetchMsg: ActionMsg.Value was not map[string]interface{}")
+			return
+		}
+		if _, ok := jsmap["objnames"]; ok {
+			// Prefetch with List
+			if prefetchMsg, err := parsePrefetchMsg(jsmap); err != nil {
+				t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+			} else {
+				t.prefetch(w, r, prefetchMsg)
+			}
+		} else {
+			// Prefetch with Range
+			if prefetchRangeMsg, err := parsePrefetchRangeMsg(jsmap); err != nil {
+				t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+			} else {
+				t.prefetchrange(w, r, prefetchRangeMsg)
+			}
+		}
 		return
 	}
 	if msg.Action != ActRename {
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 		return
 	}
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+		return
+	}
+
+	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
 	newobjname := msg.Name
 	fqn, uname := t.fqn(bucket, objname), bucket+objname
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
@@ -901,10 +927,11 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		if errstr := t.setconfig(msg.Name, msg.Value); errstr != "" {
+		if value, ok := msg.Value.(string); !ok {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
+		} else if errstr := t.setconfig(msg.Name, value); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
-		}
-		if msg.Name == "lru_enabled" && msg.Value == "false" {
+		} else if msg.Name == "lru_enabled" && value == "false" {
 			_, lruxact := t.xactinp.find(ActLRU)
 			if lruxact != nil {
 				if glog.V(3) {
@@ -1053,6 +1080,82 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 	if glog.V(3) {
 		glog.Infof("Registered self %s", t.si.DaemonID)
+	}
+}
+
+func (t *targetrunner) prefetch(w http.ResponseWriter, r *http.Request, prefetchMsg PrefetchMsg) {
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	objs := make([]string, 0)
+	for _, obj := range prefetchMsg.Objnames {
+		si := hrwTarget(bucket+"/"+obj, t.smap)
+		if si.DaemonID == t.si.DaemonID {
+			objs = append(objs, obj)
+		}
+	}
+	if len(objs) != 0 {
+		var done chan struct{}
+		if prefetchMsg.Wait {
+			done = make(chan struct{}, 1)
+		}
+		if err := t.addPrefetch(objs, bucket, prefetchMsg.Deadline, done); err != nil {
+			s := fmt.Sprintf("Error prefetching objects: %v", err)
+			t.invalmsghdlr(w, r, s)
+			t.statsif.add("numerr", 1)
+			return
+		} else if prefetchMsg.Wait {
+			<-done
+			close(done)
+		}
+	}
+}
+
+func (t *targetrunner) prefetchrange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg PrefetchRangeMsg) {
+	var (
+		min, max int64
+		err      error
+	)
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	if prefetchRangeMsg.Range != "" {
+		ranges := strings.Split(prefetchRangeMsg.Range, ":")
+		min, err = strconv.ParseInt(ranges[0], 10, 64)
+		if err != nil {
+			s := fmt.Sprintf("Error parsing range minimum: %v", err)
+			t.invalmsghdlr(w, r, s)
+			t.statsif.add("numerr", 1)
+			return
+		}
+		max, err = strconv.ParseInt(ranges[1], 10, 64)
+		if err != nil {
+			s := fmt.Sprintf("Error parsing range minimum: %v", err)
+			t.invalmsghdlr(w, r, s)
+			t.statsif.add("numerr", 1)
+			return
+		}
+	} else {
+		min = 0
+		max = 0
+	}
+	var done chan struct{}
+	if prefetchRangeMsg.Wait {
+		done = make(chan struct{}, 1)
+	}
+	if err := t.addPrefetchRange(bucket, prefetchRangeMsg.Prefix, prefetchRangeMsg.Regex,
+		min, max, prefetchRangeMsg.Deadline, done); err != nil {
+		s := fmt.Sprintf("Error adding Prefetch Range: %v", err)
+		t.invalmsghdlr(w, r, s)
+		t.statsif.add("numerr", 1)
+		return
+	} else if prefetchRangeMsg.Wait {
+		<-done
+		close(done)
 	}
 }
 

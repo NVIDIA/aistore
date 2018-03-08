@@ -7,7 +7,7 @@
 	"local_buckets":		"local",
 	"lb_conf":                	"localbuckets",
 	"stats_time":			"10s",
-	"http_timeout":			"60s",
+	"http_timeout":			"10s",
 	"keep_alive_time":		"30s",
 	"listen": {
 		"proto": 		"tcp",
