@@ -29,7 +29,7 @@ import (
 // usage examples:
 // # go test ./tests -v -run=regression
 // # go test ./tests -v -run=down -args -bucket=mybucket
-// # go test ./tests -v -run=list -bucket=otherbucket
+// # go test ./tests -v -run=list -bucket=otherbucket -prefix=smoke/obj -props=atime,ctime,iscached,checksum,version,size
 // # go test ./tests -v -run=smoke -numworkers=4
 // # go test ./tests -v -run=xxx -bench . -count 10
 
@@ -55,6 +55,7 @@ var (
 	clichecksum string
 	totalio     int64
 	proxyurl    string
+	props       string
 )
 
 // worker's result
@@ -87,6 +88,7 @@ func init() {
 	flag.StringVar(&match, "match", ".*", "object name regex")
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
+	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
 }
 
 func Test_download(t *testing.T) {
@@ -292,7 +294,16 @@ func Test_list(t *testing.T) {
 	flag.Parse()
 
 	// list the names, sizes, creation times and MD5 checksums
-	var msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion}
+	var msg *dfc.GetMsg
+	if props == "" {
+		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion}
+	} else {
+		msg = &dfc.GetMsg{GetProps: props}
+	}
+	if prefix != "" {
+		msg.GetPrefix = prefix
+	}
+	tlogf("Displaying properties: %s\n", msg.GetProps)
 
 	bucket := clibucket
 	fname := LocalDestDir + "/" + bucket
@@ -309,6 +320,7 @@ func Test_list(t *testing.T) {
 		}
 	}
 
+	totalObjs := 0
 	for {
 		jsbytes, err := json.Marshal(msg)
 		if err != nil {
@@ -330,11 +342,12 @@ func Test_list(t *testing.T) {
 		} else {
 			for _, m := range reslist.Entries {
 				if len(m.Checksum) > 8 {
-					tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum[:8]+"...")
+					tlogf("%s %d %s [%s] %s [%v - %s]\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum[:8]+"...", m.IsCached, m.Atime)
 				} else {
-					tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum)
+					tlogf("%s %d %s [%s] %s [%v - %s]\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum, m.IsCached, m.Atime)
 				}
 			}
+			totalObjs += len(reslist.Entries)
 		}
 
 		if reslist.PageMarker == "" {
@@ -343,6 +356,7 @@ func Test_list(t *testing.T) {
 
 		msg.GetPageMarker = reslist.PageMarker
 	}
+	tlogf("-----------------\nTotal objects listed: %v\n", totalObjs)
 }
 
 func Test_coldgetmd5(t *testing.T) {

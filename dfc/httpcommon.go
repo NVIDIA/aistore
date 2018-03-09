@@ -204,10 +204,12 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 	} else {
 		response, err = r.httpclient.Do(request)
 	}
-	// For a timer created with AfterFunc(d, f), if t.Stop returns false, then the timer
-	// has already expired and the function f has been started in its own goroutine (time/sleep.go)
-	if timer != nil && timer.Stop() && cancelch != nil {
-		close(cancelch)
+	// Stop timer but do not close cancelch, to avoid firing a cancel event
+	// while the data is being read from the http response.
+	// When the function exits cancelch will be closed and destroyed by garbage
+	// collector along with request variable
+	if timer != nil {
+		timer.Stop()
 	}
 	if err != nil {
 		if response != nil && response.StatusCode > 0 {

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -25,6 +26,10 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	cachedPageSize = 10000 // the number of cached file infos returned in one page
+)
+
 type mountPath struct {
 	Path string
 	Fsid syscall.Fsid
@@ -32,10 +37,25 @@ type mountPath struct {
 type fipair struct {
 	relname string
 	os.FileInfo
+	atime time.Time
 }
 type allfinfos struct {
 	finfos     []fipair
 	rootLength int
+}
+
+type cachedInfos struct {
+	files        []*BucketEntry
+	fileCount    int
+	rootLength   int
+	prefix       string
+	marker       string
+	markerDirs   []string
+	needAtime    bool
+	msg          *GetMsg
+	lastFilePath string
+	t            *targetrunner
+	bucket       string
 }
 
 //===========================================================================
@@ -372,33 +392,65 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Pushed Object List "))
 }
 
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+// should not be called for local buckets
+func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes []byte, errstr string, errcode int) {
+	var err error
 
-	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
+	if t.islocalBucket(bucket) {
+		return nil, fmt.Sprintf("Cache is unavailable for local bucket %s", bucket), 0
 	}
 
-	msg := &GetMsg{}
-	if t.readJSON(w, r, msg) != nil {
-		return
+	needAtime := strings.Contains(msg.GetProps, GetPropsAtime)
+	// Split a marker into separate directory list to make pagination
+	// more effective. All directories in the list are skipped by
+	// filepath.Walk. The last directory of the marker must be excluded
+	// from the list because the marker can point to the middle of it
+	markerDirs := make([]string, 0)
+	if msg.GetPageMarker != "" && strings.Contains(msg.GetPageMarker, "/") {
+		idx := strings.LastIndex(msg.GetPageMarker, "/")
+		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
+		markerDirs = markerDirs[:len(markerDirs)-1]
 	}
-	if !islocal {
-		jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
-		if errstr != "" {
-			if errcode == 0 {
-				t.invalmsghdlr(w, r, errstr)
-			} else {
-				t.invalmsghdlr(w, r, errstr, errcode)
-			}
-		} else {
-			if errstr := t.writeJSON(w, r, jsbytes, "listbucket"); errstr == "" {
-				t.statsif.add("numlist", 1)
-			}
+	allfinfos := cachedInfos{make([]*BucketEntry, 0, cachedPageSize), 0, 0, msg.GetPrefix, msg.GetPageMarker, markerDirs, needAtime, msg, "", t, bucket}
+
+	// We need stable order of mountpaths
+	mpathList := make([]string, 0, len(ctx.mountpaths))
+	for mpath := range ctx.mountpaths {
+		mpathList = append(mpathList, mpath)
+	}
+	sort.Strings(mpathList)
+
+	for _, mpath := range mpathList {
+		localbucketfqn := mpath + "/" + ctx.config.CloudBuckets + "/" + bucket
+		_, err = os.Stat(localbucketfqn)
+		if err != nil {
+			continue
 		}
-		return
+
+		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
+		if err = filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
+			errstr = fmt.Sprintf("Failed to traverse mpath %q, err: %v", mpath, err)
+			glog.Errorf(errstr)
+		}
 	}
-	// local bucket
+
+	if err == nil {
+		var reslist = BucketList{Entries: allfinfos.files}
+		// Mark the batch as truncated if it is full
+		if len(allfinfos.files) >= cachedPageSize {
+			reslist.PageMarker = allfinfos.lastFilePath
+		}
+		outbytes, err = json.Marshal(reslist)
+	}
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to traverse cached objects: %v", err.Error())
+		glog.Errorf(errstr)
+	}
+
+	return
+}
+
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) {
 	allfinfos := allfinfos{make([]fipair, 0, 128), 0}
 	for mpath := range ctx.mountpaths {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
@@ -407,6 +459,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		}
 	}
+
 	t.statsif.add("numlist", 1)
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(allfinfos.finfos))}
 	for _, fi := range allfinfos.finfos {
@@ -434,16 +487,68 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		if strings.Contains(msg.GetProps, GetPropsChecksum) {
 			fqn := t.fqn(bucket, fi.relname)
 			xxhex, errstr := Getxattr(fqn, xattrXXHashVal)
-			// see xattrXXHashVal comment above
 			if errstr == "" {
 				entry.Checksum = hex.EncodeToString(xxhex)
 			}
 		}
-		// TODO: other GetMsg props TBD
+		if strings.Contains(msg.GetProps, GetPropsAtime) {
+			if msg.GetTimeFormat == "" {
+				entry.Atime = fi.atime.Format(RFC822)
+			} else {
+				entry.Atime = fi.atime.Format(msg.GetTimeFormat)
+			}
+		}
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
+	_ = t.writeJSON(w, r, jsbytes, "listbucket")
+}
+
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+	var (
+		jsbytes []byte
+		errstr  string
+		errcode int
+	)
+	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+	}
+	useCache, errstr, errcode := t.checkCacheQueryParameter(r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+	}
+
+	msg := &GetMsg{}
+	if t.readJSON(w, r, msg) != nil {
+		return
+	}
+
+	if islocal {
+		t.doLocalBucketList(w, r, bucket, msg)
+		return
+	}
+
+	if useCache {
+		// Read local cached file infos
+		// It is internal call, that is why numlist of stats is not incremented
+		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
+	} else {
+		// do cloud request
+		if jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg); errstr == "" {
+			t.statsif.add("numlist", 1)
+		}
+	}
+
+	if errstr != "" {
+		if errcode == 0 {
+			t.invalmsghdlr(w, r, errstr)
+		} else {
+			t.invalmsghdlr(w, r, errstr, errcode)
+		}
+	}
+
 	_ = t.writeJSON(w, r, jsbytes, "listbucket")
 }
 
@@ -457,8 +562,83 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	relname := fqn[all.rootLength:]
-	all.finfos = append(all.finfos, fipair{relname, osfi})
+	atime, _, _ := get_amtimes(osfi)
+	all.finfos = append(all.finfos, fipair{relname, osfi, atime})
 	return nil
+}
+
+func (ci *cachedInfos) processDir(fqn string) error {
+	if len(fqn) <= ci.rootLength {
+		return nil
+	}
+
+	relname := fqn[ci.rootLength:]
+	if ci.prefix != "" && !strings.HasPrefix(ci.prefix, relname) {
+		return filepath.SkipDir
+	}
+
+	if len(ci.markerDirs) != 0 {
+		dirs := strings.Split(fqn, "/")
+		maxIdx := len(dirs)
+		if len(ci.markerDirs) < maxIdx {
+			maxIdx = len(ci.markerDirs)
+		}
+		for idx := 0; idx < maxIdx; idx++ {
+			if dirs[idx] < ci.markerDirs[idx] {
+				return filepath.SkipDir
+			}
+		}
+	}
+
+	return nil
+}
+
+func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
+	relname := fqn[ci.rootLength:]
+	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
+		return nil
+	}
+
+	if ci.marker != "" && fqn <= ci.marker {
+		return nil
+	}
+
+	if hrwTarget(ci.bucket+"/"+relname, ci.t.smap).DaemonID != ci.t.si.DaemonID {
+		// this target is not responsible for returning this object
+		return nil
+	}
+
+	// the file passed all checks - add it to the batch
+	ci.fileCount++
+	fileInfo := &BucketEntry{Name: relname, Atime: "", IsCached: true}
+	if ci.needAtime {
+		atime, _, _ := get_amtimes(osfi)
+		if ci.msg.GetTimeFormat == "" {
+			fileInfo.Atime = atime.Format(RFC822)
+		} else {
+			fileInfo.Atime = atime.Format(ci.msg.GetTimeFormat)
+		}
+	}
+	ci.files = append(ci.files, fileInfo)
+	ci.lastFilePath = fqn
+	return nil
+}
+
+func (ci *cachedInfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
+	if err != nil {
+		glog.Errorf("listwalkf callback invoked with err: %v", err)
+		return err
+	}
+
+	if ci.fileCount >= cachedPageSize {
+		return filepath.SkipDir
+	}
+
+	if osfi.IsDir() {
+		return ci.processDir(fqn)
+	}
+
+	return ci.processRegularFile(fqn, osfi)
 }
 
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
@@ -911,6 +1091,18 @@ func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	for k, v := range headers {
 		w.Header().Add(k, v)
 	}
+}
+
+func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {
+	useCacheStr := r.URL.Query().Get(ParamCached)
+	if useCacheStr != "" && useCacheStr != "true" && useCacheStr != "false" {
+		errstr = fmt.Sprintf("Invalid parameter: \"%s=%s\". Must be [\"\",\"true\",\"false\"]", ParamCached, useCacheStr)
+		errcode = http.StatusInternalServerError
+		return
+	}
+
+	useCache = useCacheStr == "true"
+	return
 }
 
 func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) (islocal bool, errstr string, errcode int) {

@@ -675,16 +675,18 @@ func regressionPrefetchRange(t *testing.T) {
 	msg := dfc.GetMsg{}
 	objsToFilter := testListBucketAll(t, clibucket, msg)
 	files := make([]string, 0)
-	for _, be := range objsToFilter.Entries {
-		if oname := strings.TrimPrefix(be.Name, prefetchPrefix); oname != be.Name {
-			s := re.FindStringSubmatch(oname)
-			if s == nil {
-				continue
-			}
-			if i, err := strconv.ParseInt(s[0], 10, 64); err != nil && s[0] != "" {
-				continue
-			} else if s[0] == "" || (rmin == 0 && rmax == 0) || (i >= rmin && i <= rmax) {
-				files = append(files, be.Name)
+	if objsToFilter != nil {
+		for _, be := range objsToFilter.Entries {
+			if oname := strings.TrimPrefix(be.Name, prefetchPrefix); oname != be.Name {
+				s := re.FindStringSubmatch(oname)
+				if s == nil {
+					continue
+				}
+				if i, err := strconv.ParseInt(s[0], 10, 64); err != nil && s[0] != "" {
+					continue
+				} else if s[0] == "" || (rmin == 0 && rmax == 0) || (i >= rmin && i <= rmax) {
+					files = append(files, be.Name)
+				}
 			}
 		}
 	}

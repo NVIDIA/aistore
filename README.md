@@ -177,10 +177,12 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 
 | Property/Option | Meaning | Value |
 | --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version". |
+| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version". (`*`) |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have. | For example, "my/directory/structure/" |
 | pagemarker | The token signifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |\b
+
+> (`*`) The objects that exist in the Cloud but are not present in the DFC cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the DFC cache.
 
 ### Example: listing local and Cloud buckets
 

@@ -45,9 +45,10 @@ const (
 
 // URL Query Parameter enum
 const (
-	ParamLocal  = "local"   //local=bool - true if bucket is expected to be local, false otherwise.
-	ParamToID   = "to_id"   // to_id=string - ID to copy to
-	ParamFromID = "from_id" // from_id=string - ID to copy from
+	ParamLocal  = "local"      //local=bool - true if bucket is expected to be local, false otherwise.
+	ParamToID   = "to_id"      // to_id=string - ID to copy to
+	ParamFromID = "from_id"    // from_id=string - ID to copy from
+	ParamCached = "cachedonly" //cachedonly=bool - true if target should return cached objects info instead of reqesting object list from cloud
 )
 
 // TODO: sort and some props are TBD
@@ -136,6 +137,7 @@ type BucketEntry struct {
 	Atime    string `json:"atime"`    // formatted as per GetMsg.GetTimeFormat
 	Bucket   string `json:"bucket"`   // parent bucket name
 	Version  string `json:"version"`  // version/generation ID. In GCP it is int64, in AWS it is a string
+	IsCached bool   `json:"iscached"` // if the file is cached on one of targets
 }
 
 type BucketList struct {
