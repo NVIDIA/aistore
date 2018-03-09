@@ -79,7 +79,7 @@ func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket s
 
 	for i := 1; i < numPuts+1; i++ {
 		fname := fmt.Sprintf("l%d", i)
-		if _, err := client.WriteRandomData(smokeDir+"/"+fname, buffer, int(fileSize), blocksize, random); err != nil {
+		if _, _, err := client.WriteRandomData(smokeDir+"/"+fname, buffer, int(fileSize), blocksize, random); err != nil {
 			return err
 		}
 		wg.Add(1)

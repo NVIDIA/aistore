@@ -143,7 +143,7 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, wg *sync.WaitGroup,
 	puturl := proxyurl + "/v1/files/" + bucket + "/" + keyname
 	if !silent {
 		if xxhashstr == "" {
-			fmt.Printf("PUT: object %s/%s\n", bucket, keyname, fname)
+			fmt.Printf("PUT: object %s/%s - %s\n", bucket, keyname, fname)
 		} else {
 			fmt.Printf("PUT: object %s/%s xxhash %s...\n", bucket, keyname, xxhashstr[:8])
 		}
