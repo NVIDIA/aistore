@@ -15,7 +15,8 @@ const (
 	blocksize = 1048576
 	baseseed  = 1062984096
 	megabytes = uint64(1024 * 1024)
-	smokeDir  = "/tmp/dfc/smoke" // smoke test dir
+	smokeDir  = "/tmp/dfc/smoke"        // smoke test dir
+	ProxyURL  = "http://localhost:8080" // assuming local proxy is listening on 8080
 )
 
 var (
@@ -23,9 +24,11 @@ var (
 	numworkers int
 	filesize   uint64
 	clibucket  string
+	proxyurl   string
 )
 
 func init() {
+	flag.StringVar(&proxyurl, "proxyurl", ProxyURL, "Proxy URL")
 	flag.StringVar(&clibucket, "bucket", "localbkt", "AWS or GCP bucket")
 	flag.IntVar(&numfiles, "files", 10, "Number of files to put")
 	flag.IntVar(&numworkers, "workers", 10, "Number of workers")
@@ -81,7 +84,7 @@ func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket s
 		}
 		wg.Add(1)
 		pool <- func() {
-			client.Put(smokeDir+"/"+fname, bucket, "__bench/"+fname, "", wg, errch, false)
+			client.Put(proxyurl, smokeDir+"/"+fname, bucket, "__bench/"+fname, "", wg, errch, false)
 		}
 
 		filesput <- fname

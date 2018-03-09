@@ -390,13 +390,12 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
 			hash := hex.EncodeToString(hashInBytes)
 			if hdhash != hash {
-				t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s \n", id, hdhash, hash)
+				t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, dfc.ChecksumXXHash, hdhash, hash)
 				resch <- res
 				close(resch)
 				return
-			} else {
-				tlogf("Worker %2d: header's hash %s does match the file's %s \n", id, hdhash, hash)
 			}
+			tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumXXHash, hdhash, hash)
 		} else if hdhashtype == dfc.ChecksumMD5 {
 			md5 := md5.New()
 			written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
@@ -407,25 +406,22 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 			hashInBytes := md5.Sum(nil)[:16]
 			md5hash := hex.EncodeToString(hashInBytes)
 			if errstr != "" {
-				t.Errorf("Worker %2d: failed to compute xxhash, err: %s", id, errstr)
+				t.Errorf("Worker %2d: failed to compute %s, err: %s", id, dfc.ChecksumMD5, errstr)
 				return
 			}
-
 			if hdhash != md5hash {
-				t.Errorf("Worker %2d: header's md5 %s doesn't match the file's %s \n", id, hdhash, md5hash)
+				t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, dfc.ChecksumMD5, hdhash, md5hash)
 				resch <- res
 				close(resch)
 				return
-			} else {
-				tlogf("Worker %2d: header's md5 %s does match the file's %s \n", id, hdhash, md5hash)
 			}
+			tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumMD5, hdhash, md5hash)
 		} else {
 			written, errstr = dfc.ReceiveFile(file, r.Body, nil)
 			if errstr != "" {
 				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 				return
 			}
-
 		}
 		res.totfiles++
 		res.totbytes += written

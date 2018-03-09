@@ -147,29 +147,30 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 }
 
 func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, buf []byte) {
+	var (
+		totalOps  int
+		prc       int
+		err       error
+		xxhashstr string
+	)
 	errch := make(chan error, 10)
 	fileCount := len(fileNames)
-	var totalOps int
-
 	if taskGrp != nil {
 		defer taskGrp.Done()
 	}
-
 	src := rand.NewSource(time.Now().UTC().UnixNano())
 	random := rand.New(src)
-	var wg = &sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 
-	var prc int
 	fmt.Printf("Running stress test...0%%")
 	totalCount := fileCount * numLoops
 	filesPut := 0
-
 	for i := 0; i < numLoops; i++ {
 		for idx := 0; idx < fileCount; idx++ {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			fname := fmt.Sprintf("%s/%s", baseDir, keyname)
 
-			if _, err := client.WriteRandomData(fname, buf, int(fileSize), blocksize, random); err != nil {
+			if _, xxhashstr, err = client.WriteRandomData(fname, buf, int(fileSize), blocksize, random); err != nil {
 				fmt.Fprintf(os.Stdout, "PUT write FAIL: %v\n", err)
 				t.Error(err)
 				if errch != nil {
@@ -189,19 +190,17 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					client.Put(proxyurl, fname, clibucket, keyname, "", nil, errch, true)
+					client.Put(proxyurl, fname, clibucket, keyname, xxhashstr, nil, errch, true)
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
 			}
-
 			filesPut++
 			newPrc := 100 * filesPut / totalCount
 			if prc != newPrc {
 				fmt.Printf("\rRunning stress test...%d%%", prc)
 				prc = newPrc
 			}
-
 			select {
 			case e := <-errch:
 				fmt.Printf("PUT failed: %v\n", e.Error())

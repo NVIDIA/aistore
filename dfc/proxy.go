@@ -598,7 +598,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if osi != nil {
-		glog.Errorf("register target: duplicate target ID %s - renewing anyway", nsi.DaemonID)
+		if osi.NodeIPAddr == nsi.NodeIPAddr && osi.DaemonPort == nsi.DaemonPort && osi.DirectURL == nsi.DirectURL {
+			glog.Infof("register target %s: already done", nsi.DaemonID)
+		} else {
+			glog.Errorf("register target %s: renewing the registration %+v => %+v", nsi.DaemonID, osi, nsi)
+		}
 		// fall through
 	}
 add:

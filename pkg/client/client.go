@@ -8,6 +8,8 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,17 +136,17 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	emitError(r, err, errch)
 	return err
 }
-func Put(proxyurl, fname, bucket, keyname, htype string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
-	var (
-		hash   string
-		errstr string
-	)
+func Put(proxyurl, fname, bucket, keyname, xxhashstr string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	puturl := proxyurl + "/v1/files/" + bucket + "/" + keyname
 	if !silent {
-		fmt.Printf("PUT: object %s fname %s\n", keyname, fname)
+		if xxhashstr == "" {
+			fmt.Printf("PUT: object %s/%s\n", bucket, keyname, fname)
+		} else {
+			fmt.Printf("PUT: object %s/%s xxhash %s...\n", bucket, keyname, xxhashstr[:8])
+		}
 	}
 	file, err := os.Open(fname)
 	if err != nil {
@@ -168,15 +170,9 @@ func Put(proxyurl, fname, bucket, keyname, htype string, wg *sync.WaitGroup, err
 	req.GetBody = func() (io.ReadCloser, error) {
 		return os.Open(fname)
 	}
-	if htype == dfc.ChecksumXXHash {
-		xx := xxhash.New64()
-		hash, errstr = dfc.ComputeXXHash(file, nil, xx)
-		if errstr != "" {
-			errch <- fmt.Errorf("Failed to compute xxhash file %s, err: %v", fname, errstr)
-			return
-		}
-		req.Header.Set(dfc.HeaderDfcChecksumType, htype)
-		req.Header.Set(dfc.HeaderDfcChecksumVal, hash)
+	if xxhashstr != "" {
+		req.Header.Set(dfc.HeaderDfcChecksumType, dfc.ChecksumXXHash)
+		req.Header.Set(dfc.HeaderDfcChecksumVal, xxhashstr)
 	}
 	_, err = file.Seek(0, 0)
 	if err != nil {
@@ -367,14 +363,14 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 	return string(b)
 }
 
-func WriteRandomData(fname string, bytes []byte, filesize int, blocksize int, random *rand.Rand) (int, error) {
+func WriteRandomData(fname string, bytes []byte, filesize int, blocksize int, random *rand.Rand) (tot int, xxhashstr string, err error) {
 	f, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
+	xx := xxhash.New64()
 	if err != nil {
-		return 0, err
+		return
 	}
 	nblocks := filesize / blocksize
-	tot := 0
-	var r int
+	var r, n int
 	for i := 0; i <= nblocks; i++ {
 		if blocksize < filesize-tot {
 			r = blocksize
@@ -382,13 +378,21 @@ func WriteRandomData(fname string, bytes []byte, filesize int, blocksize int, ra
 			r = filesize - tot
 		}
 		random.Read(bytes[0:r])
-		n, err := f.Write(bytes[0:r])
+		n, err = f.Write(bytes[0:r])
 		if err != nil {
-			return tot, err
-		} else if n < r {
-			return tot, io.ErrShortWrite
+			return
 		}
+		if n < r {
+			err = io.ErrShortWrite
+			return
+		}
+		xx.Write(bytes[0:r])
 		tot += n
 	}
-	return tot, f.Close()
+	hashIn64 := xx.Sum64()
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+	xxhashstr = hex.EncodeToString(hashInBytes)
+	err = f.Close()
+	return
 }

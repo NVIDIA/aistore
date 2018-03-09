@@ -80,21 +80,23 @@ func prefixCreateFiles(t *testing.T) {
 	buf := make([]byte, blocksize)
 	fileNames = make([]string, 0, prefixFileNumber)
 	errch := make(chan error, numfiles)
-	var wg = &sync.WaitGroup{}
-
+	wg := &sync.WaitGroup{}
+	var (
+		err       error
+		xxhashstr string
+	)
 	for i := 0; i < prefixFileNumber; i++ {
 		fileName := client.FastRandomFilename(random, fnlen)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		filePath := fmt.Sprintf("%s/%s", baseDir, keyName)
-		tlogf("Creating file at: %s\n", filePath)
-		if _, err := client.WriteRandomData(filePath, buf, int(fileSize), blocksize, random); err != nil {
+		tlogf("Generating random-content file %s, size %.2fMB\n", filePath, float64(fileSize)/1000/1000)
+		if _, xxhashstr, err = client.WriteRandomData(filePath, buf, int(fileSize), blocksize, random); err != nil {
 			fmt.Fprintf(os.Stdout, "File create fail: %v\n", err)
 			t.Error(err)
 			return
 		}
-
 		wg.Add(1)
-		go client.Put(proxyurl, filePath, clibucket, keyName, "", wg, errch, true)
+		go client.Put(proxyurl, filePath, clibucket, keyName, xxhashstr, wg, errch, true)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()
