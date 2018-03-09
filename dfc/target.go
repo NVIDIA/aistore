@@ -404,7 +404,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	allfinfos := allfinfos{make([]fipair, 0, 128), 0}
 	for mpath := range ctx.mountpaths {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-		allfinfos.rootLength = len(localbucketfqn)
+		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
 		if err := filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		}
