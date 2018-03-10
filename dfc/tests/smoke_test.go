@@ -1,6 +1,7 @@
 package dfc_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -51,11 +52,17 @@ func Test_smoke(t *testing.T) {
 	if err := dfc.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
+	if inmem {
+		megabytes, _ := dfc.TotalMemory()
+		if megabytes < PhysMemSizeWarn {
+			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
+		}
+	}
+
 	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
 		for _, r := range ratios {
-
 			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, fs, r, bs, fp) })
 			bs += int64(numworkers + 1)
 		}
@@ -65,9 +72,11 @@ func Test_smoke(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	errch := make(chan error, len(filesizes)*len(ratios)*numops*numworkers)
 	for file := range fp {
-		err := os.Remove(SmokeDir + "/" + file)
-		if err != nil {
-			t.Error(err)
+		if !inmem {
+			err := os.Remove(SmokeDir + "/" + file)
+			if err != nil {
+				t.Error(err)
+			}
 		}
 		wg.Add(1)
 		go client.Del(proxyurl, clibucket, "smoke/"+file, wg, errch, false)
@@ -94,7 +103,13 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			go func(i int) {
-				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput, SmokeDir, smokestr, "", false)
+				var fbuffer *bytes.Buffer
+				if inmem {
+					fbuf := make([]byte, filesize)
+					fbuffer = bytes.NewBuffer(fbuf)
+				}
+				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput,
+					SmokeDir, smokestr, "", false, fbuffer)
 			}(i)
 			nPut--
 		} else {
@@ -154,7 +169,8 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 }
 
 func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
-	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string, dir, keystr, htype string, silent bool) {
+	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
+	dir, keystr, htype string, silent bool, fbuffer *bytes.Buffer) {
 	var (
 		err       error
 		xxhashstr string
@@ -171,10 +187,15 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		if size == 0 {
 			size = uint64(random.Intn(1024)+1) * 1024
 		}
-		if _, xxhashstr, err = client.WriteRandomData(dir+"/"+fname, buffer, int(size), blocksize, random); err != nil {
+		if fbuffer != nil {
+			fbuffer.Reset()
+			_, xxhashstr, err = client.WriteRandomMem(buffer, int(size), blocksize, random, fbuffer)
+		} else {
+			_, xxhashstr, err = client.WriteRandomFil(dir+"/"+fname, buffer, int(size), blocksize, random)
+		}
+		if err != nil {
 			t.Error(err)
-			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n",
-				dir+"/"+fname, err)
+			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n", dir+"/"+fname, err)
 			if errch != nil {
 				errch <- err
 			}
@@ -183,7 +204,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		client.Put(proxyurl, dir+"/"+fname, bucket, keystr+"/"+fname, xxhashstr, nil, errch, silent)
+		client.Put(proxyurl, dir+"/"+fname, bucket, keystr+"/"+fname, xxhashstr, fbuffer, nil, errch, silent)
 		filesput <- fname
 	}
 }

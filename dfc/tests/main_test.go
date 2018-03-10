@@ -6,6 +6,7 @@
 package dfc_test
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
@@ -177,14 +178,18 @@ func Test_download(t *testing.T) {
 
 func Test_delete(t *testing.T) {
 	flag.Parse()
-
+	var fbuffer *bytes.Buffer
 	if err := dfc.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
-
 	errch := make(chan error, numfiles)
 	filesput := make(chan string, numfiles)
-	putRandomFiles(0, baseseed, 512*1024, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false)
+	filesize := uint64(512 * 1024)
+	if inmem {
+		fbuf := make([]byte, filesize)
+		fbuffer = bytes.NewBuffer(fbuf)
+	}
+	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false, fbuffer)
 	close(filesput)
 
 	// Declare one channel per worker to pass the keyname
@@ -203,7 +208,9 @@ func Test_delete(t *testing.T) {
 
 	num := 0
 	for name := range filesput {
-		os.Remove(DeleteDir + "/" + name)
+		if fbuffer == nil {
+			os.Remove(DeleteDir + "/" + name)
+		}
 		keynameChans[num%numworkers] <- DeleteStr + "/" + name
 		num++
 	}
@@ -270,6 +277,8 @@ func Test_coldgetmd5(t *testing.T) {
 		wg        = &sync.WaitGroup{}
 		bucket    = clibucket
 		totalsize = numPuts * largefilesize
+		filesize  = uint64(largefilesize * 1024 * 1024)
+		fbuffer   *bytes.Buffer
 	)
 	ldir := LocalSrcDir + "/" + ColdValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
@@ -280,7 +289,15 @@ func Test_coldgetmd5(t *testing.T) {
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
-	putRandomFiles(0, baseseed, uint64(largefilesize*1024*1024), numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true)
+	if inmem {
+		megabytes, _ := dfc.TotalMemory()
+		if megabytes < PhysMemSizeWarn {
+			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
+		}
+		fbuf := make([]byte, filesize)
+		fbuffer = bytes.NewBuffer(fbuf)
+	}
+	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true, fbuffer)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -315,7 +332,9 @@ func Test_coldgetmd5(t *testing.T) {
 cleanup:
 	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/v1/cluster", httpclient, t)
 	for _, fn := range fileslist {
-		_ = os.Remove(LocalSrcDir + "/" + fn)
+		if fbuffer == nil {
+			_ = os.Remove(LocalSrcDir + "/" + fn)
+		}
 		wg.Add(1)
 		go client.Del(proxyurl, bucket, fn, wg, errch, false)
 	}
@@ -549,6 +568,8 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 		htype       string
 		numPuts     = 5
+		filesize    = uint64(largefilesize * 1024 * 1024)
+		fbuffer     *bytes.Buffer
 	)
 	totalio := (numPuts * largefilesize)
 
@@ -564,7 +585,16 @@ func Test_checksum(t *testing.T) {
 	if ochksum == dfc.ChecksumXXHash {
 		htype = ochksum
 	}
-	putRandomFiles(0, 0, uint64(largefilesize*1024*1024), int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true)
+
+	if inmem {
+		megabytes, _ := dfc.TotalMemory()
+		if megabytes < PhysMemSizeWarn {
+			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
+		}
+		fbuf := make([]byte, filesize)
+		fbuffer = bytes.NewBuffer(fbuf)
+	}
+	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true, fbuffer)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -636,13 +666,16 @@ cleanup:
 	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/v1/cluster", httpclient, t)
 	return
 }
+
 func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string) {
 	wg := &sync.WaitGroup{}
 	// Delete local file and objects from bucket
 	for _, fn := range fileslist {
-		err := os.Remove(LocalSrcDir + "/" + fn)
-		if err != nil {
-			t.Error(err)
+		if !inmem {
+			err := os.Remove(LocalSrcDir + "/" + fn)
+			if err != nil {
+				t.Error(err)
+			}
 		}
 		wg.Add(1)
 		go client.Del(proxyurl, bucket, fn, wg, errch, true)
@@ -651,6 +684,7 @@ func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist
 	selectErr(errch, "delete", t, false)
 	close(errch)
 }
+
 func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []string, validate bool) {
 	getsGroup := &sync.WaitGroup{}
 	for i := 0; i < len(fileslist); i++ {

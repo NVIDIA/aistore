@@ -90,13 +90,13 @@ func prefixCreateFiles(t *testing.T) {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		filePath := fmt.Sprintf("%s/%s", baseDir, keyName)
 		tlogf("Generating random-content file %s, size %.2fMB\n", filePath, float64(fileSize)/1000/1000)
-		if _, xxhashstr, err = client.WriteRandomData(filePath, buf, int(fileSize), blocksize, random); err != nil {
-			fmt.Fprintf(os.Stdout, "File create fail: %v\n", err)
+		if _, xxhashstr, err = client.WriteRandomFil(filePath, buf, int(fileSize), blocksize, random); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create %s: %v\n", fileName, err)
 			t.Error(err)
 			return
 		}
 		wg.Add(1)
-		go client.Put(proxyurl, filePath, clibucket, keyName, xxhashstr, wg, errch, true)
+		go client.Put(proxyurl, filePath, clibucket, keyName, xxhashstr, nil, wg, errch, true)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()

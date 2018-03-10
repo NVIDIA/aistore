@@ -68,11 +68,12 @@ var (
 		Test{"Prefetch", regressionPrefetch},
 		Test{"PrefetchRange", regressionPrefetchRange},
 	}
-
-	abortonerr     = false
-	prefetchPrefix = "__bench/test-"
-	prefetchRegex  = "^\\d22\\d"
-	prefetchRange  = "0:2000"
+	abortonerr      = false
+	inmem           = true
+	prefetchPrefix  = "__bench/test-"
+	prefetchRegex   = "^\\d22\\d"
+	prefetchRange   = "0:2000"
+	PhysMemSizeWarn = uint64(7 * 1024) // MBs
 )
 
 func init() {
@@ -80,6 +81,7 @@ func init() {
 	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
+	flag.BoolVar(&inmem, "inmem", inmem, "stream random files from memory")
 }
 
 func Test_regression(t *testing.T) {
@@ -88,6 +90,12 @@ func Test_regression(t *testing.T) {
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)
+	}
+	if inmem {
+		megabytes, _ := dfc.TotalMemory()
+		if megabytes < PhysMemSizeWarn {
+			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
+		}
 	}
 
 	tlogf("=== abortonerr = %v, proxyurl = %s\n\n", abortonerr, proxyurl)
@@ -98,7 +106,11 @@ func Test_regression(t *testing.T) {
 	if err := dfc.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
-
+	// get them early to LRU later
+	errch := make(chan error, 100)
+	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
+	selectErr(errch, "get", t, true)
+	// run tests
 	for _, test := range tests {
 		t.Run(test.name, test.method)
 		if t.Failed() && abortonerr {
@@ -125,16 +137,24 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
+		fbuffer  *bytes.Buffer
+		filesize = uint64(1024)
 	)
-	putRandomFiles(0, baseseed+2, uint64(1024), numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false)
-	close(filesput) // to exit for-range
+	if inmem {
+		fbuf := make([]byte, filesize)
+		fbuffer = bytes.NewBuffer(fbuf)
+	}
+	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, fbuffer)
+	close(filesput)
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {
-		err := os.Remove(SmokeDir + "/" + fname)
-		if err != nil {
-			t.Error(err)
+		if fbuffer == nil {
+			err := os.Remove(SmokeDir + "/" + fname)
+			if err != nil {
+				t.Error(err)
+			}
 		}
 		wg.Add(1)
 		go client.Del(proxyurl, bucket, "smoke/"+fname, wg, errch, false)
@@ -262,10 +282,8 @@ func regressionLRU(t *testing.T) {
 		lwms[k] = lrucfg["lowwm"]
 		hwms[k] = lrucfg["highwm"]
 	}
-	//
-	// add some files
-	//
-	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
+	// add a few more
+	getRandomFiles(0, 0, 3, clibucket, t, nil, errch)
 	selectErr(errch, "get", t, true)
 	//
 	// find out min usage %% across all targets
@@ -306,7 +324,7 @@ func regressionLRU(t *testing.T) {
 	//
 	// cluster-wide reduce dont-evict-time
 	//
-	dontevicttimestr := "20s"                                            // 2 * stats_time; FIXME: race vs smoke test
+	dontevicttimestr := "60s"                                            // 2 * stats_time; FIXME: race vs smoke test
 	sleeptime, err := time.ParseDuration(oconfig["stats_time"].(string)) // to make sure the stats get updated
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
@@ -323,9 +341,9 @@ func regressionLRU(t *testing.T) {
 	if t.Failed() {
 		return
 	}
-	waitProgressBar("LRU: ", sleeptime)
+	waitProgressBar("LRU: ", sleeptime/2)
 	getRandomFiles(0, 0, 1, clibucket, t, nil, errch)
-	waitProgressBar("LRU: ", sleeptime)
+	waitProgressBar("LRU: ", sleeptime/2)
 	//
 	// results
 	//
@@ -356,6 +374,8 @@ func regressionRebalance(t *testing.T) {
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
+		fbuffer  *bytes.Buffer
+		filesize = uint64(1024 * 128)
 	)
 	filesSentOrig := make(map[string]int64)
 	bytesSentOrig := make(map[string]int64)
@@ -386,7 +406,11 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 2. put random files => (cluster - 1)
 	//
-	putRandomFiles(0, baseseed, uint64(1024*128), numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false)
+	if inmem {
+		fbuf := make([]byte, filesize)
+		fbuffer = bytes.NewBuffer(fbuf)
+	}
+	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, fbuffer)
 	selectErr(errch, "put", t, false)
 
 	//
@@ -426,9 +450,11 @@ func regressionRebalance(t *testing.T) {
 	//
 	close(filesput) // to exit for-range
 	for fname := range filesput {
-		err := os.Remove(SmokeDir + "/" + fname)
-		if err != nil {
-			t.Error(err)
+		if fbuffer == nil {
+			err := os.Remove(SmokeDir + "/" + fname)
+			if err != nil {
+				t.Error(err)
+			}
 		}
 		wg.Add(1)
 		go client.Del(proxyurl, clibucket, "smoke/"+fname, wg, errch, false)
@@ -451,8 +477,9 @@ func regressionRename(t *testing.T) {
 		numPuts   = 10
 		filesput  = make(chan string, numPuts)
 		errch     = make(chan error, numPuts)
-		basenames = make([]string, 0, numPuts) // basenames generated by putRandomFiles
+		basenames = make([]string, 0, numPuts) // basenames
 		bnewnames = make([]string, 0, numPuts) // new basenames
+		fbuffer   *bytes.Buffer
 	)
 	// create & put
 	createLocalBucket(httpclient, t, RenameLocalBucketName)
@@ -463,10 +490,12 @@ func regressionRename(t *testing.T) {
 			wg.Add(1)
 			go client.Del(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, false)
 		}
-		for _, fname := range basenames {
-			err = os.Remove(RenameDir + "/" + fname)
-			if err != nil {
-				t.Errorf("Failed to remove file %s: %v", fname, err)
+		if fbuffer == nil {
+			for _, fname := range basenames {
+				err = os.Remove(RenameDir + "/" + fname)
+				if err != nil {
+					t.Errorf("Failed to remove file %s: %v", fname, err)
+				}
 			}
 		}
 		wg.Wait()
@@ -480,7 +509,11 @@ func regressionRename(t *testing.T) {
 	if err = dfc.CreateDir(RenameDir); err != nil {
 		t.Errorf("Error creating dir: %v", err)
 	}
-	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false)
+	if inmem {
+		fbuf := make([]byte, 1024*1024)
+		fbuffer = bytes.NewBuffer(fbuf)
+	}
+	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false, fbuffer)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {

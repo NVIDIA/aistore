@@ -170,7 +170,7 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 			fname := fmt.Sprintf("%s/%s", baseDir, keyname)
 
-			if _, xxhashstr, err = client.WriteRandomData(fname, buf, int(fileSize), blocksize, random); err != nil {
+			if _, xxhashstr, err = client.WriteRandomFil(fname, buf, int(fileSize), blocksize, random); err != nil {
 				fmt.Fprintf(os.Stdout, "PUT write FAIL: %v\n", err)
 				t.Error(err)
 				if errch != nil {
@@ -185,12 +185,12 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.Put(proxyurl, fname, clibucket, keyname, "", wg, errch, true)
+						client.Put(proxyurl, fname, clibucket, keyname, "", nil, wg, errch, true)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					client.Put(proxyurl, fname, clibucket, keyname, xxhashstr, nil, errch, true)
+					client.Put(proxyurl, fname, clibucket, keyname, xxhashstr, nil, nil, errch, true)
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++

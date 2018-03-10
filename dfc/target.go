@@ -294,7 +294,11 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	} else if size > t.buffers4k.fixedsize {
 		buffs = t.buffers32k
 	} else {
-		assert(size != 0, "Unexpected: zero size "+fqn)
+		if size == 0 {
+			errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
+			t.invalmsghdlr(w, r, errstr)
+			return // likely, an error
+		}
 		buffs = t.buffers4k
 	}
 	buf := buffs.alloc()

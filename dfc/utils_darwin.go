@@ -61,3 +61,8 @@ func Deletexattr(fqn string, attrname string) (errstr string) {
 	}
 	return
 }
+
+func TotalMemory() (mb uint64, err error) {
+	mb, err = sysctlUint64("hw.memsize") / 1024 / 1024
+	return
+}

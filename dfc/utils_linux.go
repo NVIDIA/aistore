@@ -45,3 +45,12 @@ func Deletexattr(fqn string, attrname string) (errstr string) {
 	}
 	return
 }
+
+func TotalMemory() (mb uint64, err error) {
+	sysinfo := &syscall.Sysinfo_t{}
+	if err = syscall.Sysinfo(sysinfo); err != nil {
+		return
+	}
+	mb = sysinfo.Totalram * uint64(sysinfo.Unit) / 1024 / 1024
+	return
+}

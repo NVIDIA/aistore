@@ -91,6 +91,7 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		if err != nil {
 			errcode = gcpErrorToHTTP(err)
 			errstr = fmt.Sprintf("gcp: Failed to list objects of bucket %s, err: %v", bucket, err)
+			return
 		}
 		entry := &BucketEntry{}
 		entry.Name = attrs.Name
@@ -204,16 +205,15 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	defer gcpimpl.t.buffers.free(buf)
 	written, err := io.CopyBuffer(wc, file, buf)
 	if err != nil {
-		errstr = fmt.Sprintf("gcp: Failed to copy-buffer (object %s, bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: PUT %s/%s: failed to copy, err: %v", bucket, objname, err)
 		return
 	}
 	if err := wc.Close(); err != nil {
-		errstr = fmt.Sprintf("gcp: Unexpected failure to close wc upon uploading %s (bucket %s), err: %v",
-			objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: PUT %s/%s: failed to close wc, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("gcp: PUT %s (bucket %s, size %d) ", objname, bucket, written)
+		glog.Infof("gcp: PUT %s/%s, size %d", bucket, objname, written)
 	}
 	return
 }

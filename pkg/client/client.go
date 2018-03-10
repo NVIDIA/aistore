@@ -43,6 +43,14 @@ type reqError struct {
 	message string
 }
 
+type bytesReaderCloser struct {
+	bytes.Reader
+}
+
+func (q *bytesReaderCloser) Close() error {
+	return nil
+}
+
 func (err reqError) Error() string {
 	return err.message
 }
@@ -136,7 +144,14 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	emitError(r, err, errch)
 	return err
 }
-func Put(proxyurl, fname, bucket, keyname, xxhashstr string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+
+func Put(proxyurl, fname, bucket, keyname, xxhashstr string, fbuffer *bytes.Buffer,
+	wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+	var (
+		reader *bytesReaderCloser
+		req    *http.Request
+		file   *os.File
+	)
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -148,17 +163,21 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, wg *sync.WaitGroup,
 			fmt.Printf("PUT: object %s/%s xxhash %s...\n", bucket, keyname, xxhashstr[:8])
 		}
 	}
-	file, err := os.Open(fname)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
+	if fbuffer == nil {
+		file, err = os.Open(fname)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
+			if errch != nil {
+				errch <- fmt.Errorf("Failed to open file %s, err: %v", fname, err)
+			}
+			return
 		}
-		return
+		defer file.Close()
+		req, err = http.NewRequest(http.MethodPut, puturl, file)
+	} else {
+		reader = &bytesReaderCloser{*bytes.NewReader(fbuffer.Bytes())}
+		req, err = http.NewRequest(http.MethodPut, puturl, fbuffer)
 	}
-	defer file.Close()
-
-	req, err := http.NewRequest(http.MethodPut, puturl, file)
 	if err != nil {
 		if errch != nil {
 			errch <- fmt.Errorf("Failed to create new http request, err: %v", err)
@@ -168,18 +187,25 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, wg *sync.WaitGroup,
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
 	// If it wasn't set, we would need to deal with the redirect manually.
 	req.GetBody = func() (io.ReadCloser, error) {
-		return os.Open(fname)
+		if fbuffer == nil {
+			return os.Open(fname)
+		}
+		return reader, nil
 	}
 	if xxhashstr != "" {
 		req.Header.Set(dfc.HeaderDfcChecksumType, dfc.ChecksumXXHash)
 		req.Header.Set(dfc.HeaderDfcChecksumVal, xxhashstr)
 	}
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		if errch != nil {
-			errch <- fmt.Errorf("Failed to seek file %s, err: %v", fname, err)
+	if fbuffer == nil {
+		_, err = file.Seek(0, 0)
+		if err != nil {
+			if errch != nil {
+				errch <- fmt.Errorf("Failed to seek file %s, err: %v", fname, err)
+			}
+			return
 		}
-		return
+	} else {
+		reader.Seek(0, 0)
 	}
 	r, err := httpclient.Do(req)
 	defer func() {
@@ -363,7 +389,7 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 	return string(b)
 }
 
-func WriteRandomData(fname string, bytes []byte, filesize int, blocksize int, random *rand.Rand) (tot int, xxhashstr string, err error) {
+func WriteRandomFil(fname string, bytes []byte, filesize int, blocksize int, random *rand.Rand) (tot int, xxhashstr string, err error) {
 	f, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
 	xx := xxhash.New64()
 	if err != nil {
@@ -394,6 +420,31 @@ func WriteRandomData(fname string, bytes []byte, filesize int, blocksize int, ra
 	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
 	xxhashstr = hex.EncodeToString(hashInBytes)
 	err = f.Close()
+	return
+}
+
+func WriteRandomMem(rbuf []byte, filesize int, blocksize int, random *rand.Rand, fbuffer *bytes.Buffer) (tot int, xxhashstr string, err error) {
+	var r, n int
+	xx := xxhash.New64()
+	nblocks := filesize / blocksize
+	for i := 0; i <= nblocks; i++ {
+		if blocksize < filesize-tot {
+			r = blocksize
+		} else {
+			r = filesize - tot
+		}
+		random.Read(rbuf[0:r])
+		n, err = fbuffer.Write(rbuf[0:r])
+		if err != nil {
+			return
+		}
+		xx.Write(rbuf[0:r])
+		tot += n
+	}
+	hashIn64 := xx.Sum64()
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+	xxhashstr = hex.EncodeToString(hashInBytes)
 	return
 }
 
