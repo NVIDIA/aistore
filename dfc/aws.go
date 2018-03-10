@@ -145,6 +145,25 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
+func (awsimpl *awsimpl) headbucket(bucket string) (headers map[string]string, errstr string, errcode int) {
+	glog.Infof("aws: headbucket %s", bucket)
+	headers = make(map[string]string)
+
+	sess := createsession()
+	svc := s3.New(sess)
+	input := &s3.HeadBucketInput{Bucket: &bucket}
+
+	_, err := svc.HeadBucket(input)
+	if err != nil {
+		errcode = awsErrorToHTTP(err)
+		errstr = fmt.Sprintf("aws: Failed to HeadBucket %s. err: %v", bucket, err)
+		return
+	}
+
+	headers[HeaderServer] = amazoncloud
+	return
+}
+
 func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int) {
 	var v cksumvalue
 	sess := createsession()

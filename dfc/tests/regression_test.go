@@ -523,8 +523,17 @@ func regressionPrefetch(t *testing.T) {
 	var (
 		toprefetch    = make(chan string, numfiles)
 		netprefetches = int64(0)
-		err           error
 	)
+
+	// Skip the test when given a local bucket
+	server, err := client.HeadBucket(proxyurl, clibucket)
+	if err != nil {
+		t.Errorf("Could not execute HeadBucket Request: %v", err)
+		return
+	}
+	if server == "dfc" {
+		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
+	}
 
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(httpclient, t)
@@ -579,6 +588,16 @@ func regressionPrefetchRange(t *testing.T) {
 		rmin, rmax    int64
 		re            *regexp.Regexp
 	)
+
+	// Skip the test when given a local bucket
+	server, err := client.HeadBucket(proxyurl, clibucket)
+	if err != nil {
+		t.Errorf("Could not execute HeadBucket Request: %v", err)
+		return
+	}
+	if server == "dfc" {
+		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
+	}
 
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(httpclient, t)

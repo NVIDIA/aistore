@@ -29,6 +29,25 @@ const (
 	ActPrefetch  = "prefetch"
 )
 
+// Cloud Provider enum
+const (
+	amazoncloud = "aws"
+	googlecloud = "gcp"
+	dfclocal    = "dfc"
+)
+
+// Header Key enum
+const (
+	HeaderServer          = "Server"                // Server: from Cloud Provider enum
+	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
+	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
+)
+
+// URL Query Parameter enum
+const (
+	ParamLocal = "local" //local=bool - true if bucket is expected to be local, false otherwise.
+)
+
 // TODO: sort and some props are TBD
 type GetMsg struct {
 	GetWhat       string `json:"what"`        // "config" | "stats" ...

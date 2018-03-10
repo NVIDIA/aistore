@@ -17,20 +17,13 @@ import (
 	"github.com/golang/glog"
 )
 
-const (
-	amazoncloud = "aws"
-	googlecloud = "gcp"
-)
-
 // checksums: xattr, http header, and config
 const (
 	xattrXXHashVal = "user.obj.dfchash"
 
-	HeaderDfcChecksumType = "HeaderDfcChecksumType"
-	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"
-	ChecksumNone          = "none"
-	ChecksumXXHash        = "xxhash"
-	ChecksumMD5           = "md5"
+	ChecksumNone   = "none"
+	ChecksumXXHash = "xxhash"
+	ChecksumMD5    = "md5"
 )
 
 // dfconfig specifies common daemon's configuration structure in JSON format.

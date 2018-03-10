@@ -144,6 +144,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Destroy local bucket (proxy only) | DELETE /v1/files/bucket | `curl -i -X DELETE http://192.168.176.128:8080/v1/files/abc` |
 | Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
 | Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
+| Get bucket props (local and cloud) | HEAD /v1/files/bucket | ``` curl --head http://192.168.176.128:8080/v1/files/abc ```|
 
 > (`*`) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 

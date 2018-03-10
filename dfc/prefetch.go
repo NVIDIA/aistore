@@ -1,3 +1,8 @@
+// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+/*
+ * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc
 
 import (

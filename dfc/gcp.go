@@ -132,6 +132,25 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
+func (gcpimpl *gcpimpl) headbucket(bucket string) (headers map[string]string, errstr string, errcode int) {
+	glog.Infof("gcp: headbucket %s", bucket)
+	headers = make(map[string]string)
+
+	client, gctx, errstr := createclient()
+	if errstr != "" {
+		return
+	}
+	_, err := client.Bucket(bucket).Attrs(gctx)
+	if err != nil {
+		errcode = gcpErrorToHTTP(err)
+		errstr = fmt.Sprintf("gcp: Failed to get attributes (bucket %s), err: %v", bucket, err)
+		return
+	}
+
+	headers[HeaderServer] = googlecloud
+	return
+}
+
 func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int) {
 	var v cksumvalue
 	client, gctx, errstr := createclient()

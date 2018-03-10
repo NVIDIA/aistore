@@ -396,3 +396,23 @@ func WriteRandomData(fname string, bytes []byte, filesize int, blocksize int, ra
 	err = f.Close()
 	return
 }
+
+func HeadBucket(proxyurl, bucket string) (server string, err error) {
+	var (
+		url = proxyurl + "/v1/files/" + bucket
+		r   *http.Response
+	)
+	r, err = httpclient.Head(url)
+	if err != nil {
+		return
+	}
+	defer func() {
+		r.Body.Close()
+	}()
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		err = fmt.Errorf("Head bucket %s failed, HTTP status %d", bucket, r.StatusCode)
+		return
+	}
+	server = r.Header.Get("Server")
+	return
+}

@@ -116,6 +116,8 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		p.httpfilputdelete(w, r)
 	case http.MethodPost:
 		p.actionLocalBucket(w, r)
+	case http.MethodHead:
+		p.httpfilhead(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -157,7 +159,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.statsif.add("numget", 1)
 		si = hrwTarget(bucket+"/"+objname, ctx.smap)
 	}
-	redirecturl := si.DirectURL + r.URL.Path
+	redirecturl := fmt.Sprintf("%s%s?%s=false", si.DirectURL, r.URL.Path, ParamLocal)
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
@@ -184,7 +186,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 
 	// FIXME: re-un-marshaling here and elsewhere
 	for _, si := range ctx.smap.Smap {
-		url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
+		url := fmt.Sprintf("%s/%s/%s/%s?%s=true", si.DirectURL, Rversion, Rfiles, bucket, ParamLocal)
 		outjson, err, errstr, status := p.call(si, url, r.Method, listmsgjson) // forward as is
 		if err != nil {
 			p.invalmsghdlr(w, r, errstr)
@@ -423,6 +425,29 @@ func (p *proxyrunner) filprefetch(w http.ResponseWriter, r *http.Request, action
 	}
 	wg.Wait()
 	glog.Infoln("Completed sending Prefetch ActionMsg to all targets")
+}
+
+func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	if strings.Contains(bucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	var si *daemonInfo
+	// Use random map iteration order to choose a random target to redirect to
+	for _, si = range ctx.smap.Smap {
+		break
+	}
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, ParamLocal, p.islocalBucket(bucket))
+	if glog.V(3) {
+		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	}
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
 //===========================

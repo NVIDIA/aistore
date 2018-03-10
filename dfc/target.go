@@ -188,6 +188,8 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 		t.httpfildelete(w, r)
 	case http.MethodPost:
 		t.httpfilpost(w, r)
+	case http.MethodHead:
+		t.httpfilhead(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -381,11 +383,17 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+
+	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+	}
+
 	msg := &GetMsg{}
 	if t.readJSON(w, r, msg) != nil {
 		return
 	}
-	if !t.islocalBucket(bucket) {
+	if !islocal {
 		jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
 		if errstr != "" {
 			if errcode == 0 {
@@ -869,6 +877,70 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	t.statsif.add("numsentfiles", 1)
 	t.statsif.add("numsentbytes", size)
 	return ""
+}
+
+func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket  string
+		islocal bool
+		errstr  string
+		errcode int
+		headers map[string]string
+	)
+
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		return
+	}
+	bucket = apitems[0]
+	if strings.Contains(bucket, "/") {
+		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+		return
+	}
+
+	if !islocal {
+		headers, errstr, errcode = getcloudif().headbucket(bucket)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
+			return
+		}
+	} else {
+		headers = make(map[string]string)
+		headers[HeaderServer] = dfclocal
+	}
+
+	for k, v := range headers {
+		w.Header().Add(k, v)
+	}
+}
+
+func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) (islocal bool, errstr string, errcode int) {
+	// If a client provides the local parameter, but the bucket is not loca
+	islocal = t.islocalBucket(bucket)
+	proxylocalstr := r.URL.Query().Get(ParamLocal)
+	if proxylocalstr != "" && proxylocalstr != "true" && proxylocalstr != "false" {
+		errstr = fmt.Sprintf("Invalid parameter: \"%s=%s\". Must be [\"\",\"true\",\"false\"]", ParamLocal, proxylocalstr)
+		errcode = http.StatusInternalServerError
+		return
+	}
+	proxylocal := proxylocalstr == "true"
+	if proxylocalstr != "" && islocal != proxylocal {
+		errstr = fmt.Sprintf("Mismatch with islocalbucket: Client( %v ), Target( %v )", proxylocal, islocal)
+		errcode = http.StatusInternalServerError
+	}
+	return
 }
 
 //
