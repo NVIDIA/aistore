@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"encoding/binary"
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -62,7 +63,14 @@ func Deletexattr(fqn string, attrname string) (errstr string) {
 	return
 }
 
-func TotalMemory() (mb uint64, err error) {
-	mb, err = sysctlUint64("hw.memsize") / 1024 / 1024
-	return
+// TotalMemory returns total physical memory of the system
+func TotalMemory() (uint64, error) {
+	v, err := syscall.Sysctl("hw.memsize")
+	if err != nil {
+		return 0, err
+	}
+
+	var buf [8]byte
+	copy(buf[:], v)
+	return binary.LittleEndian.Uint64(buf[:]) / (1024 * 1024), nil
 }
