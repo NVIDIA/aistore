@@ -176,7 +176,69 @@ func Test_download(t *testing.T) {
 	}
 }
 
-func Test_delete(t *testing.T) {
+// delete existing objects that match the regex
+func Test_matchdelete(t *testing.T) {
+	flag.Parse()
+
+	// Declare one channel per worker to pass the keyname
+	keyname_chans := make([]chan string, numworkers)
+	for i := 0; i < numworkers; i++ {
+		// Allow a bunch of messages at a time to be written asynchronously to a channel
+		keyname_chans[i] = make(chan string, 100)
+	}
+	// Start the worker pools
+	errch := make(chan error, 100)
+	var wg = &sync.WaitGroup{}
+	// Get the workers started
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		go deleteFiles(keyname_chans[i], t, wg, errch, clibucket)
+	}
+
+	// list the bucket
+	var msg = &dfc.GetMsg{}
+	jsbytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("Unexpected json-marshal failure, err: %v", err)
+		t.Fail()
+		return
+	}
+	reslist, err := client.ListBucket(proxyurl, clibucket, jsbytes)
+	if err != nil {
+		t.Error(err)
+		t.Fail()
+		return
+	}
+	re, rerr := regexp.Compile(match)
+	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
+		return
+	}
+	// match
+	var num int
+	for _, entry := range reslist.Entries {
+		name := entry.Name
+		if !re.MatchString(name) {
+			continue
+		}
+		keyname_chans[num%numworkers] <- name
+		if num++; num >= numfiles {
+			break
+		}
+	}
+	// Close the channels after the reading is done
+	for i := 0; i < numworkers; i++ {
+		close(keyname_chans[i])
+	}
+	wg.Wait()
+	select {
+	case <-errch:
+		t.Fail()
+	default:
+	}
+}
+
+// PUT, then delete
+func Test_putdelete(t *testing.T) {
 	flag.Parse()
 	var fbuffer *bytes.Buffer
 	if err := dfc.CreateDir(DeleteDir); err != nil {
@@ -519,6 +581,7 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 		if errch != nil {
 			errch <- errors.New(s)
 		}
+		t.Fail()
 		return true
 	}
 	if r != nil && r.StatusCode >= http.StatusBadRequest {

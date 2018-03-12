@@ -70,6 +70,7 @@ var (
 	}
 	abortonerr      = false
 	inmem           = true
+	failLRU         = ""
 	prefetchPrefix  = "__bench/test-"
 	prefetchRegex   = "^\\d22\\d"
 	prefetchRange   = "0:2000"
@@ -109,7 +110,10 @@ func Test_regression(t *testing.T) {
 	// get them early to LRU later
 	errch := make(chan error, 100)
 	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
-	selectErr(errch, "get", t, true)
+	selectErr(errch, "get", t, false)
+	if t.Failed() {
+		failLRU = "LRU: need a cloud bucket with at least 20 objects"
+	}
 	// run tests
 	for _, test := range tests {
 		t.Run(test.name, test.method)
@@ -264,6 +268,11 @@ func regressionConfig(t *testing.T) {
 }
 
 func regressionLRU(t *testing.T) {
+	if failLRU != "" {
+		t.Errorf(failLRU)
+		t.Fail()
+		return
+	}
 	var (
 		errch   = make(chan error, 100)
 		usedpct = uint32(100)
@@ -301,7 +310,8 @@ func regressionLRU(t *testing.T) {
 		highwm = usedpct - 1
 	)
 	if int(lowwm) < 10 {
-		t.Skipf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
+		t.Errorf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
+		t.Fail()
 		return
 	}
 	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)

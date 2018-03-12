@@ -111,9 +111,6 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		defer wg.Done()
 	}
 	url := proxyurl + "/v1/files/" + bucket + "/" + keyname
-	if !silent {
-		fmt.Printf("GET: object %s\n", keyname)
-	}
 	r, err := http.Get(url)
 	defer func() {
 		if r != nil {
