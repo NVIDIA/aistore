@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dfctarget
+spec:
+  selector:
+    matchLabels:
+      app: dfctarget-app
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: dfctarget-app
+    spec:
+      hostNetwork: true
+      containers:
+      - name: dfctarget
+        image: quay.io/nvidia/dfc
+        imagePullPolicy: Always
+        env:
+         - name: ROLE
+           value: "target"
+        volumeMounts:
+         - name: dfc-config
+           mountPath: /etc/dfc/dfc.json
+           subPath: dfc.json
+         - name: aws-credentials
+           mountPath: /root/.aws/
+         - name: dfc-fs
+           mountPath: /usr/nvidia/data
+        ports:
+          - containerPort: 8081
+      nodeSelector:
+          nodename: target
+      volumes:
+        - name: dfc-config
+          configMap:
+            name: dfc-config
+        - name: aws-credentials
+          secret:
+            secretName: aws-credentials
+        - name: dfc-fs
+          hostPath:
+            path: /dfc
+            type: Directory

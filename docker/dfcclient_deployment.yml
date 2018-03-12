@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dfcclient
+spec:
+  selector:
+    matchLabels:
+      app: dfcclient-app
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: dfcclient-app
+    spec:
+      containers:
+      - name: dfcclient
+        image: quay.io/nvidia/dfc_client
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 30001
+        command: [ "/bin/bash", "-c", "--" ]
+        args: [ "while true; do sleep 30; done;" ]

@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dfcproxy
+spec:
+  selector:
+    matchLabels:
+       app: dfcproxy-app
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: dfcproxy-app
+    spec:
+      hostNetwork: true
+      containers:
+      - name: dfcproxy
+        image: quay.io/nvidia/dfc
+        imagePullPolicy: Always
+        env:
+         - name: ROLE
+           value: "proxy"
+        volumeMounts:
+         - name: dfc-config
+           mountPath: /etc/dfc/dfc.json
+           subPath: dfc.json
+         - name: aws-credentials
+           mountPath: /root/.aws/
+        ports:
+          - containerPort: 8081
+      nodeSelector:
+          nodename: proxy
+      volumes:
+        - name: dfc-config
+          configMap:
+            name: dfc-config
+        - name: aws-credentials
+          secret:
+            secretName: aws-credentials
