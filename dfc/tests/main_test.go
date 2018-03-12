@@ -286,48 +286,66 @@ func Test_putdelete(t *testing.T) {
 }
 
 func Test_list(t *testing.T) {
+	var (
+		copy    bool
+		reslist *dfc.BucketList
+		file    *os.File
+		err     error
+	)
 	flag.Parse()
 
 	// list the names, sizes, creation times and MD5 checksums
 	var msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marshal failure, err: %v", err)
-		return
-	}
-	bucket := clibucket
-	var copy bool
-	// copy = true
 
-	reslist := testListBucket(t, bucket, jsbytes)
-	if reslist == nil {
-		return
+	bucket := clibucket
+	fname := LocalDestDir + "/" + bucket
+	if copy {
+		// Write list to a local filename = bucket
+		if err = dfc.CreateDir(LocalDestDir); err != nil {
+			t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
+			return
+		}
+		file, err = os.Create(fname)
+		if err != nil {
+			t.Errorf("Failed to create file %s, err: %v", fname, err)
+			return
+		}
 	}
-	if !copy {
-		for _, m := range reslist.Entries {
-			if len(m.Checksum) > 8 {
-				tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum[:8]+"...")
-			} else {
-				tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum)
+
+	for {
+		jsbytes, err := json.Marshal(msg)
+		if err != nil {
+			t.Errorf("Unexpected json-marshal failure, err: %v", err)
+			return
+		}
+		reslist = testListBucket(t, bucket, jsbytes)
+		if reslist == nil {
+			return
+		}
+		if len(reslist.Entries) > 1000 {
+			t.Errorf("Page Size (%d) Exceeded: %d entries\n", len(reslist.Entries))
+		}
+		if copy {
+			for _, m := range reslist.Entries {
+				fmt.Fprintln(file, m)
+			}
+			t.Logf("ls bucket %s written to %s", bucket, fname)
+		} else {
+			for _, m := range reslist.Entries {
+				if len(m.Checksum) > 8 {
+					tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum[:8]+"...")
+				} else {
+					tlogf("%s %d %s [%s] %s\n", m.Name, m.Size, m.Ctime, m.Version, m.Checksum)
+				}
 			}
 		}
-		return
+
+		if reslist.PageMarker == "" {
+			break
+		}
+
+		msg.GetPageMarker = reslist.PageMarker
 	}
-	// alternatively, write to a local filename = bucket
-	fname := LocalDestDir + "/" + bucket
-	if err = dfc.CreateDir(LocalDestDir); err != nil {
-		t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
-		return
-	}
-	file, err := os.Create(fname)
-	if err != nil {
-		t.Errorf("Failed to create file %s, err: %v", fname, err)
-		return
-	}
-	for _, m := range reslist.Entries {
-		fmt.Fprintln(file, m)
-	}
-	t.Logf("ls bucket %s written to %s", bucket, fname)
 }
 
 func Test_coldgetmd5(t *testing.T) {
@@ -593,6 +611,30 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 		return true
 	}
 	return false
+}
+
+func testListBucketAll(t *testing.T, bucket string, msg dfc.GetMsg) *dfc.BucketList {
+	var (
+		url = proxyurl + "/v1/files/" + bucket
+	)
+	tlogf("LIST ALL %q\n", url)
+	fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
+	for {
+		jsbytes, err := json.Marshal(msg)
+		if err != nil {
+			t.Errorf("Unexpected json-marhsal failure, err: %v", err)
+		}
+		bucketlist := testListBucket(t, bucket, jsbytes)
+		if bucketlist == nil {
+			return nil
+		}
+		fullbucketlist.Entries = append(fullbucketlist.Entries, bucketlist.Entries...)
+		if bucketlist.PageMarker == "" {
+			break
+		}
+		msg.GetPageMarker = bucketlist.PageMarker
+	}
+	return fullbucketlist
 }
 
 func testListBucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {

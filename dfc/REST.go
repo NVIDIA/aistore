@@ -55,6 +55,7 @@ type GetMsg struct {
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below
 	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
+	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
 }
 
 type PrefetchMsgBase struct {
@@ -136,7 +137,8 @@ type BucketEntry struct {
 }
 
 type BucketList struct {
-	Entries []*BucketEntry `json:"entries"`
+	Entries    []*BucketEntry `json:"entries"`
+	PageMarker string         `json:"pagemarker"`
 }
 
 // RESTful URL path: /v1/....

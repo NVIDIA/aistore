@@ -73,15 +73,15 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	if msg.GetPrefix != "" {
 		params.Prefix = aws.String(msg.GetPrefix)
 	}
+	if msg.GetPageMarker != "" {
+		params.Marker = &msg.GetPageMarker
+	}
+
 	resp, err := svc.ListObjects(params)
 	if err != nil {
 		errstr = err.Error()
 		errcode = awsErrorToHTTP(err)
 		return
-	}
-
-	if *resp.IsTruncated {
-		glog.Warning("AWS ListBucket response was truncated - there are unretrieved keys.")
 	}
 
 	verParams := &s3.ListObjectVersionsInput{Bucket: aws.String(bucket)}
@@ -140,6 +140,13 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	if glog.V(3) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
+
+	if *resp.IsTruncated {
+		// For AWS, resp.NextMarker is only set when a query has a delimiter.
+		// Without a delimiter, NextMarker should be the last returned key.
+		reslist.PageMarker = reslist.Entries[len(reslist.Entries)-1].Name
+	}
+
 	jsbytes, err = json.Marshal(reslist)
 	assert(err == nil, err)
 	return

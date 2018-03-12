@@ -20,6 +20,7 @@ const (
 	prefetchChanSize = 200
 	defaultDeadline  = 0
 	defaultWait      = false
+	maxPrefetchPages = 10 // FIXME: Pagination for PREFETCH
 )
 
 type filesWithDeadline struct {
@@ -111,15 +112,25 @@ func (t *targetrunner) addPrefetchRange(bucket, prefix, regex string, min, max i
 		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
 	}
 	msg := &GetMsg{GetPrefix: prefix}
-	jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
-	if errstr != "" {
-		return fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
+	fullbucketlist := &BucketList{Entries: make([]*BucketEntry, 0)}
+	for i := 0; i < maxPrefetchPages; i++ {
+		jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
+		if errstr != "" {
+			return fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
+		}
+		reslist := &BucketList{}
+		if err := json.Unmarshal(jsbytes, reslist); err != nil {
+			return fmt.Errorf("Error unmarshalling BucketList: %v", err)
+		}
+		fullbucketlist.Entries = append(fullbucketlist.Entries, reslist.Entries...)
+		if reslist.PageMarker == "" {
+			break
+		} else if i == maxPrefetchPages {
+			glog.Warningf("Did not prefetch all keys (More than %d pages)", maxPrefetchPages)
+		}
+		msg.GetPageMarker = reslist.PageMarker
 	}
-	reslist := &BucketList{}
-	if err := json.Unmarshal(jsbytes, reslist); err != nil {
-		return fmt.Errorf("Error unmarshalling BucketListL %v", err)
-	}
-	objs, err := t.getObjsPrefixRegex(reslist, bucket, prefix, regex, min, max)
+	objs, err := t.getObjsPrefixRegex(fullbucketlist, bucket, prefix, regex, min, max)
 	if err != nil {
 		return err
 	}

@@ -148,7 +148,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 
 > (`*`) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
-> (`**`) The API returns object names and, optionally, their properties including sizes, creation times, checksums, and more. The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see above). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
+> (`**`) See the List Bucket section for details.
 
 > (`***`) Notice the -L option here and elsewhere.
 
@@ -168,6 +168,20 @@ This single command causes execution of multiple `GET {"what": "stats"}` request
 
 More usage examples can be found in the [the source](dfc/tests/regression_test.go).
 
+## List Bucket
+
+the ListBucket API returns a page of up to 1000 object names (and, optionally, their properties including sizes, creation times, checksums, and more), in addition to a token allowing the next page to be retrieved.
+
+### properties-and-options
+The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
+
+| Property/Option | Meaning | Value |
+| --- | --- | --- |
+| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version". |
+| time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
+| prefix | The prefix which all returned objects must have. | For example, "my/directory/structure/" |
+| pagemarker | The token signifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |\b
+
 ### Example: listing local and Cloud buckets
 
 To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
@@ -181,7 +195,44 @@ This request will produce an output that (in part) may look as follows:
 <img src="images/dfc-ls-subdir.png" alt="DFC list directory" width="440">
 
 For many more examples, please refer to the dfc/tests/*_test.go files in the repository.
- 
+
+### Example: Listing All Pages
+
+The following Go code retrieves a list of all of the keys in a bucket (Error handling omitted).
+
+```go
+// proxyurl, bucket are your DFC Proxy URL and your bucket.
+url := proxyurl + "/v1/files/" + bucket
+
+msg := &dfc.GetMsg{}
+fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
+for {
+    // 1. First, send the request
+    jsbytes, _ := json.Marshal(msg)
+    request, _ := http.NewRequest("GET", url, bytes.NewBuffer(jsbytes))
+    r, _ := http.DefaultClient.Do(request)
+    defer func(r *http.Response){
+        r.Body.Close()
+    }(r)
+
+    // 2. Unmarshal the response
+    pagelist := &dfc.BucketList{}
+    respbytes, _ := ioutil.ReadAll(r.Body)
+    _ = json.Unmarshal(respbytes, pagelist)
+
+    // 3. Add the entries to the list
+    fullbucketlist.Entries = append(fullbucketlist.Entries, pagelist.Entries...)
+    if pagelist.PageMarker == "" {
+        // If PageMarker is the empty string, this was the last page
+        break
+    }
+    // If not, update PageMarker to the next page returned from the request.
+    msg.GetPageMarker = pagelist.PageMarker
+}
+```
+
+Note that the PageMarker returned as a part of pagelist is for the next page.
+
 ## Cache Rebalancing
 
 DFC rebalances its cached content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.

@@ -669,12 +669,8 @@ func regressionPrefetchRange(t *testing.T) {
 	if re, err = regexp.Compile(prefetchRegex); err != nil {
 		t.Errorf("Error compiling regex: %v", err)
 	}
-	msg := &dfc.GetMsg{}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marhsal failure, err: %v", err)
-	}
-	objsToFilter := testListBucket(t, clibucket, jsbytes)
+	msg := dfc.GetMsg{}
+	objsToFilter := testListBucketAll(t, clibucket, msg)
 	files := make([]string, 0)
 	for _, be := range objsToFilter.Entries {
 		if oname := strings.TrimPrefix(be.Name, prefetchPrefix); oname != be.Name {

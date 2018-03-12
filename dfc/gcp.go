@@ -24,6 +24,8 @@ import (
 const (
 	gcpDfcHashType = "x-goog-meta-dfc-hash-type"
 	gcpDfcHashVal  = "x-goog-meta-dfc-hash-val"
+
+	gcpPageSize = 1000
 )
 
 //======
@@ -76,23 +78,27 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		return
 	}
 	var query *storage.Query
+	var pageToken string
 
 	if msg.GetPrefix != "" {
 		query = &storage.Query{Prefix: msg.GetPrefix}
 	}
+	if msg.GetPageMarker != "" {
+		pageToken = msg.GetPageMarker
+	}
+
 	it := client.Bucket(bucket).Objects(gctx, query)
+	pager := iterator.NewPager(it, gcpPageSize, pageToken)
+	objs := make([]*storage.ObjectAttrs, 0)
+	nextPageToken, err := pager.NextPage(&objs)
+	if err != nil {
+		errcode = gcpErrorToHTTP(err)
+		errstr = fmt.Sprintf("gcp: Failed to list objects of bucket %s, err: %v", bucket, err)
+	}
 
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			errcode = gcpErrorToHTTP(err)
-			errstr = fmt.Sprintf("gcp: Failed to list objects of bucket %s, err: %v", bucket, err)
-			return
-		}
+	reslist.PageMarker = nextPageToken
+	for _, attrs := range objs {
 		entry := &BucketEntry{}
 		entry.Name = attrs.Name
 		if strings.Contains(msg.GetProps, GetPropsSize) {
@@ -128,7 +134,7 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	if glog.V(3) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
-	jsbytes, err := json.Marshal(reslist)
+	jsbytes, err = json.Marshal(reslist)
 	assert(err == nil, err)
 	return
 }
