@@ -320,7 +320,7 @@ func Test_list(t *testing.T) {
 			return
 		}
 		if len(reslist.Entries) > 1000 {
-			t.Errorf("Page Size (%d) Exceeded: %d entries\n", len(reslist.Entries))
+			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
 		}
 		if copy {
 			for _, m := range reslist.Entries {

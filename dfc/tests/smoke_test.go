@@ -120,6 +120,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 			nGet--
 		}
 	}
+
 	wg.Wait()
 	select {
 	case err := <-errch:
@@ -178,9 +179,11 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		err       error
 		xxhashstr string
 	)
+
 	if wg != nil {
 		defer wg.Done()
 	}
+
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	buffer := make([]byte, blocksize)
@@ -196,6 +199,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		} else {
 			_, xxhashstr, err = client.WriteRandomFil(dir+"/"+fname, buffer, int(size), blocksize, random)
 		}
+
 		if err != nil {
 			t.Error(err)
 			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n", dir+"/"+fname, err)
@@ -204,6 +208,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 			}
 			return
 		}
+
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)

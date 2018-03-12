@@ -43,6 +43,15 @@ type reqError struct {
 	message string
 }
 
+// Reader is the interface a client works with to read in data and send to a HTTP server
+type Reader interface {
+	io.ReadCloser
+	io.Seeker
+	Open() (io.ReadCloser, error)
+	XXHash() string
+	Description() string
+}
+
 type bytesReaderCloser struct {
 	bytes.Reader
 }
@@ -482,4 +491,57 @@ func HeadBucket(proxyurl, bucket string) (server string, err error) {
 	}
 	server = r.Header.Get("Server")
 	return
+}
+
+// PutWithReader sends a PUT request to the given URL
+func PutWithReader(proxyURL string, reader Reader, bucket string, key string, errch chan error, silent bool) error {
+	errf := func(errMsg, err error) error {
+		if errch != nil {
+			errch <- errMsg
+		}
+		return err
+	}
+
+	url := proxyURL + "/v1/files/" + bucket + "/" + key
+
+	if !silent {
+		fmt.Printf("PUT: object %s/%s - %s\n", bucket, key, reader.Description())
+	}
+
+	handle, err := reader.Open()
+	if err != nil {
+		return errf(fmt.Errorf("Failed to open reader, err: %v", err), err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, url, handle)
+	if err != nil {
+		return errf(fmt.Errorf("Failed to create new http request, err: %v", err), err)
+	}
+
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return reader.Open()
+	}
+
+	if reader.XXHash() != "" {
+		req.Header.Set(dfc.HeaderDfcChecksumType, dfc.ChecksumXXHash)
+		req.Header.Set(dfc.HeaderDfcChecksumVal, reader.XXHash())
+	}
+
+	_, err = reader.Seek(0, 0)
+	if err != nil {
+		return errf(fmt.Errorf("Failed to seek %s, err: %v", reader.Description(), err), err)
+	}
+
+	resp, err := httpclient.Do(req)
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	err = discardResponse(resp, err, "PUT")
+	emitError(resp, err, errch)
+	return err
 }
