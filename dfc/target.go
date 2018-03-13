@@ -1382,7 +1382,7 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj c
 			ohtype, ohval = ohobj.get()
 			assert(ohtype == ChecksumXXHash)
 			if ohval != nhval {
-				errstr = fmt.Sprintf("Checksum mismatch: object %s XXHASH %s... != received file %s XXHASH %s...)",
+				errstr = fmt.Sprintf("Checksum mismatch: object %s xxhash %s... != received file %s xxhash %s...)",
 					objname, ohval, fqn, nhval)
 				return
 			}

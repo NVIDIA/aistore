@@ -1,12 +1,10 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends._test
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc_test
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
@@ -239,7 +237,7 @@ func Test_matchdelete(t *testing.T) {
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
 	flag.Parse()
-	var fbuffer *bytes.Buffer
+	var sgl *dfc.SGLIO
 	if err := dfc.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
@@ -247,10 +245,10 @@ func Test_putdelete(t *testing.T) {
 	filesput := make(chan string, numfiles)
 	filesize := uint64(512 * 1024)
 	if inmem {
-		fbuf := make([]byte, filesize)
-		fbuffer = bytes.NewBuffer(fbuf)
+		sgl = dfc.NewSGLIO(nil, filesize)
+		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false, fbuffer)
+	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false, sgl)
 	close(filesput)
 
 	// Declare one channel per worker to pass the keyname
@@ -269,7 +267,7 @@ func Test_putdelete(t *testing.T) {
 
 	num := 0
 	for name := range filesput {
-		if fbuffer == nil {
+		if sgl == nil {
 			os.Remove(DeleteDir + "/" + name)
 		}
 		keynameChans[num%numworkers] <- DeleteStr + "/" + name
@@ -357,7 +355,7 @@ func Test_coldgetmd5(t *testing.T) {
 		bucket    = clibucket
 		totalsize = numPuts * largefilesize
 		filesize  = uint64(largefilesize * 1024 * 1024)
-		fbuffer   *bytes.Buffer
+		sgl       *dfc.SGLIO
 	)
 	ldir := LocalSrcDir + "/" + ColdValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
@@ -373,10 +371,10 @@ func Test_coldgetmd5(t *testing.T) {
 		if megabytes < PhysMemSizeWarn {
 			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
 		}
-		fbuf := make([]byte, filesize)
-		fbuffer = bytes.NewBuffer(fbuf)
+		sgl = dfc.NewSGLIO(nil, filesize)
+		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true, fbuffer)
+	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -411,7 +409,7 @@ func Test_coldgetmd5(t *testing.T) {
 cleanup:
 	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/v1/cluster", httpclient, t)
 	for _, fn := range fileslist {
-		if fbuffer == nil {
+		if sgl == nil {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
 		}
 		wg.Add(1)
@@ -681,7 +679,7 @@ func Test_checksum(t *testing.T) {
 		htype       string
 		numPuts     = 5
 		filesize    = uint64(largefilesize * 1024 * 1024)
-		fbuffer     *bytes.Buffer
+		sgl         *dfc.SGLIO
 	)
 	totalio := (numPuts * largefilesize)
 
@@ -703,10 +701,10 @@ func Test_checksum(t *testing.T) {
 		if megabytes < PhysMemSizeWarn {
 			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
 		}
-		fbuf := make([]byte, filesize)
-		fbuffer = bytes.NewBuffer(fbuf)
+		sgl = dfc.NewSGLIO(nil, filesize)
+		defer sgl.Free()
 	}
-	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true, fbuffer)
+	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {

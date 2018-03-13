@@ -141,20 +141,20 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
-		fbuffer  *bytes.Buffer
+		sgl      *dfc.SGLIO
 		filesize = uint64(1024)
 	)
 	if inmem {
-		fbuf := make([]byte, filesize)
-		fbuffer = bytes.NewBuffer(fbuf)
+		sgl = dfc.NewSGLIO(nil, filesize)
+		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, fbuffer)
+	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, sgl)
 	close(filesput)
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {
-		if fbuffer == nil {
+		if sgl == nil {
 			err := os.Remove(SmokeDir + "/" + fname)
 			if err != nil {
 				t.Error(err)
@@ -384,7 +384,7 @@ func regressionRebalance(t *testing.T) {
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
-		fbuffer  *bytes.Buffer
+		sgl      *dfc.SGLIO
 		filesize = uint64(1024 * 128)
 	)
 	filesSentOrig := make(map[string]int64)
@@ -417,10 +417,10 @@ func regressionRebalance(t *testing.T) {
 	// step 2. put random files => (cluster - 1)
 	//
 	if inmem {
-		fbuf := make([]byte, filesize)
-		fbuffer = bytes.NewBuffer(fbuf)
+		sgl = dfc.NewSGLIO(nil, filesize)
+		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, fbuffer)
+	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, sgl)
 	selectErr(errch, "put", t, false)
 
 	//
@@ -460,7 +460,7 @@ func regressionRebalance(t *testing.T) {
 	//
 	close(filesput) // to exit for-range
 	for fname := range filesput {
-		if fbuffer == nil {
+		if sgl == nil {
 			err := os.Remove(SmokeDir + "/" + fname)
 			if err != nil {
 				t.Error(err)
@@ -489,7 +489,7 @@ func regressionRename(t *testing.T) {
 		errch     = make(chan error, numPuts)
 		basenames = make([]string, 0, numPuts) // basenames
 		bnewnames = make([]string, 0, numPuts) // new basenames
-		fbuffer   *bytes.Buffer
+		sgl       *dfc.SGLIO
 	)
 	// create & put
 	createLocalBucket(httpclient, t, RenameLocalBucketName)
@@ -500,7 +500,7 @@ func regressionRename(t *testing.T) {
 			wg.Add(1)
 			go client.Del(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, false)
 		}
-		if fbuffer == nil {
+		if sgl == nil {
 			for _, fname := range basenames {
 				err = os.Remove(RenameDir + "/" + fname)
 				if err != nil {
@@ -520,10 +520,10 @@ func regressionRename(t *testing.T) {
 		t.Errorf("Error creating dir: %v", err)
 	}
 	if inmem {
-		fbuf := make([]byte, 1024*1024)
-		fbuffer = bytes.NewBuffer(fbuf)
+		sgl := dfc.NewSGLIO(nil, 1024*1024)
+		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false, fbuffer)
+	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {

@@ -142,12 +142,11 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return err
 }
 
-func Put(proxyurl, fname, bucket, keyname, xxhashstr string, fbuffer *bytes.Buffer,
+func Put(proxyurl, fname, bucket, keyname, xxhashstr string, sgl *dfc.SGLIO,
 	wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
 	var (
-		reader *bytesReaderCloser
-		req    *http.Request
-		file   *os.File
+		req  *http.Request
+		file *os.File
 	)
 	if wg != nil {
 		defer wg.Done()
@@ -160,7 +159,7 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, fbuffer *bytes.Buff
 			fmt.Printf("PUT: object %s/%s xxhash %s...\n", bucket, keyname, xxhashstr[:8])
 		}
 	}
-	if fbuffer == nil {
+	if sgl == nil {
 		file, err = os.Open(fname)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to open file %s, err: %v", fname, err)
@@ -172,8 +171,8 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, fbuffer *bytes.Buff
 		defer file.Close()
 		req, err = http.NewRequest(http.MethodPut, puturl, file)
 	} else {
-		reader = &bytesReaderCloser{*bytes.NewReader(fbuffer.Bytes())}
-		req, err = http.NewRequest(http.MethodPut, puturl, fbuffer)
+		reader := dfc.NewReader(sgl)
+		req, err = http.NewRequest(http.MethodPut, puturl, reader)
 	}
 	if err != nil {
 		if errch != nil {
@@ -184,16 +183,16 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, fbuffer *bytes.Buff
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
 	// If it wasn't set, we would need to deal with the redirect manually.
 	req.GetBody = func() (io.ReadCloser, error) {
-		if fbuffer == nil {
+		if sgl == nil {
 			return os.Open(fname)
 		}
-		return reader, nil
+		return sgl, nil
 	}
 	if xxhashstr != "" {
 		req.Header.Set(dfc.HeaderDfcChecksumType, dfc.ChecksumXXHash)
 		req.Header.Set(dfc.HeaderDfcChecksumVal, xxhashstr)
 	}
-	if fbuffer == nil {
+	if sgl == nil {
 		_, err = file.Seek(0, 0)
 		if err != nil {
 			if errch != nil {
@@ -201,8 +200,6 @@ func Put(proxyurl, fname, bucket, keyname, xxhashstr string, fbuffer *bytes.Buff
 			}
 			return
 		}
-	} else {
-		reader.Seek(0, 0)
 	}
 	r, err := httpclient.Do(req)
 	defer func() {
@@ -417,6 +414,28 @@ func WriteRandomFil(fname string, bytes []byte, filesize int, blocksize int, ran
 	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
 	xxhashstr = hex.EncodeToString(hashInBytes)
 	err = f.Close()
+	return
+}
+
+func WriteRandomSGL(rbuf []byte, filesize int, blocksize int, random *rand.Rand, sgl *dfc.SGLIO) (tot int, xxhashstr string, err error) {
+	var r int
+	xx := xxhash.New64()
+	nblocks := filesize / blocksize
+	for i := 0; i <= nblocks; i++ {
+		if blocksize < filesize-tot {
+			r = blocksize
+		} else {
+			r = filesize - tot
+		}
+		random.Read(rbuf[0:r])
+		sgl.Write(rbuf[0:r]) // n vs. r  FIXME here and elsewhere
+		xx.Write(rbuf[0:r])
+		tot += r
+	}
+	hashIn64 := xx.Sum64()
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+	xxhashstr = hex.EncodeToString(hashInBytes)
 	return
 }
 

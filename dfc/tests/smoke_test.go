@@ -1,7 +1,10 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -103,13 +106,13 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			go func(i int) {
-				var fbuffer *bytes.Buffer
+				var sgl *dfc.SGLIO
 				if inmem {
-					fbuf := make([]byte, filesize)
-					fbuffer = bytes.NewBuffer(fbuf)
+					sgl = dfc.NewSGLIO(nil, uint64(filesize))
+					defer sgl.Free()
 				}
 				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput,
-					SmokeDir, smokestr, "", false, fbuffer)
+					SmokeDir, smokestr, "", false, sgl)
 			}(i)
 			nPut--
 		} else {
@@ -170,7 +173,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 
 func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
-	dir, keystr, htype string, silent bool, fbuffer *bytes.Buffer) {
+	dir, keystr, htype string, silent bool, sgl *dfc.SGLIO) {
 	var (
 		err       error
 		xxhashstr string
@@ -187,9 +190,9 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		if size == 0 {
 			size = uint64(random.Intn(1024)+1) * 1024
 		}
-		if fbuffer != nil {
-			fbuffer.Reset()
-			_, xxhashstr, err = client.WriteRandomMem(buffer, int(size), blocksize, random, fbuffer)
+		if sgl != nil {
+			sgl.Reset()
+			_, xxhashstr, err = client.WriteRandomSGL(buffer, int(size), blocksize, random, sgl)
 		} else {
 			_, xxhashstr, err = client.WriteRandomFil(dir+"/"+fname, buffer, int(size), blocksize, random)
 		}
@@ -204,7 +207,7 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		client.Put(proxyurl, dir+"/"+fname, bucket, keystr+"/"+fname, xxhashstr, fbuffer, nil, errch, silent)
+		client.Put(proxyurl, dir+"/"+fname, bucket, keystr+"/"+fname, xxhashstr, sgl, nil, errch, silent)
 		filesput <- fname
 	}
 }
