@@ -41,6 +41,21 @@ func assert(cond bool, args ...interface{}) {
 	glog.Fatalln(message)
 }
 
+func min64(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func divCeil(a, b int64) int64 {
+	if d, r := a/b, a%b; r > 0 {
+		return d + 1
+	} else {
+		return d
+	}
+}
+
 func copyStruct(dst interface{}, src interface{}) {
 	x := reflect.ValueOf(src)
 	if x.Kind() == reflect.Ptr {
