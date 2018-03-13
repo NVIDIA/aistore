@@ -105,7 +105,6 @@ func Test_download(t *testing.T) {
 	filesCreated := make(chan string, numfiles)
 
 	defer func() {
-		//Delete files created by getAndCopyTmp
 		close(filesCreated)
 		var err error
 		for file := range filesCreated {
@@ -456,91 +455,99 @@ func Benchmark_get(b *testing.B) {
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
 	errch chan error, resch chan workres, bucket string) {
-	var (
-		written int64
-		errstr  string
-		geturl  = proxyurl + "/v1/files"
-	)
+	geturl := proxyurl + "/v1/files"
 	res := workres{0, 0}
 	defer wg.Done()
 
 	for keyname := range keynames {
 		url := geturl + "/" + bucket + "/" + keyname
-		t.Logf("Worker %2d: GET %q", id, url)
-		r, err := http.Get(url)
-		hdhash := r.Header.Get(dfc.HeaderDfcChecksumVal)
-		hdhashtype := r.Header.Get(dfc.HeaderDfcChecksumType)
-		if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
-			t.Errorf("Failing test")
+		written, failed := getAndCopyOne(id, t, errch, bucket, keyname, url)
+		if failed {
+			t.Fail()
 			return
-		}
-		defer func(r *http.Response) {
-			r.Body.Close()
-		}(r)
-		// Create a local copy
-		fname := LocalDestDir + "/" + keyname
-		file, err := dfc.Createfile(fname)
-		if err != nil {
-			t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
-			return
-		}
-		defer func() {
-			if err := file.Close(); err != nil {
-				errstr = fmt.Sprintf("Failed to close file, err: %s", err)
-				t.Errorf("Worker %2d: %s", id, errstr)
-			}
-		}()
-		if hdhashtype == dfc.ChecksumXXHash {
-			xx := xxhash.New64()
-			written, errstr = dfc.ReceiveFile(file, r.Body, nil, xx)
-			if errstr != "" {
-				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
-				return
-			}
-			hashIn64 := xx.Sum64()
-			hashInBytes := make([]byte, 8)
-			binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
-			hash := hex.EncodeToString(hashInBytes)
-			if hdhash != hash {
-				t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, dfc.ChecksumXXHash, hdhash, hash)
-				resch <- res
-				close(resch)
-				return
-			}
-			tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumXXHash, hdhash, hash)
-		} else if hdhashtype == dfc.ChecksumMD5 {
-			md5 := md5.New()
-			written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
-			if errstr != "" {
-				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
-				return
-			}
-			hashInBytes := md5.Sum(nil)[:16]
-			md5hash := hex.EncodeToString(hashInBytes)
-			if errstr != "" {
-				t.Errorf("Worker %2d: failed to compute %s, err: %s", id, dfc.ChecksumMD5, errstr)
-				return
-			}
-			if hdhash != md5hash {
-				t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, dfc.ChecksumMD5, hdhash, md5hash)
-				resch <- res
-				close(resch)
-				return
-			}
-			tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumMD5, hdhash, md5hash)
-		} else {
-			written, errstr = dfc.ReceiveFile(file, r.Body, nil)
-			if errstr != "" {
-				t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
-				return
-			}
 		}
 		res.totfiles++
 		res.totbytes += written
 	}
-	// Send information back
 	resch <- res
 	close(resch)
+}
+
+func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url string) (written int64, failed bool) {
+	var errstr string
+	t.Logf("Worker %2d: GET %q", id, url)
+	r, err := http.Get(url)
+	hdhash := r.Header.Get(dfc.HeaderDfcChecksumVal)
+	hdhashtype := r.Header.Get(dfc.HeaderDfcChecksumType)
+	if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
+		t.Errorf("Failing test")
+		failed = true
+		return
+	}
+	defer func(r *http.Response) {
+		r.Body.Close()
+	}(r)
+	// Create a local copy
+	fname := LocalDestDir + "/" + keyname
+	file, err := dfc.Createfile(fname)
+	if err != nil {
+		t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
+		failed = true
+		return
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			errstr = fmt.Sprintf("Failed to close file, err: %s", err)
+			t.Errorf("Worker %2d: %s", id, errstr)
+		}
+	}()
+	if hdhashtype == dfc.ChecksumXXHash {
+		xx := xxhash.New64()
+		written, errstr = dfc.ReceiveFile(file, r.Body, nil, xx)
+		if errstr != "" {
+			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+			failed = true
+			return
+		}
+		hashIn64 := xx.Sum64()
+		hashInBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+		hash := hex.EncodeToString(hashInBytes)
+		if hdhash != hash {
+			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, dfc.ChecksumXXHash, hdhash, hash)
+			failed = true
+			return
+		}
+		tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumXXHash, hdhash, hash)
+	} else if hdhashtype == dfc.ChecksumMD5 {
+		md5 := md5.New()
+		written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
+		if errstr != "" {
+			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+			return
+		}
+		hashInBytes := md5.Sum(nil)[:16]
+		md5hash := hex.EncodeToString(hashInBytes)
+		if errstr != "" {
+			t.Errorf("Worker %2d: failed to compute %s, err: %s", id, dfc.ChecksumMD5, errstr)
+			failed = true
+			return
+		}
+		if hdhash != md5hash {
+			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, dfc.ChecksumMD5, hdhash, md5hash)
+			failed = true
+			return
+		}
+		tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumMD5, hdhash, md5hash)
+	} else {
+		written, errstr = dfc.ReceiveFile(file, r.Body, nil)
+		if errstr != "" {
+			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
+			failed = true
+			return
+		}
+	}
+	return
 }
 
 func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch chan error, bucket string) {
