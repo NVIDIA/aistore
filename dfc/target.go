@@ -52,9 +52,6 @@ type targetrunner struct {
 	starttime     time.Time
 	lbmap         *lbmap
 	rtnamemap     *rtnamemap
-	buffers       *buffers // 128K default
-	buffers32k    *buffers // 32K
-	buffers4k     *buffers // 4K
 	prefetchQueue chan filesWithDeadline
 }
 
@@ -66,9 +63,6 @@ func (t *targetrunner) run() error {
 	t.xactinp = newxactinp()                         // extended actions
 	t.lbmap = &lbmap{LBmap: make(map[string]string)} // local (cache-only) buckets
 	t.rtnamemap = newrtnamemap(128)                  // lock/unlock name
-	t.buffers = newbuffers(128 * 1024)
-	t.buffers32k = newbuffers(32 * 1024)
-	t.buffers4k = newbuffers(4 * 1024)
 
 	if status, err := t.register(false); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
@@ -287,22 +281,14 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add(HeaderDfcChecksumType, htype)
 		w.Header().Add(HeaderDfcChecksumVal, hval)
 	}
-	// buffer pooling
-	var buffs buffif
-	if size > t.buffers32k.fixedsize {
-		buffs = t.buffers
-	} else if size > t.buffers4k.fixedsize {
-		buffs = t.buffers32k
-	} else {
-		if size == 0 {
-			errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
-			t.invalmsghdlr(w, r, errstr)
-			return // likely, an error
-		}
-		buffs = t.buffers4k
+	if size == 0 {
+		errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
+		t.invalmsghdlr(w, r, errstr)
+		return // likely, an error
 	}
-	buf := buffs.alloc()
-	defer buffs.free(buf)
+	slab := selectslab(size)
+	buf := slab.alloc()
+	defer slab.free(buf)
 	// copy
 	written, err := io.CopyBuffer(w, file, buf)
 	if err != nil {
@@ -541,9 +527,10 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	// optimize out if the checksums do match
 	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone {
 		file, err := os.Open(fqn)
-		// File exists in local cache.
+		// exists - compute checksum and compare with the caller's
 		if err == nil {
-			buf := t.buffers.alloc()
+			slab := selectslab(0) // unknown size
+			buf := slab.alloc()
 			if htype == ChecksumXXHash {
 				xx := xxhash.New64()
 				hash, errstr = ComputeXXHash(file, buf, xx)
@@ -554,7 +541,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 			if errstr != "" {
 				glog.Warningf("Could not compute or invalid hash for %s  errstr: %v", fqn, errstr)
 			}
-			t.buffers.free(buf)
+			slab.free(buf)
 			// not a critical error
 			if err = file.Close(); err != nil {
 				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
@@ -821,8 +808,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	var (
 		hash   string
 		errstr string
-		buffs  buffif
 	)
+	if size == 0 {
+		return fmt.Sprintf("Unexpected: %s/%s size is zero", bucket, objname)
+	}
 	cksumcfg := &ctx.config.CksumConfig
 	if newobjname == "" {
 		newobjname = objname
@@ -839,23 +828,16 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	defer file.Close()
 
-	if size > t.buffers32k.fixedsize {
-		buffs = t.buffers
-	} else if size > t.buffers4k.fixedsize {
-		buffs = t.buffers32k
-	} else {
-		assert(size != 0, "Unexpected: zero size "+fqn)
-		buffs = t.buffers4k
-	}
+	slab := selectslab(size)
 	if cksumcfg.Checksum != ChecksumNone {
 		assert(cksumcfg.Checksum == ChecksumXXHash)
-		buf := buffs.alloc()
+		buf := slab.alloc()
 		xx := xxhash.New64()
 		if hash, errstr = ComputeXXHash(file, buf, xx); errstr != "" {
-			buffs.free(buf)
+			slab.free(buf)
 			return errstr
 		}
-		buffs.free(buf)
+		slab.free(buf)
 	}
 	_, err = file.Seek(0, 0)
 	if err != nil {
@@ -1351,9 +1333,10 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj c
 		errstr = fmt.Sprintf("Failed to create and initialize %s, err: %s", fqn, errstr)
 		return
 	}
-	buf := t.buffers.alloc()
+	slab := selectslab(0)
+	buf := slab.alloc()
 	defer func() {
-		t.buffers.free(buf)
+		slab.free(buf)
 		if errstr == "" {
 			return
 		}

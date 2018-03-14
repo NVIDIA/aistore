@@ -245,7 +245,7 @@ func Test_putdelete(t *testing.T) {
 	filesput := make(chan string, numfiles)
 	filesize := uint64(512 * 1024)
 	if inmem {
-		sgl = dfc.NewSGLIO(nil, filesize)
+		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false, sgl)
@@ -371,7 +371,7 @@ func Test_coldgetmd5(t *testing.T) {
 		if megabytes < PhysMemSizeWarn {
 			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
 		}
-		sgl = dfc.NewSGLIO(nil, filesize)
+		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true, sgl)
@@ -701,7 +701,7 @@ func Test_checksum(t *testing.T) {
 		if megabytes < PhysMemSizeWarn {
 			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
 		}
-		sgl = dfc.NewSGLIO(nil, filesize)
+		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true, sgl)

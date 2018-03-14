@@ -206,9 +206,9 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	}
 	wc := client.Bucket(bucket).Object(objname).NewWriter(gctx)
 	wc.Metadata = md
-
-	buf := gcpimpl.t.buffers.alloc()
-	defer gcpimpl.t.buffers.free(buf)
+	slab := selectslab(0)
+	buf := slab.alloc()
+	defer slab.free(buf)
 	written, err := io.CopyBuffer(wc, file, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("gcp: PUT %s/%s: failed to copy, err: %v", bucket, objname, err)

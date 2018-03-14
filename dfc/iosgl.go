@@ -1,62 +1,116 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
 
-// Reader and (streaming) Writer on top of a Scatter Gather List (SGL) of reusable buffers
-
 import (
 	"errors"
 	"io"
+	"sync"
 )
 
-var clientbuffers = newbuffers(32 * 1024) // fixedsize = 32K
+const (
+	largeSizeUseThresh = 1024 * 512
+	warnSizeThresh     = 1024 * 1024 * 1024
+	minSizeUnknown     = 32 * 1024
+)
 
-type SGLIO struct {
-	sgl       [][]byte
-	buffs     buffif
-	fixedsize int64
-	woff      int64 // stream
-	roff      int64
+var fixedsizes = []int64{4 * 1024, 16 * 1024, 32 * 1024, 64 * 1024, 128 * 1024}
+var allslabs = []slabif{nil, nil, nil, nil, nil} // NOTE: len() must be equal len(fixedsizes)
+
+//======================================================================
+//
+// simple slab allocator
+//
+//======================================================================
+type slabif interface {
+	alloc() []byte
+	free(buf []byte)
+	getsize() int64
 }
 
-func NewSGLIO(t *targetrunner, oosize uint64) *SGLIO {
-	var (
-		buffs     buffif
-		fixedsize int64
-	)
-	osize := int64(oosize)
-	if t == nil {
-		buffs = clientbuffers
-		fixedsize = clientbuffers.fixedsize
-	} else if osize > t.buffers32k.fixedsize {
-		buffs = t.buffers
-		fixedsize = t.buffers.fixedsize
-	} else if osize > t.buffers4k.fixedsize {
-		buffs = t.buffers32k
-		fixedsize = t.buffers32k.fixedsize
-	} else {
-		assert(osize != 0)
-		buffs = t.buffers4k
-		fixedsize = t.buffers4k.fixedsize
+type slab struct {
+	pool      *sync.Pool
+	fixedsize int64
+}
+
+func init() {
+	for i, fixedsize := range fixedsizes {
+		allslabs[i] = newslab(fixedsize)
 	}
-	n := divCeil(osize, fixedsize)
+}
+
+func newslab(fixedsize int64) *slab {
+	pool := &sync.Pool{
+		New: func() interface{} {
+			return make([]byte, fixedsize)
+		},
+	}
+	return &slab{pool, fixedsize}
+}
+
+func selectslab(osize int64) slabif {
+	if osize >= largeSizeUseThresh { // precondition to use the largest slab
+		return allslabs[len(allslabs)-1]
+	}
+	if osize == 0 { // when the size is unknown
+		return allslabs[len(allslabs)-2]
+	}
+	for i := len(allslabs) - 2; i >= 0; i-- {
+		if osize >= fixedsizes[i] {
+			return allslabs[i]
+		}
+	}
+	return allslabs[0]
+}
+
+func (slab *slab) alloc() []byte {
+	return slab.pool.Get().([]byte)
+}
+
+func (slab *slab) free(buf []byte) {
+	slab.pool.Put(buf)
+}
+
+func (slab *slab) getsize() int64 {
+	return slab.fixedsize
+}
+
+//======================================================================
+//
+// Reader and (streaming) Writer on top of a Scatter Gather List (SGL) of reusable buffers
+//
+//======================================================================
+type SGLIO struct {
+	sgl  [][]byte
+	slab slabif
+	woff int64 // stream
+	roff int64
+}
+
+func NewSGLIO(oosize uint64) *SGLIO {
+	osize := int64(oosize)
+	if osize == 0 {
+		osize = minSizeUnknown
+	}
+	slab := selectslab(osize)
+	n := divCeil(osize, slab.getsize())
 	sgl := make([][]byte, n, n)
 	for i := 0; i < int(n); i++ {
-		sgl[i] = buffs.alloc()
+		sgl[i] = slab.alloc()
 	}
-	return &SGLIO{sgl: sgl, buffs: buffs, fixedsize: fixedsize}
+	return &SGLIO{sgl: sgl, slab: slab}
 }
 
-func (z *SGLIO) Cap() int64 { return int64(len(z.sgl)) * z.fixedsize }
+func (z *SGLIO) Cap() int64 { return int64(len(z.sgl)) * z.slab.getsize() }
 
 func (z *SGLIO) grow(tosize int64) {
 	for z.Cap() < tosize {
 		l := len(z.sgl)
 		z.sgl = append(z.sgl, nil)
-		z.sgl[l] = z.buffs.alloc()
+		z.sgl[l] = z.slab.alloc() // FIXME: OOM
 	}
 }
 
@@ -66,9 +120,9 @@ func (z *SGLIO) Write(p []byte) (n int, err error) {
 	if needtot > z.Cap() {
 		z.grow(needtot)
 	}
-	idx, off, poff := z.woff/z.fixedsize, z.woff%z.fixedsize, 0
+	idx, off, poff := z.woff/z.slab.getsize(), z.woff%z.slab.getsize(), 0
 	for wlen > 0 {
-		size := min64(z.fixedsize-off, int64(wlen))
+		size := min64(z.slab.getsize()-off, int64(wlen))
 		buf := z.sgl[idx]
 		copy(buf[off:], p[poff:poff+int(size)])
 		z.woff += size
@@ -84,7 +138,7 @@ func (z *SGLIO) Read(b []byte) (n int, err error) {
 	if z.roff >= z.woff {
 		return 0, io.EOF
 	}
-	idx, off := int(z.roff/z.fixedsize), z.roff%z.fixedsize
+	idx, off := int(z.roff/z.slab.getsize()), z.roff%z.slab.getsize()
 	buf := z.sgl[idx]
 	size := min64(int64(len(b)), z.woff-z.roff)
 	n = copy(b[:size], buf[off:])
@@ -111,9 +165,10 @@ func (z *SGLIO) Close() error {
 
 func (z *SGLIO) Free() {
 	for i := 0; i < len(z.sgl); i++ {
-		z.buffs.free(z.sgl[i])
+		z.slab.free(z.sgl[i])
 	}
 	z.sgl = nil
+	z.woff = 0xDEADBEEF
 }
 
 //========================================================================
@@ -136,18 +191,10 @@ func (r *Reader) Len() int {
 func (r *Reader) Size() int64 { return r.z.Cap() }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
-	if r.roff >= r.z.Cap() {
-		return 0, io.EOF
-	}
-	idx, off := int(r.roff/r.z.fixedsize), r.roff%r.z.fixedsize
-	buf := r.z.sgl[idx]
-	n = copy(b, buf[off:])
-	for n < len(b) && idx < len(r.z.sgl)-1 {
-		idx++
-		buf = r.z.sgl[idx]
-		n += copy(b[n:], buf)
-	}
-	r.roff += int64(n)
+	roff := r.z.roff
+	r.z.roff = r.roff
+	n, err = r.z.Read(b)
+	r.z.roff = roff
 	return
 }
 

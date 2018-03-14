@@ -100,27 +100,41 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	var (
 		nGet = int(float32(numworkers) * ratio)
 		nPut = numworkers - nGet
+		sgls = make([]*dfc.SGLIO, numworkers, numworkers)
 	)
 	// Get the workers started
+	if inmem {
+		for i := 0; i < numworkers; i++ {
+			sgls[i] = dfc.NewSGLIO(uint64(filesize))
+		}
+		defer func() {
+			for i := 0; i < numworkers; i++ {
+				sgls[i].Free()
+			}
+		}()
+	}
 	for i := 0; i < numworkers; i++ {
-		wg.Add(1)
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
+			wg.Add(1)
 			go func(i int) {
 				var sgl *dfc.SGLIO
 				if inmem {
-					sgl = dfc.NewSGLIO(nil, uint64(filesize))
-					defer sgl.Free()
+					sgl = sgls[i]
 				}
-				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, wg, errch, filesput,
+				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
 					SmokeDir, smokestr, "", false, sgl)
+				wg.Done()
 			}(i)
 			nPut--
 		} else {
-			go func(i int) { getRandomFiles(i, bseed+int64(i), numops, clibucket, t, wg, errch) }(i)
+			wg.Add(1)
+			go func(i int) {
+				getRandomFiles(i, bseed+int64(i), numops, clibucket, t, nil, errch)
+				wg.Done()
+			}(i)
 			nGet--
 		}
 	}
-
 	wg.Wait()
 	select {
 	case err := <-errch:

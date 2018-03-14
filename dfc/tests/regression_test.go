@@ -155,7 +155,7 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		filesize = uint64(1024)
 	)
 	if inmem {
-		sgl = dfc.NewSGLIO(nil, filesize)
+		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, sgl)
@@ -427,7 +427,7 @@ func regressionRebalance(t *testing.T) {
 	// step 2. put random files => (cluster - 1)
 	//
 	if inmem {
-		sgl = dfc.NewSGLIO(nil, filesize)
+		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, sgl)
@@ -530,7 +530,7 @@ func regressionRename(t *testing.T) {
 		t.Errorf("Error creating dir: %v", err)
 	}
 	if inmem {
-		sgl := dfc.NewSGLIO(nil, 1024*1024)
+		sgl := dfc.NewSGLIO(1024 * 1024)
 		defer sgl.Free()
 	}
 	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false, sgl)
