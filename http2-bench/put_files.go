@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
-	"os"
 	"sync"
+
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -49,45 +49,32 @@ func main() {
 		go worker(w, jobs)
 	}
 
-	filesput := make(chan string, numfiles)
-	err := putSpecificFiles(0, int64(baseseed), filesize*megabytes, numfiles, clibucket, jobs, filesput)
+	err := putSpecificFiles(0, int64(baseseed), filesize*megabytes, numfiles, clibucket, jobs)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}
-	close(filesput)
-	for f := range filesput {
-		err = os.Remove(smokeDir + "/" + f)
-		if err != nil {
-			fmt.Printf("Error removing file: %v\n", err)
-			return
-		}
-	}
 }
 
-func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
-	pool chan func(), filesput chan string) error {
+func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string, pool chan func()) error {
 	var (
-		src    = rand.NewSource(seed)
-		random = rand.New(src)
-		buffer = make([]byte, blocksize)
-		errch  = make(chan error, numfiles)
-		wg     = &sync.WaitGroup{}
+		errch = make(chan error, numfiles)
+		wg    = &sync.WaitGroup{}
 	)
 
 	dfc.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
-		fname := fmt.Sprintf("l%d", i)
-		if _, _, err := client.WriteRandomFil(smokeDir+"/"+fname, buffer, int(fileSize), blocksize, random); err != nil {
+		r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
+		if err != nil {
 			return err
 		}
+
+		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			client.Put(proxyurl, smokeDir+"/"+fname, bucket, "__bench/"+fname, "", nil, wg, errch, false)
+			client.PutAsync(wg, proxyurl, r, bucket, "__bench/"+fname, errch, false)
 		}
-
-		filesput <- fname
 	}
 	close(pool)
 	wg.Wait()

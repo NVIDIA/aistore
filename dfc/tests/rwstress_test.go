@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -148,18 +150,15 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 
 func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, buf []byte) {
 	var (
-		totalOps  int
-		prc       int
-		err       error
-		xxhashstr string
+		totalOps int
+		prc      int
 	)
 	errch := make(chan error, 10)
 	fileCount := len(fileNames)
 	if taskGrp != nil {
 		defer taskGrp.Done()
 	}
-	src := rand.NewSource(time.Now().UTC().UnixNano())
-	random := rand.New(src)
+
 	wg := &sync.WaitGroup{}
 
 	fmt.Printf("Running stress test...0%%")
@@ -168,9 +167,10 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	for i := 0; i < numLoops; i++ {
 		for idx := 0; idx < fileCount; idx++ {
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
-			fname := fmt.Sprintf("%s/%s", baseDir, keyname)
 
-			if _, xxhashstr, err = client.WriteRandomFil(fname, buf, int(fileSize), blocksize, random); err != nil {
+			// Note: This test depends on the files it creates, so ignore reader type, always use file reader
+			r, err := readers.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
+			if err != nil {
 				fmt.Fprintf(os.Stdout, "PUT write FAIL: %v\n", err)
 				t.Error(err)
 				if errch != nil {
@@ -185,12 +185,15 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.Put(proxyurl, fname, clibucket, keyname, "", nil, wg, errch, true)
+						client.PutAsync(wg, proxyurl, r, clibucket, keyname, errch, true /* silent */)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					client.Put(proxyurl, fname, clibucket, keyname, xxhashstr, nil, nil, errch, true)
+					err = client.Put(proxyurl, r, clibucket, keyname, true /* silent */)
+					if err != nil {
+						errch <- err
+					}
 					unlockFile(idx, rwFileCreated)
 				}
 				totalOps++
@@ -389,7 +392,7 @@ func regressionRWStress(t *testing.T) {
 // If the test runs asynchronusly all three kinds of operations then after the
 //    test finishes it executes extra loop to delete all files
 func Test_rwstress(t *testing.T) {
-	flag.Parse()
+	parse()
 
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)

@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
@@ -91,8 +93,24 @@ func init() {
 	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
 }
 
-func Test_download(t *testing.T) {
+func checkMemory() {
+	if readerType == readers.ReaderTypeSG || readerType == readers.ReaderTypeInMem {
+		megabytes, _ := dfc.TotalMemory()
+		if megabytes < PhysMemSizeWarn {
+			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider use other reader type\n", megabytes)
+		}
+	}
+}
+
+func parse() {
 	flag.Parse()
+	usingSG = readerType == readers.ReaderTypeSG
+	usingFile = readerType == readers.ReaderTypeFile
+	checkMemory()
+}
+
+func Test_download(t *testing.T) {
+	parse()
 
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
@@ -177,7 +195,7 @@ func Test_download(t *testing.T) {
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
-	flag.Parse()
+	parse()
 
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
@@ -238,18 +256,22 @@ func Test_matchdelete(t *testing.T) {
 
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
-	flag.Parse()
+	parse()
+
 	var sgl *dfc.SGLIO
 	if err := dfc.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
+
 	errch := make(chan error, numfiles)
 	filesput := make(chan string, numfiles)
 	filesize := uint64(512 * 1024)
-	if inmem {
+
+	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
+
 	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false, sgl)
 	close(filesput)
 
@@ -259,6 +281,7 @@ func Test_putdelete(t *testing.T) {
 		// Allow a bunch of messages at a time to be written asynchronously to a channel
 		keynameChans[i] = make(chan string, 100)
 	}
+
 	// Start the worker pools
 	var wg = &sync.WaitGroup{}
 	// Get the workers started
@@ -269,9 +292,10 @@ func Test_putdelete(t *testing.T) {
 
 	num := 0
 	for name := range filesput {
-		if sgl == nil {
+		if usingFile {
 			os.Remove(DeleteDir + "/" + name)
 		}
+
 		keynameChans[num%numworkers] <- DeleteStr + "/" + name
 		num++
 	}
@@ -280,18 +304,20 @@ func Test_putdelete(t *testing.T) {
 	for i := 0; i < numworkers; i++ {
 		close(keynameChans[i])
 	}
+
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
 }
 
 func Test_list(t *testing.T) {
+	parse()
+
 	var (
 		copy    bool
 		reslist *dfc.BucketList
 		file    *os.File
 		err     error
 	)
-	flag.Parse()
 
 	// list the names, sizes, creation times and MD5 checksums
 	var msg *dfc.GetMsg
@@ -371,6 +397,7 @@ func Test_coldgetmd5(t *testing.T) {
 		filesize  = uint64(largefilesize * 1024 * 1024)
 		sgl       *dfc.SGLIO
 	)
+
 	ldir := LocalSrcDir + "/" + ColdValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
@@ -380,14 +407,11 @@ func Test_coldgetmd5(t *testing.T) {
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
-	if inmem {
-		megabytes, _ := dfc.TotalMemory()
-		if megabytes < PhysMemSizeWarn {
-			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
-		}
+	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
+
 	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
@@ -423,9 +447,10 @@ func Test_coldgetmd5(t *testing.T) {
 cleanup:
 	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/v1/cluster", httpclient, t)
 	for _, fn := range fileslist {
-		if sgl == nil {
+		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
 		}
+
 		wg.Add(1)
 		go client.Del(proxyurl, bucket, fn, wg, errch, false)
 	}
@@ -710,14 +735,11 @@ func Test_checksum(t *testing.T) {
 		htype = ochksum
 	}
 
-	if inmem {
-		megabytes, _ := dfc.TotalMemory()
-		if megabytes < PhysMemSizeWarn {
-			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider -inmem=false\n", megabytes)
-		}
+	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
+
 	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
@@ -795,7 +817,7 @@ func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist
 	wg := &sync.WaitGroup{}
 	// Delete local file and objects from bucket
 	for _, fn := range fileslist {
-		if !inmem {
+		if usingFile {
 			err := os.Remove(LocalSrcDir + "/" + fn)
 			if err != nil {
 				t.Error(err)

@@ -48,7 +48,7 @@ func putFile(size int64, withHash bool) error {
 		return err
 	}
 
-	err = client.PutWithReader(server.URL, r, "bucket", "key", nil /* errch */, true /* silent */)
+	err = client.Put(server.URL, r, "bucket", "key", true /* silent */)
 
 	r.Close()
 	os.Remove(dir + "/" + fn)
@@ -62,7 +62,7 @@ func putInMem(size int64, withHash bool) error {
 	}
 	defer r.Close()
 
-	return client.PutWithReader(server.URL, r, "bucket", "key", nil /* errch */, true /* silent */)
+	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
 func putRand(size int64, withHash bool) error {
@@ -72,7 +72,7 @@ func putRand(size int64, withHash bool) error {
 	}
 	defer r.Close()
 
-	return client.PutWithReader(server.URL, r, "bucket", "key", nil /* errch */, true /* silent */)
+	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
 func putSG(sgl *dfc.SGLIO, size int64, withHash bool) error {
@@ -83,7 +83,7 @@ func putSG(sgl *dfc.SGLIO, size int64, withHash bool) error {
 	}
 	defer r.Close()
 
-	return client.PutWithReader(server.URL, r, "bucket", "key", nil /* errch */, true /* silent */)
+	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {

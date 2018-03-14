@@ -22,6 +22,17 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const (
+	// ReaderTypeFile defines the name for file reader
+	ReaderTypeFile = "file"
+	// ReaderTypeSG defines the name for sg reader
+	ReaderTypeSG = "sg"
+	// ReaderTypeRand defines the name for rand reader
+	ReaderTypeRand = "rand"
+	// ReaderTypeInMem defines the name for inmem reader
+	ReaderTypeInMem = "inmem"
+)
+
 // helper functions
 func min(x, y int64) int64 {
 	if x < y {
@@ -274,7 +285,7 @@ func NewFileReader(path, name string, size int64, withHash bool) (client.Reader,
 
 	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	hash, err := populateData(f, size, withHash, rnd)
@@ -324,13 +335,16 @@ type ParamReader struct {
 // NewReader returns a data reader; type of reader returned is based on the parameters provided
 func NewReader(p ParamReader) (client.Reader, error) {
 	switch p.Type {
-	case "sg":
+	case ReaderTypeSG:
+		if p.SGL == nil {
+			return nil, fmt.Errorf("SGL is empty while reader type is SGL")
+		}
 		return NewSGReader(p.SGL, p.Size, true /* withHash */)
-	case "rand":
+	case ReaderTypeRand:
 		return NewRandReader(p.Size, true /* withHash */)
-	case "inmem":
+	case ReaderTypeInMem:
 		return NewInMemReader(p.Size, true /* withHash */)
-	case "file":
+	case ReaderTypeFile:
 		return NewFileReader(p.Path, p.Name, p.Size, true /* withHash */)
 	default:
 		return nil, fmt.Errorf("Unknown memory type for creating inmem reader")

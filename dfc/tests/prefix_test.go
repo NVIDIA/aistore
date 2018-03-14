@@ -19,6 +19,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -41,20 +43,15 @@ func init() {
 // the names starting with the prefix;
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func Test_prefix(t *testing.T) {
-	flag.Parse()
+	parse()
+
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)
 	}
 
 	fmt.Printf("Looking for files with prefix [%s]\n", prefix)
-
-	if err := dfc.CreateDir(fmt.Sprintf("%s/%s", baseDir, prefixDir)); err != nil {
-		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, prefixDir, err)
-	}
-
 	prefixFileNumber = numfiles
-
 	prefixCreateFiles(t)
 	prefixLookup(t)
 	prefixCleanup(t)
@@ -74,29 +71,24 @@ func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir st
 }
 
 func prefixCreateFiles(t *testing.T) {
-	fmt.Printf("Creating files...\n")
 	src := rand.NewSource(baseseed + 1000)
 	random := rand.New(src)
-	buf := make([]byte, blocksize)
 	fileNames = make([]string, 0, prefixFileNumber)
 	errch := make(chan error, numfiles)
 	wg := &sync.WaitGroup{}
-	var (
-		err       error
-		xxhashstr string
-	)
+
 	for i := 0; i < prefixFileNumber; i++ {
 		fileName := client.FastRandomFilename(random, fnlen)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
-		filePath := fmt.Sprintf("%s/%s", baseDir, keyName)
-		tlogf("Generating random-content file %s, size %.2fMB\n", filePath, float64(fileSize)/1000/1000)
-		if _, xxhashstr, err = client.WriteRandomFil(filePath, buf, int(fileSize), blocksize, random); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to create %s: %v\n", fileName, err)
-			t.Error(err)
-			return
+
+		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		if err != nil {
+			t.Fatal(err)
 		}
+
 		wg.Add(1)
-		go client.Put(proxyurl, filePath, clibucket, keyName, xxhashstr, nil, wg, errch, true)
+		go client.PutAsync(wg, proxyurl, r, clibucket, keyName, errch, false /* silent */)
 		fileNames = append(fileNames, fileName)
 	}
 	wg.Wait()
@@ -178,7 +170,6 @@ func prefixLookup(t *testing.T) {
 }
 
 func prefixCleanup(t *testing.T) {
-	fmt.Printf("Cleaning up...\n")
 	errch := make(chan error, numfiles)
 	var wg = &sync.WaitGroup{}
 
@@ -186,11 +177,6 @@ func prefixCleanup(t *testing.T) {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
 		go client.Del(proxyurl, clibucket, keyName, wg, errch, true)
-
-		if err := os.Remove(fmt.Sprintf("%s/%s", baseDir, keyName)); err != nil {
-			fmt.Printf("Failed to delete file: %v\n", err)
-			t.Fail()
-		}
 	}
 	wg.Wait()
 
