@@ -462,18 +462,25 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 }
 
 func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 9)
-	if len(apitems) > 4 && apitems[2] == Rfrom || apitems[4] == Rto {
-		//
-		// Rebalance: "/"+Rversion+"/"+Rfiles+"/"+"from_id"+"/"+ID+"to_id"+"/"+bucket+"/"+objname
-		//
-		if apitems = t.checkRestAPI(w, r, apitems, 6, Rversion, Rfiles); apitems == nil {
-			return
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+		fmt.Println("Problem in put with URL " + r.URL.Path)
+		return
+	}
+	query := r.URL.Query()
+
+	from, to, bucket, objname := query.Get(ParamFromID), query.Get(ParamToID), apitems[0], ""
+	if len(apitems) > 1 {
+		objname = strings.Join(apitems[1:], "/")
+	}
+	if from != "" && to != "" {
+		// Rebalance: "/"+Rversion+"/"+Rfiles + "/"+bucket+"/"+objname+"?from_id="+from_id+"&to_id="+to_id
+
+		if objname == "" {
+			s := "Invalid URL: missing object name to copy"
+			t.invalmsghdlr(w, r, s)
 		}
-		from, to, bucket, objname := apitems[1], apitems[3], apitems[4], apitems[5]
-		if len(apitems) > 6 {
-			objname = strings.Join(apitems[5:], "/")
-		}
+
 		size, errstr := t.dorebalance(r, from, to, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
@@ -483,13 +490,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		t.statsif.add("numrecvbytes", size)
 	} else {
 		// PUT: "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+objname
-		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-			return
-		}
-		bucket, objname := apitems[0], ""
-		if len(apitems) > 1 {
-			objname = strings.Join(apitems[1:], "/")
-		}
+
 		errstr, errcode := t.doput(w, r, bucket, objname)
 		if errstr != "" {
 			if errcode == 0 {
@@ -818,8 +819,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
-	url += Rfrom + "/" + fromid + "/" + Rto + "/" + toid + "/"
 	url += bucket + "/" + newobjname
+	url += fmt.Sprintf("?%s=%s&%s=%s", ParamFromID, fromid, ParamToID, toid)
 
 	fqn := t.fqn(bucket, objname)
 	file, err := os.Open(fqn)

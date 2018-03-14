@@ -45,7 +45,9 @@ const (
 
 // URL Query Parameter enum
 const (
-	ParamLocal = "local" //local=bool - true if bucket is expected to be local, false otherwise.
+	ParamLocal  = "local"   //local=bool - true if bucket is expected to be local, false otherwise.
+	ParamToID   = "to_id"   // to_id=string - ID to copy to
+	ParamFromID = "from_id" // from_id=string - ID to copy from
 )
 
 // TODO: sort and some props are TBD

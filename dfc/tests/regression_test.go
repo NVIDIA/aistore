@@ -44,6 +44,7 @@ var (
 	GetConfigMsg         = dfc.GetMsg{GetWhat: dfc.GetWhatConfig}
 	GetStatsMsg          = dfc.GetMsg{GetWhat: dfc.GetWhatStats}
 	CreateLocalBucketMsg = dfc.ActionMsg{Action: dfc.ActCreateLB}
+	DeleteLocalBucketMsg = dfc.ActionMsg{Action: dfc.ActDestroyLB}
 	GetSmapMsg           = dfc.GetMsg{GetWhat: dfc.GetWhatSmap}
 	RenameMsg            = dfc.ActionMsg{Action: dfc.ActRename}
 	HighWaterMark        = uint32(80)
@@ -813,11 +814,16 @@ func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 
 func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	var (
-		req *http.Request
-		r   *http.Response
-		err error
+		req    *http.Request
+		r      *http.Response
+		injson []byte
+		err    error
 	)
-	req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket, nil)
+	injson, err = json.Marshal(DeleteLocalBucketMsg)
+	if err != nil {
+		t.Fatalf("Failed to marshal CreateLocalBucketMsg: %v", err)
+	}
+	req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
