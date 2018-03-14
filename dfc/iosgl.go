@@ -135,20 +135,27 @@ func (z *SGLIO) Write(p []byte) (n int, err error) {
 }
 
 func (z *SGLIO) Read(b []byte) (n int, err error) {
-	if z.roff >= z.woff {
-		return 0, io.EOF
+	n, err, z.roff = z.readAtOffset(b, z.roff)
+	return
+}
+
+func (z *SGLIO) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64) {
+	roff = roffin
+	if roff >= z.woff {
+		err = io.EOF
+		return
 	}
-	idx, off := int(z.roff/z.slab.getsize()), z.roff%z.slab.getsize()
+	idx, off := int(roff/z.slab.getsize()), roff%z.slab.getsize()
 	buf := z.sgl[idx]
-	size := min64(int64(len(b)), z.woff-z.roff)
+	size := min64(int64(len(b)), z.woff-roff)
 	n = copy(b[:size], buf[off:])
-	z.roff += int64(n)
+	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
 		idx++
 		buf = z.sgl[idx]
-		size = min64(int64(len(b)-n), z.woff-z.roff)
+		size = min64(int64(len(b)-n), z.woff-roff)
 		n1 := copy(b[n:n+int(size)], buf)
-		z.roff += int64(n1)
+		roff += int64(n1)
 		n += n1
 	}
 	return
@@ -191,10 +198,7 @@ func (r *Reader) Len() int {
 func (r *Reader) Size() int64 { return r.z.Cap() }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
-	roff := r.z.roff
-	r.z.roff = r.roff
-	n, err = r.z.Read(b)
-	r.z.roff = roff
+	n, err, r.roff = r.z.readAtOffset(b, r.roff)
 	return
 }
 
