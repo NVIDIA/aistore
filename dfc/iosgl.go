@@ -195,6 +195,10 @@ func (r *Reader) Len() int {
 	return int(r.z.Cap() - r.roff)
 }
 
+func (r *Reader) Close() error {
+	return nil
+}
+
 func (r *Reader) Size() int64 { return r.z.Cap() }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
@@ -218,6 +222,10 @@ func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {
 	}
 	r.roff = offset
 	return
+}
+
+func (r *Reader) Open() (io.ReadCloser, error) {
+	return NewReader(r.z), nil
 }
 
 func NewReader(z *SGLIO) *Reader { return &Reader{z, 0} }

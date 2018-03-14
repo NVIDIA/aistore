@@ -232,14 +232,14 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	}
 	req, httperr := http.NewRequest(http.MethodDelete, delurl, nil)
 	if httperr != nil {
-		err = fmt.Errorf("Failed to create new http request, err: %v", err)
+		err = fmt.Errorf("Failed to create new http request, err: %v", httperr)
 		emitError(nil, err, errch)
 		return err
 	}
 
 	r, httperr := httpclient.Do(req)
 	if httperr != nil {
-		err = fmt.Errorf("Failed to delete file, err: %v", err)
+		err = fmt.Errorf("Failed to delete file, err: %v", httperr)
 		emitError(nil, err, errch)
 		return err
 	}

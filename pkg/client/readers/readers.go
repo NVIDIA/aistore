@@ -17,6 +17,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
 )
@@ -282,4 +283,56 @@ func NewFileReader(path, name string, size int64, withHash bool) (client.Reader,
 	}
 
 	return &fileReader{f, fn, name, hash}, nil
+}
+
+type sgReader struct {
+	*dfc.Reader
+	xxHash string
+}
+
+var _ client.Reader = &sgReader{}
+
+// Description implements the client.Reader interface.
+func (r *sgReader) Description() string {
+	return description("SGReader", r.xxHash)
+}
+
+// XXHash implements the client.Reader interface.
+func (r *sgReader) XXHash() string {
+	return r.xxHash
+}
+
+// NewSGReader returns a new sgReader
+func NewSGReader(sgl *dfc.SGLIO, size int64, withHash bool) (client.Reader, error) {
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	hash, err := populateData(sgl, size, withHash, rnd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sgReader{dfc.NewReader(sgl), hash}, nil
+}
+
+// ParamReader is used to pass in parameters when creating a new reader
+type ParamReader struct {
+	Type       string     // file | sg | inmem | rand
+	SGL        *dfc.SGLIO // When Type == sg
+	Path, Name string     // When Type == file; path and name of file to be created (if not already existing)
+	Size       int64
+}
+
+// NewReader returns a data reader; type of reader returned is based on the parameters provided
+func NewReader(p ParamReader) (client.Reader, error) {
+	switch p.Type {
+	case "sg":
+		return NewSGReader(p.SGL, p.Size, true /* withHash */)
+	case "rand":
+		return NewRandReader(p.Size, true /* withHash */)
+	case "inmem":
+		return NewInMemReader(p.Size, true /* withHash */)
+	case "file":
+		return NewFileReader(p.Path, p.Name, p.Size, true /* withHash */)
+	default:
+		return nil, fmt.Errorf("Unknown memory type for creating inmem reader")
+	}
 }

@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -28,8 +30,19 @@ func TestPutFile(t *testing.T) {
 	}
 }
 
+func TestPutSG(t *testing.T) {
+	size := 10
+	sgl := dfc.NewSGLIO(uint64(size))
+	defer sgl.Free()
+	err := putSG(sgl, int64(size), false /* withHash */)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func putFile(size int64, withHash bool) error {
-	dir, fn := "/tmp", "dfc-client-test"
+	fn := "dfc-client-test-" + client.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32)
+	dir := "/tmp"
 	r, err := readers.NewFileReader(dir, fn, size, withHash)
 	if err != nil {
 		return err
@@ -54,6 +67,17 @@ func putInMem(size int64, withHash bool) error {
 
 func putRand(size int64, withHash bool) error {
 	r, err := readers.NewRandReader(size, withHash)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	return client.PutWithReader(server.URL, r, "bucket", "key", nil /* errch */, true /* silent */)
+}
+
+func putSG(sgl *dfc.SGLIO, size int64, withHash bool) error {
+	sgl.Reset()
+	r, err := readers.NewSGReader(sgl, size, true /* withHash */)
 	if err != nil {
 		return err
 	}
@@ -89,6 +113,18 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 	}
 }
 
+func BenchmarkPutSGWithHash1M(b *testing.B) {
+	sgl := dfc.NewSGLIO(1024 * 1024)
+	defer sgl.Free()
+
+	for i := 0; i < b.N; i++ {
+		err := putSG(sgl, 1024*1024, true /* withHash */)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkPutFileNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		err := putFile(1024*1024, false /* withHash */)
@@ -114,6 +150,65 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+func BenchmarkPutSGNoHash1M(b *testing.B) {
+	sgl := dfc.NewSGLIO(1024 * 1024)
+	defer sgl.Free()
+
+	for i := 0; i < b.N; i++ {
+		err := putSG(sgl, 1024*1024, false /* withHash */)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkPutFileWithHash1MParallel(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			err := putFile(1024*1024, true /* withHash */)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkPutInMemWithHash1MParallel(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			err := putInMem(1024*1024, true /* withHash */)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			err := putRand(1024*1024, true /* withHash */)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		sgl := dfc.NewSGLIO(1024 * 1024)
+		defer sgl.Free()
+
+		for pb.Next() {
+			err := putSG(sgl, 1024*1024, true /* withHash */)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
 
 func TestMain(m *testing.M) {

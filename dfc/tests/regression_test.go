@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -73,6 +71,7 @@ var (
 	}
 	abortonerr      = false
 	inmem           = true
+	readerType      = "sg"
 	failLRU         = ""
 	prefetchPrefix  = "__bench/test-"
 	prefetchRegex   = "^\\d22\\d"
@@ -86,14 +85,7 @@ func init() {
 	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
 	flag.BoolVar(&inmem, "inmem", inmem, "stream random files from memory")
-}
-
-func newDataReader(inmem bool, size int64, path, name string) (client.Reader, error) {
-	if inmem {
-		return readers.NewInMemReader(size, true /* withHash */)
-	}
-
-	return readers.NewFileReader(path, name, size, true /* withHash */)
+	flag.StringVar(&readerType, "readertype", "sg", "Type of reader. {sg(default) | inmem | rand | file")
 }
 
 func Test_regression(t *testing.T) {
