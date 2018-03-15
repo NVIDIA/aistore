@@ -152,6 +152,28 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
+func (awsimpl *awsimpl) headobject(bucket string, objname string) (headers map[string]string, errstr string, errcode int) {
+	glog.Infof("aws: headobject %s/%s", bucket, objname)
+	headers = make(map[string]string)
+
+	sess := createsession()
+	svc := s3.New(sess)
+	input := &s3.HeadObjectInput{Bucket: &bucket, Key: &objname}
+
+	headOutput, err := svc.HeadObject(input)
+	if err != nil {
+		errcode = awsErrorToHTTP(err)
+		errstr = fmt.Sprintf("aws: Failed to HeadObject %s. err: %v", bucket, objname, err)
+		return
+	}
+
+	headers[HeaderServer] = amazoncloud
+	if headOutput.VersionId != nil {
+		headers["version"] = *headOutput.VersionId
+	}
+	return
+}
+
 func (awsimpl *awsimpl) headbucket(bucket string) (headers map[string]string, errstr string, errcode int) {
 	glog.Infof("aws: headbucket %s", bucket)
 	headers = make(map[string]string)
@@ -171,7 +193,7 @@ func (awsimpl *awsimpl) headbucket(bucket string) (headers map[string]string, er
 	return
 }
 
-func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props objectProps, errstr string, errcode int) {
 	var v cksumvalue
 	sess := createsession()
 	svc := s3.New(sess)
@@ -199,8 +221,11 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (nhobj cksumvalue, s
 		}
 		md5 = ""
 	}
-	if nhobj, size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, obj.Body); errstr != "" {
+	if props.nhobj, props.size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, obj.Body); errstr != "" {
 		return
+	}
+	if obj.VersionId != nil {
+		props.version = *obj.VersionId
 	}
 	if glog.V(3) {
 		glog.Infof("aws: GET %s (bucket %s)", objname, bucket)

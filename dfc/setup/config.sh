@@ -29,6 +29,9 @@
                  "validate_cold_get":    true,
                  "checksum":             "xxhash"
 	},
+	"version_config": {
+		"validate_warm_get": false
+	},
 	"lru_config": {
 		"lowwm":		75,
 		"highwm":		90,

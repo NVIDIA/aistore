@@ -132,7 +132,9 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		if hdhashtype == dfc.ChecksumXXHash {
 			xx := xxhash.New64()
 			if hash, errstr = dfc.ComputeXXHash(r.Body, nil, xx); errstr != "" {
-				errch <- errors.New(errstr)
+				if errch != nil {
+					errch <- errors.New(errstr)
+				}
 			}
 			if hdhash != hash {
 				s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)

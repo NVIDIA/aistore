@@ -158,7 +158,27 @@ func (gcpimpl *gcpimpl) headbucket(bucket string) (headers map[string]string, er
 	return
 }
 
-func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (nhobj cksumvalue, size int64, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (headers map[string]string, errstr string, errcode int) {
+	glog.Infof("gcp: headobject %s", bucket)
+	headers = make(map[string]string)
+
+	client, gctx, errstr := createclient()
+	if errstr != "" {
+		return
+	}
+	attrs, err := client.Bucket(bucket).Object(objname).Attrs(gctx)
+	if err != nil {
+		errcode = gcpErrorToHTTP(err)
+		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s/%s), err: %v", bucket, objname, err)
+		return
+	}
+
+	headers[HeaderServer] = googlecloud
+	headers["version"] = fmt.Sprintf("%v", attrs.Generation)
+	return
+}
+
+func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props objectProps, errstr string, errcode int) {
 	var v cksumvalue
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -180,9 +200,10 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (nhobj
 	}
 	defer rc.Close()
 	// hashtype and hash could be empty for legacy objects.
-	if nhobj, size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, rc); errstr != "" {
+	if props.nhobj, props.size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, rc); errstr != "" {
 		return
 	}
+	props.version = fmt.Sprintf("%v", attrs.Generation)
 	if glog.V(3) {
 		glog.Infof("gcp: GET %s (bucket %s)", objname, bucket)
 	}

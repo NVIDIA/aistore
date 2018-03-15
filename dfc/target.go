@@ -209,19 +209,47 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
+// and the object should be refreshed from Cloud storage
+// It should be called only in case of the object is present in DFC cache
+func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (coldget bool, errstr string, errcode int) {
+	if version == "" {
+		return
+	}
+
+	var cloudProps map[string]string
+	if cloudProps, errstr, errcode = t.cloudif.headobject(bucket, objname); errstr != "" {
+		glog.Errorf("Failed to read object head from a cloud: %s", errstr)
+		return false, errstr, errcode
+	}
+
+	if cloudVersion, ok := cloudProps["version"]; ok {
+		coldget = version != cloudVersion
+	}
+
+	if coldget {
+		t.statsif.add("numchanged", 1)
+	}
+
+	return
+}
+
 // "/"+Rversion+"/"+Rfiles+"/"+bucket [+"/"+objname]
 //
 // checks if the object exists locally (if not, downloads it)
 // and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	var (
-		nhobj                               cksumvalue
-		coldget, exclusive                  bool
-		bucket, objname, fqn, uname, errstr string
-		size                                int64
-		errcode                             int
+		nhobj                       cksumvalue
+		coldget, exclusive, doReget bool
+		bucket, objname, fqn        string
+		uname, errstr, version      string
+		size                        int64
+		errcode                     int
+		props                       objectProps
 	)
 	cksumcfg := &ctx.config.CksumConfig
+	versioncfg := &ctx.config.VersionConfig
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
@@ -252,12 +280,22 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	//
 	// get the object from the bucket
 	//
-	if coldget, size, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
+	if coldget, size, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		return
 	}
+
+	if !coldget && versioncfg.ValidateWarmGet {
+		if doReget, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
+			glog.Errorf("Failed to read object %s/%s head: %s", bucket, objname, errstr)
+			t.invalmsghdlr(w, r, errstr, errcode)
+			return
+		}
+		coldget = doReget
+	}
+
 	if coldget {
-		if nhobj, size, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+		if props, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
 			} else {
@@ -265,8 +303,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		size, nhobj = props.size, props.nhobj
 		t.statsif.add("numcoldget", 1)
 		t.statsif.add("bytesloaded", size)
+		if doReget {
+			t.statsif.add("bytesvchanged", size)
+		}
 	}
 	//
 	// downgrade lock(name)
@@ -316,10 +358,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	} else if glog.V(3) {
 		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
+	if coldget && props.version != "" {
+		Setxattr(fqn, xattrObjVersion, []byte(props.version))
+	}
 	t.statsif.add("numget", 1)
 }
 
-func (t *targetrunner) getchecklocal(bucket, objname, fqn string) (coldget bool, size int64, errstr string) {
+func (t *targetrunner) getchecklocal(bucket, objname, fqn string) (coldget bool, size int64, version string, errstr string) {
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		switch {
@@ -339,6 +384,11 @@ func (t *targetrunner) getchecklocal(bucket, objname, fqn string) (coldget bool,
 		}
 	} else {
 		size = finfo.Size()
+		if bytes, err := Getxattr(fqn, xattrObjVersion); err == "" {
+			version = string(bytes)
+		} else {
+			errstr = fmt.Sprintf("Failed to read version %s, err: %v", fqn, err)
+		}
 	}
 	return
 }
@@ -701,6 +751,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 		file                     *os.File
 		hdhobj, nhobj            cksumvalue
 		hash, htype, hval, nhval string
+		objProps                 map[string]string
 	)
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
@@ -776,6 +827,17 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 		if err = file.Close(); err != nil {
 			// not failing as the cloud part is done
 			glog.Errorf("Unexpected failure to close an already PUT file %s, err: %v", putfqn, err)
+		}
+
+		if objProps, errstr, errcode = getcloudif().headobject(bucket, objname); errstr != "" {
+			glog.Errorf("Unexpected failure to get object version for an already PUT file %s, err: %v", putfqn, err)
+			return
+		}
+		if version, ok := objProps["version"]; ok {
+			errstr = Setxattr(putfqn, xattrObjVersion, []byte(version))
+			if errstr != "" {
+				glog.Errorf("Unexpected failure to set object attribute for an already PUT file %s, err: %v", putfqn, err)
+			}
 		}
 	}
 	// serialize on the name - and rename
@@ -1583,6 +1645,8 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj c
 			if ohval != nhval {
 				errstr = fmt.Sprintf("Checksum mismatch: object %s xxhash %s... != received file %s xxhash %s...)",
 					objname, ohval, fqn, nhval)
+				t.statsif.add("numbadchecksum", 1)
+				t.statsif.add("bytesbadchecksum", written)
 				return
 			}
 		}
@@ -1597,6 +1661,8 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj c
 		if omd5 != md5hash {
 			errstr = fmt.Sprintf("Checksum mismatch: object %s MD5 %s... != received file %s MD5 %s...)",
 				objname, omd5[:8], fqn, md5hash[:8])
+			t.statsif.add("numbadchecksum", 1)
+			t.statsif.add("bytesbadchecksum", written)
 			return
 		}
 	} else {

@@ -345,31 +345,60 @@ loop:
 }
 
 func (t *targetrunner) prefetchIfMissing(objname, bucket string) {
+	var (
+		errstr  string
+		doReget bool
+	)
+	versioncfg := &ctx.config.VersionConfig
 	fqn, uname := t.fqn(bucket, objname), bucket+"/"+objname
 	// The first check does not take the lock, preventing get from starving
 	// from repeated prefetches on the same cached file
-	if coldget, _, _ := t.getchecklocal(bucket, objname, fqn); !coldget {
+	coldget, _, version, _ := t.getchecklocal(bucket, objname, fqn)
+	if !coldget && versioncfg.ValidateWarmGet {
+		if doReget, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
+			glog.Errorf("Failed to read object %s/%s head: %s", bucket, objname, errstr)
+			t.statsif.add("numerr", 1)
+			return
+		}
+		coldget = doReget
+	}
+	if !coldget {
 		return
 	}
+
 	// The second check takes the lock, preventing interference between get and prefetch
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer func() { t.rtnamemap.unlockname(uname, true) }()
-	coldget, _, errstr := t.getchecklocal(bucket, objname, fqn)
-	if errstr != "" {
+	if coldget, _, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
 		glog.Errorln(errstr)
 		t.statsif.add("numerr", 1)
 		return
 	}
+	if !coldget && versioncfg.ValidateWarmGet {
+		if doReget, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
+			glog.Errorf("Failed to read object %s/%s head: %s", bucket, objname, errstr)
+			t.statsif.add("numerr", 1)
+			return
+		}
+		coldget = doReget
+	}
+
 	if coldget {
 		//FIXME: Revisit potential use of timeout for prefetch deadline
-		if _, size, errstr, errcode := getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+		if props, errstr, errcode := getcloudif().getobj(fqn, bucket, objname); errstr != "" {
 			glog.Errorf("Error retrieving object %s/%s: Error Code %d: %s",
 				bucket, objname, errcode, errstr)
 			t.statsif.add("numerr", 1)
 		} else {
 			glog.Infof("Prefetched %s", fqn)
 			t.statsif.add("numprefetch", 1)
-			t.statsif.add("bytesprefetched", size)
+			t.statsif.add("bytesprefetched", props.size)
+			if props.version != "" {
+				Setxattr(fqn, xattrObjVersion, []byte(props.version))
+			}
+			if doReget {
+				t.statsif.add("bytesvchanged", props.size)
+			}
 		}
 	}
 }

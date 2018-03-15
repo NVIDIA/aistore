@@ -44,17 +44,21 @@ type proxyCoreStats struct {
 
 type targetCoreStats struct {
 	proxyCoreStats
-	Numcoldget      int64 `json:"numcoldget"`
-	Bytesloaded     int64 `json:"bytesloaded"`
-	Bytesevicted    int64 `json:"bytesevicted"`
-	Filesevicted    int64 `json:"filesevicted"`
-	Numsentfiles    int64 `json:"numsentfiles"`
-	Numsentbytes    int64 `json:"numsentbytes"`
-	Numrecvfiles    int64 `json:"numrecvfiles"`
-	Numrecvbytes    int64 `json:"numrecvbytes"`
-	Numlist         int64 `json:"numlist"`
-	Numprefetch     int64 `json:"numprefetch"`
-	Bytesprefetched int64 `json:"bytesprefetched"`
+	Numcoldget       int64 `json:"numcoldget"`
+	Bytesloaded      int64 `json:"bytesloaded"`
+	Bytesevicted     int64 `json:"bytesevicted"`
+	Filesevicted     int64 `json:"filesevicted"`
+	Numsentfiles     int64 `json:"numsentfiles"`
+	Numsentbytes     int64 `json:"numsentbytes"`
+	Numrecvfiles     int64 `json:"numrecvfiles"`
+	Numrecvbytes     int64 `json:"numrecvbytes"`
+	Numlist          int64 `json:"numlist"`
+	Numprefetch      int64 `json:"numprefetch"`
+	Bytesprefetched  int64 `json:"bytesprefetched"`
+	Numchanged       int64 `json:"numchanged"`
+	Bytesvchanged    int64 `json:"bytesvchanged"`
+	Numbadchecksum   int64 `json:"numbadchecksum"`
+	Bytesbadchecksum int64 `json:"bytesbadchecksum"`
 }
 
 type statsrunner struct {
@@ -153,6 +157,14 @@ func (s *targetCoreStats) add(name string, val int64) {
 		v = &s.Numprefetch
 	case "bytesprefetched":
 		v = &s.Bytesprefetched
+	case "numchanged":
+		v = &s.Numchanged
+	case "bytesvchanged":
+		v = &s.Bytesvchanged
+	case "numbadchecksum":
+		v = &s.Numbadchecksum
+	case "bytesbadchecksum":
+		v = &s.Bytesbadchecksum
 	default:
 		assert(false, "Invalid stats name "+name)
 	}
