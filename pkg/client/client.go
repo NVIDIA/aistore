@@ -80,19 +80,22 @@ func Tcping(url string) (err error) {
 	return
 }
 
-func discardResponse(r *http.Response, err error, src string) error {
+func discardResponse(r *http.Response, err error, src string) (int64, error) {
+	var len int64
+
 	if err == nil {
 		if r.StatusCode >= http.StatusBadRequest {
-			return fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
+			return 0, fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
 		}
 		bufreader := bufio.NewReader(r.Body)
-		if _, err = dfc.ReadToNull(bufreader); err != nil {
-			return fmt.Errorf("Failed to read http response, err: %v", err)
+		if len, err = dfc.ReadToNull(bufreader); err != nil {
+			return 0, fmt.Errorf("Failed to read http response, err: %v", err)
 		}
 	} else {
-		return fmt.Errorf("%s failed, err: %v", src, err)
+		return 0, fmt.Errorf("%s failed, err: %v", src, err)
 	}
-	return nil
+
+	return len, nil
 }
 
 func emitError(r *http.Response, err error, errch chan error) {
@@ -108,7 +111,7 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool, validate bool) error {
+func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool, validate bool) (int64, error) {
 	var (
 		hash, hdhash, hdhashtype string
 		errstr                   string
@@ -143,9 +146,9 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 			}
 		}
 	}
-	err = discardResponse(r, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
+	len, err := discardResponse(r, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
 	emitError(r, err, errch)
-	return err
+	return len, err
 }
 
 func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
@@ -174,7 +177,8 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	defer func() {
 		r.Body.Close()
 	}()
-	err = discardResponse(r, err, "DELETE")
+
+	_, err = discardResponse(r, err, "DELETE")
 	emitError(r, err, errch)
 	return err
 }
@@ -429,4 +433,64 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string,
 			errch <- err
 		}
 	}
+}
+
+// CreateLocalBucket sends a HTTP request to a proxy and asks it to create a local bucket
+func CreateLocalBucket(proxyURL, bucket string) error {
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActCreateLB})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", proxyURL+"/v1/files/"+bucket, bytes.NewBuffer(msg))
+	if err != nil {
+		return err
+	}
+
+	r, err := httpclient.Do(req)
+	if r != nil {
+		r.Body.Close()
+	}
+
+	// FIXME: A few places are doing this already, need to address them
+	time.Sleep(time.Second * 2)
+	return err
+}
+
+// DestroyLocalBucket deletes a local bucket
+func DestroyLocalBucket(proxyURL, bucket string) error {
+	req, err := http.NewRequest("DELETE", proxyURL+"/v1/files/"+bucket, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := httpclient.Do(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	return err
+}
+
+// ListObjects returns a slice of object names of all objects that match the prefix in a bucket
+func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
+	msg, err := json.Marshal(&dfc.GetMsg{GetPrefix: prefix})
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ListBucket(proxyURL, bucket, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	var objs []string
+	for _, obj := range data.Entries {
+		// Skip directories
+		if obj.Name[len(obj.Name)-1] != '/' {
+			objs = append(objs, obj.Name)
+		}
+	}
+
+	return objs, nil
 }
