@@ -605,7 +605,12 @@ func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 		return nil
 	}
 
-	if hrwTarget(ci.bucket+"/"+relname, ci.t.smap).DaemonID != ci.t.si.DaemonID {
+	si, errstr := hrwTarget(ci.bucket+"/"+relname, ci.t.smap)
+	if errstr != "" {
+		glog.Errorln(errstr)
+		return nil
+	}
+	if si.DaemonID != ci.t.si.DaemonID {
 		// this target is not responsible for returning this object
 		return nil
 	}
@@ -982,7 +987,11 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	si := hrwTarget(bucket+"/"+newobjname, t.smap)
+	si, errstr := hrwTarget(bucket+"/"+newobjname, t.smap)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		newfqn := t.fqn(bucket, newobjname)

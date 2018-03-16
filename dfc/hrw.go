@@ -14,13 +14,13 @@ const mLCG32 = 1103515245
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-func hrwTarget(name string, smap *Smap) (si *daemonInfo) {
+func hrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 	// NOTE: commented out on purpose - trading off read access to unlocked map
-	// 	 (that changes very rarely)
-	//       vs locking zillion times - use sync.Map otherwise
-	// smap.lock.Lock()
-	// defer smap.lock.Unlock()
-	assert(len(smap.Smap) > 0, "FATAL: cluster map is empty")
+	//       smap.lock.Lock(); defer smap.lock.Unlock()
+	if len(smap.Smap) == 0 {
+		errstr = "DFC cluster map is empty: no targets"
+		return
+	}
 	var max uint64
 	for id, sinfo := range smap.Smap {
 		cs := xxhash.ChecksumString64S(id+":"+name, mLCG32)

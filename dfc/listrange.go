@@ -77,7 +77,10 @@ func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max i
 		if !acceptRegexRange(be.Name, prefix, re, min, max) {
 			continue
 		}
-		if si := hrwTarget(bucket+"/"+be.Name, t.smap); si.DaemonID == t.si.DaemonID {
+		if si, errstr := hrwTarget(bucket+"/"+be.Name, t.smap); si.DaemonID == t.si.DaemonID {
+			if errstr != "" {
+				return nil, fmt.Errorf(errstr)
+			}
 			objs = append(objs, be.Name)
 		}
 	}
@@ -115,7 +118,11 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 	bucket := apitems[0]
 	objs := make([]string, 0)
 	for _, obj := range listMsg.Objnames {
-		si := hrwTarget(bucket+"/"+obj, t.smap)
+		si, errstr := hrwTarget(bucket+"/"+obj, t.smap)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
 		if si.DaemonID == t.si.DaemonID {
 			objs = append(objs, obj)
 		}

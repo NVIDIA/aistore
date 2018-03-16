@@ -156,15 +156,18 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		objname = apitems[1]
 	}
 	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		p.invalmsghdlr(w, r, s)
+		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 
 	if len(objname) != 0 {
 		p.statsif.add("numget", 1)
-		si := hrwTarget(bucket+"/"+objname, ctx.smap)
-
+		si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+		if errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+			return
+		}
 		redirecturl := fmt.Sprintf("%s%s?%s=false", si.DirectURL, r.URL.Path, ParamLocal)
 		if glog.V(3) {
 			glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
@@ -478,7 +481,11 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("%s %s/%s", r.Method, bucket, objname)
 	}
-	si := hrwTarget(bucket+"/"+objname, ctx.smap)
+	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
@@ -501,7 +508,11 @@ func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infof("%s %s/%s", r.Method, bucket, objname)
 		}
-		si := hrwTarget(bucket+"/"+objname, ctx.smap)
+		si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+		if errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+			return
+		}
 		redirecturl := si.DirectURL + r.URL.Path
 		if glog.V(3) {
 			glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
@@ -613,7 +624,11 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	}
 	p.lbmap.unlock()
 
-	si := hrwTarget(lbucket+"/"+objname, ctx.smap)
+	si, errstr := hrwTarget(lbucket+"/"+objname, ctx.smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (rename)", r.URL.Path, si.DirectURL)
