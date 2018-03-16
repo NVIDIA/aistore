@@ -170,7 +170,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		}
 		if !ctx.config.Proxy.Passthru && len(objname) > 0 {
 			glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
-			_ = p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
+			p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 		}
 
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
@@ -412,18 +412,14 @@ func (p *proxyrunner) getCloudBucketObjects(w http.ResponseWriter, r *http.Reque
 }
 
 func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
-	const cloudObjecst = false
-	var (
-		err        error
-		allentries *BucketList
-	)
+	var allentries *BucketList
 	listmsgjson, err := ioutil.ReadAll(r.Body)
-	assert(err == nil)
-	errclose := r.Body.Close()
-	assert(errclose == nil)
-	islocal := p.islocalBucket(bucket)
-
-	if islocal {
+	if err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	defer r.Body.Close()
+	if p.islocalBucket(bucket) {
 		allentries, err = p.getLocalBucketObjects(w, r, bucket, listmsgjson)
 	} else {
 		allentries, err = p.getCloudBucketObjects(w, r, bucket, listmsgjson)
@@ -432,39 +428,33 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	jsbytes, err := json.Marshal(allentries)
 	assert(err == nil, err)
 	_ = p.writeJSON(w, r, jsbytes, "listbucket")
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)
-func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redirecturl string) error {
+func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redirecturl string) {
 	if glog.V(3) {
 		glog.Infof("GET redirect URL %q", redirecturl)
 	}
 	newr, err := http.Get(redirecturl)
 	if err != nil {
 		glog.Errorf("Failed to GET redirect URL %q, err: %v", redirecturl, err)
-		return err
+		return
 	}
-	defer func() {
-		if newr != nil {
-			err = newr.Body.Close()
-		}
-	}()
+	defer newr.Body.Close()
+
 	bufreader := bufio.NewReader(newr.Body)
 	bytes, err := ReadToNull(bufreader)
 	if err != nil {
 		glog.Errorf("Failed to copy data to http, URL %q, err: %v", redirecturl, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		p.statsif.add("numerr", 1)
-		return err
+		return
 	}
 	if glog.V(3) {
 		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1000/1000)
 	}
-	return err
+	return
 }
 
 // PUT "/"+Rversion+"/"+Rfiles

@@ -1028,7 +1028,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	// do send
 	//
 	request, err := http.NewRequest(method, url, file)
-	assert(err == nil, err)
+	if err != nil {
+		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)
+	}
 	if hash != "" {
 		request.Header.Set(HeaderDfcChecksumType, ChecksumXXHash)
 		request.Header.Set(HeaderDfcChecksumVal, hash)
