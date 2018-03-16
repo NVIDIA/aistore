@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -227,10 +228,16 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		return
 	}
 	assert(response != nil, "Unexpected: nil response with no error")
-	defer func() { err = response.Body.Close() }()
+	defer response.Body.Close()
 
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): Unexpected failure to read response body: %v", sid, method, url, err)
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, method, url, err)
+		if err == io.EOF {
+			trailer := response.Trailer.Get("Error")
+			if trailer != "" {
+				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, method, url, err, trailer)
+			}
+		}
 		return
 	}
 	if sid != "unknown" {
@@ -284,13 +291,19 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 
 func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	b, err := ioutil.ReadAll(r.Body)
-	errclose := r.Body.Close()
-	if err == nil && errclose != nil {
-		err = errclose
+	if err != nil {
+		s := fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+		h.invalmsghdlr(w, r, s)
+		return err
 	}
-	if err == nil {
-		err = json.Unmarshal(b, out)
-	}
+
+	err = json.Unmarshal(b, out)
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
 		h.invalmsghdlr(w, r, s)
@@ -302,7 +315,7 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (errstr string) {
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(jsbytes); err != nil {
-		errstr = fmt.Sprintf("%s: Unexpected failure to write json to HTTP reply, err: %v", tag, err)
+		errstr = fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
 		h.invalmsghdlr(w, r, errstr)
 	}
 	return

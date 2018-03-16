@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -415,10 +416,16 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	var allentries *BucketList
 	listmsgjson, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		p.invalmsghdlr(w, r, err.Error())
+		s := fmt.Sprintf("listbucket: Failed to read %s request, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("listbucket: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+		p.invalmsghdlr(w, r, s)
 		return
 	}
-	defer r.Body.Close()
 	if p.islocalBucket(bucket) {
 		allentries, err = p.getLocalBucketObjects(w, r, bucket, listmsgjson)
 	} else {

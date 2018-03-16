@@ -258,7 +258,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	if coldget {
 		if nhobj, size, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
 			} else {
@@ -355,7 +354,6 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(bucket, "/") {
 		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
 		t.invalmsghdlr(w, r, s)
-		t.statsif.add("numerr", 1)
 		return
 	}
 
@@ -363,8 +361,13 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 		objnamebytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			s := fmt.Sprintf("Could not read Request Body: %v", err)
+			if err == io.EOF {
+				trailer := r.Trailer.Get("Error")
+				if trailer != "" {
+					s = fmt.Sprintf("pushhdlr: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+				}
+			}
 			t.invalmsghdlr(w, r, s)
-			t.statsif.add("numerr", 1)
 			return
 		}
 
@@ -373,7 +376,6 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			s := fmt.Sprintf("Could not unmarshal objnames: %v", err)
 			t.invalmsghdlr(w, r, s)
-			t.statsif.add("numerr", 1)
 			return
 		}
 
@@ -695,8 +697,9 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
 	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
-	defer r.Body.Close()
-	glog.Infof("PUT: %s => %s", fqn, putfqn)
+	if glog.V(3) {
+		glog.Infof("PUT: %s => %s", fqn, putfqn)
+	}
 	hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
 	if hdhobj != nil {
 		htype, hval = hdhobj.get()
@@ -865,16 +868,23 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 
 	if !t.islocalBucket(bucket) {
 		b, err := ioutil.ReadAll(r.Body)
-		r.Body.Close()
-		if err == nil && len(b) > 0 {
+		if err != nil {
+			errstr = fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
+			if err == io.EOF {
+				trailer := r.Trailer.Get("Error")
+				if trailer != "" {
+					errstr = fmt.Sprintf("fildelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+				}
+			}
+		} else if len(b) > 0 {
 			err = json.Unmarshal(b, &msg)
 			if err == nil {
 				evict = (msg.Action == ActEvict)
+				if !evict {
+					errstr, errcode = getcloudif().deleteobj(bucket, objname)
+					t.statsif.add("numdelete", 1)
+				}
 			}
-		}
-		if !evict {
-			errstr, errcode = getcloudif().deleteobj(bucket, objname)
-			t.statsif.add("numdelete", 1)
 		}
 	}
 	if errstr != "" {
@@ -1037,11 +1047,22 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	response, err := t.httpclient.Do(request)
 	if err != nil {
-		return fmt.Sprintf("Failed to send %q from %s, err: %v", t.si.DaemonID, fqn, err)
+		return fmt.Sprintf("Failed to send %q from %s, err: %v", fqn, t.si.DaemonID, err)
 	}
 	if response != nil {
-		ioutil.ReadAll(response.Body)
-		response.Body.Close()
+		defer response.Body.Close()
+		_, err = ioutil.ReadAll(response.Body)
+		if err != nil {
+			s := fmt.Sprintf("Failed to read response body %q from %s, err: %v", fqn, t.si.DaemonID, err)
+			if err == io.EOF {
+				trailer := response.Trailer.Get("Error")
+				if trailer != "" {
+					s = fmt.Sprintf("Failed to read response body %q from %s, err: %v, trailer: %s",
+						fqn, t.si.DaemonID, err, trailer)
+				}
+			}
+			return s
+		}
 	}
 	t.statsif.add("numsentfiles", 1)
 	t.statsif.add("numsentbytes", size)
