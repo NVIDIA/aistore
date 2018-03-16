@@ -49,11 +49,11 @@ func min64(a, b int64) int64 {
 }
 
 func divCeil(a, b int64) int64 {
-	if d, r := a/b, a%b; r > 0 {
+	d, r := a/b, a%b
+	if r > 0 {
 		return d + 1
-	} else {
-		return d
 	}
+	return d
 }
 
 func copyStruct(dst interface{}, src interface{}) {
@@ -176,7 +176,7 @@ func ComputeXXHash(reader io.Reader, buf []byte, xx hash.Hash64) (csum string, e
 	}
 	hashIn64 := xx.Sum64()
 	hashInBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
 	csum = hex.EncodeToString(hashInBytes)
 	return csum, ""
 }

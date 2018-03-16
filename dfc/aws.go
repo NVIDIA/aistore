@@ -98,7 +98,7 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 			return
 		}
 
-		versions := make(map[string]*string, initialBucketListSize)
+		versions = make(map[string]*string, initialBucketListSize)
 		for _, vers := range verResp.Versions {
 			if *(vers.IsLatest) && vers.VersionId != nil {
 				versions[*(vers.Key)] = vers.VersionId

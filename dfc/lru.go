@@ -79,7 +79,7 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	h := &maxheap{}
 	heap.Init(h)
 
-	toevict, err := get_toevict(bucketdir, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
+	toevict, err := getToEvict(bucketdir, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
 	if err != nil {
 		return
 	}
@@ -134,7 +134,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		return fmt.Errorf("%s aborted - exiting lruwalkfn", xlru.tostring())
 	}
 
-	atime, mtime, stat := get_amtimes(osfi)
+	atime, mtime, stat := getAmTimes(osfi)
 	usetime := atime
 	if mtime.After(atime) {
 		usetime = mtime

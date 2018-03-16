@@ -90,61 +90,59 @@ type httprunner struct {
 	kalive              kaliveif
 }
 
-func (r *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
-	if r.mux == nil {
-		r.mux = http.NewServeMux()
+func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
+	if h.mux == nil {
+		h.mux = http.NewServeMux()
 	}
-	r.mux.HandleFunc(path, handler)
+	h.mux.HandleFunc(path, handler)
 }
 
-func (r *httprunner) init(s statsif) {
-	r.statsif = s
+func (h *httprunner) init(s statsif) {
+	h.statsif = s
 	ipaddr, errstr := getipaddr() // FIXME: this must change
 	if errstr != "" {
 		glog.Fatalf("FATAL: %s", errstr)
 	}
 	// http client
-	r.httpclient = &http.Client{
+	h.httpclient = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
 		Timeout:   ctx.config.HTTPTimeout,
 	}
-	r.httpclientNoTimeout = &http.Client{
+	h.httpclientNoTimeout = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
 		Timeout:   0,
 	}
 	// init daemonInfo here
-	r.si = &daemonInfo{}
-	r.si.NodeIPAddr = ipaddr
-	r.si.DaemonPort = ctx.config.Listen.Port
+	h.si = &daemonInfo{}
+	h.si.NodeIPAddr = ipaddr
+	h.si.DaemonPort = ctx.config.Listen.Port
 
 	id := os.Getenv("DFCDAEMONID")
 	if id != "" {
-		r.si.DaemonID = id
+		h.si.DaemonID = id
 	} else {
 		split := strings.Split(ipaddr, ".")
 		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
-		r.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
+		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
 	}
 
-	r.si.DirectURL = "http://" + r.si.NodeIPAddr + ":" + r.si.DaemonPort
-	return
+	h.si.DirectURL = "http://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
 }
 
-func (r *httprunner) run() error {
+func (h *httprunner) run() error {
 	// a wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
-	r.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
-	var handler http.Handler
-	handler = r.mux
+	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
+	var handler http.Handler = h.mux
 	if ctx.config.H2c {
 		handler = h2c.Server{Handler: handler}
 	}
 
 	portstring := ":" + ctx.config.Listen.Port
-	r.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: r.glogger}
-	if err := r.h.ListenAndServe(); err != nil {
+	h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+	if err := h.h.ListenAndServe(); err != nil {
 		if err != http.ErrServerClosed {
-			glog.Errorf("Terminated %s with err: %v", r.name, err)
+			glog.Errorf("Terminated %s with err: %v", h.name, err)
 			return err
 		}
 	}
@@ -152,24 +150,24 @@ func (r *httprunner) run() error {
 }
 
 // stop gracefully
-func (r *httprunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
+func (h *httprunner) stop(err error) {
+	glog.Infof("Stopping %s, err: %v", h.name, err)
 
 	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTPTimeout)
 	defer cancel()
 
-	if r.h == nil {
+	if h.h == nil {
 		return
 	}
-	err = r.h.Shutdown(contextwith)
+	err = h.h.Shutdown(contextwith)
 	if err != nil {
-		glog.Infof("Stopped %s, err: %v", r.name, err)
+		glog.Infof("Stopped %s, err: %v", h.name, err)
 	}
 }
 
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
 // optionally, sends a json-encoded body to the callee
-func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
+func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 	timeout ...time.Duration) (outjson []byte, err error, errstr string, status int) {
 	var (
 		request  *http.Request
@@ -181,7 +179,7 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 	if si != nil {
 		sid = si.DaemonID
 	}
-	if injson == nil || len(injson) == 0 {
+	if len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
 		if glog.V(3) {
 			glog.Infof("%s URL %q", method, url)
@@ -197,7 +195,7 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		return
 	}
 
-	// Explitily specifying a 0 timeout means the client wants no timeout.
+	// Explicitly specifying a 0 timeout means the client wants no timeout.
 	if len(timeout) > 0 && timeout[0] != 0 {
 		cancelch = make(chan struct{})
 		timer = time.AfterFunc(timeout[0], func() {
@@ -207,9 +205,9 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		request.Cancel = cancelch
 	}
 	if len(timeout) > 0 && timeout[0] == 0 {
-		response, err = r.httpclientNoTimeout.Do(request)
+		response, err = h.httpclientNoTimeout.Do(request)
 	} else {
-		response, err = r.httpclient.Do(request)
+		response, err = h.httpclient.Do(request)
 	}
 	// Stop timer but do not close cancelch, to avoid firing a cancel event
 	// while the data is being read from the http response.
@@ -241,7 +239,7 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		return
 	}
 	if sid != "unknown" {
-		r.kalive.timestamp(sid)
+		h.kalive.timestamp(sid)
 	}
 	return
 }
@@ -251,7 +249,7 @@ func (r *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 // http request parsing helpers
 //
 //=============================
-func (r *httprunner) restAPIItems(unescapedpath string, maxsplit int) []string {
+func (h *httprunner) restAPIItems(unescapedpath string, maxsplit int) []string {
 	escaped := html.EscapeString(unescapedpath)
 	split := strings.SplitN(escaped, "/", maxsplit)
 	apitems := make([]string, 0, len(split))

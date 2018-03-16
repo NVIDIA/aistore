@@ -13,7 +13,7 @@ import (
 	"github.com/golang/glog"
 )
 
-func get_toevict(mpath string, hwm uint32, lwm uint32) (int64, error) {
+func getToEvict(mpath string, hwm uint32, lwm uint32) (int64, error) {
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(mpath, &statfs); err != nil {
 		glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
@@ -30,9 +30,9 @@ func get_toevict(mpath string, hwm uint32, lwm uint32) (int64, error) {
 	return int64(used-lwmblocks) * bsize, nil
 }
 
-func get_amtimes(osfi os.FileInfo) (time.Time, time.Time, *syscall.Stat_t) {
+func getAmTimes(osfi os.FileInfo) (time.Time, time.Time, *syscall.Stat_t) {
 	stat := osfi.Sys().(*syscall.Stat_t)
-	atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
+	atime := time.Unix(stat.Atim.Sec, stat.Atim.Nsec)
 	// atime controversy, see e.g. https://en.wikipedia.org/wiki/Stat_(system_call)#Criticism_of_atime
 	mtime := osfi.ModTime()
 	return atime, mtime, stat

@@ -17,7 +17,7 @@ const mLCG32 = 1103515245
 func hrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 	// NOTE: commented out on purpose - trading off read access to unlocked map
 	//       smap.lock.Lock(); defer smap.lock.Unlock()
-	if len(smap.Smap) == 0 {
+	if smap.count() == 0 {
 		errstr = "DFC cluster map is empty: no targets"
 		return
 	}

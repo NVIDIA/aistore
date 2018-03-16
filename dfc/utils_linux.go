@@ -20,9 +20,8 @@ func Getxattr(fqn string, attrname string) ([]byte, string) {
 	}
 	if read > 0 {
 		return data[:read], ""
-	} else {
-		return nil, ""
 	}
+	return nil, ""
 }
 
 // Set specific named attribute for specific fqn.

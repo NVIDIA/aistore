@@ -196,7 +196,6 @@ func (r *statsrunner) log() (runlru bool) {
 }
 
 func (r *statsrunner) housekeep(bool) {
-	return
 }
 
 func (r *proxystatsrunner) run() error {

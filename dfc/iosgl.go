@@ -97,7 +97,7 @@ func NewSGLIO(oosize uint64) *SGLIO {
 	}
 	slab := selectslab(osize)
 	n := divCeil(osize, slab.getsize())
-	sgl := make([][]byte, n, n)
+	sgl := make([][]byte, n)
 	for i := 0; i < int(n); i++ {
 		sgl[i] = slab.alloc()
 	}

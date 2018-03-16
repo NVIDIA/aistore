@@ -89,7 +89,7 @@ func (t *targetrunner) run() error {
 		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout { // AA: use status
 			glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 			time.Sleep(time.Second * 3)
-			if status, err = t.register(false); err != nil {
+			if _, err = t.register(false); err != nil {
 				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 				glog.Errorf("Target %s is terminating", t.si.DaemonID)
 				return err
@@ -226,7 +226,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
-	bucket, objname, errstr = apitems[0], "", ""
+	bucket, objname = apitems[0], ""
 	if len(apitems) > 1 {
 		objname = apitems[1]
 	}
@@ -391,7 +391,11 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("Pushed Object List "))
+	_, err := w.Write([]byte("Pushed Object List "))
+	if err != nil {
+		s := fmt.Sprintf("Error writing response: %v", err)
+		t.invalmsghdlr(w, r, s)
+	}
 }
 
 // should not be called for local buckets
@@ -453,18 +457,18 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 }
 
 func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) {
-	allfinfos := allfinfos{make([]fipair, 0, 128), 0}
+	finfos := allfinfos{make([]fipair, 0, 128), 0}
 	for mpath := range ctx.mountpaths {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
-		if err := filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
+		finfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
+		if err := filepath.Walk(localbucketfqn, finfos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
 		}
 	}
 
 	t.statsif.add("numlist", 1)
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(allfinfos.finfos))}
-	for _, fi := range allfinfos.finfos {
+	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(finfos.finfos))}
+	for _, fi := range finfos.finfos {
 		if msg.GetPrefix != "" && !strings.HasPrefix(fi.relname, msg.GetPrefix) {
 			continue
 		}
@@ -564,7 +568,7 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	relname := fqn[all.rootLength:]
-	atime, _, _ := get_amtimes(osfi)
+	atime, _, _ := getAmTimes(osfi)
 	all.finfos = append(all.finfos, fipair{relname, osfi, atime})
 	return nil
 }
@@ -619,7 +623,7 @@ func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 	ci.fileCount++
 	fileInfo := &BucketEntry{Name: relname, Atime: "", IsCached: true}
 	if ci.needAtime {
-		atime, _, _ := get_amtimes(osfi)
+		atime, _, _ := getAmTimes(osfi)
 		if ci.msg.GetTimeFormat == "" {
 			fileInfo.Atime = atime.Format(RFC822)
 		} else {
@@ -689,7 +693,6 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		}
 		t.statsif.add("numput", 1)
 	}
-	return
 }
 
 func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket string, objname string) (errstr string, errcode int) {
@@ -715,7 +718,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket stri
 	}
 	// optimize out if the checksums do match
 	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone {
-		file, err := os.Open(fqn)
+		file, err = os.Open(fqn)
 		// exists - compute checksum and compare with the caller's
 		if err == nil {
 			slab := selectslab(0) // unknown size
@@ -1039,7 +1042,6 @@ func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg
 			t.prefetchRange(w, r, prefetchRangeMsg)
 		}
 	}
-	return
 }
 
 func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
@@ -1068,8 +1070,8 @@ func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg A
 			t.deleteRange(w, r, deleteMsg)
 		}
 	}
-	return
 }
+
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newobjname string) string {
 	var (
 		hash   string
@@ -1259,12 +1261,12 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
 	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
-		t.httpdaeput_smap(w, r, apitems)
+		t.httpdaeputSmap(w, r, apitems)
 		return
 	}
 	// PUT '{lbmap}' /v1/daemon/localbuckets
 	if len(apitems) > 0 && apitems[0] == Rsynclb {
-		t.httpdaeput_lbmap(w, r, apitems)
+		t.httpdaeputLBMap(w, r, apitems)
 		return
 	}
 	//
@@ -1297,7 +1299,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, apitems []string) {
+func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string) {
 	curversion := t.smap.Version
 	var newsmap *Smap
 	if t.readJSON(w, r, &newsmap) != nil {
@@ -1344,7 +1346,7 @@ func (t *targetrunner) httpdaeput_smap(w http.ResponseWriter, r *http.Request, a
 	go t.runRebalance()
 }
 
-func (t *targetrunner) httpdaeput_lbmap(w http.ResponseWriter, r *http.Request, apitems []string) {
+func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, apitems []string) {
 	curversion := t.lbmap.Version
 	newlbmap := &lbmap{LBmap: make(map[string]string)}
 	if t.readJSON(w, r, newlbmap) != nil {
@@ -1380,7 +1382,6 @@ func (t *targetrunner) httpdaeput_lbmap(w http.ResponseWriter, r *http.Request, 
 			}
 		}
 	}
-	return
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
@@ -1537,7 +1538,7 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 // on err closes and removes the file; othwerise closes and returns the size
 // omd5 or oxxhash can be empty depending on configuration and operation.
 func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj cksumvalue,
-	reader io.ReadCloser) (nhobj cksumvalue, written int64, errstr string) {
+	reader io.Reader) (nhobj cksumvalue, written int64, errstr string) {
 	var (
 		err                  error
 		file                 *os.File
@@ -1572,7 +1573,7 @@ func (t *targetrunner) receiveFileAndFinalize(fqn, objname, omd5 string, ohobj c
 		}
 		hashIn64 := xx.Sum64()
 		hashInBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
+		binary.BigEndian.PutUint64(hashInBytes, hashIn64)
 		nhval = hex.EncodeToString(hashInBytes)
 		nhobj = newcksumvalue(ChecksumXXHash, nhval)
 		// Legacy objects may not have chksum.

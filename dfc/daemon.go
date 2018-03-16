@@ -41,6 +41,7 @@ type cliVars struct {
 }
 
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
+// Smap contains id:daemonInfo pairs and related metadata
 type Smap struct {
 	sync.Mutex
 	Smap        map[string]*daemonInfo `json:"smap"`
@@ -139,8 +140,14 @@ func (m *Smap) count() int {
 	return len(m.Smap)
 }
 
+func (m *Smap) countLocked() int {
+	m.lock()
+	defer m.unlock()
+	return m.count()
+}
+
 func (m *Smap) get(sid string) *daemonInfo {
-	si, _ := m.Smap[sid]
+	si := m.Smap[sid]
 	return si
 }
 

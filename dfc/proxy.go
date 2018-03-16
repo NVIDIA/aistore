@@ -309,7 +309,7 @@ func (p *proxyrunner) collectCachedFileList(w http.ResponseWriter, r *http.Reque
 		bucketMap[entry.Name] = entry
 	}
 
-	dataCh := make(chan *cachedFileBatch, len(ctx.smap.Smap))
+	dataCh := make(chan *cachedFileBatch, ctx.smap.count())
 	errch := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
@@ -464,7 +464,6 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	if glog.V(3) {
 		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1000/1000)
 	}
-	return
 }
 
 // PUT "/"+Rversion+"/"+Rfiles
@@ -1022,7 +1021,6 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	p.lbmap.lock()
 	lbversion := p.lbmap.version()
 	smapversion := ctx.smap.version()
-	ntargets_cur := ctx.smap.count()
 	delay := syncmapsdelay
 	if lbversion == p.lbmap.syncversion && smapversion == ctx.smap.syncversion {
 		glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync with the targets",
@@ -1046,12 +1044,10 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 			smapversion = smv
 			// if provided, use ntargets as a hint
 			if startingUp {
-				ctx.smap.lock()
-				ntargets_cur = ctx.smap.count()
-				ctx.smap.unlock()
-				if ntargets_cur >= ntargets {
+				ntargetsCur := ctx.smap.countLocked()
+				if ntargetsCur >= ntargets {
 					glog.Infof("Reached the expected number %d (%d) of target registrations",
-						ntargets, ntargets_cur)
+						ntargets, ntargetsCur)
 					glog.Flush()
 				}
 			} else {
@@ -1063,14 +1059,14 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 		// change in the cluster map warrants the broadcast of every other config that
 		// must be shared across the cluster;
 		// the opposite it not true though, that's why the check below
-		p.httpfilput_lb()
+		p.httpfilputLB()
 		if action == Rebalance {
-			p.httpcluput_smap(Rebalance) // REST cmd
+			p.httpcluputSmap(Rebalance) // REST cmd
 		} else if ctx.smap.syncversion != smapversion {
 			if startingUp {
-				p.httpcluput_smap(Rsyncsmap)
+				p.httpcluputSmap(Rsyncsmap)
 			} else {
-				p.httpcluput_smap(Rebalance) // NOTE: auto-rebalance
+				p.httpcluputSmap(Rebalance) // NOTE: auto-rebalance
 			}
 		}
 		break
@@ -1084,7 +1080,7 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	glog.Infof("Smap (v%d) and lbmap (v%d) are now in sync with the targets", smapversion, lbversion)
 }
 
-func (p *proxyrunner) httpcluput_smap(action string) {
+func (p *proxyrunner) httpcluputSmap(action string) {
 	method := http.MethodPut
 	assert(action == Rebalance || action == Rsyncsmap)
 	ctx.smap.lock()
@@ -1101,7 +1097,7 @@ func (p *proxyrunner) httpcluput_smap(action string) {
 	}
 }
 
-func (p *proxyrunner) httpfilput_lb() {
+func (p *proxyrunner) httpfilputLB() {
 	p.lbmap.lock()
 	jsbytes, err := json.Marshal(p.lbmap)
 	assert(err == nil, err)

@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -32,7 +31,7 @@ type pendinginfo struct {
 // methods
 //
 func (info *pendinginfo) String() string {
-	return fmt.Sprintf("%s", info.fqn)
+	return info.fqn
 }
 
 func newrtnamemap(size int) *rtnamemap {

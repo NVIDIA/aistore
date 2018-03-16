@@ -87,7 +87,7 @@ func (r *kalive) skipCheck(sid string) bool {
 	r.okmap.Lock()
 	last, ok := r.okmap.okmap[sid]
 	r.okmap.Unlock()
-	return ok && time.Now().Sub(last) < ctx.config.KeepAliveTime
+	return ok && time.Since(last) < ctx.config.KeepAliveTime
 }
 
 func (r *kalive) run() error {
@@ -103,7 +103,7 @@ func (r *kalive) run() error {
 			lastcheck = time.Now()
 			r.k.keepalive(nil)
 		case err := <-r.checknow:
-			if time.Now().Sub(lastcheck) >= proxypollival {
+			if time.Since(lastcheck) >= proxypollival {
 				lastcheck = time.Now()
 				if stopped := r.k.keepalive(err); stopped {
 					ticker.Stop()

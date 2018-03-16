@@ -7,7 +7,7 @@ package dfc
 
 import "time"
 
-// JSON-formatted control structures
+// ActionMsg is a JSON-formatted control structures
 type ActionMsg struct {
 	Action string      `json:"action"` // shutdown, restart, setconfig - the enum below
 	Name   string      `json:"name"`   // action-specific params
@@ -53,6 +53,7 @@ const (
 )
 
 // TODO: sort and some props are TBD
+// GetMsg represents properties and options for get requests
 type GetMsg struct {
 	GetWhat       string `json:"what"`        // "config" | "stats" ...
 	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
@@ -62,6 +63,7 @@ type GetMsg struct {
 	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
 }
 
+// RangeListMsgBase contains fields common to Range and List operations
 type RangeListMsgBase struct {
 	Deadline time.Duration `json:"deadline,omitempty"`
 	Wait     bool          `json:"wait,omitempty"`
@@ -73,6 +75,7 @@ type ListMsg struct {
 	Objnames []string `json:"objnames"`
 }
 
+// RangeMsg contains a Prefix, Regex, and Range for a Range Operation
 type RangeMsg struct {
 	RangeListMsgBase
 	Prefix string `json:"prefix"`
@@ -128,7 +131,7 @@ const (
 //
 //===================
 
-// file and directory metadata in response to the GetMsg
+// BucketEntry contains file and directory metadata in response to the GetMsg
 type BucketEntry struct {
 	Name     string `json:"name"`     // name of the object - note: does not include the bucket name
 	Size     int64  `json:"size"`     // size in bytes
@@ -141,6 +144,7 @@ type BucketEntry struct {
 	IsCached bool   `json:"iscached"` // if the file is cached on one of targets
 }
 
+// BucketList represents the response to a ListBucket call
 type BucketList struct {
 	Entries    []*BucketEntry `json:"entries"`
 	PageMarker string         `json:"pagemarker"`
