@@ -221,7 +221,7 @@ func ListBucket(proxyurl, bucket string, injson []byte) (*dfc.BucketList, error)
 	return reslist, nil
 }
 
-func EvictObjects(proxyurl, bucket string, fileslist []string) error {
+func Evict(proxyurl, bucket string, fname string) error {
 	var (
 		req    *http.Request
 		r      *http.Response
@@ -229,44 +229,42 @@ func EvictObjects(proxyurl, bucket string, fileslist []string) error {
 		err    error
 	)
 	EvictMsg := dfc.ActionMsg{Action: dfc.ActEvict}
-	for _, fname := range fileslist {
-		EvictMsg.Name = bucket + "/" + fname
-		injson, err = json.Marshal(EvictMsg)
-		if err != nil {
-			return fmt.Errorf("Failed to marshal EvictMsg: %v", err)
-		}
+	EvictMsg.Name = bucket + "/" + fname
+	injson, err = json.Marshal(EvictMsg)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal EvictMsg: %v", err)
+	}
 
-		req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket+"/"+fname, bytes.NewBuffer(injson))
-		if err != nil {
-			return fmt.Errorf("Failed to create request: %v", err)
-		}
+	req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket+"/"+fname, bytes.NewBuffer(injson))
+	if err != nil {
+		return fmt.Errorf("Failed to create request: %v", err)
+	}
 
-		r, err = httpclient.Do(req)
-		if r != nil {
-			r.Body.Close()
-		}
+	r, err = httpclient.Do(req)
+	if r != nil {
+		r.Body.Close()
+	}
 
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func doPrefetch(proxyurl, bucket string, prefetchmsg interface{}, wait bool) error {
+func doListRangeCall(proxyurl, bucket, action, method string, listrangemsg interface{}, wait bool) error {
 	var (
 		req    *http.Request
 		r      *http.Response
 		injson []byte
 		err    error
 	)
-	actionMsg := dfc.ActionMsg{Action: dfc.ActPrefetch, Value: prefetchmsg}
+	actionMsg := dfc.ActionMsg{Action: action, Value: listrangemsg}
 	injson, err = json.Marshal(actionMsg)
 	if err != nil {
 		return fmt.Errorf("Failed to marhsal ActionMsg: %v", err)
 	}
-	req, err = http.NewRequest("POST", proxyurl+"/v1/files/"+bucket+"/", bytes.NewBuffer(injson))
+	req, err = http.NewRequest(method, proxyurl+"/v1/files/"+bucket+"/", bytes.NewBuffer(injson))
 	if err != nil {
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
@@ -282,16 +280,40 @@ func doPrefetch(proxyurl, bucket string, prefetchmsg interface{}, wait bool) err
 	return err
 }
 
-func Prefetch(proxyurl, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	prefetchMsgBase := dfc.PrefetchMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := dfc.PrefetchMsg{Objnames: fileslist, PrefetchMsgBase: prefetchMsgBase}
-	return doPrefetch(proxyurl, bucket, prefetchMsg, wait)
+func PrefetchList(proxyurl, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+	rangeListMsgBase := dfc.RangeListMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := dfc.ListMsg{Objnames: fileslist, RangeListMsgBase: rangeListMsgBase}
+	return doListRangeCall(proxyurl, bucket, dfc.ActPrefetch, http.MethodPost, prefetchMsg, wait)
 }
 
 func PrefetchRange(proxyurl, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	prefetchMsgBase := dfc.PrefetchMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := dfc.PrefetchRangeMsg{Prefix: prefix, Regex: regex, Range: rng, PrefetchMsgBase: prefetchMsgBase}
-	return doPrefetch(proxyurl, bucket, prefetchMsg, wait)
+	prefetchMsgBase := dfc.RangeListMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := dfc.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, RangeListMsgBase: prefetchMsgBase}
+	return doListRangeCall(proxyurl, bucket, dfc.ActPrefetch, http.MethodPost, prefetchMsg, wait)
+}
+
+func DeleteList(proxyurl, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+	rangeListMsgBase := dfc.RangeListMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := dfc.ListMsg{Objnames: fileslist, RangeListMsgBase: rangeListMsgBase}
+	return doListRangeCall(proxyurl, bucket, dfc.ActDelete, http.MethodDelete, deleteMsg, wait)
+}
+
+func DeleteRange(proxyurl, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+	rangeListMsgBase := dfc.RangeListMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := dfc.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, RangeListMsgBase: rangeListMsgBase}
+	return doListRangeCall(proxyurl, bucket, dfc.ActDelete, http.MethodDelete, deleteMsg, wait)
+}
+
+func EvictList(proxyurl, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
+	rangeListMsgBase := dfc.RangeListMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := dfc.ListMsg{Objnames: fileslist, RangeListMsgBase: rangeListMsgBase}
+	return doListRangeCall(proxyurl, bucket, dfc.ActEvict, http.MethodDelete, evictMsg, wait)
+}
+
+func EvictRange(proxyurl, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
+	rangeListMsgBase := dfc.RangeListMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := dfc.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, RangeListMsgBase: rangeListMsgBase}
+	return doListRangeCall(proxyurl, bucket, dfc.ActEvict, http.MethodDelete, evictMsg, wait)
 }
 
 // fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang

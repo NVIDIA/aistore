@@ -37,6 +37,8 @@ const (
 	RenameLocalBucketName = "renamebucket"
 	RenameDir             = "/tmp/dfc/rename"
 	RenameStr             = "rename"
+	ListRangeDir          = "/tmp/dfc/listrange"
+	ListRangeStr          = "__listrange"
 )
 
 var (
@@ -67,14 +69,16 @@ var (
 		Test{"LRU", regressionLRU},
 		Test{"Rename", regressionRename},
 		Test{"RW stress", regressionRWStress},
-		Test{"Prefetch", regressionPrefetch},
+		Test{"PrefetchList", regressionPrefetchList},
 		Test{"PrefetchRange", regressionPrefetchRange},
+		Test{"DeleteList", regressionDeleteList},
+		Test{"DeleteRange", regressionDeleteRange},
 	}
 	abortonerr      = false
 	readerType      = readers.ReaderTypeSG
 	failLRU         = ""
 	prefetchPrefix  = "__bench/test-"
-	prefetchRegex   = "^\\d22\\d"
+	prefetchRegex   = "^\\d22\\d?"
 	prefetchRange   = "0:2000"
 	PhysMemSizeWarn = uint64(7 * 1024) // MBs
 
@@ -151,8 +155,7 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, sgl)
+	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, SmokeStr, "", false, sgl)
 	close(filesput)
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
@@ -425,8 +428,7 @@ func regressionRebalance(t *testing.T) {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, smokestr, "", false, sgl)
+	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, SmokeStr, "", false, sgl)
 	selectErr(errch, "put", t, false)
 
 	//
@@ -573,7 +575,7 @@ func regressionRename(t *testing.T) {
 	selectErr(errch, "get", t, false)
 }
 
-func regressionPrefetch(t *testing.T) {
+func regressionPrefetchList(t *testing.T) {
 	var (
 		toprefetch    = make(chan string, numfiles)
 		netprefetches = int64(0)
@@ -611,11 +613,11 @@ func regressionPrefetch(t *testing.T) {
 
 	// 3. Evict those objects from the cache and prefetch them
 	tlogf("Evicting and Prefetching %d objects\n", len(files))
-	err = client.EvictObjects(proxyurl, clibucket, files)
+	err = client.EvictList(proxyurl, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = client.Prefetch(proxyurl, clibucket, files, true, 0)
+	err = client.PrefetchList(proxyurl, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -701,7 +703,7 @@ func regressionPrefetchRange(t *testing.T) {
 
 	// 4. Evict those objects from the cache, and then prefetch them.
 	tlogf("Evicting and Prefetching %d objects\n", len(files))
-	err = client.EvictObjects(proxyurl, clibucket, files)
+	err = client.EvictRange(proxyurl, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -723,6 +725,118 @@ func regressionPrefetchRange(t *testing.T) {
 	if netprefetches != int64(len(files)) {
 		t.Errorf("Did not prefetch all files: Missing %d of %d\n",
 			(int64(len(files)) - netprefetches), len(files))
+	}
+}
+
+func regressionDeleteRange(t *testing.T) {
+	var (
+		err            error
+		prefix         = ListRangeStr + "/tstf-"
+		quarter        = numfiles / 4
+		third          = numfiles / 3
+		smallrangesize = third - quarter + 1
+		smallrange     = fmt.Sprintf("%d:%d", quarter, third)
+		bigrange       = fmt.Sprintf("0:%d", numfiles)
+		regex          = "\\d?\\d"
+		wg             = &sync.WaitGroup{}
+		errch          = make(chan error, numfiles)
+	)
+	// 1. Put files to delete:
+	for i := 0; i < numfiles; i++ {
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wg.Add(1)
+		go client.PutAsync(wg, proxyurl, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch, false /* silent */)
+	}
+	wg.Wait()
+	selectErr(errch, "put", t, true)
+
+	// 2. Delete the small range of objects:
+	err = client.DeleteRange(proxyurl, clibucket, prefix, regex, smallrange, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 3. Check to see that the correct files have been deleted
+	msg := &dfc.GetMsg{GetPrefix: prefix}
+	injson, err := json.Marshal(msg)
+	if err != nil {
+		t.Error(err)
+	}
+	bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+	if len(bktlst.Entries) != numfiles-smallrangesize {
+		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
+	}
+	filemap := make(map[string]*dfc.BucketEntry)
+	for _, entry := range bktlst.Entries {
+		filemap[entry.Name] = entry
+	}
+	for i := 0; i < numfiles; i++ {
+		keyname := fmt.Sprintf("%s%d", prefix, i)
+		_, ok := filemap[keyname]
+		if ok && i >= quarter && i <= third {
+			t.Errorf("File exists that should have been deleted: %s", keyname)
+		} else if !ok && (i < quarter || i > third) {
+			t.Errorf("File does not exist that should not have been deleted: %s", keyname)
+		}
+	}
+
+	// 4. Delete the big range of objects:
+	err = client.DeleteRange(proxyurl, clibucket, prefix, regex, bigrange, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 5. Check to see that all the files have been deleted
+	bktlst, err = client.ListBucket(proxyurl, clibucket, injson)
+	if len(bktlst.Entries) != 0 {
+		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
+	}
+}
+
+func regressionDeleteList(t *testing.T) {
+	var (
+		err    error
+		prefix = ListRangeStr + "/tstf-"
+		wg     = &sync.WaitGroup{}
+		errch  = make(chan error, numfiles)
+		files  = make([]string, 0)
+	)
+	// 1. Put files to delete:
+	for i := 0; i < numfiles; i++ {
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		keyname := fmt.Sprintf("%s%d", prefix, i)
+
+		wg.Add(1)
+		go client.PutAsync(wg, proxyurl, r, clibucket, keyname, errch, false /* silent */)
+		files = append(files, keyname)
+
+	}
+	wg.Wait()
+	selectErr(errch, "put", t, true)
+
+	// 2. Delete the objects
+	err = client.DeleteList(proxyurl, clibucket, files, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 3. Check to see that all the files have been deleted.
+	msg := &dfc.GetMsg{GetPrefix: prefix}
+	injson, err := json.Marshal(msg)
+	if err != nil {
+		t.Error(err)
+	}
+	bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+	if len(bktlst.Entries) != 0 {
+		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
 }
 

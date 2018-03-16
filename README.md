@@ -144,6 +144,10 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Destroy local bucket (proxy only) | DELETE {"action": "destroylb"} /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/files/abc` |
 | Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
 | Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
+| Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
+| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
+| Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
+| Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
 | Get bucket props (local and cloud) | HEAD /v1/files/bucket | ``` curl --head http://192.168.176.128:8080/v1/files/abc ```|
 
 > (`*`) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
@@ -154,7 +158,7 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 
 > (`****`) Advanced usage only.
 
-> (`*****`) See the Prefetching section for details.
+> (`*****`) See the List/Range Operations section for details.
 
 ### Example: querying runtime statistics
 
@@ -241,36 +245,36 @@ DFC rebalances its cached content based on the DFC cluster map. When cache serve
 
 Thus, the rebalancing process is completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the content will get rebalanced via direct target-to-target transfers.
 
-## Prefetching
+## List/Range Operations
 
-DFC provides an API to prefetch objects (cache objects on the DFC server without retrieving them through a GET request). There are two forms of this API: List, and Range. Both of these share two optional parameters:
+DFC provides two APIs to operate on groups of objects: List, and Range. Both of these share two optional parameters:
 
 | Parameter | Meaning | Default |
 |--- | --- | --- |
-| deadline | The amount of time before the prefetch request expires formatted as a [golang duration string](https://golang.org/pkg/time/#ParseDuration). A timeout of 0 means no timeout.| 0 |
-| wait | If true, a response will be sent only once all requested files have been prefetched or the deadline passes. When false, a response will be sent once the prefetch request is initiated. When setting wait=true, ensure your request has a timeout at least as long as the deadline. | false |
+| deadline | The amount of time before the request expires formatted as a [golang duration string](https://golang.org/pkg/time/#ParseDuration). A timeout of 0 means no timeout.| 0 |
+| wait | If true, a response will be sent only when the operation completes or the deadline passes. When false, a response will be sent once the operation is initiated. When setting wait=true, ensure your request has a timeout at least as long as the deadline. | false |
 
 ### List
 
-List Prefetch takes a JSON array of object names to prefetch, and initiates a prefetch request for those objects.
+List APIs take a JSON array of object names, and initiate the operation on those objects.
 
 | Parameter | Meaning |
 | --- | --- |
-| objnames | The JSON array of object names to be prefetched. |
+| objnames | The JSON array of object names. |
 
 ### Range
 
-Range Prefetch takes a prefix, a regular expression, and a range, and prefetches all files beginning with the prefix where a number matching the regular expression immediately follows and is within the range.
+Range APIs take a prefix, a regular expression, and a range, and initiate the operation on all files beginning with the prefix where a number matching the regular expression immediately follows and is within the range.
 
 
 | Parameter | Meaning |
 | --- | --- |
-| prefix | The prefix that all prefetched files will begin with. |
+| prefix | The prefix that all matching object names will begin with. |
 | regex | The regular expression to match to the number following the prefix, represented as an escaped string. If it is an empty string (""), it will match all files. |
-| range | Represented as "min:max", corresponding to the inclusive range from min to max. Range may be empty (""), meaning it will return all matches from the regex. If regex is the empty string, range will be ignored. |
+| range | Represented as "min:max", corresponding to the inclusive range from min to max. Either or both of min and max may be empty strings (""), in which case they will be ignored. If regex is an empty string, range will be ignored. |
 
 #### Examples
 | Prefix | Regex |  Escaped Regex | Range | Matches | Doesn't Match |
 | --- | --- | --- | --- | --- | --- |
 | "__tst/test-" | `"\d22\d"` | `"\\d22\\d"` | "1000:2000" | "__tst/test-1223","__tst/test-1229-4000.dat" | "__prod/test-1223", "__tst/test-1333", "__tst/test-12222-40000.dat", "__tst/test-2222-4000.dat" |
-| "a/b/c" | `"\d+1\d"` | `"\\d+1\\d"` | "0:100000" | "a/b/c/110", "a/b/c/99919-200000.dat", "a/b/c/2314video-big" | "a/b/110", "a/b/c/d/110", "a/b/c/video-99919-20000.dat", "a/b/c/100012", "a/b/c/30111" |
+| "a/b/c" | `"\d+1\d"` | `"\\d+1\\d"` | ":100000" | "a/b/c/110", "a/b/c/99919-200000.dat", "a/b/c/2314video-big" | "a/b/110", "a/b/c/d/110", "a/b/c/video-99919-20000.dat", "a/b/c/100012", "a/b/c/30111" |

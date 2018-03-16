@@ -848,10 +848,9 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 
 func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket, objname, errstr string
-		msg                     ActionMsg
-		evict                   bool
-		errcode                 int
+		bucket, objname string
+		msg             ActionMsg
+		evict           bool
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
@@ -861,96 +860,111 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
-	fqn := t.fqn(bucket, objname)
-	uname := bucket + objname
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, true)
 
-	if !t.islocalBucket(bucket) {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			errstr = fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
-			if err == io.EOF {
-				trailer := r.Trailer.Get("Error")
-				if trailer != "" {
-					errstr = fmt.Sprintf("fildelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-				}
-			}
-		} else if len(b) > 0 {
-			err = json.Unmarshal(b, &msg)
-			if err == nil {
-				evict = (msg.Action == ActEvict)
-				if !evict {
-					errstr, errcode = getcloudif().deleteobj(bucket, objname)
-					t.statsif.add("numdelete", 1)
-				}
+	b, err := ioutil.ReadAll(r.Body)
+	if err == nil && len(b) > 0 {
+		err = json.Unmarshal(b, &msg)
+		if err == nil {
+			evict = (msg.Action == ActEvict)
+		}
+	} else if err != nil {
+		s := fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("fildelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
 			}
 		}
+		t.invalmsghdlr(w, r, s)
+		return
 	}
-	if errstr != "" {
-		if errcode == 0 {
-			t.invalmsghdlr(w, r, errstr)
-		} else {
-			t.invalmsghdlr(w, r, errstr, errcode)
+
+	if objname == "" && len(b) > 0 {
+		// It must be a List/Range request, since there is no object name
+		t.deletefiles(w, r, msg)
+		return
+	} else if objname != "" {
+		err := t.fildelete(bucket, objname, evict)
+		if err != nil {
+			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
+			t.invalmsghdlr(w, r, s)
 		}
 		return
 	}
+
+	s := fmt.Sprintf("Invalid API request: No object name or message body.")
+	t.invalmsghdlr(w, r, s)
+}
+
+func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
+	var (
+		errstr  string
+		errcode int
+	)
+	fqn := t.fqn(bucket, objname)
+	uname := bucket + objname
+	localbucket := t.islocalBucket(bucket)
+
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, true)
+
+	if !localbucket && !evict {
+		errstr, errcode = getcloudif().deleteobj(bucket, objname)
+		t.statsif.add("numdelete", 1)
+		if errstr != "" {
+			if errcode == 0 {
+				return fmt.Errorf("%s", errstr)
+			}
+			return fmt.Errorf("%d: %s", errcode, errstr)
+		}
+	}
+
 	finfo, err := os.Stat(fqn)
 	if err != nil {
-		if os.IsNotExist(err) && t.islocalBucket(bucket) && !evict {
-			errstr = fmt.Sprintf("DELETE local: file %s (local bucket %s, object %s) does not exist",
-				fqn, bucket, objname)
+		if os.IsNotExist(err) {
+			if localbucket && !evict {
+				return fmt.Errorf("DELETE local: file %s (local bucket %s, object %s) does not exist",
+					fqn, bucket, objname)
+			}
+
+			// Do try to delete non-cached objects.
+			return nil
+
 		}
-	} else {
+	}
+	if !(evict && localbucket) {
+		// Don't evict from a local bucket (this would be deletion)
 		if err := os.Remove(fqn); err != nil {
-			errstr = err.Error()
+			return err
 		} else if evict {
 			t.statsif.add("bytesevicted", finfo.Size())
 			t.statsif.add("filesevicted", 1)
 		}
 	}
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
+	return nil
 }
 
 func (t *targetrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		msg    ActionMsg
-		errstr string
-	)
-	apitems := t.restAPIItems(r.URL.Path, 5)
+	var msg ActionMsg
 	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
-	if msg.Action == ActPrefetch {
-		jsmap, ok := msg.Value.(map[string]interface{})
-		if !ok {
-			t.invalmsghdlr(w, r, "Could not parse PrefetchMsg: ActionMsg.Value was not map[string]interface{}")
-			return
-		}
-		if _, ok := jsmap["objnames"]; ok {
-			// Prefetch with List
-			if prefetchMsg, err := parsePrefetchMsg(jsmap); err != nil {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
-			} else {
-				t.prefetch(w, r, prefetchMsg)
-			}
-		} else {
-			// Prefetch with Range
-			if prefetchRangeMsg, err := parsePrefetchRangeMsg(jsmap); err != nil {
-				t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
-			} else {
-				t.prefetchrange(w, r, prefetchRangeMsg)
-			}
-		}
-		return
-	}
-	if msg.Action != ActRename {
+
+	switch msg.Action {
+	case ActPrefetch:
+		t.prefetchfiles(w, r, msg)
+	case ActRename:
+		t.renamefile(w, r, msg)
+	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
-		return
 	}
+
+}
+
+func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
+	var errstr string
+
+	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
 		return
 	}
@@ -995,6 +1009,58 @@ func (t *targetrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
+	jsmap, ok := msg.Value.(map[string]interface{})
+	if !ok {
+		t.invalmsghdlr(w, r, "Could not parse List/Range Message: ActionMsg.Value was not map[string]interface{}")
+		return
+	}
+	if _, ok := jsmap["objnames"]; ok {
+		// Prefetch with List
+		if prefetchMsg, err := parseListMsg(jsmap); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		} else {
+			t.prefetchList(w, r, prefetchMsg)
+		}
+	} else {
+		// Prefetch with Range
+		if prefetchRangeMsg, err := parseRangeMsg(jsmap); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		} else {
+			t.prefetchRange(w, r, prefetchRangeMsg)
+		}
+	}
+	return
+}
+
+func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
+	evict := msg.Action == ActEvict
+	jsmap, ok := msg.Value.(map[string]interface{})
+	if !ok {
+		t.invalmsghdlr(w, r, "Could not parse List/Range Message: ActionMsg.Value was not map[string]interface{}")
+		return
+	}
+	if _, ok := jsmap["objnames"]; ok {
+		// Delete with List
+		if deleteMsg, err := parseListMsg(jsmap); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		} else if evict {
+			t.evictList(w, r, deleteMsg)
+		} else {
+			t.deleteList(w, r, deleteMsg)
+		}
+	} else {
+		// Delete with Range
+		if deleteMsg, err := parseRangeMsg(jsmap); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		} else if evict {
+			t.evictRange(w, r, deleteMsg)
+		} else {
+			t.deleteRange(w, r, deleteMsg)
+		}
+	}
+	return
+}
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newobjname string) string {
 	var (
 		hash   string
@@ -1354,82 +1420,6 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 	if glog.V(3) {
 		glog.Infof("Registered self %s", t.si.DaemonID)
-	}
-}
-
-func (t *targetrunner) prefetch(w http.ResponseWriter, r *http.Request, prefetchMsg PrefetchMsg) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket := apitems[0]
-	objs := make([]string, 0)
-	for _, obj := range prefetchMsg.Objnames {
-		si := hrwTarget(bucket+"/"+obj, t.smap)
-		if si.DaemonID == t.si.DaemonID {
-			objs = append(objs, obj)
-		}
-	}
-	if len(objs) != 0 {
-		var done chan struct{}
-		if prefetchMsg.Wait {
-			done = make(chan struct{}, 1)
-		}
-		if err := t.addPrefetch(objs, bucket, prefetchMsg.Deadline, done); err != nil {
-			s := fmt.Sprintf("Error prefetching objects: %v", err)
-			t.invalmsghdlr(w, r, s)
-			t.statsif.add("numerr", 1)
-			return
-		} else if prefetchMsg.Wait {
-			<-done
-			close(done)
-		}
-	}
-}
-
-func (t *targetrunner) prefetchrange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg PrefetchRangeMsg) {
-	var (
-		min, max int64
-		err      error
-	)
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket := apitems[0]
-	if prefetchRangeMsg.Range != "" {
-		ranges := strings.Split(prefetchRangeMsg.Range, ":")
-		min, err = strconv.ParseInt(ranges[0], 10, 64)
-		if err != nil {
-			s := fmt.Sprintf("Error parsing range minimum: %v", err)
-			t.invalmsghdlr(w, r, s)
-			t.statsif.add("numerr", 1)
-			return
-		}
-		max, err = strconv.ParseInt(ranges[1], 10, 64)
-		if err != nil {
-			s := fmt.Sprintf("Error parsing range minimum: %v", err)
-			t.invalmsghdlr(w, r, s)
-			t.statsif.add("numerr", 1)
-			return
-		}
-	} else {
-		min = 0
-		max = 0
-	}
-	var done chan struct{}
-	if prefetchRangeMsg.Wait {
-		done = make(chan struct{}, 1)
-	}
-	if err := t.addPrefetchRange(bucket, prefetchRangeMsg.Prefix, prefetchRangeMsg.Regex,
-		min, max, prefetchRangeMsg.Deadline, done); err != nil {
-		s := fmt.Sprintf("Error adding Prefetch Range: %v", err)
-		t.invalmsghdlr(w, r, s)
-		t.statsif.add("numerr", 1)
-		return
-	} else if prefetchRangeMsg.Wait {
-		<-done
-		close(done)
 	}
 }
 

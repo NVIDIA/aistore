@@ -846,7 +846,7 @@ func evictobjects(t *testing.T, fileslist []string) {
 	var (
 		bucket = clibucket
 	)
-	err := client.EvictObjects(proxyurl, bucket, fileslist)
+	err := client.EvictList(proxyurl, bucket, fileslist, true, 0)
 	if testfail(err, bucket, nil, nil, t) {
 		return
 	}

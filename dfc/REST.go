@@ -26,6 +26,7 @@ const (
 	ActSetConfig = "setconfig"
 	ActRename    = "rename"
 	ActEvict     = "evict"
+	ActDelete    = "delete"
 	ActPrefetch  = "prefetch"
 )
 
@@ -61,19 +62,19 @@ type GetMsg struct {
 	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
 }
 
-type PrefetchMsgBase struct {
+type RangeListMsgBase struct {
 	Deadline time.Duration `json:"deadline,omitempty"`
 	Wait     bool          `json:"wait,omitempty"`
 }
 
-// PrefetchMsg contains a list of files and a duration within which to get them
-type PrefetchMsg struct {
-	PrefetchMsgBase
+// ListMsg contains a list of files and a duration within which to get them
+type ListMsg struct {
+	RangeListMsgBase
 	Objnames []string `json:"objnames"`
 }
 
-type PrefetchRangeMsg struct {
-	PrefetchMsgBase
+type RangeMsg struct {
+	RangeListMsgBase
 	Prefix string `json:"prefix"`
 	Regex  string `json:"regex"`
 	Range  string `json:"range"`

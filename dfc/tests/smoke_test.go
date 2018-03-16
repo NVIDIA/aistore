@@ -21,7 +21,7 @@ import (
 
 const (
 	SmokeDir        = "/tmp/dfc/smoke" // smoke test dir
-	smokestr        = "smoke"
+	SmokeStr        = "smoke"
 	blocksize       = 1048576
 	defaultbaseseed = 1062984096
 )
@@ -124,7 +124,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 				}
 
 				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
-					SmokeDir, smokestr, "", false, sgl)
+					SmokeDir, SmokeStr, "", false, sgl)
 				wg.Done()
 			}(i)
 			nPut--
