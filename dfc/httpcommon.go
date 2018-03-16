@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -68,6 +69,11 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 	n := len(p)
 	s := string(p[:n])
 	glog.Errorln(s)
+
+	stacktrace := debug.Stack()
+	n1 := len(stacktrace)
+	s1 := string(stacktrace[:n1])
+	glog.Errorln(s1)
 	return n, nil
 }
 
