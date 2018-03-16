@@ -367,6 +367,7 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 	if err != nil {
 		return fmt.Errorf("Failed to open reader, err: %v", err)
 	}
+	defer handle.Close()
 
 	req, err := http.NewRequest(http.MethodPut, url, handle)
 	if err != nil {
@@ -382,11 +383,6 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 	if reader.XXHash() != "" {
 		req.Header.Set(dfc.HeaderDfcChecksumType, dfc.ChecksumXXHash)
 		req.Header.Set(dfc.HeaderDfcChecksumVal, reader.XXHash())
-	}
-
-	_, err = reader.Seek(0, 0)
-	if err != nil {
-		return fmt.Errorf("Failed to seek %s, err: %v", reader.Description(), err)
 	}
 
 	resp, err := httpclient.Do(req)

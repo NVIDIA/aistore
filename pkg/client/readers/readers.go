@@ -277,8 +277,7 @@ func (r *fileReader) Description() string {
 	return description("FileReader "+r.name, r.xxHash)
 }
 
-// NewFileReader returns a new fileReader
-// If no error, returns with the file opened, caller needs to close the file.
+// NewFileReader creates/opens the file, populates it with random data, closes it and returns a new fileReader
 func NewFileReader(path, name string, size int64, withHash bool) (client.Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	fn := path + "/" + name
@@ -287,6 +286,7 @@ func NewFileReader(path, name string, size int64, withHash bool) (client.Reader,
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
 	hash, err := populateData(f, size, withHash, rnd)
 	if err != nil {
