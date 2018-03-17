@@ -28,6 +28,18 @@ var (
 	httpclient            = &http.Client{Timeout: 30 * time.Second}
 	httpclientLongTimeout = &http.Client{Timeout: 5 * time.Minute}
 
+	transport = &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout: 60 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 600 * time.Second,
+	}
+
+	longWaitingClient = &http.Client{
+		Timeout:   600 * time.Second,
+		Transport: transport,
+	}
+
 	ProxyProto      = "http"
 	ProxyIP         = "localhost"
 	ProxyPort       = 8080
@@ -192,13 +204,15 @@ func ListBucket(proxyurl, bucket string, injson []byte) (*dfc.BucketList, error)
 		request *http.Request
 		r       *http.Response
 	)
+
+	c := longWaitingClient
 	if len(injson) == 0 {
-		r, err = httpclient.Get(url)
+		r, err = c.Get(url)
 	} else {
 		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
-			r, err = httpclient.Do(request)
+			r, err = c.Do(request)
 		}
 	}
 	if err != nil {

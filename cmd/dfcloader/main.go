@@ -80,7 +80,7 @@ var (
 	intervalStats        stats.Stats
 	accumulatedStats     stats.Stats
 	allObjects           []string // All objects created under virtual directory myName
-	statsPrintHeader     = "%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
+	statsPrintHeader     = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 )
 
 func parseCmdLine() (params, error) {
@@ -180,6 +180,7 @@ func main() {
 		return
 	}
 
+	fmt.Printf("Found %d existing objects\n", len(allObjects))
 	logRunParams(runParams, os.Stdout)
 
 	workOrders = make(chan *workOrder, runParams.numWorkers)
@@ -247,13 +248,13 @@ L:
 		completeWorkOrder(wo)
 	}
 
+	fmt.Printf("\nActual run duration: %v\n", time.Now().Sub(tsStart))
+	accumulatedStats.Aggregate(intervalStats)
+	writeStats(statsWriter, true /* final */, intervalStats, accumulatedStats)
+
 	if runParams.cleanUp {
 		cleanUp()
 	}
-
-	fmt.Printf("Actual run duration: %v\n", time.Now().Sub(tsStart))
-	accumulatedStats.Aggregate(intervalStats)
-	writeStats(statsWriter, true /* final */, intervalStats, accumulatedStats)
 }
 
 // lonRunParams show run parameters in json format
@@ -342,47 +343,56 @@ func prettyLatency(min, avg, max int64) string {
 	return fmt.Sprintf("%-11s%-11s%-11s", prettyDuration(min), prettyDuration(avg), prettyDuration(max))
 }
 
+func prettyTimeStamp() string {
+	return time.Now().String()[11:19]
+}
+
 // writeStatusHeader writes stats header to the writter.
 func writeStatsHeader(to *os.File) {
 	fmt.Fprintln(to)
 	fmt.Fprintf(to, statsPrintHeader,
-		"OP", "Count", "Total Bytes", "Latency(min, avg, max)", "Throughput", "Error")
+		"Time", "OP", "Count", "Total Bytes", "Latency(min, avg, max)", "Throughput", "Error")
 }
 
 // writeStatus writes stats to the writter.
 // if final = true, writes the total; otherwise writes the interval stats
 func writeStats(to *os.File, final bool, s, t stats.Stats) {
+	p := fmt.Fprintf
+	pn := prettyNumber
+	pb := prettyNumBytes
+	pl := prettyLatency
+	pt := prettyTimeStamp
 	if final {
 		writeStatsHeader(to)
-		fmt.Fprintf(to, statsPrintHeader, "Put",
-			prettyNumber(t.TotalPuts()),
-			prettyNumBytes(t.TotalPutBytes()),
-			prettyLatency(t.MinPutLatency(), t.AvgPutLatency(), t.MaxPutLatency()),
-			prettyNumBytes(t.PutThroughput(time.Now())),
-			prettyNumber(t.TotalErrPuts()))
-		fmt.Fprintf(to, statsPrintHeader, "Get",
-			prettyNumber(t.TotalGets()),
-			prettyNumBytes(t.TotalGetBytes()),
-			prettyLatency(t.MinGetLatency(), t.AvgGetLatency(), t.MaxGetLatency()),
-			prettyNumBytes(t.GetThroughput(time.Now())),
-			prettyNumber(t.TotalErrGets()))
+		p(to, statsPrintHeader, pt(), "Put",
+			pn(t.TotalPuts()),
+			pb(t.TotalPutBytes()),
+			pl(t.MinPutLatency(), t.AvgPutLatency(), t.MaxPutLatency()),
+			pb(t.PutThroughput(time.Now())),
+			pn(t.TotalErrPuts()))
+		p(to, statsPrintHeader, pt(), "Get",
+			pn(t.TotalGets()),
+			pb(t.TotalGetBytes()),
+			pl(t.MinGetLatency(), t.AvgGetLatency(), t.MaxGetLatency()),
+			pb(t.GetThroughput(time.Now())),
+			pn(t.TotalErrGets()))
 	} else {
 		// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
 		if s.TotalPuts() != 0 {
-			fmt.Fprintf(to, statsPrintHeader, "Put",
-				prettyNumber(s.TotalPuts())+"("+prettyNumber(t.TotalPuts())+")",
-				prettyNumBytes(s.TotalPutBytes())+"("+prettyNumBytes(t.TotalPutBytes())+")",
-				prettyLatency(s.MinPutLatency(), s.AvgPutLatency(), s.MaxPutLatency()),
-				prettyNumBytes(s.PutThroughput(time.Now()))+"("+prettyNumBytes(t.PutThroughput(time.Now()))+")",
-				prettyNumber(s.TotalErrPuts())+"("+prettyNumber(t.TotalErrPuts())+")")
+			p(to, statsPrintHeader, pt(), "Put",
+				pn(s.TotalPuts())+"("+pn(t.TotalPuts())+")",
+				pb(s.TotalPutBytes())+"("+pb(t.TotalPutBytes())+")",
+				pl(s.MinPutLatency(), s.AvgPutLatency(), s.MaxPutLatency()),
+				pb(s.PutThroughput(time.Now()))+"("+pb(t.PutThroughput(time.Now()))+")",
+				pn(s.TotalErrPuts())+"("+pn(t.TotalErrPuts())+")")
 		}
 		if s.TotalGets() != 0 {
-			fmt.Fprintf(to, statsPrintHeader, "Get",
-				prettyNumber(s.TotalGets())+"("+prettyNumber(t.TotalGets())+")",
-				prettyNumBytes(s.TotalGetBytes())+"("+prettyNumBytes(t.TotalGetBytes())+")",
-				prettyLatency(s.MinGetLatency(), s.AvgGetLatency(), s.MaxGetLatency()),
-				prettyNumBytes(s.GetThroughput(time.Now()))+"("+prettyNumBytes(t.GetThroughput(time.Now()))+")",
-				prettyNumber(s.TotalErrGets())+"("+prettyNumber(t.TotalErrGets())+")")
+			p(to, statsPrintHeader, pt(), "Get",
+				pn(s.TotalGets())+"("+pn(t.TotalGets())+")",
+				pb(s.TotalGetBytes())+"("+pb(t.TotalGetBytes())+")",
+				pl(s.MinGetLatency(), s.AvgGetLatency(), s.MaxGetLatency()),
+				pb(s.GetThroughput(time.Now()))+"("+pb(t.GetThroughput(time.Now()))+")",
+				pn(s.TotalErrGets())+"("+pn(t.TotalErrGets())+")")
 		}
 	}
 }
@@ -443,6 +453,7 @@ func completeWorkOrder(wo *workOrder) {
 		if wo.err == nil {
 			intervalStats.AddGet(wo.size, delta)
 		} else {
+			fmt.Println("Get failed: ", wo.err)
 			intervalStats.AddErrGet()
 		}
 	case opPut:
@@ -450,6 +461,7 @@ func completeWorkOrder(wo *workOrder) {
 			allObjects = append(allObjects, wo.objName)
 			intervalStats.AddPut(wo.size, delta)
 		} else {
+			fmt.Println("Put failed: ", wo.err)
 			intervalStats.AddErrPut()
 		}
 	default:
@@ -458,21 +470,42 @@ func completeWorkOrder(wo *workOrder) {
 }
 
 func cleanUp() {
-	for _, obj := range allObjects {
-		client.Del(runParams.proxyURL, runParams.bucket, obj, nil /* wg */, nil /* errch */, true /* silent */)
-		if runParams.usingFile {
-			err := os.Remove(runParams.tmpDir + "/" + obj)
-			if err != nil {
-				fmt.Println("delete local file err ", err)
+	fmt.Println(prettyTimeStamp() + " Clean up ...")
+
+	var wg sync.WaitGroup
+	f := func(objs []string, wg *sync.WaitGroup) {
+		defer wg.Done()
+
+		for _, obj := range objs {
+			client.Del(runParams.proxyURL, runParams.bucket, obj, nil /* wg */, nil /* errch */, true /* silent */)
+			if runParams.usingFile {
+				err := os.Remove(runParams.tmpDir + "/" + obj)
+				if err != nil {
+					fmt.Println("delete local file err ", err)
+				}
 			}
 		}
 	}
+
+	w := runParams.numWorkers
+	n := len(allObjects) / w
+	for i := 0; i < w; i++ {
+		wg.Add(1)
+		go f(allObjects[i*n:(i+1)*n], &wg)
+	}
+
+	if len(allObjects)%w != 0 {
+		wg.Add(1)
+		go f(allObjects[n*w:], &wg)
+	}
+
+	wg.Wait()
 
 	if runParams.isLocal {
 		client.DestroyLocalBucket(runParams.proxyURL, runParams.bucket)
 	}
 
-	fmt.Println("Objects are removed")
+	fmt.Println(prettyTimeStamp() + " Clean up done")
 }
 
 // bootStrap boot straps existing objects in the bucket
