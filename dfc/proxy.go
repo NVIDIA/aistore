@@ -190,7 +190,7 @@ func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
 	reqBody []byte, islocal bool, cached bool) (response *bucketResp, err error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
 		Rfiles, bucket, ParamLocal, islocal, ParamCached, cached)
-	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.HTTPTimeout)
+	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.HTTP.Timeout)
 	if err != nil {
 		p.kalive.onerr(err, status)
 	}

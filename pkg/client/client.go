@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	httpclient          = &http.Client{}
-	httpclientNoTimeout = &http.Client{Timeout: 0}
+	httpclient            = &http.Client{Timeout: 10 * time.Second}
+	httpclientLongTimeout = &http.Client{Timeout: 2 * time.Minute}
 
 	ProxyProto      = "http"
 	ProxyIP         = "localhost"
@@ -270,7 +270,7 @@ func doListRangeCall(proxyurl, bucket, action, method string, listrangemsg inter
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if wait {
-		r, err = httpclientNoTimeout.Do(req)
+		r, err = httpclientLongTimeout.Do(req)
 	} else {
 		r, err = httpclient.Do(req)
 	}

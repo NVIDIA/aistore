@@ -36,8 +36,7 @@ type dfconfig struct {
 	LBConf           string            `json:"lb_conf"`
 	StatsTimeStr     string            `json:"stats_time"`
 	StatsTime        time.Duration     `json:"-"` // omitempty
-	HTTPTimeoutStr   string            `json:"http_timeout"`
-	HTTPTimeout      time.Duration     `json:"-"` // omitempty
+	HTTP             httpconfig        `json:"http"`
 	KeepAliveTimeStr string            `json:"keep_alive_time"`
 	KeepAliveTime    time.Duration     `json:"-"` // omitempty
 	Listen           listenconfig      `json:"listen"`
@@ -88,6 +87,14 @@ type cksumconfig struct {
 	// True enables MD5 validation for COLD GET.
 	ValidateColdGet bool   `json:"validate_cold_get"`
 	Checksum        string `json:"checksum"`
+}
+
+// httpconfig configures parameters for the HTTP clients used by the Proxy
+type httpconfig struct {
+	TimeoutStr     string        `json:"timeout"`
+	Timeout        time.Duration `json:"-"` // omitempty
+	LongTimeoutStr string        `json:"long_timeout"`
+	LongTimeout    time.Duration `json:"-"` // omitempty
 }
 
 // Load and validate daemon's config
@@ -144,8 +151,11 @@ func validateconf() (err error) {
 	if ctx.config.StatsTime, err = time.ParseDuration(ctx.config.StatsTimeStr); err != nil {
 		return fmt.Errorf("Bad stats-time format %s, err: %v", ctx.config.StatsTimeStr, err)
 	}
-	if ctx.config.HTTPTimeout, err = time.ParseDuration(ctx.config.HTTPTimeoutStr); err != nil {
-		return fmt.Errorf("Bad http-timeout format %s, err: %v", ctx.config.HTTPTimeoutStr, err)
+	if ctx.config.HTTP.Timeout, err = time.ParseDuration(ctx.config.HTTP.TimeoutStr); err != nil {
+		return fmt.Errorf("Bad http-timeout format %s, err: %v", ctx.config.HTTP.TimeoutStr, err)
+	}
+	if ctx.config.HTTP.Timeout, err = time.ParseDuration(ctx.config.HTTP.LongTimeoutStr); err != nil {
+		return fmt.Errorf("Bad http-long-timeout format %s, err %v", ctx.config.HTTP.LongTimeoutStr, err)
 	}
 	if ctx.config.KeepAliveTime, err = time.ParseDuration(ctx.config.KeepAliveTimeStr); err != nil {
 		return fmt.Errorf("Bad keep-alive format %s, err: %v", ctx.config.KeepAliveTimeStr, err)

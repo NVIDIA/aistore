@@ -80,14 +80,14 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 
 type httprunner struct {
 	namedrunner
-	mux                 *http.ServeMux
-	h                   *http.Server
-	glogger             *log.Logger
-	si                  *daemonInfo
-	httpclient          *http.Client // http client for intra-cluster comm
-	httpclientNoTimeout *http.Client // http client for long-wait intra-cluster comm
-	statsif             statsif
-	kalive              kaliveif
+	mux                   *http.ServeMux
+	h                     *http.Server
+	glogger               *log.Logger
+	si                    *daemonInfo
+	httpclient            *http.Client // http client for intra-cluster comm
+	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
+	statsif               statsif
+	kalive                kaliveif
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -106,11 +106,11 @@ func (h *httprunner) init(s statsif) {
 	// http client
 	h.httpclient = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
-		Timeout:   ctx.config.HTTPTimeout,
+		Timeout:   ctx.config.HTTP.Timeout,
 	}
-	h.httpclientNoTimeout = &http.Client{
+	h.httpclientLongTimeout = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
-		Timeout:   0,
+		Timeout:   ctx.config.HTTP.LongTimeout,
 	}
 	// init daemonInfo here
 	h.si = &daemonInfo{}
@@ -153,7 +153,7 @@ func (h *httprunner) run() error {
 func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.name, err)
 
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTPTimeout)
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTP.Timeout)
 	defer cancel()
 
 	if h.h == nil {
@@ -205,7 +205,7 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		request.Cancel = cancelch
 	}
 	if len(timeout) > 0 && timeout[0] == 0 {
-		response, err = h.httpclientNoTimeout.Do(request)
+		response, err = h.httpclientLongTimeout.Do(request)
 	} else {
 		response, err = h.httpclient.Do(request)
 	}
