@@ -21,7 +21,7 @@ func propsStats(t *testing.T) (objChanged int64, bytesChanged int64) {
 	bytesChanged = 0
 
 	for _, v := range stats.Target {
-		objChanged += v.Core.Numchanged
+		objChanged += v.Core.Numvchanged
 		bytesChanged += v.Core.Bytesvchanged
 	}
 

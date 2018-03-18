@@ -212,25 +212,18 @@ func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
 // and the object should be refreshed from Cloud storage
 // It should be called only in case of the object is present in DFC cache
-func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (coldget bool, errstr string, errcode int) {
-	if version == "" {
-		return
-	}
-
+func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
 	var cloudProps map[string]string
 	if cloudProps, errstr, errcode = t.cloudif.headobject(bucket, objname); errstr != "" {
-		glog.Errorf("Failed to read object head from a cloud: %s", errstr)
-		return false, errstr, errcode
+		return
 	}
-
 	if cloudVersion, ok := cloudProps["version"]; ok {
-		coldget = version != cloudVersion
+		if version != cloudVersion {
+			glog.Infof("Object %s/%s version changed, current version %s (old/local %s)",
+				bucket, objname, cloudVersion, version)
+			vchanged = true
+		}
 	}
-
-	if coldget {
-		t.statsif.add("numchanged", 1)
-	}
-
 	return
 }
 
@@ -240,13 +233,13 @@ func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (coldg
 // and sends it back via http
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	var (
-		nhobj                       cksumvalue
-		coldget, exclusive, doReget bool
-		bucket, objname, fqn        string
-		uname, errstr, version      string
-		size                        int64
-		errcode                     int
-		props                       objectProps
+		nhobj                        cksumvalue
+		coldget, exclusive, vchanged bool
+		bucket, objname, fqn         string
+		uname, errstr, version       string
+		size                         int64
+		errcode                      int
+		props                        *objectProps
 	)
 	cksumcfg := &ctx.config.CksumConfig
 	versioncfg := &ctx.config.VersionConfig
@@ -284,16 +277,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		return
 	}
-
-	if !coldget && versioncfg.ValidateWarmGet {
-		if doReget, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
-			glog.Errorf("Failed to read object %s/%s head: %s", bucket, objname, errstr)
+	if !coldget && versioncfg.ValidateWarmGet && version != "" {
+		if vchanged, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
 		}
-		coldget = doReget
+		coldget = vchanged
 	}
-
 	if coldget {
 		if props, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
 			if errcode == 0 {
@@ -306,8 +296,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		size, nhobj = props.size, props.nhobj
 		t.statsif.add("numcoldget", 1)
 		t.statsif.add("bytesloaded", size)
-		if doReget {
+		if vchanged {
 			t.statsif.add("bytesvchanged", size)
+			t.statsif.add("numvchanged", 1)
 		}
 	}
 	//
@@ -370,25 +361,20 @@ func (t *targetrunner) getchecklocal(bucket, objname, fqn string) (coldget bool,
 		switch {
 		case os.IsNotExist(err):
 			if t.islocalBucket(bucket) {
-				errstr = fmt.Sprintf("GET local: file %s (local bucket %s, object %s) does not exist",
-					fqn, bucket, objname)
+				errstr = fmt.Sprintf("GET local: file %s (object %s/%s) does not exist", fqn, bucket, objname)
 				return
 			}
 			coldget = true
 		case os.IsPermission(err):
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
-			return
 		default:
 			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
-			return
 		}
-	} else {
-		size = finfo.Size()
-		if bytes, err := Getxattr(fqn, xattrObjVersion); err == "" {
-			version = string(bytes)
-		} else {
-			errstr = fmt.Sprintf("Failed to read version %s, err: %v", fqn, err)
-		}
+		return
+	}
+	size = finfo.Size()
+	if bytes, errs := Getxattr(fqn, xattrObjVersion); errs == "" {
+		version = string(bytes)
 	}
 	return
 }

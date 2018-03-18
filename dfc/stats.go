@@ -55,7 +55,7 @@ type targetCoreStats struct {
 	Numlist          int64 `json:"numlist"`
 	Numprefetch      int64 `json:"numprefetch"`
 	Bytesprefetched  int64 `json:"bytesprefetched"`
-	Numchanged       int64 `json:"numchanged"`
+	Numvchanged      int64 `json:"numvchanged"`
 	Bytesvchanged    int64 `json:"bytesvchanged"`
 	Numbadchecksum   int64 `json:"numbadchecksum"`
 	Bytesbadchecksum int64 `json:"bytesbadchecksum"`
@@ -157,8 +157,8 @@ func (s *targetCoreStats) add(name string, val int64) {
 		v = &s.Numprefetch
 	case "bytesprefetched":
 		v = &s.Bytesprefetched
-	case "numchanged":
-		v = &s.Numchanged
+	case "numvchanged":
+		v = &s.Numvchanged
 	case "bytesvchanged":
 		v = &s.Bytesvchanged
 	case "numbadchecksum":

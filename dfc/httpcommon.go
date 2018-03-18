@@ -48,7 +48,7 @@ type cloudif interface {
 	listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
 	headbucket(bucket string) (headers map[string]string, errstr string, errcode int)
 	headobject(bucket string, objname string) (headers map[string]string, errstr string, errcode int)
-	getobj(fqn, bucket, objname string) (props objectProps, errstr string, errcode int)
+	getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
 	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (errstr string, errcode int)
 	deleteobj(bucket, objname string) (errstr string, errcode int)
 }

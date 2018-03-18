@@ -169,16 +169,15 @@ func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (headers map[s
 	attrs, err := client.Bucket(bucket).Object(objname).Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s/%s), err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("gcp: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-
 	headers[HeaderServer] = googlecloud
-	headers["version"] = fmt.Sprintf("%v", attrs.Generation)
+	headers["version"] = fmt.Sprintf("%d", attrs.Generation)
 	return
 }
 
-func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props objectProps, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
 	var v cksumvalue
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -188,24 +187,25 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to get attributes (object %s, bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
 	v = newcksumvalue(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("gcp: Failed to create rc (object %s, bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: The object %s/%s either does not exist or is not accessible, err: %v", bucket, objname, err)
 		return
 	}
 	defer rc.Close()
 	// hashtype and hash could be empty for legacy objects.
+	props = &objectProps{}
 	if props.nhobj, props.size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, rc); errstr != "" {
 		return
 	}
-	props.version = fmt.Sprintf("%v", attrs.Generation)
+	props.version = fmt.Sprintf("%d", attrs.Generation)
 	if glog.V(3) {
-		glog.Infof("gcp: GET %s (bucket %s)", objname, bucket)
+		glog.Infof("gcp: GET %s/%s", bucket, objname)
 	}
 	return
 }
@@ -254,11 +254,11 @@ func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string, errcod
 	err := o.Delete(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("gcp: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("gcp: deleted %s (bucket %s)", objname, bucket)
+		glog.Infof("gcp: DELETE %s/%s", bucket, objname)
 	}
 	return
 }

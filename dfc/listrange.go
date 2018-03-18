@@ -327,7 +327,7 @@ loop:
 			}
 			bucket := fwd.bucket
 			for _, objname := range fwd.objnames {
-				t.prefetchIfMissing(objname, bucket)
+				t.prefetchMissing(objname, bucket)
 			}
 
 			// Signal completion of prefetch
@@ -344,29 +344,37 @@ loop:
 	t.xactinp.del(xpre.id)
 }
 
-func (t *targetrunner) prefetchIfMissing(objname, bucket string) {
+func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	var (
-		errstr  string
-		doReget bool
+		errstr, version   string
+		errcode           int
+		vchanged, coldget bool
+		props             *objectProps
 	)
 	versioncfg := &ctx.config.VersionConfig
-	fqn, uname := t.fqn(bucket, objname), bucket+"/"+objname
-	// The first check does not take the lock, preventing get from starving
+	fqn := t.fqn(bucket, objname)
+	uname := bucket + objname
+	//
+	// step 1: do not take the lock to prevent get from starving
 	// from repeated prefetches on the same cached file
-	coldget, _, version, _ := t.getchecklocal(bucket, objname, fqn)
-	if !coldget && versioncfg.ValidateWarmGet {
-		if doReget, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
-			glog.Errorf("Failed to read object %s/%s head: %s", bucket, objname, errstr)
-			t.statsif.add("numerr", 1)
+	//
+	if coldget, _, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
+		glog.Errorln(errstr)
+		t.statsif.add("numerr", 1)
+		return
+	}
+	if !coldget && versioncfg.ValidateWarmGet && version != "" {
+		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			return
 		}
-		coldget = doReget
+		coldget = vchanged
 	}
 	if !coldget {
 		return
 	}
-
-	// The second check takes the lock, preventing interference between get and prefetch
+	//
+	// step 2: the same, with a lock
+	//
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer func() { t.rtnamemap.unlockname(uname, true) }()
 	if coldget, _, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
@@ -374,32 +382,32 @@ func (t *targetrunner) prefetchIfMissing(objname, bucket string) {
 		t.statsif.add("numerr", 1)
 		return
 	}
-	if !coldget && versioncfg.ValidateWarmGet {
-		if doReget, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
-			glog.Errorf("Failed to read object %s/%s head: %s", bucket, objname, errstr)
-			t.statsif.add("numerr", 1)
+	if !coldget && versioncfg.ValidateWarmGet && version != "" {
+		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			return
 		}
-		coldget = doReget
+		coldget = vchanged
 	}
-
-	if coldget {
-		//FIXME: Revisit potential use of timeout for prefetch deadline
-		if props, errstr, errcode := getcloudif().getobj(fqn, bucket, objname); errstr != "" {
-			glog.Errorf("Error retrieving object %s/%s: Error Code %d: %s",
-				bucket, objname, errcode, errstr)
-			t.statsif.add("numerr", 1)
-		} else {
-			glog.Infof("Prefetched %s", fqn)
-			t.statsif.add("numprefetch", 1)
-			t.statsif.add("bytesprefetched", props.size)
-			if props.version != "" {
-				Setxattr(fqn, xattrObjVersion, []byte(props.version))
-			}
-			if doReget {
-				t.statsif.add("bytesvchanged", props.size)
-			}
-		}
+	if !coldget {
+		return
+	}
+	//
+	// step 3: prefetch (FIXME: revisit potential use of timeout for prefetch deadline)
+	//
+	if props, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+		glog.Errorf("Failed to prefetch %s/%s, err: %s, code %d", bucket, objname, errstr, errcode)
+		t.statsif.add("numerr", 1)
+		return
+	}
+	glog.Infof("PREFETCH %s/%s => %s", bucket, objname, fqn)
+	t.statsif.add("numprefetch", 1)
+	t.statsif.add("bytesprefetched", props.size)
+	if props.version != "" {
+		Setxattr(fqn, xattrObjVersion, []byte(props.version))
+	}
+	if vchanged {
+		t.statsif.add("bytesvchanged", props.size)
+		t.statsif.add("numvchanged", 1)
 	}
 }
 

@@ -158,15 +158,14 @@ func (awsimpl *awsimpl) headobject(bucket string, objname string) (headers map[s
 
 	sess := createsession()
 	svc := s3.New(sess)
-	input := &s3.HeadObjectInput{Bucket: &bucket, Key: &objname}
+	input := &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)}
 
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to HeadObject %s. err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("aws: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-
 	headers[HeaderServer] = amazoncloud
 	if headOutput.VersionId != nil {
 		headers["version"] = *headOutput.VersionId
@@ -180,20 +179,19 @@ func (awsimpl *awsimpl) headbucket(bucket string) (headers map[string]string, er
 
 	sess := createsession()
 	svc := s3.New(sess)
-	input := &s3.HeadBucketInput{Bucket: &bucket}
+	input := &s3.HeadBucketInput{Bucket: aws.String(bucket)}
 
 	_, err := svc.HeadBucket(input)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to HeadBucket %s. err: %v", bucket, err)
+		errstr = fmt.Sprintf("aws: The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 		return
 	}
-
 	headers[HeaderServer] = amazoncloud
 	return
 }
 
-func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props objectProps, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int) {
 	var v cksumvalue
 	sess := createsession()
 	svc := s3.New(sess)
@@ -203,11 +201,11 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props objectProps, 
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to get %s from bucket %s, err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("aws: Failed to GET %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	defer obj.Body.Close()
-	// object may not have dfc metadata
+	// may not have dfc metadata
 	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
 		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
 			v = newcksumvalue(*htype, *hval)
@@ -217,10 +215,11 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props objectProps, 
 	// FIXME: multipart
 	if strings.Contains(md5, awsMultipartDelim) {
 		if glog.V(3) {
-			glog.Infof("Multipart object %s (bucket %s) - not validating checksum", objname, bucket)
+			glog.Infof("Warning: multipart object %s/%s - not validating checksum %s", bucket, objname, md5)
 		}
 		md5 = ""
 	}
+	props = &objectProps{}
 	if props.nhobj, props.size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, obj.Body); errstr != "" {
 		return
 	}
@@ -228,16 +227,17 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props objectProps, 
 		props.version = *obj.VersionId
 	}
 	if glog.V(3) {
-		glog.Infof("aws: GET %s (bucket %s)", objname, bucket)
+		glog.Infof("aws: GET %s/%s", bucket, objname)
 	}
 	return
 }
 
 func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksumvalue) (errstr string, errcode int) {
 	var (
-		err         error
-		htype, hval string
-		md          map[string]*string
+		err          error
+		htype, hval  string
+		md           map[string]*string
+		uploadoutput *s3manager.UploadOutput
 	)
 	if ohash != nil {
 		htype, hval = ohash.get()
@@ -247,7 +247,7 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	}
 	sess := createsession()
 	uploader := s3manager.NewUploader(sess)
-	_, err = uploader.Upload(&s3manager.UploadInput{
+	uploadoutput, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(bucket),
 		Key:      aws.String(objname),
 		Body:     file,
@@ -255,11 +255,17 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to put %s (bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("aws: Failed to PUT %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("aws: PUT %s (bucket %s)", objname, bucket)
+		var v string
+		if uploadoutput.VersionID != nil {
+			v = *uploadoutput.VersionID
+			glog.Infof("aws: PUT %s/%s, version %s", bucket, objname, v)
+		} else {
+			glog.Infof("aws: PUT %s/%s", bucket, objname)
+		}
 	}
 	return
 }
@@ -270,11 +276,11 @@ func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string, errcod
 	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to delete %s (bucket %s), err: %v", objname, bucket, err)
+		errstr = fmt.Sprintf("aws: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("aws: deleted %s (bucket %s)", objname, bucket)
+		glog.Infof("aws: DELETE %s/%s", bucket, objname)
 	}
 	return
 }

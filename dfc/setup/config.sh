@@ -26,16 +26,16 @@
 		"maxpartsize":		4294967296
 	},
 	"cksum_config": {
-                 "validate_cold_get":    true,
-                 "checksum":             "xxhash"
+                 "validate_cold_get":	true,
+                 "checksum":		"xxhash"
 	},
 	"version_config": {
-		"validate_warm_get": false
+		"validate_warm_get":	false
 	},
 	"lru_config": {
 		"lowwm":		75,
 		"highwm":		90,
-		"dont_evict_time":      "120m",
+		"dont_evict_time":	"120m",
 		"lru_enabled":  	true
 	},
 	"test_fspaths": {
