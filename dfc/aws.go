@@ -59,6 +59,10 @@ func awsErrorToHTTP(awsError error) int {
 	return http.StatusInternalServerError
 }
 
+func awsIsVersionSet(version *string) bool {
+	return version != nil && *version != "null" && *version != ""
+}
+
 //======
 //
 // methods
@@ -100,7 +104,7 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 
 		versions = make(map[string]*string, initialBucketListSize)
 		for _, vers := range verResp.Versions {
-			if *(vers.IsLatest) && vers.VersionId != nil {
+			if *(vers.IsLatest) && awsIsVersionSet(vers.VersionId) {
 				versions[*(vers.Key)] = vers.VersionId
 			}
 		}
@@ -130,7 +134,7 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 			entry.Checksum = omd5
 		}
 		if strings.Contains(msg.GetProps, GetPropsVersion) {
-			if val, ok := versions[*(key.Key)]; ok {
+			if val, ok := versions[*(key.Key)]; ok && awsIsVersionSet(val) {
 				entry.Version = *val
 			}
 		}
@@ -166,7 +170,21 @@ func (awsimpl *awsimpl) headbucket(bucket string) (bucketprops map[string]string
 		errstr = fmt.Sprintf("aws: The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 		return
 	}
-	bucketprops[HeaderServer] = amazoncloud
+	bucketprops[CloudProvider] = ProviderAmazon
+
+	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}
+	result, err := svc.GetBucketVersioning(inputVers)
+	if err != nil {
+		errcode = awsErrorToHTTP(err)
+		errstr = fmt.Sprintf("aws: The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
+	} else {
+		if result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled {
+			bucketprops[Versioning] = VersioningEnabled
+		} else {
+			bucketprops[Versioning] = VersioningDisabled
+		}
+	}
+
 	return
 }
 
@@ -184,8 +202,8 @@ func (awsimpl *awsimpl) headobject(bucket string, objname string) (objmeta map[s
 		errstr = fmt.Sprintf("aws: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	objmeta[HeaderServer] = amazoncloud
-	if headOutput.VersionId != nil {
+	objmeta[CloudProvider] = ProviderAmazon
+	if awsIsVersionSet(headOutput.VersionId) {
 		objmeta["version"] = *headOutput.VersionId
 	}
 	return
@@ -220,11 +238,11 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 		md5 = ""
 	}
 	props = &objectProps{}
-	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
-		return
-	}
 	if obj.VersionId != nil {
 		props.version = *obj.VersionId
+	}
+	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
+		return
 	}
 	if glog.V(3) {
 		glog.Infof("aws: GET %s/%s", bucket, objname)
@@ -232,7 +250,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 	return
 }
 
-func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksumvalue) (errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
 	var (
 		err          error
 		htype, hval  string
@@ -259,10 +277,9 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 		return
 	}
 	if glog.V(3) {
-		var v string
 		if uploadoutput.VersionID != nil {
-			v = *uploadoutput.VersionID
-			glog.Infof("aws: PUT %s/%s, version %s", bucket, objname, v)
+			version = *uploadoutput.VersionID
+			glog.Infof("aws: PUT %s/%s, version %s", bucket, objname, version)
 		} else {
 			glog.Infof("aws: PUT %s/%s", bucket, objname)
 		}

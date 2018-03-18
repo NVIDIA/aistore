@@ -32,16 +32,24 @@ const (
 
 // Cloud Provider enum
 const (
-	amazoncloud = "aws"
-	googlecloud = "gcp"
-	dfclocal    = "dfc"
+	ProviderAmazon = "aws"
+	ProviderGoogle = "gcp"
+	ProviderDfc    = "dfc"
+)
+
+// Bucket versioning state
+const (
+	VersioningEnabled  = "enabled"
+	VersioningDisabled = "disabled"
 )
 
 // Header Key enum
 const (
-	HeaderServer          = "Server"                // Server: from Cloud Provider enum
+	CloudProvider         = "CloudProvider"         // from Cloud Provider enum
+	Versioning            = "Versioning"            // Versioning state for a bucket: "enabled"/"disabled"
 	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
+	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation
 )
 
 // URL Query Parameter enum

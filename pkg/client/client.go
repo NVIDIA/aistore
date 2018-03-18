@@ -44,9 +44,14 @@ var (
 	RestAPIResource = "files"
 )
 
-type reqError struct {
+type ReqError struct {
 	code    int
 	message string
+}
+
+type BucketProps struct {
+	CloudProvider     string
+	VersioningEnabled bool
 }
 
 // Reader is the interface a client works with to read in data and send to a HTTP server
@@ -66,12 +71,12 @@ func (q *bytesReaderCloser) Close() error {
 	return nil
 }
 
-func (err reqError) Error() string {
+func (err ReqError) Error() string {
 	return err.message
 }
 
-func newReqError(msg string, code int) reqError {
-	return reqError{
+func newReqError(msg string, code int) ReqError {
+	return ReqError{
 		code:    code,
 		message: msg,
 	}
@@ -357,11 +362,12 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 	return string(b)
 }
 
-func HeadBucket(proxyurl, bucket string) (server string, err error) {
+func HeadBucket(proxyurl, bucket string) (bucketprops *BucketProps, err error) {
 	var (
 		url = proxyurl + "/v1/files/" + bucket
 		r   *http.Response
 	)
+	bucketprops = &BucketProps{}
 	r, err = client.Head(url)
 	if err != nil {
 		return
@@ -373,13 +379,14 @@ func HeadBucket(proxyurl, bucket string) (server string, err error) {
 		err = fmt.Errorf("Head bucket %s failed, HTTP status %d", bucket, r.StatusCode)
 		return
 	}
-	server = r.Header.Get("Server")
+	bucketprops.CloudProvider = r.Header.Get(dfc.CloudProvider)
+	bucketprops.VersioningEnabled = r.Header.Get(dfc.Versioning) == dfc.VersioningEnabled
 	return
 }
 
 func checkHTTPStatus(resp *http.Response, op string) error {
 	if resp.StatusCode >= http.StatusBadRequest {
-		return reqError{
+		return ReqError{
 			code:    resp.StatusCode,
 			message: fmt.Sprintf("Bad status code from %s", op),
 		}

@@ -49,7 +49,7 @@ type cloudif interface {
 	headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int)
 	headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int)
 	getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
-	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (errstr string, errcode int)
+	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
 	deleteobj(bucket, objname string) (errstr string, errcode int)
 }
 
@@ -405,6 +405,12 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 			ctx.config.CksumConfig.Checksum = value
 		} else {
 			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, ChecksumXXHash, ChecksumNone)
+		}
+	case "versioning":
+		if err := validateVersion(value); err == nil {
+			ctx.config.VersionConfig.Versioning = value
+		} else {
+			return err.Error()
 		}
 	default:
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)

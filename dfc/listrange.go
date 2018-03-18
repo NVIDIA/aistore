@@ -354,16 +354,17 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	versioncfg := &ctx.config.VersionConfig
 	fqn := t.fqn(bucket, objname)
 	uname := bucket + objname
+	islocal := t.islocalBucket(bucket)
 	//
 	// step 1: do not take the lock to prevent get from starving
 	// from repeated prefetches on the same cached file
 	//
-	if coldget, _, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
+	if coldget, _, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
 		glog.Errorln(errstr)
 		t.statsif.add("numerr", 1)
 		return
 	}
-	if !coldget && versioncfg.ValidateWarmGet && version != "" {
+	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && versioningConfigured(bucket, islocal) {
 		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			return
 		}
@@ -377,12 +378,12 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	//
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer func() { t.rtnamemap.unlockname(uname, true) }()
-	if coldget, _, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
+	if coldget, _, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
 		glog.Errorln(errstr)
 		t.statsif.add("numerr", 1)
 		return
 	}
-	if !coldget && versioncfg.ValidateWarmGet && version != "" {
+	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && versioningConfigured(bucket, islocal) {
 		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			return
 		}
@@ -402,8 +403,8 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	glog.Infof("PREFETCH %s/%s => %s", bucket, objname, fqn)
 	t.statsif.add("numprefetch", 1)
 	t.statsif.add("bytesprefetched", props.size)
-	if props.version != "" {
-		Setxattr(fqn, xattrObjVersion, []byte(props.version))
+	if errstr := finalizeobj(fqn, props); errstr != "" {
+		glog.Errorf("Setting object properties failed: %s", errstr)
 	}
 	if vchanged {
 		t.statsif.add("bytesvchanged", props.size)

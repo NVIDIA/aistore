@@ -175,7 +175,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=false", si.DirectURL, r.URL.Path, ParamLocal)
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, ParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
@@ -236,7 +236,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
 // Request list of all cached files from a target.
 // The target returns its list in batches `cachedPageSize` length
 func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
-	dataCh chan *cachedFileBatch, wg *sync.WaitGroup, msg GetMsg) {
+	dataCh chan *cachedFileBatch, wg *sync.WaitGroup, origmsg *GetMsg) {
 	const (
 		cachedObjects = true
 		islocal       = false
@@ -245,6 +245,8 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 		defer wg.Done()
 	}
 
+	var msg GetMsg
+	copyStruct(&msg, origmsg)
 	for {
 		// re-Marshall request arguments every time because PageMarker
 		// changes every loop run
@@ -299,8 +301,8 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 // Get list of cached files from all targets and update the list
 // of files from cloud with local metadata (iscached, atime etc)
 func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList, getmsgjson []byte) (err error) {
-	reqParams := GetMsg{}
-	err = json.Unmarshal(getmsgjson, &reqParams)
+	reqParams := &GetMsg{}
+	err = json.Unmarshal(getmsgjson, reqParams)
 	if err != nil {
 		return
 	}
@@ -413,6 +415,15 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 	return
 }
 
+// Local bucket:
+//   - reads object list from all targets, combines them into one big list,
+//     and returns it
+// Cloud bucket:
+//   - selects a random target to read the list of objects from cloud
+//   - if iscached or atime property is requested it does extra steps:
+//      * get list of cached files info from all targets
+//      * updates the list of objects from the cloud with cached info
+//   - returns the list
 func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
 	var allentries *BucketList
 	listmsgjson, err := ioutil.ReadAll(r.Body)
@@ -483,7 +494,7 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := si.DirectURL + r.URL.Path
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, ParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
@@ -654,6 +665,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 	bucket := apitems[0]
+	islocal := p.islocalBucket(bucket)
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
 		s := fmt.Sprintf("Failed to unmarshal JSMAP: Not a map[string]interface")
@@ -690,7 +702,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 				err     error
 				errstr  string
 				errcode int
-				url     = si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
+				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rfiles, bucket, ParamLocal, islocal)
 			)
 			if wait {
 				_, err, errstr, errcode = p.call(si, url, method, jsonbytes, 0)

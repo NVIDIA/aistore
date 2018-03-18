@@ -31,7 +31,8 @@
                  "checksum":		"xxhash"
 	},
 	"version_config": {
-		"validate_warm_get":	false
+		"validate_warm_get":	false,
+		"versioning": "all"
 	},
 	"lru_config": {
 		"lowwm":		75,

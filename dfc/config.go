@@ -25,6 +25,11 @@ const (
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
 	ChecksumMD5    = "md5"
+
+	VersionAll   = "all"
+	VersionCloud = "cloud"
+	VersionLocal = "local"
+	VersionNone  = "none"
 )
 
 const (
@@ -113,7 +118,8 @@ type httpconfig struct {
 
 type versionconfig struct {
 	// True enables object version validation for WARM GET.
-	ValidateWarmGet bool `json:"validate_warm_get"`
+	ValidateWarmGet bool   `json:"validate_warm_get"`
+	Versioning      string `json:"versioning"` // for what types of objects versioning is enabled: all, cloud, local, none
 }
 
 //==============================
@@ -168,6 +174,21 @@ func getConfig(fpath string) {
 	}
 }
 
+func validateVersion(version string) error {
+	versions := []string{VersionAll, VersionCloud, VersionLocal, VersionNone}
+	versionValid := false
+	for _, v := range versions {
+		if v == version {
+			versionValid = true
+			break
+		}
+	}
+	if !versionValid {
+		return fmt.Errorf("Invalid version: %s - expecting one of %s", version, strings.Join(versions, ", "))
+	}
+	return nil
+}
+
 func validateconf() (err error) {
 	// durations
 	if ctx.config.StatsTime, err = time.ParseDuration(ctx.config.StatsTimeStr); err != nil {
@@ -200,6 +221,9 @@ func validateconf() (err error) {
 	}
 	if ctx.config.CksumConfig.Checksum != ChecksumXXHash && ctx.config.CksumConfig.Checksum != ChecksumNone {
 		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.CksumConfig.Checksum, ChecksumXXHash, ChecksumNone)
+	}
+	if err := validateVersion(ctx.config.VersionConfig.Versioning); err != nil {
+		return err
 	}
 	return nil
 }

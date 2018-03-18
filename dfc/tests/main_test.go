@@ -463,11 +463,11 @@ func Test_headbucket(t *testing.T) {
 	// Test that a local bucket returns Server:"DFC"
 	createLocalBucket(httpclient, t, TestLocalBucketName)
 	time.Sleep(time.Second * 2) // FIXME
-	server, err := client.HeadBucket(proxyurl, TestLocalBucketName)
+	props, err := client.HeadBucket(proxyurl, TestLocalBucketName)
 	if err != nil {
 		t.Errorf("Failed to execute HeadBucket: %v", err)
-	} else if server != "dfc" {
-		t.Errorf("Received incorrect Server from HeadBucket: \"%v\", expecting \"DFC\"", server)
+	} else if props.CloudProvider != dfc.ProviderDfc {
+		t.Errorf("Received incorrect Server from HeadBucket: \"%v\", expecting \"DFC\"", props.CloudProvider)
 	}
 	destroyLocalBucket(httpclient, t, TestLocalBucketName)
 }

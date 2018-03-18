@@ -120,12 +120,12 @@ func (t *targetrunner) run() error {
 	}
 
 	// cloud provider
-	if ctx.config.CloudProvider == amazoncloud {
+	if ctx.config.CloudProvider == ProviderAmazon {
 		// TODO: sessions
 		t.cloudif = &awsimpl{t}
 
 	} else {
-		assert(ctx.config.CloudProvider == googlecloud)
+		assert(ctx.config.CloudProvider == ProviderGoogle)
 		t.cloudif = &gcpimpl{t}
 	}
 	// init capacity
@@ -232,6 +232,11 @@ func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchan
 //
 // checks if the object exists locally (if not, downloads it)
 // and sends it back via http
+// If the bucket is cloud one and ValidateWarmGet is enabled then
+// there is extra check in case of the file exists locally:
+// - It reads the object version from cloud and compare to local version from xattrs.
+// - If local version is not empty and it differs from cloud one, it refetch the
+//	 object from cloud, updates xattrs, and increases stats numvchanged & bytesvchanged
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	var (
 		nhobj                        cksumvalue
@@ -264,6 +269,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.listbucket(w, r, bucket)
 		return
 	}
+
+	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+		return
+	}
 	//
 	// serialize on the name
 	//
@@ -274,13 +285,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	//
 	// get the object from the bucket
 	//
-	if coldget, size, version, errstr = t.getchecklocal(bucket, objname, fqn); errstr != "" {
+	if coldget, size, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		return
 	}
 	// FIXME - TODO: split ValidateWarmGet into a) validate and b) get new if invalid
 	// the second flag controls whether the original request blocks on version update
-	if !coldget && versioncfg.ValidateWarmGet && version != "" {
+	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && versioningConfigured(bucket, islocal) {
 		if vchanged, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -305,15 +316,39 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			t.statsif.add("bytesvchanged", size)
 			t.statsif.add("numvchanged", 1)
 		}
+		if errstr = finalizeobj(fqn, props); errstr != "" {
+			glog.Errorf("Setting object properties failed: %s", errstr)
+		}
 	}
 	//
 	// downgrade lock(name)
 	//
 	exclusive = false
 	t.rtnamemap.downgradelock(uname)
+
 	//
 	// local file => http response
 	//
+	if size == 0 {
+		errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
+		t.invalmsghdlr(w, r, errstr)
+		return // likely, an error
+	}
+	if !coldget && cksumcfg.Checksum != ChecksumNone {
+		hashbinary, errstr := Getxattr(fqn, xattrXXHashVal)
+		if errstr == "" && hashbinary != nil {
+			nhobj = newcksumvalue(cksumcfg.Checksum, string(hashbinary))
+		}
+	}
+	if nhobj != nil {
+		htype, hval := nhobj.get()
+		w.Header().Add(HeaderDfcChecksumType, htype)
+		w.Header().Add(HeaderDfcChecksumVal, hval)
+	}
+	if props != nil && props.version != "" {
+		w.Header().Add(HeaderDfcObjVersion, props.version)
+	}
+
 	file, err := os.Open(fqn)
 	if err != nil {
 		if os.IsPermission(err) {
@@ -327,22 +362,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer file.Close()
-	if !coldget && cksumcfg.Checksum != ChecksumNone {
-		hashbinary, errstr := Getxattr(fqn, xattrXXHashVal)
-		if errstr == "" && hashbinary != nil {
-			nhobj = newcksumvalue(cksumcfg.Checksum, string(hashbinary))
-		}
-	}
-	if nhobj != nil {
-		htype, hval := nhobj.get()
-		w.Header().Add(HeaderDfcChecksumType, htype)
-		w.Header().Add(HeaderDfcChecksumVal, hval)
-	}
-	if size == 0 {
-		errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
-		t.invalmsghdlr(w, r, errstr)
-		return // likely, an error
-	}
 	slab := selectslab(size)
 	buf := slab.alloc()
 	defer slab.free(buf)
@@ -356,13 +375,10 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
-	if coldget && props.version != "" {
-		Setxattr(fqn, xattrObjVersion, []byte(props.version))
-	}
 	t.statsif.add("numget", 1)
 }
 
-func (t *targetrunner) getchecklocal(bucket, objname, fqn string) (coldget bool, size int64, version string, errstr string) {
+func (t *targetrunner) isObjectCached(bucket, objname, fqn string) (coldget bool, size int64, version string, errstr string) {
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		switch {
@@ -553,6 +569,13 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 				entry.Atime = fi.atime.Format(msg.GetTimeFormat)
 			}
 		}
+		if strings.Contains(msg.GetProps, GetPropsVersion) {
+			fqn := t.fqn(bucket, fi.relname)
+			version, errstr := Getxattr(fqn, xattrObjVersion)
+			if errstr == "" {
+				entry.Version = string(version)
+			}
+		}
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 	jsbytes, err := json.Marshal(reslist)
@@ -560,6 +583,10 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 	t.writeJSON(w, r, jsbytes, "listbucket")
 }
 
+// List bucket returns a list of objects in a bucket (with optional prefix)
+// Special case:
+// If URL contains cachedonly=true then the function returns the list of
+// locally cached objects. Paging is used to return a long list of objects
 func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
 	var (
 		jsbytes []byte
@@ -569,10 +596,12 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
+		return
 	}
 	useCache, errstr, errcode := t.checkCacheQueryParameter(r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
+		return
 	}
 
 	msg := &GetMsg{}
@@ -618,6 +647,11 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
+// Checks if the directory should be processed by cache list call
+// Does checks:
+//  - Object name must start with prefix (if it is set)
+//  - Object name is not in early processed directories by the previos call:
+//    paging support
 func (ci *cachedInfos) processDir(fqn string) error {
 	if len(fqn) <= ci.rootLength {
 		return nil
@@ -644,6 +678,10 @@ func (ci *cachedInfos) processDir(fqn string) error {
 	return nil
 }
 
+// Adds an info about cached object to the list if:
+//  - its name starts with prefix (if prefix is set)
+//  - it has not been already returned by previous page request
+//  - this target responses getobj request for the object
 func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 	relname := fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
@@ -709,6 +747,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
+
 	if from != "" && to != "" {
 		// Rebalance: "/"+Rversion+"/"+Rfiles + "/"+bucket+"/"+objname+"?from_id="+from_id+"&to_id="+to_id
 		if objname == "" {
@@ -737,6 +776,12 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// After putting a new version it updates xattr attrubutes for the object
+// Local bucket:
+//  - if bucket versioing is enable("all" or "local") then the version is autoincremented
+// Cloud bucket:
+//  - if the Cloud returns a new version id then save it to xattr
+// In both case a new checksum is saved to xattrs
 func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, objname string) (errstr string, errcode int) {
 	var (
 		file                       *os.File
@@ -746,6 +791,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		htype, hval, nhtype, nhval string
 		sgl                        *SGLIO
 	)
+
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
 	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
@@ -798,15 +844,16 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		return
 	}
 	// commit
+	props := &objectProps{nhobj: nhobj}
 	if sgl == nil {
-		return t.putCommit(bucket, objname, putfqn, fqn, nhobj, false)
+		return t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 	}
 	// FIXME: AA: use xaction
-	go t.sglToCloudAsync(sgl, bucket, objname, putfqn, fqn, nhobj)
+	go t.sglToCloudAsync(sgl, bucket, objname, putfqn, fqn, props)
 	return
 }
 
-func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn string, nhobj cksumvalue) {
+func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn string, objprops *objectProps) {
 	slab := selectslab(sgl.Size())
 	buf := slab.alloc()
 	defer func() {
@@ -840,7 +887,7 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 		}
 		return
 	}
-	errstr, _ := t.putCommit(bucket, objname, putfqn, fqn, nhobj, false)
+	errstr, _ := t.putCommit(bucket, objname, putfqn, fqn, objprops, false /*rebalance*/)
 	if errstr != "" {
 		glog.Errorln("sglToCloudAsync: commit", errstr)
 		return
@@ -848,10 +895,12 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 	glog.Infof("sglToCloudAsync: %s/%s done", bucket, objname)
 }
 
-func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string, nhobj cksumvalue, rebalance bool) (errstr string, errcode int) {
+func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
+	objprops *objectProps, rebalance bool) (errstr string, errcode int) {
 	var (
-		file *os.File
-		err  error
+		file          *os.File
+		err           error
+		isBucketLocal = t.islocalBucket(bucket)
 	)
 	defer func() {
 		if errstr != "" {
@@ -861,12 +910,12 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string, nhobj cksu
 		}
 	}()
 	// cloud
-	if !t.islocalBucket(bucket) && !rebalance {
+	if !isBucketLocal && !rebalance {
 		if file, err = os.Open(putfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
 			return
 		}
-		if errstr, errcode = getcloudif().putobj(file, bucket, objname, nhobj); errstr != "" {
+		if objprops.version, errstr, errcode = getcloudif().putobj(file, bucket, objname, objprops.nhobj); errstr != "" {
 			_ = file.Close()
 			return
 		}
@@ -876,12 +925,18 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string, nhobj cksu
 			return
 		}
 	}
+
+	if isBucketLocal && versioningConfigured(bucket, isBucketLocal) {
+		if objprops.version, errstr = increaseObjectVersion(fqn); errstr != "" {
+			return
+		}
+	}
+
 	// when all set and done:
 	if errstr = t.putSafeRename(bucket, objname, putfqn, fqn); errstr != "" {
 		return
 	}
-	// FIXME: PUT must be returning the version - use it here to "finalize"
-	if errstr = finalizeobj(fqn, nhobj); errstr != "" {
+	if errstr = finalizeobj(fqn, objprops); errstr != "" {
 		return
 	}
 	t.statsif.add("numput", 1)
@@ -951,14 +1006,14 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		var (
 			hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
-			nhobj  cksumvalue
 			inmem  = false // TODO
+			props  = &objectProps{version: r.Header.Get(HeaderDfcObjVersion)}
 		)
-		if _, nhobj, size, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
+		if _, props.nhobj, size, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
 			return
 		}
-		if nhobj != nil {
-			nhtype, nhval := nhobj.get()
+		if props.nhobj != nil {
+			nhtype, nhval := props.nhobj.get()
 			htype, hval := hdhobj.get()
 			assert(htype == nhtype)
 			if hval != nhval {
@@ -967,7 +1022,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 				return
 			}
 		}
-		errstr, _ = t.putCommit(bucket, objname, putfqn, fqn, nhobj, true)
+		errstr, _ = t.putCommit(bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 	}
 	return
 }
@@ -1188,10 +1243,14 @@ func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg A
 	}
 }
 
+// Rebalancing supports versioning. If an object in DFC cache has version in
+// xattrs then the sender adds to HTTP header object version. A receiver side
+// reads version from headers and set xattrs if the version is not empty
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newobjname string) string {
 	var (
 		xxhashval string
 		errstr    string
+		version   []byte
 	)
 	if size == 0 {
 		return fmt.Sprintf("Unexpected: %s/%s size is zero", bucket, objname)
@@ -1211,6 +1270,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
 	defer file.Close()
+
+	if version, errstr = Getxattr(fqn, xattrObjVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, xattrObjVersion, errstr)
+	}
 
 	slab := selectslab(size)
 	if cksumcfg.Checksum != ChecksumNone {
@@ -1237,6 +1300,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if xxhashval != "" {
 		request.Header.Set(HeaderDfcChecksumType, ChecksumXXHash)
 		request.Header.Set(HeaderDfcChecksumVal, xxhashval)
+	}
+	if len(version) != 0 {
+		request.Header.Set(HeaderDfcObjVersion, string(version))
 	}
 	response, err := t.httpclient.Do(request)
 	if err != nil {
@@ -1291,7 +1357,6 @@ func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	if !islocal {
 		bucketprops, errstr, errcode = getcloudif().headbucket(bucket)
 		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
 			} else {
@@ -1301,7 +1366,13 @@ func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		bucketprops = make(map[string]string)
-		bucketprops[HeaderServer] = dfclocal
+		bucketprops[CloudProvider] = ProviderDfc
+		bucketprops[Versioning] = VersioningEnabled
+
+	}
+	// double check if we support versioning internally for the bucket
+	if !versioningConfigured(bucket, islocal) {
+		bucketprops[Versioning] = VersioningDisabled
 	}
 
 	for k, v := range bucketprops {
@@ -1743,12 +1814,64 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 	return
 }
 
-func finalizeobj(fqn string, nhobj cksumvalue) (errstr string) {
-	if nhobj == nil {
+// This function must be used everywhere instead of Setxattr call
+func finalizeobj(fqn string, objprops *objectProps) (errstr string) {
+	if objprops.nhobj != nil {
+		htype, hval := objprops.nhobj.get()
+		assert(htype == ChecksumXXHash)
+		if errstr = Setxattr(fqn, xattrXXHashVal, []byte(hval)); errstr != "" {
+			return errstr
+		}
+	}
+	if objprops.version != "" {
+		errstr = Setxattr(fqn, xattrObjVersion, []byte(objprops.version))
+	}
+	return
+}
+
+// versioningConfigured returns if DFC supports versioning for the bucket.
+// Note about AWS cloud:
+// AWS bucket versioning can be disabled on the cloud. In this case we do not
+//    save/read/update version using xattrs. And the function returns that the
+//    versioning is unsupported even if versioning is 'all' or 'cloud'.
+func versioningConfigured(bucket string, islocal bool) bool {
+	versioning := ctx.config.VersionConfig.Versioning
+	if islocal {
+		return versioning == VersionAll || versioning == VersionLocal
+	}
+
+	return versioning == VersionAll || versioning == VersionCloud
+}
+
+// increaseObjectVersion is version id support for local buckets.
+// It reads the current version from xattrs, increase the value by one,
+// and returns the new value. If the current version is empty(file was put
+// before versioning for local buckets had been enabled) or file does not exist
+// (object has not been put yet) the version id starts from "1"
+func increaseObjectVersion(fqn string) (newVersion string, errstr string) {
+	const initialVersion = "1"
+	var (
+		err    error
+		vbytes []byte
+	)
+	_, err = os.Stat(fqn)
+	if err != nil && os.IsNotExist(err) {
+		newVersion = initialVersion
 		return
 	}
-	htype, hval := nhobj.get()
-	assert(htype == ChecksumXXHash)
-	errstr = Setxattr(fqn, xattrXXHashVal, []byte(hval))
+	if err != nil {
+		errstr = fmt.Sprintf("Unexpected failure to read stats of file %s, err: %v", fqn, err)
+		return
+	}
+
+	if vbytes, errstr = Getxattr(fqn, xattrObjVersion); errstr != "" {
+		return
+	}
+	if currValue, err := strconv.Atoi(string(vbytes)); err != nil {
+		newVersion = initialVersion
+	} else {
+		newVersion = fmt.Sprintf("%d", currValue+1)
+	}
+
 	return
 }
