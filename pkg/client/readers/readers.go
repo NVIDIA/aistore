@@ -49,14 +49,13 @@ func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (strin
 		hash string
 		h    *xxhash.XXHash64
 	)
-
-	blkSize := int64(1048576)
-	blk := make([]byte, blkSize)
+	blk, handle := dfc.AllocFromSlab(int64(1048576))
+	blkSize := int64(len(blk))
+	defer dfc.FreeToSlab(blk, handle)
 
 	if withHash {
 		h = xxhash.New64()
 	}
-
 	for i := int64(0); i <= size/blkSize; i++ {
 		n := min(blkSize, left)
 		rnd.Read(blk[:n])
@@ -71,13 +70,11 @@ func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (strin
 
 		left -= int64(m)
 	}
-
 	if withHash {
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
 		hash = hex.EncodeToString(b)
 	}
-
 	return hash, nil
 }
 

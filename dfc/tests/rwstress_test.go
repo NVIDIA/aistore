@@ -56,7 +56,6 @@ var (
 	skipdel bool
 
 	fileNames []string
-	buf       []byte
 	filelock  fileLocks
 
 	numLoops   int
@@ -137,8 +136,6 @@ func generateRandomData(t *testing.T, seed int64, fileCount int) {
 	for i := 0; i < fileCount; i++ {
 		fileNames[i] = client.FastRandomFilename(random, fnlen)
 	}
-
-	buf = make([]byte, blocksize)
 }
 
 // rwCanRunAsync limits the number of extra goroutines simultaneously
@@ -148,7 +145,7 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 	return currAsyncOps+1 < int64(maxAsycOps)
 }
 
-func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, buf []byte) {
+func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	var (
 		totalOps int
 		prc      int
@@ -347,7 +344,7 @@ func rwstress(t *testing.T) {
 
 	doneCh := make(chan int, 2)
 	wg.Add(1)
-	go rwPutLoop(t, fileNames, wg, doneCh, buf)
+	go rwPutLoop(t, fileNames, wg, doneCh)
 	wg.Add(1)
 	go rwGetLoop(t, fileNames, wg, doneCh)
 	if !skipdel {

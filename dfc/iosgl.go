@@ -78,6 +78,21 @@ func (slab *slab) getsize() int64 {
 	return slab.fixedsize
 }
 
+//===========
+//
+// client API
+//
+//===========
+func AllocFromSlab(desiredsize int64) ([]byte, interface{}) {
+	slabif := selectslab(desiredsize)
+	return slabif.alloc(), slabif
+}
+
+func FreeToSlab(buf []byte, handle interface{}) {
+	slabif := handle.(slabif)
+	slabif.free(buf)
+}
+
 //======================================================================
 //
 // Reader and (streaming) Writer on top of a Scatter Gather List (SGL) of reusable buffers

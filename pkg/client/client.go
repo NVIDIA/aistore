@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	httpclient            = &http.Client{Timeout: 10 * time.Second}
-	httpclientLongTimeout = &http.Client{Timeout: 2 * time.Minute}
+	httpclient            = &http.Client{Timeout: 30 * time.Second}
+	httpclientLongTimeout = &http.Client{Timeout: 5 * time.Minute}
 
 	ProxyProto      = "http"
 	ProxyIP         = "localhost"
@@ -388,7 +388,7 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 	url := proxyURL + "/v1/files/" + bucket + "/" + key
 
 	if !silent {
-		fmt.Printf("PUT: object %s/%s - %s\n", bucket, key, reader.Description())
+		fmt.Printf("PUT: %s/%s\n", bucket, key)
 	}
 
 	handle, err := reader.Open()
