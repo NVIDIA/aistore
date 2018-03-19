@@ -180,10 +180,10 @@ func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, ms
 		}
 
 		if m.Version == "" {
-			t.Error("Failed to read object %s/%s version", bucket, m.Name)
+			t.Errorf("Failed to read object %s/%s version", bucket, m.Name)
 			t.Fail()
 		} else if version != m.Version {
-			t.Error("Object %s/%s versions mismath: old[%s] = new[%s]", bucket, m.Name, version, m.Version)
+			t.Errorf("Object %s/%s versions mismath: old[%s] = new[%s]", bucket, m.Name, version, m.Version)
 			t.Fail()
 		}
 	}
