@@ -477,7 +477,10 @@ func cleanUp() {
 		defer wg.Done()
 
 		for _, obj := range objs {
-			client.Del(runParams.proxyURL, runParams.bucket, obj, nil /* wg */, nil /* errch */, true /* silent */)
+			err := client.Del(runParams.proxyURL, runParams.bucket, obj, nil /* wg */, nil /* errch */, true /* silent */)
+			if err != nil {
+				fmt.Println("delete err ", err)
+			}
 			if runParams.usingFile {
 				err := os.Remove(runParams.tmpDir + "/" + obj)
 				if err != nil {

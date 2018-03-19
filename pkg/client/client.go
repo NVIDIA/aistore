@@ -475,7 +475,12 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 
 // DestroyLocalBucket deletes a local bucket
 func DestroyLocalBucket(proxyURL, bucket string) error {
-	req, err := http.NewRequest("DELETE", proxyURL+"/v1/files/"+bucket, nil)
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActDestroyLB})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("DELETE", proxyURL+"/v1/files/"+bucket, bytes.NewBuffer(msg))
 	if err != nil {
 		return err
 	}
