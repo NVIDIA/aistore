@@ -165,7 +165,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		}
 
 		if items == nil {
-			errch <- fmt.Errorf("listbucket %s: is empty - no entries")
+			errch <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
 			return
 		}
 		files := make([]string, 0)
