@@ -27,7 +27,16 @@ const (
 	ChecksumMD5    = "md5"
 )
 
-// dfconfig specifies common daemon's configuration structure in JSON format.
+const (
+	AckWhenInMem  = "memory"
+	AckWhenOnDisk = "disk"
+)
+
+//==============================
+//
+// config types
+//
+//==============================
 type dfconfig struct {
 	Logdir           string            `json:"logdir"`
 	Loglevel         string            `json:"loglevel"`
@@ -40,6 +49,7 @@ type dfconfig struct {
 	HTTP             httpconfig        `json:"http"`
 	KeepAliveTimeStr string            `json:"keep_alive_time"`
 	KeepAliveTime    time.Duration     `json:"-"` // omitempty
+	H2c              bool              `json:"h2c"`
 	Listen           listenconfig      `json:"listen"`
 	Proxy            proxyconfig       `json:"proxy"`
 	S3               s3config          `json:"s3"`
@@ -48,17 +58,15 @@ type dfconfig struct {
 	VersionConfig    versionconfig     `json:"version_config"`
 	FSpaths          map[string]string `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
-	H2c              bool              `json:"h2c"`
+	AckPolicy        ackpolicy         `json:"ack_policy"`
 }
 
-// s3config specifies  Amazon S3 specific configuration parameters
 type s3config struct {
 	Maxconcurrdownld uint32 `json:"maxconcurrdownld"` // Concurent Download for a session.
 	Maxconcurrupld   uint32 `json:"maxconcurrupld"`   // Concurrent Upload for a session.
 	Maxpartsize      uint64 `json:"maxpartsize"`      // Maximum part size for Upload and Download used for buffering.
 }
 
-// caching configuration
 type lruconfig struct {
 	LowWM            uint32        `json:"lowwm"`           // capacity usage low watermark
 	HighWM           uint32        `json:"highwm"`          // capacity usage high watermark
@@ -73,22 +81,24 @@ type testfspathconf struct {
 	Instance int    `json:"instance"`
 }
 
-// daemon listenig params
 type listenconfig struct {
 	Proto string `json:"proto"` // Prototype : tcp, udp
 	Port  string `json:"port"`  // Listening port.
 }
 
-// proxyconfig specifies proxy's well-known address as http://<ipaddress>:<portnumber>
 type proxyconfig struct {
 	URL      string `json:"url"`      // used to register caching servers
 	Passthru bool   `json:"passthru"` // false: get then redirect, true (default): redirect right away
 }
 
 type cksumconfig struct {
-	// True enables MD5 validation for COLD GET.
-	ValidateColdGet bool   `json:"validate_cold_get"`
-	Checksum        string `json:"checksum"`
+	ValidateColdGet bool   `json:"validate_cold_get"` // MD5 (ETag) validation upon cold GET
+	Checksum        string `json:"checksum"`          // DFC checksum: xxhash:none
+}
+
+type ackpolicy struct {
+	Put      string `json:"put"`        // ditto, see enum AckWhen... above
+	MaxMemMB int    `json:"max_mem_mb"` // max memory size for the "memory" option - FIXME: niy
 }
 
 // httpconfig configures parameters for the HTTP clients used by the Proxy
@@ -104,7 +114,11 @@ type versionconfig struct {
 	ValidateWarmGet bool `json:"validate_warm_get"`
 }
 
-// Load and validate daemon's config
+//==============================
+//
+// config functions
+//
+//==============================
 func initconfigparam() error {
 	getConfig(clivars.conffile)
 
@@ -139,7 +153,6 @@ func initconfigparam() error {
 	return err
 }
 
-// Read JSON config file and unmarshal json content into config struct.
 func getConfig(fpath string) {
 	raw, err := ioutil.ReadFile(fpath)
 	if err != nil {

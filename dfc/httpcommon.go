@@ -46,8 +46,8 @@ type objectProps struct {
 //===========
 type cloudif interface {
 	listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
-	headbucket(bucket string) (headers map[string]string, errstr string, errcode int)
-	headobject(bucket string, objname string) (headers map[string]string, errstr string, errcode int)
+	headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int)
+	headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int)
 	getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
 	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (errstr string, errcode int)
 	deleteobj(bucket, objname string) (errstr string, errcode int)
@@ -317,13 +317,26 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 	return nil
 }
 
-func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (errstr string) {
+// NOTE: must be the last error-generating-and-handling call in the http handler
+//       writes http body and header
+//       calls invalmsghdlr() on err
+func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) {
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(jsbytes); err != nil {
-		errstr = fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
-		h.invalmsghdlr(w, r, errstr)
+	var err error
+	if _, err = w.Write(jsbytes); err == nil {
+		return
 	}
-	return
+	if isSyscallWriteError(err) {
+		// apparently, cannot write to this w: broken-pipe and similar
+		glog.Errorf("isSyscallWriteError: %v", err)
+		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+		glog.Errorln(s)
+		glog.Flush()
+		h.statsif.add("numerr", 1)
+		return
+	}
+	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
+	h.invalmsghdlr(w, r, errstr)
 }
 
 //=================

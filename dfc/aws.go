@@ -152,30 +152,9 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
-func (awsimpl *awsimpl) headobject(bucket string, objname string) (headers map[string]string, errstr string, errcode int) {
-	glog.Infof("aws: headobject %s/%s", bucket, objname)
-	headers = make(map[string]string)
-
-	sess := createsession()
-	svc := s3.New(sess)
-	input := &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)}
-
-	headOutput, err := svc.HeadObject(input)
-	if err != nil {
-		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
-		return
-	}
-	headers[HeaderServer] = amazoncloud
-	if headOutput.VersionId != nil {
-		headers["version"] = *headOutput.VersionId
-	}
-	return
-}
-
-func (awsimpl *awsimpl) headbucket(bucket string) (headers map[string]string, errstr string, errcode int) {
+func (awsimpl *awsimpl) headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int) {
 	glog.Infof("aws: headbucket %s", bucket)
-	headers = make(map[string]string)
+	bucketprops = make(map[string]string)
 
 	sess := createsession()
 	svc := s3.New(sess)
@@ -187,7 +166,28 @@ func (awsimpl *awsimpl) headbucket(bucket string) (headers map[string]string, er
 		errstr = fmt.Sprintf("aws: The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 		return
 	}
-	headers[HeaderServer] = amazoncloud
+	bucketprops[HeaderServer] = amazoncloud
+	return
+}
+
+func (awsimpl *awsimpl) headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
+	glog.Infof("aws: headobject %s/%s", bucket, objname)
+	objmeta = make(map[string]string)
+
+	sess := createsession()
+	svc := s3.New(sess)
+	input := &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)}
+
+	headOutput, err := svc.HeadObject(input)
+	if err != nil {
+		errcode = awsErrorToHTTP(err)
+		errstr = fmt.Sprintf("aws: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		return
+	}
+	objmeta[HeaderServer] = amazoncloud
+	if headOutput.VersionId != nil {
+		objmeta["version"] = *headOutput.VersionId
+	}
 	return
 }
 
@@ -220,7 +220,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 		md5 = ""
 	}
 	props = &objectProps{}
-	if props.nhobj, props.size, errstr = awsimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, obj.Body); errstr != "" {
+	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
 		return
 	}
 	if obj.VersionId != nil {

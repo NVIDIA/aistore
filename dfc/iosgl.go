@@ -119,7 +119,8 @@ func NewSGLIO(oosize uint64) *SGLIO {
 	return &SGLIO{sgl: sgl, slab: slab}
 }
 
-func (z *SGLIO) Cap() int64 { return int64(len(z.sgl)) * z.slab.getsize() }
+func (z *SGLIO) Cap() int64  { return int64(len(z.sgl)) * z.slab.getsize() }
+func (z *SGLIO) Size() int64 { return z.woff }
 
 func (z *SGLIO) grow(tosize int64) {
 	for z.Cap() < tosize {

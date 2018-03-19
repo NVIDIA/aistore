@@ -165,13 +165,12 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 		}
 
 		if items == nil {
-			errch <- fmt.Errorf("Nil listbucket response")
+			errch <- fmt.Errorf("listbucket %s: is empty - no entries")
 			return
 		}
 		files := make([]string, 0)
 		for _, it := range items.Entries {
-			// Directories retrieved from listbucket show up as files with '/' endings -
-			// this filters them out.
+			// directories show up as files with '/' endings - filter them out
 			if it.Name[len(it.Name)-1] != '/' {
 				files = append(files, it.Name)
 			}
@@ -180,7 +179,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 			errch <- fmt.Errorf("Cannot retrieve from an empty bucket")
 			return
 		}
-		keyname := files[random.Intn(len(files)-1)]
+		keyname := files[random.Intn(len(files))]
 		tlogln("GET: " + keyname)
 		getsGroup.Add(1)
 		go client.Get(proxyurl, bucket, keyname, getsGroup, errch, false, false)

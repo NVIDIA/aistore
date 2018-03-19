@@ -8,10 +8,11 @@
 	"lb_conf":                	"localbuckets",
 	"stats_time":			"10s",
 	"http": {
-		"timeout":		"10s",
+		"timeout":		"30s",
 		"long_timeout":		"30m"
 	},
 	"keep_alive_time":		"30s",
+	"h2c": 				false,
 	"listen": {
 		"proto": 		"tcp",
 		"port":			"${PORT}"
@@ -47,6 +48,9 @@
 		"/tmp/dfc":		"",
 		"/disk2/dfc":		""
 	},
-	"h2c": 				false
+	"ack_policy": {
+		"put":			"disk",
+		"max_mem_mb":		16
+	}
 }
 EOL

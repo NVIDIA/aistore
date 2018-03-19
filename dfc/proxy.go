@@ -160,29 +160,29 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-
-	if len(objname) != 0 {
-		p.statsif.add("numget", 1)
-		si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
-		if errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
-			return
-		}
-		redirecturl := fmt.Sprintf("%s%s?%s=false", si.DirectURL, r.URL.Path, ParamLocal)
-		if glog.V(3) {
-			glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
-		}
-		if !ctx.config.Proxy.Passthru && len(objname) > 0 {
-			glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
-			p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
-		}
-
-		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	// listbucket
+	if len(objname) == 0 {
+		p.statsif.add("numlist", 1)
+		p.listbucket(w, r, bucket)
 		return
 	}
 
-	p.statsif.add("numlist", 1)
-	p.listbucket(w, r, bucket)
+	// GET
+	p.statsif.add("numget", 1)
+	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	redirecturl := fmt.Sprintf("%s%s?%s=false", si.DirectURL, r.URL.Path, ParamLocal)
+	if glog.V(3) {
+		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	}
+	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
+		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
+		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
+	}
+	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
@@ -435,10 +435,9 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-
 	jsbytes, err := json.Marshal(allentries)
 	assert(err == nil, err)
-	_ = p.writeJSON(w, r, jsbytes, "listbucket")
+	p.writeJSON(w, r, jsbytes, "listbucket")
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)
@@ -520,8 +519,6 @@ func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := p.readJSON(w, r, &msg); err != nil {
-		s := fmt.Sprintf("Could not read JSON Body: %v", err)
-		p.invalmsghdlr(w, r, s)
 		return
 	}
 	p.statsif.add("numdelete", 1)
@@ -756,7 +753,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatConfig:
 		jsbytes, err := json.Marshal(ctx.config)
 		assert(err == nil)
-		_ = p.writeJSON(w, r, jsbytes, "httpdaeget")
+		p.writeJSON(w, r, jsbytes, "httpdaeget")
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -821,7 +818,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatSmap:
 		jsbytes, err := json.Marshal(ctx.smap)
 		assert(err == nil, err)
-		_ = p.writeJSON(w, r, jsbytes, "httpcluget")
+		p.writeJSON(w, r, jsbytes, "httpcluget")
 	case GetWhatStats:
 		getstatsmsg, err := json.Marshal(msg) // same message to all targets
 		assert(err == nil, err)
@@ -856,7 +853,7 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 	jsbytes, err := json.Marshal(out)
 	rr.Unlock()
 	assert(err == nil, err)
-	_ = p.writeJSON(w, r, jsbytes, "httpclugetstats")
+	p.writeJSON(w, r, jsbytes, "httpclugetstats")
 }
 
 // register|keepalive target

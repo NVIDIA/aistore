@@ -526,7 +526,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 	}(r)
 	// Create a local copy
 	fname := LocalDestDir + "/" + keyname
-	file, err := dfc.Createfile(fname)
+	file, err := dfc.CreateFile(fname)
 	if err != nil {
 		t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
 		failed = true
@@ -540,7 +540,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 	}()
 	if hdhashtype == dfc.ChecksumXXHash {
 		xx := xxhash.New64()
-		written, errstr = dfc.ReceiveFile(file, r.Body, nil, xx)
+		written, errstr = dfc.ReceiveAndChecksum(file, r.Body, nil, xx)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			failed = true
@@ -558,7 +558,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 		tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumXXHash, hdhash, hash)
 	} else if hdhashtype == dfc.ChecksumMD5 {
 		md5 := md5.New()
-		written, errstr = dfc.ReceiveFile(file, r.Body, nil, md5)
+		written, errstr = dfc.ReceiveAndChecksum(file, r.Body, nil, md5)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			return
@@ -577,7 +577,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 		}
 		tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumMD5, hdhash, md5hash)
 	} else {
-		written, errstr = dfc.ReceiveFile(file, r.Body, nil)
+		written, errstr = dfc.ReceiveAndChecksum(file, r.Body, nil)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			failed = true

@@ -139,9 +139,9 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
-func (gcpimpl *gcpimpl) headbucket(bucket string) (headers map[string]string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int) {
 	glog.Infof("gcp: headbucket %s", bucket)
-	headers = make(map[string]string)
+	bucketprops = make(map[string]string)
 
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -153,14 +153,13 @@ func (gcpimpl *gcpimpl) headbucket(bucket string) (headers map[string]string, er
 		errstr = fmt.Sprintf("gcp: Failed to get attributes (bucket %s), err: %v", bucket, err)
 		return
 	}
-
-	headers[HeaderServer] = googlecloud
+	bucketprops[HeaderServer] = googlecloud
 	return
 }
 
-func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (headers map[string]string, errstr string, errcode int) {
-	glog.Infof("gcp: headobject %s", bucket)
-	headers = make(map[string]string)
+func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
+	glog.Infof("gcp: headobject %s/%s", bucket, objname)
+	objmeta = make(map[string]string)
 
 	client, gctx, errstr := createclient()
 	if errstr != "" {
@@ -172,8 +171,8 @@ func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (headers map[s
 		errstr = fmt.Sprintf("gcp: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	headers[HeaderServer] = googlecloud
-	headers["version"] = fmt.Sprintf("%d", attrs.Generation)
+	objmeta[HeaderServer] = googlecloud
+	objmeta["version"] = fmt.Sprintf("%d", attrs.Generation)
 	return
 }
 
@@ -200,7 +199,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props
 	defer rc.Close()
 	// hashtype and hash could be empty for legacy objects.
 	props = &objectProps{}
-	if props.nhobj, props.size, errstr = gcpimpl.t.receiveFileAndFinalize(fqn, objname, md5, v, rc); errstr != "" {
+	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, false, objname, md5, v, rc); errstr != "" {
 		return
 	}
 	props.version = fmt.Sprintf("%d", attrs.Generation)
