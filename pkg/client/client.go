@@ -25,9 +25,6 @@ import (
 )
 
 var (
-	httpclient            = &http.Client{Timeout: 30 * time.Second}
-	httpclientLongTimeout = &http.Client{Timeout: 5 * time.Minute}
-
 	transport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 60 * time.Second,
@@ -35,7 +32,7 @@ var (
 		TLSHandshakeTimeout: 600 * time.Second,
 	}
 
-	longWaitingClient = &http.Client{
+	client = &http.Client{
 		Timeout:   600 * time.Second,
 		Transport: transport,
 	}
@@ -181,7 +178,7 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		return err
 	}
 
-	r, httperr := httpclient.Do(req)
+	r, httperr := client.Do(req)
 	if httperr != nil {
 		err = fmt.Errorf("Failed to delete file, err: %v", httperr)
 		emitError(nil, err, errch)
@@ -205,14 +202,13 @@ func ListBucket(proxyurl, bucket string, injson []byte) (*dfc.BucketList, error)
 		r       *http.Response
 	)
 
-	c := longWaitingClient
 	if len(injson) == 0 {
-		r, err = c.Get(url)
+		r, err = client.Get(url)
 	} else {
 		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
-			r, err = c.Do(request)
+			r, err = client.Do(request)
 		}
 	}
 	if err != nil {
@@ -260,7 +256,7 @@ func Evict(proxyurl, bucket string, fname string) error {
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
 
-	r, err = httpclient.Do(req)
+	r, err = client.Do(req)
 	if r != nil {
 		r.Body.Close()
 	}
@@ -290,9 +286,9 @@ func doListRangeCall(proxyurl, bucket, action, method string, listrangemsg inter
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if wait {
-		r, err = httpclientLongTimeout.Do(req)
+		r, err = client.Do(req)
 	} else {
-		r, err = httpclient.Do(req)
+		r, err = client.Do(req)
 	}
 	if r != nil {
 		r.Body.Close()
@@ -366,7 +362,7 @@ func HeadBucket(proxyurl, bucket string) (server string, err error) {
 		url = proxyurl + "/v1/files/" + bucket
 		r   *http.Response
 	)
-	r, err = httpclient.Head(url)
+	r, err = client.Head(url)
 	if err != nil {
 		return
 	}
@@ -427,7 +423,7 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 		req.Header.Set(dfc.HeaderDfcChecksumVal, reader.XXHash())
 	}
 
-	resp, err := httpclient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -463,7 +459,7 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	r, err := httpclient.Do(req)
+	r, err := client.Do(req)
 	if r != nil {
 		r.Body.Close()
 	}
@@ -485,7 +481,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	resp, err := httpclient.Do(req)
+	resp, err := client.Do(req)
 	if resp != nil {
 		resp.Body.Close()
 	}
