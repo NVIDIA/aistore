@@ -266,8 +266,8 @@ func logRunParams(p params, to *os.File) {
 		Duration      string `json:"duration"`
 		MaxPutBytes   int64  `json:"put upper bound"`
 		PutPct        int    `json:"put %"`
-		MinSize       int    `json:"minimal block size"`
-		MaxSize       int    `json:"maximal block size"`
+		MinSize       int    `json:"minimal object size in KB"`
+		MaxSize       int    `json:"maximal object size in KB"`
 		NumWorkers    int    `json:"# workers"`
 		StatsInterval string `json:"stats interval"`
 		Backing       string `json:"backed by"`
