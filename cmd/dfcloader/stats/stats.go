@@ -104,7 +104,7 @@ func (s *Stats) AvgPutLatency() int64 {
 	return int64(s.putLatency) / s.puts
 }
 
-// PutThroughput returns throughput of puts (puts/per second).
+// PutThroughput returns throughput of puts (put bytes/per second).
 func (s *Stats) PutThroughput(t time.Time) int64 {
 	if s.start == t {
 		return 0
@@ -165,7 +165,7 @@ func (s *Stats) AvgGetLatency() int64 {
 	return int64(s.getLatency) / s.gets
 }
 
-// GetThroughput returns throughput of gets (gets/per second).
+// GetThroughput returns throughput of gets (get bytes/per second).
 func (s *Stats) GetThroughput(t time.Time) int64 {
 	if s.start == t {
 		return 0
