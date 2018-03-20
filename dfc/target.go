@@ -84,12 +84,12 @@ func (t *targetrunner) run() error {
 	t.lbmap = &lbmap{LBmap: make(map[string]string)} // local (cache-only) buckets
 	t.rtnamemap = newrtnamemap(128)                  // lock/unlock name
 
-	if status, err := t.register(false); err != nil {
+	if status, err := t.register(0); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 			time.Sleep(time.Second * 3)
-			if _, err = t.register(false); err != nil {
+			if _, err = t.register(0); err != nil {
 				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 				glog.Errorf("Target %s is terminating", t.si.DaemonID)
 				return err
@@ -163,15 +163,15 @@ func (t *targetrunner) stop(err error) {
 }
 
 // target registration with proxy
-func (t *targetrunner) register(keepalive bool) (status int, err error) {
+func (t *targetrunner) register(timeout time.Duration) (status int, err error) {
 	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
 		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
 	}
 	url := ctx.config.Proxy.URL + "/" + Rversion + "/" + Rcluster
-	if keepalive {
+	if timeout > 0 { // keepalive
 		url += "/" + Rkeepalive
-		_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes, kalivetimeout)
+		_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes, timeout)
 	} else {
 		_, err, _, status = t.call(t.proxysi, url, http.MethodPost, jsbytes)
 	}
@@ -350,7 +350,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
 		t.invalmsghdlr(w, r, errstr)
-	} else if glog.V(3) {
+		return
+	}
+	if glog.V(3) {
 		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	if coldget && props.version != "" {
@@ -1518,6 +1520,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
+		return
 	}
 	t.writeJSON(w, r, jsbytes, "httpdaeget")
 }
@@ -1528,7 +1531,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-	if status, err := t.register(false); err != nil {
+	if status, err := t.register(0); err != nil {
 		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
 		t.invalmsghdlr(w, r, s)
 		return

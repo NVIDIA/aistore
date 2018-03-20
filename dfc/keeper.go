@@ -16,10 +16,9 @@ import (
 )
 
 const (
-	proxypollival = time.Second * 3
-	targetpollivl = time.Second * 10
+	proxypollival = time.Second * 5
+	targetpollivl = time.Second * 5
 	kalivetimeout = time.Second * 2
-	proxypollmaxc = 3
 )
 
 type kaliveif interface {
@@ -147,7 +146,7 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 			continue
 		}
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes)
+		_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes, kalivetimeout)
 		if err == nil {
 			continue
 		}
@@ -177,14 +176,26 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 }
 
 func (r *proxykalive) poll(si *daemonInfo, url string, jsbytes []byte) (responded, stopped bool) {
-	poller := time.NewTicker(proxypollival)
+	var (
+		maxedout = 0
+		timeout  = kalivetimeout
+		poller   = time.NewTicker(proxypollival)
+	)
 	defer poller.Stop()
-	for i := 0; i < proxypollmaxc; i++ {
+	for maxedout < 2 {
+		if r.skipCheck(si.DaemonID) {
+			return true, false
+		}
 		select {
 		case <-poller.C:
-			_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes, kalivetimeout)
+			_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes, timeout)
 			if err == nil {
 				return true, false
+			}
+			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
+			if timeout > ctx.config.HTTP.Timeout {
+				timeout = ctx.config.HTTP.Timeout
+				maxedout++
 			}
 			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 				continue
@@ -206,7 +217,8 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
 		return
 	}
-	status, err := r.t.register(true)
+	timeout := kalivetimeout
+	status, err := r.t.register(timeout)
 	if err == nil {
 		return
 	}
@@ -221,10 +233,14 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	for {
 		select {
 		case <-poller.C:
-			status, err := r.t.register(true)
+			status, err := r.t.register(timeout)
 			if err == nil {
 				glog.Infoln("keepalive: successfully re-registered")
 				return
+			}
+			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
+			if timeout > ctx.config.HTTP.Timeout {
+				timeout = ctx.config.HTTP.Timeout
 			}
 			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 				continue

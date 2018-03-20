@@ -11,7 +11,7 @@
 		"timeout":		"30s",
 		"long_timeout":		"30m"
 	},
-	"keep_alive_time":		"30s",
+	"keep_alive_time":		"20s",
 	"h2c": 				false,
 	"listen": {
 		"proto": 		"tcp",
