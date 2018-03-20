@@ -172,10 +172,10 @@ func validateconf() (err error) {
 		return fmt.Errorf("Bad stats-time format %s, err: %v", ctx.config.StatsTimeStr, err)
 	}
 	if ctx.config.HTTP.Timeout, err = time.ParseDuration(ctx.config.HTTP.TimeoutStr); err != nil {
-		return fmt.Errorf("Bad http-timeout format %s, err: %v", ctx.config.HTTP.TimeoutStr, err)
+		return fmt.Errorf("Bad HTTP timeout format %s, err: %v", ctx.config.HTTP.TimeoutStr, err)
 	}
-	if ctx.config.HTTP.Timeout, err = time.ParseDuration(ctx.config.HTTP.LongTimeoutStr); err != nil {
-		return fmt.Errorf("Bad http-long-timeout format %s, err %v", ctx.config.HTTP.LongTimeoutStr, err)
+	if ctx.config.HTTP.LongTimeout, err = time.ParseDuration(ctx.config.HTTP.LongTimeoutStr); err != nil {
+		return fmt.Errorf("Bad HTTP long-timeout format %s, err %v", ctx.config.HTTP.LongTimeoutStr, err)
 	}
 	if ctx.config.KeepAliveTime, err = time.ParseDuration(ctx.config.KeepAliveTimeStr); err != nil {
 		return fmt.Errorf("Bad keep-alive format %s, err: %v", ctx.config.KeepAliveTimeStr, err)
