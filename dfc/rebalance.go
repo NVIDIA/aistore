@@ -79,9 +79,10 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 	t := xreb.targetrunner
 	bucket, objname, ok := t.fqn2bckobj(fqn)
 	if !ok {
-		return fmt.Errorf("Warning: cannot rebalance (%q => bucket=%s,object=%s) - fspath config changed?",
-			fqn, bucket, objname)
-
+		// FIXME: resynch local buckets and rerun rebalance
+		glog.Errorf("Cannot rebalance %q => %s/%s - localbuckets config changed?", fqn, bucket, objname)
+		glog.Errorf("Skipping %q ...", fqn)
+		return nil
 	}
 	si, errstr := hrwTarget(bucket+"/"+objname, t.smap)
 	if errstr != "" {

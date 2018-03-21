@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1432,9 +1433,9 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 		if id == t.si.DaemonID {
 			existentialQ = true
 			glog.Infoln("target:", si, "<= self")
-		} else {
-			glog.Infoln("target:", si)
+			continue
 		}
+		glog.Infoln("target:", si)
 		if _, ok := t.smap.Smap[id]; !ok {
 			isSubset = false
 		}
@@ -1556,6 +1557,7 @@ func (t *targetrunner) testingFSPpaths() bool {
 }
 
 func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) {
+	islocal := t.islocalBucket(bucket)
 	fn := func(path string) bool {
 		if strings.HasPrefix(fqn, path) {
 			rempath := fqn[len(path):]
@@ -1571,8 +1573,7 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) 
 			return
 		}
 		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
-			assert(t.islocalBucket(bucket))
-			ok = len(objname) > 0
+			ok = len(objname) > 0 && islocal
 			return
 		}
 	}
@@ -1658,6 +1659,18 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		cksumcfg             = &ctx.config.CksumConfig
 	)
 	// ack policy = memory
+	if inmem {
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		totmb, err := TotalMemory()
+		if err != nil {
+			inmem = false
+		} else {
+			used := mem.Sys * 100 / (totmb * 1024 * 1024)
+			inmem = used < 50 // FIXME
+		}
+		// FIXME: use ackpolicy.MaxMemMB
+	}
 	if inmem {
 		sgl = NewSGLIO(0)
 		filewriter = sgl

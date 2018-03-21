@@ -200,7 +200,7 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 func (t *targetrunner) lrufilRemove(prefix, fqn string) error {
 	bucket, objname, ok := t.fqn2bckobj(fqn)
 	if !ok {
-		glog.Errorf("Cannot convert (%q => bucket %s, object %s) - fspath config changed?", fqn, bucket, objname)
+		glog.Errorf("Cannot convert %q => %s/%s - localbuckets config changed?", fqn, bucket, objname)
 		glog.Errorf("Evicting %q anyway...", fqn)
 		if err := os.Remove(fqn); err != nil {
 			return err
