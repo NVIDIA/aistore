@@ -1450,6 +1450,10 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 		glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
 		return
 	}
+	if t.lbmap.Version == 0 {
+		glog.Infoln("cannot rebalance: lbmap not sync-ed yet")
+		return
+	}
 	// xaction
 	go t.runRebalance()
 }
