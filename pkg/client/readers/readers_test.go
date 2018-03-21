@@ -1,10 +1,17 @@
 package readers_test
 
 import (
+	"bytes"
+	"flag"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -12,14 +19,9 @@ import (
 )
 
 func TestFileReader(t *testing.T) {
-	r, err := readers.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
+	_, err := readers.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
 	if err != nil {
 		t.Fatal("Failed to create file reader", err)
-	}
-
-	_, err = r.Seek(0, 0)
-	if err != nil {
-		t.Fatal("Failed to seek", err)
 	}
 }
 
@@ -379,4 +381,157 @@ func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+// File read throughput tests
+// Usages:
+// 1. Run discard benchmark (to show which discard method is the fastest):
+// 	  go test -v -run=XXX -bench=Discard
+// 2. Create temporary files to prepare for read testing:
+// 	  go test -v -run=XXX -bench=WriteFiles -args /tmp/dfc (directory where files are saved)
+// 3. Random file read benchmark (simulate dfcloader file get):
+// 	  go test -v -run=XXX -bench=RandomRead -args /tmp/dfc
+// 4. Cleanup all generated files:
+// 	  go test -v -run=DeleteFiles -args /tmp/dfc
+
+var files []string
+
+func visit(path string, f os.FileInfo, err error) error {
+	if !f.IsDir() {
+		files = append(files, path)
+	}
+	return nil
+}
+
+func listFiles() {
+	flag.Parse()
+	if len(flag.Args()) != 1 {
+		fmt.Printf("Usags: %s root_directory\n", os.Args[0])
+		os.Exit(2)
+	}
+
+	filepath.Walk(flag.Arg(0), visit)
+}
+
+func BenchmarkWriteFiles(b *testing.B) {
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			r, err := readers.NewFileReader(flag.Arg(0), client.FastRandomFilename(rnd, 32), 1024*1024*8, false /* withHash */)
+			if err != nil {
+				b.Fatalf("Failed to create file reader, err = %v\n", err)
+			}
+
+			r.Close()
+		}
+	})
+}
+
+func BenchmarkRandomReadFiles(b *testing.B) {
+	listFiles()
+	if len(files) == 0 {
+		fmt.Println("No files found, can't do read tests")
+		os.Exit(0)
+	}
+
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			i := rnd.Intn(len(files))
+			f, err := os.Open(files[i])
+			if err != nil {
+				b.Fatalf("Failed to open file %s, err = %v\n", files[i], err)
+			}
+			defer f.Close()
+
+			_, err = io.Copy(ioutil.Discard, f)
+			if err != nil {
+				b.Fatalf("Failed to read file %s, err = %v\n", files[i], err)
+			}
+		}
+	})
+}
+
+func TestDeleteFiles(t *testing.T) {
+	listFiles()
+	for _, f := range files {
+		os.Remove(f)
+	}
+}
+
+func BenchmarkDevDiscard(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			size := int64(1024 * 1024 * 8)
+			r, err := readers.NewRandReader(size, false /* withHash */)
+			if err != nil {
+				b.Fatal("Failed to create reader", err)
+			}
+			defer r.Close()
+
+			n, err := io.Copy(ioutil.Discard, r)
+			if err != nil {
+				b.Fatal("Failed to read from reader", err)
+			}
+
+			if n != size {
+				b.Fatalf("read returned wrong number of bytes, exp = %d, act = %d", size, n)
+			}
+		}
+	})
+}
+
+func BenchmarkBufDiscard(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			size := int64(1024 * 1024 * 8)
+			r, err := readers.NewRandReader(size, false /* withHash */)
+			if err != nil {
+				b.Fatal("Failed to create reader", err)
+			}
+			defer r.Close()
+
+			buf := make([]byte, size, size)
+			var totalLen int64
+			for {
+				n, err := r.Read(buf)
+				if err != nil && err != io.EOF {
+					b.Fatal("Failed to read from reader", err)
+				}
+				totalLen += int64(n)
+				if n < len(buf) || err == io.EOF {
+					break
+				}
+			}
+
+			if totalLen != size {
+				b.Fatalf("read returned wrong number of bytes, exp = %d, act = %d", size, totalLen)
+			}
+		}
+	})
+}
+
+func BenchmarkByteBufDiscard(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			size := int64(1024 * 1024 * 8)
+			r, err := readers.NewRandReader(size, false /* withHash */)
+			if err != nil {
+				b.Fatal("Failed to create reader", err)
+			}
+			defer r.Close()
+
+			var buf bytes.Buffer
+			n, err := buf.ReadFrom(r)
+			if err != nil {
+				b.Fatal("Failed to read", err)
+			}
+
+			if n != size {
+				b.Fatalf("read returned wrong number of bytes, exp = %d, act = %d", size, n)
+			}
+		}
+	})
 }
