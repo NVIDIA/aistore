@@ -17,6 +17,12 @@ spec:
       - name: dfcproxy
         image: quay.io/nvidia/dfc
         imagePullPolicy: Always
+        livenessProbe:
+            httpGet:
+                path: /v1/health
+                port: 8080
+                initialDelaySeconds: 20
+                periodSeconds: 10
         env:
          - name: ROLE
            value: "proxy"

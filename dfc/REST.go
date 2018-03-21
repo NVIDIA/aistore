@@ -163,4 +163,5 @@ const (
 	Rsynclb    = ActSyncLB
 	Rpush      = "push"
 	Rkeepalive = "keepalive"
+	Rhealth    = "health"
 )

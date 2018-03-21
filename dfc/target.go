@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -142,6 +141,7 @@ func (t *targetrunner) run() error {
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, t.daemonhdlr)
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", t.daemonhdlr) // FIXME
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rpush+"/", t.pushhdlr)
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, t.httphealth)
 	t.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
@@ -437,6 +437,14 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 		s := fmt.Sprintf("Error writing response: %v", err)
 		t.invalmsghdlr(w, r, s)
 	}
+}
+
+// "/"+Rversion+"/"+Rhealth
+func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+	targetcorestats := getstorstats()
+	jsbytes, err := json.Marshal(targetcorestats)
+	assert(err == nil, err)
+	t.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
 // should not be called for local buckets
@@ -1433,9 +1441,9 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 		if id == t.si.DaemonID {
 			existentialQ = true
 			glog.Infoln("target:", si, "<= self")
-			continue
+		} else {
+			glog.Infoln("target:", si)
 		}
-		glog.Infoln("target:", si)
 		if _, ok := t.smap.Smap[id]; !ok {
 			isSubset = false
 		}
@@ -1448,10 +1456,6 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 	if isSubset {
 		glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
-		return
-	}
-	if t.lbmap.Version == 0 {
-		glog.Infoln("cannot rebalance: lbmap not sync-ed yet")
 		return
 	}
 	// xaction
@@ -1561,7 +1565,6 @@ func (t *targetrunner) testingFSPpaths() bool {
 }
 
 func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) {
-	islocal := t.islocalBucket(bucket)
 	fn := func(path string) bool {
 		if strings.HasPrefix(fqn, path) {
 			rempath := fqn[len(path):]
@@ -1577,7 +1580,8 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) 
 			return
 		}
 		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
-			ok = len(objname) > 0 && islocal
+			assert(t.islocalBucket(bucket))
+			ok = len(objname) > 0
 			return
 		}
 	}
@@ -1663,18 +1667,6 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		cksumcfg             = &ctx.config.CksumConfig
 	)
 	// ack policy = memory
-	if inmem {
-		var mem runtime.MemStats
-		runtime.ReadMemStats(&mem)
-		totmb, err := TotalMemory()
-		if err != nil {
-			inmem = false
-		} else {
-			used := mem.Sys * 100 / (totmb * 1024 * 1024)
-			inmem = used < 50 // FIXME
-		}
-		// FIXME: use ackpolicy.MaxMemMB
-	}
 	if inmem {
 		sgl = NewSGLIO(0)
 		filewriter = sgl

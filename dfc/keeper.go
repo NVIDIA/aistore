@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -138,15 +137,12 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	if err != nil {
 		glog.Infof("keepalive-alltargets: got err %v, checking now...", err)
 	}
-	msg := &GetMsg{GetWhat: GetWhatStats}
-	jsbytes, err := json.Marshal(msg)
-	assert(err == nil, err)
 	for sid, si := range ctx.smap.Smap {
 		if r.skipCheck(sid) {
 			continue
 		}
-		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes, kalivetimeout)
+		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+		_, err, _, status := r.p.call(si, url, http.MethodGet, nil, kalivetimeout)
 		if err == nil {
 			continue
 		}
@@ -155,7 +151,7 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 		} else {
 			glog.Infof("Warning: target %s fails keepalive, err: %v", sid, err)
 		}
-		responded, stopped := r.poll(si, url, jsbytes)
+		responded, stopped := r.poll(si, url)
 		if stopped {
 			return true
 		}
@@ -175,7 +171,7 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	return false
 }
 
-func (r *proxykalive) poll(si *daemonInfo, url string, jsbytes []byte) (responded, stopped bool) {
+func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool) {
 	var (
 		maxedout = 0
 		timeout  = kalivetimeout
@@ -188,7 +184,7 @@ func (r *proxykalive) poll(si *daemonInfo, url string, jsbytes []byte) (responde
 		}
 		select {
 		case <-poller.C:
-			_, err, _, status := r.p.call(si, url, http.MethodGet, jsbytes, timeout)
+			_, err, _, status := r.p.call(si, url, http.MethodGet, nil, timeout)
 			if err == nil {
 				return true, false
 			}

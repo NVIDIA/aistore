@@ -87,6 +87,7 @@ func (p *proxyrunner) run() error {
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster+"/", p.clusterhdlr) // FIXME
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
 	p.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Proxy %s is ready", p.si.DaemonID)
 	glog.Flush()
@@ -530,6 +531,14 @@ func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
 	}
+}
+
+// "/"+Rversion+"/"+Rhealth
+func (p *proxyrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+	proxycorestats := getproxystats()
+	jsbytes, err := json.Marshal(proxycorestats)
+	assert(err == nil, err)
+	p.writeJSON(w, r, jsbytes, "targetcorestats")
 }
 
 func (p *proxyrunner) deleteLocalBucket(w http.ResponseWriter, r *http.Request, lbucket string) {
