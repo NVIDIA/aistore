@@ -1,11 +1,11 @@
 	cat > $CONFFILE <<EOL
 {
 	"logdir":			"$LOGDIR",
+	"confdir":                	"$CONFDIR",
 	"loglevel": 			"${LOGLEVEL}",
 	"cloudprovider":		"${CLDPROVIDER}",
 	"cloud_buckets":		"cloud",
 	"local_buckets":		"local",
-	"lb_conf":                	"localbuckets",
 	"stats_time":			"10s",
 	"http": {
 		"timeout":		"30s",

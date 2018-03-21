@@ -66,7 +66,7 @@ func (p *proxyrunner) run() error {
 	p.xactinp = newxactinp()
 	// local (aka cache-only) buckets
 	p.lbmap = &lbmap{LBmap: make(map[string]string)}
-	lbpathname := p.confdir + "/" + ctx.config.LBConf
+	lbpathname := p.confdir + "/" + lbname
 	p.lbmap.lock()
 	if localLoad(lbpathname, p.lbmap) != nil {
 		// create empty
@@ -602,7 +602,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 
 // synclbmap requires the caller to lock p.lbmap
 func (p *proxyrunner) synclbmap(w http.ResponseWriter, r *http.Request) {
-	lbpathname := p.confdir + "/" + ctx.config.LBConf
+	lbpathname := p.confdir + "/" + lbname
 	if err := localSave(lbpathname, p.lbmap); err != nil {
 		s := fmt.Sprintf("Failed to store localbucket config %s, err: %v", lbpathname, err)
 		p.invalmsghdlr(w, r, s)

@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -288,7 +287,7 @@ func dfcinit() {
 			glog.Fatalf("Unspecified or invalid number (%d) of storage targets (a hint for the http proxy)",
 				clivars.ntargets)
 		}
-		confdir := filepath.Dir(clivars.conffile)
+		confdir := ctx.config.Confdir
 		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8)}
 		p := &proxyrunner{confdir: confdir}
 		ctx.rg.add(p, xproxy)

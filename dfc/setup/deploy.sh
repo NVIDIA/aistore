@@ -17,7 +17,7 @@ LOGROOT="/tmp/dfc"
 # existence of each fspath is checked at runtime
 #
 ###################################
-CONFPATH="$HOME/.dfc"
+CONFDIR="$HOME/.dfc"
 TESTFSPATHCOUNT=1
 
 PROXYPORT=$(expr $PORT + 1)
@@ -77,7 +77,7 @@ else
 	echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
 fi
 
-mkdir -p $CONFPATH
+mkdir -p $CONFDIR
 #
 # generate conf file(s) based on the settings/selections above
 #
@@ -85,7 +85,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 for (( c=$START; c<=$END; c++ ))
 do
 	PORT=$(expr $PORT + 1)
-	CONFFILE="$CONFPATH/dfc$c.json"
+	CONFFILE="$CONFDIR/dfc$c.json"
 	LOGDIR="$LOGROOT/$c/log"
 	source $DIR/config.sh
 done
@@ -102,7 +102,7 @@ fi
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
-	CONFFILE="$CONFPATH/dfc$c.json"
+	CONFFILE="$CONFDIR/dfc$c.json"
 	if [ $c -eq 0 ]
 	then
 			set -x

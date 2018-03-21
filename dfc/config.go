@@ -32,6 +32,8 @@ const (
 	AckWhenOnDisk = "disk"
 )
 
+const lbname = "localbuckets"
+
 //==============================
 //
 // config types
@@ -39,11 +41,11 @@ const (
 //==============================
 type dfconfig struct {
 	Logdir           string            `json:"logdir"`
+	Confdir          string            `json:"confdir"`
 	Loglevel         string            `json:"loglevel"`
 	CloudProvider    string            `json:"cloudprovider"`
 	CloudBuckets     string            `json:"cloud_buckets"`
 	LocalBuckets     string            `json:"local_buckets"`
-	LBConf           string            `json:"lb_conf"`
 	StatsTimeStr     string            `json:"stats_time"`
 	StatsTime        time.Duration     `json:"-"` // omitempty
 	HTTP             httpconfig        `json:"http"`
