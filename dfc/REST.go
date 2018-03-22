@@ -37,12 +37,6 @@ const (
 	ProviderDfc    = "dfc"
 )
 
-// Bucket versioning state
-const (
-	VersioningEnabled  = "enabled"
-	VersioningDisabled = "disabled"
-)
-
 // Header Key enum
 const (
 	CloudProvider         = "CloudProvider"         // from Cloud Provider enum

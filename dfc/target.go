@@ -291,7 +291,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	// FIXME - TODO: split ValidateWarmGet into a) validate and b) get new if invalid
 	// the second flag controls whether the original request blocks on version update
-	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && versioningConfigured(bucket, islocal) {
+	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		if vchanged, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			return
@@ -926,7 +926,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 		}
 	}
 
-	if isBucketLocal && versioningConfigured(bucket, isBucketLocal) {
+	if isBucketLocal && t.versioningConfigured(bucket) {
 		if objprops.version, errstr = increaseObjectVersion(fqn); errstr != "" {
 			return
 		}
@@ -1367,12 +1367,12 @@ func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	} else {
 		bucketprops = make(map[string]string)
 		bucketprops[CloudProvider] = ProviderDfc
-		bucketprops[Versioning] = VersioningEnabled
+		bucketprops[Versioning] = VersionLocal
 
 	}
 	// double check if we support versioning internally for the bucket
-	if !versioningConfigured(bucket, islocal) {
-		bucketprops[Versioning] = VersioningDisabled
+	if !t.versioningConfigured(bucket) {
+		bucketprops[Versioning] = VersionNone
 	}
 
 	for k, v := range bucketprops {
@@ -1834,7 +1834,9 @@ func finalizeobj(fqn string, objprops *objectProps) (errstr string) {
 // AWS bucket versioning can be disabled on the cloud. In this case we do not
 //    save/read/update version using xattrs. And the function returns that the
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
-func versioningConfigured(bucket string, islocal bool) bool {
+// FIXME TODO: revisit the function when versioning can be set on bucket level
+func (t *targetrunner) versioningConfigured(bucket string) bool {
+	islocal := t.islocalBucket(bucket)
 	versioning := ctx.config.VersionConfig.Versioning
 	if islocal {
 		return versioning == VersionAll || versioning == VersionLocal

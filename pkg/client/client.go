@@ -50,8 +50,8 @@ type ReqError struct {
 }
 
 type BucketProps struct {
-	CloudProvider     string
-	VersioningEnabled bool
+	CloudProvider string
+	Versioning    string
 }
 
 // Reader is the interface a client works with to read in data and send to a HTTP server
@@ -380,7 +380,7 @@ func HeadBucket(proxyurl, bucket string) (bucketprops *BucketProps, err error) {
 		return
 	}
 	bucketprops.CloudProvider = r.Header.Get(dfc.CloudProvider)
-	bucketprops.VersioningEnabled = r.Header.Get(dfc.Versioning) == dfc.VersioningEnabled
+	bucketprops.Versioning = r.Header.Get(dfc.Versioning)
 	return
 }
 

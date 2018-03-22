@@ -364,7 +364,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 		t.statsif.add("numerr", 1)
 		return
 	}
-	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && versioningConfigured(bucket, islocal) {
+	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			return
 		}
@@ -383,7 +383,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 		t.statsif.add("numerr", 1)
 		return
 	}
-	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && versioningConfigured(bucket, islocal) {
+	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			return
 		}

@@ -430,7 +430,7 @@ func Test_objpropsVersionEnabled(t *testing.T) {
 	if props.CloudProvider == dfc.ProviderDfc {
 		isLocalBucket = true
 	}
-	versionEnabled := props.VersioningEnabled
+	versionEnabled := props.Versioning != dfc.VersionNone
 
 	propsMainTest(t, versionEnabled, isLocalBucket)
 
@@ -469,7 +469,7 @@ func Test_objpropsVersionDisabled(t *testing.T) {
 	if props.CloudProvider == dfc.ProviderDfc {
 		isLocalBucket = true
 	}
-	versionEnabled := props.VersioningEnabled
+	versionEnabled := props.Versioning != dfc.VersionNone
 
 	propsMainTest(t, versionEnabled, isLocalBucket)
 

@@ -156,7 +156,7 @@ func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string
 	bucketprops[CloudProvider] = ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
-	bucketprops[Versioning] = VersioningEnabled
+	bucketprops[Versioning] = VersionCloud
 	return
 }
 
