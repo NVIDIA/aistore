@@ -101,7 +101,7 @@ echo Enter your cache choice:
 read cachesource
 if [ $cachesource -eq 1 ]
 then
-   echo Enter number of local cache directories
+   echo Enter number of local cache directories:
    read testfspathcnt
    if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
        echo "Error: '$testfspathcnt' is not a number"; exit 1
@@ -109,7 +109,7 @@ then
 fi
 if [ $cachesource -eq 2 ]
 then
-   echo Enter filesystem info in comma seperated format ex: /tmp/dfc1,/tmp/dfc
+   echo Enter filesystem info in comma seperated format ex: /tmp/dfc1,/tmp/dfc:
    read fsinfo
    fspath=""
    IFS=',' read -r -a array <<< "$fsinfo"
