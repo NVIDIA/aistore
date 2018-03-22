@@ -17,12 +17,6 @@ spec:
       - name: dfcproxy
         image: quay.io/nvidia/dfc
         imagePullPolicy: Always
-        livenessProbe:
-            httpGet:
-                path: /v1/health
-                port: 8080
-                initialDelaySeconds: 20
-                periodSeconds: 10
         env:
          - name: ROLE
            value: "proxy"
@@ -32,6 +26,10 @@ spec:
            subPath: dfc.json
          - name: aws-credentials
            mountPath: /root/.aws/
+         - name: dfc-log
+           mountPath: /tmp/
+         - name: dfc-localbucket
+           mountPath: /usr/nvidia/
         ports:
           - containerPort: 8081
       nodeSelector:
@@ -43,3 +41,11 @@ spec:
         - name: aws-credentials
           secret:
             secretName: aws-credentials
+        - name: dfc-log
+          hostPath:
+            path: /tmp
+            type: Directory
+        - name: dfc-localbucket
+          hostPath:
+            path: /usr/nvidia/
+            type: Directory

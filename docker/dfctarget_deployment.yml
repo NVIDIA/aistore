@@ -28,6 +28,8 @@ spec:
            mountPath: /root/.aws/
          - name: dfc-fs
            mountPath: /usr/nvidia/data
+         - name: dfc-log
+           mountPath: /tmp/
         ports:
           - containerPort: 8081
       nodeSelector:
@@ -42,4 +44,8 @@ spec:
         - name: dfc-fs
           hostPath:
             path: /dfc
+            type: Directory
+        - name: dfc-log
+          hostPath:
+            path: /tmp
             type: Directory

@@ -74,6 +74,7 @@ PORT=8080
 SERVICENAME="dfc"
 LOGDIR="/tmp/dfc/log"
 LOGLEVEL="3"
+CONFDIR="/usr/nvidia"
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -91,11 +92,36 @@ START=0
 END=$servcount
 
 
-echo "Number of local cache directories (enter 0 to use preconfigured filesystems):"
-read testfspathcnt
-if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
-    echo "Error: '$testfspathcnt' is not a number"; exit 1
+testfspathcnt=0
+fspath="\"\":\"\""
+echo Select
+echo  1: Local cache directories
+echo  2: Filesystems
+echo Enter your cache choice:
+read cachesource
+if [ $cachesource -eq 1 ]
+then
+   echo Enter number of local cache directories
+   read testfspathcnt
+   if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
+       echo "Error: '$testfspathcnt' is not a number"; exit 1
+   fi
 fi
+if [ $cachesource -eq 2 ]
+then
+   echo Enter filesystem info in comma seperated format ex: /tmp/dfc1,/tmp/dfc
+   read fsinfo
+   fspath=""
+   IFS=',' read -r -a array <<< "$fsinfo"
+   for element in "${array[@]}"
+   do
+      fspath="$fspath,\"$element\" : \"\" "
+   done
+   fspath=${fspath#","}
+fi
+
+echo $FSPATHS
+FSPATHS=$fspath
 TESTFSPATHCOUNT=$testfspathcnt
 
 echo Select Cloud Provider:
@@ -175,4 +201,3 @@ else
     mv Dockerfile /tmp/dfc_backup/
 fi
 echo done
-
