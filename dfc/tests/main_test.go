@@ -254,6 +254,156 @@ func Test_matchdelete(t *testing.T) {
 	}
 }
 
+func Test_putdeleteRange(t *testing.T) {
+	parse()
+
+	const (
+		numFiles     = 100
+		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
+	)
+	var sgl *dfc.SGLIO
+
+	if err := dfc.CreateDir(DeleteDir); err != nil {
+		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
+	}
+
+	errch := make(chan error, numfiles*5)
+	filesput := make(chan string, numfiles)
+	filesize := uint64(16 * 1024)
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	filenameList := make([]string, 0, numfiles)
+	for i := 0; i < numfiles/2; i++ {
+		fname := fmt.Sprintf("a-%04d", i)
+		filenameList = append(filenameList, fname)
+		fname = fmt.Sprintf("b-%04d", i)
+		filenameList = append(filenameList, fname)
+	}
+	fillWithRandomData(baseseed, filesize, filenameList, clibucket, t, errch, filesput, DeleteDir, commonPrefix, false, sgl)
+	selectErr(errch, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
+	close(filesput)
+
+	type testParams struct {
+		// title to print out while testing
+		name string
+		// prefix for object name
+		prefix string
+		// regular expression object name must match
+		regexStr string
+		// a range of file IDs
+		rangeStr string
+		// total number of files expected to delete
+		delta int
+	}
+	tests := []testParams{
+		{
+			"Trying to delete files with invalid prefix",
+			"file/a-", "\\d+", "0:10",
+			0,
+		},
+		{
+			"Trying to delete files out of range",
+			commonPrefix + "/a-", "\\d+", fmt.Sprintf("%d:%d", numFiles+10, numFiles+110),
+			0,
+		},
+		{
+			"Deleting 10 files with prefix 'a-'",
+			commonPrefix + "/a-", "\\d+", "10:19",
+			10,
+		},
+		{
+			"Deleting 20 files (short range)",
+			commonPrefix + "/", "\\d+", "30:39",
+			20,
+		},
+		{
+			"Deleting 20 more files (wide range)",
+			commonPrefix + "/", "2\\d+", "10:90",
+			20,
+		},
+		{
+			"Deleting files with empty range",
+			commonPrefix + "/b-", "", "",
+			30,
+		},
+	}
+
+	totalFiles := numFiles
+	for idx, test := range tests {
+		msg := &dfc.GetMsg{GetPrefix: commonPrefix + "/"}
+		injson, err := json.Marshal(msg)
+		if err != nil {
+			t.Error(err)
+		}
+		tlogf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
+
+		err = client.DeleteRange(proxyurl, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
+		if err != nil {
+			t.Error(err)
+		}
+
+		totalFiles -= test.delta
+		bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(bktlst.Entries) != totalFiles {
+			t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), totalFiles)
+		} else {
+			tlogf("  %d files have been deleted\n", test.delta)
+		}
+	}
+
+	tlogf("Cleaning up remained objects...\n")
+	msg := &dfc.GetMsg{GetPrefix: commonPrefix + "/"}
+	injson, err := json.Marshal(msg)
+	if err != nil {
+		t.Error(err)
+	}
+	bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+	if err != nil {
+		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
+	}
+	// cleanup everything at the end
+	// Declare one channel per worker to pass the keyname
+	keynameChans := make([]chan string, numworkers)
+	for i := 0; i < numworkers; i++ {
+		// Allow a bunch of messages at a time to be written asynchronously to a channel
+		keynameChans[i] = make(chan string, 100)
+	}
+
+	// Start the worker pools
+	var wg = &sync.WaitGroup{}
+	// Get the workers started
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		go deleteFiles(keynameChans[i], t, wg, errch, clibucket)
+	}
+
+	if usingFile {
+		for name := range filesput {
+			os.Remove(DeleteDir + "/" + name)
+		}
+	}
+	num := 0
+	for _, entry := range bktlst.Entries {
+		keynameChans[num%numworkers] <- entry.Name
+		num++
+	}
+
+	// Close the channels after the reading is done
+	for i := 0; i < numworkers; i++ {
+		close(keynameChans[i])
+	}
+
+	wg.Wait()
+	selectErr(errch, "delete", t, false)
+}
+
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
 	parse()

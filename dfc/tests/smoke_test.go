@@ -176,7 +176,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 			}
 		}
 		if len(files) == 0 {
-			errch <- fmt.Errorf("Cannot retrieve from an empty bucket")
+			errch <- fmt.Errorf("Cannot retrieve from an empty bucket %s", bucket)
 			return
 		}
 		keyname := files[random.Intn(len(files))]
@@ -187,17 +187,12 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 	getsGroup.Wait()
 }
 
-func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
-	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
-	dir, keystr, htype string, silent bool, sgl *dfc.SGLIO) {
-	if wg != nil {
-		defer wg.Done()
-	}
-
+func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket string,
+	t *testing.T, errch chan error, filesput chan string,
+	dir, keystr string, silent bool, sgl *dfc.SGLIO) {
 	src := rand.NewSource(seed)
 	random := rand.New(src)
-	for i := 0; i < numPuts; i++ {
-		fname := client.FastRandomFilename(random, fnlen)
+	for _, fname := range objList {
 		size := fileSize
 		if size == 0 {
 			size = uint64(random.Intn(1024)+1) * 1024
@@ -241,4 +236,22 @@ func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket str
 		}
 		filesput <- fname
 	}
+}
+
+func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
+	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
+	dir, keystr, htype string, silent bool, sgl *dfc.SGLIO) {
+	if wg != nil {
+		defer wg.Done()
+	}
+
+	src := rand.NewSource(seed)
+	random := rand.New(src)
+	fileList := make([]string, 0, numPuts)
+	for i := 0; i < numPuts; i++ {
+		fname := client.FastRandomFilename(random, fnlen)
+		fileList = append(fileList, fname)
+	}
+
+	fillWithRandomData(seed, fileSize, fileList, bucket, t, errch, filesput, dir, keystr, silent, sgl)
 }

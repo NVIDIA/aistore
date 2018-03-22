@@ -570,7 +570,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 	return
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList) {
 	finfos := allfinfos{make([]fipair, 0, 128), 0}
 	for mpath := range ctx.mountpaths {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
@@ -580,8 +580,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	t.statsif.add("numlist", 1)
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, len(finfos.finfos))}
+	bucketList = &BucketList{Entries: make([]*BucketEntry, 0, len(finfos.finfos))}
 	for _, fi := range finfos.finfos {
 		if msg.GetPrefix != "" && !strings.HasPrefix(fi.relname, msg.GetPrefix) {
 			continue
@@ -625,8 +624,15 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 				entry.Version = string(version)
 			}
 		}
-		reslist.Entries = append(reslist.Entries, entry)
+		bucketList.Entries = append(bucketList.Entries, entry)
 	}
+
+	return
+}
+
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) {
+	var reslist = t.prepareLocalObjectList(bucket, msg)
+	t.statsif.add("numlist", 1)
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
 	t.writeJSON(w, r, jsbytes, "listbucket")

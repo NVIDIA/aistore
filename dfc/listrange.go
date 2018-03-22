@@ -47,9 +47,8 @@ type xactDeleteEvict struct {
 //
 //===========================
 
-func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max int64) ([]string, error) {
-	msg := &GetMsg{GetPrefix: prefix}
-	fullbucketlist := &BucketList{Entries: make([]*BucketEntry, 0)}
+func (t *targetrunner) getListFromRangeCloud(bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
+	bucketList = &BucketList{Entries: make([]*BucketEntry, 0)}
 	for i := 0; i < maxPrefetchPages; i++ {
 		jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
 		if errstr != "" {
@@ -59,13 +58,31 @@ func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max i
 		if err := json.Unmarshal(jsbytes, reslist); err != nil {
 			return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
 		}
-		fullbucketlist.Entries = append(fullbucketlist.Entries, reslist.Entries...)
+		bucketList.Entries = append(bucketList.Entries, reslist.Entries...)
 		if reslist.PageMarker == "" {
 			break
 		} else if i == maxPrefetchPages {
 			glog.Warningf("Did not prefetch all keys (More than %d pages)", maxPrefetchPages)
 		}
 		msg.GetPageMarker = reslist.PageMarker
+	}
+
+	return
+}
+
+func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max int64) ([]string, error) {
+	msg := &GetMsg{GetPrefix: prefix}
+	var (
+		fullbucketlist *BucketList
+		err            error
+	)
+	if t.islocalBucket(bucket) {
+		fullbucketlist = t.prepareLocalObjectList(bucket, msg)
+	} else {
+		fullbucketlist, err = t.getListFromRangeCloud(bucket, msg)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	objs := make([]string, 0)
