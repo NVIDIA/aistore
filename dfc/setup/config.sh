@@ -46,8 +46,7 @@
 		"instance":		$c
 	},
 	"fspaths": {
-		"/tmp/dfc":		"",
-		"/disk2/dfc":		""
+		$FSPATHS
 	},
 	"ack_policy": {
 		"put":			"disk",
