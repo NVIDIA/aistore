@@ -26,4 +26,4 @@ RUN mkdir /etc/dfc
 COPY dfc.json $CONFFILE
 WORKDIR $WORKDIR
 ENTRYPOINT export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=$CONFFILE -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true
-HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1
+#HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1
