@@ -347,21 +347,17 @@ loop:
 func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	var (
 		errstr, version   string
-		errcode           int
 		vchanged, coldget bool
 		props             *objectProps
 	)
 	versioncfg := &ctx.config.VersionConfig
 	fqn := t.fqn(bucket, objname)
-	uname := bucket + objname
 	islocal := t.islocalBucket(bucket)
 	//
-	// step 1: do not take the lock to prevent get from starving
-	// from repeated prefetches on the same cached file
+	// NOTE: lockless
 	//
 	if coldget, _, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
 		glog.Errorln(errstr)
-		t.statsif.add("numerr", 1)
 		return
 	}
 	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
@@ -373,39 +369,15 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	if !coldget {
 		return
 	}
-	//
-	// step 2: the same, with a lock
-	//
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer func() { t.rtnamemap.unlockname(uname, true) }()
-	if coldget, _, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
-		glog.Errorln(errstr)
-		t.statsif.add("numerr", 1)
-		return
-	}
-	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
-			return
+	if props, errstr, _ = t.coldget(bucket, objname, vchanged, true); errstr != "" {
+		if errstr != "skip" {
+			glog.Errorln(errstr)
 		}
-		coldget = vchanged
-	}
-	if !coldget {
 		return
 	}
-	//
-	// step 3: prefetch (FIXME: revisit potential use of timeout for prefetch deadline)
-	//
-	if props, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
-		glog.Errorf("Failed to prefetch %s/%s, err: %s, code %d", bucket, objname, errstr, errcode)
-		t.statsif.add("numerr", 1)
-		return
-	}
-	glog.Infof("PREFETCH %s/%s => %s", bucket, objname, fqn)
+	glog.Infof("PREFETCH done: %s/%s", bucket, objname)
 	t.statsif.add("numprefetch", 1)
 	t.statsif.add("bytesprefetched", props.size)
-	if errstr := finalizeobj(fqn, props); errstr != "" {
-		glog.Errorf("Setting object properties failed: %s", errstr)
-	}
 	if vchanged {
 		t.statsif.add("bytesvchanged", props.size)
 		t.statsif.add("numvchanged", 1)

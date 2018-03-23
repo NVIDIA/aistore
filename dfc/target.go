@@ -240,12 +240,12 @@ func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchan
 func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	var (
 		nhobj                        cksumvalue
-		coldget, exclusive, vchanged bool
 		bucket, objname, fqn         string
 		uname, errstr, version       string
 		size                         int64
-		errcode                      int
 		props                        *objectProps
+		errcode                      int
+		coldget, exclusive, vchanged bool
 	)
 	cksumcfg := &ctx.config.CksumConfig
 	versioncfg := &ctx.config.VersionConfig
@@ -276,32 +276,28 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//
-	// serialize on the name
+	// lockname(ro)
 	//
-	fqn, uname, exclusive = t.fqn(bucket, objname), bucket+objname, true
+	fqn, uname = t.fqn(bucket, objname), bucket+objname
 	t.rtnamemap.lockname(uname, exclusive, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer func(locktype *bool) { t.rtnamemap.unlockname(uname, *locktype) }(&exclusive)
 
-	//
-	// get the object from the bucket
-	//
 	if coldget, size, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+		t.rtnamemap.unlockname(uname, false)
 		return
 	}
-	// FIXME - TODO: split ValidateWarmGet into a) validate and b) get new if invalid
-	// the second flag controls whether the original request blocks on version update
 	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		if vchanged, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
+			t.rtnamemap.unlockname(uname, false)
 			return
 		}
+		// TODO: add config to return what's cached and upgrade the version asynchronously
 		coldget = vchanged
 	}
 	if coldget {
-		// FIXME - TODO: with rename similar to PUT
-		// getfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
-		if props, errstr, errcode = getcloudif().getobj(fqn, bucket, objname); errstr != "" {
+		t.rtnamemap.unlockname(uname, false)
+		if props, errstr, errcode = t.coldget(bucket, objname, vchanged, false); errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
 			} else {
@@ -310,21 +306,10 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		size, nhobj = props.size, props.nhobj
-		t.statsif.add("numcoldget", 1)
-		t.statsif.add("bytesloaded", size)
-		if vchanged {
-			t.statsif.add("bytesvchanged", size)
-			t.statsif.add("numvchanged", 1)
-		}
-		if errstr = finalizeobj(fqn, props); errstr != "" {
-			glog.Errorf("Setting object properties failed: %s", errstr)
-		}
 	}
-	//
-	// downgrade lock(name)
-	//
-	exclusive = false
-	t.rtnamemap.downgradelock(uname)
+
+	// t.coldget() keeps read lock if successful
+	defer t.rtnamemap.unlockname(uname, false)
 
 	//
 	// local file => http response
@@ -376,6 +361,70 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
 	}
 	t.statsif.add("numget", 1)
+}
+
+func (t *targetrunner) coldget(bucket, objname string, vchanged, prefetch bool) (props *objectProps, errstr string, errcode int) {
+	fqn := t.fqn(bucket, objname)
+	getfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
+
+	// exclusive: one cold GET(name) at a time
+	uname := bucket + objname
+	if prefetch {
+		if !t.rtnamemap.trylockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}) {
+			glog.Infof("PREFETCH: cold GET race: %s/%s - skipping", bucket, objname)
+			return nil, "skip", 0
+		}
+	} else {
+		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	}
+
+	if coldget, size, version, errs := t.isObjectCached(bucket, objname, fqn); !coldget && errs == "" {
+		props = &objectProps{version: version, size: size}
+		xxhashval, _ := Getxattr(fqn, xattrXXHashVal)
+		if xxhashval != nil {
+			cksumcfg := &ctx.config.CksumConfig
+			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxhashval))
+		}
+		glog.Infof("cold GET race: %s/%s, size=%d, version=%s", bucket, objname, size, version)
+		goto ret
+	}
+	if props, errstr, errcode = getcloudif().getobj(getfqn, bucket, objname); errstr != "" {
+		t.rtnamemap.unlockname(uname, true)
+		return
+	}
+	defer func() {
+		if errstr != "" {
+			t.rtnamemap.unlockname(uname, true)
+			if err := os.Remove(getfqn); err != nil {
+				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, err)
+			}
+		}
+	}()
+	if err := os.Rename(getfqn, fqn); err != nil {
+		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", getfqn, fqn, err)
+		return
+	}
+	if errstr = finalizeobj(fqn, props); errstr != "" {
+		return
+	}
+ret:
+	//
+	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
+	//
+	if prefetch {
+		t.rtnamemap.unlockname(uname, true)
+	} else {
+		t.statsif.add("numcoldget", 1)
+		t.statsif.add("bytesloaded", props.size)
+		if vchanged {
+			t.statsif.add("bytesvchanged", props.size)
+			t.statsif.add("numvchanged", 1)
+		}
+		glog.Infof("cold GET done: %s/%s", bucket, objname)
+
+		t.rtnamemap.downgradelock(uname)
+	}
+	return
 }
 
 func (t *targetrunner) isObjectCached(bucket, objname, fqn string) (coldget bool, size int64, version string, errstr string) {
@@ -933,25 +982,18 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 	}
 
 	// when all set and done:
-	if errstr = t.putSafeRename(bucket, objname, putfqn, fqn); errstr != "" {
+	uname := bucket + objname
+	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	defer t.rtnamemap.unlockname(uname, true)
+	if err := os.Rename(putfqn, fqn); err != nil {
+		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", putfqn, fqn, err)
 		return
 	}
 	if errstr = finalizeobj(fqn, objprops); errstr != "" {
 		return
 	}
+	glog.Infof("PUT done: %s/%s", bucket, objname)
 	t.statsif.add("numput", 1)
-	return
-}
-
-func (t *targetrunner) putSafeRename(bucket, objname, putfqn, fqn string) (errstr string) {
-	uname := bucket + objname
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	if err := os.Rename(putfqn, fqn); err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", putfqn, fqn, err)
-	} else {
-		glog.Infof("PUT done: %s <= %s", fqn, putfqn)
-	}
-	t.rtnamemap.unlockname(uname, true)
 	return
 }
 
