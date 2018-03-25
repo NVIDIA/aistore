@@ -63,6 +63,7 @@ type (
 		minSize           int
 		maxSize           int
 		numWorkers        int
+		verifyHash        bool // verify xxHash during get
 		cleanUp           bool
 		statsShowInterval int
 		readerType        string
@@ -99,6 +100,7 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/dfc", "Local temporary directory used to store temporary files")
 	flag.Int64Var(&p.putSizeUpperBound, "totalputsize", 0, "Stops after total put size exceeds this (in KB); 0 = no limit")
 	flag.BoolVar(&p.cleanUp, "cleanup", true, "True if clean up after run")
+	flag.BoolVar(&p.verifyHash, "verifyhash", false, "True if verify xxhash during get")
 	flag.IntVar(&p.minSize, "minsize", 1024, "Minimal object size in KB")
 	flag.IntVar(&p.maxSize, "maxsize", 1048576, "Maximal object size in KB")
 	flag.StringVar(&p.readerType, "readertype", readers.ReaderTypeSG,
