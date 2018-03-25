@@ -386,7 +386,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	if !coldget {
 		return
 	}
-	if props, errstr, _ = t.coldget(bucket, objname, vchanged, true); errstr != "" {
+	if props, errstr, _ = t.coldget(bucket, objname, true); errstr != "" {
 		if errstr != "skip" {
 			glog.Errorln(errstr)
 		}
