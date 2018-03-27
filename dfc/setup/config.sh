@@ -48,6 +48,9 @@
 	"fspaths": {
 		$FSPATHS
 	},
+	"network": {
+		"ipv4": "$IPV4LIST"
+	},
 	"ack_policy": {
 		"put":			"disk",
 		"max_mem_mb":		16

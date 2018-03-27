@@ -19,12 +19,25 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"strings"
 	"syscall"
 
 	"github.com/golang/glog"
 )
 
-const maxAttrSize = 1024
+const (
+	maxAttrSize = 1024
+	// use extra algorithms to choose a local IPv4 if there are more than 1 available
+	guessTheBestIPv4 = false
+)
+
+// Local unicast IP info
+type localIPv4Info struct {
+	ipv4  string
+	mtu   int
+	speed int
+}
 
 func assert(cond bool, args ...interface{}) {
 	if cond {
@@ -69,27 +82,143 @@ func copyStruct(dst interface{}, src interface{}) {
 	}
 }
 
-// FIXME: pick the first random IPv4 that is not loopback
-func getipaddr() (ipaddr string, errstr string) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to get host unicast IPs, err: %v", err)
+// getLocalIPv4List returns a list of local unicast IPv4 with MTU
+func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
+	addrlist = make([]*localIPv4Info, 0)
+	addrs, e := net.InterfaceAddrs()
+	if e != nil {
+		err = fmt.Errorf("Failed to get host unicast IPs, err: %v", e)
 		return
 	}
-	found := false
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+	iflist, e := net.Interfaces()
+	if e != nil {
+		err = fmt.Errorf("Failed to get interface list: %v", e)
+		return
+	}
+
+	for _, addr := range addrs {
+		curr := &localIPv4Info{}
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
-				ipaddr = ipnet.IP.String()
-				found = true
+				curr.ipv4 = ipnet.IP.String()
+			}
+		}
+		if curr.ipv4 == "" {
+			continue
+		}
+
+		for _, intf := range iflist {
+			ifAddrs, e := intf.Addrs()
+			// skip invalid interfaces
+			if e != nil {
+				continue
+			}
+			for _, ifAddr := range ifAddrs {
+				if ipnet, ok := ifAddr.(*net.IPNet); ok && ipnet.IP.To4() != nil && ipnet.IP.String() == curr.ipv4 {
+					curr.mtu = intf.MTU
+					curr.speed = netifSpeed(intf.Name)
+					addrlist = append(addrlist, curr)
+					break
+				}
+			}
+			if curr.mtu != 0 {
 				break
 			}
 		}
 	}
-	if !found {
-		errstr = "The host does not have any IPv4 addresses"
+
+	return addrlist, nil
+}
+
+// selectConfiguredIPv4 returns the first IPv4 from a preconfigured IPv4 list that
+// matches any local unicast IPv4
+func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredIPv4s string) (ipv4addr string, errstr string) {
+	glog.Infof("Selecting one of the configured IPv4 addresses: %s...\n", configuredIPv4s)
+	localList := ""
+	configuredList := strings.Split(configuredIPv4s, ",")
+	for _, localaddr := range addrlist {
+		localList += " " + localaddr.ipv4
+		for _, ipv4 := range configuredList {
+			if localaddr.ipv4 == strings.TrimSpace(ipv4) {
+				glog.Warningf("Selected IPv4 %s from the configuration file\n", ipv4)
+				return ipv4, ""
+			}
+		}
 	}
+
+	glog.Errorf("Configured IPv4 does not match any local one.\nLocal IPv4 list:%s\n", localList)
+	return "", "Configured IPv4 does not match any local one"
+}
+
+func guessIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string) {
+	glog.Warning("Looking for the fastest network interface")
+	// sort addresses in descendent order by interface speed
+	ifLess := func(i, j int) bool {
+		return addrlist[i].speed >= addrlist[j].speed
+	}
+	sort.Slice(addrlist, ifLess)
+
+	// Take the first IPv4 if it is faster than the others
+	if addrlist[0].speed != addrlist[1].speed {
+		glog.Warningf("Interface %s is the fastest - %dMbit\n",
+			addrlist[0].ipv4, addrlist[0].speed)
+		if addrlist[0].mtu <= 1500 {
+			glog.Warningf("IPv4 %s selected but MTU is low: %s\n", addrlist[0].mtu)
+		}
+		ipv4addr = addrlist[0].ipv4
+		return
+	}
+
+	errstr = fmt.Sprintf("Failed to select one IPv4 of %d available\n", len(addrlist))
 	return
+}
+
+// detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a deamon to listen on it
+func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string) {
+	if len(addrlist) == 1 {
+		msg := fmt.Sprintf("Found only one IPv4: %s, MTU %d", addrlist[0].ipv4, addrlist[0].mtu)
+		if addrlist[0].speed != 0 {
+			msg += fmt.Sprintf(", bandwidth %d", addrlist[0].speed)
+		}
+		glog.Info(msg)
+		if addrlist[0].mtu <= 1500 {
+			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrlist[0].ipv4, addrlist[0].mtu)
+		}
+		ipv4addr = addrlist[0].ipv4
+		return
+	}
+
+	glog.Warningf("%d IPv4s available\n", len(addrlist))
+	for _, intf := range addrlist {
+		glog.Warningf("    %#v\n", *intf)
+	}
+
+	if guessTheBestIPv4 {
+		return guessIPv4(addrlist)
+	}
+
+	return "", "Failed to select network interface: more than one IPv4 available"
+}
+
+// getipv4addr returns an IPv4 for proxy/target to listen on it.
+// 1. If there is an IPv4 in config - it tries to use it
+// 2. If config does not contain IPv4 - it chooses one of local IPv4s
+func getipv4addr() (ipv4addr string, errstr string) {
+	addrlist, err := getLocalIPv4List()
+	if err != nil {
+		errstr = err.Error()
+		return
+	}
+	if len(addrlist) == 0 {
+		errstr = "The host does not have any IPv4 addresses"
+		return
+	}
+
+	if ctx.config.Network.IPv4 != "" {
+		return selectConfiguredIPv4(addrlist, ctx.config.Network.IPv4)
+	}
+
+	return detectLocalIPv4(addrlist)
 }
 
 func CreateDir(dirname string) (err error) {

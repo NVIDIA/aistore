@@ -66,6 +66,7 @@ type dfconfig struct {
 	FSpaths          map[string]string `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	AckPolicy        ackpolicy         `json:"ack_policy"`
+	Network          netconfig         `json:"network"`
 }
 
 type s3config struct {
@@ -120,6 +121,10 @@ type versionconfig struct {
 	// True enables object version validation for WARM GET.
 	ValidateWarmGet bool   `json:"validate_warm_get"`
 	Versioning      string `json:"versioning"` // for what types of objects versioning is enabled: all, cloud, local, none
+}
+
+type netconfig struct {
+	IPv4 string `json:"ipv4"`
 }
 
 //==============================

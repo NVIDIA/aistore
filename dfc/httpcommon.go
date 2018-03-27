@@ -106,7 +106,7 @@ func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 
 func (h *httprunner) init(s statsif) {
 	h.statsif = s
-	ipaddr, errstr := getipaddr() // FIXME: this must change
+	ipaddr, errstr := getipv4addr()
 	if errstr != "" {
 		glog.Fatalf("FATAL: %s", errstr)
 	}
