@@ -180,8 +180,6 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		request  *http.Request
 		response *http.Response
 		sid      = "unknown"
-		timer    *time.Timer
-		cancelch chan struct{}
 	)
 	if si != nil {
 		sid = si.DaemonID
@@ -202,26 +200,17 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		return
 	}
 
-	// Explicitly specifying a 0 timeout means the client wants no timeout.
-	if len(timeout) > 0 && timeout[0] != 0 {
-		cancelch = make(chan struct{})
-		timer = time.AfterFunc(timeout[0], func() {
-			close(cancelch)
-			cancelch = nil
-		})
-		request.Cancel = cancelch
-	}
-	if len(timeout) > 0 && timeout[0] == 0 {
-		response, err = h.httpclientLongTimeout.Do(request)
+	if len(timeout) > 0 {
+		if timeout[0] != 0 {
+			contextwith, cancel := context.WithTimeout(context.Background(), timeout[0])
+			defer cancel()
+			newrequest := request.WithContext(contextwith)
+			response, err = h.httpclient.Do(newrequest) // timeout => context.deadlineExceededError
+		} else { // zero timeout means the client wants no timeout
+			response, err = h.httpclientLongTimeout.Do(request)
+		}
 	} else {
 		response, err = h.httpclient.Do(request)
-	}
-	// Stop timer but do not close cancelch, to avoid firing a cancel event
-	// while the data is being read from the http response.
-	// When the function exits cancelch will be closed and destroyed by garbage
-	// collector along with request variable
-	if timer != nil {
-		timer.Stop()
 	}
 	if err != nil {
 		if response != nil && response.StatusCode > 0 {

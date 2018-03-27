@@ -37,7 +37,6 @@ type lructx struct {
 	t       *targetrunner
 }
 
-// FIXME: mountpath.enabled is never used
 func (t *targetrunner) runLRU() {
 	// FIXME: if LRU config has changed we need to force new LRU transaction
 	xlru := t.xactinp.renewLRU(t)
