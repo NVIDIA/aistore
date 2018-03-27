@@ -14,6 +14,14 @@ import (
 	"github.com/golang/glog"
 )
 
+//==============================
+//
+// types
+//
+//==============================
+
+const minTimeUpdCapacity = time.Minute * 10
+
 type fscapacity struct {
 	Used    uint64 `json:"used"`    // bytes
 	Avail   uint64 `json:"avail"`   // ditto
@@ -40,6 +48,7 @@ type proxyCoreStats struct {
 	Numrename int64 `json:"numrename"`
 	Numerr    int64 `json:"numerr"`
 	Numlist   int64 `json:"numlist"`
+	logged    bool  `json:"-"`
 }
 
 type targetCoreStats struct {
@@ -71,15 +80,19 @@ type statsrunner struct {
 type proxystatsrunner struct {
 	statsrunner `json:"-"`
 	Core        proxyCoreStats `json:"core"`
-	ccopy       proxyCoreStats `json:"-"`
 }
 
+type deviometrics map[string]string
+
 type storstatsrunner struct {
-	statsrunner `json:"-"`
-	Core        targetCoreStats         `json:"core"`
-	Capacity    map[string]*fscapacity  `json:"capacity"`
-	ccopy       targetCoreStats         `json:"-"`
-	fsmap       map[syscall.Fsid]string `json:"-"`
+	statsrunner         `json:"-"`
+	timeUpdatedCapacity time.Time               `json:"-"`
+	Core                targetCoreStats         `json:"core"`
+	Capacity            map[string]*fscapacity  `json:"capacity"`
+	fsmap               map[syscall.Fsid]string `json:"-"`
+	// iostat
+	CPUidle string                  `json:"cpuidle"`
+	Disk    map[string]deviometrics `json:"disk"`
 }
 
 type ClusterStats struct {
@@ -87,9 +100,20 @@ type ClusterStats struct {
 	Target map[string]*storstatsrunner `json:"target"`
 }
 
+type iostatrunner struct {
+	sync.Mutex
+	namedrunner
+	chsts       chan struct{}
+	CPUidle     string
+	metricnames []string
+	Disk        map[string]deviometrics
+}
+
+//==============================================================
 //
 // c-tor and methods
 //
+//==============================================================
 func newClusterStats() *ClusterStats {
 	targets := make(map[string]*storstatsrunner, ctx.smap.count())
 	for _, si := range ctx.smap.Smap {
@@ -98,8 +122,73 @@ func newClusterStats() *ClusterStats {
 	return &ClusterStats{Target: targets}
 }
 
-func (s *proxyCoreStats) add(name string, val int64) {
+//==================
+//
+// common statsunner
+//
+//==================
+func (r *statsrunner) runcommon(logger statslogger) error {
+	r.chsts = make(chan struct{}, 1)
+
+	glog.Infof("Starting %s", r.name)
+	ticker := time.NewTicker(ctx.config.StatsTime)
+	for {
+		select {
+		case <-ticker.C:
+			runlru := logger.log()
+			logger.housekeep(runlru)
+		case <-r.chsts:
+			ticker.Stop()
+			return nil
+		}
+	}
+}
+
+func (r *statsrunner) stop(err error) {
+	glog.Infof("Stopping %s, err: %v", r.name, err)
+	var v struct{}
+	r.chsts <- v
+	close(r.chsts)
+}
+
+// statslogger interface impl
+func (r *statsrunner) log() (runlru bool) {
+	assert(false)
+	return false
+}
+
+func (r *statsrunner) housekeep(bool) {
+}
+
+//=================
+//
+// proxystatsrunner
+//
+//=================
+func (r *proxystatsrunner) run() error {
+	return r.runcommon(r)
+}
+
+// statslogger interface impl
+func (r *proxystatsrunner) log() (runlru bool) {
+	r.Lock()
+	if r.Core.logged {
+		r.Unlock()
+		return
+	}
+	s := fmt.Sprintf("%s: %+v", r.name, r.Core)
+	r.Core.logged = true
+	r.Unlock()
+
+	glog.Infoln(s)
+	return
+}
+
+func (r *proxystatsrunner) add(name string, val int64) {
 	var v *int64
+	s := &r.Core
+	r.Lock()
+	defer r.Unlock()
 	switch name {
 	case "numget":
 		v = &s.Numget
@@ -119,9 +208,122 @@ func (s *proxyCoreStats) add(name string, val int64) {
 		assert(false, "Invalid stats name "+name)
 	}
 	*v += val
+	s.logged = false
 }
-func (s *targetCoreStats) add(name string, val int64) {
+
+//================
+//
+// storstatsrunner
+//
+//================
+func (r *storstatsrunner) run() error {
+	return r.runcommon(r)
+}
+
+func (r *storstatsrunner) log() (runlru bool) {
+	r.Lock()
+	if r.Core.logged {
+		r.Unlock()
+		return
+	}
+	lines := make([]string, 0, 16)
+	// core stats
+	lines = append(lines, fmt.Sprintf("%s: %+v", r.name, r.Core))
+
+	// capacity
+	if time.Since(r.timeUpdatedCapacity) >= minTimeUpdCapacity {
+		runlru = r.updateCapacity()
+		r.timeUpdatedCapacity = time.Now()
+		for _, mpath := range r.fsmap {
+			fscapacity := r.Capacity[mpath]
+			lines = append(lines, fmt.Sprintf("capacity: %+v", fscapacity))
+		}
+	}
+	// disk
+	riostat := getiostatrunner()
+	riostat.Lock()
+	r.CPUidle = riostat.CPUidle
+	for k, v := range riostat.Disk {
+		r.Disk[k] = v // copy
+	}
+	lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
+	lines = append(lines, fmt.Sprintf("iostat: %+v", r.Disk))
+	riostat.Unlock()
+
+	r.Core.logged = true
+	r.Unlock()
+
+	// log
+	for _, ln := range lines {
+		glog.Infoln(ln)
+	}
+	return
+}
+
+func (r *storstatsrunner) housekeep(runlru bool) {
+	t := gettarget()
+
+	if runlru && ctx.config.LRUConfig.LRUEnabled {
+		go t.runLRU()
+	}
+
+	// Run prefetch operation if there are items to be prefetched
+	if len(t.prefetchQueue) > 0 {
+		go t.doPrefetch()
+	}
+}
+
+func (r *storstatsrunner) updateCapacity() (runlru bool) {
+	for _, mpath := range r.fsmap {
+		statfs := &syscall.Statfs_t{}
+		if err := syscall.Statfs(mpath, statfs); err != nil {
+			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
+			continue
+		}
+		fscapacity := r.Capacity[mpath]
+		r.fillfscap(fscapacity, statfs)
+		if fscapacity.Usedpct >= ctx.config.LRUConfig.HighWM {
+			runlru = true
+		}
+	}
+	return
+}
+
+func (r *storstatsrunner) fillfscap(fscapacity *fscapacity, statfs *syscall.Statfs_t) {
+	fscapacity.Used = (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize)
+	fscapacity.Avail = statfs.Bavail * uint64(statfs.Bsize)
+	fscapacity.Usedpct = uint32((statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks)
+}
+
+func (r *storstatsrunner) init() {
+	r.Disk = make(map[string]deviometrics, 8)
+	// local filesystems and their cap-s
+	r.Capacity = make(map[string]*fscapacity)
+	r.fsmap = make(map[syscall.Fsid]string)
+	for mpath, mountpath := range ctx.mountpaths {
+		mp1, ok := r.fsmap[mountpath.Fsid]
+		if ok {
+			// the same filesystem: usage cannot be different..
+			assert(r.Capacity[mp1] != nil)
+			r.Capacity[mpath] = r.Capacity[mp1]
+			continue
+		}
+		statfs := &syscall.Statfs_t{}
+		if err := syscall.Statfs(mpath, statfs); err != nil {
+			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
+			continue
+		}
+		r.fsmap[mountpath.Fsid] = mpath
+		r.Capacity[mpath] = &fscapacity{}
+		r.fillfscap(r.Capacity[mpath], statfs)
+	}
+}
+
+func (r *storstatsrunner) add(name string, val int64) {
 	var v *int64
+	s := &r.Core
+	r.Lock()
+	defer r.Unlock()
 	switch name {
 	case "numget":
 		v = &s.Numget
@@ -169,162 +371,5 @@ func (s *targetCoreStats) add(name string, val int64) {
 		assert(false, "Invalid stats name "+name)
 	}
 	*v += val
-}
-
-//========================
-//
-// stats runners & methods
-//
-//========================
-
-func (r *statsrunner) runcommon(logger statslogger) error {
-	r.chsts = make(chan struct{}, 1)
-
-	glog.Infof("Starting %s", r.name)
-	ticker := time.NewTicker(ctx.config.StatsTime)
-	for {
-		select {
-		case <-ticker.C:
-			runlru := logger.log()
-			logger.housekeep(runlru)
-		case <-r.chsts:
-			ticker.Stop()
-			return nil
-		}
-	}
-}
-
-func (r *statsrunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
-	var v struct{}
-	r.chsts <- v
-	close(r.chsts)
-}
-
-// statslogger interface impl
-func (r *statsrunner) log() (runlru bool) {
-	assert(false)
-	return false
-}
-
-func (r *statsrunner) housekeep(bool) {
-}
-
-func (r *proxystatsrunner) run() error {
-	return r.runcommon(r)
-}
-
-func (r *proxystatsrunner) syncstats(stats *proxyCoreStats) {
-	r.Lock()
-	copyStruct(stats, &r.Core)
-	r.Unlock()
-}
-
-// statslogger interface impl
-func (r *proxystatsrunner) log() (runlru bool) {
-	// nothing changed since the previous invocation
-	if r.Core.Numput == r.ccopy.Numput &&
-		r.Core.Numget == r.ccopy.Numget &&
-		r.Core.Numpost == r.ccopy.Numpost &&
-		r.Core.Numdelete == r.ccopy.Numdelete {
-		return false
-	}
-	s := fmt.Sprintf("%s: %+v", r.name, r.Core)
-	r.syncstats(&r.ccopy)
-	glog.Infoln(s)
-	return false
-}
-
-func (r *storstatsrunner) run() error {
-	return r.runcommon(r)
-}
-
-func (r *storstatsrunner) syncstats(stats *targetCoreStats) {
-	r.Lock()
-	copyStruct(stats, &r.Core)
-	r.Unlock()
-}
-
-func (r *storstatsrunner) log() (runlru bool) {
-	// nothing changed since the previous invocation
-	if r.Core.Numput == r.ccopy.Numput &&
-		r.Core.Numget == r.ccopy.Numget &&
-		r.Core.Numdelete == r.ccopy.Numdelete &&
-		r.Core.Bytesloaded == r.ccopy.Bytesloaded &&
-		r.Core.Bytesevicted == r.ccopy.Bytesevicted {
-		return false
-	}
-	// 1. core stats
-	glog.Infof("%s: %+v", r.name, r.Core)
-
-	// 2. capacity
-	runlru = r.updateCapacity()
-
-	// 3. format and log usage %%
-	for _, mpath := range r.fsmap {
-		fscapacity := r.Capacity[mpath]
-		glog.Infof("capacity: %+v", fscapacity)
-	}
-
-	r.syncstats(&r.ccopy)
-	return runlru
-}
-
-func (r *storstatsrunner) housekeep(runlru bool) {
-	t := gettarget()
-
-	if runlru && ctx.config.LRUConfig.LRUEnabled {
-		go t.runLRU()
-	}
-
-	// Run prefetch operation if there are items to be prefetched
-	if len(t.prefetchQueue) > 0 {
-		go t.doPrefetch()
-	}
-}
-
-func (r *storstatsrunner) updateCapacity() (runlru bool) {
-	r.Lock()
-	defer r.Unlock()
-	for _, mpath := range r.fsmap {
-		statfs := &syscall.Statfs_t{}
-		if err := syscall.Statfs(mpath, statfs); err != nil {
-			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
-			continue
-		}
-		fscapacity := r.Capacity[mpath]
-		r.fillfscap(fscapacity, statfs)
-		if fscapacity.Usedpct >= ctx.config.LRUConfig.HighWM {
-			runlru = true
-		}
-	}
-	return
-}
-
-func (r *storstatsrunner) fillfscap(fscapacity *fscapacity, statfs *syscall.Statfs_t) {
-	fscapacity.Used = (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize)
-	fscapacity.Avail = statfs.Bavail * uint64(statfs.Bsize)
-	fscapacity.Usedpct = uint32((statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks)
-}
-
-func (r *storstatsrunner) initCapacity() {
-	r.Capacity = make(map[string]*fscapacity)
-	r.fsmap = make(map[syscall.Fsid]string)
-	for mpath, mountpath := range ctx.mountpaths {
-		mp1, ok := r.fsmap[mountpath.Fsid]
-		if ok {
-			// the same filesystem: usage cannot be different..
-			assert(r.Capacity[mp1] != nil)
-			r.Capacity[mpath] = r.Capacity[mp1]
-			continue
-		}
-		statfs := &syscall.Statfs_t{}
-		if err := syscall.Statfs(mpath, statfs); err != nil {
-			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
-			continue
-		}
-		r.fsmap[mountpath.Fsid] = mpath
-		r.Capacity[mpath] = &fscapacity{}
-		r.fillfscap(r.Capacity[mpath], statfs)
-	}
+	s.logged = false
 }

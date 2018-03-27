@@ -57,16 +57,21 @@ func (t *targetrunner) runLRU() {
 	}
 	fschkwg.Wait()
 
-	// final check
-	rr := getstorstatsrunner()
-	rr.updateCapacity()
-
-	for mpath := range ctx.mountpaths {
-		fscapacity := rr.Capacity[mpath]
-		if fscapacity.Usedpct > ctx.config.LRUConfig.LowWM+1 {
-			glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)", mpath, ctx.config.LRUConfig.LowWM, fscapacity.Usedpct)
+	// DEBUG
+	if glog.V(4) {
+		rr := getstorstatsrunner()
+		rr.Lock()
+		rr.updateCapacity()
+		for mpath := range ctx.mountpaths {
+			fscapacity := rr.Capacity[mpath]
+			if fscapacity.Usedpct > ctx.config.LRUConfig.LowWM+1 {
+				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
+					mpath, ctx.config.LRUConfig.LowWM, fscapacity.Usedpct)
+			}
 		}
+		rr.Unlock()
 	}
+
 	xlru.etime = time.Now()
 	glog.Infoln(xlru.tostring())
 	t.xactinp.del(xlru.id)
@@ -82,7 +87,7 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	if err != nil {
 		return
 	}
-	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1000/1000)
+	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1024/1024)
 
 	// init LRU context
 	lctx := &lructx{totsize: toevict, xlru: xlru, h: h, t: t}
@@ -188,11 +193,8 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 		bevicted += fi.size
 		fevicted++
 	}
-	if ctx.rg != nil { // FIXME: for *_test only
-		stats := getstorstats()
-		stats.add("bytesevicted", bevicted)
-		stats.add("filesevicted", fevicted)
-	}
+	t.statsif.add("bytesevicted", bevicted)
+	t.statsif.add("filesevicted", fevicted)
 	return nil
 }
 

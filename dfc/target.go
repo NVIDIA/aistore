@@ -77,7 +77,7 @@ type targetrunner struct {
 
 // start target runner
 func (t *targetrunner) run() error {
-	t.httprunner.init(getstorstats())
+	t.httprunner.init(getstorstatsrunner())
 	t.httprunner.kalive = gettargetkalive()
 	t.smap = &Smap{}                                 // cluster map
 	t.xactinp = newxactinp()                         // extended actions
@@ -130,7 +130,7 @@ func (t *targetrunner) run() error {
 	}
 	// init capacity
 	rr := getstorstatsrunner()
-	rr.initCapacity()
+	rr.init()
 	// prefetch
 	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
 
@@ -275,6 +275,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
+	if glog.V(3) {
+		glog.Infof("GET started: %s/%s", bucket, objname)
+	}
 	//
 	// lockname(ro)
 	//
@@ -358,7 +361,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("GET: sent %s (%.2f MB)", fqn, float64(written)/1000/1000)
+		glog.Infof("GET done: %s/%s (%.2f MB)", bucket, objname, float64(written)/1024/1024)
 	}
 	t.statsif.add("numget", 1)
 }
@@ -432,8 +435,9 @@ ret:
 			t.statsif.add("bytesvchanged", props.size)
 			t.statsif.add("numvchanged", 1)
 		}
-		glog.Infof("cold GET done: %s/%s", bucket, objname)
-
+		if glog.V(3) {
+			glog.Infof("cold GET done: %s/%s", bucket, objname)
+		}
 		t.rtnamemap.downgradelock(uname)
 	}
 	return
@@ -959,7 +963,7 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 		glog.Errorln("sglToCloudAsync: commit", errstr)
 		return
 	}
-	glog.Infof("sglToCloudAsync: %s/%s done", bucket, objname)
+	glog.Infof("sglToCloudAsync done: %s/%s", bucket, objname)
 }
 
 func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
@@ -1013,7 +1017,9 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 		glog.Errorf("finalizeobj %s/%s: %s", bucket, objname, errstr)
 		return
 	}
-	glog.Infof("PUT done: %s/%s", bucket, objname)
+	if glog.V(3) {
+		glog.Infof("PUT done: %s/%s", bucket, objname)
+	}
 	t.statsif.add("numput", 1)
 	return
 }

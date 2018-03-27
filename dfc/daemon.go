@@ -24,6 +24,7 @@ const (
 	xstorstats    = "storstats"
 	xproxykalive  = "proxykalive"
 	xtargetkalive = "targetkalive"
+	xiostat       = "iostat"
 )
 
 //======
@@ -298,6 +299,9 @@ func dfcinit() {
 		ctx.rg.add(t, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
 		ctx.rg.add(newtargetkalive(t), xtargetkalive)
+		if iostatverok() {
+			ctx.rg.add(&iostatrunner{}, xiostat)
+		}
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
@@ -371,6 +375,13 @@ func gettargetkalive() *targetkalive {
 func getstorstatsrunner() *storstatsrunner {
 	r := ctx.rg.runmap[xstorstats]
 	rr, ok := r.(*storstatsrunner)
+	assert(ok)
+	return rr
+}
+
+func getiostatrunner() *iostatrunner {
+	r := ctx.rg.runmap[xiostat]
+	rr, ok := r.(*iostatrunner)
 	assert(ok)
 	return rr
 }

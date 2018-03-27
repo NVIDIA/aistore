@@ -59,7 +59,7 @@ type proxyrunner struct {
 
 // start proxy runner
 func (p *proxyrunner) run() error {
-	p.httprunner.init(getproxystats())
+	p.httprunner.init(getproxystatsrunner())
 	ctx.smap.ProxySI = p.si
 	p.httprunner.kalive = getproxykalive()
 
@@ -471,7 +471,7 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1000/1000)
+		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1024/1024)
 	}
 }
 
