@@ -241,14 +241,16 @@ func (r *storstatsrunner) log() (runlru bool) {
 	}
 	// disk
 	riostat := getiostatrunner()
-	riostat.Lock()
-	r.CPUidle = riostat.CPUidle
-	for k, v := range riostat.Disk {
-		r.Disk[k] = v // copy
+	if riostat != nil {
+		riostat.Lock()
+		r.CPUidle = riostat.CPUidle
+		for k, v := range riostat.Disk {
+			r.Disk[k] = v // copy
+		}
+		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
+		lines = append(lines, fmt.Sprintf("iostat: %+v", r.Disk))
+		riostat.Unlock()
 	}
-	lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
-	lines = append(lines, fmt.Sprintf("iostat: %+v", r.Disk))
-	riostat.Unlock()
 
 	r.Core.logged = true
 	r.Unlock()

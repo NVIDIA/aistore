@@ -381,8 +381,8 @@ func getstorstatsrunner() *storstatsrunner {
 
 func getiostatrunner() *iostatrunner {
 	r := ctx.rg.runmap[xiostat]
-	rr, ok := r.(*iostatrunner)
-	assert(ok)
+	rr, _ := r.(*iostatrunner)
+	// not asserting: a) sysstat installed? b) mac
 	return rr
 }
 
