@@ -13,6 +13,7 @@ RUN set -eux &&\
   apt-get --no-install-recommends -y install wget &&\
   apt-get --no-install-recommends -y install vim &&\
   apt-get --no-install-recommends -y install python &&\
+  apt-get --no-install-recommends -y install sysstat &&\
   apt-get -y clean all
 RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 RUN curl -LO  https://storage.googleapis.com/golang/go$GOLANG_VERSION.linux-amd64.tar.gz
