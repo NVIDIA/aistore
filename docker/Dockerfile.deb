@@ -31,10 +31,11 @@ COPY dfc.json $CONFFILE
 
 # Statsd
 ENV STATSD_PATH /opt/statsd
+ENV STATSD_CONF statsd.conf
 RUN apt-get -y install nodejs -y
 RUN git clone git://github.com/etsy/statsd.git $STATSD_PATH
 RUN apt-get -y install nodejs-legacy
-COPY statsd.conf $STATSD_PATH/localConfig.js
+COPY $STATSD_CONF $STATSD_PATH
 
 # Collectd
 RUN apt-get -y install collectd collectd-utils
@@ -43,9 +44,10 @@ COPY collectd.conf /etc/collectd
 WORKDIR $WORKDIR
 RUN echo "\
 service collectd start \n \
-node $STATSD_PATH/stats.js $STATSD_PATH/localConfig.js& \n \
+node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
 export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=$CONFFILE -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true \n" \
 > /tmp/run.sh
+RUN chmod +x /tmp/run.sh
 CMD sh /tmp/run.sh
 
 #HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1

@@ -30,6 +30,12 @@ spec:
          - name: dfc-config
            mountPath: /etc/dfc/dfc.json
            subPath: dfc.json
+         - name: collectd-config
+           mountPath: /etc/collectd/collectd.conf
+           subPath: collectd.conf
+         - name: statsd-config
+           mountPath: /opt/statsd/statsd.conf
+           subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
          - name: dfc-log
@@ -44,6 +50,12 @@ spec:
         - name: dfc-config
           configMap:
             name: dfc-config
+        - name: collectd-config
+          configMap:
+            name: collectd-config
+        - name: statsd-config
+          configMap:
+            name: statsd-config
         - name: aws-credentials
           secret:
             secretName: aws-credentials
