@@ -1,9 +1,11 @@
 #!/bin/bash
 
+GRAPHITE_SERVER="52.41.234.112"
 usage() {
     echo "Usage: $0 [-e dev|prod|k8s] -a <aws.env> [-s] [-o centos|ubuntu]"
-    echo "   -e : dev|prod - deployment environment (default is dev[elopment])"
     echo "   -a : aws.env - AWS credentials"
+    echo "   -e : dev|prod - deployment environment (default is dev[elopment])"
+    echo "   -g : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
     echo "   -o : centos|ubuntu - docker base image OS (default ubuntu)"
     echo "   -s : scale the targets: add new targets to an already running cluster, or stop a given number of already running"
     echo
@@ -15,11 +17,16 @@ os="ubuntu"
 while getopts "e:a:o:s:" OPTION
 do
     case $OPTION in
+    a)
+        aws_env=${OPTARG}
+        ;;
+
     e)
         environment=${OPTARG}
         ;;
-    a)
-        aws_env=${OPTARG}
+
+    g)
+        GRAPHITE_SERVER=${OPTARG}
         ;;
 
     o)
@@ -153,6 +160,8 @@ fi
 
 CONFFILE="dfc.json"
 c=0
+CONFFILE_STATSD="statsd.conf"
+CONFFILE_COLLECTD="collectd.conf"
 source $DIR/../dfc/setup/config.sh
 
 #1) create/update/delete kubctl configmap
@@ -197,7 +206,9 @@ else
     echo "Cleaning up files.."
     mkdir -p /tmp/dfc_backup
     mv aws.env /tmp/dfc_backup/
-    mv dfc.json /tmp/dfc_backup/
+    mv $CONFFILE /tmp/dfc_backup/
+    mv $CONFFILE_STATSD /tmp/dfc_backup/
+    mv $CONFFILE_COLLECTD /tmp/dfc_backup/
     mv Dockerfile /tmp/dfc_backup/
 fi
 echo done

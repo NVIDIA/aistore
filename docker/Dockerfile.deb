@@ -26,7 +26,26 @@ RUN go get -u -v github.com/NVIDIA/dfcpub/dfc
 RUN rm -rf %WORKDIR/*
 RUN apt-get -y remove wget
 RUN mkdir /etc/dfc
+RUN mkdir /usr/nvidia
 COPY dfc.json $CONFFILE
+
+# Statsd
+ENV STATSD_PATH /opt/statsd
+RUN apt-get -y install nodejs -y
+RUN git clone git://github.com/etsy/statsd.git $STATSD_PATH
+RUN apt-get -y install nodejs-legacy
+COPY statsd.conf $STATSD_PATH/localConfig.js
+
+# Collectd
+RUN apt-get -y install collectd collectd-utils
+COPY collectd.conf /etc/collectd
+
 WORKDIR $WORKDIR
-ENTRYPOINT export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=$CONFFILE -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true
+RUN echo "\
+service collectd start \n \
+node $STATSD_PATH/stats.js $STATSD_PATH/localConfig.js& \n \
+export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=$CONFFILE -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true \n" \
+> /tmp/run.sh
+CMD sh /tmp/run.sh
+
 #HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1

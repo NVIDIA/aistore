@@ -54,3 +54,56 @@
 	}
 }
 EOL
+
+	cat > $CONFFILE_STATSD <<EOL
+{
+	graphitePort: 2003,
+	graphiteHost: "${GRAPHITE_SERVER}",
+	port: 8125
+}
+EOL
+
+	cat > $CONFFILE_COLLECTD <<EOL
+{
+	LoadPlugin df
+	LoadPlugin disk
+	LoadPlugin interface
+	LoadPlugin load
+	LoadPlugin memory
+	LoadPlugin processes
+	LoadPlugin write_graphite
+
+	<Plugin syslog>
+	        LogLevel info
+	</Plugin>
+
+	<Plugin df>
+	        FSType rootfs
+	        FSType sysfs
+	        FSType proc
+	        FSType devtmpfs
+	        FSType devpts
+	        FSType tmpfs
+	        FSType fusectl
+	        FSType cgroup
+	        IgnoreSelected true
+	        ValuesPercentage True
+	</Plugin>
+
+	<Plugin write_graphite>
+	        <Node "graphiting">
+			Host "${GRAPHITE_SERVER}"
+	                Port "2003"
+	                Protocol "tcp"
+	                LogSendErrors true
+	                StoreRates true
+	                AlwaysAppendDS false
+	                EscapeCharacter "_"
+	        </Node>
+	</Plugin>
+
+	<Include "/etc/collectd/collectd.conf.d">
+	        Filter "*.conf"
+	</Include>
+}
+EOL
