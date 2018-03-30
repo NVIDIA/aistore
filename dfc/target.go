@@ -547,7 +547,17 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
 		markerDirs = markerDirs[:len(markerDirs)-1]
 	}
-	allfinfos := cachedInfos{make([]*BucketEntry, 0, cachedPageSize), 0, 0, msg.GetPrefix, msg.GetPageMarker, markerDirs, needAtime, msg, "", t, bucket}
+	allfinfos := cachedInfos{make([]*BucketEntry, 0, cachedPageSize),
+		0,                 // fileCount
+		0,                 // rootLength
+		msg.GetPrefix,     // prefix
+		msg.GetPageMarker, // marker
+		markerDirs,        // markerDirs
+		needAtime,         // needAtime
+		msg,               // GetMsg
+		"",                // lastFilePath
+		t,                 // targetrunner
+		bucket}            // bucket
 
 	// We need stable order of mountpaths
 	mpathList := make([]string, 0, len(ctx.mountpaths))
@@ -560,7 +570,11 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		localbucketfqn := mpath + "/" + ctx.config.CloudBuckets + "/" + bucket
 		_, err = os.Stat(localbucketfqn)
 		if err != nil {
-			continue
+			if os.IsNotExist(err) {
+				err = nil // nothing cached yet
+				continue
+			}
+			break
 		}
 
 		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename

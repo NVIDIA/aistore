@@ -234,6 +234,13 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		}
 		return
 	}
+	// err == nil && bad status: response.Body contains the error message
+	if response.StatusCode >= http.StatusBadRequest {
+		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
+		errstr = err.Error()
+		status = response.StatusCode
+		return
+	}
 	if sid != "unknown" {
 		h.kalive.timestamp(sid)
 	}
