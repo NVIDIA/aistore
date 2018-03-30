@@ -114,8 +114,10 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
 	}
-	// skip system files and directories
-	if strings.HasPrefix(osfi.Name(), ".") || osfi.Mode().IsDir() {
+	if osfi.Mode().IsDir() {
+		return nil
+	}
+	if isworkfile(fqn) {
 		return nil
 	}
 	_, err = os.Stat(fqn)

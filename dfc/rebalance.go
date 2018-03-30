@@ -58,8 +58,10 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 		glog.Errorf("rewalkf callback invoked with err: %v", err)
 		return err
 	}
-	// skip system files and directories
 	if osfi.Mode().IsDir() {
+		return nil
+	}
+	if isworkfile(fqn) {
 		return nil
 	}
 	// abort?

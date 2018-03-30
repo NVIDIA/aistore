@@ -28,6 +28,7 @@ import (
 
 const (
 	cachedPageSize = 10000 // the number of cached file infos returned in one page
+	workfilesuffix = ".~~~."
 )
 
 type mountPath struct {
@@ -370,7 +371,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 	var (
 		fqn        = t.fqn(bucket, objname)
 		uname      = bucket + objname
-		getfqn     = fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
+		getfqn     = fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano()) + workfilesuffix
 		versioncfg = &ctx.config.VersionConfig
 		errv       = ""
 		vchanged   = false
@@ -723,7 +724,9 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		return err
 	}
 	if osfi.IsDir() {
-		// Listbucket doesn't need to return directories
+		return nil
+	}
+	if isworkfile(fqn) {
 		return nil
 	}
 	relname := fqn[all.rootLength:]
@@ -879,7 +882,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
-	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
+	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano()) + workfilesuffix
 	if glog.V(3) {
 		glog.Infof("PUT: %s => %s", fqn, putfqn)
 	}
@@ -1081,7 +1084,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if glog.V(3) {
 			glog.Infof("Rebalance to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
 		}
-		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano())
+		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano()) + workfilesuffix
 		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
@@ -1959,4 +1962,8 @@ func increaseObjectVersion(fqn string) (newVersion string, errstr string) {
 	}
 
 	return
+}
+
+func isworkfile(fqn string) bool {
+	return strings.HasSuffix(fqn, workfilesuffix)
 }
