@@ -45,9 +45,9 @@ WORKDIR $WORKDIR
 RUN echo "\
 service collectd start \n \
 node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
-export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=$CONFFILE -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true \n" \
+export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-ENTRYPOINT ["/bin/bash","/run/run.sh"]
+CMD ["sh","-c", "/run/run.sh $CONFFILE $ROLE $TARGETS"]
 
 #HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1
