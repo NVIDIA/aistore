@@ -42,7 +42,6 @@ RUN apt-get -y install collectd collectd-utils
 COPY collectd.conf /etc/collectd
 
 WORKDIR $WORKDIR
-RUN mkdir /run
 RUN echo "\
 service collectd start \n \
 node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
