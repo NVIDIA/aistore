@@ -28,7 +28,7 @@ import (
 
 const (
 	cachedPageSize = 10000 // the number of cached file infos returned in one page
-	workfilesuffix = ".~~~."
+	workfileprefix = ".~~~."
 )
 
 type mountPath struct {
@@ -42,6 +42,7 @@ type fipair struct {
 }
 type allfinfos struct {
 	finfos     []fipair
+	t          *targetrunner
 	rootLength int
 }
 
@@ -371,7 +372,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 	var (
 		fqn        = t.fqn(bucket, objname)
 		uname      = bucket + objname
-		getfqn     = fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano()) + workfilesuffix
+		getfqn     = t.fqn2workfile(fqn)
 		versioncfg = &ctx.config.VersionConfig
 		errv       = ""
 		vchanged   = false
@@ -420,7 +421,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", getfqn, fqn, err)
 		return
 	}
-	if errstr = finalizeobj(fqn, props); errstr != "" {
+	if errstr = t.finalizeobj(fqn, props); errstr != "" {
 		return
 	}
 ret:
@@ -602,7 +603,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 }
 
 func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList) {
-	finfos := allfinfos{make([]fipair, 0, 128), 0}
+	finfos := allfinfos{make([]fipair, 0, 128), t, 0}
 	for mpath := range ctx.mountpaths {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
 		finfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
@@ -726,7 +727,7 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.IsDir() {
 		return nil
 	}
-	if isworkfile(fqn) {
+	if all.t.isworkfile(fqn) {
 		return nil
 	}
 	relname := fqn[all.rootLength:]
@@ -811,13 +812,14 @@ func (ci *cachedInfos) listwalkf(fqn string, osfi os.FileInfo, err error) error 
 		glog.Errorf("listwalkf callback invoked with err: %v", err)
 		return err
 	}
-
 	if ci.fileCount >= cachedPageSize {
 		return filepath.SkipDir
 	}
-
 	if osfi.IsDir() {
 		return ci.processDir(fqn)
+	}
+	if ci.t.isworkfile(fqn) {
+		return nil
 	}
 
 	return ci.processRegularFile(fqn, osfi)
@@ -882,7 +884,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
-	putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano()) + workfilesuffix
+	putfqn := t.fqn2workfile(fqn)
 	if glog.V(3) {
 		glog.Infof("PUT: %s => %s", fqn, putfqn)
 	}
@@ -1016,7 +1018,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 	}
 
 	if isBucketLocal && t.versioningConfigured(bucket) {
-		if objprops.version, errstr = increaseObjectVersion(fqn); errstr != "" {
+		if objprops.version, errstr = t.increaseObjectVersion(fqn); errstr != "" {
 			return
 		}
 	}
@@ -1030,7 +1032,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 		return
 	}
 	renamed = true
-	if errstr = finalizeobj(fqn, objprops); errstr != "" {
+	if errstr = t.finalizeobj(fqn, objprops); errstr != "" {
 		glog.Errorf("finalizeobj %s/%s: %s", bucket, objname, errstr)
 		return
 	}
@@ -1084,7 +1086,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if glog.V(3) {
 			glog.Infof("Rebalance to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
 		}
-		putfqn := fmt.Sprintf("%s.%d", fqn, time.Now().UnixNano()) + workfilesuffix
+		putfqn := t.fqn2workfile(fqn)
 		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
@@ -1495,17 +1497,6 @@ func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) 
 	return
 }
 
-//
-// Cloud bucket + object => (local hashed path, fully qualified filename)
-//
-func (t *targetrunner) fqn(bucket, objname string) string {
-	mpath := hrwMpath(bucket + "/" + objname)
-	if t.islocalBucket(bucket) {
-		return mpath + "/" + ctx.config.LocalBuckets + "/" + bucket + "/" + objname
-	}
-	return mpath + "/" + ctx.config.CloudBuckets + "/" + bucket + "/" + objname
-}
-
 //===========================
 //
 // control plane
@@ -1707,113 +1698,13 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//==============================================================================
+//====================== common for both cold GET and PUT ======================================
 //
-// target's utilities and helpers
-//
-//==============================================================================
-func (t *targetrunner) islocalBucket(bucket string) bool {
-	_, ok := t.lbmap.LBmap[bucket]
-	return ok
-}
-
-func (t *targetrunner) testingFSPpaths() bool {
-	return ctx.config.TestFSP.Count > 0
-}
-
-func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) {
-	fn := func(path string) bool {
-		if strings.HasPrefix(fqn, path) {
-			rempath := fqn[len(path):]
-			items := strings.SplitN(rempath, "/", 2)
-			bucket, objname = items[0], items[1]
-			return true
-		}
-		return false
-	}
-	for mpath := range ctx.mountpaths {
-		if fn(mpath + "/" + ctx.config.CloudBuckets + "/") {
-			ok = len(objname) > 0
-			return
-		}
-		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
-			assert(t.islocalBucket(bucket))
-			ok = len(objname) > 0
-			return
-		}
-	}
-	return
-}
-
-func (t *targetrunner) fspath2mpath() {
-	for fp := range ctx.config.FSpaths {
-		if _, err := os.Stat(fp); err != nil {
-			glog.Fatalf("FATAL: fspath %q does not exist, err: %v", fp, err)
-		}
-		statfs := syscall.Statfs_t{}
-		if err := syscall.Statfs(fp, &statfs); err != nil {
-			glog.Fatalf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
-		}
-
-		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
-		_, ok := ctx.mountpaths[mp.Path]
-		assert(!ok)
-		ctx.mountpaths[mp.Path] = mp
-	}
-}
-
-// create local directories to test multiple fspaths
-func (t *targetrunner) testCachepathMounts() {
-	var instpath string
-	if ctx.config.TestFSP.Instance > 0 {
-		instpath = ctx.config.TestFSP.Root + strconv.Itoa(ctx.config.TestFSP.Instance) + "/"
-	} else {
-		// e.g. when docker
-		instpath = ctx.config.TestFSP.Root
-	}
-	for i := 0; i < ctx.config.TestFSP.Count; i++ {
-		var mpath string
-		if ctx.config.TestFSP.Count > 1 {
-			mpath = instpath + strconv.Itoa(i+1)
-		} else {
-			mpath = instpath[0 : len(instpath)-1]
-		}
-		if err := CreateDir(mpath); err != nil {
-			glog.Fatalf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
-			return
-		}
-		statfs := syscall.Statfs_t{}
-		if err := syscall.Statfs(mpath, &statfs); err != nil {
-			glog.Fatalf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
-			return
-		}
-		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
-		_, ok := ctx.mountpaths[mp.Path]
-		assert(!ok)
-		ctx.mountpaths[mp.Path] = mp
-	}
-}
-
-func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
-	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths))
-	for _, mountpath := range ctx.mountpaths {
-		mp2, ok := fsmap[mountpath.Fsid]
-		if ok {
-			if !t.testingFSPpaths() {
-				glog.Fatalf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
-			}
-			continue
-		}
-		fsmap[mountpath.Fsid] = mountpath.Path
-	}
-	return
-}
-
-//=====
 // on err: closes and removes the file; othwerise closes and returns the size;
 // empty omd5 or oxxhash: not considered an exception even when the configuration says otherwise;
 // xxhash is always preferred over md5
-//=====
+//
+//==============================================================================================
 func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, ohobj cksumvalue,
 	reader io.Reader) (sgl *SGLIO, nhobj cksumvalue, written int64, errstr string) {
 	var (
@@ -1900,8 +1791,159 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 	return
 }
 
-// This function must be used everywhere instead of Setxattr call
-func finalizeobj(fqn string, objprops *objectProps) (errstr string) {
+//==============================================================================
+//
+// target's misc utilities and helpers
+//
+//==============================================================================
+func (t *targetrunner) islocalBucket(bucket string) bool {
+	_, ok := t.lbmap.LBmap[bucket]
+	return ok
+}
+
+func (t *targetrunner) testingFSPpaths() bool {
+	return ctx.config.TestFSP.Count > 0
+}
+
+// (bucket, object) => (local hashed path, fully qualified name aka fqn)
+func (t *targetrunner) fqn(bucket, objname string) string {
+	mpath := hrwMpath(bucket + "/" + objname)
+	if t.islocalBucket(bucket) {
+		return mpath + "/" + ctx.config.LocalBuckets + "/" + bucket + "/" + objname
+	}
+	return mpath + "/" + ctx.config.CloudBuckets + "/" + bucket + "/" + objname
+}
+
+// the opposite
+func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) {
+	fn := func(path string) bool {
+		if strings.HasPrefix(fqn, path) {
+			rempath := fqn[len(path):]
+			items := strings.SplitN(rempath, "/", 2)
+			bucket, objname = items[0], items[1]
+			return true
+		}
+		return false
+	}
+	for mpath := range ctx.mountpaths {
+		if fn(mpath + "/" + ctx.config.CloudBuckets + "/") {
+			ok = len(objname) > 0
+			return
+		}
+		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
+			assert(t.islocalBucket(bucket))
+			ok = len(objname) > 0
+			return
+		}
+	}
+	return
+}
+
+func (t *targetrunner) fqn2workfile(fqn string) (workfqn string) {
+	dir, base := filepath.Split(fqn)
+	assert(strings.HasSuffix(dir, "/"), dir+" : "+base)
+	assert(base != "", dir+" : "+base)
+
+	workfqn = dir + workfileprefix + base + "." + strconv.FormatInt(time.Now().UnixNano(), 16)
+	return
+}
+
+func (t *targetrunner) isworkfile(workfqn string) bool {
+	dir, base := filepath.Split(workfqn)
+	if !strings.HasSuffix(dir, "/") {
+		return false
+	}
+	if base == "" {
+		return false
+	}
+	// TODO: consider additional check
+	//    i := strings.LastIndex(base, ".")
+	//    _, err := strconv.ParseInt(base[i + 1:], 0, 64)
+	return strings.HasPrefix(base, workfileprefix)
+}
+
+func (t *targetrunner) fspath2mpath() {
+	for fp := range ctx.config.FSpaths {
+		if len(fp) > 1 {
+			fp = strings.TrimSuffix(fp, "/")
+		}
+		if _, err := os.Stat(fp); err != nil {
+			glog.Fatalf("FATAL: fspath %q does not exist, err: %v", fp, err)
+		}
+		statfs := syscall.Statfs_t{}
+		if err := syscall.Statfs(fp, &statfs); err != nil {
+			glog.Fatalf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
+		}
+		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
+		_, ok := ctx.mountpaths[mp.Path]
+		assert(!ok)
+		ctx.mountpaths[mp.Path] = mp
+	}
+}
+
+// create local directories to test multiple fspaths
+func (t *targetrunner) testCachepathMounts() {
+	var instpath string
+	if ctx.config.TestFSP.Instance > 0 {
+		instpath = ctx.config.TestFSP.Root + strconv.Itoa(ctx.config.TestFSP.Instance) + "/"
+	} else {
+		// e.g. when docker
+		instpath = ctx.config.TestFSP.Root
+	}
+	for i := 0; i < ctx.config.TestFSP.Count; i++ {
+		var mpath string
+		if ctx.config.TestFSP.Count > 1 {
+			mpath = instpath + strconv.Itoa(i+1)
+		} else {
+			mpath = instpath[0 : len(instpath)-1]
+		}
+		if err := CreateDir(mpath); err != nil {
+			glog.Fatalf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
+			return
+		}
+		statfs := syscall.Statfs_t{}
+		if err := syscall.Statfs(mpath, &statfs); err != nil {
+			glog.Fatalf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
+			return
+		}
+		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
+		_, ok := ctx.mountpaths[mp.Path]
+		assert(!ok)
+		ctx.mountpaths[mp.Path] = mp
+	}
+}
+
+func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
+	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths))
+	for _, mountpath := range ctx.mountpaths {
+		mp2, ok := fsmap[mountpath.Fsid]
+		if ok {
+			if !t.testingFSPpaths() {
+				glog.Fatalf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
+			}
+			continue
+		}
+		fsmap[mountpath.Fsid] = mountpath.Path
+	}
+	return
+}
+
+// versioningConfigured returns true if versioning for a given bucket is enabled
+// NOTE:
+//    AWS bucket versioning can be disabled on the cloud. In this case we do not
+//    save/read/update version using xattrs. And the function returns that the
+//    versioning is unsupported even if versioning is 'all' or 'cloud'.
+func (t *targetrunner) versioningConfigured(bucket string) bool {
+	islocal := t.islocalBucket(bucket)
+	versioning := ctx.config.VersionConfig.Versioning
+	if islocal {
+		return versioning == VersionAll || versioning == VersionLocal
+	}
+	return versioning == VersionAll || versioning == VersionCloud
+}
+
+// xattrs
+func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr string) {
 	if objprops.nhobj != nil {
 		htype, hval := objprops.nhobj.get()
 		assert(htype == ChecksumXXHash)
@@ -1915,28 +1957,10 @@ func finalizeobj(fqn string, objprops *objectProps) (errstr string) {
 	return
 }
 
-// versioningConfigured returns if DFC supports versioning for the bucket.
-// Note about AWS cloud:
-// AWS bucket versioning can be disabled on the cloud. In this case we do not
-//    save/read/update version using xattrs. And the function returns that the
-//    versioning is unsupported even if versioning is 'all' or 'cloud'.
-// FIXME TODO: revisit the function when versioning can be set on bucket level
-func (t *targetrunner) versioningConfigured(bucket string) bool {
-	islocal := t.islocalBucket(bucket)
-	versioning := ctx.config.VersionConfig.Versioning
-	if islocal {
-		return versioning == VersionAll || versioning == VersionLocal
-	}
-
-	return versioning == VersionAll || versioning == VersionCloud
-}
-
-// increaseObjectVersion is version id support for local buckets.
-// It reads the current version from xattrs, increase the value by one,
-// and returns the new value. If the current version is empty(file was put
-// before versioning for local buckets had been enabled) or file does not exist
-// (object has not been put yet) the version id starts from "1"
-func increaseObjectVersion(fqn string) (newVersion string, errstr string) {
+// increaseObjectVersion increments the current version xattrs and returns the new value.
+// If the current version is empty (local bucket versioning (re)enabled, new file)
+// the version is set to "1"
+func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, errstr string) {
 	const initialVersion = "1"
 	var (
 		err    error
@@ -1962,8 +1986,4 @@ func increaseObjectVersion(fqn string) (newVersion string, errstr string) {
 	}
 
 	return
-}
-
-func isworkfile(fqn string) bool {
-	return strings.HasSuffix(fqn, workfilesuffix)
 }

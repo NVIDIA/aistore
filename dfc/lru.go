@@ -117,7 +117,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if isworkfile(fqn) {
+	if lctx.t.isworkfile(fqn) {
 		return nil
 	}
 	_, err = os.Stat(fqn)

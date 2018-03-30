@@ -61,7 +61,7 @@ func (xreb *xactRebalance) rewalkf(fqn string, osfi os.FileInfo, err error) erro
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if isworkfile(fqn) {
+	if xreb.targetrunner.isworkfile(fqn) {
 		return nil
 	}
 	// abort?
