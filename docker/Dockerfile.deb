@@ -42,12 +42,13 @@ RUN apt-get -y install collectd collectd-utils
 COPY collectd.conf /etc/collectd
 
 WORKDIR $WORKDIR
+RUN mkdir /run
 RUN echo "\
 service collectd start \n \
 node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
 export DFCDAEMONID=`echo $HOSTNAME` && go run setup/dfc.go -config=$CONFFILE -role=$ROLE -ntargets=$TARGETS -alsologtostderr=true \n" \
-> /tmp/run.sh
-RUN chmod +x /tmp/run.sh
-ENTRYPOINT ["/bin/bash","/tmp/run.sh"]
+> /run/run.sh
+RUN chmod +x /run/run.sh
+ENTRYPOINT ["/bin/bash","/run/run.sh"]
 
 #HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1
