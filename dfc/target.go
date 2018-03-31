@@ -489,7 +489,8 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 			if err == io.EOF {
 				trailer := r.Trailer.Get("Error")
 				if trailer != "" {
-					s = fmt.Sprintf("pushhdlr: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+					s = fmt.Sprintf("pushhdlr: Failed to read %s request, err: %v, trailer: %s",
+						r.Method, err, trailer)
 				}
 			}
 			t.invalmsghdlr(w, r, s)
@@ -696,16 +697,32 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 	if islocal {
+		if glog.V(3) {
+			glog.Infof("LIST local started: %s", bucket)
+		}
 		t.doLocalBucketList(w, r, bucket, msg)
+		if glog.V(3) {
+			glog.Infof("LIST local done: %s", bucket)
+		}
 		return
 	}
 	if useCache {
-		// read local file infos
+		if glog.V(3) {
+			glog.Infof("LIST cloud cached started: %s", bucket)
+		}
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
+		if errstr == "" && glog.V(3) {
+			glog.Infof("LIST cloud cached done: %s", bucket)
+		}
 	} else {
-		// do cloud request
+		if glog.V(3) {
+			glog.Infof("LIST cloud started: %s", bucket)
+		}
 		if jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg); errstr == "" {
 			t.statsif.add("numlist", 1)
+			if glog.V(3) {
+				glog.Infof("LIST cloud done: %s", bucket)
+			}
 		}
 	}
 	if errstr != "" {
@@ -833,7 +850,7 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 
-	from, to, bucket, objname := query.Get(ParamFromID), query.Get(ParamToID), apitems[0], ""
+	from, to, bucket, objname := query.Get(URLParamFromID), query.Get(URLParamToID), apitems[0], ""
 	if len(apitems) > 1 {
 		objname = strings.Join(apitems[1:], "/")
 	}
@@ -885,9 +902,6 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
 	putfqn := t.fqn2workfile(fqn)
-	if glog.V(3) {
-		glog.Infof("PUT: %s => %s", fqn, putfqn)
-	}
 	hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
 	if hdhobj != nil {
 		htype, hval = hdhobj.get()
@@ -921,6 +935,9 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		}
 	}
 	inmem := (ctx.config.AckPolicy.Put == AckWhenInMem)
+	if bool(glog.V(3)) && !inmem {
+		glog.Infof("PUT: => %s", putfqn)
+	}
 	if sgl, nhobj, _, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
@@ -1350,7 +1367,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
 	url += bucket + "/" + newobjname
-	url += fmt.Sprintf("?%s=%s&%s=%s", ParamFromID, fromid, ParamToID, toid)
+	url += fmt.Sprintf("?%s=%s&%s=%s", URLParamFromID, fromid, URLParamToID, toid)
 
 	fqn := t.fqn(bucket, objname)
 	file, err := os.Open(fqn)
@@ -1469,9 +1486,10 @@ func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {
-	useCacheStr := r.URL.Query().Get(ParamCached)
+	useCacheStr := r.URL.Query().Get(URLParamCached)
 	if useCacheStr != "" && useCacheStr != "true" && useCacheStr != "false" {
-		errstr = fmt.Sprintf("Invalid parameter: \"%s=%s\". Must be [\"\",\"true\",\"false\"]", ParamCached, useCacheStr)
+		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
+			URLParamCached, useCacheStr)
 		errcode = http.StatusInternalServerError
 		return
 	}
@@ -1483,9 +1501,10 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) (islocal bool, errstr string, errcode int) {
 	// If a client provides the local parameter, but the bucket is not loca
 	islocal = t.islocalBucket(bucket)
-	proxylocalstr := r.URL.Query().Get(ParamLocal)
+	proxylocalstr := r.URL.Query().Get(URLParamLocal)
 	if proxylocalstr != "" && proxylocalstr != "true" && proxylocalstr != "false" {
-		errstr = fmt.Sprintf("Invalid parameter: \"%s=%s\". Must be [\"\",\"true\",\"false\"]", ParamLocal, proxylocalstr)
+		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
+			URLParamLocal, proxylocalstr)
 		errcode = http.StatusInternalServerError
 		return
 	}
@@ -1525,7 +1544,14 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
 	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
-		t.httpdaeputSmap(w, r, apitems)
+		autorebalance := r.URL.Query().Get(URLParamAutoReb)
+		if autorebalance != "true" && autorebalance != "false" {
+			errstr := fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: true | false)",
+				URLParamAutoReb, autorebalance)
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+		t.httpdaeputSmap(w, r, apitems, autorebalance == "true")
 		return
 	}
 	// PUT '{lbmap}' /v1/daemon/localbuckets
@@ -1563,7 +1589,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string) {
+func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string, autorebalance bool) {
 	curversion := t.smap.Version
 	var newsmap *Smap
 	if t.readJSON(w, r, &newsmap) != nil {
@@ -1578,7 +1604,9 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 		t.kalive.onerr(err, 0)
 		return
 	}
-	glog.Infof("%s: new Smap version %d (old %d)", apitems[0], newsmap.Version, curversion)
+	newlen, oldlen := len(newsmap.Smap), len(t.smap.Smap)
+	glog.Infof("%s: new Smap version %d (old %d), num targets %d (%d), autorebalance=%t",
+		apitems[0], newsmap.Version, curversion, newlen, oldlen, autorebalance)
 
 	// check whether this target is present in the new Smap
 	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
@@ -1602,10 +1630,27 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	if apitems[0] == Rsyncsmap {
 		return
 	}
+	// config checks
+	if autorebalance {
+		if !ctx.config.RebalanceConf.RebalancingEnabled {
+			glog.Infoln("auto-rebalancing disabled")
+			return
+		}
+		if time.Since(t.starttime) < ctx.config.RebalanceConf.StartupDelayTime {
+			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime), ctx.config.RebalanceConf.StartupDelayTime)
+			return
+		}
+	}
 	if isSubset {
-		glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
+		if newlen != oldlen {
+			assert(newlen < oldlen)
+			glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
+		} else {
+			glog.Infof("nothing to rebalance: num (%d) and IDs of the targets did not change", newlen)
+		}
 		return
 	}
+
 	// xaction
 	go t.runRebalance()
 }

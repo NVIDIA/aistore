@@ -175,7 +175,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, ParamLocal, p.islocalBucket(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
@@ -190,7 +190,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
 	reqBody []byte, islocal bool, cached bool) (response *bucketResp, err error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
-		Rfiles, bucket, ParamLocal, islocal, ParamCached, cached)
+		Rfiles, bucket, URLParamLocal, islocal, URLParamCached, cached)
 	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.HTTP.Timeout)
 	if err != nil {
 		p.kalive.onerr(err, status)
@@ -494,7 +494,7 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, ParamLocal, p.islocalBucket(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
@@ -702,7 +702,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 				err     error
 				errstr  string
 				errcode int
-				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rfiles, bucket, ParamLocal, islocal)
+				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rfiles, bucket, URLParamLocal, islocal)
 			)
 			if wait {
 				_, err, errstr, errcode = p.call(si, url, method, jsonbytes, 0)
@@ -736,7 +736,7 @@ func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	for _, si = range ctx.smap.Smap {
 		break
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, ParamLocal, p.islocalBucket(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
 		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
 	}
@@ -1077,12 +1077,12 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 		// the opposite it not true though, that's why the check below
 		p.httpfilputLB()
 		if action == Rebalance {
-			p.httpcluputSmap(Rebalance) // REST cmd
+			p.httpcluputSmap(Rebalance, false) // REST cmd
 		} else if ctx.smap.syncversion != smapversion {
 			if startingUp {
-				p.httpcluputSmap(Rsyncsmap)
+				p.httpcluputSmap(Rsyncsmap, false)
 			} else {
-				p.httpcluputSmap(Rebalance) // NOTE: auto-rebalance
+				p.httpcluputSmap(Rebalance, true)
 			}
 		}
 		break
@@ -1096,7 +1096,7 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	glog.Infof("Smap (v%d) and lbmap (v%d) are now in sync with the targets", smapversion, lbversion)
 }
 
-func (p *proxyrunner) httpcluputSmap(action string) {
+func (p *proxyrunner) httpcluputSmap(action string, autorebalance bool) {
 	method := http.MethodPut
 	assert(action == Rebalance || action == Rsyncsmap)
 	ctx.smap.lock()
@@ -1104,7 +1104,7 @@ func (p *proxyrunner) httpcluputSmap(action string) {
 	ctx.smap.unlock()
 	assert(err == nil, err)
 	for _, si := range ctx.smap.Smap {
-		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + action
+		url := fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rdaemon, action, URLParamAutoReb, autorebalance)
 		glog.Infof("%s: %s", action, url)
 		if _, err, errstr, status := p.call(si, url, method, jsbytes); errstr != "" {
 			p.kalive.onerr(err, status)

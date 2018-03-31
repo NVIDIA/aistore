@@ -52,12 +52,13 @@ var (
 	LowWaterMark         = uint32(60)
 	UpdTime              = time.Second * 20
 	configRegression     = map[string]string{
-		"stats_time":      fmt.Sprintf("%v", UpdTime),
-		"dont_evict_time": fmt.Sprintf("%v", UpdTime),
-		"lowwm":           fmt.Sprintf("%d", LowWaterMark),
-		"highwm":          fmt.Sprintf("%d", HighWaterMark),
-		"passthru":        "true",
-		"lru_enabled":     "true",
+		"stats_time":         fmt.Sprintf("%v", UpdTime),
+		"dont_evict_time":    fmt.Sprintf("%v", UpdTime),
+		"startup_delay_time": fmt.Sprintf("%v", UpdTime),
+		"lowwm":              fmt.Sprintf("%d", LowWaterMark),
+		"highwm":             fmt.Sprintf("%d", HighWaterMark),
+		"passthru":           "true",
+		"lru_enabled":        "true",
 	}
 	httpclient = &http.Client{}
 	tests      = []Test{
@@ -213,6 +214,7 @@ func regressionStats(t *testing.T) {
 func regressionConfig(t *testing.T) {
 	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
+	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
 	oproxyconfig := oconfig["proxy"].(map[string]interface{})
 
 	for k, v := range configRegression {
@@ -221,6 +223,7 @@ func regressionConfig(t *testing.T) {
 
 	nconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
+	nrebconfig := nconfig["rebalance_conf"].(map[string]interface{})
 	nproxyconfig := nconfig["proxy"].(map[string]interface{})
 
 	if nconfig["stats_time"] != configRegression["stats_time"] {
@@ -236,6 +239,13 @@ func regressionConfig(t *testing.T) {
 	} else {
 		o := olruconfig["dont_evict_time"].(string)
 		setConfig("dont_evict_time", o, proxyurl+"/v1/cluster", httpclient, t)
+	}
+	if nrebconfig["startup_delay_time"] != configRegression["startup_delay_time"] {
+		t.Errorf("StartupDelayTime was not set properly: %v, should be: %v",
+			nrebconfig["startup_delay_time"], configRegression["startup_delay_time"])
+	} else {
+		o := orebconfig["startup_delay_time"].(string)
+		setConfig("startup_delay_time", o, proxyurl+"/v1/cluster", httpclient, t)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -388,7 +398,7 @@ func regressionLRU(t *testing.T) {
 func regressionRebalance(t *testing.T) {
 	var (
 		sid      string
-		numPuts  = 30
+		numPuts  = 40
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
@@ -404,8 +414,27 @@ func regressionRebalance(t *testing.T) {
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
 			v.Core.Numsentbytes, v.Core.Numsentfiles, v.Core.Numrecvbytes, v.Core.Numrecvfiles
 	}
+
 	//
-	// step 1. unregister random target
+	// step 1. config
+	//
+	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
+	defer func() {
+		setConfig("startup_delay_time", orebconfig["startup_delay_time"].(string), proxyurl+"/v1/cluster", httpclient, t)
+	}()
+	//
+	// cluster-wide reduce startup_delay_time
+	//
+	startupdelaytimestr := "20s"
+	setConfig("startup_delay_time", startupdelaytimestr, proxyurl+"/v1/cluster", httpclient, t) // NOTE: 1 second
+	if t.Failed() {
+		return
+	}
+	waitProgressBar("Rebalance: ", time.Second*10)
+
+	//
+	// step 2. unregister random target
 	//
 	smap := getClusterMap(httpclient, t)
 	l := len(smap.Smap)
@@ -422,7 +451,7 @@ func regressionRebalance(t *testing.T) {
 	unregisterTarget(sid, t)
 	tlogf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
 	//
-	// step 2. put random files => (cluster - 1)
+	// step 3. put random files => (cluster - 1)
 	//
 	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
@@ -432,7 +461,7 @@ func regressionRebalance(t *testing.T) {
 	selectErr(errch, "put", t, false)
 
 	//
-	// step 3. register back
+	// step 4. register back
 	//
 	registerTarget(sid, &smap, t)
 	for i := 0; i < 10; i++ {
@@ -448,11 +477,11 @@ func regressionRebalance(t *testing.T) {
 	}
 	tlogf("Re-registered %s: the cluster is now back to %d targets\n", sid, l)
 	//
-	// step 4. wait for rebalance to run its course
+	// step 5. wait for rebalance to run its course
 	//
 	waitProgressBar("Rebalance: ", time.Second*10)
 	//
-	// step 5. statistics
+	// step 6. statistics
 	//
 	stats = getClusterStats(httpclient, t)
 	var bsent, fsent, brecv, frecv int64
@@ -464,7 +493,7 @@ func regressionRebalance(t *testing.T) {
 	}
 
 	//
-	// step 6. cleanup
+	// step 7. cleanup
 	//
 	close(filesput) // to exit for-range
 	for fname := range filesput {

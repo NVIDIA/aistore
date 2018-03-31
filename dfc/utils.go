@@ -188,10 +188,13 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string)
 		return
 	}
 
-	glog.Warningf("%d IPv4s available\n", len(addrlist))
+	glog.Warningf("Warning: %d IPv4s available", len(addrlist))
 	for _, intf := range addrlist {
 		glog.Warningf("    %#v\n", *intf)
 	}
+	// FIXME: temp hack - make sure to keep working on laptops with dockers
+	ipv4addr = addrlist[0].ipv4
+	return
 
 	if guessTheBestIPv4 {
 		return guessIPv4(addrlist)

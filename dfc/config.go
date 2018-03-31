@@ -61,6 +61,7 @@ type dfconfig struct {
 	Proxy            proxyconfig       `json:"proxy"`
 	S3               s3config          `json:"s3"`
 	LRUConfig        lruconfig         `json:"lru_config"`
+	RebalanceConf    rebalanceconf     `json:"rebalance_conf"`
 	CksumConfig      cksumconfig       `json:"cksum_config"`
 	VersionConfig    versionconfig     `json:"version_config"`
 	FSpaths          map[string]string `json:"fspaths"`
@@ -81,6 +82,12 @@ type lruconfig struct {
 	DontEvictTimeStr string        `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
 	LRUEnabled       bool          `json:"lru_enabled"`     // LRU will only run when LRUEnabled is true
 	DontEvictTime    time.Duration `json:"-"`               // omitempty
+}
+
+type rebalanceconf struct {
+	StartupDelayTimeStr string        `json:"startup_delay_time"`
+	StartupDelayTime    time.Duration `json:"-"` // omitempty
+	RebalancingEnabled  bool          `json:"rebalancing_enabled"`
 }
 
 type testfspathconf struct {
@@ -194,6 +201,8 @@ func validateVersion(version string) error {
 	return nil
 }
 
+//	StartupDelayTimeStr string        `json:"startup_delay_time"`
+//	StartupDelayTime    time.Duration `json:"-"` // omitempty
 func validateconf() (err error) {
 	// durations
 	if ctx.config.StatsTime, err = time.ParseDuration(ctx.config.StatsTimeStr); err != nil {
@@ -211,6 +220,10 @@ func validateconf() (err error) {
 	if ctx.config.LRUConfig.DontEvictTime, err = time.ParseDuration(ctx.config.LRUConfig.DontEvictTimeStr); err != nil {
 		return fmt.Errorf("Bad dont-evict-time format %s, err: %v", ctx.config.LRUConfig.DontEvictTimeStr, err)
 	}
+	if ctx.config.RebalanceConf.StartupDelayTime, err = time.ParseDuration(ctx.config.RebalanceConf.StartupDelayTimeStr); err != nil {
+		return fmt.Errorf("Bad startup_delay_time format %s, err: %v", ctx.config.RebalanceConf.StartupDelayTimeStr, err)
+	}
+
 	hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
 	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 		return fmt.Errorf("Invalid LRU configuration %+v", ctx.config.LRUConfig)

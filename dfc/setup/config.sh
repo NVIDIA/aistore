@@ -40,6 +40,10 @@
 		"dont_evict_time":	"120m",
 		"lru_enabled":  	true
 	},
+	"rebalance_conf": {
+		"startup_delay_time":	"10m",
+		"rebalancing_enabled": 	true
+	},
 	"test_fspaths": {
 		"root":			"/tmp/dfc/",
 		"count":		$TESTFSPATHCOUNT,

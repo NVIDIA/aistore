@@ -360,6 +360,12 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.LRUConfig.DontEvictTime, ctx.config.LRUConfig.DontEvictTimeStr = v, value
 		}
+	case "startup_delay_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse startup_delay_time, err: %v", err)
+		} else {
+			ctx.config.RebalanceConf.StartupDelayTime, ctx.config.RebalanceConf.StartupDelayTimeStr = v, value
+		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
@@ -383,6 +389,12 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
 		} else {
 			ctx.config.LRUConfig.LRUEnabled = v
+		}
+	case "rebalancing_enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse rebalancing_enabled, err: %v", err)
+		} else {
+			ctx.config.RebalanceConf.RebalancingEnabled = v
 		}
 	case "validate_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
