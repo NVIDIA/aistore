@@ -77,11 +77,13 @@ type s3config struct {
 }
 
 type lruconfig struct {
-	LowWM            uint32        `json:"lowwm"`           // capacity usage low watermark
-	HighWM           uint32        `json:"highwm"`          // capacity usage high watermark
-	DontEvictTimeStr string        `json:"dont_evict_time"` // eviction is not permitted during [atime, atime + dont]
-	LRUEnabled       bool          `json:"lru_enabled"`     // LRU will only run when LRUEnabled is true
-	DontEvictTime    time.Duration `json:"-"`               // omitempty
+	LowWM              uint32        `json:"lowwm"`             // capacity usage low watermark
+	HighWM             uint32        `json:"highwm"`            // capacity usage high watermark
+	DontEvictTimeStr   string        `json:"dont_evict_time"`   // eviction is not permitted during [atime, atime + dont]
+	CapacityUpdTimeStr string        `json:"capacity_upd_time"` // min time to update capacity
+	LRUEnabled         bool          `json:"lru_enabled"`       // LRU will only run when LRUEnabled is true
+	DontEvictTime      time.Duration `json:"-"`                 // omitempty
+	CapacityUpdTime    time.Duration `json:"-"`                 // ditto
 }
 
 type rebalanceconf struct {
@@ -212,13 +214,16 @@ func validateconf() (err error) {
 		return fmt.Errorf("Bad HTTP timeout format %s, err: %v", ctx.config.HTTP.TimeoutStr, err)
 	}
 	if ctx.config.HTTP.LongTimeout, err = time.ParseDuration(ctx.config.HTTP.LongTimeoutStr); err != nil {
-		return fmt.Errorf("Bad HTTP long-timeout format %s, err %v", ctx.config.HTTP.LongTimeoutStr, err)
+		return fmt.Errorf("Bad HTTP long_timeout format %s, err %v", ctx.config.HTTP.LongTimeoutStr, err)
 	}
 	if ctx.config.KeepAliveTime, err = time.ParseDuration(ctx.config.KeepAliveTimeStr); err != nil {
-		return fmt.Errorf("Bad keep-alive format %s, err: %v", ctx.config.KeepAliveTimeStr, err)
+		return fmt.Errorf("Bad keep_alive_time format %s, err: %v", ctx.config.KeepAliveTimeStr, err)
 	}
 	if ctx.config.LRUConfig.DontEvictTime, err = time.ParseDuration(ctx.config.LRUConfig.DontEvictTimeStr); err != nil {
-		return fmt.Errorf("Bad dont-evict-time format %s, err: %v", ctx.config.LRUConfig.DontEvictTimeStr, err)
+		return fmt.Errorf("Bad dont_evict_time format %s, err: %v", ctx.config.LRUConfig.DontEvictTimeStr, err)
+	}
+	if ctx.config.LRUConfig.CapacityUpdTime, err = time.ParseDuration(ctx.config.LRUConfig.CapacityUpdTimeStr); err != nil {
+		return fmt.Errorf("Bad capacity_upd_time format %s, err: %v", ctx.config.LRUConfig.CapacityUpdTimeStr, err)
 	}
 	if ctx.config.RebalanceConf.StartupDelayTime, err = time.ParseDuration(ctx.config.RebalanceConf.StartupDelayTimeStr); err != nil {
 		return fmt.Errorf("Bad startup_delay_time format %s, err: %v", ctx.config.RebalanceConf.StartupDelayTimeStr, err)

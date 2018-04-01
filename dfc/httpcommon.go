@@ -360,6 +360,12 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.LRUConfig.DontEvictTime, ctx.config.LRUConfig.DontEvictTimeStr = v, value
 		}
+	case "capacity_upd_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse capacity_upd_time, err: %v", err)
+		} else {
+			ctx.config.LRUConfig.CapacityUpdTime, ctx.config.LRUConfig.CapacityUpdTimeStr = v, value
+		}
 	case "startup_delay_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse startup_delay_time, err: %v", err)

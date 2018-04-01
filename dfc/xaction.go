@@ -203,11 +203,11 @@ func (q *xactInProgress) abortAll() (sleep bool) {
 //
 //===================
 func (xact *xactLRU) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime)
+	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
 		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
 	}
-	fin := time.Since(xact.targetrunner.starttime)
+	fin := time.Since(xact.targetrunner.starttime())
 	return fmt.Sprintf("xaction %s:%d %v finished %v", xact.kind, xact.id, start, fin)
 }
 
@@ -217,11 +217,11 @@ func (xact *xactLRU) tostring() string {
 //
 //===================
 func (xact *xactRebalance) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime)
+	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
 		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, start)
 	}
-	fin := time.Since(xact.targetrunner.starttime)
+	fin := time.Since(xact.targetrunner.starttime())
 	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v", xact.kind, xact.id, xact.curversion, start, fin)
 }
 

@@ -54,6 +54,7 @@ var (
 	configRegression     = map[string]string{
 		"stats_time":         fmt.Sprintf("%v", UpdTime),
 		"dont_evict_time":    fmt.Sprintf("%v", UpdTime),
+		"capacity_upd_time":  fmt.Sprintf("%v", UpdTime),
 		"startup_delay_time": fmt.Sprintf("%v", UpdTime),
 		"lowwm":              fmt.Sprintf("%d", LowWaterMark),
 		"highwm":             fmt.Sprintf("%d", HighWaterMark),
@@ -240,6 +241,13 @@ func regressionConfig(t *testing.T) {
 		o := olruconfig["dont_evict_time"].(string)
 		setConfig("dont_evict_time", o, proxyurl+"/v1/cluster", httpclient, t)
 	}
+	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
+		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
+			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
+	} else {
+		o := olruconfig["capacity_upd_time"].(string)
+		setConfig("capacity_upd_time", o, proxyurl+"/v1/cluster", httpclient, t)
+	}
 	if nrebconfig["startup_delay_time"] != configRegression["startup_delay_time"] {
 		t.Errorf("StartupDelayTime was not set properly: %v, should be: %v",
 			nrebconfig["startup_delay_time"], configRegression["startup_delay_time"])
@@ -342,6 +350,7 @@ func regressionLRU(t *testing.T) {
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	defer func() {
 		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+"/v1/cluster", httpclient, t)
 		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+"/v1/cluster", httpclient, t)
 		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+"/v1/cluster", httpclient, t)
 		for k, di := range smap.Smap {
@@ -352,12 +361,14 @@ func regressionLRU(t *testing.T) {
 	//
 	// cluster-wide reduce dont-evict-time
 	//
-	dontevicttimestr := "60s"                                            // 2 * stats_time; FIXME: race vs smoke test
+	dontevicttimestr := "30s"
+	capacityupdtimestr := "5s"
 	sleeptime, err := time.ParseDuration(oconfig["stats_time"].(string)) // to make sure the stats get updated
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
-	setConfig("dont_evict_time", dontevicttimestr, proxyurl+"/v1/cluster", httpclient, t) // NOTE: 1 second
+	setConfig("dont_evict_time", dontevicttimestr, proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("capacity_upd_time", capacityupdtimestr, proxyurl+"/v1/cluster", httpclient, t)
 	if t.Failed() {
 		return
 	}

@@ -60,6 +60,12 @@ type cachedInfos struct {
 	bucket       string
 }
 
+type uxprocess struct {
+	starttime time.Time
+	spid      string
+	pid       int64
+}
+
 //===========================================================================
 //
 // target runner
@@ -71,7 +77,7 @@ type targetrunner struct {
 	smap          *Smap
 	proxysi       *daemonInfo
 	xactinp       *xactInProgress
-	starttime     time.Time
+	uxprocess     *uxprocess
 	lbmap         *lbmap
 	rtnamemap     *rtnamemap
 	prefetchQueue chan filesWithDeadline
@@ -147,7 +153,8 @@ func (t *targetrunner) run() error {
 	t.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
-	t.starttime = time.Now()
+	pid := int64(os.Getpid())
+	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
 	return t.httprunner.run()
 }
 
@@ -744,7 +751,7 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.IsDir() {
 		return nil
 	}
-	if all.t.isworkfile(fqn) {
+	if iswork, _ := all.t.isworkfile(fqn); iswork {
 		return nil
 	}
 	relname := fqn[all.rootLength:]
@@ -835,7 +842,7 @@ func (ci *cachedInfos) listwalkf(fqn string, osfi os.FileInfo, err error) error 
 	if osfi.IsDir() {
 		return ci.processDir(fqn)
 	}
-	if ci.t.isworkfile(fqn) {
+	if iswork, _ := ci.t.isworkfile(fqn); iswork {
 		return nil
 	}
 
@@ -1636,8 +1643,8 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 			glog.Infoln("auto-rebalancing disabled")
 			return
 		}
-		if time.Since(t.starttime) < ctx.config.RebalanceConf.StartupDelayTime {
-			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime), ctx.config.RebalanceConf.StartupDelayTime)
+		if time.Since(t.starttime()) < ctx.config.RebalanceConf.StartupDelayTime {
+			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime()), ctx.config.RebalanceConf.StartupDelayTime)
 			return
 		}
 	}
@@ -1841,6 +1848,10 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 // target's misc utilities and helpers
 //
 //==============================================================================
+func (t *targetrunner) starttime() time.Time {
+	return t.uxprocess.starttime
+}
+
 func (t *targetrunner) islocalBucket(bucket string) bool {
 	_, ok := t.lbmap.LBmap[bucket]
 	return ok
@@ -1889,22 +1900,33 @@ func (t *targetrunner) fqn2workfile(fqn string) (workfqn string) {
 	assert(strings.HasSuffix(dir, "/"), dir+" : "+base)
 	assert(base != "", dir+" : "+base)
 
-	workfqn = dir + workfileprefix + base + "." + strconv.FormatInt(time.Now().UnixNano(), 16)
+	tiebreaker := strconv.FormatInt(time.Now().UnixNano(), 16)
+	workfqn = dir + workfileprefix + base + "." + tiebreaker[5:] + "." + t.uxprocess.spid
 	return
 }
 
-func (t *targetrunner) isworkfile(workfqn string) bool {
+func (t *targetrunner) isworkfile(workfqn string) (iswork, isold bool) {
 	dir, base := filepath.Split(workfqn)
 	if !strings.HasSuffix(dir, "/") {
-		return false
+		return
 	}
 	if base == "" {
-		return false
+		return
 	}
-	// TODO: consider additional check
-	//    i := strings.LastIndex(base, ".")
-	//    _, err := strconv.ParseInt(base[i + 1:], 0, 64)
-	return strings.HasPrefix(base, workfileprefix)
+	if !strings.HasPrefix(base, workfileprefix) {
+		return
+	}
+	i := strings.LastIndex(base, ".")
+	if i < 0 {
+		return
+	}
+	pid, err := strconv.ParseInt(base[i+1:], 16, 64)
+	if err != nil {
+		return
+	}
+	iswork = true
+	isold = pid != t.uxprocess.pid
+	return
 }
 
 func (t *targetrunner) fspath2mpath() {

@@ -308,11 +308,11 @@ func (q *xactInProgress) newEvict() *xactDeleteEvict {
 }
 
 func (xact *xactDeleteEvict) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime)
+	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
 		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
 	}
-	fin := time.Since(xact.targetrunner.starttime)
+	fin := time.Since(xact.targetrunner.starttime())
 	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
 }
 
@@ -444,11 +444,11 @@ func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
 }
 
 func (xact *xactPrefetch) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime)
+	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
 		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
 	}
-	fin := time.Since(xact.targetrunner.starttime)
+	fin := time.Since(xact.targetrunner.starttime())
 	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
 }
 

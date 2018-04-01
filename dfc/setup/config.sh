@@ -38,6 +38,7 @@
 		"lowwm":		75,
 		"highwm":		90,
 		"dont_evict_time":	"120m",
+		"capacity_upd_time":	"10m",
 		"lru_enabled":  	true
 	},
 	"rebalance_conf": {

@@ -34,6 +34,7 @@ type lructx struct {
 	newest  time.Time
 	xlru    *xactLRU
 	h       *maxheap
+	oldwork []*fileinfo
 	t       *targetrunner
 }
 
@@ -90,7 +91,8 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1024/1024)
 
 	// init LRU context
-	lctx := &lructx{totsize: toevict, xlru: xlru, h: h, t: t}
+	var oldwork []*fileinfo
+	lctx := &lructx{totsize: toevict, xlru: xlru, h: h, oldwork: oldwork, t: t}
 
 	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
 		s := err.Error()
@@ -109,7 +111,6 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 // the walking callback is execited by the LRU xaction
 // (notice the receiver)
 func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
-	xlru, h := lctx.xlru, lctx.h
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
@@ -117,8 +118,14 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if lctx.t.isworkfile(fqn) {
-		return nil
+	var (
+		iswork, isold bool
+		xlru, h       = lctx.xlru, lctx.h
+	)
+	if iswork, isold = lctx.t.isworkfile(fqn); iswork {
+		if !isold {
+			return nil
+		}
 	}
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {
@@ -141,6 +148,16 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	atime, mtime, stat := getAmTimes(osfi)
+	if isold {
+		fi := &fileinfo{
+			fqn:  fqn,
+			size: stat.Size,
+		}
+		lctx.oldwork = append(lctx.oldwork, fi)
+		return nil
+	}
+
+	// object eviction: access time
 	usetime := atime
 	if mtime.After(atime) {
 		usetime = mtime
@@ -182,14 +199,19 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 	var (
 		fevicted, bevicted int64
 	)
-	for h.Len() > 0 && toevict > 10 {
-		fi := heap.Pop(h).(*fileinfo)
-		if err := t.lrufilRemove("lru", fi.fqn); err != nil {
-			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
+	for _, fi := range lctx.oldwork {
+		if err := os.Remove(fi.fqn); err != nil {
+			glog.Warningf("LRU: failed to GC %q", fi.fqn)
 			continue
 		}
-		if glog.V(3) {
-			glog.Infof("LRU %s: removed %q", bucketdir, fi.fqn)
+		toevict -= fi.size
+		glog.Infof("LRU: GC-ed %q", fi.fqn)
+	}
+	for h.Len() > 0 && toevict > 0 {
+		fi := heap.Pop(h).(*fileinfo)
+		if err := t.lruEvict(fi.fqn); err != nil {
+			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
+			continue
 		}
 		toevict -= fi.size
 		bevicted += fi.size
@@ -200,7 +222,7 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 	return nil
 }
 
-func (t *targetrunner) lrufilRemove(prefix, fqn string) error {
+func (t *targetrunner) lruEvict(fqn string) error {
 	bucket, objname, ok := t.fqn2bckobj(fqn)
 	if !ok {
 		glog.Errorf("Cannot convert %q => %s/%s - localbuckets config changed?", fqn, bucket, objname)
@@ -208,7 +230,7 @@ func (t *targetrunner) lrufilRemove(prefix, fqn string) error {
 		if err := os.Remove(fqn); err != nil {
 			return err
 		}
-		glog.Infof("%s: removed %q", prefix, fqn)
+		glog.Infof("LRU: removed %q", fqn)
 		return nil
 	}
 	uname := bucket + objname
@@ -218,7 +240,7 @@ func (t *targetrunner) lrufilRemove(prefix, fqn string) error {
 	if err := os.Remove(fqn); err != nil {
 		return err
 	}
-	glog.Infof("lru: removed %q", fqn)
+	glog.Infof("LRU: evicted %s/%s", bucket, objname)
 	return nil
 }
 

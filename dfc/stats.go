@@ -19,9 +19,6 @@ import (
 // types
 //
 //==============================
-
-const minTimeUpdCapacity = time.Minute * 10
-
 type fscapacity struct {
 	Used    uint64 `json:"used"`    // bytes
 	Avail   uint64 `json:"avail"`   // ditto
@@ -231,7 +228,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 	lines = append(lines, fmt.Sprintf("%s: %+v", r.name, r.Core))
 
 	// capacity
-	if time.Since(r.timeUpdatedCapacity) >= minTimeUpdCapacity {
+	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRUConfig.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for _, mpath := range r.fsmap {
