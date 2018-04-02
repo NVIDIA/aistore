@@ -169,6 +169,9 @@ func initconfigparam() error {
 		//  Not fatal as it will use default logging level
 		glog.Errorf("Failed to set loglevel %v", err)
 	}
+	if build != "" {
+		glog.Infof("Build:  %s", build) // git rev-parse --short HEAD
+	}
 	glog.Infof("Logdir: %q Proto: %s Port: %s Verbosity: %s",
 		ctx.config.Logdir, ctx.config.Listen.Proto, ctx.config.Listen.Port, ctx.config.Loglevel)
 	glog.Infof("Config: %q Role: %s StatsTime: %v", clivars.conffile, clivars.role, ctx.config.StatsTime)

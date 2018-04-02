@@ -100,7 +100,8 @@ done
 # -alsologtostderr=false 	# Logs are written to standard error and files
 # -stderrthreshold=ERROR 	# Log errors and above are written to stderr and files
 # build
-go build && go install && GOBIN=$GOPATH/bin go install setup/dfc.go
+BUILD=`git rev-parse --short HEAD`
+go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" setup/dfc.go
 if [ $? -ne 0 ]; then
 	exit 1
 fi

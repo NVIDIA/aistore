@@ -108,6 +108,7 @@ type gstopError struct {
 //
 //====================
 var (
+	build   string
 	ctx     = &daemon{}
 	clivars = &cliVars{}
 )
