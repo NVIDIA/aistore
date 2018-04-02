@@ -34,7 +34,7 @@ func hrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 
 func hrwMpath(name string) (mpath string) {
 	var max uint64
-	for path := range ctx.mountpaths {
+	for path := range ctx.mountpaths.available {
 		cs := xxhash.ChecksumString64S(path+":"+name, mLCG32)
 		if cs > max {
 			max = cs

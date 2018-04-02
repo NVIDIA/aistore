@@ -26,6 +26,7 @@ const (
 	xproxykalive  = "proxykalive"
 	xtargetkalive = "targetkalive"
 	xiostat       = "iostat"
+	xdiskkeeper   = "diskkeeper"
 )
 
 //======
@@ -51,11 +52,18 @@ type Smap struct {
 	syncversion int64
 }
 
+type mountedFS struct {
+	sync.Mutex
+	available    map[string]*mountPath
+	offline      map[string]*mountPath
+	availOrdered []string
+}
+
 // daemon instance: proxy or storage target
 type daemon struct {
 	smap       *Smap
 	config     dfconfig
-	mountpaths map[string]*mountPath
+	mountpaths mountedFS
 	rg         *rungroup
 }
 
@@ -303,6 +311,10 @@ func dfcinit() {
 		ctx.rg.add(newtargetkalive(t), xtargetkalive)
 		if iostatverok() {
 			ctx.rg.add(&iostatrunner{}, xiostat)
+		}
+		// FIXME TODO: disable diskkeeper to avoid possible side-effects for a while
+		if false {
+			ctx.rg.add(newdiskkeeper(t), xdiskkeeper)
 		}
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)

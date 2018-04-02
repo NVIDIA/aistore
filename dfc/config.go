@@ -68,6 +68,7 @@ type dfconfig struct {
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	AckPolicy        ackpolicy         `json:"ack_policy"`
 	Network          netconfig         `json:"network"`
+	DiskKeeper       diskkeeperconf    `json:"diskkeeper"`
 }
 
 type s3config struct {
@@ -134,6 +135,13 @@ type versionconfig struct {
 
 type netconfig struct {
 	IPv4 string `json:"ipv4"`
+}
+
+type diskkeeperconf struct {
+	FSCheckTimeStr        string        `json:"fs_check_time"`
+	FSCheckTime           time.Duration `json:"-"` // omitempty
+	OfflineFSCheckTimeStr string        `json:"offline_fs_check_time"`
+	OfflineFSCheckTime    time.Duration `json:"-"` // omitempty
 }
 
 //==============================
@@ -250,6 +258,12 @@ func validateconf() (err error) {
 	}
 	if err := validateVersion(ctx.config.VersionConfig.Versioning); err != nil {
 		return err
+	}
+	if ctx.config.DiskKeeper.FSCheckTime, err = time.ParseDuration(ctx.config.DiskKeeper.FSCheckTimeStr); err != nil {
+		return fmt.Errorf("Bad DiskKeeper fs_check_time format %s, err %v", ctx.config.DiskKeeper.FSCheckTimeStr, err)
+	}
+	if ctx.config.DiskKeeper.OfflineFSCheckTime, err = time.ParseDuration(ctx.config.DiskKeeper.OfflineFSCheckTimeStr); err != nil {
+		return fmt.Errorf("Bad DiskKeeper offline_fs_check_time format %s, err %v", ctx.config.DiskKeeper.OfflineFSCheckTimeStr, err)
 	}
 	return nil
 }

@@ -47,12 +47,12 @@ func (t *targetrunner) runLRU() {
 	fschkwg := &sync.WaitGroup{}
 
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
-	for mpath := range ctx.mountpaths {
+	for mpath := range ctx.mountpaths.available {
 		fschkwg.Add(1)
 		go t.oneLRU(mpath+"/"+ctx.config.LocalBuckets, fschkwg, xlru)
 	}
 	fschkwg.Wait()
-	for mpath := range ctx.mountpaths {
+	for mpath := range ctx.mountpaths.available {
 		fschkwg.Add(1)
 		go t.oneLRU(mpath+"/"+ctx.config.CloudBuckets, fschkwg, xlru)
 	}
@@ -63,7 +63,7 @@ func (t *targetrunner) runLRU() {
 		rr := getstorstatsrunner()
 		rr.Lock()
 		rr.updateCapacity()
-		for mpath := range ctx.mountpaths {
+		for mpath := range ctx.mountpaths.available {
 			fscapacity := rr.Capacity[mpath]
 			if fscapacity.Usedpct > ctx.config.LRUConfig.LowWM+1 {
 				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",

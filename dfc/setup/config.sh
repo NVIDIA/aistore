@@ -59,6 +59,10 @@
 	"ack_policy": {
 		"put":			"disk",
 		"max_mem_mb":		16
+	},
+	"diskkeeper": {
+		"fs_check_time":         "30s",
+		"offline_fs_check_time": "2m"
 	}
 }
 EOL

@@ -108,7 +108,9 @@ func (t *targetrunner) run() error {
 		}
 	}
 	// fill-in mpaths
-	ctx.mountpaths = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.availOrdered = make([]string, 0, len(ctx.config.FSpaths))
 	if t.testingFSPpaths() {
 		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 		t.testCachepathMounts()
@@ -116,7 +118,13 @@ func (t *targetrunner) run() error {
 		t.fspath2mpath()
 		t.mpath2Fsid() // enforce FS uniqueness
 	}
-	for mpath := range ctx.mountpaths {
+
+	// sort mountpaths by name - to keep their order stable for filepath.Walk
+	ctx.mountpaths.Lock()
+	sort.Strings(ctx.mountpaths.availOrdered)
+	ctx.mountpaths.Unlock()
+
+	for mpath := range ctx.mountpaths.available {
 		cloudbctsfqn := mpath + "/" + ctx.config.CloudBuckets
 		if err := CreateDir(cloudbctsfqn); err != nil {
 			glog.Fatalf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
@@ -569,14 +577,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		t,                 // targetrunner
 		bucket}            // bucket
 
-	// We need stable order of mountpaths
-	mpathList := make([]string, 0, len(ctx.mountpaths))
-	for mpath := range ctx.mountpaths {
-		mpathList = append(mpathList, mpath)
-	}
-	sort.Strings(mpathList)
-
-	for _, mpath := range mpathList {
+	for _, mpath := range ctx.mountpaths.availOrdered {
 		localbucketfqn := mpath + "/" + ctx.config.CloudBuckets + "/" + bucket
 		_, err = os.Stat(localbucketfqn)
 		if err != nil {
@@ -612,7 +613,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 
 func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList) {
 	finfos := allfinfos{make([]fipair, 0, 128), t, 0}
-	for mpath := range ctx.mountpaths {
+	for mpath := range ctx.mountpaths.available {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
 		finfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
 		if err := filepath.Walk(localbucketfqn, finfos.listwalkf); err != nil {
@@ -1681,7 +1682,7 @@ func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, a
 		_, ok := newlbmap.LBmap[bucket]
 		if !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
-			for mpath := range ctx.mountpaths {
+			for mpath := range ctx.mountpaths.available {
 				localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
 				if err := os.RemoveAll(localbucketfqn); err != nil {
 					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
@@ -1690,7 +1691,7 @@ func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, a
 		}
 	}
 	t.lbmap = newlbmap
-	for mpath := range ctx.mountpaths {
+	for mpath := range ctx.mountpaths.available {
 		for bucket := range t.lbmap.LBmap {
 			localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
 			if err := CreateDir(localbucketfqn); err != nil {
@@ -1881,7 +1882,7 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) 
 		}
 		return false
 	}
-	for mpath := range ctx.mountpaths {
+	for mpath := range ctx.mountpaths.available {
 		if fn(mpath + "/" + ctx.config.CloudBuckets + "/") {
 			ok = len(objname) > 0
 			return
@@ -1942,9 +1943,10 @@ func (t *targetrunner) fspath2mpath() {
 			glog.Fatalf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
 		}
 		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
-		_, ok := ctx.mountpaths[mp.Path]
+		_, ok := ctx.mountpaths.available[mp.Path]
 		assert(!ok)
-		ctx.mountpaths[mp.Path] = mp
+		ctx.mountpaths.available[mp.Path] = mp
+		ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
 	}
 }
 
@@ -1974,15 +1976,16 @@ func (t *targetrunner) testCachepathMounts() {
 			return
 		}
 		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
-		_, ok := ctx.mountpaths[mp.Path]
+		_, ok := ctx.mountpaths.available[mp.Path]
 		assert(!ok)
-		ctx.mountpaths[mp.Path] = mp
+		ctx.mountpaths.available[mp.Path] = mp
+		ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
 	}
 }
 
 func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
-	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths))
-	for _, mountpath := range ctx.mountpaths {
+	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths.available))
+	for _, mountpath := range ctx.mountpaths.available {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
 			if !t.testingFSPpaths() {
