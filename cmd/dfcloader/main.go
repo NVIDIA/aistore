@@ -73,6 +73,7 @@ type (
 		tmpDir            string // only used when usingFile is true
 		occurance         int    // when multiple of instances of loader running on the same host
 		statsdPort        int
+		batchSize         int // batch is used for bootstraping(list) and delete
 	}
 )
 
@@ -112,6 +113,7 @@ func parseCmdLine() (params, error) {
 			readers.ReaderTypeFile, readers.ReaderTypeInMem, readers.ReaderTypeRand))
 	flag.IntVar(&p.occurance, "occurance", 1, "Id to identify a loader when multiple instances of loader runningon the same host")
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for local statsd server")
+	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
 
 	flag.Parse()
 	p.usingSG = p.readerType == readers.ReaderTypeSG
@@ -524,6 +526,14 @@ func completeWorkOrder(wo *workOrder) {
 	}
 }
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+
+	return b
+}
+
 func cleanUp() {
 	fmt.Println(prettyTimeStamp() + " Clean up ...")
 
@@ -531,12 +541,25 @@ func cleanUp() {
 	f := func(objs []string, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		for _, obj := range objs {
-			err := client.Del(runParams.proxyURL, runParams.bucket, obj, nil /* wg */, nil /* errch */, true /* silent */)
+		t := len(objs)
+		b := min(t, runParams.batchSize)
+		n := t / b
+		for i := 0; i < n; i++ {
+			err := client.DeleteList(runParams.proxyURL, runParams.bucket, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
-			if runParams.usingFile {
+		}
+
+		if t%b != 0 {
+			err := client.DeleteList(runParams.proxyURL, runParams.bucket, objs[n*b:], true /* wait */, 0 /* wait forever */)
+			if err != nil {
+				fmt.Println("delete err ", err)
+			}
+		}
+
+		if runParams.usingFile {
+			for _, obj := range objs {
 				err := os.Remove(runParams.tmpDir + "/" + obj)
 				if err != nil {
 					fmt.Println("delete local file err ", err)
