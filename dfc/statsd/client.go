@@ -25,6 +25,7 @@ type (
 	Client struct {
 		conn   *net.UDPConn
 		prefix string
+		opened bool // true if the connection with statsd is successfully opened
 	}
 
 	// Metric is a generic structure for all type of statsd metrics
@@ -53,17 +54,25 @@ func New(ip string, port int, prefix string) (Client, error) {
 		return Client{}, err
 	}
 
-	return Client{conn, prefix}, nil
+	return Client{conn, prefix, true}, nil
 }
 
 // Close closes the UDP connection
 func (c Client) Close() error {
-	return c.conn.Close()
+	if c.opened {
+		return c.conn.Close()
+	}
+
+	return nil
 }
 
 // Send sends metrics to statsd server
 // Note: Sending error is ignored
 func (c Client) Send(bucket string, metrics ...Metric) {
+	if !c.opened {
+		return
+	}
+
 	var t string
 
 	for _, m := range metrics {

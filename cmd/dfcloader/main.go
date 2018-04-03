@@ -37,21 +37,23 @@ import (
 const (
 	opPut = iota
 	opGet
+	opConfig
 
 	myName = "loader"
 )
 
 type (
 	workOrder struct {
-		op       int
-		proxyURL string
-		bucket   string
-		isLocal  bool
-		objName  string // In the format of 'virtual dir' + "/" + objname
-		size     int64
-		err      error
-		start    time.Time
-		end      time.Time
+		op        int
+		proxyURL  string
+		bucket    string
+		isLocal   bool
+		objName   string // In the format of 'virtual dir' + "/" + objname
+		size      int64
+		err       error
+		start     time.Time
+		end       time.Time
+		latencies client.HTTPLatencies
 	}
 
 	params struct {
@@ -73,7 +75,15 @@ type (
 		tmpDir            string // only used when usingFile is true
 		occurance         int    // when multiple of instances of loader running on the same host
 		statsdPort        int
-		batchSize         int // batch is used for bootstraping(list) and delete
+		batchSize         int  // batch is used for bootstraping(list) and delete
+		getConfig         bool // true if only run get proxy config request
+	}
+
+	// sts records accumulated puts/gets information.
+	sts struct {
+		put       stats.HTTPReq
+		get       stats.HTTPReq
+		getConfig stats.HTTPReq
 	}
 )
 
@@ -82,8 +92,8 @@ var (
 	nonDeterministicRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	workOrders           chan *workOrder
 	workOrderResults     chan *workOrder
-	intervalStats        stats.Stats
-	accumulatedStats     stats.Stats
+	intervalStats        sts
+	accumulatedStats     sts
 	allObjects           []string // All objects created under virtual directory myName
 	statsPrintHeader     = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC              statsd.Client
@@ -114,6 +124,7 @@ func parseCmdLine() (params, error) {
 	flag.IntVar(&p.occurance, "occurance", 1, "Id to identify a loader when multiple instances of loader runningon the same host")
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for local statsd server")
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
+	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
 
 	flag.Parse()
 	p.usingSG = p.readerType == readers.ReaderTypeSG
@@ -135,6 +146,22 @@ func parseCmdLine() (params, error) {
 	p.proxyURL = "http://" + *ip + ":" + strconv.Itoa(*port)
 	p.putSizeUpperBound *= 1024
 	return p, nil
+}
+
+// newStats returns a new stats object with given time as the starting point
+func newStats(t time.Time) sts {
+	return sts{
+		put:       stats.NewHTTPReq(t),
+		get:       stats.NewHTTPReq(t),
+		getConfig: stats.NewHTTPReq(t),
+	}
+}
+
+// aggregate adds another sts to self
+func (s *sts) aggregate(other sts) {
+	s.get.Aggregate(other.get)
+	s.put.Aggregate(other.put)
+	s.getConfig.Aggregate(other.getConfig)
 }
 
 func main() {
@@ -179,18 +206,21 @@ func main() {
 		}
 	}
 
-	err = bootStrap()
-	if err != nil {
-		fmt.Println("Failed to boot strap, err = ", err)
-		return
+	if !runParams.getConfig {
+		err = bootStrap()
+		if err != nil {
+			fmt.Println("Failed to boot strap, err = ", err)
+			return
+		}
+
+		if runParams.putPct == 0 && len(allObjects) == 0 {
+			fmt.Println("Nothing to read, bucket is empty")
+			return
+		}
+
+		fmt.Printf("Found %d existing objects\n", len(allObjects))
 	}
 
-	if runParams.putPct == 0 && len(allObjects) == 0 {
-		fmt.Println("Nothing to read, bucket is empty")
-		return
-	}
-
-	fmt.Printf("Found %d existing objects\n", len(allObjects))
 	logRunParams(runParams, os.Stdout)
 
 	host, err := os.Hostname()
@@ -223,25 +253,29 @@ func main() {
 	}
 
 	tsStart := time.Now()
-	intervalStats = stats.NewStats(tsStart)
-	accumulatedStats = stats.NewStats(tsStart)
+	intervalStats = newStats(tsStart)
+	accumulatedStats = newStats(tsStart)
 
 	statsWriter := os.Stdout
 	writeStatsHeader(statsWriter)
 
 	// Get the workers started
 	for i := 0; i < runParams.numWorkers; i++ {
-		if runParams.putPct == 0 {
-			workOrders <- newGetWorkOrder()
+		if runParams.getConfig {
+			workOrders <- newGetConfigWorkOrder()
 		} else {
-			workOrders <- newPutWorkOrder()
+			if runParams.putPct == 0 {
+				workOrders <- newGetWorkOrder()
+			} else {
+				workOrders <- newPutWorkOrder()
+			}
 		}
 	}
 
 L:
 	for {
 		if runParams.putSizeUpperBound != 0 &&
-			accumulatedStats.TotalPutBytes() >= runParams.putSizeUpperBound {
+			accumulatedStats.put.TotalBytes() >= runParams.putSizeUpperBound {
 			break
 		}
 
@@ -252,9 +286,9 @@ L:
 			completeWorkOrder(wo)
 			newWorkOrder()
 		case <-statsTicker.C:
-			accumulatedStats.Aggregate(intervalStats)
+			accumulatedStats.aggregate(intervalStats)
 			writeStats(statsWriter, false /* final */, intervalStats, accumulatedStats)
-			intervalStats = stats.NewStatsNow()
+			intervalStats = newStats(time.Now())
 		default:
 			// Do nothing
 		}
@@ -272,7 +306,7 @@ L:
 	}
 
 	fmt.Printf("\nActual run duration: %v\n", time.Now().Sub(tsStart))
-	accumulatedStats.Aggregate(intervalStats)
+	accumulatedStats.aggregate(intervalStats)
 	writeStats(statsWriter, true /* final */, intervalStats, accumulatedStats)
 
 	if runParams.cleanUp {
@@ -379,7 +413,7 @@ func writeStatsHeader(to *os.File) {
 
 // writeStatus writes stats to the writter.
 // if final = true, writes the total; otherwise writes the interval stats
-func writeStats(to *os.File, final bool, s, t stats.Stats) {
+func writeStats(to *os.File, final bool, s, t sts) {
 	p := fmt.Fprintf
 	pn := prettyNumber
 	pb := prettyNumBytes
@@ -388,34 +422,48 @@ func writeStats(to *os.File, final bool, s, t stats.Stats) {
 	if final {
 		writeStatsHeader(to)
 		p(to, statsPrintHeader, pt(), "Put",
-			pn(t.TotalPuts()),
-			pb(t.TotalPutBytes()),
-			pl(t.MinPutLatency(), t.AvgPutLatency(), t.MaxPutLatency()),
-			pb(t.PutThroughput(time.Now())),
-			pn(t.TotalErrPuts()))
+			pn(t.put.Total()),
+			pb(t.put.TotalBytes()),
+			pl(t.put.MinLatency(), t.put.AvgLatency(), t.put.MaxLatency()),
+			pb(t.put.Throughput(t.put.Start(), time.Now())),
+			pn(t.put.TotalErrs()))
 		p(to, statsPrintHeader, pt(), "Get",
-			pn(t.TotalGets()),
-			pb(t.TotalGetBytes()),
-			pl(t.MinGetLatency(), t.AvgGetLatency(), t.MaxGetLatency()),
-			pb(t.GetThroughput(time.Now())),
-			pn(t.TotalErrGets()))
+			pn(t.get.Total()),
+			pb(t.get.TotalBytes()),
+			pl(t.get.MinLatency(), t.get.AvgLatency(), t.get.MaxLatency()),
+			pb(t.get.Throughput(t.get.Start(), time.Now())),
+			pn(t.get.TotalErrs()))
+		p(to, statsPrintHeader, pt(), "CFG",
+			pn(t.getConfig.Total()),
+			pb(t.getConfig.TotalBytes()),
+			pl(t.getConfig.MinLatency(), t.getConfig.AvgLatency(), t.getConfig.MaxLatency()),
+			pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now())),
+			pn(t.getConfig.TotalErrs()))
 	} else {
 		// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
-		if s.TotalPuts() != 0 {
+		if s.put.Total() != 0 {
 			p(to, statsPrintHeader, pt(), "Put",
-				pn(s.TotalPuts())+"("+pn(t.TotalPuts())+")",
-				pb(s.TotalPutBytes())+"("+pb(t.TotalPutBytes())+")",
-				pl(s.MinPutLatency(), s.AvgPutLatency(), s.MaxPutLatency()),
-				pb(s.PutThroughput(time.Now()))+"("+pb(t.PutThroughput(time.Now()))+")",
-				pn(s.TotalErrPuts())+"("+pn(t.TotalErrPuts())+")")
+				pn(s.put.Total())+"("+pn(t.put.Total())+")",
+				pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
+				pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
+				pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
+				pn(s.put.TotalErrs())+"("+pn(t.put.TotalErrs())+")")
 		}
-		if s.TotalGets() != 0 {
+		if s.get.Total() != 0 {
 			p(to, statsPrintHeader, pt(), "Get",
-				pn(s.TotalGets())+"("+pn(t.TotalGets())+")",
-				pb(s.TotalGetBytes())+"("+pb(t.TotalGetBytes())+")",
-				pl(s.MinGetLatency(), s.AvgGetLatency(), s.MaxGetLatency()),
-				pb(s.GetThroughput(time.Now()))+"("+pb(t.GetThroughput(time.Now()))+")",
-				pn(s.TotalErrGets())+"("+pn(t.TotalErrGets())+")")
+				pn(s.get.Total())+"("+pn(t.get.Total())+")",
+				pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
+				pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
+				pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
+				pn(s.get.TotalErrs())+"("+pn(t.get.TotalErrs())+")")
+		}
+		if s.getConfig.Total() != 0 {
+			p(to, statsPrintHeader, pt(), "CFG",
+				pn(s.getConfig.Total())+"("+pn(t.getConfig.Total())+")",
+				pb(s.getConfig.TotalBytes())+"("+pb(t.getConfig.TotalBytes())+")",
+				pl(s.getConfig.MinLatency(), s.getConfig.AvgLatency(), s.getConfig.MaxLatency()),
+				pb(s.getConfig.Throughput(s.getConfig.Start(), time.Now()))+"("+pb(t.getConfig.Throughput(t.getConfig.Start(), time.Now()))+")",
+				pn(s.getConfig.TotalErrs())+"("+pn(t.getConfig.TotalErrs())+")")
 		}
 	}
 }
@@ -454,13 +502,24 @@ func newGetWorkOrder() *workOrder {
 	}
 }
 
+func newGetConfigWorkOrder() *workOrder {
+	return &workOrder{
+		proxyURL: runParams.proxyURL,
+		op:       opConfig,
+	}
+}
+
 func newWorkOrder() {
 	var wo *workOrder
 
-	if nonDeterministicRand.Intn(99) < runParams.putPct {
-		wo = newPutWorkOrder()
+	if runParams.getConfig {
+		wo = newGetConfigWorkOrder()
 	} else {
-		wo = newGetWorkOrder()
+		if nonDeterministicRand.Intn(99) < runParams.putPct {
+			wo = newPutWorkOrder()
+		} else {
+			wo = newGetWorkOrder()
+		}
 	}
 
 	if wo != nil {
@@ -474,7 +533,7 @@ func completeWorkOrder(wo *workOrder) {
 	switch wo.op {
 	case opGet:
 		if wo.err == nil {
-			intervalStats.AddGet(wo.size, delta)
+			intervalStats.get.Add(wo.size, delta)
 			statsdC.Send("get",
 				statsd.Metric{
 					Type:  statsd.Counter,
@@ -491,15 +550,70 @@ func completeWorkOrder(wo *workOrder) {
 					Name:  "throughput",
 					Value: wo.size,
 				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxyconn",
+					Value: float64(wo.latencies.ProxyConn / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxy",
+					Value: float64(wo.latencies.Proxy / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.targetconn",
+					Value: float64(wo.latencies.TargetConn / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.target",
+					Value: float64(wo.latencies.Target / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.posthttp",
+					Value: float64(wo.latencies.PostHTTP / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxyheader",
+					Value: float64(wo.latencies.ProxyWroteHeader / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxyrequest",
+					Value: float64(wo.latencies.ProxyWroteRequest / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxyresponse",
+					Value: float64(wo.latencies.ProxyFirstResponse / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.targetheader",
+					Value: float64(wo.latencies.TargetWroteHeader / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.targetrequest",
+					Value: float64(wo.latencies.TargetWroteRequest / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.targetresponse",
+					Value: float64(wo.latencies.TargetFirstResponse / time.Millisecond),
+				},
 			)
 		} else {
 			fmt.Println("Get failed: ", wo.err)
-			intervalStats.AddErrGet()
+			intervalStats.get.AddErr()
 		}
 	case opPut:
 		if wo.err == nil {
 			allObjects = append(allObjects, wo.objName)
-			intervalStats.AddPut(wo.size, delta)
+			intervalStats.put.Add(wo.size, delta)
 			statsdC.Send("put",
 				statsd.Metric{
 					Type:  statsd.Counter,
@@ -519,7 +633,36 @@ func completeWorkOrder(wo *workOrder) {
 			)
 		} else {
 			fmt.Println("Put failed: ", wo.err)
-			intervalStats.AddErrPut()
+			intervalStats.put.AddErr()
+		}
+	case opConfig:
+		if wo.err == nil {
+			intervalStats.getConfig.Add(1, delta)
+			statsdC.Send("getconfig",
+				statsd.Metric{
+					Type:  statsd.Counter,
+					Name:  "count",
+					Value: 1,
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency",
+					Value: float64(delta / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxyconn",
+					Value: float64(wo.latencies.ProxyConn / time.Millisecond),
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency.proxy",
+					Value: float64(wo.latencies.Proxy / time.Millisecond),
+				},
+			)
+		} else {
+			fmt.Println("Get config failed: ", wo.err)
+			intervalStats.getConfig.AddErr()
 		}
 	default:
 		// Should not be here
