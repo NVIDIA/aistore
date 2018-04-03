@@ -29,12 +29,6 @@ sudo systemctl status docker.service
 
 #### Install Docker compose
 * Install python-pip and use pip to install docker-compose
-##### RPM
-```
-$ sudo yum install epel-release
-$ sudo yum install -y python-pip
-$ sudo pip install docker-compose
-```
 ##### Debian
 ```
 $ sudo apt-get install -y python-pip
@@ -59,17 +53,11 @@ Example:
 ./deploy_docker.sh -a ~/.dfc/aws.env
 ```
 
-3. As stated above, DFC can be launched in two modes (dev | prod), and supports Ubuntu and CentOS container images.
+3. As stated above, DFC can be launched in two modes (dev | prod), and supports Ubuntu container images.
 ```
 $ ./deploy_docker.sh -e dev -a <aws.env file path>
 ```
 
- * Select the container OS by passing -o parameter to deploy_docker.sh script with argument centos or ubuntu.
- ```
- $ ./deploy_docker.sh -e dev -o centos -a <aws.env file path>
- or
- $ ./deploy_docker.sh -e dev -o ubuntu -a <aws.env file path>
- ```
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 5. Scale up/down number of targets
