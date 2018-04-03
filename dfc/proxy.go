@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,9 +34,9 @@ type bucketResp struct {
 	id      string
 }
 
-// A list of locally cached files on a target.
-// Maximum number of files in the response is `cachedPageSize` items
-type cachedFileBatch struct {
+// A list of target local files: cached or local bucket
+// Maximum number of files in the response is `pageSize` entries
+type localFilePage struct {
 	entries []*BucketEntry
 	err     error
 	id      string
@@ -211,7 +212,7 @@ func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
 // Receives info about locally cached files from targets in batches
 // and merges with existing list of cloud files
 func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
-	dataCh chan *cachedFileBatch, errch chan error, wg *sync.WaitGroup) {
+	dataCh chan *localFilePage, errch chan error, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -238,9 +239,9 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
 }
 
 // Request list of all cached files from a target.
-// The target returns its list in batches `cachedPageSize` length
+// The target returns its list in batches `pageSize` length
 func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
-	dataCh chan *cachedFileBatch, wg *sync.WaitGroup, origmsg *GetMsg) {
+	dataCh chan *localFilePage, wg *sync.WaitGroup, origmsg *GetMsg) {
 	const (
 		cachedObjects = true
 		islocal       = false
@@ -259,7 +260,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 		resp, err := p.targetListBucket(bucket, daemon, listmsgjson, islocal, cachedObjects)
 		if err != nil {
 			if dataCh != nil {
-				dataCh <- &cachedFileBatch{
+				dataCh <- &localFilePage{
 					id:  daemon.DaemonID,
 					err: err,
 				}
@@ -275,7 +276,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
 		if err := json.Unmarshal(resp.outjson, &entries); err != nil {
 			if dataCh != nil {
-				dataCh <- &cachedFileBatch{
+				dataCh <- &localFilePage{
 					id:  daemon.DaemonID,
 					err: err,
 				}
@@ -286,7 +287,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 
 		msg.GetPageMarker = entries.PageMarker
 		if dataCh != nil {
-			dataCh <- &cachedFileBatch{
+			dataCh <- &localFilePage{
 				err:     nil,
 				id:      daemon.DaemonID,
 				marker:  entries.PageMarker,
@@ -316,7 +317,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 		bucketMap[entry.Name] = entry
 	}
 
-	dataCh := make(chan *cachedFileBatch, ctx.smap.count())
+	dataCh := make(chan *localFilePage, ctx.smap.count())
 	errch := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
@@ -349,33 +350,80 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 }
 
 func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
+	type targetReply struct {
+		resp *bucketResp
+		err  error
+	}
 	const (
 		islocal    = true
 		cachedObjs = false
 	)
-	var resp *bucketResp
-	allentries = &BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
-	for _, si := range ctx.smap.Smap {
-		resp, err = p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjs)
-		if err != nil {
-			return
-		}
-
-		if resp.outjson == nil || len(resp.outjson) == 0 {
-			continue
-		}
-
-		entries := &BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
-		if err = json.Unmarshal(resp.outjson, &entries); err != nil {
-			return
-		}
-		if len(entries.Entries) == 0 {
-			continue
-		}
-
-		allentries.Entries = append(allentries.Entries, entries.Entries...)
+	msg := &GetMsg{}
+	if err = json.Unmarshal(listmsgjson, msg); err != nil {
+		return
 	}
-	return
+	pageSize := defaultPageSize
+	if msg.GetPageSize != 0 {
+		pageSize = msg.GetPageSize
+	}
+
+	chresult := make(chan *targetReply, len(ctx.smap.Smap))
+	wg := &sync.WaitGroup{}
+
+	targetCallFn := func(si *daemonInfo) {
+		defer wg.Done()
+		resp, err := p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjs)
+		chresult <- &targetReply{resp, err}
+	}
+
+	for _, si := range ctx.smap.Smap {
+		wg.Add(1)
+		go targetCallFn(si)
+	}
+	wg.Wait()
+	close(chresult)
+
+	// combine results
+	allentries = &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
+	for r := range chresult {
+		if r.err != nil {
+			err = r.err
+			return
+		}
+
+		if r.resp.outjson == nil || len(r.resp.outjson) == 0 {
+			continue
+		}
+
+		bucketList := &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
+		if err = json.Unmarshal(r.resp.outjson, &bucketList); err != nil {
+			return
+		}
+
+		if len(bucketList.Entries) == 0 {
+			continue
+		}
+
+		allentries.Entries = append(allentries.Entries, bucketList.Entries...)
+	}
+
+	// shrink the result to `pageSize` entries if it is longer
+	// the result must be sorted to support paging and PageMarker
+	if len(allentries.Entries) > pageSize {
+		entryLess := func(i, j int) bool {
+			return allentries.Entries[i].Name < allentries.Entries[j].Name
+		}
+		sort.Slice(allentries.Entries, entryLess)
+
+		for i := pageSize; i < len(allentries.Entries); i++ {
+			allentries.Entries[i] = nil
+		}
+
+		allentries.Entries = allentries.Entries[:pageSize]
+		allentries.PageMarker = allentries.Entries[pageSize-1].Name
+	}
+
+	return allentries, nil
 }
 
 func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (allentries *BucketList, err error) {

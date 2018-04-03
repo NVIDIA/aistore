@@ -77,7 +77,7 @@ func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max i
 		err            error
 	)
 	if t.islocalBucket(bucket) {
-		fullbucketlist = t.prepareLocalObjectList(bucket, msg)
+		fullbucketlist, err = t.prepareLocalObjectList(bucket, msg)
 	} else {
 		fullbucketlist, err = t.getListFromRangeCloud(bucket, msg)
 	}

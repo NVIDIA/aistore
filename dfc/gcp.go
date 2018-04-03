@@ -88,7 +88,11 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	}
 
 	it := client.Bucket(bucket).Objects(gctx, query)
-	pager := iterator.NewPager(it, gcpPageSize, pageToken)
+	pageSize := gcpPageSize
+	if msg.GetPageSize != 0 {
+		pageSize = msg.GetPageSize
+	}
+	pager := iterator.NewPager(it, pageSize, pageToken)
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {

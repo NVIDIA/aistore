@@ -462,6 +462,7 @@ func Test_putdelete(t *testing.T) {
 func Test_list(t *testing.T) {
 	parse()
 
+	const pageSize = 1000
 	var (
 		copy    bool
 		reslist *dfc.BucketList
@@ -472,9 +473,9 @@ func Test_list(t *testing.T) {
 	// list the names, sizes, creation times and MD5 checksums
 	var msg *dfc.GetMsg
 	if props == "" {
-		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion}
+		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion, GetPageSize: pageSize}
 	} else {
-		msg = &dfc.GetMsg{GetProps: props}
+		msg = &dfc.GetMsg{GetProps: props, GetPageSize: pageSize}
 	}
 	if prefix != "" {
 		msg.GetPrefix = prefix
@@ -507,7 +508,7 @@ func Test_list(t *testing.T) {
 		if reslist == nil {
 			return
 		}
-		if len(reslist.Entries) > 1000 {
+		if pageSize != 0 && len(reslist.Entries) > pageSize {
 			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
 		}
 		if copy {
@@ -531,6 +532,7 @@ func Test_list(t *testing.T) {
 		}
 
 		msg.GetPageMarker = reslist.PageMarker
+		tlogf("PageMarker for the next page: %s\n", reslist.PageMarker)
 	}
 	tlogf("-----------------\nTotal objects listed: %v\n", totalObjs)
 }

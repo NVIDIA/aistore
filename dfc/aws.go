@@ -78,7 +78,10 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		params.Prefix = aws.String(msg.GetPrefix)
 	}
 	if msg.GetPageMarker != "" {
-		params.Marker = &msg.GetPageMarker
+		params.Marker = aws.String(msg.GetPageMarker)
+	}
+	if msg.GetPageSize != 0 {
+		params.MaxKeys = aws.Int64(int64(msg.GetPageSize))
 	}
 
 	resp, err := svc.ListObjects(params)

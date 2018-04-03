@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	cachedPageSize = 10000 // the number of cached file infos returned in one page
-	workfileprefix = ".~~~."
+	defaultPageSize = 1000 // the number of cached file infos returned in one page
+	workfileprefix  = ".~~~."
 )
 
 type mountPath struct {
@@ -40,13 +40,8 @@ type fipair struct {
 	os.FileInfo
 	atime time.Time
 }
-type allfinfos struct {
-	finfos     []fipair
-	t          *targetrunner
-	rootLength int
-}
 
-type cachedInfos struct {
+type allfinfos struct {
 	files        []*BucketEntry
 	fileCount    int
 	rootLength   int
@@ -54,10 +49,14 @@ type cachedInfos struct {
 	marker       string
 	markerDirs   []string
 	needAtime    bool
+	needCtime    bool
+	needChkSum   bool
+	needVersion  bool
 	msg          *GetMsg
 	lastFilePath string
 	t            *targetrunner
 	bucket       string
+	limit        int
 }
 
 type uxprocess struct {
@@ -562,28 +561,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		return nil, fmt.Sprintf("Cache is unavailable for local bucket %s", bucket), 0
 	}
 
-	needAtime := strings.Contains(msg.GetProps, GetPropsAtime)
-	// Split a marker into separate directory list to make pagination
-	// more effective. All directories in the list are skipped by
-	// filepath.Walk. The last directory of the marker must be excluded
-	// from the list because the marker can point to the middle of it
-	markerDirs := make([]string, 0)
-	if msg.GetPageMarker != "" && strings.Contains(msg.GetPageMarker, "/") {
-		idx := strings.LastIndex(msg.GetPageMarker, "/")
-		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
-		markerDirs = markerDirs[:len(markerDirs)-1]
-	}
-	allfinfos := cachedInfos{make([]*BucketEntry, 0, cachedPageSize),
-		0,                 // fileCount
-		0,                 // rootLength
-		msg.GetPrefix,     // prefix
-		msg.GetPageMarker, // marker
-		markerDirs,        // markerDirs
-		needAtime,         // needAtime
-		msg,               // GetMsg
-		"",                // lastFilePath
-		t,                 // targetrunner
-		bucket}            // bucket
+	allfinfos := t.newFileWalk(bucket, msg)
 
 	for _, mpath := range ctx.mountpaths.availOrdered {
 		localbucketfqn := mpath + "/" + ctx.config.CloudBuckets + "/" + bucket
@@ -606,7 +584,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 	if err == nil {
 		var reslist = BucketList{Entries: allfinfos.files}
 		// Mark the batch as truncated if it is full
-		if len(allfinfos.files) >= cachedPageSize {
+		if allfinfos.fileCount >= allfinfos.limit {
 			reslist.PageMarker = allfinfos.lastFilePath
 		}
 		outbytes, err = json.Marshal(reslist)
@@ -619,71 +597,59 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 	return
 }
 
-func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList) {
-	finfos := allfinfos{make([]fipair, 0, 128), t, 0}
-	for mpath := range ctx.mountpaths.available {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
+	pageSize := msg.GetPageSize
+	if pageSize == 0 {
+		pageSize = defaultPageSize
+	}
+	allfinfos := t.newFileWalk(bucket, msg)
+
+	// read from every target no more than `pageSize` entries
+	for _, mpath := range ctx.mountpaths.availOrdered {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-		finfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
-		if err := filepath.Walk(localbucketfqn, finfos.listwalkf); err != nil {
+		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
+		if err = filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+			break
 		}
+		allfinfos.limit += pageSize
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	bucketList = &BucketList{Entries: make([]*BucketEntry, 0, len(finfos.finfos))}
-	for _, fi := range finfos.finfos {
-		if msg.GetPrefix != "" && !strings.HasPrefix(fi.relname, msg.GetPrefix) {
-			continue
+	// sort the result and return only first `pageSize` entries
+	marker := ""
+	if allfinfos.fileCount > pageSize {
+		ifLess := func(i, j int) bool {
+			return allfinfos.files[i].Name < allfinfos.files[j].Name
 		}
-
-		entry := &BucketEntry{}
-		entry.Name = fi.relname
-
-		if strings.Contains(msg.GetProps, GetPropsSize) {
-			entry.Size = fi.Size()
+		sort.Slice(allfinfos.files, ifLess)
+		// set extra infos to nil to avoid memory leaks
+		// see NOTE on https://github.com/golang/go/wiki/SliceTricks
+		for i := pageSize; i < allfinfos.fileCount; i++ {
+			allfinfos.files[i] = nil
 		}
-		if strings.Contains(msg.GetProps, GetPropsCtime) {
-			t := fi.ModTime()
-			switch msg.GetTimeFormat {
-			case "":
-				fallthrough
-			case RFC822:
-				entry.Ctime = t.Format(time.RFC822)
-			default:
-				entry.Ctime = t.Format(msg.GetTimeFormat)
-			}
-		}
-		if strings.Contains(msg.GetProps, GetPropsChecksum) {
-			fqn := t.fqn(bucket, fi.relname)
-			xxhex, errstr := Getxattr(fqn, xattrXXHashVal)
-			if errstr == "" {
-				entry.Checksum = hex.EncodeToString(xxhex)
-			}
-		}
-		if strings.Contains(msg.GetProps, GetPropsAtime) {
-			if msg.GetTimeFormat == "" {
-				entry.Atime = fi.atime.Format(RFC822)
-			} else {
-				entry.Atime = fi.atime.Format(msg.GetTimeFormat)
-			}
-		}
-		if strings.Contains(msg.GetProps, GetPropsVersion) {
-			fqn := t.fqn(bucket, fi.relname)
-			version, errstr := Getxattr(fqn, xattrObjVersion)
-			if errstr == "" {
-				entry.Version = string(version)
-			}
-		}
-		bucketList.Entries = append(bucketList.Entries, entry)
+		allfinfos.files = allfinfos.files[:pageSize]
+		marker = allfinfos.files[pageSize-1].Name
 	}
 
-	return
+	bucketList = &BucketList{
+		Entries:    allfinfos.files,
+		PageMarker: marker,
+	}
+	return bucketList, nil
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (ok bool) {
-	var reslist = t.prepareLocalObjectList(bucket, msg)
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (errstr string) {
+	reslist, err := t.prepareLocalObjectList(bucket, msg)
+	if err != nil {
+		return fmt.Sprintf("List local bucket %s failed, err: %v", bucket, err)
+	}
+	t.statsif.add("numlist", 1)
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
-	ok = t.writeJSON(w, r, jsbytes, "listbucket")
+	t.writeJSON(w, r, jsbytes, "listbucket")
 	return
 }
 
@@ -723,7 +689,11 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	}()
 	if islocal {
 		tag = "local"
-		ok = t.doLocalBucketList(w, r, bucket, msg)
+		if errstr = t.doLocalBucketList(w, r, bucket, msg); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+		ok = true
 		return // ======================================>
 	}
 	// cloud bucket
@@ -745,27 +715,41 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	ok = t.writeJSON(w, r, jsbytes, "listbucket")
 }
 
-func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		glog.Errorf("listwalkf invoked with err: %v", err)
-		return err
-	}
-	if osfi.IsDir() {
-		return nil
-	}
-	if iswork, _ := all.t.isworkfile(fqn); iswork {
-		return nil
-	}
-	_, _, errstr := all.t.fqn2bckobj(fqn)
-	if errstr != "" {
-		glog.Errorln(errstr)
-		return nil
+func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
+	// Split a marker into separate directory list to make pagination
+	// more effective. All directories in the list are skipped by
+	// filepath.Walk. The last directory of the marker must be excluded
+	// from the list because the marker can point to the middle of it
+	markerDirs := make([]string, 0)
+	if msg.GetPageMarker != "" && strings.Contains(msg.GetPageMarker, "/") {
+		idx := strings.LastIndex(msg.GetPageMarker, "/")
+		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
+		markerDirs = markerDirs[:len(markerDirs)-1]
 	}
 
-	relname := fqn[all.rootLength:]
-	atime, _, _ := getAmTimes(osfi)
-	all.finfos = append(all.finfos, fipair{relname, osfi, atime})
-	return nil
+	isLocal := t.islocalBucket(bucket)
+	// A small optimization: set boolean variables need* to avoid
+	// doing string search(strings.Contains) for every entry.
+	// Some properties make no sense to read from local files for cached
+	// objects(for non-local bucket - ctime, version, and size),
+	// so they are disabled
+	ci := &allfinfos{make([]*BucketEntry, 0, defaultPageSize),
+		0,                 // fileCount
+		0,                 // rootLength
+		msg.GetPrefix,     // prefix
+		msg.GetPageMarker, // marker
+		markerDirs,        // markerDirs
+		strings.Contains(msg.GetProps, GetPropsAtime),              // needAtime
+		strings.Contains(msg.GetProps, GetPropsCtime) && isLocal,   // needCtime
+		strings.Contains(msg.GetProps, GetPropsChecksum),           // needChkSum
+		strings.Contains(msg.GetProps, GetPropsVersion) && isLocal, // needVersion
+		msg,             // GetMsg
+		"",              // lastFilePath - next page marker
+		t,               // targetrunner
+		bucket,          // bucket
+		defaultPageSize, // limit
+	}
+	return ci
 }
 
 // Checks if the directory should be processed by cache list call
@@ -773,7 +757,7 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 //  - Object name must start with prefix (if it is set)
 //  - Object name is not in early processed directories by the previos call:
 //    paging support
-func (ci *cachedInfos) processDir(fqn string) error {
+func (ci *allfinfos) processDir(fqn string) error {
 	if len(fqn) <= ci.rootLength {
 		return nil
 	}
@@ -784,7 +768,14 @@ func (ci *cachedInfos) processDir(fqn string) error {
 	}
 
 	if len(ci.markerDirs) != 0 {
-		dirs := strings.Split(fqn, "/")
+		var dirs []string
+		if strings.HasPrefix(ci.marker, "/") {
+			// cache list - use full path
+			dirs = strings.Split(fqn, "/")
+		} else {
+			// local bucket - use relative path
+			dirs = strings.Split(relname, "/")
+		}
 		maxIdx := len(dirs)
 		if len(ci.markerDirs) < maxIdx {
 			maxIdx = len(ci.markerDirs)
@@ -803,14 +794,22 @@ func (ci *cachedInfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
+func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 	relname := fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
 	}
 
-	if ci.marker != "" && fqn <= ci.marker {
-		return nil
+	if ci.marker != "" {
+		if strings.HasPrefix(ci.marker, "/") {
+			// cached cloud object case
+			if fqn <= ci.marker {
+				return nil
+			}
+		} else if relname <= ci.marker {
+			// local bucket case
+			return nil
+		}
 	}
 
 	si, errstr := hrwTarget(ci.bucket+"/"+relname, ci.t.smap)
@@ -834,17 +833,46 @@ func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 			fileInfo.Atime = atime.Format(ci.msg.GetTimeFormat)
 		}
 	}
+	if ci.needCtime {
+		t := osfi.ModTime()
+		switch ci.msg.GetTimeFormat {
+		case "":
+			fallthrough
+		case RFC822:
+			fileInfo.Ctime = t.Format(time.RFC822)
+		default:
+			fileInfo.Ctime = t.Format(ci.msg.GetTimeFormat)
+		}
+	}
+	if ci.needChkSum {
+		fqn := ci.t.fqn(ci.bucket, relname)
+		xxhex, errstr := Getxattr(fqn, xattrXXHashVal)
+		if errstr == "" {
+			fileInfo.Checksum = hex.EncodeToString(xxhex)
+		}
+	}
+	if ci.needVersion {
+		fqn := ci.t.fqn(ci.bucket, relname)
+		version, errstr := Getxattr(fqn, xattrObjVersion)
+		if errstr == "" {
+			fileInfo.Version = string(version)
+		}
+	}
+	fileInfo.Size = osfi.Size()
 	ci.files = append(ci.files, fileInfo)
 	ci.lastFilePath = fqn
 	return nil
 }
 
-func (ci *cachedInfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
+func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		glog.Errorf("listwalkf callback invoked with err: %v", err)
 		return err
 	}
-	if ci.fileCount >= cachedPageSize {
+	if ci.fileCount >= ci.limit {
 		return filepath.SkipDir
 	}
 	if osfi.IsDir() {
