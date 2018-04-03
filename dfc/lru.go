@@ -223,9 +223,9 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 }
 
 func (t *targetrunner) lruEvict(fqn string) error {
-	bucket, objname, ok := t.fqn2bckobj(fqn)
-	if !ok {
-		glog.Errorf("Cannot convert %q => %s/%s - localbuckets config changed?", fqn, bucket, objname)
+	bucket, objname, errstr := t.fqn2bckobj(fqn)
+	if errstr != "" {
+		glog.Errorln(errstr)
 		glog.Errorf("Evicting %q anyway...", fqn)
 		if err := os.Remove(fqn); err != nil {
 			return err
@@ -233,7 +233,7 @@ func (t *targetrunner) lruEvict(fqn string) error {
 		glog.Infof("LRU: removed %q", fqn)
 		return nil
 	}
-	uname := bucket + objname
+	uname := t.uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 

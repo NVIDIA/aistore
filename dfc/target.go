@@ -298,7 +298,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	//
 	// lockname(ro)
 	//
-	fqn, uname = t.fqn(bucket, objname), bucket+objname
+	fqn, uname = t.fqn(bucket, objname), t.uname(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
@@ -386,7 +386,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
 		fqn        = t.fqn(bucket, objname)
-		uname      = bucket + objname
+		uname      = t.uname(bucket, objname)
 		getfqn     = t.fqn2workfile(fqn)
 		versioncfg = &ctx.config.VersionConfig
 		errv       = ""
@@ -746,7 +746,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 
 func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		glog.Errorf("listwalkf callback invoked with err: %v", err)
+		glog.Errorf("listwalkf invoked with err: %v", err)
 		return err
 	}
 	if osfi.IsDir() {
@@ -755,6 +755,12 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if iswork, _ := all.t.isworkfile(fqn); iswork {
 		return nil
 	}
+	_, _, errstr := all.t.fqn2bckobj(fqn)
+	if errstr != "" {
+		glog.Errorln(errstr)
+		return nil
+	}
+
 	relname := fqn[all.rootLength:]
 	atime, _, _ := getAmTimes(osfi)
 	all.finfos = append(all.finfos, fipair{relname, osfi, atime})
@@ -844,6 +850,11 @@ func (ci *cachedInfos) listwalkf(fqn string, osfi os.FileInfo, err error) error 
 		return ci.processDir(fqn)
 	}
 	if iswork, _ := ci.t.isworkfile(fqn); iswork {
+		return nil
+	}
+	_, _, errstr := ci.t.fqn2bckobj(fqn)
+	if errstr != "" {
+		glog.Errorln(errstr)
 		return nil
 	}
 
@@ -1049,7 +1060,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 	}
 
 	// when all set and done:
-	uname := bucket + objname
+	uname := t.uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 	if err = os.Rename(putfqn, fqn); err != nil {
@@ -1080,7 +1091,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		//
 		// the source
 		//
-		uname := bucket + objname
+		uname := t.uname(bucket, objname)
 		t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 		defer t.rtnamemap.unlockname(uname, false)
 
@@ -1194,7 +1205,7 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 		errcode int
 	)
 	fqn := t.fqn(bucket, objname)
-	uname := bucket + objname
+	uname := t.uname(bucket, objname)
 	localbucket := t.islocalBucket(bucket)
 
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
@@ -1263,7 +1274,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 
 	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
 	newobjname := msg.Name
-	fqn, uname := t.fqn(bucket, objname), bucket+objname
+	fqn, uname := t.fqn(bucket, objname), t.uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
@@ -1862,6 +1873,10 @@ func (t *targetrunner) testingFSPpaths() bool {
 	return ctx.config.TestFSP.Count > 0
 }
 
+func (t *targetrunner) uname(bucket, objname string) string {
+	return bucket + objname
+}
+
 // (bucket, object) => (local hashed path, fully qualified name aka fqn)
 func (t *targetrunner) fqn(bucket, objname string) string {
 	mpath := hrwMpath(bucket + "/" + objname)
@@ -1872,7 +1887,7 @@ func (t *targetrunner) fqn(bucket, objname string) string {
 }
 
 // the opposite
-func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) {
+func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
 	fn := func(path string) bool {
 		if strings.HasPrefix(fqn, path) {
 			rempath := fqn[len(path):]
@@ -1882,16 +1897,19 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname string, ok bool) 
 		}
 		return false
 	}
+	ok := true
 	for mpath := range ctx.mountpaths.available {
 		if fn(mpath + "/" + ctx.config.CloudBuckets + "/") {
-			ok = len(objname) > 0
-			return
+			ok = len(objname) > 0 && t.fqn(bucket, objname) == fqn
+			break
 		}
 		if fn(mpath + "/" + ctx.config.LocalBuckets + "/") {
-			assert(t.islocalBucket(bucket))
-			ok = len(objname) > 0
-			return
+			ok = t.islocalBucket(bucket) && len(objname) > 0 && t.fqn(bucket, objname) == fqn
+			break
 		}
+	}
+	if !ok {
+		errstr = fmt.Sprintf("Cannot convert %q => %s/%s - localbuckets or device mount paths changed?", fqn, bucket, objname)
 	}
 	return
 }
