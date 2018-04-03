@@ -13,11 +13,31 @@ Users (i.e., http/https clients) connect to the proxy and execute RESTful
 commands. Data then moves directly between storage targets (that cache this data)
 and the requesting user.
 
+## Prerequisites
+
+* Linux or macOS
+* Go 1.8 or later
+* Optionally, extended atributes (xattrs)
+* Optionally, Amazon (AWS) or Google Cloud (GCP) account
+
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes),
+or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not
+always be enabled in the OS kernel (configurations) - the fact that can be easily
+found out by running setfattr (Linux) or xattr (macOS) command as shown in this
+[single-host local deployment script](dfc/setup/deploy.sh).
+If this is the case - that is, if you happen not to have xattrs handy, you can configure DFC
+not to use them at all (section **Configuration** below).
+
+To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket.
+But if you don't have any Cloud-based buckets, you can first create a local bucket as illustrated
+in the **API** section below
+and in the [test sources](dfc/tests/regression_test.go). Note that DFC local buckets support the same exact
+API as the Cloud-based ones.
+
 ## Getting Started
 
-If you've already installed Go and happen to have AWS or GCP account, getting
-started with DFC takes about 30 seconds and consists in executing the following
-4 steps:
+If you've already installed Go, getting started with DFC takes about 30 seconds
+and consists in the following 4 steps:
 
 ```
 $ go get -u -v github.com/NVIDIA/dfcpub/dfc
@@ -31,14 +51,18 @@ under your configured $GOPATH.
 
 The 3rd - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)).
 
-Finally, the 4th command executes a smoke test to download 2 (two) files
-from your own named Amazon S3 or Google Cloud Storage bucket. Here's another example:
+Finally, for the last 4th command to work, you'll need to have a name - the name of a bucket.
+The bucket could be an AWS or GCP based one, or a DFC-own so-called "local bucket".
+
+Assuming the bucket exists, the 'go test' command above will download 2 (two) objects. Similarly:
+
 
 ```
 $ go test ./tests -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS3bucket
 ```
-This will download up to 100 objects from the bucket called myS3bucket.
-The names of those objects will match 'a\d+' regex.
+
+downloads up to 100 objects from the bucket called myS3bucket, whereby names of those objects
+will match 'a\d+' regex.
 
 For more testing/running command line options, please refer to [the source](dfc/tests/main_test.go).
 
@@ -74,29 +98,53 @@ and
 
 <img src="images/dfc-config-2-commented.png" alt="DFC configuration: local filesystems" width="548">
 
+### Disabling extended attributes
+
+To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all
+targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh)
+that is further used to deploy the cluster.
+
 ## Miscellaneous
 
-The following sequence downloads 100 objects from the bucket "myS3bucket", and then
-finds the corresponding cached files and generated logs:
+The following sequence downloads 100 objects from the bucket called "myS3bucket":
+
 ```
 $ go test -v -run=down -bucket=myS3bucket
-$ find /tmp/dfc/ -type f | grep cache
-$ find /tmp/dfc/ -type f | grep log
 ```
 
-Don't forget, though, to run 'make deploy' first.
+and then finds the corresponding cached objects in the local bucket and cloud buckets, respectively:
+
+```
+$ find /tmp/dfc -type f | grep local
+$ find /tmp/dfc -type f | grep cloud
+```
+
+This, of course, assumes that all DFC daemons are local and non-containerized
+ - don't forget to run 'make deploy' to make it happen - and that the "test_fspaths"
+section in their respective configurations points to the /tmp/dfc directory
+(see section **Configuration** for details).
+
+Further, to locate all the logs, run:
+
+```
+$ find $LOGDIR -type f | grep log
+```
+
+where $LOGDIR is the configured logging directory as per [DFC configuration](dfc/setup/config.sh).
+
 
 To terminate a running DFC service and cleanup local caches, run:
 ```
 $ make kill
 $ make rmcache
 ```
+
 ## REST operations
 
 DFC supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
 ```
-$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/cluster
+$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/daemon
 ```
 
 This command queries the DFC configuration; at the time of this writing it'll result in a JSON output that looks as follows:
@@ -111,15 +159,16 @@ In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief
 
 2. URL path: hostname or IP address of one of the DFC servers.
 
-By convention, REST operation implies a "clustered" scope when performed on a DFC proxy server.
+By convention, a RESTful operation performed on a DFC proxy server usually implies a "clustered" scope. Exceptions include querying
+proxy's own configuration via `{"what": "config"}` message.
 
 3. URL path: version of the REST API, resource that is operated upon, and possibly more forward-slash delimited specifiers.
 
-For example: /v1/cluster where 'v1' is the currently supported version and 'cluster' is the resource.
+For example: /v1/cluster where 'v1' is the currently supported API version and 'cluster' is the resource.
 
 4. Control message in JSON format, e.g. `{"what": "config"}`.
 
-> Combined, all these elements tell the following story. They tell us what to do in the most generic terms (e.g., GET), designate the target aka "resource" (e.g., cluster), and may also include context-specific and JSON-encoded control message to, for instance, distinguish between getting system statistics (`{"what": "stats"}`) versus system configuration (`{"what": "config"}`).
+> Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e.g., an entire cluster or a given daemon. Further, they may also include context-specific and JSON-encoded control message to, for instance, distinguish between getting system statistics (`{"what": "stats"}`) versus system configuration (`{"what": "config"}`).
 
 | Operation | HTTP action | Example |
 |--- | --- | ---|
@@ -134,31 +183,31 @@ For example: /v1/cluster where 'v1' is the currently supported version and 'clus
 | Rebalance cluster (proxy only) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics (proxy only) | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
-| Get object (proxy only) | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` (`*`) |
-| List bucket | GET { properties-and-options... } /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` (`**`) |
-| Rename/move file (local buckets only) | POST {"action": "rename", "name": new-name} /v1/files/bucket | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/files/mylocalbucket/dir1/CCCCCC` (`***`)|
-| Copy file | PUT /v1/files/bucket/object?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/files/myS3bucket/myS3object?from_id=15205:8083&to_id=15205:8081` (`****`) |
+| Get object (proxy only) | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` <sup id="a1">[1](#ft1)</sup> |
+| List bucket | GET { properties-and-options... } /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
+| Rename/move file (local buckets only) | POST {"action": "rename", "name": new-name} /v1/files/bucket | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/files/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
+| Copy file | PUT /v1/files/bucket/object?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/files/myS3bucket/myS3object?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
 | Delete file | DELETE /v1/files/bucket/object | `curl -i -X DELETE -L http://192.168.176.128:8080/v1/files/mybucket/mydirectory/myobject` |
 | Evict file from cache | DELETE '{"action": "evict"}' /v1/files/bucket/object | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://192.168.176.128:8080/v1/files/mybucket/myobject` |
 | Create local bucket (proxy only) | POST {"action": "createlb"} /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/files/abc` |
 | Destroy local bucket (proxy only) | DELETE {"action": "destroylb"} /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/files/abc` |
-| Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
-| Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
-| Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
-| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
-| Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]*]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
-| Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` (`*****`) |
+| Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
+| Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
+| Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
+| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
+| Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
+| Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
 | Get bucket props (local and cloud) | HEAD /v1/files/bucket | ``` curl --head http://192.168.176.128:8080/v1/files/abc ```|
 
-> (`*`) This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
+<a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
-> (`**`) See the List Bucket section for details.
+<a name="ft2">2</a>: See the List Bucket section for details. [↩](#a2)
 
-> (`***`) Notice the -L option here and elsewhere.
+<a name="ft3">3</a>: Notice the -L option here and elsewhere. [↩](#a3)
 
-> (`****`) Advanced usage only.
+<a name="ft4">4</a>: Advanced usage only. [↩](#a4)
 
-> (`*****`) See the List/Range Operations section for details.
+<a name="ft5">5</a>: See the List/Range Operations section for details.
 
 ### Example: querying runtime statistics
 
@@ -181,12 +230,12 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 
 | Property/Option | Meaning | Value |
 | --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version". (`*`) |
+| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version". <sup id="a6">[6](#ft6)</sup> |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
 | prefix | The prefix which all returned objects must have. | For example, "my/directory/structure/" |
 | pagemarker | The token signifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |\b
 
-> (`*`) The objects that exist in the Cloud but are not present in the DFC cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the DFC cache.
+ <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the DFC cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the DFC cache. [↩](#a6)
 
 ### Example: listing local and Cloud buckets
 
