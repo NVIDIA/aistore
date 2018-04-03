@@ -316,10 +316,11 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 // NOTE: must be the last error-generating-and-handling call in the http handler
 //       writes http body and header
 //       calls invalmsghdlr() on err
-func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) {
+func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (ok bool) {
 	w.Header().Set("Content-Type", "application/json")
 	var err error
 	if _, err = w.Write(jsbytes); err == nil {
+		ok = true
 		return
 	}
 	if isSyscallWriteError(err) {
@@ -333,6 +334,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
 	h.invalmsghdlr(w, r, errstr)
+	return
 }
 
 //=================

@@ -124,7 +124,7 @@ func (r *kalive) stop(err error) {
 
 //==========================================
 //
-// proxykalive: implements keepaliveinterace
+// proxykalive: implements kaliveif
 //
 //===========================================
 func (r *proxykalive) keepalive(err error) (stopped bool) {
@@ -206,7 +206,7 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 
 //==========================================
 //
-// targetkalive - implements keepaliveinterace
+// targetkalive - implements kaliveif
 //
 //===========================================
 func (r *targetkalive) keepalive(err error) (stopped bool) {

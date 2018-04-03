@@ -543,7 +543,10 @@ func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 	targetcorestats := getstorstats()
 	jsbytes, err := json.Marshal(targetcorestats)
 	assert(err == nil, err)
-	t.writeJSON(w, r, jsbytes, "proxycorestats")
+	ok := t.writeJSON(w, r, jsbytes, "proxycorestats")
+	if ok {
+		t.kalive.timestamp(t.proxysi.DaemonID)
+	}
 }
 
 // should not be called for local buckets
