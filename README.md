@@ -17,7 +17,7 @@ and the requesting user.
 
 * Linux or macOS
 * Go 1.8 or later
-* Optionally, extended atributes (xattrs)
+* Optionally, extended attributes (xattrs)
 * Optionally, Amazon (AWS) or Google Cloud (GCP) account
 
 The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes),
@@ -102,7 +102,7 @@ and
 
 To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all
 targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh)
-that is further used to deploy the cluster.
+that'd be further used to deploy the cluster.
 
 ## Miscellaneous
 
@@ -228,7 +228,7 @@ the ListBucket API returns a page of up to 1000 object names (and, optionally, t
 ### properties-and-options
 The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
 
-| Property/Option | Meaning | Value |
+| Property/Option | Description | Value |
 | --- | --- | --- |
 | props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version". <sup id="a6">[6](#ft6)</sup> |
 | time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
@@ -298,7 +298,7 @@ Thus, the rebalancing process is completely decentralized. When a single server 
 
 DFC provides two APIs to operate on groups of objects: List, and Range. Both of these share two optional parameters:
 
-| Parameter | Meaning | Default |
+| Parameter | Description | Default |
 |--- | --- | --- |
 | deadline | The amount of time before the request expires formatted as a [golang duration string](https://golang.org/pkg/time/#ParseDuration). A timeout of 0 means no timeout.| 0 |
 | wait | If true, a response will be sent only when the operation completes or the deadline passes. When false, a response will be sent once the operation is initiated. When setting wait=true, ensure your request has a timeout at least as long as the deadline. | false |
@@ -307,23 +307,23 @@ DFC provides two APIs to operate on groups of objects: List, and Range. Both of 
 
 List APIs take a JSON array of object names, and initiate the operation on those objects.
 
-| Parameter | Meaning |
+| Parameter | Description |
 | --- | --- |
-| objnames | The JSON array of object names. |
+| objnames | JSON array of object names |
 
 ### Range
 
 Range APIs take an optional prefix, a regular expression, and a numeric range. A matching object name will begin with the prefix and contain a number that satisfies both the regex and the range as illustrated below.
 
 
-| Parameter | Meaning |
+| Parameter | Description |
 | --- | --- |
 | prefix | The prefix that all matching object names will begin with. Empty prefix ("") will match all names. |
 | regex | The regular expression, represented as an escaped string, to match the number embedded in the object name. Note that the regular expression applies to the entire name - the prefix (if provided) is not excluded. |
 | range | Represented as "min:max", corresponding to the inclusive range from min to max. Either or both of min and max may be empty strings (""), in which case they will be ignored. If regex is an empty string, range will be ignored. |
 
 #### Examples
-| Prefix | Regex |  Escaped Regex | Range | Matches<br>(a number matched regex and used for range is highlighted) | Doesn't Match |
+| Prefix | Regex |  Escaped Regex | Range | Matches<br>(the match is highlighted) | Doesn't Match |
 | --- | --- | --- | --- | --- | --- |
 | "__tst/test-" | `"\d22\d"` | `"\\d22\\d"` | "1000:2000" | "__tst/test-`1223`"<br>"__tst/test-`1229`-4000.dat"<br>"__tst/test-1111-`1229`.dat"<br>"__tst/test-`1222`2-40000.dat" | "__prod/test-1223"<br>"__tst/test-1333"<br>"__tst/test-2222-4000.dat" |
 | "a/b/c" | `"^\d+1\d"` | `"^\\d+1\\d"` | ":100000" | "a/b/c/`110`"<br>"a/b/c/`99919`-200000.dat"<br>"a/b/c/`2314`video-big" | "a/b/110"<br>"a/b/c/d/110"<br>"a/b/c/video-99919-20000.dat"<br>"a/b/c/100012"<br>"a/b/c/30331" |
