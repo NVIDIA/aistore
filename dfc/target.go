@@ -261,6 +261,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		uname, errstr, version string
 		size                   int64
 		props                  *objectProps
+		started                time.Time
 		errcode                int
 		coldget, vchanged      bool
 	)
@@ -293,7 +294,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("GET started: %s/%s", bucket, objname)
+		started = time.Now()
 	}
 	//
 	// lockname(ro)
@@ -335,7 +336,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	// local file => http response
 	//
 	if size == 0 {
-		errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
+		errstr = fmt.Sprintf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
 		t.invalmsghdlr(w, r, errstr)
 		return // likely, an error
 	}
@@ -378,7 +379,12 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("GET done: %s/%s (%.2f MB)", bucket, objname, float64(written)/1024/1024)
+		s := fmt.Sprintf("GET: %s/%s, size %.2f MB, latency %d µs",
+			bucket, objname, float64(written)/1024/1024, time.Since(started)/1000)
+		if coldget {
+			s += " (cold)"
+		}
+		glog.Infoln(s)
 	}
 	t.statsif.add("numget", 1)
 }
@@ -451,9 +457,6 @@ ret:
 		if vchanged {
 			t.statsif.add("bytesvchanged", props.size)
 			t.statsif.add("numvchanged", 1)
-		}
-		if glog.V(3) {
-			glog.Infof("cold GET done: %s/%s", bucket, objname)
 		}
 		t.rtnamemap.downgradelock(uname)
 	}
@@ -674,12 +677,12 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 	return
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) {
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (ok bool) {
 	var reslist = t.prepareLocalObjectList(bucket, msg)
-	t.statsif.add("numlist", 1)
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
-	t.writeJSON(w, r, jsbytes, "listbucket")
+	ok = t.writeJSON(w, r, jsbytes, "listbucket")
+	return
 }
 
 // List bucket returns a list of objects in a bucket (with optional prefix)
@@ -690,7 +693,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	var (
 		jsbytes []byte
 		errstr  string
+		started time.Time
+		tag     string
 		errcode int
+		ok      bool
 	)
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
@@ -702,39 +708,29 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-
+	started = time.Now()
 	msg := &GetMsg{}
 	if t.readJSON(w, r, msg) != nil {
 		return
 	}
-	if islocal {
-		if glog.V(3) {
-			glog.Infof("LIST local started: %s", bucket)
-		}
-		t.doLocalBucketList(w, r, bucket, msg)
-		if glog.V(3) {
-			glog.Infof("LIST local done: %s", bucket)
-		}
-		return
-	}
-	if useCache {
-		if glog.V(3) {
-			glog.Infof("LIST cloud cached started: %s", bucket)
-		}
-		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
-		if errstr == "" && glog.V(3) {
-			glog.Infof("LIST cloud cached done: %s", bucket)
-		}
-	} else {
-		if glog.V(3) {
-			glog.Infof("LIST cloud started: %s", bucket)
-		}
-		if jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg); errstr == "" {
+	defer func() {
+		if ok {
 			t.statsif.add("numlist", 1)
-			if glog.V(3) {
-				glog.Infof("LIST cloud done: %s", bucket)
-			}
+			glog.Infof("LIST %s: %s, latency %d µs", tag, bucket, time.Since(started)/1000)
 		}
+	}()
+	if islocal {
+		tag = "local"
+		ok = t.doLocalBucketList(w, r, bucket, msg)
+		return // ======================================>
+	}
+	// cloud bucket
+	if useCache {
+		tag = "cloud cached"
+		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
+	} else {
+		tag = "cloud"
+		jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg)
 	}
 	if errstr != "" {
 		if errcode == 0 {
@@ -744,7 +740,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		}
 		return
 	}
-	t.writeJSON(w, r, jsbytes, "listbucket")
+	ok = t.writeJSON(w, r, jsbytes, "listbucket")
 }
 
 func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
@@ -919,8 +915,9 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		xxhashval                  string
 		htype, hval, nhtype, nhval string
 		sgl                        *SGLIO
+		started                    time.Time
 	)
-
+	started = time.Now()
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
 	putfqn := t.fqn2workfile(fqn)
@@ -957,9 +954,6 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		}
 	}
 	inmem := (ctx.config.AckPolicy.Put == AckWhenInMem)
-	if bool(glog.V(3)) && !inmem {
-		glog.Infof("PUT: => %s", putfqn)
-	}
 	if sgl, nhobj, _, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
@@ -975,9 +969,13 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	// commit
 	props := &objectProps{nhobj: nhobj}
 	if sgl == nil {
-		return t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		errstr, errcode = t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		if errstr == "" && bool(glog.V(3)) {
+			glog.Infof("PUT: %s/%s, latency %d µs", bucket, objname, time.Since(started)/1000)
+		}
+		return
 	}
-	// FIXME: AA: use xaction
+	// FIXME: use xaction
 	go t.sglToCloudAsync(sgl, bucket, objname, putfqn, fqn, props)
 	return
 }
@@ -1021,7 +1019,7 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 		glog.Errorln("sglToCloudAsync: commit", errstr)
 		return
 	}
-	glog.Infof("sglToCloudAsync done: %s/%s", bucket, objname)
+	glog.Infof("sglToCloudAsync: %s/%s", bucket, objname)
 }
 
 func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
@@ -1074,9 +1072,6 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 	if errstr = t.finalizeobj(fqn, objprops); errstr != "" {
 		glog.Errorf("finalizeobj %s/%s: %s", bucket, objname, errstr)
 		return
-	}
-	if glog.V(3) {
-		glog.Infof("PUT done: %s/%s", bucket, objname)
 	}
 	t.statsif.add("numput", 1)
 	return
@@ -1159,6 +1154,8 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 		bucket, objname string
 		msg             ActionMsg
 		evict           bool
+		started         = time.Now()
+		ok              = true
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
@@ -1170,6 +1167,11 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if ok && err == nil && bool(glog.V(3)) {
+			glog.Infof("DELETE: %s/%s, latency %d µs", bucket, objname, time.Since(started)/1000)
+		}
+	}()
 	if err == nil && len(b) > 0 {
 		err = json.Unmarshal(b, &msg)
 		if err == nil {
@@ -1188,7 +1190,7 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if objname == "" && len(b) > 0 {
 		// It must be a List/Range request, since there is no object name
-		t.deletefiles(w, r, msg)
+		t.deletefiles(w, r, msg) // FIXME: must return ok or err
 		return
 	} else if objname != "" {
 		err := t.fildelete(bucket, objname, evict)
@@ -1200,6 +1202,7 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s := fmt.Sprintf("Invalid API request: No object name or message body.")
 	t.invalmsghdlr(w, r, s)
+	ok = false
 }
 
 func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
@@ -1216,13 +1219,13 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 
 	if !localbucket && !evict {
 		errstr, errcode = getcloudif().deleteobj(bucket, objname)
-		t.statsif.add("numdelete", 1)
 		if errstr != "" {
 			if errcode == 0 {
 				return fmt.Errorf("%s", errstr)
 			}
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
+		t.statsif.add("numdelete", 1)
 	}
 
 	finfo, err := os.Stat(fqn)

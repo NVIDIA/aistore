@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"syscall"
@@ -225,15 +226,20 @@ func (r *storstatsrunner) log() (runlru bool) {
 	}
 	lines := make([]string, 0, 16)
 	// core stats
-	lines = append(lines, fmt.Sprintf("%s: %+v", r.name, r.Core))
-
+	b, err := json.Marshal(r.Core)
+	if err == nil {
+		lines = append(lines, string(b))
+	}
 	// capacity
 	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRUConfig.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for _, mpath := range r.fsmap {
 			fscapacity := r.Capacity[mpath]
-			lines = append(lines, fmt.Sprintf("capacity: %+v", fscapacity))
+			b, err := json.Marshal(fscapacity)
+			if err == nil {
+				lines = append(lines, mpath+": "+string(b))
+			}
 		}
 	}
 	// disk
@@ -243,9 +249,12 @@ func (r *storstatsrunner) log() (runlru bool) {
 		r.CPUidle = riostat.CPUidle
 		for k, v := range riostat.Disk {
 			r.Disk[k] = v // copy
+			b, err := json.Marshal(r.Disk[k])
+			if err == nil {
+				lines = append(lines, k+": "+string(b))
+			}
 		}
 		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
-		lines = append(lines, fmt.Sprintf("iostat: %+v", r.Disk))
 		riostat.Unlock()
 	}
 

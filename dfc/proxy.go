@@ -163,8 +163,12 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	// listbucket
 	if len(objname) == 0 {
-		p.statsif.add("numlist", 1)
-		p.listbucket(w, r, bucket)
+		started := time.Now()
+		ok := p.listbucket(w, r, bucket)
+		if ok {
+			p.statsif.add("numlist", 1)
+			glog.Infof("LIST: %s, latency %d µs", bucket, time.Since(started)/1000)
+		}
 		return
 	}
 
@@ -424,7 +428,7 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (ok bool) {
 	var allentries *BucketList
 	listmsgjson, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -449,7 +453,8 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	}
 	jsbytes, err := json.Marshal(allentries)
 	assert(err == nil, err)
-	p.writeJSON(w, r, jsbytes, "listbucket")
+	ok = p.writeJSON(w, r, jsbytes, "listbucket")
+	return
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)
