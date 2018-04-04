@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -322,8 +321,6 @@ func dfcinit() {
 
 // Run is the 'main' where everything gets started
 func Run() {
-
-	runtime.GOMAXPROCS(runtime.NumCPU() * 8)
 	dfcinit()
 	var ok bool
 

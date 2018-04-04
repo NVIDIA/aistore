@@ -137,11 +137,13 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	if err != nil {
 		glog.Infof("keepalive-alltargets: got err %v, checking now...", err)
 	}
+	from := "?" + URLParamFromID + "=" + r.p.si.DaemonID
 	for sid, si := range ctx.smap.Smap {
 		if r.skipCheck(sid) {
 			continue
 		}
 		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+		url += from
 		_, err, _, status := r.p.call(si, url, http.MethodGet, nil, kalivetimeout)
 		if err == nil {
 			continue

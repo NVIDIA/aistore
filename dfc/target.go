@@ -543,11 +543,13 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 
 // "/"+Rversion+"/"+Rhealth
 func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	from := query.Get(URLParamFromID)
 	targetcorestats := getstorstats()
 	jsbytes, err := json.Marshal(targetcorestats)
 	assert(err == nil, err)
 	ok := t.writeJSON(w, r, jsbytes, "proxycorestats")
-	if ok {
+	if ok && from == t.proxysi.DaemonID {
 		t.kalive.timestamp(t.proxysi.DaemonID)
 	}
 }
