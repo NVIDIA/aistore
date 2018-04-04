@@ -1,0 +1,15 @@
+---
+- hosts: all
+  gather_facts: no
+  become: true
+  tasks:
+    - name: Compress dfc logs
+      archive:
+        path: /var/log/dfc
+        dest: /tmp/log.tgz
+    - fetch:
+        src: /tmp/log.tgz
+        dest: "{{ playbook_dir }}/logs/{{ inventory_hostname }}/log.tgz"
+        flat: yes
+...
+
