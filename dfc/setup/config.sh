@@ -77,6 +77,7 @@ EOL
 
 	cat > $CONFFILE_COLLECTD <<EOL
 LoadPlugin df
+LoadPlugin cpu
 LoadPlugin disk
 LoadPlugin interface
 LoadPlugin load
