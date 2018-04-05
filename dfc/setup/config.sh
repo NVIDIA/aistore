@@ -63,9 +63,10 @@
 		"put":			"disk",
 		"max_mem_mb":		16
 	},
-	"diskkeeper": {
-		"fs_check_time":         "30s",
-		"offline_fs_check_time": "2m"
+	"fskeeper": {
+		"fs_check_time":         "0",
+		"offline_fs_check_time": "0",
+		"fskeeper_enabled":      false
 	},
 	"h2c": 				false
 }

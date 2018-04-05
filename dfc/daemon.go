@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -25,7 +26,7 @@ const (
 	xproxykalive  = "proxykalive"
 	xtargetkalive = "targetkalive"
 	xiostat       = "iostat"
-	xdiskkeeper   = "diskkeeper"
+	xfskeeper     = "fskeeper"
 )
 
 //======
@@ -119,6 +120,23 @@ var (
 	ctx     = &daemon{}
 	clivars = &cliVars{}
 )
+
+//====================
+//
+// MountedFS - utilities
+//
+//====================
+
+// Updates ordered list of available mountpaths
+// Stable order of mountpaths is kept to support local bucket/DFC cache list paging
+func (m *mountedFS) updateOrderedList() {
+	ordered := make([]string, 0, len(m.available))
+	for path, _ := range m.available {
+		ordered = append(ordered, path)
+	}
+	sort.Strings(ordered)
+	m.availOrdered = ordered
+}
 
 //====================
 //
@@ -312,9 +330,8 @@ func dfcinit() {
 		if iostatverok() {
 			ctx.rg.add(&iostatrunner{}, xiostat)
 		}
-		// FIXME TODO: disable diskkeeper to avoid possible side-effects for a while
-		if false {
-			ctx.rg.add(newdiskkeeper(t), xdiskkeeper)
+		if ctx.config.FSKeeper.Enabled {
+			ctx.rg.add(newfskeeper(t), xfskeeper)
 		}
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
@@ -410,4 +427,15 @@ func getcloudif() cloudif {
 	rr, ok := r.(*targetrunner)
 	assert(ok)
 	return rr.cloudif
+}
+
+func getfskeeper() *fskeeper {
+	if !ctx.config.FSKeeper.Enabled {
+		return nil
+	}
+
+	r := ctx.rg.runmap[xfskeeper]
+	rr, ok := r.(*fskeeper)
+	assert(ok)
+	return rr
 }

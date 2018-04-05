@@ -8,7 +8,7 @@ package dfc
 import (
 	"io/ioutil"
 	"os"
-	"sort"
+	"path"
 	"sync/atomic"
 	"time"
 
@@ -16,10 +16,12 @@ import (
 )
 
 const (
-	fsCheckInterval = time.Second * 10
+	fsCheckInterval     = time.Second * 30
+	tmpDirnameTemplate  = "DFC-TEMP-DIR"
+	tmpFilenameTemplate = "DFC-TEMP-FILE"
 )
 
-type diskkeeper struct {
+type fskeeper struct {
 	namedrunner
 	checknow chan error
 	chstop   chan struct{}
@@ -29,9 +31,8 @@ type diskkeeper struct {
 }
 
 // construction
-func newdiskkeeper(t *targetrunner) *diskkeeper {
-	k := &diskkeeper{t: t}
-	return k
+func newfskeeper(t *targetrunner) *fskeeper {
+	return &fskeeper{t: t}
 }
 
 //=========================================================
@@ -39,31 +40,34 @@ func newdiskkeeper(t *targetrunner) *diskkeeper {
 // common methods
 //
 //=========================================================
-func (k *diskkeeper) onerr(err error) {
+func (k *fskeeper) onerr(err error) {
 	k.checknow <- err
 }
 
-func (k *diskkeeper) timestamp(sid string) {
+func (k *fskeeper) timestamp(mpath string) {
 	k.okmap.Lock()
-	k.okmap.okmap[sid] = time.Now()
+	k.okmap.okmap[mpath] = time.Now()
 	k.okmap.Unlock()
 }
 
-func (k *diskkeeper) skipCheck(sid string) bool {
+func (k *fskeeper) skipCheck(mpath string) bool {
 	k.okmap.Lock()
-	last, ok := k.okmap.okmap[sid]
+	last, ok := k.okmap.okmap[mpath]
 	k.okmap.Unlock()
 
-	_, avail := ctx.mountpaths.available[sid]
-	interval := ctx.config.DiskKeeper.FSCheckTime
-	if !avail {
-		interval = ctx.config.DiskKeeper.OfflineFSCheckTime
+	if !ok {
+		return false
 	}
 
-	return ok && time.Since(last) < interval
+	interval := ctx.config.FSKeeper.FSCheckTime
+	if _, avail := ctx.mountpaths.available[mpath]; !avail {
+		interval = ctx.config.FSKeeper.OfflineFSCheckTime
+	}
+
+	return time.Since(last) < interval
 }
 
-func (k *diskkeeper) run() error {
+func (k *fskeeper) run() error {
 	glog.Infof("Starting %s", k.name)
 	k.chstop = make(chan struct{}, 16)
 	k.checknow = make(chan error, 16)
@@ -82,14 +86,14 @@ func (k *diskkeeper) run() error {
 	}
 }
 
-func (k *diskkeeper) stop(err error) {
+func (k *fskeeper) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", k.name, err)
 	var v struct{}
 	k.chstop <- v
 	close(k.chstop)
 }
 
-func (k *diskkeeper) checkAlivePaths(err error) {
+func (k *fskeeper) checkAlivePaths(err error) {
 	for _, mp := range ctx.mountpaths.available {
 		if err == nil && k.skipCheck(mp.Path) {
 			continue
@@ -101,21 +105,14 @@ func (k *diskkeeper) checkAlivePaths(err error) {
 			ctx.mountpaths.Lock()
 			delete(ctx.mountpaths.available, mp.Path)
 			ctx.mountpaths.offline[mp.Path] = mp
-			// FIXME TODO: just recreate the list of sorted mountpaths and use it everywhere
-			for i, mpath := range ctx.mountpaths.availOrdered {
-				if mpath == mp.Path {
-					copy(ctx.mountpaths.availOrdered[i:], ctx.mountpaths.availOrdered[i+1:])
-					ctx.mountpaths.availOrdered = ctx.mountpaths.availOrdered[:len(ctx.mountpaths.availOrdered)-1]
-					break
-				}
-			}
+			ctx.mountpaths.updateOrderedList()
 			ctx.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
 	}
 }
 
-func (k *diskkeeper) checkOfflinePaths(err error) {
+func (k *fskeeper) checkOfflinePaths(err error) {
 	for _, mp := range ctx.mountpaths.offline {
 		if err == nil && k.skipCheck(mp.Path) {
 			continue
@@ -123,19 +120,18 @@ func (k *diskkeeper) checkOfflinePaths(err error) {
 
 		ok := k.pathTest(mp.Path)
 		if ok {
-			glog.Errorf("Mountpath %s is back. Enabling it...", mp.Path)
+			glog.Infof("Mountpath %s is back. Enabling it...", mp.Path)
 			ctx.mountpaths.Lock()
 			delete(ctx.mountpaths.offline, mp.Path)
 			ctx.mountpaths.available[mp.Path] = mp
-			ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
-			sort.Strings(ctx.mountpaths.availOrdered)
+			ctx.mountpaths.updateOrderedList()
 			ctx.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
 	}
 }
 
-func (k *diskkeeper) checkPaths(err error) {
+func (k *fskeeper) checkPaths(err error) {
 	aval := time.Now().Unix()
 	if !atomic.CompareAndSwapInt64(&k.atomic, 0, aval) {
 		glog.Infof("Path check is in progress...")
@@ -146,21 +142,20 @@ func (k *diskkeeper) checkPaths(err error) {
 		glog.Infof("Path check: got err %v, checking now...", err)
 	}
 
-	if ctx.config.DiskKeeper.FSCheckTime != 0 {
+	if err != nil || ctx.config.FSKeeper.FSCheckTime != 0 {
 		k.checkAlivePaths(err)
 	}
-	if ctx.config.DiskKeeper.OfflineFSCheckTime != 0 {
+	if ctx.config.FSKeeper.OfflineFSCheckTime != 0 {
 		k.checkOfflinePaths(err)
 	}
 
-	// TODO: what to do if all mounts are down?
 	if len(ctx.mountpaths.available) == 0 && len(ctx.mountpaths.offline) != 0 {
 		glog.Fatal("All mounted filesystems are down")
 	}
 }
 
-func (k *diskkeeper) pathTest(path string) (ok bool) {
-	tmpdir, err := ioutil.TempDir(path, "DFC-TMP")
+func (k *fskeeper) pathTest(mountpath string) (ok bool) {
+	tmpdir, err := ioutil.TempDir(mountpath, tmpDirnameTemplate)
 	if err != nil {
 		glog.Errorf("Failed to create temporary directory: %v", err)
 		return false
@@ -172,9 +167,8 @@ func (k *diskkeeper) pathTest(path string) (ok bool) {
 		}
 	}()
 
-	// FIXME TODO: generate temporary file name to be compatible with
-	// isworkfile() - it must return true for temporary file
-	tmpfile, err := ioutil.TempFile(tmpdir, "DFC-TMP-FILE")
+	tmpfilename := k.t.fqn2workfile(path.Join(tmpdir, tmpFilenameTemplate))
+	tmpfile, err := os.OpenFile(tmpfilename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		glog.Errorf("Failed to create temporary file: %v", err)
 		return false

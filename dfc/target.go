@@ -109,7 +109,6 @@ func (t *targetrunner) run() error {
 	// fill-in mpaths
 	ctx.mountpaths.available = make(map[string]*mountPath, len(ctx.config.FSpaths))
 	ctx.mountpaths.offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	ctx.mountpaths.availOrdered = make([]string, 0, len(ctx.config.FSpaths))
 	if t.testingFSPpaths() {
 		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 		t.testCachepathMounts()
@@ -117,11 +116,7 @@ func (t *targetrunner) run() error {
 		t.fspath2mpath()
 		t.mpath2Fsid() // enforce FS uniqueness
 	}
-
-	// sort mountpaths by name - to keep their order stable for filepath.Walk
-	ctx.mountpaths.Lock()
-	sort.Strings(ctx.mountpaths.availOrdered)
-	ctx.mountpaths.Unlock()
+	ctx.mountpaths.updateOrderedList() // generate sorted list of mountpaths
 
 	for mpath := range ctx.mountpaths.available {
 		cloudbctsfqn := mpath + "/" + ctx.config.CloudBuckets
@@ -302,6 +297,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
+		t.runFSKeeper(fmt.Errorf("%s", fqn))
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		t.rtnamemap.unlockname(uname, false)
 		return
@@ -435,6 +431,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 			if err := os.Remove(getfqn); err != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, err)
 			}
+			t.runFSKeeper(fmt.Errorf("%s", fqn))
 		}
 	}()
 	if err := os.Rename(getfqn, fqn); err != nil {
@@ -578,22 +575,23 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		if err = filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
 			errstr = fmt.Sprintf("Failed to traverse mpath %q, err: %v", mpath, err)
 			glog.Errorf(errstr)
+			break
 		}
 	}
 
-	if err == nil {
-		var reslist = BucketList{Entries: allfinfos.files}
-		// Mark the batch as truncated if it is full
-		if allfinfos.fileCount >= allfinfos.limit {
-			reslist.PageMarker = allfinfos.lastFilePath
-		}
-		outbytes, err = json.Marshal(reslist)
-	}
 	if err != nil {
+		t.runFSKeeper(err)
 		errstr = fmt.Sprintf("Failed to traverse cached objects: %v", err.Error())
 		glog.Errorf(errstr)
+		return
 	}
 
+	var reslist = BucketList{Entries: allfinfos.files}
+	// Mark the batch as truncated if it is full
+	if allfinfos.fileCount >= allfinfos.limit {
+		reslist.PageMarker = allfinfos.lastFilePath
+	}
+	outbytes, err = json.Marshal(reslist)
 	return
 }
 
@@ -615,6 +613,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		allfinfos.limit += pageSize
 	}
 	if err != nil {
+		t.runFSKeeper(err)
 		return nil, err
 	}
 
@@ -1020,12 +1019,14 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 	// sgl => fqn sequence
 	file, err := CreateFile(putfqn)
 	if err != nil {
+		t.runFSKeeper(fmt.Errorf("%s", putfqn))
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
 		return
 	}
 	reader := NewReader(sgl)
 	written, err := io.CopyBuffer(file, reader, buf)
 	if err != nil {
+		t.runFSKeeper(fmt.Errorf("%s", putfqn))
 		glog.Errorln("sglToCloudAsync: CopyBuffer", err)
 		if err1 := file.Close(); err != nil {
 			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
@@ -1065,6 +1066,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 			if err = os.Remove(putfqn); err != nil {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
 			}
+			t.runFSKeeper(fmt.Errorf("%s", putfqn))
 		}
 	}()
 	// cloud
@@ -1820,6 +1822,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		filewriter = sgl
 	} else {
 		if file, err = CreateFile(fqn); err != nil {
+			t.runFSKeeper(fmt.Errorf("%s", fqn))
 			errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
 			return
 		}
@@ -1832,6 +1835,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		if errstr == "" {
 			return
 		}
+		t.runFSKeeper(fmt.Errorf("%s", fqn))
 		if err = file.Close(); err != nil {
 			glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
 		}
@@ -2000,7 +2004,6 @@ func (t *targetrunner) fspath2mpath() {
 		_, ok := ctx.mountpaths.available[mp.Path]
 		assert(!ok)
 		ctx.mountpaths.available[mp.Path] = mp
-		ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
 	}
 }
 
@@ -2033,7 +2036,6 @@ func (t *targetrunner) testCachepathMounts() {
 		_, ok := ctx.mountpaths.available[mp.Path]
 		assert(!ok)
 		ctx.mountpaths.available[mp.Path] = mp
-		ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
 	}
 }
 
@@ -2110,4 +2112,10 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 	}
 
 	return
+}
+
+func (t *targetrunner) runFSKeeper(err error) {
+	if ctx.config.FSKeeper.Enabled {
+		getfskeeper().onerr(err)
+	}
 }
