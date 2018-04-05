@@ -28,6 +28,7 @@ const (
 	awsGetDfcHashType = "X-Amz-Meta-Dfc-Hash-Type"
 	awsGetDfcHashVal  = "X-Amz-Meta-Dfc-Hash-Val"
 	awsMultipartDelim = "-"
+	awsMaxPageSize    = 1000
 )
 
 //======
@@ -81,6 +82,11 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		params.Marker = aws.String(msg.GetPageMarker)
 	}
 	if msg.GetPageSize != 0 {
+		if msg.GetPageSize > awsMaxPageSize {
+			glog.Warningf("AWS maximum page size is %d (%d requested). Returning the first %d keys",
+				awsMaxPageSize, msg.GetPageSize, awsMaxPageSize)
+			msg.GetPageSize = awsMaxPageSize
+		}
 		params.MaxKeys = aws.Int64(int64(msg.GetPageSize))
 	}
 

@@ -58,6 +58,7 @@ var (
 	totalio     int64
 	proxyurl    string
 	props       string
+	pagesize    int64
 )
 
 // worker's result
@@ -91,6 +92,7 @@ func init() {
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
 	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
+	flag.Int64Var(&pagesize, "pagesize", 1000, "The maximum number of object returned by one list bucket call")
 }
 
 func checkMemory() {
@@ -462,12 +464,12 @@ func Test_putdelete(t *testing.T) {
 func Test_list(t *testing.T) {
 	parse()
 
-	const pageSize = 1000
 	var (
-		copy    bool
-		reslist *dfc.BucketList
-		file    *os.File
-		err     error
+		copy     bool
+		reslist  *dfc.BucketList
+		file     *os.File
+		err      error
+		pageSize = int(pagesize)
 	)
 
 	// list the names, sizes, creation times and MD5 checksums
