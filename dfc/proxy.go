@@ -181,8 +181,9 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	// FIXME: glog with caution!
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
@@ -539,17 +540,14 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	// FIXME: add protection agaist putting into non-existing local bucket
 	//
 	objname := strings.Join(apitems[1:], "/")
-	if glog.V(3) {
-		glog.Infof("%s %s/%s", r.Method, bucket, objname)
-	}
 	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 	p.statsif.add("numput", 1)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
@@ -566,17 +564,14 @@ func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		// Redirect DELETE /v1/files/bucket/object
 		objname := strings.Join(apitems[1:], "/")
-		if glog.V(3) {
-			glog.Infof("%s %s/%s", r.Method, bucket, objname)
-		}
 		si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
 		if errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
 		redirecturl := si.DirectURL + r.URL.Path
-		if glog.V(3) {
-			glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+		if glog.V(4) {
+			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 		}
 		p.statsif.add("numdelete", 1)
 		http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
@@ -698,7 +693,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	}
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (rename)", r.URL.Path, si.DirectURL)
+		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
 	p.statsif.add("numrename", 1)
 	// NOTE:
@@ -791,7 +786,7 @@ func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }

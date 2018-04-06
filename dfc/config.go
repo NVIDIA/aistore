@@ -45,9 +45,8 @@ const lbname = "localbuckets"
 //
 //==============================
 type dfconfig struct {
-	Logdir           string            `json:"logdir"`
+	Log              logconfig         `json:"log"`
 	Confdir          string            `json:"confdir"`
-	Loglevel         string            `json:"loglevel"`
 	CloudProvider    string            `json:"cloudprovider"`
 	CloudBuckets     string            `json:"cloud_buckets"`
 	LocalBuckets     string            `json:"local_buckets"`
@@ -56,7 +55,6 @@ type dfconfig struct {
 	HTTP             httpconfig        `json:"http"`
 	KeepAliveTimeStr string            `json:"keep_alive_time"`
 	KeepAliveTime    time.Duration     `json:"-"` // omitempty
-	H2c              bool              `json:"h2c"`
 	Listen           listenconfig      `json:"listen"`
 	Proxy            proxyconfig       `json:"proxy"`
 	S3               s3config          `json:"s3"`
@@ -69,6 +67,13 @@ type dfconfig struct {
 	AckPolicy        ackpolicy         `json:"ack_policy"`
 	Network          netconfig         `json:"network"`
 	DiskKeeper       diskkeeperconf    `json:"diskkeeper"`
+	H2c              bool              `json:"h2c"`
+}
+
+type logconfig struct {
+	Dir     string `json:"logdir"`
+	Level   string `json:"loglevel"`
+	MaxSize uint64 `json:"logmaxsize"`
 }
 
 type s3config struct {
@@ -152,16 +157,22 @@ type diskkeeperconf struct {
 func initconfigparam() error {
 	getConfig(clivars.conffile)
 
-	err := flag.Lookup("log_dir").Value.Set(ctx.config.Logdir)
+	err := flag.Lookup("log_dir").Value.Set(ctx.config.Log.Dir)
 	if err != nil {
-		glog.Errorf("Failed to flag-set glog dir %q, err: %v", ctx.config.Logdir, err)
+		glog.Errorf("Failed to flag-set glog dir %q, err: %v", ctx.config.Log.Dir, err)
 	}
-	if err = CreateDir(ctx.config.Logdir); err != nil {
-		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Logdir, err)
+	if err = CreateDir(ctx.config.Log.Dir); err != nil {
+		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Log.Dir, err)
 		return err
 	}
 	if err = validateconf(); err != nil {
 		return err
+	}
+	// glog rotate
+	glog.MaxSize = ctx.config.Log.MaxSize
+	if glog.MaxSize > 1024*1024*1024 {
+		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
+		glog.MaxSize = 1024 * 1024
 	}
 	// CLI override
 	if clivars.statstime != 0 {
@@ -169,9 +180,9 @@ func initconfigparam() error {
 	}
 	if clivars.loglevel != "" {
 		err = flag.Lookup("v").Value.Set(clivars.loglevel)
-		ctx.config.Loglevel = clivars.loglevel
+		ctx.config.Log.Level = clivars.loglevel
 	} else {
-		err = flag.Lookup("v").Value.Set(ctx.config.Loglevel)
+		err = flag.Lookup("v").Value.Set(ctx.config.Log.Level)
 	}
 	if err != nil {
 		//  Not fatal as it will use default logging level
@@ -181,7 +192,7 @@ func initconfigparam() error {
 		glog.Infof("Build:  %s", build) // git rev-parse --short HEAD
 	}
 	glog.Infof("Logdir: %q Proto: %s Port: %s Verbosity: %s",
-		ctx.config.Logdir, ctx.config.Listen.Proto, ctx.config.Listen.Port, ctx.config.Loglevel)
+		ctx.config.Log.Dir, ctx.config.Listen.Proto, ctx.config.Listen.Port, ctx.config.Log.Level)
 	glog.Infof("Config: %q Role: %s StatsTime: %v", clivars.conffile, clivars.role, ctx.config.StatsTime)
 	return err
 }
