@@ -279,7 +279,8 @@ func dfcinit() {
 
 	flag.Parse()
 	if clivars.conffile == "" {
-		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|target> -config=<json> [...]\n")
+		fmt.Fprintf(os.Stderr, "Missing configuration file - must be provided via command line\n")
+		fmt.Fprintf(os.Stderr, "Usage: ... -role=<proxy|target> -config=<json> ...\n")
 		os.Exit(2)
 	}
 	if err := initconfigparam(); err != nil {

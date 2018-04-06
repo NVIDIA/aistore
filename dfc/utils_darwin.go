@@ -72,5 +72,5 @@ func TotalMemory() (uint64, error) {
 
 	var buf [8]byte
 	copy(buf[:], v)
-	return binary.LittleEndian.Uint64(buf[:]) / (1024 * 1024), nil
+	return binary.LittleEndian.Uint64(buf[:]) / MiB, nil
 }

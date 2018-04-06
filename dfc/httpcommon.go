@@ -350,6 +350,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		return uint32(v), err
 	}
 	switch name {
+	case "loglevel":
+		if err := setloglevel(value); err != nil {
+			errstr = fmt.Sprintf("Failed to set log level = %s, err: %v", err)
+		}
 	case "stats_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)

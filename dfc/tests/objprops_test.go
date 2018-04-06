@@ -87,7 +87,7 @@ func propsReadObjects(t *testing.T, bucket string, filelist map[string]string) {
 	tlogf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
 	for fname, _ := range filelist {
-		_, err := client.Get(proxyurl, bucket, fname, nil, nil, false, false)
+		_, _, err := client.Get(proxyurl, bucket, fname, nil, nil, false, false)
 		if err != nil {
 			t.Errorf("Failed to read %s/%s, err: %v", bucket, fname, err)
 			continue

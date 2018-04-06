@@ -174,11 +174,13 @@ func (r *proxystatsrunner) log() (runlru bool) {
 		r.Unlock()
 		return
 	}
-	s := fmt.Sprintf("%s: %+v", r.name, r.Core)
-	r.Core.logged = true
+	b, err := json.Marshal(r.Core)
 	r.Unlock()
 
-	glog.Infoln(s)
+	if err == nil {
+		glog.Infoln(string(b))
+		r.Core.logged = true
+	}
 	return
 }
 

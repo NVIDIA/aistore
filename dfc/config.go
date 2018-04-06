@@ -17,6 +17,12 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	KiB = 1024
+	MiB = 1024 * KiB
+	GiB = 1024 * MiB
+)
+
 // checksums: xattr, http header, and config
 const (
 	xattrXXHashVal  = "user.obj.dfchash"
@@ -71,9 +77,10 @@ type dfconfig struct {
 }
 
 type logconfig struct {
-	Dir     string `json:"logdir"`
-	Level   string `json:"loglevel"`
-	MaxSize uint64 `json:"logmaxsize"`
+	Dir      string `json:"logdir"`      // log directory
+	Level    string `json:"loglevel"`    // log level aka verbosity
+	MaxSize  uint64 `json:"logmaxsize"`  // size that triggers log rotation
+	MaxTotal uint64 `json:"logmaxtotal"` // max total size of all the logs in the log directory
 }
 
 type s3config struct {
@@ -170,23 +177,22 @@ func initconfigparam() error {
 	}
 	// glog rotate
 	glog.MaxSize = ctx.config.Log.MaxSize
-	if glog.MaxSize > 1024*1024*1024 {
+	if glog.MaxSize > GiB {
 		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
-		glog.MaxSize = 1024 * 1024
+		glog.MaxSize = MiB
 	}
 	// CLI override
 	if clivars.statstime != 0 {
 		ctx.config.StatsTime = clivars.statstime
 	}
 	if clivars.loglevel != "" {
-		err = flag.Lookup("v").Value.Set(clivars.loglevel)
-		ctx.config.Log.Level = clivars.loglevel
+		if err = setloglevel(clivars.loglevel); err != nil {
+			glog.Errorf("Failed to set log level = %s, err: %v", clivars.loglevel, err)
+		}
 	} else {
-		err = flag.Lookup("v").Value.Set(ctx.config.Log.Level)
-	}
-	if err != nil {
-		//  Not fatal as it will use default logging level
-		glog.Errorf("Failed to set loglevel %v", err)
+		if err = setloglevel(ctx.config.Log.Level); err != nil {
+			glog.Errorf("Failed to set log level = %s, err: %v", ctx.config.Log.Level, err)
+		}
 	}
 	if build != "" {
 		glog.Infof("Build:  %s", build) // git rev-parse --short HEAD
@@ -277,4 +283,16 @@ func validateconf() (err error) {
 		return fmt.Errorf("Bad DiskKeeper offline_fs_check_time format %s, err %v", ctx.config.DiskKeeper.OfflineFSCheckTimeStr, err)
 	}
 	return nil
+}
+
+func setloglevel(loglevel string) (err error) {
+	v := flag.Lookup("v").Value
+	if v == nil {
+		return fmt.Errorf("nil -v Value")
+	}
+	err = v.Set(loglevel)
+	if err == nil {
+		ctx.config.Log.Level = loglevel
+	}
+	return
 }

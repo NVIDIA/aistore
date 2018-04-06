@@ -525,7 +525,7 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1024/1024)
+		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/MiB)
 	}
 }
 
@@ -765,7 +765,6 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		}(si)
 	}
 	wg.Wait()
-	glog.Infoln("Completed sending List/Range ActionMsg to all targets")
 }
 
 func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
@@ -843,11 +842,21 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		if value, ok := msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
-		} else if msg.Name != "stats_time" && msg.Name != "passthru" {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid setconfig request: Proxy does not support this configuration variable: %s", msg.Name))
-		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
+		var (
+			value string
+			ok    bool
+		)
+		if value, ok = msg.Value.(string); !ok {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: not a string"))
+			return
+		}
+		switch msg.Name {
+		case "loglevel", "stats_time", "passthru":
+			if errstr := p.setconfig(msg.Name, value); errstr != "" {
+				p.invalmsghdlr(w, r, errstr)
+			}
+		default:
+			errstr := fmt.Sprintf("Invalid setconfig request: proxy does not support (updating) '%s'", msg.Name)
 			p.invalmsghdlr(w, r, errstr)
 		}
 	default:

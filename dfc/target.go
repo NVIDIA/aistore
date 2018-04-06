@@ -379,7 +379,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	if glog.V(3) {
 		s := fmt.Sprintf("GET: %s/%s, size %.2f MB, latency %d µs",
-			bucket, objname, float64(written)/1024/1024, time.Since(started)/1000)
+			bucket, objname, float64(written)/MiB, time.Since(started)/1000)
 		if coldget {
 			s += " (cold)"
 		}
