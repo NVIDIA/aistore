@@ -332,44 +332,58 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return err
 }
 
-func ListBucket(proxyurl, bucket string, injson []byte) (*dfc.BucketList, error) {
+// ListBucket returns properties of all objects in a bucket
+func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg) (*dfc.BucketList, error) {
 	var (
 		url     = proxyurl + "/v1/files/" + bucket
-		err     error
 		request *http.Request
-		r       *http.Response
 	)
 
-	if len(injson) == 0 {
-		r, err = client.Get(url)
-	} else {
-		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
-		if err == nil {
-			request.Header.Set("Content-Type", "application/json")
-			r, err = client.Do(request)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("List bucket %s failed, HTTP status %d", bucket, r.StatusCode)
-	}
-
-	defer func() {
-		r.Body.Close()
-	}()
-	var reslist = &dfc.BucketList{}
-	reslist.Entries = make([]*dfc.BucketEntry, 0, 1000)
-	b, err := ioutil.ReadAll(r.Body)
-
-	if err == nil {
-		err = json.Unmarshal(b, reslist)
+	reslist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0, 1000)}
+	for {
+		var r *http.Response
+		injson, err := json.Marshal(msg)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+			return nil, err
 		}
-	} else {
-		return nil, fmt.Errorf("Failed to read json, err: %v", err)
+		if len(injson) == 0 {
+			r, err = client.Get(url)
+		} else {
+			request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
+			if err == nil {
+				request.Header.Set("Content-Type", "application/json")
+				r, err = client.Do(request)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		if r != nil && r.StatusCode >= http.StatusBadRequest {
+			return nil, fmt.Errorf("List bucket %s failed, HTTP status %d", bucket, r.StatusCode)
+		}
+
+		defer func() {
+			r.Body.Close()
+		}()
+		var page = &dfc.BucketList{}
+		page.Entries = make([]*dfc.BucketEntry, 0, 1000)
+		b, err := ioutil.ReadAll(r.Body)
+
+		if err == nil {
+			err = json.Unmarshal(b, page)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+			}
+		} else {
+			return nil, fmt.Errorf("Failed to read json, err: %v", err)
+		}
+
+		reslist.Entries = append(reslist.Entries, page.Entries...)
+		if page.PageMarker == "" {
+			break
+		}
+
+		msg.GetPageMarker = page.PageMarker
 	}
 
 	return reslist, nil
@@ -631,11 +645,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
-	msg, err := json.Marshal(&dfc.GetMsg{GetPrefix: prefix})
-	if err != nil {
-		return nil, err
-	}
-
+	msg := &dfc.GetMsg{GetPrefix: prefix}
 	data, err := ListBucket(proxyURL, bucket, msg)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,6 @@
 package dfc_test
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -153,13 +152,8 @@ func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
 	var msg = &dfc.GetMsg{}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marshal failure, err: %v", err)
-		return
-	}
 	for i := 0; i < numGets; i++ {
-		items, cerr := client.ListBucket(proxyurl, bucket, jsbytes)
+		items, cerr := client.ListBucket(proxyurl, bucket, msg)
 		if testfail(cerr, "List files with prefix failed", nil, errch, t) {
 			return
 		}

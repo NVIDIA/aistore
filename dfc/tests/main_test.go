@@ -8,7 +8,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -216,13 +215,7 @@ func Test_matchdelete(t *testing.T) {
 
 	// list the bucket
 	var msg = &dfc.GetMsg{}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marshal failure, err: %v", err)
-		t.Fail()
-		return
-	}
-	reslist, err := client.ListBucket(proxyurl, clibucket, jsbytes)
+	reslist, err := client.ListBucket(proxyurl, clibucket, msg)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -337,19 +330,15 @@ func Test_putdeleteRange(t *testing.T) {
 	totalFiles := numFiles
 	for idx, test := range tests {
 		msg := &dfc.GetMsg{GetPrefix: commonPrefix + "/"}
-		injson, err := json.Marshal(msg)
-		if err != nil {
-			t.Error(err)
-		}
 		tlogf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
-		err = client.DeleteRange(proxyurl, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
+		err := client.DeleteRange(proxyurl, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
 		if err != nil {
 			t.Error(err)
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+		bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
 		if err != nil {
 			t.Error(err)
 		}
@@ -362,11 +351,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tlogf("Cleaning up remained objects...\n")
 	msg := &dfc.GetMsg{GetPrefix: commonPrefix + "/"}
-	injson, err := json.Marshal(msg)
-	if err != nil {
-		t.Error(err)
-	}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -501,12 +486,7 @@ func Test_list(t *testing.T) {
 
 	totalObjs := 0
 	for {
-		jsbytes, err := json.Marshal(msg)
-		if err != nil {
-			t.Errorf("Unexpected json-marshal failure, err: %v", err)
-			return
-		}
-		reslist = testListBucket(t, bucket, jsbytes)
+		reslist = testListBucket(t, bucket, msg)
 		if reslist == nil {
 			return
 		}
@@ -754,12 +734,7 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
 	// list the bucket
 	var msg = &dfc.GetMsg{}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marshal failure, err: %v", err)
-		return 0
-	}
-	reslist := testListBucket(t, bucket, jsbytes)
+	reslist := testListBucket(t, bucket, msg)
 	if reslist == nil {
 		return 0
 	}
@@ -818,11 +793,7 @@ func testListBucketAll(t *testing.T, bucket string, msg dfc.GetMsg) *dfc.BucketL
 	tlogf("LIST ALL %q\n", url)
 	fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
 	for {
-		jsbytes, err := json.Marshal(msg)
-		if err != nil {
-			t.Errorf("Unexpected json-marhsal failure, err: %v", err)
-		}
-		bucketlist := testListBucket(t, bucket, jsbytes)
+		bucketlist := testListBucket(t, bucket, &msg)
 		if bucketlist == nil {
 			return nil
 		}
@@ -835,12 +806,12 @@ func testListBucketAll(t *testing.T, bucket string, msg dfc.GetMsg) *dfc.BucketL
 	return fullbucketlist
 }
 
-func testListBucket(t *testing.T, bucket string, injson []byte) *dfc.BucketList {
+func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg) *dfc.BucketList {
 	var (
 		url = proxyurl + "/v1/files/" + bucket
 	)
 	tlogf("LIST %q\n", url)
-	reslist, err := client.ListBucket(proxyurl, bucket, injson)
+	reslist, err := client.ListBucket(proxyurl, bucket, msg)
 	if testfail(err, fmt.Sprintf("List bucket %s failed", bucket), nil, nil, t) {
 		return nil
 	}

@@ -10,7 +10,6 @@
 package dfc_test
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -104,14 +103,8 @@ func prefixCreateFiles(t *testing.T) {
 func prefixLookupOne(t *testing.T) {
 	fmt.Printf("Looking up for files than names start with %s\n", prefix)
 	var msg = &dfc.GetMsg{GetPrefix: prefix}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marshal failure, err: %v", err)
-		return
-	}
-
 	numFiles := 0
-	objList, err := client.ListBucket(proxyurl, clibucket, jsbytes)
+	objList, err := client.ListBucket(proxyurl, clibucket, msg)
 	if testfail(err, "List files with prefix failed", nil, nil, t) {
 		return
 	}
@@ -137,13 +130,7 @@ func prefixLookupDefault(t *testing.T) {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &dfc.GetMsg{GetPrefix: lookFor}
-		jsbytes, err := json.Marshal(msg)
-		if err != nil {
-			t.Errorf("Unexpected json-marshal failure, err: %v", err)
-			return
-		}
-
-		objList, err := client.ListBucket(proxyurl, clibucket, jsbytes)
+		objList, err := client.ListBucket(proxyurl, clibucket, msg)
 		if testfail(err, "List files with prefix failed", nil, nil, t) {
 			return
 		}

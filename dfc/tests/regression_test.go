@@ -802,11 +802,7 @@ func regressionDeleteRange(t *testing.T) {
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &dfc.GetMsg{GetPrefix: prefix}
-	injson, err := json.Marshal(msg)
-	if err != nil {
-		t.Error(err)
-	}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
 	}
@@ -831,7 +827,7 @@ func regressionDeleteRange(t *testing.T) {
 	}
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = client.ListBucket(proxyurl, clibucket, injson)
+	bktlst, err = client.ListBucket(proxyurl, clibucket, msg)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
@@ -870,11 +866,7 @@ func regressionDeleteList(t *testing.T) {
 
 	// 3. Check to see that all the files have been deleted.
 	msg := &dfc.GetMsg{GetPrefix: prefix}
-	injson, err := json.Marshal(msg)
-	if err != nil {
-		t.Error(err)
-	}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, injson)
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
