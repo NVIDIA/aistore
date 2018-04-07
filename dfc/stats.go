@@ -8,13 +8,19 @@ package dfc
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/golang/glog"
 )
+
+const logsTotalSizeCheckTime = time.Hour * 3
 
 //==============================
 //
@@ -84,14 +90,16 @@ type proxystatsrunner struct {
 type deviometrics map[string]string
 
 type storstatsrunner struct {
-	statsrunner         `json:"-"`
-	timeUpdatedCapacity time.Time               `json:"-"`
-	Core                targetCoreStats         `json:"core"`
-	Capacity            map[string]*fscapacity  `json:"capacity"`
-	fsmap               map[syscall.Fsid]string `json:"-"`
+	statsrunner `json:"-"`
+	Core        targetCoreStats        `json:"core"`
+	Capacity    map[string]*fscapacity `json:"capacity"`
 	// iostat
 	CPUidle string                  `json:"cpuidle"`
 	Disk    map[string]deviometrics `json:"disk"`
+	// omitempty
+	timeUpdatedCapacity time.Time               `json:"-"`
+	timeCheckedLogSizes time.Time               `json:"-"`
+	fsmap               map[syscall.Fsid]string `json:"-"`
 }
 
 type ClusterStats struct {
@@ -282,6 +290,73 @@ func (r *storstatsrunner) housekeep(runlru bool) {
 	// Run prefetch operation if there are items to be prefetched
 	if len(t.prefetchQueue) > 0 {
 		go t.doPrefetch()
+	}
+
+	// keep total log size below the configured max
+	if time.Since(r.timeCheckedLogSizes) >= logsTotalSizeCheckTime {
+		go r.removeLogs(ctx.config.Log.MaxTotal)
+		r.timeCheckedLogSizes = time.Now()
+	}
+}
+
+func (r *storstatsrunner) removeLogs(maxtotal uint64) {
+	var (
+		tot   int64
+		infos = []os.FileInfo{}
+	)
+	logfinfos, err := ioutil.ReadDir(ctx.config.Log.Dir)
+	if err != nil {
+		glog.Errorf("GC logs: cannot read log dir %s, err: %v", ctx.config.Log.Dir, err)
+		return // ignore error
+	}
+	// sample name dfc.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+	for _, logfi := range logfinfos {
+		if logfi.IsDir() {
+			continue
+		}
+		if !strings.HasPrefix(logfi.Name(), "dfc.") {
+			continue
+		}
+		if !strings.Contains(logfi.Name(), ".log.") {
+			continue
+		}
+		tot += logfi.Size()
+		if strings.Contains(logfi.Name(), ".INFO.") { // GC "INFO" logs only
+			infos = append(infos, logfi)
+		}
+	}
+	if tot < int64(maxtotal) {
+		return
+	}
+	if len(infos) <= 1 {
+		glog.Errorf("GC logs err: log dir %s, total %d, maxtotal %d", ctx.config.Log.Dir, tot, maxtotal)
+		return
+	}
+	r.removeOlderLogs(tot, int64(maxtotal), infos)
+}
+
+func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileInfo) {
+	fiLess := func(i, j int) bool {
+		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
+	}
+	if glog.V(3) {
+		glog.Infof("GC logs: started")
+	}
+	sort.Slice(filteredInfos, fiLess)
+	for _, logfi := range filteredInfos[:len(filteredInfos)-1] { // except last = current
+		logfqn := ctx.config.Log.Dir + "/" + logfi.Name()
+		if err := os.Remove(logfqn); err == nil {
+			tot -= logfi.Size()
+			glog.Infof("GC logs: removed %s", logfqn)
+			if tot < maxtotal {
+				break
+			}
+		} else {
+			glog.Errorf("GC logs: failed to remove %s", logfqn)
+		}
+	}
+	if glog.V(3) {
+		glog.Infof("GC logs: done")
 	}
 }
 
