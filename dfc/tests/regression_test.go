@@ -449,7 +449,7 @@ func regressionRebalance(t *testing.T) {
 	//
 	smap := getClusterMap(httpclient, t)
 	l := len(smap.Smap)
-	if l < 2 {
+	if l < 3 { // NOTE: proxy is counted; FIXME: will have to be fixed for "multi-proxies"...
 		if l == 0 {
 			t.Fatal("DFC cluster is empty - zero targets")
 		} else {

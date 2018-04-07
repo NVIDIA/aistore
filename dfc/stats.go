@@ -8,6 +8,7 @@ package dfc
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"sync"
 	"syscall"
 	"time"
@@ -105,6 +106,7 @@ type iostatrunner struct {
 	CPUidle     string
 	metricnames []string
 	Disk        map[string]deviometrics
+	cmd         *exec.Cmd
 }
 
 //==============================================================
