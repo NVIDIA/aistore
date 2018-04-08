@@ -8,6 +8,8 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -192,22 +194,39 @@ func Tcping(url string) (err error) {
 	return
 }
 
-func discardResponse(r *http.Response, err error, src string) (int64, error) {
-	var len int64
+func readResponse(r *http.Response, w io.Writer, err error, src string, validate bool) (int64, string, error) {
+	var (
+		len  int64
+		hash string
+	)
 
+	// Note: This code can use some cleanup.
 	if err == nil {
 		if r.StatusCode >= http.StatusBadRequest {
-			return 0, fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
+			return 0, "", fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
 		}
+
 		bufreader := bufio.NewReader(r.Body)
-		if len, err = dfc.ReadToNull(bufreader); err != nil {
-			return 0, fmt.Errorf("Failed to read http response, err: %v", err)
+		if validate {
+			len, hash, err = ReadWriteWithHash(bufreader, w)
+			if err != nil {
+				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
+			}
+		} else {
+			if len, err = io.Copy(w, bufreader); err != nil {
+				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
+			}
 		}
 	} else {
-		return 0, fmt.Errorf("%s failed, err: %v", src, err)
+		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
 	}
 
-	return len, nil
+	return len, hash, nil
+}
+
+func discardResponse(r *http.Response, err error, src string) (int64, error) {
+	len, _, err := readResponse(r, ioutil.Discard, err, src, false /* validate */)
+	return len, err
 }
 
 func emitError(r *http.Response, err error, errch chan error) {
@@ -223,11 +242,10 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
-	silent bool, validate bool) (int64, HTTPLatencies, error) {
+func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
-		errstr                   string
 	)
 
 	if wg != nil {
@@ -260,30 +278,26 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 
 	tr.tsHTTPEnd = time.Now()
 
-	if validate && err == nil {
+	if validate {
 		hdhash = resp.Header.Get(dfc.HeaderDfcChecksumVal)
 		hdhashtype = resp.Header.Get(dfc.HeaderDfcChecksumType)
-		if hdhashtype == dfc.ChecksumXXHash {
-			xx := xxhash.New64()
-			if hash, errstr = dfc.ComputeXXHash(resp.Body, nil, xx); errstr != "" {
-				if errch != nil {
-					errch <- errors.New(errstr)
-				}
+	}
+
+	v := hdhashtype == dfc.ChecksumXXHash
+	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
+	if err != nil && v {
+		if hdhash != hash {
+			s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
+			if errch != nil {
+				errch <- errors.New(s)
 			}
-			if hdhash != hash {
-				s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
-				if errch != nil {
-					errch <- errors.New(s)
-				}
-			} else {
-				if !silent {
-					fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
-				}
+		} else {
+			if !silent {
+				fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
 			}
 		}
 	}
 
-	len, err := discardResponse(resp, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
 	emitError(resp, err, errch)
 	l := HTTPLatencies{
 		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
@@ -299,6 +313,18 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		TargetFirstResponse: tr.tsTargetFirstResponse.Sub(tr.tsTargetWroteRequest),
 	}
 	return len, l, err
+}
+
+// Get sends a get request to proxy and discard the data returned
+func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool) (int64, HTTPLatencies, error) {
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard)
+}
+
+// GetFile sends a get request to proxy and save the data returned to an io.Writer
+func GetFile(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w)
 }
 
 func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
@@ -721,4 +747,63 @@ func GetConfig(server string) (HTTPLatencies, error) {
 		Proxy:     time.Now().Sub(tr.tsProxyConn),
 	}
 	return l, err
+}
+
+// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and calculate
+// xxHash on the data.
+func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
+	var (
+		total   int64
+		bufSize = 32768
+	)
+
+	buf := make([]byte, bufSize)
+	h := xxhash.New64()
+	mw := io.MultiWriter(h, w)
+	for {
+		n, err := r.Read(buf)
+		total += int64(n)
+		if err != nil && err != io.EOF {
+			return 0, "", err
+		}
+
+		if n == 0 {
+			break
+		}
+
+		mw.Write(buf[:n])
+	}
+
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
+	return total, hex.EncodeToString(b), nil
+}
+
+// ListBuckets returns all buckets in DFC (cloud and local)
+func ListBuckets(proxy string, local bool) (*dfc.BucketNames, error) {
+	url := proxy + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*"
+	if local {
+		url += "?local=true"
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("HTTP failed, status = %d", resp.StatusCode)
+	}
+
+	var b []byte
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	buckets := &dfc.BucketNames{}
+	err = json.Unmarshal(b, buckets)
+	return buckets, err
 }
