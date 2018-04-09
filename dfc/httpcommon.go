@@ -186,7 +186,7 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 	}
 	if len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
-		if glog.V(3) {
+		if glog.V(4) { // super-verbose
 			glog.Infof("%s %s", method, url)
 		}
 	} else {
@@ -194,12 +194,18 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
+		if glog.V(4) { // super-verbose
+			l := len(injson)
+			if l > 16 {
+				l = 16
+			}
+			glog.Infof("%s %s %s...}", method, url, string(injson[:l]))
+		}
 	}
 	if err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
 		return
 	}
-
 	if len(timeout) > 0 {
 		if timeout[0] != 0 {
 			contextwith, cancel := context.WithTimeout(context.Background(), timeout[0])

@@ -131,7 +131,7 @@ var (
 // Stable order of mountpaths is kept to support local bucket/DFC cache list paging
 func (m *mountedFS) updateOrderedList() {
 	ordered := make([]string, 0, len(m.available))
-	for path, _ := range m.available {
+	for path := range m.available {
 		ordered = append(ordered, path)
 	}
 	sort.Strings(ordered)

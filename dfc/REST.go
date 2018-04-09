@@ -162,8 +162,6 @@ const (
 	Rdaemon    = "daemon"
 	Rsyncsmap  = ActSyncSmap
 	Rebalance  = ActRebalance
-	Rfrom      = "from_id"
-	Rto        = "to_id"
 	Rsynclb    = ActSyncLB
 	Rpush      = "push"
 	Rkeepalive = "keepalive"

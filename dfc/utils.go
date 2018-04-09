@@ -195,12 +195,12 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string)
 	// FIXME: temp hack - make sure to keep working on laptops with dockers
 	ipv4addr = addrlist[0].ipv4
 	return
-
-	if guessTheBestIPv4 {
-		return guessIPv4(addrlist)
-	}
-
-	return "", "Failed to select network interface: more than one IPv4 available"
+	/*
+		if guessTheBestIPv4 {
+			return guessIPv4(addrlist)
+		}
+		return "", "Failed to select network interface: more than one IPv4 available"
+	*/
 }
 
 // getipv4addr returns an IPv4 for proxy/target to listen on it.
