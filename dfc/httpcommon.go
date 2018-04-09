@@ -187,7 +187,7 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 	if len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
 		if glog.V(3) {
-			glog.Infof("%s URL %q", method, url)
+			glog.Infof("%s %s", method, url)
 		}
 	} else {
 		request, err = http.NewRequest(method, url, bytes.NewBuffer(injson))

@@ -374,8 +374,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(3) {
-		s := fmt.Sprintf("GET: %s/%s, size %.2f MB, latency %d µs",
-			bucket, objname, float64(written)/MiB, time.Since(started)/1000)
+		s := fmt.Sprintf("GET: %s/%s, %.2f MB, %d µs", bucket, objname, float64(written)/MiB, time.Since(started)/1000)
 		if coldget {
 			s += " (cold)"
 		}
@@ -683,7 +682,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	defer func() {
 		if ok {
 			t.statsif.add("numlist", 1)
-			glog.Infof("LIST %s: %s, latency %d µs", tag, bucket, time.Since(started)/1000)
+			glog.Infof("LIST %s: %s, %d µs", tag, bucket, time.Since(started)/1000)
 		}
 	}()
 	if islocal {
@@ -977,7 +976,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
 			}
 			if errstr == "" && xxhashval == hval {
-				glog.Infof("Existing %s is valid: PUT is a no-op", fqn)
+				glog.Infof("Existing %s/%s is valid: PUT is a no-op", bucket, objname)
 				return
 			}
 		}
@@ -1000,7 +999,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	if sgl == nil {
 		errstr, errcode = t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 		if errstr == "" && bool(glog.V(3)) {
-			glog.Infof("PUT: %s/%s, latency %d µs", bucket, objname, time.Since(started)/1000)
+			glog.Infof("PUT: %s/%s, %d µs", bucket, objname, time.Since(started)/1000)
 		}
 		return
 	}
@@ -1127,7 +1126,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 
 		finfo, err := os.Stat(fqn)
 		if glog.V(3) {
-			glog.Infof("Rebalance from %q: bucket %q objname %q => to %q", from, bucket, objname, to)
+			glog.Infof("Rebalance %s/%s from %s (self) to %s", bucket, objname, from, to)
 		}
 		if err != nil && os.IsNotExist(err) {
 			errstr = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
@@ -1142,15 +1141,15 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if errstr = t.sendfile(r.Method, bucket, objname, si, size, ""); errstr != "" {
 			return
 		}
-		if glog.V(3) {
-			glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
+		if glog.V(4) {
+			glog.Infof("Rebalance %s/%s done, %.2f MB", bucket, objname, float64(size)/MiB)
 		}
 	} else {
 		//
 		// the destination
 		//
 		if glog.V(3) {
-			glog.Infof("Rebalance to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
+			glog.Infof("Rebalance %s/%s from %s to %s (self)", bucket, objname, from, to)
 		}
 		putfqn := t.fqn2workfile(fqn)
 		_, err := os.Stat(fqn)
@@ -1201,7 +1200,7 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	defer func() {
 		if ok && err == nil && bool(glog.V(3)) {
-			glog.Infof("DELETE: %s/%s, latency %d µs", bucket, objname, time.Since(started)/1000)
+			glog.Infof("DELETE: %s/%s, %d µs", bucket, objname, time.Since(started)/1000)
 		}
 	}()
 	if err == nil && len(b) > 0 {

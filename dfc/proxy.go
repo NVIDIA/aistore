@@ -168,7 +168,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		ok := p.listbucket(w, r, bucket)
 		if ok {
 			p.statsif.add("numlist", 1)
-			glog.Infof("LIST: %s, latency %d µs", bucket, time.Since(started)/1000)
+			glog.Infof("LIST: %s, %d µs", bucket, time.Since(started)/1000)
 		}
 		return
 	}
@@ -1160,9 +1160,9 @@ func (p *proxyrunner) httpcluputSmap(action string, autorebalance bool) {
 	jsbytes, err := json.Marshal(ctx.smap)
 	ctx.smap.unlock()
 	assert(err == nil, err)
+	glog.Infof("%s: %s", action, string(jsbytes))
 	for _, si := range ctx.smap.Smap {
 		url := fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rdaemon, action, URLParamAutoReb, autorebalance)
-		glog.Infof("%s: %s", action, url)
 		if _, err, errstr, status := p.call(si, url, method, jsbytes); errstr != "" {
 			p.kalive.onerr(err, status)
 			return
@@ -1176,9 +1176,9 @@ func (p *proxyrunner) httpfilputLB() {
 	assert(err == nil, err)
 	p.lbmap.unlock()
 
+	glog.Infoln(string(jsbytes))
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
-		glog.Infof("%s: %+v", url, p.lbmap)
 		if _, err, _, status := p.call(si, url, http.MethodPut, jsbytes); err != nil {
 			p.kalive.onerr(err, status)
 			return

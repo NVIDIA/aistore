@@ -253,7 +253,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("aws: GET %s/%s", bucket, objname)
 	}
 	return
@@ -285,7 +285,7 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 		errstr = fmt.Sprintf("aws: Failed to PUT %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		if uploadoutput.VersionID != nil {
 			version = *uploadoutput.VersionID
 			glog.Infof("aws: PUT %s/%s, version %s", bucket, objname, version)
@@ -305,7 +305,7 @@ func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string, errcod
 		errstr = fmt.Sprintf("aws: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("aws: DELETE %s/%s", bucket, objname)
 	}
 	return
