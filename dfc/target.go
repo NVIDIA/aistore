@@ -595,11 +595,8 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 }
 
 func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
-	pageSize := msg.GetPageSize
-	if pageSize == 0 {
-		pageSize = defaultPageSize
-	}
 	allfinfos := t.newFileWalk(bucket, msg)
+	pageSize := allfinfos.limit
 
 	// read from every target no more than `pageSize` entries
 	for _, mpath := range ctx.mountpaths.availOrdered {
@@ -747,6 +744,11 @@ func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
 		bucket,          // bucket
 		defaultPageSize, // limit
 	}
+
+	if msg.GetPageSize != 0 {
+		ci.limit = msg.GetPageSize
+	}
+
 	return ci
 }
 
