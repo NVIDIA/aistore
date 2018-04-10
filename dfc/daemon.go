@@ -27,6 +27,7 @@ const (
 	xtargetkalive = "targetkalive"
 	xiostat       = "iostat"
 	xfskeeper     = "fskeeper"
+	xatime        = "atime"
 )
 
 //======
@@ -333,6 +334,7 @@ func dfcinit() {
 		if ctx.config.FSKeeper.Enabled {
 			ctx.rg.add(newfskeeper(t), xfskeeper)
 		}
+		ctx.rg.add(&atimerunner{}, xatime)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
@@ -414,6 +416,13 @@ func getiostatrunner() *iostatrunner {
 	r := ctx.rg.runmap[xiostat]
 	rr, _ := r.(*iostatrunner)
 	// not asserting: a) sysstat installed? b) mac
+	return rr
+}
+
+func getatimerunner() *atimerunner {
+	r := ctx.rg.runmap[xatime]
+	rr, ok := r.(*atimerunner)
+	assert(ok)
 	return rr
 }
 

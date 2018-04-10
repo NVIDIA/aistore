@@ -90,7 +90,7 @@ func (r *kalive) skipCheck(sid string) bool {
 
 func (r *kalive) run() error {
 	glog.Infof("Starting %s", r.name)
-	r.chstop = make(chan struct{}, 16)
+	r.chstop = make(chan struct{}, 4)
 	r.checknow = make(chan error, 16)
 	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(ctx.config.KeepAliveTime)
