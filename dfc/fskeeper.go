@@ -69,7 +69,7 @@ func (k *fskeeper) skipCheck(mpath string) bool {
 
 func (k *fskeeper) run() error {
 	glog.Infof("Starting %s", k.name)
-	k.chstop = make(chan struct{}, 16)
+	k.chstop = make(chan struct{}, 4)
 	k.checknow = make(chan error, 16)
 	k.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(fsCheckInterval)

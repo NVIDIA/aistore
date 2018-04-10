@@ -381,6 +381,9 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		glog.Infoln(s)
 	}
 	t.statsif.add("numget", 1)
+	if !coldget {
+		getatimerunner().notify(fqn)
+	}
 }
 
 func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {

@@ -136,7 +136,7 @@ func newClusterStats() *ClusterStats {
 //
 //==================
 func (r *statsrunner) runcommon(logger statslogger) error {
-	r.chsts = make(chan struct{}, 1)
+	r.chsts = make(chan struct{}, 4)
 
 	glog.Infof("Starting %s", r.name)
 	ticker := time.NewTicker(ctx.config.StatsTime)
