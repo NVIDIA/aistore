@@ -49,12 +49,12 @@ func (t *targetrunner) runLRU() {
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
 	for mpath := range ctx.mountpaths.available {
 		fschkwg.Add(1)
-		go t.oneLRU(mpath+"/"+ctx.config.LocalBuckets, fschkwg, xlru)
+		go t.oneLRU(makePathLocal(mpath), fschkwg, xlru)
 	}
 	fschkwg.Wait()
 	for mpath := range ctx.mountpaths.available {
 		fschkwg.Add(1)
-		go t.oneLRU(mpath+"/"+ctx.config.CloudBuckets, fschkwg, xlru)
+		go t.oneLRU(makePathCloud(mpath), fschkwg, xlru)
 	}
 	fschkwg.Wait()
 

@@ -24,11 +24,11 @@ func (t *targetrunner) runRebalance() {
 	}
 	glog.Infoln(xreb.tostring())
 	for mpath := range ctx.mountpaths.available {
-		aborted := t.oneRebalance(mpath+"/"+ctx.config.CloudBuckets, xreb)
+		aborted := t.oneRebalance(makePathCloud(mpath), xreb)
 		if aborted {
 			break
 		}
-		aborted = t.oneRebalance(mpath+"/"+ctx.config.LocalBuckets, xreb)
+		aborted = t.oneRebalance(makePathLocal(mpath), xreb)
 		if aborted {
 			break
 		}
