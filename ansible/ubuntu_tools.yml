@@ -48,6 +48,9 @@
         name: collectd-utils
         state: present
         update_cache: yes
+    - name: Git clone statsd
+      shell: cd /opt; git clone git://github.com/etsy/statsd.git
+
 
 ...
 

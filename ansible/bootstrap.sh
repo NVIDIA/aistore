@@ -1,28 +1,33 @@
 #!/bin/bash
-sudo umount -f /dfc/1
-sudo umount -f /dfc/2
-sudo umount -f /dfc/3
-sudo umount -f /dfc/4
-sudo umount -f /dfc/5
-sudo umount -f /dfc/6
-sudo umount -f /dfc/7
-sudo umount -f /dfc/8
-sudo mkfs -t ext4 /dev/xvdb
-sudo mkfs -t ext4 /dev/xvdc
-sudo mkfs -t ext4 /dev/xvdd
-sudo mkfs -t ext4 /dev/xvde
-sudo mkfs -t ext4 /dev/xvdf
-sudo mkfs -t ext4 /dev/xvdg
-sudo mkfs -t ext4 /dev/xvdh
-sudo mkfs -t ext4 /dev/xvdi
-sudo mkdir /dfc
-sudo mkdir /dfc/1 /dfc/2 /dfc/3 /dfc/4 /dfc/5 /dfc/6 /dfc/7 /dfc/8
-sudo mount /dev/xvdb /dfc/1
-sudo mount /dev/xvdc /dfc/2
-sudo mount /dev/xvdd /dfc/3
-sudo mount /dev/xvde /dfc/4
-sudo mount /dev/xvdf /dfc/5
-sudo mount /dev/xvdg /dfc/6
-sudo mount /dev/xvdh /dfc/7
-sudo mount /dev/xvdi /dfc/8
+set -e
+#create md volume
+echo creating md volume
+sudo mdadm --create  /dev/md0 --level=raid0 -c 1024K --raid-devices=2 /dev/xvdl /dev/xvdm
+sudo mdadm --create  /dev/md1 --level=raid0 -c 1024K --raid-devices=2 /dev/xvdn /dev/xvdo
+sudo mdadm --create  /dev/md2 --level=raid0 -c 1024K --raid-devices=2 /dev/xvdp /dev/xvdq
+sudo mdadm --create  /dev/md3 --level=raid0 -c 1024K --raid-devices=2 /dev/xvdr /dev/xvds
+sudo mdadm --create  /dev/md4 --level=raid0 -c 1024K --raid-devices=2 /dev/xvdt /dev/xvdu
+sudo mdadm --create  /dev/md5 --level=raid0 -c 1024K --raid-devices=2 /dev/xvdv /dev/xvdw
+
+#create file systems
+echo creating file systems
+sudo mkfs  -t xfs -f /dev/md0
+sudo mkfs  -t xfs -f /dev/md1
+sudo mkfs  -t xfs -f /dev/md2
+sudo mkfs  -t xfs -f /dev/md3
+sudo mkfs  -t xfs -f /dev/md4
+sudo mkfs  -t xfs -f /dev/md5
+
+#mount file systems
+echo umount dfc file system if any mounted
+mount
+for i in `mount | grep dfc | cut -d' ' -f3`; do sudo umount $i; done
+mount
+echo mounting file systems
+sudo mount -t xfs /dev/md0 -onoatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier /dfc/1
+sudo mount -t xfs /dev/md1 -onoatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier /dfc/2
+sudo mount -t xfs /dev/md2 -onoatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier /dfc/3
+sudo mount -t xfs /dev/md3 -onoatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier /dfc/4
+sudo mount -t xfs /dev/md4 -onoatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier /dfc/5
+sudo mount -t xfs /dev/md5 -onoatime,nodiratime,logbufs=8,logbsize=256k,largeio,inode64,swalloc,allocsize=131072k,nobarrier /dfc/6
 

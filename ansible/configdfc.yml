@@ -3,7 +3,13 @@
   gather_facts: no
   tasks:
     - copy:
-        src: "{{ playbook_dir }}/configdfc.sh
+        src: "{{ playbook_dir }}/configdfc.sh"
+        dest: /home/ubuntu
+        owner: ubuntu
+        group: ubuntu
+        mode: 0777
+    - copy:
+        src: "{{ playbook_dir }}/inventory"
         dest: /home/ubuntu
         owner: ubuntu
         group: ubuntu
