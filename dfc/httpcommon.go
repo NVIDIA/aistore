@@ -26,12 +26,12 @@ import (
 	"github.com/hkwi/h2c"
 )
 
-const (
-	maxidleconns = 32768 // max num idle connections
+const ( // => Transport.MaxIdleConnsPerHost
+	targetMaxIdleConnsPer = 4
+	proxyMaxIdleConnsPer  = 8
 )
-const (
-	initialBucketListSize = 512
-)
+
+const initialBucketListSize = 512
 
 type objectProps struct {
 	version string
@@ -104,19 +104,28 @@ func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 	h.mux.HandleFunc(path, handler)
 }
 
-func (h *httprunner) init(s statsif) {
+func (h *httprunner) init(s statsif, isproxy bool) {
 	h.statsif = s
 	ipaddr, errstr := getipv4addr()
 	if errstr != "" {
 		glog.Fatalf("FATAL: %s", errstr)
 	}
 	// http client
+	perhost := targetMaxIdleConnsPer
+	if isproxy {
+		perhost = proxyMaxIdleConnsPer
+	}
+	numDaemons := ctx.config.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
+	assert(numDaemons < 1024)                       // not a limitation!
+	if numDaemons < 4 {
+		numDaemons = 4
+	}
 	h.httpclient = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
 		Timeout:   ctx.config.HTTP.Timeout,
 	}
 	h.httpclientLongTimeout = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
 		Timeout:   ctx.config.HTTP.LongTimeout,
 	}
 	// init daemonInfo here

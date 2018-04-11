@@ -13,7 +13,8 @@
 	"stats_time":			"10s",
 	"http": {
 		"timeout":		"30s",
-		"long_timeout":		"30m"
+		"long_timeout":		"30m",
+		"max_num_targets":      16
 	},
 	"keep_alive_time":		"20s",
 	"listen": {
@@ -30,8 +31,8 @@
 		"maxpartsize":		4294967296
 	},
 	"cksum_config": {
-                 "validate_cold_get":	true,
-                 "checksum":		"xxhash"
+                 "checksum":		"xxhash",
+                 "validate_cold_get":	true
 	},
 	"version_config": {
 		"validate_warm_get":	false,
@@ -54,7 +55,7 @@
 		"instance":		$c
 	},
 	"fspaths": {
-		$FSPATHS
+$FSPATHS
 	},
 	"network": {
 		"ipv4": "$IPV4LIST"

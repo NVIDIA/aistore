@@ -84,7 +84,7 @@ type targetrunner struct {
 
 // start target runner
 func (t *targetrunner) run() error {
-	t.httprunner.init(getstorstatsrunner())
+	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.kalive = gettargetkalive()
 	t.smap = &Smap{}                                 // cluster map
 	t.xactinp = newxactinp()                         // extended actions

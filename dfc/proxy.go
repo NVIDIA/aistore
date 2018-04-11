@@ -60,7 +60,7 @@ type proxyrunner struct {
 
 // start proxy runner
 func (p *proxyrunner) run() error {
-	p.httprunner.init(getproxystatsrunner())
+	p.httprunner.init(getproxystatsrunner(), true)
 	ctx.smap.ProxySI = p.si
 	p.httprunner.kalive = getproxykalive()
 
