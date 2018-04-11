@@ -1,7 +1,7 @@
 #/bin/bash
 set -e
-export AWS_ACCESS_KEY_ID=AKIAJMVS4P7LW7GZ4LHA
-export AWS_SECRET_ACCESS_KEY=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
+export AWS_ACCESS_KEY_ID=AK
+export AWS_SECRET_ACCESS_KEY=SK
 export AWS_DEFAULT_REGION=us-east-2
 
 declare -a devices=(l m n o p q r s t u v w x y z)
