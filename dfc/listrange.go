@@ -392,7 +392,9 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 		}
 		return
 	}
-	glog.Infof("PREFETCH done: %s/%s", bucket, objname)
+	if glog.V(4) {
+		glog.Infof("PREFETCH: %s/%s", bucket, objname)
+	}
 	t.statsif.add("numprefetch", 1)
 	t.statsif.add("bytesprefetched", props.size)
 	if vchanged {

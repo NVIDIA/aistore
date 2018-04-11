@@ -145,6 +145,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 
 // e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	if ctx.smap.count() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
@@ -167,21 +168,22 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
 		ok := p.listbucket(w, r, bucket)
 		if ok {
-			p.statsif.add("numlist", 1)
-			glog.Infof("LIST: %s, %d µs", bucket, time.Since(started)/1000)
+			lat := int64(time.Since(started) / 1000)
+			p.statsif.addMany("numlist", int64(1), "listlatency", lat)
+			if glog.V(3) {
+				glog.Infof("LIST: %s, %d µs", bucket, lat)
+			}
 		}
 		return
 	}
 
 	// GET
-	p.statsif.add("numget", 1)
 	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	// FIXME: glog with caution!
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
@@ -190,6 +192,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
 	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	p.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
@@ -531,6 +534,7 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 
 // PUT "/"+Rversion+"/"+Rfiles
 func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
@@ -549,8 +553,8 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	p.statsif.add("numput", 1)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	p.statsif.addMany("numput", int64(1), "putlatency", int64(time.Since(started)/1000))
 }
 
 // { action } "/"+Rversion+"/"+Rfiles

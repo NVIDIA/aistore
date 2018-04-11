@@ -3,8 +3,8 @@
 	"log": {
 		"logdir":		"$LOGDIR",
 		"loglevel": 		"${LOGLEVEL}",
-		"logmaxsize": 		2097152,
-		"logmaxtotal":		33554432
+		"logmaxsize": 		4194304,
+		"logmaxtotal":		67108864
 	},
 	"confdir":                	"$CONFDIR",
 	"cloudprovider":		"${CLDPROVIDER}",
