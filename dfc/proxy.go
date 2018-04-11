@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,9 +34,9 @@ type bucketResp struct {
 	id      string
 }
 
-// A list of locally cached files on a target.
-// Maximum number of files in the response is `cachedPageSize` items
-type cachedFileBatch struct {
+// A list of target local files: cached or local bucket
+// Maximum number of files in the response is `pageSize` entries
+type localFilePage struct {
 	entries []*BucketEntry
 	err     error
 	id      string
@@ -59,7 +60,7 @@ type proxyrunner struct {
 
 // start proxy runner
 func (p *proxyrunner) run() error {
-	p.httprunner.init(getproxystatsrunner())
+	p.httprunner.init(getproxystatsrunner(), true)
 	ctx.smap.ProxySI = p.si
 	p.httprunner.kalive = getproxykalive()
 
@@ -144,6 +145,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 
 // e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	if ctx.smap.count() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
@@ -163,27 +165,34 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	// listbucket
 	if len(objname) == 0 {
-		p.statsif.add("numlist", 1)
-		p.listbucket(w, r, bucket)
+		started := time.Now()
+		ok := p.listbucket(w, r, bucket)
+		if ok {
+			lat := int64(time.Since(started) / 1000)
+			p.statsif.addMany("numlist", int64(1), "listlatency", lat)
+			if glog.V(3) {
+				glog.Infof("LIST: %s, %d µs", bucket, lat)
+			}
+		}
 		return
 	}
 
 	// GET
-	p.statsif.add("numget", 1)
 	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
 	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	p.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
@@ -207,7 +216,7 @@ func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
 // Receives info about locally cached files from targets in batches
 // and merges with existing list of cloud files
 func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
-	dataCh chan *cachedFileBatch, errch chan error, wg *sync.WaitGroup) {
+	dataCh chan *localFilePage, errch chan error, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -234,9 +243,9 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
 }
 
 // Request list of all cached files from a target.
-// The target returns its list in batches `cachedPageSize` length
+// The target returns its list in batches `pageSize` length
 func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
-	dataCh chan *cachedFileBatch, wg *sync.WaitGroup, origmsg *GetMsg) {
+	dataCh chan *localFilePage, wg *sync.WaitGroup, origmsg *GetMsg) {
 	const (
 		cachedObjects = true
 		islocal       = false
@@ -255,7 +264,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 		resp, err := p.targetListBucket(bucket, daemon, listmsgjson, islocal, cachedObjects)
 		if err != nil {
 			if dataCh != nil {
-				dataCh <- &cachedFileBatch{
+				dataCh <- &localFilePage{
 					id:  daemon.DaemonID,
 					err: err,
 				}
@@ -271,7 +280,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
 		if err := json.Unmarshal(resp.outjson, &entries); err != nil {
 			if dataCh != nil {
-				dataCh <- &cachedFileBatch{
+				dataCh <- &localFilePage{
 					id:  daemon.DaemonID,
 					err: err,
 				}
@@ -282,7 +291,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 
 		msg.GetPageMarker = entries.PageMarker
 		if dataCh != nil {
-			dataCh <- &cachedFileBatch{
+			dataCh <- &localFilePage{
 				err:     nil,
 				id:      daemon.DaemonID,
 				marker:  entries.PageMarker,
@@ -312,7 +321,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 		bucketMap[entry.Name] = entry
 	}
 
-	dataCh := make(chan *cachedFileBatch, ctx.smap.count())
+	dataCh := make(chan *localFilePage, ctx.smap.count())
 	errch := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
@@ -345,33 +354,80 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 }
 
 func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
+	type targetReply struct {
+		resp *bucketResp
+		err  error
+	}
 	const (
 		islocal    = true
 		cachedObjs = false
 	)
-	var resp *bucketResp
-	allentries = &BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
-	for _, si := range ctx.smap.Smap {
-		resp, err = p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjs)
-		if err != nil {
-			return
-		}
-
-		if resp.outjson == nil || len(resp.outjson) == 0 {
-			continue
-		}
-
-		entries := &BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
-		if err = json.Unmarshal(resp.outjson, &entries); err != nil {
-			return
-		}
-		if len(entries.Entries) == 0 {
-			continue
-		}
-
-		allentries.Entries = append(allentries.Entries, entries.Entries...)
+	msg := &GetMsg{}
+	if err = json.Unmarshal(listmsgjson, msg); err != nil {
+		return
 	}
-	return
+	pageSize := defaultPageSize
+	if msg.GetPageSize != 0 {
+		pageSize = msg.GetPageSize
+	}
+
+	chresult := make(chan *targetReply, len(ctx.smap.Smap))
+	wg := &sync.WaitGroup{}
+
+	targetCallFn := func(si *daemonInfo) {
+		defer wg.Done()
+		resp, err := p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjs)
+		chresult <- &targetReply{resp, err}
+	}
+
+	for _, si := range ctx.smap.Smap {
+		wg.Add(1)
+		go targetCallFn(si)
+	}
+	wg.Wait()
+	close(chresult)
+
+	// combine results
+	allentries = &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
+	for r := range chresult {
+		if r.err != nil {
+			err = r.err
+			return
+		}
+
+		if r.resp.outjson == nil || len(r.resp.outjson) == 0 {
+			continue
+		}
+
+		bucketList := &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
+		if err = json.Unmarshal(r.resp.outjson, &bucketList); err != nil {
+			return
+		}
+
+		if len(bucketList.Entries) == 0 {
+			continue
+		}
+
+		allentries.Entries = append(allentries.Entries, bucketList.Entries...)
+	}
+
+	// shrink the result to `pageSize` entries if it is longer
+	// the result must be sorted to support paging and PageMarker
+	if len(allentries.Entries) > pageSize {
+		entryLess := func(i, j int) bool {
+			return allentries.Entries[i].Name < allentries.Entries[j].Name
+		}
+		sort.Slice(allentries.Entries, entryLess)
+
+		for i := pageSize; i < len(allentries.Entries); i++ {
+			allentries.Entries[i] = nil
+		}
+
+		allentries.Entries = allentries.Entries[:pageSize]
+		allentries.PageMarker = allentries.Entries[pageSize-1].Name
+	}
+
+	return allentries, nil
 }
 
 func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
@@ -424,7 +480,7 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (ok bool) {
 	var allentries *BucketList
 	listmsgjson, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -449,7 +505,8 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	}
 	jsbytes, err := json.Marshal(allentries)
 	assert(err == nil, err)
-	p.writeJSON(w, r, jsbytes, "listbucket")
+	ok = p.writeJSON(w, r, jsbytes, "listbucket")
+	return
 }
 
 // receiveDrop reads until EOF and uses dummy writer (ReadToNull)
@@ -471,12 +528,13 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 		return
 	}
 	if glog.V(3) {
-		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/1024/1024)
+		glog.Infof("Received and discarded %q (size %.2f MB)", redirecturl, float64(bytes)/MiB)
 	}
 }
 
 // PUT "/"+Rversion+"/"+Rfiles
 func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
@@ -486,20 +544,17 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	// FIXME: add protection agaist putting into non-existing local bucket
 	//
 	objname := strings.Join(apitems[1:], "/")
-	if glog.V(3) {
-		glog.Infof("%s %s/%s", r.Method, bucket, objname)
-	}
 	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	p.statsif.add("numput", 1)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	p.statsif.addMany("numput", int64(1), "putlatency", int64(time.Since(started)/1000))
 }
 
 // { action } "/"+Rversion+"/"+Rfiles
@@ -513,17 +568,14 @@ func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		// Redirect DELETE /v1/files/bucket/object
 		objname := strings.Join(apitems[1:], "/")
-		if glog.V(3) {
-			glog.Infof("%s %s/%s", r.Method, bucket, objname)
-		}
 		si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
 		if errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
 		redirecturl := si.DirectURL + r.URL.Path
-		if glog.V(3) {
-			glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+		if glog.V(4) {
+			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 		}
 		p.statsif.add("numdelete", 1)
 		http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
@@ -645,7 +697,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	}
 	redirecturl := si.DirectURL + r.URL.Path
 	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (rename)", r.URL.Path, si.DirectURL)
+		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
 	p.statsif.add("numrename", 1)
 	// NOTE:
@@ -717,7 +769,6 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		}(si)
 	}
 	wg.Wait()
-	glog.Infoln("Completed sending List/Range ActionMsg to all targets")
 }
 
 func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
@@ -738,7 +789,7 @@ func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
-		glog.Infof("Redirecting %q to %s (%s)", r.URL.Path, si.DirectURL, r.Method)
+		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
@@ -795,11 +846,21 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActSetConfig:
-		if value, ok := msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
-		} else if msg.Name != "stats_time" && msg.Name != "passthru" {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid setconfig request: Proxy does not support this configuration variable: %s", msg.Name))
-		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
+		var (
+			value string
+			ok    bool
+		)
+		if value, ok = msg.Value.(string); !ok {
+			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: not a string"))
+			return
+		}
+		switch msg.Name {
+		case "loglevel", "stats_time", "passthru":
+			if errstr := p.setconfig(msg.Name, value); errstr != "" {
+				p.invalmsghdlr(w, r, errstr)
+			}
+		default:
+			errstr := fmt.Sprintf("Invalid setconfig request: proxy does not support (updating) '%s'", msg.Name)
 			p.invalmsghdlr(w, r, errstr)
 		}
 	default:
@@ -1103,9 +1164,9 @@ func (p *proxyrunner) httpcluputSmap(action string, autorebalance bool) {
 	jsbytes, err := json.Marshal(ctx.smap)
 	ctx.smap.unlock()
 	assert(err == nil, err)
+	glog.Infof("%s: %s", action, string(jsbytes))
 	for _, si := range ctx.smap.Smap {
 		url := fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rdaemon, action, URLParamAutoReb, autorebalance)
-		glog.Infof("%s: %s", action, url)
 		if _, err, errstr, status := p.call(si, url, method, jsbytes); errstr != "" {
 			p.kalive.onerr(err, status)
 			return
@@ -1119,9 +1180,9 @@ func (p *proxyrunner) httpfilputLB() {
 	assert(err == nil, err)
 	p.lbmap.unlock()
 
+	glog.Infoln(string(jsbytes))
 	for _, si := range ctx.smap.Smap {
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
-		glog.Infof("%s: %+v", url, p.lbmap)
 		if _, err, _, status := p.call(si, url, http.MethodPut, jsbytes); err != nil {
 			p.kalive.onerr(err, status)
 			return

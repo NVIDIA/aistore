@@ -64,6 +64,7 @@ type GetMsg struct {
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below
 	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
+	GetPageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
 }
 
 // RangeListMsgBase contains fields common to Range and List operations
@@ -161,8 +162,6 @@ const (
 	Rdaemon    = "daemon"
 	Rsyncsmap  = ActSyncSmap
 	Rebalance  = ActRebalance
-	Rfrom      = "from_id"
-	Rto        = "to_id"
 	Rsynclb    = ActSyncLB
 	Rpush      = "push"
 	Rkeepalive = "keepalive"

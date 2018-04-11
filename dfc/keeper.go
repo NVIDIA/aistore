@@ -90,7 +90,7 @@ func (r *kalive) skipCheck(sid string) bool {
 
 func (r *kalive) run() error {
 	glog.Infof("Starting %s", r.name)
-	r.chstop = make(chan struct{}, 16)
+	r.chstop = make(chan struct{}, 4)
 	r.checknow = make(chan error, 16)
 	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(ctx.config.KeepAliveTime)
@@ -137,11 +137,13 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	if err != nil {
 		glog.Infof("keepalive-alltargets: got err %v, checking now...", err)
 	}
+	from := "?" + URLParamFromID + "=" + r.p.si.DaemonID
 	for sid, si := range ctx.smap.Smap {
 		if r.skipCheck(sid) {
 			continue
 		}
 		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+		url += from
 		_, err, _, status := r.p.call(si, url, http.MethodGet, nil, kalivetimeout)
 		if err == nil {
 			continue

@@ -2,11 +2,10 @@
 
 GRAPHITE_SERVER="52.41.234.112"
 usage() {
-    echo "Usage: $0 [-e dev|prod|k8s] -a <aws.env> [-s] [-o centos|ubuntu]"
+    echo "Usage: $0 [-e dev|prod|k8s] -a <aws.env> [-s]"
     echo "   -a : aws.env - AWS credentials"
     echo "   -e : dev|prod - deployment environment (default is dev[elopment])"
     echo "   -g : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
-    echo "   -o : centos|ubuntu - docker base image OS (default ubuntu)"
     echo "   -s : scale the targets: add new targets to an already running cluster, or stop a given number of already running"
     echo
     exit 1;
@@ -27,10 +26,6 @@ do
 
     g)
         GRAPHITE_SERVER=${OPTARG}
-        ;;
-
-    o)
-        os=${OPTARG}
         ;;
 
     s)
@@ -54,7 +49,6 @@ if [ ! -z "$scale" ]; then
    sudo docker-compose -f $environment"_docker-compose.yml" up --no-recreate --scale dfctarget=$scale -d dfctarget
    rm aws.env
    rm dfc.json
-   rm Dockerfile
    sudo docker ps
    echo Done
    exit 0
@@ -63,17 +57,6 @@ fi
 if [ -z "$aws_env" ]; then
    echo -a is a required parameter.Provide the path for aws.env file
    usage
-fi
-
-#Copy .deb or .rpm docker file as Dockerfile. This is done keep docker_compose agnostic of docker OS
-if [[ "$environment" != "k8s" ]]; then
-  if [ $os == "ubuntu" ]; then
-     echo "Using debian packaging for the docker container"
-     cp Dockerfile.deb Dockerfile
-  else
-     echo "Usind rpm packaging for the docker container"
-     cp Dockerfile.rpm Dockerfile
-  fi
 fi
 
 PROXYURL="http://dfcproxy:8080"
@@ -213,6 +196,5 @@ else
     mv $CONFFILE /tmp/dfc_backup/
     mv $CONFFILE_STATSD /tmp/dfc_backup/
     mv $CONFFILE_COLLECTD /tmp/dfc_backup/
-    mv Dockerfile /tmp/dfc_backup/
 fi
 echo done

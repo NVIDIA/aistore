@@ -26,12 +26,12 @@ import (
 	"github.com/hkwi/h2c"
 )
 
-const (
-	maxidleconns = 32768 // max num idle connections
+const ( // => Transport.MaxIdleConnsPerHost
+	targetMaxIdleConnsPer = 4
+	proxyMaxIdleConnsPer  = 8
 )
-const (
-	initialBucketListSize = 512
-)
+
+const initialBucketListSize = 512
 
 type objectProps struct {
 	version string
@@ -104,19 +104,28 @@ func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 	h.mux.HandleFunc(path, handler)
 }
 
-func (h *httprunner) init(s statsif) {
+func (h *httprunner) init(s statsif, isproxy bool) {
 	h.statsif = s
 	ipaddr, errstr := getipv4addr()
 	if errstr != "" {
 		glog.Fatalf("FATAL: %s", errstr)
 	}
 	// http client
+	perhost := targetMaxIdleConnsPer
+	if isproxy {
+		perhost = proxyMaxIdleConnsPer
+	}
+	numDaemons := ctx.config.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
+	assert(numDaemons < 1024)                       // not a limitation!
+	if numDaemons < 4 {
+		numDaemons = 4
+	}
 	h.httpclient = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
 		Timeout:   ctx.config.HTTP.Timeout,
 	}
 	h.httpclientLongTimeout = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: maxidleconns},
+		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
 		Timeout:   ctx.config.HTTP.LongTimeout,
 	}
 	// init daemonInfo here
@@ -186,20 +195,26 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 	}
 	if len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
-		if glog.V(3) {
-			glog.Infof("%s URL %q", method, url)
+		if glog.V(4) { // super-verbose
+			glog.Infof("%s %s", method, url)
 		}
 	} else {
 		request, err = http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
+		if glog.V(4) { // super-verbose
+			l := len(injson)
+			if l > 16 {
+				l = 16
+			}
+			glog.Infof("%s %s %s...}", method, url, string(injson[:l]))
+		}
 	}
 	if err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
 		return
 	}
-
 	if len(timeout) > 0 {
 		if timeout[0] != 0 {
 			contextwith, cancel := context.WithTimeout(context.Background(), timeout[0])
@@ -350,6 +365,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		return uint32(v), err
 	}
 	switch name {
+	case "loglevel":
+		if err := setloglevel(value); err != nil {
+			errstr = fmt.Sprintf("Failed to set log level = %s, err: %v", value, err)
+		}
 	case "stats_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)

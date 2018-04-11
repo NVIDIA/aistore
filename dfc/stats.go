@@ -1,18 +1,26 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/golang/glog"
 )
+
+const logsTotalSizeCheckTime = time.Hour * 3
 
 //==============================
 //
@@ -34,18 +42,26 @@ type statslogger interface {
 // implemented by the ***CoreStats types
 type statsif interface {
 	add(name string, val int64)
+	addMany(nameval ...interface{})
 }
 
 // TODO: use static map[string]int64
 type proxyCoreStats struct {
-	Numget    int64 `json:"numget"`
-	Numput    int64 `json:"numput"`
-	Numpost   int64 `json:"numpost"`
-	Numdelete int64 `json:"numdelete"`
-	Numrename int64 `json:"numrename"`
-	Numerr    int64 `json:"numerr"`
-	Numlist   int64 `json:"numlist"`
-	logged    bool  `json:"-"`
+	Numget      int64 `json:"numget"`
+	Numput      int64 `json:"numput"`
+	Numpost     int64 `json:"numpost"`
+	Numdelete   int64 `json:"numdelete"`
+	Numrename   int64 `json:"numrename"`
+	Numlist     int64 `json:"numlist"`
+	Getlatency  int64 `json:"getlatency"`  // microseconds
+	Putlatency  int64 `json:"putlatency"`  // ---/---
+	Listlatency int64 `json:"listlatency"` // ---/---
+	Numerr      int64 `json:"numerr"`
+	// omitempty
+	ngets  int64 `json:"-"`
+	nputs  int64 `json:"-"`
+	nlists int64 `json:"-"`
+	logged bool  `json:"-"`
 }
 
 type targetCoreStats struct {
@@ -58,7 +74,6 @@ type targetCoreStats struct {
 	Numsentbytes     int64 `json:"numsentbytes"`
 	Numrecvfiles     int64 `json:"numrecvfiles"`
 	Numrecvbytes     int64 `json:"numrecvbytes"`
-	Numlist          int64 `json:"numlist"`
 	Numprefetch      int64 `json:"numprefetch"`
 	Bytesprefetched  int64 `json:"bytesprefetched"`
 	Numvchanged      int64 `json:"numvchanged"`
@@ -82,14 +97,16 @@ type proxystatsrunner struct {
 type deviometrics map[string]string
 
 type storstatsrunner struct {
-	statsrunner         `json:"-"`
-	timeUpdatedCapacity time.Time               `json:"-"`
-	Core                targetCoreStats         `json:"core"`
-	Capacity            map[string]*fscapacity  `json:"capacity"`
-	fsmap               map[syscall.Fsid]string `json:"-"`
+	statsrunner `json:"-"`
+	Core        targetCoreStats        `json:"core"`
+	Capacity    map[string]*fscapacity `json:"capacity"`
 	// iostat
 	CPUidle string                  `json:"cpuidle"`
 	Disk    map[string]deviometrics `json:"disk"`
+	// omitempty
+	timeUpdatedCapacity time.Time               `json:"-"`
+	timeCheckedLogSizes time.Time               `json:"-"`
+	fsmap               map[syscall.Fsid]string `json:"-"`
 }
 
 type ClusterStats struct {
@@ -104,6 +121,7 @@ type iostatrunner struct {
 	CPUidle     string
 	metricnames []string
 	Disk        map[string]deviometrics
+	cmd         *exec.Cmd
 }
 
 //==============================================================
@@ -125,7 +143,7 @@ func newClusterStats() *ClusterStats {
 //
 //==================
 func (r *statsrunner) runcommon(logger statslogger) error {
-	r.chsts = make(chan struct{}, 1)
+	r.chsts = make(chan struct{}, 4)
 
 	glog.Infof("Starting %s", r.name)
 	ticker := time.NewTicker(ctx.config.StatsTime)
@@ -173,19 +191,51 @@ func (r *proxystatsrunner) log() (runlru bool) {
 		r.Unlock()
 		return
 	}
-	s := fmt.Sprintf("%s: %+v", r.name, r.Core)
-	r.Core.logged = true
+	if r.Core.ngets > 0 {
+		r.Core.Getlatency /= r.Core.ngets
+	}
+	if r.Core.nputs > 0 {
+		r.Core.Putlatency /= r.Core.nputs
+	}
+	if r.Core.nlists > 0 {
+		r.Core.Listlatency /= r.Core.nlists
+	}
+	b, err := json.Marshal(r.Core)
+	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
 	r.Unlock()
 
-	glog.Infoln(s)
+	if err == nil {
+		glog.Infoln(string(b))
+		r.Core.logged = true
+	}
 	return
 }
 
 func (r *proxystatsrunner) add(name string, val int64) {
-	var v *int64
-	s := &r.Core
+	r.Lock()
+	r.addLocked(name, val)
+	r.Unlock()
+}
+
+func (r *proxystatsrunner) addMany(nameval ...interface{}) {
 	r.Lock()
 	defer r.Unlock()
+	i := 0
+	for i < len(nameval) {
+		statsname, ok := nameval[i].(string)
+		assert(ok, fmt.Sprintf("Invalid stats name: %v, %T", nameval[i], nameval[i]))
+		i++
+		statsval, ok := nameval[i].(int64)
+		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
+		i++
+		r.addLocked(statsname, statsval)
+	}
+}
+
+func (r *proxystatsrunner) addLocked(name string, val int64) {
+	var v *int64
+	s := &r.Core
 	switch name {
 	case "numget":
 		v = &s.Numget
@@ -199,6 +249,15 @@ func (r *proxystatsrunner) add(name string, val int64) {
 		v = &s.Numrename
 	case "numlist":
 		v = &s.Numlist
+	case "getlatency":
+		v = &s.Getlatency
+		s.ngets++
+	case "putlatency":
+		v = &s.Putlatency
+		s.nputs++
+	case "listlatency":
+		v = &s.Listlatency
+		s.nlists++
 	case "numerr":
 		v = &s.Numerr
 	default:
@@ -225,15 +284,32 @@ func (r *storstatsrunner) log() (runlru bool) {
 	}
 	lines := make([]string, 0, 16)
 	// core stats
-	lines = append(lines, fmt.Sprintf("%s: %+v", r.name, r.Core))
+	if r.Core.ngets > 0 {
+		r.Core.Getlatency /= r.Core.ngets
+	}
+	if r.Core.nputs > 0 {
+		r.Core.Putlatency /= r.Core.nputs
+	}
+	if r.Core.nlists > 0 {
+		r.Core.Listlatency /= r.Core.nlists
+	}
 
+	b, err := json.Marshal(r.Core)
+	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
+	if err == nil {
+		lines = append(lines, string(b))
+	}
 	// capacity
 	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRUConfig.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for _, mpath := range r.fsmap {
 			fscapacity := r.Capacity[mpath]
-			lines = append(lines, fmt.Sprintf("capacity: %+v", fscapacity))
+			b, err := json.Marshal(fscapacity)
+			if err == nil {
+				lines = append(lines, mpath+": "+string(b))
+			}
 		}
 	}
 	// disk
@@ -243,9 +319,12 @@ func (r *storstatsrunner) log() (runlru bool) {
 		r.CPUidle = riostat.CPUidle
 		for k, v := range riostat.Disk {
 			r.Disk[k] = v // copy
+			b, err := json.Marshal(r.Disk[k])
+			if err == nil {
+				lines = append(lines, k+": "+string(b))
+			}
 		}
 		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
-		lines = append(lines, fmt.Sprintf("iostat: %+v", r.Disk))
 		riostat.Unlock()
 	}
 
@@ -269,6 +348,73 @@ func (r *storstatsrunner) housekeep(runlru bool) {
 	// Run prefetch operation if there are items to be prefetched
 	if len(t.prefetchQueue) > 0 {
 		go t.doPrefetch()
+	}
+
+	// keep total log size below the configured max
+	if time.Since(r.timeCheckedLogSizes) >= logsTotalSizeCheckTime {
+		go r.removeLogs(ctx.config.Log.MaxTotal)
+		r.timeCheckedLogSizes = time.Now()
+	}
+}
+
+func (r *storstatsrunner) removeLogs(maxtotal uint64) {
+	var (
+		tot   int64
+		infos = []os.FileInfo{}
+	)
+	logfinfos, err := ioutil.ReadDir(ctx.config.Log.Dir)
+	if err != nil {
+		glog.Errorf("GC logs: cannot read log dir %s, err: %v", ctx.config.Log.Dir, err)
+		return // ignore error
+	}
+	// sample name dfc.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+	for _, logfi := range logfinfos {
+		if logfi.IsDir() {
+			continue
+		}
+		if !strings.HasPrefix(logfi.Name(), "dfc.") {
+			continue
+		}
+		if !strings.Contains(logfi.Name(), ".log.") {
+			continue
+		}
+		tot += logfi.Size()
+		if strings.Contains(logfi.Name(), ".INFO.") { // GC "INFO" logs only
+			infos = append(infos, logfi)
+		}
+	}
+	if tot < int64(maxtotal) {
+		return
+	}
+	if len(infos) <= 1 {
+		glog.Errorf("GC logs err: log dir %s, total %d, maxtotal %d", ctx.config.Log.Dir, tot, maxtotal)
+		return
+	}
+	r.removeOlderLogs(tot, int64(maxtotal), infos)
+}
+
+func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileInfo) {
+	fiLess := func(i, j int) bool {
+		return filteredInfos[i].ModTime().Before(filteredInfos[j].ModTime())
+	}
+	if glog.V(3) {
+		glog.Infof("GC logs: started")
+	}
+	sort.Slice(filteredInfos, fiLess)
+	for _, logfi := range filteredInfos[:len(filteredInfos)-1] { // except last = current
+		logfqn := ctx.config.Log.Dir + "/" + logfi.Name()
+		if err := os.Remove(logfqn); err == nil {
+			tot -= logfi.Size()
+			glog.Infof("GC logs: removed %s", logfqn)
+			if tot < maxtotal {
+				break
+			}
+		} else {
+			glog.Errorf("GC logs: failed to remove %s", logfqn)
+		}
+	}
+	if glog.V(3) {
+		glog.Infof("GC logs: done")
 	}
 }
 
@@ -319,11 +465,32 @@ func (r *storstatsrunner) init() {
 }
 
 func (r *storstatsrunner) add(name string, val int64) {
-	var v *int64
-	s := &r.Core
+	r.Lock()
+	r.addLocked(name, val)
+	r.Unlock()
+}
+
+// FIXME: copy paste
+func (r *storstatsrunner) addMany(nameval ...interface{}) {
 	r.Lock()
 	defer r.Unlock()
+	i := 0
+	for i < len(nameval) {
+		statsname, ok := nameval[i].(string)
+		assert(ok, fmt.Sprintf("Invalid stats name: %v, %T", nameval[i], nameval[i]))
+		i++
+		statsval, ok := nameval[i].(int64)
+		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
+		i++
+		r.addLocked(statsname, statsval)
+	}
+}
+
+func (r *storstatsrunner) addLocked(name string, val int64) {
+	var v *int64
+	s := &r.Core
 	switch name {
+	// common
 	case "numget":
 		v = &s.Numget
 	case "numput":
@@ -334,8 +501,20 @@ func (r *storstatsrunner) add(name string, val int64) {
 		v = &s.Numdelete
 	case "numrename":
 		v = &s.Numrename
+	case "numlist":
+		v = &s.Numlist
+	case "getlatency":
+		v = &s.Getlatency
+		s.ngets++
+	case "putlatency":
+		v = &s.Putlatency
+		s.nputs++
+	case "listlatency":
+		v = &s.Listlatency
+		s.nlists++
 	case "numerr":
 		v = &s.Numerr
+	// target only
 	case "numcoldget":
 		v = &s.Numcoldget
 	case "bytesloaded":
@@ -352,8 +531,6 @@ func (r *storstatsrunner) add(name string, val int64) {
 		v = &s.Numrecvfiles
 	case "numrecvbytes":
 		v = &s.Numrecvbytes
-	case "numlist":
-		v = &s.Numlist
 	case "numprefetch":
 		v = &s.Numprefetch
 	case "bytesprefetched":

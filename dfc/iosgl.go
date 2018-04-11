@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	largeSizeUseThresh = 1024 * 512
-	warnSizeThresh     = 1024 * 1024 * 1024
-	minSizeUnknown     = 32 * 1024
+	largeSizeUseThresh = MiB / 2
+	warnSizeThresh     = GiB
+	minSizeUnknown     = 32 * KiB
 )
 
-var fixedsizes = []int64{4 * 1024, 16 * 1024, 32 * 1024, 64 * 1024, 128 * 1024}
+var fixedsizes = []int64{4 * KiB, 16 * KiB, 32 * KiB, 64 * KiB, 128 * KiB}
 var allslabs = []slabif{nil, nil, nil, nil, nil} // NOTE: len() must be equal len(fixedsizes)
 
 //======================================================================

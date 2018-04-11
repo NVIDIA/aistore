@@ -88,7 +88,7 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	if err != nil {
 		return
 	}
-	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/1024/1024)
+	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/MiB)
 
 	// init LRU context
 	var oldwork []*fileinfo
@@ -159,7 +159,9 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 
 	// object eviction: access time
 	usetime := atime
-	if mtime.After(atime) {
+	if cachedatime, ok := getatimerunner().atime(fqn); ok {
+		usetime = cachedatime
+	} else if mtime.After(atime) {
 		usetime = mtime
 	}
 	now := time.Now()

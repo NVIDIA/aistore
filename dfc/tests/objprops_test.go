@@ -5,7 +5,6 @@
 package dfc_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -30,7 +29,7 @@ func propsStats(t *testing.T) (objChanged int64, bytesChanged int64) {
 	return
 }
 
-func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]string, msgbytes []byte,
+func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]string, msg *dfc.GetMsg,
 	versionEnabled bool, isLocalBucket bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tlogf("Updating objects...\n")
@@ -47,7 +46,7 @@ func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]stri
 		}
 	}
 
-	reslist := testListBucket(t, bucket, msgbytes)
+	reslist := testListBucket(t, bucket, msg)
 	if reslist == nil {
 		return
 	}
@@ -87,7 +86,7 @@ func propsReadObjects(t *testing.T, bucket string, filelist map[string]string) {
 	tlogf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
 	for fname, _ := range filelist {
-		_, err := client.Get(proxyurl, bucket, fname, nil, nil, false, false)
+		_, _, err := client.Get(proxyurl, bucket, fname, nil, nil, false, false)
 		if err != nil {
 			t.Errorf("Failed to read %s/%s, err: %v", bucket, fname, err)
 			continue
@@ -103,7 +102,7 @@ func propsReadObjects(t *testing.T, bucket string, filelist map[string]string) {
 	}
 }
 
-func propsEvict(t *testing.T, bucket string, objMap map[string]string, msgbytes []byte, versionEnabled bool) {
+func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *dfc.GetMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -132,7 +131,7 @@ func propsEvict(t *testing.T, bucket string, objMap map[string]string, msgbytes 
 
 	// read a new object list and check that evicted objects do not have atime and iscached==false
 	// version must be the same
-	reslist := testListBucket(t, bucket, msgbytes)
+	reslist := testListBucket(t, bucket, msg)
 	if reslist == nil {
 		return
 	}
@@ -169,11 +168,11 @@ func propsEvict(t *testing.T, bucket string, objMap map[string]string, msgbytes 
 	}
 }
 
-func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, msgbytes []byte, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, msg *dfc.GetMsg, versionEnabled bool) {
 	tlogf("Refetching objects...\n")
 	propsReadObjects(t, bucket, objs)
 	tlogf("Checking objects properties after refetching...\n")
-	reslist := testListBucket(t, bucket, msgbytes)
+	reslist := testListBucket(t, bucket, msg)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
 		t.Fail()
@@ -208,7 +207,7 @@ func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, ms
 	}
 }
 
-func propsRebalance(t *testing.T, bucket string, objects map[string]string, msgbytes []byte, versionEnabled bool, isLocalBucket bool) {
+func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg *dfc.GetMsg, versionEnabled bool, isLocalBucket bool) {
 	propsCleanupObjects(t, bucket, objects)
 
 	smap := getClusterMap(httpclient, t)
@@ -229,7 +228,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msgb
 	tlogf("Target %s is removed\n", removedSid)
 
 	// rewrite objects and compare versions - they should change
-	newobjs := propsUpdateObjects(t, bucket, objects, msgbytes, versionEnabled, isLocalBucket)
+	newobjs := propsUpdateObjects(t, bucket, objects, msg, versionEnabled, isLocalBucket)
 
 	tlogf("Reregistering target...\n")
 	registerTarget(removedSid, &smap, t)
@@ -251,7 +250,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msgb
 	waitProgressBar("Rebalance: ", time.Second*10)
 
 	tlogf("Reading file versions...\n")
-	reslist := testListBucket(t, bucket, msgbytes)
+	reslist := testListBucket(t, bucket, msg)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
 		t.Fail()
@@ -313,7 +312,6 @@ func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		bucket     = clibucket
 		versionDir = "versionid"
 		sgl        *dfc.SGLIO
-		err        error
 	)
 
 	parse()
@@ -340,13 +338,7 @@ func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		GetPrefix: versionDir,
 		GetProps:  dfc.GetPropsVersion + ", " + dfc.GetPropsIsCached + ", " + dfc.GetPropsAtime,
 	}
-	jsbytes, err := json.Marshal(msg)
-	if err != nil {
-		t.Errorf("Unexpected json-marshal failure, err: %v", err)
-		t.Fail()
-		return
-	}
-	reslist := testListBucket(t, bucket, jsbytes)
+	reslist := testListBucket(t, bucket, msg)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
 		t.Fail()
@@ -381,7 +373,7 @@ func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	}
 
 	// rewrite objects and compare versions - they should change
-	newVersions := propsUpdateObjects(t, bucket, fileslist, jsbytes, versionEnabled, isLocalBucket)
+	newVersions := propsUpdateObjects(t, bucket, fileslist, msg, versionEnabled, isLocalBucket)
 	if len(newVersions) != len(fileslist) {
 		t.Errorf("Number of objects mismatch. Expected: %d objects, after update: %d", len(fileslist), len(newVersions))
 	}
@@ -391,14 +383,14 @@ func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 
 	if !isLocalBucket {
 		// try to evict some files and check if they are gone
-		propsEvict(t, bucket, newVersions, jsbytes, versionEnabled)
+		propsEvict(t, bucket, newVersions, msg, versionEnabled)
 
 		// read objects to put them to the cache. After that all objects must have iscached=true
-		propsRecacheObjects(t, bucket, newVersions, jsbytes, versionEnabled)
+		propsRecacheObjects(t, bucket, newVersions, msg, versionEnabled)
 	}
 
 	// test rebalance should keep object versions
-	propsRebalance(t, bucket, newVersions, jsbytes, versionEnabled, isLocalBucket)
+	propsRebalance(t, bucket, newVersions, msg, versionEnabled, isLocalBucket)
 
 	// cleanup
 	propsCleanupObjects(t, bucket, newVersions)

@@ -9,7 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -26,7 +26,8 @@ const (
 	xproxykalive  = "proxykalive"
 	xtargetkalive = "targetkalive"
 	xiostat       = "iostat"
-	xdiskkeeper   = "diskkeeper"
+	xfskeeper     = "fskeeper"
+	xatime        = "atime"
 )
 
 //======
@@ -120,6 +121,23 @@ var (
 	ctx     = &daemon{}
 	clivars = &cliVars{}
 )
+
+//====================
+//
+// MountedFS - utilities
+//
+//====================
+
+// Updates ordered list of available mountpaths
+// Stable order of mountpaths is kept to support local bucket/DFC cache list paging
+func (m *mountedFS) updateOrderedList() {
+	ordered := make([]string, 0, len(m.available))
+	for path := range m.available {
+		ordered = append(ordered, path)
+	}
+	sort.Strings(ordered)
+	m.availOrdered = ordered
+}
 
 //====================
 //
@@ -280,7 +298,8 @@ func dfcinit() {
 
 	flag.Parse()
 	if clivars.conffile == "" {
-		fmt.Fprintf(os.Stderr, "Usage: go run dfc.go -role=<proxy|target> -config=<json> [...]\n")
+		fmt.Fprintf(os.Stderr, "Missing configuration file - must be provided via command line\n")
+		fmt.Fprintf(os.Stderr, "Usage: ... -role=<proxy|target> -config=<json> ...\n")
 		os.Exit(2)
 	}
 	if err := initconfigparam(); err != nil {
@@ -312,18 +331,16 @@ func dfcinit() {
 		if iostatverok() {
 			ctx.rg.add(&iostatrunner{}, xiostat)
 		}
-		// FIXME TODO: disable diskkeeper to avoid possible side-effects for a while
-		if false {
-			ctx.rg.add(newdiskkeeper(t), xdiskkeeper)
+		if ctx.config.FSKeeper.Enabled {
+			ctx.rg.add(newfskeeper(t), xfskeeper)
 		}
+		ctx.rg.add(&atimerunner{}, xatime)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
 
 // Run is the 'main' where everything gets started
 func Run() {
-
-	runtime.GOMAXPROCS(runtime.NumCPU() * 8)
 	dfcinit()
 	var ok bool
 
@@ -402,6 +419,13 @@ func getiostatrunner() *iostatrunner {
 	return rr
 }
 
+func getatimerunner() *atimerunner {
+	r := ctx.rg.runmap[xatime]
+	rr, ok := r.(*atimerunner)
+	assert(ok)
+	return rr
+}
+
 func getstorstats() *targetCoreStats {
 	rr := getstorstatsrunner()
 	return &rr.Core
@@ -412,4 +436,15 @@ func getcloudif() cloudif {
 	rr, ok := r.(*targetrunner)
 	assert(ok)
 	return rr.cloudif
+}
+
+func getfskeeper() *fskeeper {
+	if !ctx.config.FSKeeper.Enabled {
+		return nil
+	}
+
+	r := ctx.rg.runmap[xfskeeper]
+	rr, ok := r.(*fskeeper)
+	assert(ok)
+	return rr
 }

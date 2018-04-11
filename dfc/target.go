@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	cachedPageSize = 10000 // the number of cached file infos returned in one page
-	workfileprefix = ".~~~."
+	defaultPageSize = 1000 // the number of cached file infos returned in one page
+	workfileprefix  = ".~~~."
 )
 
 type mountPath struct {
@@ -40,13 +40,8 @@ type fipair struct {
 	os.FileInfo
 	atime time.Time
 }
-type allfinfos struct {
-	finfos     []fipair
-	t          *targetrunner
-	rootLength int
-}
 
-type cachedInfos struct {
+type allfinfos struct {
 	files        []*BucketEntry
 	fileCount    int
 	rootLength   int
@@ -54,10 +49,14 @@ type cachedInfos struct {
 	marker       string
 	markerDirs   []string
 	needAtime    bool
+	needCtime    bool
+	needChkSum   bool
+	needVersion  bool
 	msg          *GetMsg
 	lastFilePath string
 	t            *targetrunner
 	bucket       string
+	limit        int
 }
 
 type uxprocess struct {
@@ -85,7 +84,7 @@ type targetrunner struct {
 
 // start target runner
 func (t *targetrunner) run() error {
-	t.httprunner.init(getstorstatsrunner())
+	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.kalive = gettargetkalive()
 	t.smap = &Smap{}                                 // cluster map
 	t.xactinp = newxactinp()                         // extended actions
@@ -110,7 +109,6 @@ func (t *targetrunner) run() error {
 	// fill-in mpaths
 	ctx.mountpaths.available = make(map[string]*mountPath, len(ctx.config.FSpaths))
 	ctx.mountpaths.offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	ctx.mountpaths.availOrdered = make([]string, 0, len(ctx.config.FSpaths))
 	if t.testingFSPpaths() {
 		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 		t.testCachepathMounts()
@@ -118,11 +116,7 @@ func (t *targetrunner) run() error {
 		t.fspath2mpath()
 		t.mpath2Fsid() // enforce FS uniqueness
 	}
-
-	// sort mountpaths by name - to keep their order stable for filepath.Walk
-	ctx.mountpaths.Lock()
-	sort.Strings(ctx.mountpaths.availOrdered)
-	ctx.mountpaths.Unlock()
+	ctx.mountpaths.updateOrderedList() // generate sorted list of mountpaths
 
 	for mpath := range ctx.mountpaths.available {
 		cloudbctsfqn := mpath + "/" + ctx.config.CloudBuckets
@@ -261,9 +255,11 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		uname, errstr, version string
 		size                   int64
 		props                  *objectProps
+		started                time.Time
 		errcode                int
 		coldget, vchanged      bool
 	)
+	started = time.Now()
 	cksumcfg := &ctx.config.CksumConfig
 	versioncfg := &ctx.config.VersionConfig
 	apitems := t.restAPIItems(r.URL.Path, 5)
@@ -283,7 +279,14 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	// list the bucket and return
 	//
 	if len(objname) == 0 {
-		t.listbucket(w, r, bucket)
+		tag, ok := t.listbucket(w, r, bucket)
+		if ok {
+			lat := int64(time.Since(started) / 1000)
+			t.statsif.addMany("numlist", int64(1), "listlatency", lat)
+			if glog.V(3) {
+				glog.Infof("LIST %s: %s, %d µs", tag, bucket, lat)
+			}
+		}
 		return
 	}
 
@@ -292,9 +295,6 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	if glog.V(3) {
-		glog.Infof("GET started: %s/%s", bucket, objname)
-	}
 	//
 	// lockname(ro)
 	//
@@ -302,6 +302,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
+		t.runFSKeeper(fmt.Errorf("%s", fqn))
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		t.rtnamemap.unlockname(uname, false)
 		return
@@ -335,7 +336,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	// local file => http response
 	//
 	if size == 0 {
-		errstr = fmt.Sprintf("Unexpected: object %s/%s size is zero", bucket, objname)
+		errstr = fmt.Sprintf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
 		t.invalmsghdlr(w, r, errstr)
 		return // likely, an error
 	}
@@ -377,10 +378,17 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if glog.V(3) {
-		glog.Infof("GET done: %s/%s (%.2f MB)", bucket, objname, float64(written)/1024/1024)
+	if !coldget {
+		getatimerunner().notify(fqn)
 	}
-	t.statsif.add("numget", 1)
+	if glog.V(4) {
+		s := fmt.Sprintf("GET: %s/%s, %.2f MB, %d µs", bucket, objname, float64(written)/MiB, time.Since(started)/1000)
+		if coldget {
+			s += " (cold)"
+		}
+		glog.Infoln(s)
+	}
+	t.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
 }
 
 func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
@@ -430,6 +438,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 			if err := os.Remove(getfqn); err != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, err)
 			}
+			t.runFSKeeper(fmt.Errorf("%s", fqn))
 		}
 	}()
 	if err := os.Rename(getfqn, fqn); err != nil {
@@ -446,14 +455,10 @@ ret:
 	if prefetch {
 		t.rtnamemap.unlockname(uname, true)
 	} else {
-		t.statsif.add("numcoldget", 1)
-		t.statsif.add("bytesloaded", props.size)
 		if vchanged {
-			t.statsif.add("bytesvchanged", props.size)
-			t.statsif.add("numvchanged", 1)
-		}
-		if glog.V(3) {
-			glog.Infof("cold GET done: %s/%s", bucket, objname)
+			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size, "bytesvchanged", props.size, "numvchanged", int64(1))
+		} else {
+			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size)
 		}
 		t.rtnamemap.downgradelock(uname)
 	}
@@ -540,11 +545,13 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 
 // "/"+Rversion+"/"+Rhealth
 func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	from := query.Get(URLParamFromID)
 	targetcorestats := getstorstats()
 	jsbytes, err := json.Marshal(targetcorestats)
 	assert(err == nil, err)
 	ok := t.writeJSON(w, r, jsbytes, "proxycorestats")
-	if ok {
+	if ok && from == t.proxysi.DaemonID {
 		t.kalive.timestamp(t.proxysi.DaemonID)
 	}
 }
@@ -557,28 +564,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		return nil, fmt.Sprintf("Cache is unavailable for local bucket %s", bucket), 0
 	}
 
-	needAtime := strings.Contains(msg.GetProps, GetPropsAtime)
-	// Split a marker into separate directory list to make pagination
-	// more effective. All directories in the list are skipped by
-	// filepath.Walk. The last directory of the marker must be excluded
-	// from the list because the marker can point to the middle of it
-	markerDirs := make([]string, 0)
-	if msg.GetPageMarker != "" && strings.Contains(msg.GetPageMarker, "/") {
-		idx := strings.LastIndex(msg.GetPageMarker, "/")
-		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
-		markerDirs = markerDirs[:len(markerDirs)-1]
-	}
-	allfinfos := cachedInfos{make([]*BucketEntry, 0, cachedPageSize),
-		0,                 // fileCount
-		0,                 // rootLength
-		msg.GetPrefix,     // prefix
-		msg.GetPageMarker, // marker
-		markerDirs,        // markerDirs
-		needAtime,         // needAtime
-		msg,               // GetMsg
-		"",                // lastFilePath
-		t,                 // targetrunner
-		bucket}            // bucket
+	allfinfos := t.newFileWalk(bucket, msg)
 
 	for _, mpath := range ctx.mountpaths.availOrdered {
 		localbucketfqn := mpath + "/" + ctx.config.CloudBuckets + "/" + bucket
@@ -595,98 +581,85 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		if err = filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
 			errstr = fmt.Sprintf("Failed to traverse mpath %q, err: %v", mpath, err)
 			glog.Errorf(errstr)
+			break
 		}
 	}
 
-	if err == nil {
-		var reslist = BucketList{Entries: allfinfos.files}
-		// Mark the batch as truncated if it is full
-		if len(allfinfos.files) >= cachedPageSize {
-			reslist.PageMarker = allfinfos.lastFilePath
-		}
-		outbytes, err = json.Marshal(reslist)
-	}
 	if err != nil {
+		t.runFSKeeper(err)
 		errstr = fmt.Sprintf("Failed to traverse cached objects: %v", err.Error())
 		glog.Errorf(errstr)
+		return
 	}
 
+	var reslist = BucketList{Entries: allfinfos.files}
+	// Mark the batch as truncated if it is full
+	if allfinfos.fileCount >= allfinfos.limit {
+		reslist.PageMarker = allfinfos.lastFilePath
+	}
+	outbytes, err = json.Marshal(reslist)
 	return
 }
 
-func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList) {
-	finfos := allfinfos{make([]fipair, 0, 128), t, 0}
-	for mpath := range ctx.mountpaths.available {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
+	allfinfos := t.newFileWalk(bucket, msg)
+	pageSize := allfinfos.limit
+
+	// read from every target no more than `pageSize` entries
+	for _, mpath := range ctx.mountpaths.availOrdered {
 		localbucketfqn := mpath + "/" + ctx.config.LocalBuckets + "/" + bucket
-		finfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
-		if err := filepath.Walk(localbucketfqn, finfos.listwalkf); err != nil {
+		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
+		if err = filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+			break
 		}
+		allfinfos.limit += pageSize
+	}
+	if err != nil {
+		t.runFSKeeper(err)
+		return nil, err
 	}
 
-	bucketList = &BucketList{Entries: make([]*BucketEntry, 0, len(finfos.finfos))}
-	for _, fi := range finfos.finfos {
-		if msg.GetPrefix != "" && !strings.HasPrefix(fi.relname, msg.GetPrefix) {
-			continue
+	// sort the result and return only first `pageSize` entries
+	marker := ""
+	if allfinfos.fileCount > pageSize {
+		ifLess := func(i, j int) bool {
+			return allfinfos.files[i].Name < allfinfos.files[j].Name
 		}
-
-		entry := &BucketEntry{}
-		entry.Name = fi.relname
-
-		if strings.Contains(msg.GetProps, GetPropsSize) {
-			entry.Size = fi.Size()
+		sort.Slice(allfinfos.files, ifLess)
+		// set extra infos to nil to avoid memory leaks
+		// see NOTE on https://github.com/golang/go/wiki/SliceTricks
+		for i := pageSize; i < allfinfos.fileCount; i++ {
+			allfinfos.files[i] = nil
 		}
-		if strings.Contains(msg.GetProps, GetPropsCtime) {
-			t := fi.ModTime()
-			switch msg.GetTimeFormat {
-			case "":
-				fallthrough
-			case RFC822:
-				entry.Ctime = t.Format(time.RFC822)
-			default:
-				entry.Ctime = t.Format(msg.GetTimeFormat)
-			}
-		}
-		if strings.Contains(msg.GetProps, GetPropsChecksum) {
-			fqn := t.fqn(bucket, fi.relname)
-			xxhex, errstr := Getxattr(fqn, xattrXXHashVal)
-			if errstr == "" {
-				entry.Checksum = hex.EncodeToString(xxhex)
-			}
-		}
-		if strings.Contains(msg.GetProps, GetPropsAtime) {
-			if msg.GetTimeFormat == "" {
-				entry.Atime = fi.atime.Format(RFC822)
-			} else {
-				entry.Atime = fi.atime.Format(msg.GetTimeFormat)
-			}
-		}
-		if strings.Contains(msg.GetProps, GetPropsVersion) {
-			fqn := t.fqn(bucket, fi.relname)
-			version, errstr := Getxattr(fqn, xattrObjVersion)
-			if errstr == "" {
-				entry.Version = string(version)
-			}
-		}
-		bucketList.Entries = append(bucketList.Entries, entry)
+		allfinfos.files = allfinfos.files[:pageSize]
+		marker = allfinfos.files[pageSize-1].Name
 	}
 
-	return
+	bucketList = &BucketList{
+		Entries:    allfinfos.files,
+		PageMarker: marker,
+	}
+	return bucketList, nil
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) {
-	var reslist = t.prepareLocalObjectList(bucket, msg)
-	t.statsif.add("numlist", 1)
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (errstr string, ok bool) {
+	reslist, err := t.prepareLocalObjectList(bucket, msg)
+	if err != nil {
+		errstr = fmt.Sprintf("List local bucket %s failed, err: %v", bucket, err)
+		return
+	}
 	jsbytes, err := json.Marshal(reslist)
 	assert(err == nil, err)
-	t.writeJSON(w, r, jsbytes, "listbucket")
+	ok = t.writeJSON(w, r, jsbytes, "listbucket")
+	return
 }
 
 // List bucket returns a list of objects in a bucket (with optional prefix)
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -702,39 +675,24 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-
 	msg := &GetMsg{}
 	if t.readJSON(w, r, msg) != nil {
 		return
 	}
 	if islocal {
-		if glog.V(3) {
-			glog.Infof("LIST local started: %s", bucket)
+		tag = "local"
+		if errstr, ok = t.doLocalBucketList(w, r, bucket, msg); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
 		}
-		t.doLocalBucketList(w, r, bucket, msg)
-		if glog.V(3) {
-			glog.Infof("LIST local done: %s", bucket)
-		}
-		return
+		return // ======================================>
 	}
+	// cloud bucket
 	if useCache {
-		if glog.V(3) {
-			glog.Infof("LIST cloud cached started: %s", bucket)
-		}
+		tag = "cloud cached"
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
-		if errstr == "" && glog.V(3) {
-			glog.Infof("LIST cloud cached done: %s", bucket)
-		}
 	} else {
-		if glog.V(3) {
-			glog.Infof("LIST cloud started: %s", bucket)
-		}
-		if jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg); errstr == "" {
-			t.statsif.add("numlist", 1)
-			if glog.V(3) {
-				glog.Infof("LIST cloud done: %s", bucket)
-			}
-		}
+		tag = "cloud"
+		jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg)
 	}
 	if errstr != "" {
 		if errcode == 0 {
@@ -744,30 +702,50 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		}
 		return
 	}
-	t.writeJSON(w, r, jsbytes, "listbucket")
+	ok = t.writeJSON(w, r, jsbytes, "listbucket")
+	return
 }
 
-func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		glog.Errorf("listwalkf invoked with err: %v", err)
-		return err
-	}
-	if osfi.IsDir() {
-		return nil
-	}
-	if iswork, _ := all.t.isworkfile(fqn); iswork {
-		return nil
-	}
-	_, _, errstr := all.t.fqn2bckobj(fqn)
-	if errstr != "" {
-		glog.Errorln(errstr)
-		return nil
+func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
+	// Split a marker into separate directory list to make pagination
+	// more effective. All directories in the list are skipped by
+	// filepath.Walk. The last directory of the marker must be excluded
+	// from the list because the marker can point to the middle of it
+	markerDirs := make([]string, 0)
+	if msg.GetPageMarker != "" && strings.Contains(msg.GetPageMarker, "/") {
+		idx := strings.LastIndex(msg.GetPageMarker, "/")
+		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
+		markerDirs = markerDirs[:len(markerDirs)-1]
 	}
 
-	relname := fqn[all.rootLength:]
-	atime, _, _ := getAmTimes(osfi)
-	all.finfos = append(all.finfos, fipair{relname, osfi, atime})
-	return nil
+	isLocal := t.islocalBucket(bucket)
+	// A small optimization: set boolean variables need* to avoid
+	// doing string search(strings.Contains) for every entry.
+	// Some properties make no sense to read from local files for cached
+	// objects(for non-local bucket - ctime, version, and size),
+	// so they are disabled
+	ci := &allfinfos{make([]*BucketEntry, 0, defaultPageSize),
+		0,                 // fileCount
+		0,                 // rootLength
+		msg.GetPrefix,     // prefix
+		msg.GetPageMarker, // marker
+		markerDirs,        // markerDirs
+		strings.Contains(msg.GetProps, GetPropsAtime),              // needAtime
+		strings.Contains(msg.GetProps, GetPropsCtime) && isLocal,   // needCtime
+		strings.Contains(msg.GetProps, GetPropsChecksum),           // needChkSum
+		strings.Contains(msg.GetProps, GetPropsVersion) && isLocal, // needVersion
+		msg,             // GetMsg
+		"",              // lastFilePath - next page marker
+		t,               // targetrunner
+		bucket,          // bucket
+		defaultPageSize, // limit
+	}
+
+	if msg.GetPageSize != 0 {
+		ci.limit = msg.GetPageSize
+	}
+
+	return ci
 }
 
 // Checks if the directory should be processed by cache list call
@@ -775,7 +753,7 @@ func (all *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 //  - Object name must start with prefix (if it is set)
 //  - Object name is not in early processed directories by the previos call:
 //    paging support
-func (ci *cachedInfos) processDir(fqn string) error {
+func (ci *allfinfos) processDir(fqn string) error {
 	if len(fqn) <= ci.rootLength {
 		return nil
 	}
@@ -786,7 +764,14 @@ func (ci *cachedInfos) processDir(fqn string) error {
 	}
 
 	if len(ci.markerDirs) != 0 {
-		dirs := strings.Split(fqn, "/")
+		var dirs []string
+		if strings.HasPrefix(ci.marker, "/") {
+			// cache list - use full path
+			dirs = strings.Split(fqn, "/")
+		} else {
+			// local bucket - use relative path
+			dirs = strings.Split(relname, "/")
+		}
 		maxIdx := len(dirs)
 		if len(ci.markerDirs) < maxIdx {
 			maxIdx = len(ci.markerDirs)
@@ -805,14 +790,22 @@ func (ci *cachedInfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
+func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 	relname := fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
 	}
 
-	if ci.marker != "" && fqn <= ci.marker {
-		return nil
+	if ci.marker != "" {
+		if strings.HasPrefix(ci.marker, "/") {
+			// cached cloud object case
+			if fqn <= ci.marker {
+				return nil
+			}
+		} else if relname <= ci.marker {
+			// local bucket case
+			return nil
+		}
 	}
 
 	si, errstr := hrwTarget(ci.bucket+"/"+relname, ci.t.smap)
@@ -836,17 +829,46 @@ func (ci *cachedInfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 			fileInfo.Atime = atime.Format(ci.msg.GetTimeFormat)
 		}
 	}
+	if ci.needCtime {
+		t := osfi.ModTime()
+		switch ci.msg.GetTimeFormat {
+		case "":
+			fallthrough
+		case RFC822:
+			fileInfo.Ctime = t.Format(time.RFC822)
+		default:
+			fileInfo.Ctime = t.Format(ci.msg.GetTimeFormat)
+		}
+	}
+	if ci.needChkSum {
+		fqn := ci.t.fqn(ci.bucket, relname)
+		xxhex, errstr := Getxattr(fqn, xattrXXHashVal)
+		if errstr == "" {
+			fileInfo.Checksum = hex.EncodeToString(xxhex)
+		}
+	}
+	if ci.needVersion {
+		fqn := ci.t.fqn(ci.bucket, relname)
+		version, errstr := Getxattr(fqn, xattrObjVersion)
+		if errstr == "" {
+			fileInfo.Version = string(version)
+		}
+	}
+	fileInfo.Size = osfi.Size()
 	ci.files = append(ci.files, fileInfo)
 	ci.lastFilePath = fqn
 	return nil
 }
 
-func (ci *cachedInfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
+func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		glog.Errorf("listwalkf callback invoked with err: %v", err)
 		return err
 	}
-	if ci.fileCount >= cachedPageSize {
+	if ci.fileCount >= ci.limit {
 		return filepath.SkipDir
 	}
 	if osfi.IsDir() {
@@ -884,13 +906,9 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, s)
 			return
 		}
-		size, errstr := t.dorebalance(r, from, to, bucket, objname)
-		if errstr != "" {
+		if errstr := t.dorebalance(r, from, to, bucket, objname); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
-			return
 		}
-		t.statsif.add("numrecvfiles", 1)
-		t.statsif.add("numrecvbytes", size)
 	} else {
 		// PUT: "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+objname
 		errstr, errcode := t.doput(w, r, bucket, objname)
@@ -900,7 +918,6 @@ func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 			} else {
 				t.invalmsghdlr(w, r, errstr, errcode)
 			}
-			return
 		}
 	}
 }
@@ -919,8 +936,9 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		xxhashval                  string
 		htype, hval, nhtype, nhval string
 		sgl                        *SGLIO
+		started                    time.Time
 	)
-
+	started = time.Now()
 	cksumcfg := &ctx.config.CksumConfig
 	fqn := t.fqn(bucket, objname)
 	putfqn := t.fqn2workfile(fqn)
@@ -951,15 +969,12 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
 			}
 			if errstr == "" && xxhashval == hval {
-				glog.Infof("Existing %s is valid: PUT is a no-op", fqn)
+				glog.Infof("Existing %s/%s is valid: PUT is a no-op", bucket, objname)
 				return
 			}
 		}
 	}
 	inmem := (ctx.config.AckPolicy.Put == AckWhenInMem)
-	if bool(glog.V(3)) && !inmem {
-		glog.Infof("PUT: => %s", putfqn)
-	}
 	if sgl, nhobj, _, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
@@ -975,9 +990,17 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	// commit
 	props := &objectProps{nhobj: nhobj}
 	if sgl == nil {
-		return t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		errstr, errcode = t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		if errstr == "" {
+			lat := int64(time.Since(started) / 1000)
+			t.statsif.addMany("numput", int64(1), "putlatency", lat)
+			if glog.V(4) {
+				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, lat)
+			}
+		}
+		return
 	}
-	// FIXME: AA: use xaction
+	// FIXME: use xaction
 	go t.sglToCloudAsync(sgl, bucket, objname, putfqn, fqn, props)
 	return
 }
@@ -992,12 +1015,14 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 	// sgl => fqn sequence
 	file, err := CreateFile(putfqn)
 	if err != nil {
+		t.runFSKeeper(fmt.Errorf("%s", putfqn))
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
 		return
 	}
 	reader := NewReader(sgl)
 	written, err := io.CopyBuffer(file, reader, buf)
 	if err != nil {
+		t.runFSKeeper(fmt.Errorf("%s", putfqn))
 		glog.Errorln("sglToCloudAsync: CopyBuffer", err)
 		if err1 := file.Close(); err != nil {
 			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
@@ -1021,7 +1046,7 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 		glog.Errorln("sglToCloudAsync: commit", errstr)
 		return
 	}
-	glog.Infof("sglToCloudAsync done: %s/%s", bucket, objname)
+	glog.Infof("sglToCloudAsync: %s/%s", bucket, objname)
 }
 
 func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
@@ -1037,6 +1062,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 			if err = os.Remove(putfqn); err != nil {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
 			}
+			t.runFSKeeper(fmt.Errorf("%s", putfqn))
 		}
 	}()
 	// cloud
@@ -1075,21 +1101,17 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 		glog.Errorf("finalizeobj %s/%s: %s", bucket, objname, errstr)
 		return
 	}
-	if glog.V(3) {
-		glog.Infof("PUT done: %s/%s", bucket, objname)
-	}
-	t.statsif.add("numput", 1)
 	return
 }
 
-func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname string) (size int64, errstr string) {
+func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname string) (errstr string) {
 	if t.si.DaemonID != from && t.si.DaemonID != to {
 		errstr = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
 			t.si.DaemonID, from, to)
 		return
 	}
+	var size int64
 	fqn := t.fqn(bucket, objname)
-
 	if t.si.DaemonID == from {
 		//
 		// the source
@@ -1100,7 +1122,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 
 		finfo, err := os.Stat(fqn)
 		if glog.V(3) {
-			glog.Infof("Rebalance from %q: bucket %q objname %q => to %q", from, bucket, objname, to)
+			glog.Infof("Rebalance %s/%s from %s (self) to %s", bucket, objname, from, to)
 		}
 		if err != nil && os.IsNotExist(err) {
 			errstr = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
@@ -1115,15 +1137,15 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if errstr = t.sendfile(r.Method, bucket, objname, si, size, ""); errstr != "" {
 			return
 		}
-		if glog.V(3) {
-			glog.Infof("Sent %q to %s (size %.2f MB)", fqn, to, float64(finfo.Size())/1000/1000)
+		if glog.V(4) {
+			glog.Infof("Rebalance %s/%s done, %.2f MB", bucket, objname, float64(size)/MiB)
 		}
 	} else {
 		//
 		// the destination
 		//
 		if glog.V(3) {
-			glog.Infof("Rebalance to %q: bucket %q objname %q <= from %q", to, bucket, objname, from)
+			glog.Infof("Rebalance %s/%s from %s to %s (self)", bucket, objname, from, to)
 		}
 		putfqn := t.fqn2workfile(fqn)
 		_, err := os.Stat(fqn)
@@ -1150,6 +1172,9 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			}
 		}
 		errstr, _ = t.putCommit(bucket, objname, putfqn, fqn, props, true /*rebalance*/)
+		if errstr == "" {
+			t.statsif.addMany("numrecvfiles", int64(1), "numrecvbytes", size)
+		}
 	}
 	return
 }
@@ -1159,6 +1184,8 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 		bucket, objname string
 		msg             ActionMsg
 		evict           bool
+		started         = time.Now()
+		ok              = true
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
@@ -1170,6 +1197,11 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if ok && err == nil && bool(glog.V(4)) {
+			glog.Infof("DELETE: %s/%s, %d µs", bucket, objname, time.Since(started)/1000)
+		}
+	}()
 	if err == nil && len(b) > 0 {
 		err = json.Unmarshal(b, &msg)
 		if err == nil {
@@ -1188,7 +1220,7 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if objname == "" && len(b) > 0 {
 		// It must be a List/Range request, since there is no object name
-		t.deletefiles(w, r, msg)
+		t.deletefiles(w, r, msg) // FIXME: must return ok or err
 		return
 	} else if objname != "" {
 		err := t.fildelete(bucket, objname, evict)
@@ -1200,6 +1232,7 @@ func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s := fmt.Sprintf("Invalid API request: No object name or message body.")
 	t.invalmsghdlr(w, r, s)
+	ok = false
 }
 
 func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
@@ -1216,13 +1249,13 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 
 	if !localbucket && !evict {
 		errstr, errcode = getcloudif().deleteobj(bucket, objname)
-		t.statsif.add("numdelete", 1)
 		if errstr != "" {
 			if errcode == 0 {
 				return fmt.Errorf("%s", errstr)
 			}
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
+		t.statsif.add("numdelete", 1)
 	}
 
 	finfo, err := os.Stat(fqn)
@@ -1243,8 +1276,7 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 		if err := os.Remove(fqn); err != nil {
 			return err
 		} else if evict {
-			t.statsif.add("bytesevicted", finfo.Size())
-			t.statsif.add("filesevicted", 1)
+			t.statsif.addMany("filesevicted", int64(1), "bytesevicted", finfo.Size())
 		}
 	}
 	return nil
@@ -1450,8 +1482,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 			return s
 		}
 	}
-	t.statsif.add("numsentfiles", 1)
-	t.statsif.add("numsentbytes", size)
+	t.statsif.addMany("numsentfiles", int64(1), "numsentbytes", size)
 	return ""
 }
 
@@ -1787,6 +1818,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		filewriter = sgl
 	} else {
 		if file, err = CreateFile(fqn); err != nil {
+			t.runFSKeeper(fmt.Errorf("%s", fqn))
 			errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
 			return
 		}
@@ -1799,6 +1831,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		if errstr == "" {
 			return
 		}
+		t.runFSKeeper(fmt.Errorf("%s", fqn))
 		if err = file.Close(); err != nil {
 			glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
 		}
@@ -1824,8 +1857,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 			if ohval != nhval {
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
-				t.statsif.add("numbadchecksum", 1)
-				t.statsif.add("bytesbadchecksum", written)
+				t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
 				return
 			}
 		}
@@ -1839,8 +1871,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		if omd5 != md5hash {
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
 				objname, ohval[:8], nhval[:8], fqn)
-			t.statsif.add("numbadchecksum", 1)
-			t.statsif.add("bytesbadchecksum", written)
+			t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
 			return
 		}
 	} else {
@@ -1967,7 +1998,6 @@ func (t *targetrunner) fspath2mpath() {
 		_, ok := ctx.mountpaths.available[mp.Path]
 		assert(!ok)
 		ctx.mountpaths.available[mp.Path] = mp
-		ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
 	}
 }
 
@@ -2000,7 +2030,6 @@ func (t *targetrunner) testCachepathMounts() {
 		_, ok := ctx.mountpaths.available[mp.Path]
 		assert(!ok)
 		ctx.mountpaths.available[mp.Path] = mp
-		ctx.mountpaths.availOrdered = append(ctx.mountpaths.availOrdered, mp.Path)
 	}
 }
 
@@ -2077,4 +2106,10 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 	}
 
 	return
+}
+
+func (t *targetrunner) runFSKeeper(err error) {
+	if ctx.config.FSKeeper.Enabled {
+		getfskeeper().onerr(err)
+	}
 }

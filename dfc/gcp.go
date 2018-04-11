@@ -88,7 +88,11 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	}
 
 	it := client.Bucket(bucket).Objects(gctx, query)
-	pager := iterator.NewPager(it, gcpPageSize, pageToken)
+	pageSize := gcpPageSize
+	if msg.GetPageSize != 0 {
+		pageSize = msg.GetPageSize
+	}
+	pager := iterator.NewPager(it, pageSize, pageToken)
 	objs := make([]*storage.ObjectAttrs, 0)
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
@@ -205,7 +209,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props
 	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, false, objname, md5, v, rc); errstr != "" {
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("gcp: GET %s/%s", bucket, objname)
 	}
 	return
@@ -247,7 +251,7 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("gcp: PUT %s/%s, size %d, version %s", bucket, objname, written, version)
 	}
 	return
@@ -265,7 +269,7 @@ func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string, errcod
 		errstr = fmt.Sprintf("gcp: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("gcp: DELETE %s/%s", bucket, objname)
 	}
 	return

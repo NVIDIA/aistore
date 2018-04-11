@@ -50,6 +50,6 @@ func TotalMemory() (mb uint64, err error) {
 	if err = syscall.Sysinfo(sysinfo); err != nil {
 		return
 	}
-	mb = sysinfo.Totalram * uint64(sysinfo.Unit) / 1024 / 1024
+	mb = sysinfo.Totalram * uint64(sysinfo.Unit) / MiB
 	return
 }

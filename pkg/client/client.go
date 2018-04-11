@@ -16,6 +16,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"sync"
 	"time"
@@ -24,12 +25,49 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+type (
+	// traceableTransport is an http.RoundTripper that keeps track of a http
+	// request and implements hooks to report HTTP tracing events.
+	traceableTransport struct {
+		transport             *http.Transport
+		current               *http.Request
+		tsBegin               time.Time // request initialized
+		tsProxyConn           time.Time // connected with proxy
+		tsRedirect            time.Time // redirected
+		tsTargetConn          time.Time // connected with target
+		tsHTTPEnd             time.Time // http request returned
+		tsProxyWroteHeaders   time.Time
+		tsProxyWroteRequest   time.Time
+		tsProxyFirstResponse  time.Time
+		tsTargetWroteHeaders  time.Time
+		tsTargetWroteRequest  time.Time
+		tsTargetFirstResponse time.Time
+		connCnt               int
+	}
+
+	// HTTPLatencies stores latency of a http request
+	HTTPLatencies struct {
+		ProxyConn           time.Duration // from request is created to proxy connection is estabilished
+		Proxy               time.Duration // from proxy connection is estabilished to redirected
+		TargetConn          time.Duration // from request is redirected to target connection is estabilished
+		Target              time.Duration // from target connection is estabilished to request is completed
+		PostHTTP            time.Duration // from http ends to after read data from http response and verify hash (if specified)
+		ProxyWroteHeader    time.Duration // from ProxyConn to header is written
+		ProxyWroteRequest   time.Duration // from ProxyWroteHeader to response body is written
+		ProxyFirstResponse  time.Duration // from ProxyWroteRequest to first byte of response
+		TargetWroteHeader   time.Duration // from TargetConn to header is written
+		TargetWroteRequest  time.Duration // from TargetWroteHeader to response body is written
+		TargetFirstResponse time.Duration // from TargetWroteRequest to first byte of response
+	}
+)
+
 var (
 	transport = &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout: 60 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 600 * time.Second,
+		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}
 
 	client = &http.Client{
@@ -43,6 +81,65 @@ var (
 	RestAPIVersion  = "v1"
 	RestAPIResource = "files"
 )
+
+// RoundTrip records the proxy redirect time and keeps track of requests.
+func (t *traceableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.connCnt == 1 {
+		t.tsRedirect = time.Now()
+	}
+
+	t.current = req
+	return t.transport.RoundTrip(req)
+}
+
+// GotConn records when the connection to proxy/target is made.
+func (t *traceableTransport) GotConn(info httptrace.GotConnInfo) {
+	switch t.connCnt {
+	case 0:
+		t.tsProxyConn = time.Now()
+	case 1:
+		t.tsTargetConn = time.Now()
+	default:
+		fmt.Println("Unexpected multiple redirection")
+	}
+	t.connCnt++
+}
+
+// WroteHeaders records when the header is written to
+func (t *traceableTransport) WroteHeaders() {
+	switch t.connCnt {
+	case 1:
+		t.tsProxyWroteHeaders = time.Now()
+	case 2:
+		t.tsTargetWroteHeaders = time.Now()
+	default:
+		fmt.Println("Unexpected")
+	}
+}
+
+// WroteRequest records when the request is completely written
+func (t *traceableTransport) WroteRequest(wr httptrace.WroteRequestInfo) {
+	switch t.connCnt {
+	case 1:
+		t.tsProxyWroteRequest = time.Now()
+	case 2:
+		t.tsTargetWroteRequest = time.Now()
+	default:
+		fmt.Println("Unexpected")
+	}
+}
+
+// GotFirstResponseByte records when the response starts to come back
+func (t *traceableTransport) GotFirstResponseByte() {
+	switch t.connCnt {
+	case 1:
+		t.tsProxyFirstResponse = time.Now()
+	case 2:
+		t.tsTargetFirstResponse = time.Now()
+	default:
+		fmt.Println("Unexpected")
+	}
+}
 
 type ReqError struct {
 	code    int
@@ -125,27 +222,49 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool, validate bool) (int64, error) {
+func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
 		errstr                   string
 	)
+
 	if wg != nil {
 		defer wg.Done()
 	}
+
 	url := proxyurl + "/v1/files/" + bucket + "/" + keyname
-	r, err := http.Get(url)
+	req, _ := http.NewRequest("GET", url, nil)
+
+	tr := &traceableTransport{
+		transport: transport,
+		tsBegin:   time.Now(),
+	}
+	trace := &httptrace.ClientTrace{
+		GotConn:              tr.GotConn,
+		WroteHeaders:         tr.WroteHeaders,
+		WroteRequest:         tr.WroteRequest,
+		GotFirstResponseByte: tr.GotFirstResponseByte,
+	}
+
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+
+	client := &http.Client{Transport: tr}
+	resp, err := client.Do(req)
 	defer func() {
-		if r != nil {
-			r.Body.Close()
+		if resp != nil {
+			resp.Body.Close()
 		}
 	}()
+
+	tr.tsHTTPEnd = time.Now()
+
 	if validate && err == nil {
-		hdhash = r.Header.Get(dfc.HeaderDfcChecksumVal)
-		hdhashtype = r.Header.Get(dfc.HeaderDfcChecksumType)
+		hdhash = resp.Header.Get(dfc.HeaderDfcChecksumVal)
+		hdhashtype = resp.Header.Get(dfc.HeaderDfcChecksumType)
 		if hdhashtype == dfc.ChecksumXXHash {
 			xx := xxhash.New64()
-			if hash, errstr = dfc.ComputeXXHash(r.Body, nil, xx); errstr != "" {
+			if hash, errstr = dfc.ComputeXXHash(resp.Body, nil, xx); errstr != "" {
 				if errch != nil {
 					errch <- errors.New(errstr)
 				}
@@ -162,9 +281,23 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 			}
 		}
 	}
-	len, err := discardResponse(r, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
-	emitError(r, err, errch)
-	return len, err
+
+	len, err := discardResponse(resp, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
+	emitError(resp, err, errch)
+	l := HTTPLatencies{
+		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
+		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
+		TargetConn:          tr.tsTargetConn.Sub(tr.tsRedirect),
+		Target:              tr.tsHTTPEnd.Sub(tr.tsTargetConn),
+		PostHTTP:            time.Now().Sub(tr.tsHTTPEnd),
+		ProxyWroteHeader:    tr.tsProxyWroteHeaders.Sub(tr.tsProxyConn),
+		ProxyWroteRequest:   tr.tsProxyWroteRequest.Sub(tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  tr.tsProxyFirstResponse.Sub(tr.tsProxyWroteRequest),
+		TargetWroteHeader:   tr.tsTargetWroteHeaders.Sub(tr.tsTargetConn),
+		TargetWroteRequest:  tr.tsTargetWroteRequest.Sub(tr.tsTargetWroteHeaders),
+		TargetFirstResponse: tr.tsTargetFirstResponse.Sub(tr.tsTargetWroteRequest),
+	}
+	return len, l, err
 }
 
 func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
@@ -199,44 +332,58 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return err
 }
 
-func ListBucket(proxyurl, bucket string, injson []byte) (*dfc.BucketList, error) {
+// ListBucket returns properties of all objects in a bucket
+func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg) (*dfc.BucketList, error) {
 	var (
 		url     = proxyurl + "/v1/files/" + bucket
-		err     error
 		request *http.Request
-		r       *http.Response
 	)
 
-	if len(injson) == 0 {
-		r, err = client.Get(url)
-	} else {
-		request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
-		if err == nil {
-			request.Header.Set("Content-Type", "application/json")
-			r, err = client.Do(request)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("List bucket %s failed, HTTP status %d", bucket, r.StatusCode)
-	}
-
-	defer func() {
-		r.Body.Close()
-	}()
-	var reslist = &dfc.BucketList{}
-	reslist.Entries = make([]*dfc.BucketEntry, 0, 1000)
-	b, err := ioutil.ReadAll(r.Body)
-
-	if err == nil {
-		err = json.Unmarshal(b, reslist)
+	reslist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0, 1000)}
+	for {
+		var r *http.Response
+		injson, err := json.Marshal(msg)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+			return nil, err
 		}
-	} else {
-		return nil, fmt.Errorf("Failed to read json, err: %v", err)
+		if len(injson) == 0 {
+			r, err = client.Get(url)
+		} else {
+			request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
+			if err == nil {
+				request.Header.Set("Content-Type", "application/json")
+				r, err = client.Do(request)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		if r != nil && r.StatusCode >= http.StatusBadRequest {
+			return nil, fmt.Errorf("List bucket %s failed, HTTP status %d", bucket, r.StatusCode)
+		}
+
+		defer func() {
+			r.Body.Close()
+		}()
+		var page = &dfc.BucketList{}
+		page.Entries = make([]*dfc.BucketEntry, 0, 1000)
+		b, err := ioutil.ReadAll(r.Body)
+
+		if err == nil {
+			err = json.Unmarshal(b, page)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+			}
+		} else {
+			return nil, fmt.Errorf("Failed to read json, err: %v", err)
+		}
+
+		reslist.Entries = append(reslist.Entries, page.Entries...)
+		if page.PageMarker == "" {
+			break
+		}
+
+		msg.GetPageMarker = page.PageMarker
 	}
 
 	return reslist, nil
@@ -498,11 +645,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
-	msg, err := json.Marshal(&dfc.GetMsg{GetPrefix: prefix})
-	if err != nil {
-		return nil, err
-	}
-
+	msg := &dfc.GetMsg{GetPrefix: prefix}
 	data, err := ListBucket(proxyURL, bucket, msg)
 	if err != nil {
 		return nil, err
@@ -517,4 +660,42 @@ func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
 	}
 
 	return objs, nil
+}
+
+// GetConfig sends a {what:config} request to the url and discard the message
+// For testing purpose only
+func GetConfig(server string) (HTTPLatencies, error) {
+	url := server + "/v1/daemon"
+	msg, err := json.Marshal(&dfc.GetMsg{GetWhat: dfc.GetWhatConfig})
+	if err != nil {
+		return HTTPLatencies{}, err
+	}
+
+	req, _ := http.NewRequest("GET", url, bytes.NewBuffer(msg))
+	tr := &traceableTransport{
+		transport: transport,
+		tsBegin:   time.Now(),
+	}
+	trace := &httptrace.ClientTrace{
+		GotConn: tr.GotConn,
+	}
+
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	client := &http.Client{
+		Transport: tr,
+	}
+	resp, err := client.Do(req)
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	_, err = discardResponse(resp, err, fmt.Sprintf("Get config"))
+	emitError(resp, err, nil)
+	l := HTTPLatencies{
+		ProxyConn: tr.tsProxyConn.Sub(tr.tsBegin),
+		Proxy:     time.Now().Sub(tr.tsProxyConn),
+	}
+	return l, err
 }

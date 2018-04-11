@@ -40,8 +40,12 @@ func doPut(wo *workOrder) {
 }
 
 func doGet(wo *workOrder) {
-	wo.size, wo.err = client.Get(wo.proxyURL, wo.bucket, wo.objName, nil /* wg */, nil /* errch */, true, /* silent */
+	wo.size, wo.latencies, wo.err = client.Get(wo.proxyURL, wo.bucket, wo.objName, nil /* wg */, nil /* errch */, true, /* silent */
 		runParams.verifyHash /* validate */)
+}
+
+func doGetConfig(wo *workOrder) {
+	wo.latencies, wo.err = client.GetConfig(wo.proxyURL)
 }
 
 func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup) {
@@ -60,6 +64,8 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			doPut(wo)
 		case opGet:
 			doGet(wo)
+		case opConfig:
+			doGetConfig(wo)
 		default:
 			// Should not come here
 		}

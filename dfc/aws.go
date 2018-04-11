@@ -28,6 +28,7 @@ const (
 	awsGetDfcHashType = "X-Amz-Meta-Dfc-Hash-Type"
 	awsGetDfcHashVal  = "X-Amz-Meta-Dfc-Hash-Val"
 	awsMultipartDelim = "-"
+	awsMaxPageSize    = 1000
 )
 
 //======
@@ -78,7 +79,15 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		params.Prefix = aws.String(msg.GetPrefix)
 	}
 	if msg.GetPageMarker != "" {
-		params.Marker = &msg.GetPageMarker
+		params.Marker = aws.String(msg.GetPageMarker)
+	}
+	if msg.GetPageSize != 0 {
+		if msg.GetPageSize > awsMaxPageSize {
+			glog.Warningf("AWS maximum page size is %d (%d requested). Returning the first %d keys",
+				awsMaxPageSize, msg.GetPageSize, awsMaxPageSize)
+			msg.GetPageSize = awsMaxPageSize
+		}
+		params.MaxKeys = aws.Int64(int64(msg.GetPageSize))
 	}
 
 	resp, err := svc.ListObjects(params)
@@ -244,7 +253,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("aws: GET %s/%s", bucket, objname)
 	}
 	return
@@ -276,7 +285,7 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 		errstr = fmt.Sprintf("aws: Failed to PUT %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		if uploadoutput.VersionID != nil {
 			version = *uploadoutput.VersionID
 			glog.Infof("aws: PUT %s/%s, version %s", bucket, objname, version)
@@ -296,7 +305,7 @@ func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string, errcod
 		errstr = fmt.Sprintf("aws: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("aws: DELETE %s/%s", bucket, objname)
 	}
 	return

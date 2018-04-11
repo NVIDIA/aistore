@@ -1,18 +1,22 @@
 	cat > $CONFFILE <<EOL
 {
-	"logdir":			"$LOGDIR",
+	"log": {
+		"logdir":		"$LOGDIR",
+		"loglevel": 		"${LOGLEVEL}",
+		"logmaxsize": 		4194304,
+		"logmaxtotal":		67108864
+	},
 	"confdir":                	"$CONFDIR",
-	"loglevel": 			"${LOGLEVEL}",
 	"cloudprovider":		"${CLDPROVIDER}",
 	"cloud_buckets":		"cloud",
 	"local_buckets":		"local",
 	"stats_time":			"10s",
 	"http": {
 		"timeout":		"30s",
-		"long_timeout":		"30m"
+		"long_timeout":		"30m",
+		"max_num_targets":      16
 	},
 	"keep_alive_time":		"20s",
-	"h2c": 				false,
 	"listen": {
 		"proto": 		"tcp",
 		"port":			"${PORT}"
@@ -27,8 +31,8 @@
 		"maxpartsize":		4294967296
 	},
 	"cksum_config": {
-                 "validate_cold_get":	true,
-                 "checksum":		"xxhash"
+                 "checksum":		"xxhash",
+                 "validate_cold_get":	true
 	},
 	"version_config": {
 		"validate_warm_get":	false,
@@ -51,7 +55,7 @@
 		"instance":		$c
 	},
 	"fspaths": {
-		$FSPATHS
+$FSPATHS
 	},
 	"network": {
 		"ipv4": "$IPV4LIST"
@@ -60,10 +64,12 @@
 		"put":			"disk",
 		"max_mem_mb":		16
 	},
-	"diskkeeper": {
-		"fs_check_time":         "30s",
-		"offline_fs_check_time": "2m"
-	}
+	"fskeeper": {
+		"fs_check_time":         "0",
+		"offline_fs_check_time": "0",
+		"fskeeper_enabled":      false
+	},
+	"h2c": 				false
 }
 EOL
 
@@ -76,46 +82,45 @@ EOL
 EOL
 
 	cat > $CONFFILE_COLLECTD <<EOL
-{
-	LoadPlugin df
-	LoadPlugin disk
-	LoadPlugin interface
-	LoadPlugin load
-	LoadPlugin memory
-	LoadPlugin processes
-	LoadPlugin write_graphite
+LoadPlugin df
+LoadPlugin cpu
+LoadPlugin disk
+LoadPlugin interface
+LoadPlugin load
+LoadPlugin memory
+LoadPlugin processes
+LoadPlugin write_graphite
 
-	<Plugin syslog>
-	        LogLevel info
-	</Plugin>
+<Plugin syslog>
+        LogLevel info
+</Plugin>
 
-	<Plugin df>
-	        FSType rootfs
-	        FSType sysfs
-	        FSType proc
-	        FSType devtmpfs
-	        FSType devpts
-	        FSType tmpfs
-	        FSType fusectl
-	        FSType cgroup
-	        IgnoreSelected true
-	        ValuesPercentage True
-	</Plugin>
+<Plugin df>
+        FSType rootfs
+        FSType sysfs
+        FSType proc
+        FSType devtmpfs
+        FSType devpts
+        FSType tmpfs
+        FSType fusectl
+        FSType cgroup
+        IgnoreSelected true
+        ValuesPercentage True
+</Plugin>
 
-	<Plugin write_graphite>
-	        <Node "graphiting">
-			Host "${GRAPHITE_SERVER}"
-	                Port "2003"
-	                Protocol "tcp"
-	                LogSendErrors true
-	                StoreRates true
-	                AlwaysAppendDS false
-	                EscapeCharacter "_"
-	        </Node>
-	</Plugin>
+<Plugin write_graphite>
+        <Node "graphiting">
+		Host "${GRAPHITE_SERVER}"
+                Port "2003"
+                Protocol "tcp"
+                LogSendErrors true
+                StoreRates true
+                AlwaysAppendDS false
+                EscapeCharacter "_"
+        </Node>
+</Plugin>
 
-	<Include "/etc/collectd/collectd.conf.d">
-	        Filter "*.conf"
-	</Include>
-}
+<Include "/etc/collectd/collectd.conf.d">
+        Filter "*.conf"
+</Include>
 EOL

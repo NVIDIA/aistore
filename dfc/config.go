@@ -17,6 +17,12 @@ import (
 	"github.com/golang/glog"
 )
 
+const (
+	KiB = 1024
+	MiB = 1024 * KiB
+	GiB = 1024 * MiB
+)
+
 // checksums: xattr, http header, and config
 const (
 	xattrXXHashVal  = "user.obj.dfchash"
@@ -45,9 +51,8 @@ const lbname = "localbuckets"
 //
 //==============================
 type dfconfig struct {
-	Logdir           string            `json:"logdir"`
+	Log              logconfig         `json:"log"`
 	Confdir          string            `json:"confdir"`
-	Loglevel         string            `json:"loglevel"`
 	CloudProvider    string            `json:"cloudprovider"`
 	CloudBuckets     string            `json:"cloud_buckets"`
 	LocalBuckets     string            `json:"local_buckets"`
@@ -56,7 +61,6 @@ type dfconfig struct {
 	HTTP             httpconfig        `json:"http"`
 	KeepAliveTimeStr string            `json:"keep_alive_time"`
 	KeepAliveTime    time.Duration     `json:"-"` // omitempty
-	H2c              bool              `json:"h2c"`
 	Listen           listenconfig      `json:"listen"`
 	Proxy            proxyconfig       `json:"proxy"`
 	S3               s3config          `json:"s3"`
@@ -68,7 +72,15 @@ type dfconfig struct {
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	AckPolicy        ackpolicy         `json:"ack_policy"`
 	Network          netconfig         `json:"network"`
-	DiskKeeper       diskkeeperconf    `json:"diskkeeper"`
+	FSKeeper         fskeeperconf      `json:"fskeeper"`
+	H2c              bool              `json:"h2c"`
+}
+
+type logconfig struct {
+	Dir      string `json:"logdir"`      // log directory
+	Level    string `json:"loglevel"`    // log level aka verbosity
+	MaxSize  uint64 `json:"logmaxsize"`  // size that triggers log rotation
+	MaxTotal uint64 `json:"logmaxtotal"` // max total size of all the logs in the log directory
 }
 
 type s3config struct {
@@ -110,8 +122,8 @@ type proxyconfig struct {
 }
 
 type cksumconfig struct {
-	ValidateColdGet bool   `json:"validate_cold_get"` // MD5 (ETag) validation upon cold GET
 	Checksum        string `json:"checksum"`          // DFC checksum: xxhash:none
+	ValidateColdGet bool   `json:"validate_cold_get"` // MD5 (ETag) validation upon cold GET
 }
 
 type ackpolicy struct {
@@ -121,27 +133,29 @@ type ackpolicy struct {
 
 // httpconfig configures parameters for the HTTP clients used by the Proxy
 type httpconfig struct {
-	TimeoutStr     string        `json:"timeout"`
-	Timeout        time.Duration `json:"-"` // omitempty
-	LongTimeoutStr string        `json:"long_timeout"`
-	LongTimeout    time.Duration `json:"-"` // omitempty
+	TimeoutStr     string `json:"timeout"`         // httpclient (call) default timeout
+	LongTimeoutStr string `json:"long_timeout"`    // prefetch et al. timeout
+	MaxNumTargets  int    `json:"max_num_targets"` // estimated max num targets (to count idle conns)
+	// omitempty
+	Timeout     time.Duration `json:"-"`
+	LongTimeout time.Duration `json:"-"`
 }
 
 type versionconfig struct {
-	// True enables object version validation for WARM GET.
-	ValidateWarmGet bool   `json:"validate_warm_get"`
-	Versioning      string `json:"versioning"` // for what types of objects versioning is enabled: all, cloud, local, none
+	ValidateWarmGet bool   `json:"validate_warm_get"` // True: validate object version upon warm GET
+	Versioning      string `json:"versioning"`        // types of objects versioning is enabled for: all, cloud, local, none
 }
 
 type netconfig struct {
 	IPv4 string `json:"ipv4"`
 }
 
-type diskkeeperconf struct {
+type fskeeperconf struct {
 	FSCheckTimeStr        string        `json:"fs_check_time"`
 	FSCheckTime           time.Duration `json:"-"` // omitempty
 	OfflineFSCheckTimeStr string        `json:"offline_fs_check_time"`
 	OfflineFSCheckTime    time.Duration `json:"-"` // omitempty
+	Enabled               bool          `json:"fskeeper_enabled"`
 }
 
 //==============================
@@ -152,36 +166,41 @@ type diskkeeperconf struct {
 func initconfigparam() error {
 	getConfig(clivars.conffile)
 
-	err := flag.Lookup("log_dir").Value.Set(ctx.config.Logdir)
+	err := flag.Lookup("log_dir").Value.Set(ctx.config.Log.Dir)
 	if err != nil {
-		glog.Errorf("Failed to flag-set glog dir %q, err: %v", ctx.config.Logdir, err)
+		glog.Errorf("Failed to flag-set glog dir %q, err: %v", ctx.config.Log.Dir, err)
 	}
-	if err = CreateDir(ctx.config.Logdir); err != nil {
-		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Logdir, err)
+	if err = CreateDir(ctx.config.Log.Dir); err != nil {
+		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Log.Dir, err)
 		return err
 	}
 	if err = validateconf(); err != nil {
 		return err
+	}
+	// glog rotate
+	glog.MaxSize = ctx.config.Log.MaxSize
+	if glog.MaxSize > GiB {
+		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
+		glog.MaxSize = MiB
 	}
 	// CLI override
 	if clivars.statstime != 0 {
 		ctx.config.StatsTime = clivars.statstime
 	}
 	if clivars.loglevel != "" {
-		err = flag.Lookup("v").Value.Set(clivars.loglevel)
-		ctx.config.Loglevel = clivars.loglevel
+		if err = setloglevel(clivars.loglevel); err != nil {
+			glog.Errorf("Failed to set log level = %s, err: %v", clivars.loglevel, err)
+		}
 	} else {
-		err = flag.Lookup("v").Value.Set(ctx.config.Loglevel)
-	}
-	if err != nil {
-		//  Not fatal as it will use default logging level
-		glog.Errorf("Failed to set loglevel %v", err)
+		if err = setloglevel(ctx.config.Log.Level); err != nil {
+			glog.Errorf("Failed to set log level = %s, err: %v", ctx.config.Log.Level, err)
+		}
 	}
 	if build != "" {
 		glog.Infof("Build:  %s", build) // git rev-parse --short HEAD
 	}
 	glog.Infof("Logdir: %q Proto: %s Port: %s Verbosity: %s",
-		ctx.config.Logdir, ctx.config.Listen.Proto, ctx.config.Listen.Port, ctx.config.Loglevel)
+		ctx.config.Log.Dir, ctx.config.Listen.Proto, ctx.config.Listen.Port, ctx.config.Log.Level)
 	glog.Infof("Config: %q Role: %s StatsTime: %v", clivars.conffile, clivars.role, ctx.config.StatsTime)
 	return err
 }
@@ -259,11 +278,23 @@ func validateconf() (err error) {
 	if err := validateVersion(ctx.config.VersionConfig.Versioning); err != nil {
 		return err
 	}
-	if ctx.config.DiskKeeper.FSCheckTime, err = time.ParseDuration(ctx.config.DiskKeeper.FSCheckTimeStr); err != nil {
-		return fmt.Errorf("Bad DiskKeeper fs_check_time format %s, err %v", ctx.config.DiskKeeper.FSCheckTimeStr, err)
+	if ctx.config.FSKeeper.FSCheckTime, err = time.ParseDuration(ctx.config.FSKeeper.FSCheckTimeStr); err != nil {
+		return fmt.Errorf("Bad FSKeeper fs_check_time format %s, err %v", ctx.config.FSKeeper.FSCheckTimeStr, err)
 	}
-	if ctx.config.DiskKeeper.OfflineFSCheckTime, err = time.ParseDuration(ctx.config.DiskKeeper.OfflineFSCheckTimeStr); err != nil {
-		return fmt.Errorf("Bad DiskKeeper offline_fs_check_time format %s, err %v", ctx.config.DiskKeeper.OfflineFSCheckTimeStr, err)
+	if ctx.config.FSKeeper.OfflineFSCheckTime, err = time.ParseDuration(ctx.config.FSKeeper.OfflineFSCheckTimeStr); err != nil {
+		return fmt.Errorf("Bad FSKeeper offline_fs_check_time format %s, err %v", ctx.config.FSKeeper.OfflineFSCheckTimeStr, err)
 	}
 	return nil
+}
+
+func setloglevel(loglevel string) (err error) {
+	v := flag.Lookup("v").Value
+	if v == nil {
+		return fmt.Errorf("nil -v Value")
+	}
+	err = v.Set(loglevel)
+	if err == nil {
+		ctx.config.Log.Level = loglevel
+	}
+	return
 }
