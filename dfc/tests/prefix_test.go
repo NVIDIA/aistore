@@ -104,7 +104,7 @@ func prefixLookupOne(t *testing.T) {
 	fmt.Printf("Looking up for files than names start with %s\n", prefix)
 	var msg = &dfc.GetMsg{GetPrefix: prefix}
 	numFiles := 0
-	objList, err := client.ListBucket(proxyurl, clibucket, msg)
+	objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if testfail(err, "List files with prefix failed", nil, nil, t) {
 		return
 	}
@@ -130,7 +130,7 @@ func prefixLookupDefault(t *testing.T) {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &dfc.GetMsg{GetPrefix: lookFor}
-		objList, err := client.ListBucket(proxyurl, clibucket, msg)
+		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 		if testfail(err, "List files with prefix failed", nil, nil, t) {
 			return
 		}

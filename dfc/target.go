@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	defaultPageSize = 1000 // the number of cached file infos returned in one page
-	workfileprefix  = ".~~~."
+	DefaultPageSize  = 1000  // the number of cached file infos returned in one page
+	internalPageSize = 10000 // number of objects in a page for internal call between target and proxy to get atime/iscached
+	workfileprefix   = ".~~~."
 )
 
 type mountPath struct {
@@ -724,7 +725,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
 	// Some properties make no sense to read from local files for cached
 	// objects(for non-local bucket - ctime, version, and size),
 	// so they are disabled
-	ci := &allfinfos{make([]*BucketEntry, 0, defaultPageSize),
+	ci := &allfinfos{make([]*BucketEntry, 0, DefaultPageSize),
 		0,                 // fileCount
 		0,                 // rootLength
 		msg.GetPrefix,     // prefix
@@ -738,7 +739,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
 		"",              // lastFilePath - next page marker
 		t,               // targetrunner
 		bucket,          // bucket
-		defaultPageSize, // limit
+		DefaultPageSize, // limit
 	}
 
 	if msg.GetPageSize != 0 {

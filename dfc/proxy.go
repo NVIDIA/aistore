@@ -256,6 +256,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 
 	var msg GetMsg
 	copyStruct(&msg, origmsg)
+	msg.GetPageSize = internalPageSize
 	for {
 		// re-Marshall request arguments every time because PageMarker
 		// changes every loop run
@@ -366,7 +367,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	if err = json.Unmarshal(listmsgjson, msg); err != nil {
 		return
 	}
-	pageSize := defaultPageSize
+	pageSize := DefaultPageSize
 	if msg.GetPageSize != 0 {
 		pageSize = msg.GetPageSize
 	}

@@ -332,16 +332,31 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return err
 }
 
-// ListBucket returns properties of all objects in a bucket
-func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg) (*dfc.BucketList, error) {
+// ListBucket returns list of objects in a bucket. objectCountLimit is the
+// maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
+func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) (*dfc.BucketList, error) {
 	var (
 		url     = proxyurl + "/v1/files/" + bucket
 		request *http.Request
 	)
 
 	reslist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0, 1000)}
+	// An optimization to read as few objects from bucket as possible.
+	// toRead is the current number of objects ListBucket must read before
+	// returning the list. Every cycle the loop reads objects by pages and
+	// decreases toRead by the number of received objects. When toRead gets less
+	// than pageSize, the loop does the final request with reduced pageSize
+	toRead := objectCountLimit
 	for {
 		var r *http.Response
+
+		if toRead != 0 {
+			if (msg.GetPageSize == 0 && toRead < dfc.DefaultPageSize) ||
+				(msg.GetPageSize != 0 && msg.GetPageSize > toRead) {
+				msg.GetPageSize = toRead
+			}
+		}
+
 		injson, err := json.Marshal(msg)
 		if err != nil {
 			return nil, err
@@ -381,6 +396,13 @@ func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg) (*dfc.BucketList, erro
 		reslist.Entries = append(reslist.Entries, page.Entries...)
 		if page.PageMarker == "" {
 			break
+		}
+
+		if objectCountLimit != 0 {
+			if len(reslist.Entries) >= objectCountLimit {
+				break
+			}
+			toRead -= len(page.Entries)
 		}
 
 		msg.GetPageMarker = page.PageMarker
@@ -644,9 +666,9 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
+func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &dfc.GetMsg{GetPrefix: prefix}
-	data, err := ListBucket(proxyURL, bucket, msg)
+	data, err := ListBucket(proxyURL, bucket, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}

@@ -58,6 +58,7 @@ var (
 	proxyurl    string
 	props       string
 	pagesize    int64
+	objlimit    int64
 )
 
 // worker's result
@@ -91,7 +92,8 @@ func init() {
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
 	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
-	flag.Int64Var(&pagesize, "pagesize", 1000, "The maximum number of object returned by one list bucket call")
+	flag.Int64Var(&pagesize, "pagesize", 1000, "The maximum number of objects returned in one page")
+	flag.Int64Var(&objlimit, "objlimit", 0, "The maximum number of objects returned in one list bucket call (0 - no limit)")
 }
 
 func checkMemory() {
@@ -214,8 +216,8 @@ func Test_matchdelete(t *testing.T) {
 	}
 
 	// list the bucket
-	var msg = &dfc.GetMsg{}
-	reslist, err := client.ListBucket(proxyurl, clibucket, msg)
+	var msg = &dfc.GetMsg{GetPageSize: int(pagesize)}
+	reslist, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -338,7 +340,7 @@ func Test_putdeleteRange(t *testing.T) {
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
+		bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -351,7 +353,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tlogf("Cleaning up remained objects...\n")
 	msg := &dfc.GetMsg{GetPrefix: commonPrefix + "/"}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -455,6 +457,7 @@ func Test_list(t *testing.T) {
 		file     *os.File
 		err      error
 		pageSize = int(pagesize)
+		objLimit = int(objlimit)
 	)
 
 	// list the names, sizes, creation times and MD5 checksums
@@ -486,11 +489,11 @@ func Test_list(t *testing.T) {
 
 	totalObjs := 0
 	for {
-		reslist = testListBucket(t, bucket, msg)
+		reslist = testListBucket(t, bucket, msg, objLimit)
 		if reslist == nil {
 			return
 		}
-		if pageSize != 0 && len(reslist.Entries) > pageSize {
+		if objLimit != 0 && len(reslist.Entries) > objLimit {
 			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
 		}
 		if copy {
@@ -733,8 +736,8 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 
 func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
 	// list the bucket
-	var msg = &dfc.GetMsg{}
-	reslist := testListBucket(t, bucket, msg)
+	var msg = &dfc.GetMsg{GetPageSize: int(pagesize)}
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		return 0
 	}
@@ -786,32 +789,12 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 	return false
 }
 
-func testListBucketAll(t *testing.T, bucket string, msg dfc.GetMsg) *dfc.BucketList {
+func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg, limit int) *dfc.BucketList {
 	var (
 		url = proxyurl + "/v1/files/" + bucket
 	)
-	tlogf("LIST ALL %q\n", url)
-	fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
-	for {
-		bucketlist := testListBucket(t, bucket, &msg)
-		if bucketlist == nil {
-			return nil
-		}
-		fullbucketlist.Entries = append(fullbucketlist.Entries, bucketlist.Entries...)
-		if bucketlist.PageMarker == "" {
-			break
-		}
-		msg.GetPageMarker = bucketlist.PageMarker
-	}
-	return fullbucketlist
-}
-
-func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg) *dfc.BucketList {
-	var (
-		url = proxyurl + "/v1/files/" + bucket
-	)
-	tlogf("LIST %q\n", url)
-	reslist, err := client.ListBucket(proxyurl, bucket, msg)
+	tlogf("LIST %q (Number of objects: %d)\n", url, limit)
+	reslist, err := client.ListBucket(proxyurl, bucket, msg, limit)
 	if testfail(err, fmt.Sprintf("List bucket %s failed", bucket), nil, nil, t) {
 		return nil
 	}
