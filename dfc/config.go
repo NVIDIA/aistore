@@ -122,8 +122,8 @@ type proxyconfig struct {
 }
 
 type cksumconfig struct {
-	ValidateColdGet bool   `json:"validate_cold_get"` // MD5 (ETag) validation upon cold GET
 	Checksum        string `json:"checksum"`          // DFC checksum: xxhash:none
+	ValidateColdGet bool   `json:"validate_cold_get"` // MD5 (ETag) validation upon cold GET
 }
 
 type ackpolicy struct {
@@ -133,16 +133,17 @@ type ackpolicy struct {
 
 // httpconfig configures parameters for the HTTP clients used by the Proxy
 type httpconfig struct {
-	TimeoutStr     string        `json:"timeout"`
-	Timeout        time.Duration `json:"-"` // omitempty
-	LongTimeoutStr string        `json:"long_timeout"`
-	LongTimeout    time.Duration `json:"-"` // omitempty
+	TimeoutStr     string `json:"timeout"`         // httpclient (call) default timeout
+	LongTimeoutStr string `json:"long_timeout"`    // prefetch et al. timeout
+	MaxNumTargets  int    `json:"max_num_targets"` // estimated max num targets (to count idle conns)
+	// omitempty
+	Timeout     time.Duration `json:"-"`
+	LongTimeout time.Duration `json:"-"`
 }
 
 type versionconfig struct {
-	// True enables object version validation for WARM GET.
-	ValidateWarmGet bool   `json:"validate_warm_get"`
-	Versioning      string `json:"versioning"` // for what types of objects versioning is enabled: all, cloud, local, none
+	ValidateWarmGet bool   `json:"validate_warm_get"` // True: validate object version upon warm GET
+	Versioning      string `json:"versioning"`        // types of objects versioning is enabled for: all, cloud, local, none
 }
 
 type netconfig struct {

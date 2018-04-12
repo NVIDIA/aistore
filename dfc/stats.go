@@ -1,6 +1,6 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -42,18 +42,26 @@ type statslogger interface {
 // implemented by the ***CoreStats types
 type statsif interface {
 	add(name string, val int64)
+	addMany(nameval ...interface{})
 }
 
 // TODO: use static map[string]int64
 type proxyCoreStats struct {
-	Numget    int64 `json:"numget"`
-	Numput    int64 `json:"numput"`
-	Numpost   int64 `json:"numpost"`
-	Numdelete int64 `json:"numdelete"`
-	Numrename int64 `json:"numrename"`
-	Numerr    int64 `json:"numerr"`
-	Numlist   int64 `json:"numlist"`
-	logged    bool  `json:"-"`
+	Numget      int64 `json:"numget"`
+	Numput      int64 `json:"numput"`
+	Numpost     int64 `json:"numpost"`
+	Numdelete   int64 `json:"numdelete"`
+	Numrename   int64 `json:"numrename"`
+	Numlist     int64 `json:"numlist"`
+	Getlatency  int64 `json:"getlatency"`  // microseconds
+	Putlatency  int64 `json:"putlatency"`  // ---/---
+	Listlatency int64 `json:"listlatency"` // ---/---
+	Numerr      int64 `json:"numerr"`
+	// omitempty
+	ngets  int64 `json:"-"`
+	nputs  int64 `json:"-"`
+	nlists int64 `json:"-"`
+	logged bool  `json:"-"`
 }
 
 type targetCoreStats struct {
@@ -66,7 +74,6 @@ type targetCoreStats struct {
 	Numsentbytes     int64 `json:"numsentbytes"`
 	Numrecvfiles     int64 `json:"numrecvfiles"`
 	Numrecvbytes     int64 `json:"numrecvbytes"`
-	Numlist          int64 `json:"numlist"`
 	Numprefetch      int64 `json:"numprefetch"`
 	Bytesprefetched  int64 `json:"bytesprefetched"`
 	Numvchanged      int64 `json:"numvchanged"`
@@ -184,7 +191,18 @@ func (r *proxystatsrunner) log() (runlru bool) {
 		r.Unlock()
 		return
 	}
+	if r.Core.ngets > 0 {
+		r.Core.Getlatency /= r.Core.ngets
+	}
+	if r.Core.nputs > 0 {
+		r.Core.Putlatency /= r.Core.nputs
+	}
+	if r.Core.nlists > 0 {
+		r.Core.Listlatency /= r.Core.nlists
+	}
 	b, err := json.Marshal(r.Core)
+	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
 	r.Unlock()
 
 	if err == nil {
@@ -195,10 +213,29 @@ func (r *proxystatsrunner) log() (runlru bool) {
 }
 
 func (r *proxystatsrunner) add(name string, val int64) {
-	var v *int64
-	s := &r.Core
+	r.Lock()
+	r.addLocked(name, val)
+	r.Unlock()
+}
+
+func (r *proxystatsrunner) addMany(nameval ...interface{}) {
 	r.Lock()
 	defer r.Unlock()
+	i := 0
+	for i < len(nameval) {
+		statsname, ok := nameval[i].(string)
+		assert(ok, fmt.Sprintf("Invalid stats name: %v, %T", nameval[i], nameval[i]))
+		i++
+		statsval, ok := nameval[i].(int64)
+		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
+		i++
+		r.addLocked(statsname, statsval)
+	}
+}
+
+func (r *proxystatsrunner) addLocked(name string, val int64) {
+	var v *int64
+	s := &r.Core
 	switch name {
 	case "numget":
 		v = &s.Numget
@@ -212,6 +249,15 @@ func (r *proxystatsrunner) add(name string, val int64) {
 		v = &s.Numrename
 	case "numlist":
 		v = &s.Numlist
+	case "getlatency":
+		v = &s.Getlatency
+		s.ngets++
+	case "putlatency":
+		v = &s.Putlatency
+		s.nputs++
+	case "listlatency":
+		v = &s.Listlatency
+		s.nlists++
 	case "numerr":
 		v = &s.Numerr
 	default:
@@ -238,7 +284,19 @@ func (r *storstatsrunner) log() (runlru bool) {
 	}
 	lines := make([]string, 0, 16)
 	// core stats
+	if r.Core.ngets > 0 {
+		r.Core.Getlatency /= r.Core.ngets
+	}
+	if r.Core.nputs > 0 {
+		r.Core.Putlatency /= r.Core.nputs
+	}
+	if r.Core.nlists > 0 {
+		r.Core.Listlatency /= r.Core.nlists
+	}
+
 	b, err := json.Marshal(r.Core)
+	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
 	if err == nil {
 		lines = append(lines, string(b))
 	}
@@ -407,11 +465,32 @@ func (r *storstatsrunner) init() {
 }
 
 func (r *storstatsrunner) add(name string, val int64) {
-	var v *int64
-	s := &r.Core
+	r.Lock()
+	r.addLocked(name, val)
+	r.Unlock()
+}
+
+// FIXME: copy paste
+func (r *storstatsrunner) addMany(nameval ...interface{}) {
 	r.Lock()
 	defer r.Unlock()
+	i := 0
+	for i < len(nameval) {
+		statsname, ok := nameval[i].(string)
+		assert(ok, fmt.Sprintf("Invalid stats name: %v, %T", nameval[i], nameval[i]))
+		i++
+		statsval, ok := nameval[i].(int64)
+		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
+		i++
+		r.addLocked(statsname, statsval)
+	}
+}
+
+func (r *storstatsrunner) addLocked(name string, val int64) {
+	var v *int64
+	s := &r.Core
 	switch name {
+	// common
 	case "numget":
 		v = &s.Numget
 	case "numput":
@@ -422,8 +501,20 @@ func (r *storstatsrunner) add(name string, val int64) {
 		v = &s.Numdelete
 	case "numrename":
 		v = &s.Numrename
+	case "numlist":
+		v = &s.Numlist
+	case "getlatency":
+		v = &s.Getlatency
+		s.ngets++
+	case "putlatency":
+		v = &s.Putlatency
+		s.nputs++
+	case "listlatency":
+		v = &s.Listlatency
+		s.nlists++
 	case "numerr":
 		v = &s.Numerr
+	// target only
 	case "numcoldget":
 		v = &s.Numcoldget
 	case "bytesloaded":
@@ -440,8 +531,6 @@ func (r *storstatsrunner) add(name string, val int64) {
 		v = &s.Numrecvfiles
 	case "numrecvbytes":
 		v = &s.Numrecvbytes
-	case "numlist":
-		v = &s.Numlist
 	case "numprefetch":
 		v = &s.Numprefetch
 	case "bytesprefetched":

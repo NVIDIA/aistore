@@ -735,6 +735,6 @@ func cleanUp() {
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
 	var err error
-	allObjects, err = client.ListObjects(runParams.proxyURL, runParams.bucket, myName)
+	allObjects, err = client.ListObjects(runParams.proxyURL, runParams.bucket, myName, 0)
 	return err
 }

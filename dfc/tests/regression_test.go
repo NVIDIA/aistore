@@ -117,7 +117,7 @@ func Test_regression(t *testing.T) {
 	}
 	// get them early to LRU later
 	errch := make(chan error, 100)
-	getRandomFiles(0, 0, 20, clibucket, t, nil, errch)
+	getRandomFiles(0, 0, 20, clibucket, "", t, nil, errch)
 	selectErr(errch, "get", t, false)
 	if t.Failed() {
 		failLRU = "LRU: need a cloud bucket with at least 20 objects"
@@ -160,7 +160,7 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, SmokeStr, "", false, sgl)
 	close(filesput)
 	selectErr(errch, "put", t, false)
-	getRandomFiles(0, 0, numPuts, bucket, t, nil, errch)
+	getRandomFiles(0, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {
 		if usingFile {
@@ -318,7 +318,7 @@ func regressionLRU(t *testing.T) {
 		hwms[k] = lrucfg["highwm"]
 	}
 	// add a few more
-	getRandomFiles(0, 0, 3, clibucket, t, nil, errch)
+	getRandomFiles(0, 0, 3, clibucket, "", t, nil, errch)
 	selectErr(errch, "get", t, true)
 	//
 	// find out min usage %% across all targets
@@ -381,7 +381,7 @@ func regressionLRU(t *testing.T) {
 		return
 	}
 	waitProgressBar("LRU: ", sleeptime/2)
-	getRandomFiles(0, 0, 1, clibucket, t, nil, errch)
+	getRandomFiles(0, 0, 1, clibucket, "", t, nil, errch)
 	waitProgressBar("LRU: ", sleeptime/2)
 	//
 	// results
@@ -722,8 +722,8 @@ func regressionPrefetchRange(t *testing.T) {
 	if re, err = regexp.Compile(prefetchRegex); err != nil {
 		t.Errorf("Error compiling regex: %v", err)
 	}
-	msg := dfc.GetMsg{}
-	objsToFilter := testListBucketAll(t, clibucket, msg)
+	msg := &dfc.GetMsg{GetPrefix: prefetchPrefix, GetPageSize: int(pagesize)}
+	objsToFilter := testListBucket(t, clibucket, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
 		for _, be := range objsToFilter.Entries {
@@ -801,8 +801,8 @@ func regressionDeleteRange(t *testing.T) {
 	}
 
 	// 3. Check to see that the correct files have been deleted
-	msg := &dfc.GetMsg{GetPrefix: prefix}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
+	msg := &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
 	}
@@ -827,7 +827,7 @@ func regressionDeleteRange(t *testing.T) {
 	}
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = client.ListBucket(proxyurl, clibucket, msg)
+	bktlst, err = client.ListBucket(proxyurl, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
@@ -865,8 +865,8 @@ func regressionDeleteList(t *testing.T) {
 	}
 
 	// 3. Check to see that all the files have been deleted.
-	msg := &dfc.GetMsg{GetPrefix: prefix}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
+	msg := &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}

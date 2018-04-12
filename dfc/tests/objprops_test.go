@@ -46,7 +46,7 @@ func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]stri
 		}
 	}
 
-	reslist := testListBucket(t, bucket, msg)
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		return
 	}
@@ -131,7 +131,7 @@ func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *dfc.
 
 	// read a new object list and check that evicted objects do not have atime and iscached==false
 	// version must be the same
-	reslist := testListBucket(t, bucket, msg)
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		return
 	}
@@ -172,7 +172,7 @@ func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, ms
 	tlogf("Refetching objects...\n")
 	propsReadObjects(t, bucket, objs)
 	tlogf("Checking objects properties after refetching...\n")
-	reslist := testListBucket(t, bucket, msg)
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
 		t.Fail()
@@ -250,7 +250,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	waitProgressBar("Rebalance: ", time.Second*10)
 
 	tlogf("Reading file versions...\n")
-	reslist := testListBucket(t, bucket, msg)
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
 		t.Fail()
@@ -338,7 +338,7 @@ func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		GetPrefix: versionDir,
 		GetProps:  dfc.GetPropsVersion + ", " + dfc.GetPropsIsCached + ", " + dfc.GetPropsAtime,
 	}
-	reslist := testListBucket(t, bucket, msg)
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
 		t.Fail()

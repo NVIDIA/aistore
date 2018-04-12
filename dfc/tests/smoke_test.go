@@ -130,7 +130,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		} else {
 			wg.Add(1)
 			go func(i int) {
-				getRandomFiles(i, bseed+int64(i), numops, clibucket, t, nil, errch)
+				getRandomFiles(i, bseed+int64(i), numops, clibucket, SmokeStr+"/", t, nil, errch)
 				wg.Done()
 			}(i)
 			nGet--
@@ -144,16 +144,16 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	}
 }
 
-func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
-	var msg = &dfc.GetMsg{}
+	var msg = &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
-		items, cerr := client.ListBucket(proxyurl, bucket, msg)
+		items, cerr := client.ListBucket(proxyurl, bucket, msg, 0)
 		if testfail(cerr, "List files with prefix failed", nil, errch, t) {
 			return
 		}
