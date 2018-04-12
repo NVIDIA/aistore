@@ -43,6 +43,7 @@ func (r *iostatrunner) run() (err error) {
 		}
 		line := string(b)
 		fields := strings.Fields(line)
+		maxutil := float64(0)
 		if len(fields) == iostatnumsys {
 			r.Lock()
 			r.CPUidle = fields[iostatnumsys-1]
@@ -56,14 +57,30 @@ func (r *iostatrunner) run() (err error) {
 			} else {
 				r.Lock()
 				device := fields[0]
-				iometrics := make(map[string]string, iostatnumdsk-1)
+				var (
+					iometrics deviometrics
+					ok        bool
+				)
+				if iometrics, ok = r.Disk[device]; ok { // reuse
+				} else {
+					iometrics = make(map[string]string, iostatnumdsk-1) // first time
+				}
 				for i := 1; i < iostatnumdsk; i++ {
-					iometrics[r.metricnames[i-1]] = fields[i]
+					name := r.metricnames[i-1]
+					iometrics[name] = fields[i]
+					if name == "%util" {
+						if util, err := strconv.ParseFloat(fields[i], 32); err == nil {
+							if util > maxutil {
+								maxutil = util
+							}
+						}
+					}
 				}
 				r.Disk[device] = iometrics
 				r.Unlock()
 			}
 		}
+		r.maxDiskUtil = maxutil
 		select {
 		case <-r.chsts:
 			return nil

@@ -380,7 +380,7 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !coldget {
-		getatimerunner().notify(fqn)
+		getatimerunner().touch(fqn)
 	}
 	if glog.V(4) {
 		s := fmt.Sprintf("GET: %s/%s, %.2f MB, %d µs", bucket, objname, float64(written)/MiB, time.Since(started)/1000)

@@ -121,6 +121,7 @@ type iostatrunner struct {
 	CPUidle     string
 	metricnames []string
 	Disk        map[string]deviometrics
+	maxDiskUtil float64
 	cmd         *exec.Cmd
 }
 
