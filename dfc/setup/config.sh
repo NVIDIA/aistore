@@ -41,6 +41,7 @@
 	"lru_config": {
 		"lowwm":		75,
 		"highwm":		90,
+		"atime_cache_max":	65536,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",
 		"lru_enabled":  	true

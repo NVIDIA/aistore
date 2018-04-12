@@ -13,12 +13,10 @@ import (
 	"github.com/golang/glog"
 )
 
-// FIXME: config, at least in part
 const (
 	chfqnSize     = 1024
 	atimeCacheIni = 4 * 1024
-	atimeCacheMax = 64 * 1024 // max ## entries
-	atimeSyncTime = time.Minute
+	atimeSyncTime = time.Minute * 3
 	atimeLWM      = 60
 	atimeHWM      = 80
 )
@@ -69,10 +67,15 @@ func (r *atimerunner) stop(err error) {
 }
 
 func (r *atimerunner) touch(fqn string) {
-	r.chfqn <- fqn
+	if ctx.config.LRUConfig.LRUEnabled {
+		r.chfqn <- fqn
+	}
 }
 
 func (r *atimerunner) atime(fqn string) (atime time.Time, ok bool) {
+	if !ctx.config.LRUConfig.LRUEnabled {
+		return
+	}
 	r.atimemap.Lock()
 	defer r.atimemap.Unlock()
 	atime, ok = r.atimemap.m[fqn]
@@ -80,17 +83,21 @@ func (r *atimerunner) atime(fqn string) (atime time.Time, ok bool) {
 }
 
 func (r *atimerunner) heuristics() (n int) {
+	if !ctx.config.LRUConfig.LRUEnabled {
+		return
+	}
 	l := len(r.atimemap.m)
 	if l <= atimeCacheIni {
 		return
 	}
 	maxutil := float64(-1)
-	wm := l * 100 / atimeCacheMax
+	wm := 100
+	if uint64(l) < ctx.config.LRUConfig.AtimeCacheMax {
+		wm = int(uint64(l) * 100 / ctx.config.LRUConfig.AtimeCacheMax)
+	}
 	riostat := getiostatrunner()
 	if riostat != nil {
-		riostat.Lock()
-		maxutil = riostat.maxDiskUtil
-		riostat.Unlock()
+		maxutil = riostat.getMaxUtil()
 	}
 	switch {
 	case maxutil >= 0 && maxutil < 50: // idle
