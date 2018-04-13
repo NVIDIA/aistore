@@ -18,3 +18,7 @@ func (r *iostatrunner) stop(err error) {
 func iostatverok() (ok bool) {
 	return
 }
+
+func (r *iostatrunner) getMaxUtil() (maxutil float64) {
+	return float64(-1)
+}

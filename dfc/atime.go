@@ -103,7 +103,11 @@ func (r *atimerunner) heuristics() (n int) {
 	case maxutil >= 0 && maxutil < 50: // idle
 		n = l / 4
 	case wm > atimeHWM: // atime map capacity at high watermark
-		n = l / 4
+		if wm == 100 {
+			n = l / 2
+		} else {
+			n = l / 4
+		}
 	case wm > atimeLWM && maxutil >= 0 && maxutil < 90: // low watermark => weighted formula
 		f := float64(wm-atimeLWM) / float64(atimeHWM-atimeLWM) * float64(l)
 		n = int(f) / 4
@@ -140,7 +144,7 @@ func (r *atimerunner) flush(n int) {
 		} else {
 			delete(r.atimemap.m, fqn)
 			i++
-			if glog.V(3) {
+			if glog.V(4) {
 				glog.Infof("touch %s at %v", fqn, atime)
 			}
 		}

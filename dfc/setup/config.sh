@@ -24,7 +24,7 @@
 		"url": 			"${PROXYURL}",
 		"passthru": 		true
 	},
-    "originalprimaryproxy": {
+	"originalprimaryproxy": {
 		"id":			"${PROXYID}",
 		"url": 			"${PROXYURL}",
 		"passthru": 		true

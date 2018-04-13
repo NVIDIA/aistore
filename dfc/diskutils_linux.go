@@ -91,6 +91,7 @@ func (r *iostatrunner) stop(err error) {
 }
 
 func (r *iostatrunner) getMaxUtil() (maxutil float64) {
+	maxutil = -1
 	r.Lock()
 	defer r.Unlock()
 	for _, iometrics := range r.Disk {
