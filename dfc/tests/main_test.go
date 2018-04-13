@@ -448,42 +448,25 @@ func Test_putdelete(t *testing.T) {
 	selectErr(errch, "delete", t, false)
 }
 
-func Test_list(t *testing.T) {
-	parse()
-
+func listObjects(t *testing.T, msg *dfc.GetMsg, bucket string, objLimit int) (*dfc.BucketList, error) {
 	var (
-		copy     bool
-		reslist  *dfc.BucketList
-		file     *os.File
-		err      error
-		pageSize = int(pagesize)
-		objLimit = int(objlimit)
+		copy    bool
+		file    *os.File
+		err     error
+		reslist *dfc.BucketList
 	)
-
-	// list the names, sizes, creation times and MD5 checksums
-	var msg *dfc.GetMsg
-	if props == "" {
-		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion, GetPageSize: pageSize}
-	} else {
-		msg = &dfc.GetMsg{GetProps: props, GetPageSize: pageSize}
-	}
-	if prefix != "" {
-		msg.GetPrefix = prefix
-	}
-	tlogf("Displaying properties: %s\n", msg.GetProps)
-
-	bucket := clibucket
+	tlogf("LIST %s [prefix %s]\n", bucket, msg.GetPrefix)
 	fname := LocalDestDir + "/" + bucket
 	if copy {
 		// Write list to a local filename = bucket
 		if err = dfc.CreateDir(LocalDestDir); err != nil {
 			t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
-			return
+			return nil, err
 		}
 		file, err = os.Create(fname)
 		if err != nil {
 			t.Errorf("Failed to create file %s, err: %v", fname, err)
-			return
+			return nil, err
 		}
 	}
 
@@ -491,10 +474,7 @@ func Test_list(t *testing.T) {
 	for {
 		reslist = testListBucket(t, bucket, msg, objLimit)
 		if reslist == nil {
-			return
-		}
-		if objLimit != 0 && len(reslist.Entries) > objLimit {
-			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
+			return nil, fmt.Errorf("Failed to list bucket %s", bucket)
 		}
 		if copy {
 			for _, m := range reslist.Entries {
@@ -520,6 +500,35 @@ func Test_list(t *testing.T) {
 		tlogf("PageMarker for the next page: %s\n", reslist.PageMarker)
 	}
 	tlogf("-----------------\nTotal objects listed: %v\n", totalObjs)
+	return reslist, nil
+}
+
+func Test_list(t *testing.T) {
+	parse()
+
+	var (
+		pageSize = int(pagesize)
+		objLimit = int(objlimit)
+		bucket   = clibucket
+	)
+
+	// list the names, sizes, creation times and MD5 checksums
+	var msg *dfc.GetMsg
+	if props == "" {
+		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion, GetPageSize: pageSize}
+	} else {
+		msg = &dfc.GetMsg{GetProps: props, GetPageSize: pageSize}
+	}
+	if prefix != "" {
+		msg.GetPrefix = prefix
+	}
+	tlogf("Displaying properties: %s\n", msg.GetProps)
+	reslist, err := listObjects(t, msg, bucket, objLimit)
+	if err == nil {
+		if objLimit != 0 && len(reslist.Entries) > objLimit {
+			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
+		}
+	}
 }
 
 func Test_coldgetmd5(t *testing.T) {

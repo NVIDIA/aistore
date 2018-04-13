@@ -224,6 +224,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 
 	tlogf("Removing a target: %s\n", removedSid)
 	unregisterTarget(removedSid, t)
+	waitProgressBar("Removing: ", time.Second*5)
 
 	tlogf("Target %s is removed\n", removedSid)
 
@@ -301,7 +302,7 @@ func propsCleanupObjects(t *testing.T, bucket string, newVersions map[string]str
 	close(errch)
 }
 
-func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
+func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	const objCountToTest = 15
 	var (
 		filesput   = make(chan string, objCountToTest)
@@ -396,22 +397,38 @@ func propsMainTest(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	propsCleanupObjects(t, bucket, newVersions)
 }
 
-func Test_objpropsVersionEnabled(t *testing.T) {
+func propsMainTest(t *testing.T, versioning string) {
 	var (
 		chkVersion    = true
-		versioning    = "all"
 		isLocalBucket = false
+		rbdelay       = "1s" // default startup_delay_time is 10m
 	)
 	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	versionCfg := config["version_config"].(map[string]interface{})
+	rebalanceCfg := config["rebalance_conf"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
+	oldRBDelay := rebalanceCfg["startup_delay_time"].(string)
 	if oldChkVersion != chkVersion {
 		setConfig("validate_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/v1/cluster", httpclient, t)
 	}
 	if oldVersioning != versioning {
 		setConfig("versioning", versioning, proxyurl+"/v1/cluster", httpclient, t)
 	}
+	setConfig("startup_delay_time", rbdelay, proxyurl+"/v1/cluster", httpclient, t)
+
+	defer func() {
+		// restore configuration
+		if oldChkVersion != chkVersion {
+			setConfig("validate_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/v1/cluster", httpclient, t)
+		}
+		if oldVersioning != versioning {
+			setConfig("versioning", oldVersioning, proxyurl+"/v1/cluster", httpclient, t)
+		}
+		if oldRBDelay != "" {
+			setConfig("startup_delay_time", oldRBDelay, proxyurl+"/v1/cluster", httpclient, t)
+		}
+	}()
 
 	// Skip the test when given a local bucket
 	props, err := client.HeadBucket(proxyurl, clibucket)
@@ -424,52 +441,13 @@ func Test_objpropsVersionEnabled(t *testing.T) {
 	}
 	versionEnabled := props.Versioning != dfc.VersionNone
 
-	propsMainTest(t, versionEnabled, isLocalBucket)
+	propsTestCore(t, versionEnabled, isLocalBucket)
+}
 
-	// restore configuration
-	if oldChkVersion != chkVersion {
-		setConfig("validate_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/v1/cluster", httpclient, t)
-	}
-	if oldVersioning != versioning {
-		setConfig("versioning", oldVersioning, proxyurl+"/v1/cluster", httpclient, t)
-	}
+func Test_objpropsVersionEnabled(t *testing.T) {
+	propsMainTest(t, dfc.VersionAll)
 }
 
 func Test_objpropsVersionDisabled(t *testing.T) {
-	var (
-		chkVersion    = true
-		versioning    = "none"
-		isLocalBucket = false
-	)
-	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
-	versionCfg := config["version_config"].(map[string]interface{})
-	oldChkVersion := versionCfg["validate_warm_get"].(bool)
-	oldVersioning := versionCfg["versioning"].(string)
-	if oldChkVersion != chkVersion {
-		setConfig("validate_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/v1/cluster", httpclient, t)
-	}
-	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyurl+"/v1/cluster", httpclient, t)
-	}
-
-	// Skip the test when given a local bucket
-	props, err := client.HeadBucket(proxyurl, clibucket)
-	if err != nil {
-		t.Errorf("Could not execute HeadBucket Request: %v", err)
-		return
-	}
-	if props.CloudProvider == dfc.ProviderDfc {
-		isLocalBucket = true
-	}
-	versionEnabled := props.Versioning != dfc.VersionNone
-
-	propsMainTest(t, versionEnabled, isLocalBucket)
-
-	// restore configuration
-	if oldChkVersion != chkVersion {
-		setConfig("validate_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/v1/cluster", httpclient, t)
-	}
-	if oldVersioning != versioning {
-		setConfig("versioning", oldVersioning, proxyurl+"/v1/cluster", httpclient, t)
-	}
+	propsMainTest(t, dfc.VersionNone)
 }

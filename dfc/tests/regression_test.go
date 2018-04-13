@@ -75,6 +75,10 @@ var (
 		Test{"PrefetchRange", regressionPrefetchRange},
 		Test{"DeleteList", regressionDeleteList},
 		Test{"DeleteRange", regressionDeleteRange},
+		Test{"HeadBucket", regressionHeadBucket},
+		Test{"ListObjects", regressionListObjects},
+		Test{"ObjectProps", regressionObjectsVersions},
+		Test{"ObjectPrefix", regressionObjectPrefix},
 	}
 	abortonerr      = false
 	readerType      = readers.ReaderTypeSG
@@ -872,6 +876,129 @@ func regressionDeleteList(t *testing.T) {
 	}
 }
 
+func regressionListObjects(t *testing.T) {
+	var (
+		numFiles        = 20
+		prefix          = "regressionList"
+		fileSize uint64 = 1024
+		bucket          = clibucket
+		seed            = baseseed + 101
+		errch           = make(chan error, numFiles*5)
+		filesput        = make(chan string, numfiles)
+		dir             = DeleteDir
+		sgl      *dfc.SGLIO
+	)
+	if usingSG {
+		sgl = dfc.NewSGLIO(fileSize)
+		defer sgl.Free()
+	}
+	tlogf("Create a list of %d objects", numFiles)
+	fileList := make([]string, 0, numFiles)
+	for i := 0; i < numFiles; i++ {
+		fname := fmt.Sprintf("obj%d", i+1)
+		fileList = append(fileList, fname)
+	}
+	fillWithRandomData(seed, fileSize, fileList, bucket, t, errch, filesput, dir, prefix, false, sgl)
+	close(filesput)
+	selectErr(errch, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
+
+	type testParams struct {
+		title    string
+		prefix   string
+		pageSize int
+		limit    int
+		expected int
+	}
+	tests := []testParams{
+		{
+			"Full list - default pageSize",
+			prefix, 0, 0,
+			numFiles,
+		},
+		{
+			"Full list - small pageSize - no limit",
+			prefix, int(numFiles / 7), 0,
+			numFiles,
+		},
+		{
+			"Full list - limited",
+			prefix, 0, 8,
+			8,
+		},
+		{
+			"Full list - with prefix",
+			prefix + "/obj1", 0, 0,
+			11, //obj1 and obj10..obj19
+		},
+		{
+			"Full list - with prefix and limit",
+			prefix + "/obj1", 0, 2,
+			2, //obj1 and obj10
+		},
+		{
+			"Empty list - prefix",
+			prefix + "/nothing", 0, 0,
+			0,
+		},
+	}
+
+	for idx, test := range tests {
+		tlogf("%d. %s\n    Prefix: [%s], Expected objects: %d\n", idx+1, test.title, test.prefix, test.expected)
+		msg := &dfc.GetMsg{GetPageSize: test.pageSize, GetPrefix: test.prefix}
+		reslist, err := listObjects(t, msg, bucket, test.limit)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		if len(reslist.Entries) != test.expected {
+			t.Errorf("Test %d. %s failed: returned %d objects instead of %d",
+				idx+1, test.title, len(reslist.Entries), test.expected)
+		}
+	}
+
+	if usingFile {
+		for name := range filesput {
+			os.Remove(dir + "/" + name)
+		}
+	}
+}
+
+func regressionHeadBucket(t *testing.T) {
+	bprops, err := client.HeadBucket(proxyurl, clibucket)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if bprops == nil {
+		t.Errorf("Failed to get bucket %s head but no errors", bprops)
+		return
+	}
+
+	providerList := []string{dfc.ProviderAmazon, dfc.ProviderGoogle, dfc.ProviderDfc}
+	if !stringInSlice(bprops.CloudProvider, providerList) {
+		t.Errorf("Invalid bucket %s Cloud Provider: %s [must be one of %s]",
+			clibucket, bprops.CloudProvider, strings.Join(providerList, ", "))
+	}
+
+	versionModes := []string{dfc.VersionAll, dfc.VersionCloud, dfc.VersionLocal, dfc.VersionNone}
+	if !stringInSlice(bprops.Versioning, versionModes) {
+		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
+			clibucket, bprops.Versioning, strings.Join(versionModes, ", "))
+	}
+}
+
+func regressionObjectsVersions(t *testing.T) {
+	propsMainTest(t, dfc.VersionAll)
+}
+
+func regressionObjectPrefix(t *testing.T) {
+	prefixFileNumber = numfiles
+	prefixCreateFiles(t)
+	prefixLookup(t)
+	prefixCleanup(t)
+}
+
 //========
 //
 // Helpers
@@ -1190,4 +1317,14 @@ func tlogf(msg string, args ...interface{}) {
 
 func tlogln(msg string) {
 	tlogf(msg + "\n")
+}
+
+func stringInSlice(str string, values []string) bool {
+	for _, v := range values {
+		if str == v {
+			return true
+		}
+	}
+
+	return false
 }
