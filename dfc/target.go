@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	DefaultPageSize  = 1000  // the number of cached file infos returned in one page
-	internalPageSize = 10000 // number of objects in a page for internal call between target and proxy to get atime/iscached
+	DefaultPageSize  = 1000      // the number of cached file infos returned in one page
+	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
+	MaxPageSize      = 64 * 1024 // the maximum number of objects in a page (waring is logged in case of requested page size exceeds the limit)
 	workfileprefix   = ".~~~."
 )
 
@@ -799,8 +800,11 @@ func (ci *allfinfos) processDir(fqn string) error {
 		return nil
 	}
 
+	// every directory has to either:
+	// - start with prefix (for levels higher than prefix: prefix="ab", directory="abcd/def")
+	// - or include prefix (for levels deeper than prefix: prefix="a/", directory="a/b/")
 	relname := fqn[ci.rootLength:]
-	if ci.prefix != "" && !strings.HasPrefix(ci.prefix, relname) {
+	if ci.prefix != "" && !strings.HasPrefix(ci.prefix, relname) && !strings.HasPrefix(relname, ci.prefix) {
 		return filepath.SkipDir
 	}
 

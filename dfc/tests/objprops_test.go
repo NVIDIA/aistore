@@ -224,7 +224,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 
 	tlogf("Removing a target: %s\n", removedSid)
 	unregisterTarget(removedSid, t)
-	waitProgressBar("Removing: ", time.Second*5)
+	waitProgressBar("Removing: ", time.Second*10)
 
 	tlogf("Target %s is removed\n", removedSid)
 

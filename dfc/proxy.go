@@ -437,6 +437,10 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		pageSize = msg.GetPageSize
 	}
 
+	if pageSize > MaxPageSize {
+		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, MaxPageSize)
+	}
+
 	chresult := make(chan *targetReply, len(p.smap.Smap))
 	wg := &sync.WaitGroup{}
 
@@ -477,14 +481,15 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		allentries.Entries = append(allentries.Entries, bucketList.Entries...)
 	}
 
+	// return the list always sorted in alphabetical order
+	entryLess := func(i, j int) bool {
+		return allentries.Entries[i].Name < allentries.Entries[j].Name
+	}
+	sort.Slice(allentries.Entries, entryLess)
+
 	// shrink the result to `pageSize` entries if it is longer
 	// the result must be sorted to support paging and PageMarker
 	if len(allentries.Entries) > pageSize {
-		entryLess := func(i, j int) bool {
-			return allentries.Entries[i].Name < allentries.Entries[j].Name
-		}
-		sort.Slice(allentries.Entries, entryLess)
-
 		for i := pageSize; i < len(allentries.Entries); i++ {
 			allentries.Entries[i] = nil
 		}
@@ -507,6 +512,9 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 	err = json.Unmarshal(listmsgjson, &msg)
 	if err != nil {
 		return
+	}
+	if msg.GetPageSize > MaxPageSize {
+		glog.Warningf("Page size(%d) for cloud bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, MaxPageSize)
 	}
 
 	// first, get the cloud object list from a random target
@@ -560,6 +568,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		p.invalmsghdlr(w, r, s)
 		return
 	}
+
 	if p.islocalBucket(bucket) {
 		allentries, err = p.getLocalBucketObjects(bucket, listmsgjson)
 	} else {
