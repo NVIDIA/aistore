@@ -129,9 +129,9 @@ type iostatrunner struct {
 // c-tor and methods
 //
 //==============================================================
-func newClusterStats() *ClusterStats {
-	targets := make(map[string]*storstatsrunner, ctx.smap.count())
-	for _, si := range ctx.smap.Smap {
+func (p *proxyrunner) newClusterStats() *ClusterStats {
+	targets := make(map[string]*storstatsrunner, p.smap.count())
+	for _, si := range p.smap.Smap {
 		targets[si.DaemonID] = &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 	}
 	return &ClusterStats{Target: targets}

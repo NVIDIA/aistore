@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -56,12 +57,12 @@ type proxyrunner struct {
 	xactinp     *xactInProgress
 	lbmap       *lbmap
 	syncmapinp  int64
+	primary     bool
 }
 
 // start proxy runner
 func (p *proxyrunner) run() error {
 	p.httprunner.init(getproxystatsrunner(), true)
-	ctx.smap.ProxySI = p.si
 	p.httprunner.kalive = getproxykalive()
 
 	p.xactinp = newxactinp()
@@ -78,23 +79,84 @@ func (p *proxyrunner) run() error {
 	}
 	p.lbmap.unlock()
 
+	isproxy := os.Getenv("DFCPRIMARYPROXY")
+	// Register proxy if it isn't the Primary proxy
+	if isproxy == "" && ctx.config.PrimaryProxy.ID != p.si.DaemonID {
+		glog.Infof("Proxy (%s) is not primary proxy (%s), registering.", p.si.DaemonID, ctx.config.PrimaryProxy.ID)
+		if status, err := p.register(0); err != nil {
+			glog.Errorf("Proxy %s failed to register with primary proxy, err: %v", p.si.DaemonID, err)
+			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+				glog.Errorf("Proxy %s: retrying registration...", p.si.DaemonID)
+				time.Sleep(time.Second * 3)
+				if _, err = p.register(0); err != nil {
+					glog.Errorf("Proxy %s failed to register with primary proxy, err: %v", p.si.DaemonID, err)
+					glog.Errorf("Proxy %s is terminating", p.si.DaemonID)
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+		glog.Infof("Success: proxy %s joined the cluster", p.si.DaemonID)
+		p.primary = false
+	} else {
+		p.smap.Smap = make(map[string]*daemonInfo, 8)
+		p.smap.Pmap = make(map[string]*proxyInfo, 8)
+		p.smap.addProxy(&proxyInfo{
+			daemonInfo: *p.si,
+			Primary:    true,
+		})
+		p.primary = true
+	}
+	p.smap.ProxySI = &proxyInfo{daemonInfo: *p.si, Primary: p.primary}
 	// startup: sync local buckets and cluster map when the latter stabilizes
-	go p.synchronizeMaps(clivars.ntargets, "")
+	if p.primary {
+		go p.synchronizeMaps(clivars.ntargets, "")
+	}
 
 	//
 	// REST API: register proxy handlers and start listening
 	//
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", p.filehdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", p.daemonhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster+"/", p.clusterhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", p.votehdlr)
 	p.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Proxy %s is ready", p.si.DaemonID)
 	glog.Flush()
 	p.starttime = time.Now()
 
 	return p.httprunner.run()
+}
+
+func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
+	jsbytes, err := json.Marshal(p.si)
+	assert(err == nil)
+
+	var url string
+	if p.proxysi.DaemonID != "" {
+		url = p.proxysi.DirectURL
+	} else {
+		// Smap has not yet been synced
+		url = ctx.config.PrimaryProxy.URL
+	}
+	url += "/" + Rversion + "/" + Rcluster + "/" + Rproxy
+	if timeout > 0 {
+		url += "/" + Rkeepalive
+		_, err, _, status = p.call(nil, url, http.MethodPost, jsbytes, timeout)
+	} else {
+		_, err, _, status = p.call(nil, url, http.MethodPost, jsbytes)
+	}
+	return
+}
+
+func (p *proxyrunner) unregister() (status int, err error) {
+	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.PrimaryProxy.URL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
+	_, err, _, status = p.call(nil, url, http.MethodDelete, nil)
+	return
 }
 
 // stop gracefully
@@ -104,16 +166,19 @@ func (p *proxyrunner) stop(err error) {
 	//
 	// give targets a limited time to unregister
 	//
-	version := ctx.smap.versionLocked()
+	version := p.smap.versionLocked()
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Second)
-		v := ctx.smap.versionLocked()
+		v := p.smap.versionLocked()
 		if version != v {
 			version = v
 			time.Sleep(time.Second)
 			continue
 		}
 		break
+	}
+	if p.httprunner.h != nil {
+		p.unregister()
 	}
 	p.httprunner.stop(err)
 }
@@ -146,7 +211,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 // e.g.: GET /v1/files/bucket/object
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	if ctx.smap.count() < 1 {
+	if p.smap.count() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
@@ -178,7 +243,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// GET
-	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -187,7 +252,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	if !ctx.config.Proxy.Passthru && len(objname) > 0 {
+	if !ctx.config.PrimaryProxy.Passthru && len(objname) > 0 {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
@@ -200,7 +265,7 @@ func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
 	reqBody []byte, islocal bool, cached bool) (response *bucketResp, err error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
 		Rfiles, bucket, URLParamLocal, islocal, URLParamCached, cached)
-	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.HTTP.Timeout)
+	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
 	if err != nil {
 		p.kalive.onerr(err, status)
 	}
@@ -322,7 +387,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 		bucketMap[entry.Name] = entry
 	}
 
-	dataCh := make(chan *localFilePage, ctx.smap.count())
+	dataCh := make(chan *localFilePage, p.smap.count())
 	errch := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
@@ -333,7 +398,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	reqParams.GetPageMarker = ""
 
 	wg := &sync.WaitGroup{}
-	for _, daemon := range ctx.smap.Smap {
+	for _, daemon := range p.smap.Smap {
 		wg.Add(1)
 		go p.generateCachedList(bucket, daemon, dataCh, wg, reqParams)
 	}
@@ -372,7 +437,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		pageSize = msg.GetPageSize
 	}
 
-	chresult := make(chan *targetReply, len(ctx.smap.Smap))
+	chresult := make(chan *targetReply, len(p.smap.Smap))
 	wg := &sync.WaitGroup{}
 
 	targetCallFn := func(si *daemonInfo) {
@@ -381,7 +446,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		chresult <- &targetReply{resp, err}
 	}
 
-	for _, si := range ctx.smap.Smap {
+	for _, si := range p.smap.Smap {
 		wg.Add(1)
 		go targetCallFn(si)
 	}
@@ -445,7 +510,7 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 	}
 
 	// first, get the cloud object list from a random target
-	for _, si := range ctx.smap.Smap {
+	for _, si := range p.smap.Smap {
 		resp, err = p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjects)
 		if err != nil {
 			return
@@ -545,7 +610,7 @@ func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
 	// FIXME: add protection agaist putting into non-existing local bucket
 	//
 	objname := strings.Join(apitems[1:], "/")
-	si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -569,7 +634,7 @@ func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 1 {
 		// Redirect DELETE /v1/files/bucket/object
 		objname := strings.Join(apitems[1:], "/")
-		si, errstr := hrwTarget(bucket+"/"+objname, ctx.smap)
+		si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
 		if errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 			return
@@ -606,6 +671,10 @@ func (p *proxyrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) deleteLocalBucket(w http.ResponseWriter, r *http.Request, lbucket string) {
+	if !p.checkPrimaryProxy("delete local bucket", w, r) {
+		return
+	}
+
 	if !p.islocalBucket(lbucket) {
 		p.invalmsghdlr(w, r, "Cannot delete non-local bucket %s", lbucket)
 		return
@@ -627,6 +696,7 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
 		return
 	}
+
 	lbucket := apitems[0]
 
 	if strings.Contains(lbucket, "/") {
@@ -639,6 +709,9 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActCreateLB:
+		if !p.checkPrimaryProxy("create local bucket", w, r) {
+			return
+		}
 		p.lbmap.lock()
 		defer p.lbmap.unlock()
 		if !p.lbmap.add(lbucket) {
@@ -648,6 +721,9 @@ func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.synclbmap(w, r)
 	case ActSyncLB:
+		if !p.checkPrimaryProxy("synchronize LBmap", w, r) {
+			return
+		}
 		p.lbmap.lock()
 		defer p.lbmap.unlock()
 		p.synclbmap(w, r)
@@ -691,7 +767,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	}
 	p.lbmap.unlock()
 
-	si, errstr := hrwTarget(lbucket+"/"+objname, ctx.smap)
+	si, errstr := hrwTarget(lbucket+"/"+objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -747,7 +823,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	}
 
 	wg := &sync.WaitGroup{}
-	for _, si := range ctx.smap.Smap {
+	for _, si := range p.smap.Smap {
 		wg.Add(1)
 		go func(si *daemonInfo) {
 			defer wg.Done()
@@ -785,7 +861,7 @@ func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 	}
 	var si *daemonInfo
 	// Use random map iteration order to choose a random target to redirect to
-	for _, si = range ctx.smap.Smap {
+	for _, si = range p.smap.Smap {
 		break
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
@@ -838,6 +914,16 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
+
+	if len(apitems) > 0 && apitems[0] == Rsynclb {
+		p.httpdaeputLBMap(w, r, apitems)
+		return
+	}
+	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
+		p.httpdaeputSmap(w, r, apitems)
+		return
+	}
+
 	//
 	// other PUT /daemon actions
 	//
@@ -864,10 +950,54 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			errstr := fmt.Sprintf("Invalid setconfig request: proxy does not support (updating) '%s'", msg.Name)
 			p.invalmsghdlr(w, r, errstr)
 		}
+	case ActShutdown:
+		q := r.URL.Query()
+		forcestr := q.Get(URLParamForce)
+		force := (forcestr == "true")
+		if p.primary && !force {
+			s := fmt.Sprintf("Cannot shutdown Primary Proxy without %s=true query parameter", URLParamForce)
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 	}
+}
+
+func (p *proxyrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string) {
+	curversion := p.smap.Version
+	var newsmap *Smap
+	if p.readJSON(w, r, &newsmap) != nil {
+		return
+	}
+	if curversion == newsmap.Version {
+		return
+	}
+	if curversion > newsmap.Version {
+		return
+	}
+	existentialQ := (newsmap.getProxy(p.si.DaemonID) != nil)
+	assert(existentialQ)
+	p.smap, p.proxysi = newsmap, newsmap.ProxySI
+}
+
+func (p *proxyrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, apitems []string) {
+	curversion := p.lbmap.Version
+	newlbmap := &lbmap{LBmap: make(map[string]string)}
+	if p.readJSON(w, r, newlbmap) != nil {
+		return
+	}
+	if curversion == newlbmap.Version {
+		return
+	}
+	if curversion > newlbmap.Version {
+		glog.Errorf("Warning: attempt to downgrade lbmap verion %d to %d", curversion, newlbmap.Version)
+		return
+	}
+	glog.Infof("%s: new lbmap version %d (old %d)", apitems[0], newlbmap.Version, curversion)
+	p.lbmap = newlbmap
 }
 
 // handler for: "/"+Rversion+"/"+Rcluster
@@ -899,7 +1029,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.GetWhat {
 	case GetWhatSmap:
-		jsbytes, err := json.Marshal(ctx.smap)
+		jsbytes, err := json.Marshal(p.smap)
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpcluget")
 	case GetWhatStats:
@@ -914,8 +1044,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 // FIXME: read-lock
 func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
-	out := newClusterStats()
-	for _, si := range ctx.smap.Smap {
+	out := p.newClusterStats()
+	for _, si := range p.smap.Smap {
 		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 		out.Target[si.DaemonID] = stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
@@ -942,16 +1072,25 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 // register|keepalive target
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		osi       *daemonInfo
 		nsi       daemonInfo
 		keepalive bool
+		proxy     bool
 	)
+
+	if !p.checkPrimaryProxy("register", w, r) {
+		return
+	}
+
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
 	if len(apitems) > 0 {
 		keepalive = (apitems[0] == Rkeepalive)
+		proxy = (apitems[0] == Rproxy)
+		if proxy && len(apitems) > 1 {
+			keepalive = (apitems[1] == Rkeepalive)
+		}
 	}
 	if p.readJSON(w, r, &nsi) != nil {
 		return
@@ -962,41 +1101,80 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.statsif.add("numpost", 1)
-	ctx.smap.lock()
-	osi = ctx.smap.get(nsi.DaemonID)
-	if keepalive {
-		if osi == nil {
-			glog.Warningf("register/keepalive target %s: adding back to the cluster map", nsi.DaemonID)
-			goto add
-		}
-		if osi.NodeIPAddr != nsi.NodeIPAddr || osi.DaemonPort != nsi.DaemonPort {
-			glog.Warningf("register/keepalive target %s: info changed - renewing", nsi.DaemonID)
-			goto add
-		}
-		ctx.smap.unlock()
-		p.kalive.timestamp(nsi.DaemonID)
-		return
-	}
-	if osi != nil {
-		if osi.NodeIPAddr == nsi.NodeIPAddr && osi.DaemonPort == nsi.DaemonPort && osi.DirectURL == nsi.DirectURL {
-			glog.Infof("register target %s: already done", nsi.DaemonID)
-		} else {
-			glog.Errorf("register target %s: renewing the registration %+v => %+v", nsi.DaemonID, osi, nsi)
-		}
-		// fall through
-	}
-add:
-	ctx.smap.add(&nsi)
-	ctx.smap.unlock()
-	if glog.V(3) {
-		glog.Infof("register target %s (count %d)", nsi.DaemonID, ctx.smap.count())
+	if proxy {
+		p.registerproxy(nsi, keepalive)
+	} else {
+		p.registertarget(nsi, keepalive)
 	}
 	go p.synchronizeMaps(0, "")
 }
 
-// unregisters a target
+func (p *proxyrunner) shouldAddToSmap(nsi *daemonInfo, osi *daemonInfo, keepalive bool, kind string) bool {
+	if keepalive {
+		if osi == nil {
+			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", kind, nsi.DaemonID)
+			return true
+		}
+		if osi.NodeIPAddr != nsi.NodeIPAddr || osi.DaemonPort != nsi.DaemonPort {
+			glog.Warningf("register/keepalive %s %s: info changed - renewing", kind, nsi.DaemonID)
+			return true
+		}
+		p.kalive.timestamp(nsi.DaemonID)
+		return false
+	}
+	if osi != nil {
+		if osi.NodeIPAddr == nsi.NodeIPAddr && osi.DaemonPort == nsi.DaemonPort && osi.DirectURL == nsi.DirectURL {
+			glog.Infof("register %s %s: already done", kind, nsi.DaemonID)
+			return false
+		} else {
+			glog.Errorf("register %s %s: renewing the registration %+v => %+v", kind, nsi.DaemonID, osi, nsi)
+			return true
+		}
+	}
+	return true
+}
+
+func (p *proxyrunner) registerproxy(nsi daemonInfo, keepalive bool) {
+	p.smap.Lock()
+	defer p.smap.unlock()
+	pi := proxyInfo{
+		daemonInfo: nsi,
+		Primary:    false, // This proxy is the primary, so the newly registered one cannot be.
+	}
+	osi := p.smap.getProxy(nsi.DaemonID)
+	var osidi *daemonInfo
+	if osi != nil {
+		osidi = &osi.daemonInfo
+
+	}
+	if !p.shouldAddToSmap(&nsi, osidi, keepalive, "proxy") {
+		return
+	}
+	p.smap.addProxy(&pi)
+	if glog.V(3) {
+		glog.Infof("register proxy %s (count %d)", nsi.DaemonID, p.smap.count())
+	}
+}
+
+func (p *proxyrunner) registertarget(nsi daemonInfo, keepalive bool) {
+	p.smap.lock()
+	defer p.smap.unlock()
+	osi := p.smap.get(nsi.DaemonID)
+	if !p.shouldAddToSmap(&nsi, osi, keepalive, "target") {
+		return
+	}
+	p.smap.add(&nsi)
+	if glog.V(3) {
+		glog.Infof("register target %s (count %d)", nsi.DaemonID, p.smap.count())
+	}
+}
+
+// unregisters a target/proxy
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
+	if !p.checkPrimaryProxy("unregister", w, r) {
+		return
+	}
+	apitems := p.restAPIItems(r.URL.Path, 6)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
 		return
 	}
@@ -1006,19 +1184,37 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sid := apitems[1]
-	ctx.smap.lock()
-	if ctx.smap.get(sid) == nil {
+	proxy := false
+	if sid == Rproxy {
+		proxy = true
+		sid = apitems[2]
+	}
+	p.smap.lock()
+	if !proxy && p.smap.get(sid) == nil {
 		glog.Errorf("Unknown target %s", sid)
-		ctx.smap.unlock()
+		p.smap.unlock()
 		return
 	}
-	ctx.smap.del(sid)
-	ctx.smap.unlock()
+	if proxy && p.smap.getProxy(sid) == nil {
+		glog.Errorf("Unknown proxy %s,", sid)
+		p.smap.unlock()
+		return
+	}
+	if proxy {
+		p.smap.delProxy(sid)
+	} else {
+		p.smap.del(sid)
+	}
+	p.smap.unlock()
 	//
 	// TODO: startup -- leave --
 	//
 	if glog.V(3) {
-		glog.Infof("Unregistered target {%s} (count %d)", sid, ctx.smap.count())
+		if proxy {
+			glog.Infof("Unregistered proxy {%s} (count %d)", sid, p.smap.countProxies())
+		} else {
+			glog.Infof("Unregistered target {%s} (count %d)", sid, p.smap.count())
+		}
 	}
 	go p.synchronizeMaps(0, "")
 }
@@ -1045,30 +1241,36 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else {
 			msgbytes, err := json.Marshal(msg) // same message -> all targets
 			assert(err == nil, err)
-			for _, si := range ctx.smap.Smap {
+			// Broadcast is not used here, because these changes should only be propogated to targets.
+			for _, si := range p.smap.Smap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 				if _, err, errstr, status := p.call(si, url, http.MethodPut, msgbytes); err != nil {
 					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, errstr))
 					p.kalive.onerr(err, status)
 					break
 				}
+
 			}
 		}
 	case ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		msgbytes, err := json.Marshal(msg) // same message -> all targets
 		assert(err == nil, err)
-		for _, si := range ctx.smap.Smap {
-			url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-			glog.Infof("%s: %s", msg.Action, url)
-			p.call(si, url, http.MethodPut, msgbytes) // ignore errors
-		}
+
+		urlfmt := fmt.Sprintf("%%s/%s/%s", Rversion, Rdaemon)
+		callback := func(_ *daemonInfo, _ []byte, _ error, _ string, _ int) {}
+		p.smap.lock()
+		defer p.smap.unlock()
+		p.broadcast(urlfmt, http.MethodPut, msgbytes, callback)
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
 	case ActSyncSmap:
 		fallthrough
 	case ActRebalance:
+		if !p.checkPrimaryProxy("initiate rebalance", w, r) {
+			return
+		}
 		go p.synchronizeMaps(0, msg.Action)
 
 	default:
@@ -1084,6 +1286,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //========================
 // TODO: proxy.stop() must terminate this routine
 func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
+	if !p.primary {
+		glog.Errorf("Only the primary proxy should call SynchronizeMaps.")
+		return
+	}
 	aval := time.Now().Unix()
 	startingUp := ntargets > 0
 
@@ -1095,20 +1301,20 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	if startingUp {
 		time.Sleep(syncmapsdelay)
 	}
-	ctx.smap.lock()
+	p.smap.lock()
 	p.lbmap.lock()
 	lbversion := p.lbmap.version()
-	smapversion := ctx.smap.version()
+	smapversion := p.smap.version()
 	delay := syncmapsdelay
-	if lbversion == p.lbmap.syncversion && smapversion == ctx.smap.syncversion {
+	if lbversion == p.lbmap.syncversion && smapversion == p.smap.syncversion {
 		glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync with the targets",
 			smapversion, lbversion)
 		p.lbmap.unlock()
-		ctx.smap.unlock()
+		p.smap.unlock()
 		return
 	}
 	p.lbmap.unlock()
-	ctx.smap.unlock()
+	p.smap.unlock()
 	time.Sleep(time.Second)
 	for {
 		lbv := p.lbmap.versionLocked()
@@ -1117,12 +1323,12 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 			time.Sleep(delay)
 			continue
 		}
-		smv := ctx.smap.versionLocked()
+		smv := p.smap.versionLocked()
 		if smapversion != smv {
 			smapversion = smv
 			// if provided, use ntargets as a hint
 			if startingUp {
-				ntargetsCur := ctx.smap.countLocked()
+				ntargetsCur := p.smap.countLocked()
 				if ntargetsCur >= ntargets {
 					glog.Infof("Reached the expected number %d (%d) of target registrations",
 						ntargets, ntargetsCur)
@@ -1140,7 +1346,7 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 		p.httpfilputLB()
 		if action == Rebalance {
 			p.httpcluputSmap(Rebalance, false) // REST cmd
-		} else if ctx.smap.syncversion != smapversion {
+		} else if p.smap.syncversion != smapversion {
 			if startingUp {
 				p.httpcluputSmap(Rsyncsmap, false)
 			} else {
@@ -1149,30 +1355,30 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 		}
 		break
 	}
-	ctx.smap.lock()
+	p.smap.lock()
 	p.lbmap.lock()
-	ctx.smap.syncversion = smapversion
+	p.smap.syncversion = smapversion
 	p.lbmap.syncversion = lbversion
 	p.lbmap.unlock()
-	ctx.smap.unlock()
+	p.smap.unlock()
 	glog.Infof("Smap (v%d) and lbmap (v%d) are now in sync with the targets", smapversion, lbversion)
 }
 
 func (p *proxyrunner) httpcluputSmap(action string, autorebalance bool) {
 	method := http.MethodPut
 	assert(action == Rebalance || action == Rsyncsmap)
-	ctx.smap.lock()
-	jsbytes, err := json.Marshal(ctx.smap)
-	ctx.smap.unlock()
+	p.smap.lock()
+	defer p.smap.unlock()
+	jsbytes, err := json.Marshal(p.smap)
 	assert(err == nil, err)
 	glog.Infof("%s: %s", action, string(jsbytes))
-	for _, si := range ctx.smap.Smap {
-		url := fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rdaemon, action, URLParamAutoReb, autorebalance)
-		if _, err, errstr, status := p.call(si, url, method, jsbytes); errstr != "" {
+	urlfmt := fmt.Sprintf("%%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, action, URLParamAutoReb, autorebalance)
+	callback := func(_ *daemonInfo, _ []byte, err error, _ string, status int) {
+		if err != nil {
 			p.kalive.onerr(err, status)
-			return
 		}
 	}
+	p.broadcast(urlfmt, method, jsbytes, callback)
 }
 
 func (p *proxyrunner) httpfilputLB() {
@@ -1182,13 +1388,15 @@ func (p *proxyrunner) httpfilputLB() {
 	p.lbmap.unlock()
 
 	glog.Infoln(string(jsbytes))
-	for _, si := range ctx.smap.Smap {
-		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rsynclb
-		if _, err, _, status := p.call(si, url, http.MethodPut, jsbytes); err != nil {
+	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rdaemon, Rsynclb)
+	callback := func(_ *daemonInfo, _ []byte, err error, _ string, status int) {
+		if err != nil {
 			p.kalive.onerr(err, status)
-			return
 		}
 	}
+	p.smap.lock()
+	defer p.smap.unlock()
+	p.broadcast(urlfmt, http.MethodPut, jsbytes, callback)
 }
 
 //===================
@@ -1198,4 +1406,51 @@ func (p *proxyrunner) httpfilputLB() {
 func (p *proxyrunner) islocalBucket(bucket string) bool {
 	_, ok := p.lbmap.LBmap[bucket]
 	return ok
+}
+
+func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
+	if !p.primary {
+		if p.proxysi != nil {
+			w.Header().Add(HeaderPrimaryProxyURL, p.proxysi.DirectURL)
+			w.Header().Add(HeaderPrimaryProxyID, p.proxysi.DaemonID)
+		}
+		s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
+		p.invalmsghdlr(w, r, s)
+		return false
+	}
+	return true
+}
+
+/* Broadcasts jsbytes using the given method to all targets and proxies in the cluster.
+The URL for each proxy is created with urlfmt, which should contain one %s representing
+the direct url of any given node.
+
+Sending to each node happens in parallel, and callback will be called with the result of each one.
+
+The caller must lock p.smap.
+*/
+func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, callback func(*daemonInfo, []byte, error, string, int), timeout ...time.Duration) {
+	wg := &sync.WaitGroup{}
+	for _, si := range p.smap.Smap {
+		wg.Add(1)
+		go func(si *daemonInfo) {
+			defer wg.Done()
+			url := fmt.Sprintf(urlfmt, si.DirectURL)
+			r, err, errstr, status := p.call(si, url, method, jsbytes, timeout...)
+			callback(si, r, err, errstr, status)
+		}(si)
+	}
+	for _, si := range p.smap.Pmap {
+		if si.DaemonID != p.si.DaemonID {
+			wg.Add(1)
+			go func(si *proxyInfo) {
+				defer wg.Done()
+				// Don't broadcast to self
+				url := fmt.Sprintf(urlfmt, si.DirectURL)
+				r, err, errstr, status := p.call(&si.daemonInfo, url, method, jsbytes, timeout...)
+				callback(&si.daemonInfo, r, err, errstr, status)
+			}(si)
+		}
+	}
+	wg.Wait()
 }

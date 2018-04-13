@@ -12,8 +12,6 @@
 	"local_buckets":		"local",
 	"stats_time":			"10s",
 	"http": {
-		"timeout":		"30s",
-		"long_timeout":		"30m",
 		"max_num_targets":      16
 	},
 	"keep_alive_time":		"20s",
@@ -21,7 +19,13 @@
 		"proto": 		"tcp",
 		"port":			"${PORT}"
 	},
-	"proxy": {
+	"primaryproxy": {
+		"id":			"${PROXYID}",
+		"url": 			"${PROXYURL}",
+		"passthru": 		true
+	},
+    "originalprimaryproxy": {
+		"id":			"${PROXYID}",
 		"url": 			"${PROXYURL}",
 		"passthru": 		true
 	},
@@ -69,6 +73,13 @@ $FSPATHS
 		"fs_check_time":         "0",
 		"offline_fs_check_time": "0",
 		"fskeeper_enabled":      false
+	},
+	"timeout": {
+		"default":		"30s",
+		"default_long":		"30m",
+		"max_keepalive":	"4s",
+		"proxy_ping":		"100ms",
+		"vote_request":		"2s"
 	},
 	"h2c": 				false
 }

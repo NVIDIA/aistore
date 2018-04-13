@@ -48,6 +48,12 @@ type xactLRU struct {
 	targetrunner *targetrunner
 }
 
+type xactElection struct {
+	xactBase
+	proxyrunner *proxyrunner
+	vr          *VoteRecord
+}
+
 //====================
 //
 // xactBase
@@ -185,6 +191,25 @@ func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	return xlru
 }
 
+func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	_, xx := q.find(ActElection)
+	if xx != nil {
+		xele := xx.(*xactElection)
+		glog.Infof("%s already running, nothing to do", xele.tostring())
+		return nil
+	}
+	id := q.uniqueid()
+	xele := &xactElection{
+		xactBase:    *newxactBase(id, ActElection),
+		proxyrunner: p,
+		vr:          vr,
+	}
+	q.add(xele)
+	return xele
+}
+
 func (q *xactInProgress) abortAll() (sleep bool) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
@@ -226,6 +251,25 @@ func (xact *xactRebalance) tostring() string {
 }
 
 func (xact *xactRebalance) abort() {
+	xact.xactBase.abort()
+	glog.Infof("ABORT: " + xact.tostring())
+}
+
+//==============
+//
+// xactElection
+//
+//==============
+func (xact *xactElection) tostring() string {
+	start := xact.stime.Sub(xact.proxyrunner.starttime)
+	if !xact.finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+	}
+	fin := time.Since(xact.proxyrunner.starttime)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
+}
+
+func (xact *xactElection) abort() {
 	xact.xactBase.abort()
 	glog.Infof("ABORT: " + xact.tostring())
 }

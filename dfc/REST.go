@@ -44,15 +44,20 @@ const (
 	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation
+	HeaderPrimaryProxyURL = "PrimaryProxyURL"       // URL of Primary Proxy
+	HeaderPrimaryProxyID  = "PrimaryProxyID"        // ID of Primary Proxy
 )
 
 // URL Query Parameter enum
 const (
-	URLParamLocal   = "local"      // true if bucket is expected to be local, false otherwise
-	URLParamToID    = "to_id"      // target ID to copy to (string)
-	URLParamFromID  = "from_id"    // target ID to copy from (string)
-	URLParamCached  = "cachedonly" // true: return cached objects, false: object list from the cloud
-	URLParamAutoReb = "auto_reb"   // true: auto-rebalance upon Smap version change, false: RESTful
+	URLParamLocal            = "local"      //local=bool - true if bucket is expected to be local, false otherwise.
+	URLParamToID             = "to_id"      // to_id=string - ID to copy to
+	URLParamFromID           = "from_id"    // from_id=string - ID to copy from
+	URLParamCached           = "cachedonly" //cachedonly=bool - true if target should return cached objects info instead of reqesting object list from cloud
+	URLParamAutoReb          = "auto_reb"   // true: auto-rebalance upon Smap version change, false: RESTful
+	URLParamSuspectedTarget  = "suspect"    // suspect=string - id of target suspected of failure
+	URLParamPrimaryCandidate = "candidate"  // candidate=string - id of candidate for primary proxy
+	URLParamForce            = "force"      // force=bool - Must be true to shutdown the primary proxy
 )
 
 // TODO: sort and some props are TBD
@@ -166,4 +171,9 @@ const (
 	Rpush      = "push"
 	Rkeepalive = "keepalive"
 	Rhealth    = "health"
+	Rvote      = "vote"
+	Rtarget    = "target"
+	Rproxy     = "proxy"
+	Rvoteres   = "result"
+	Rvoteinit  = "init"
 )

@@ -141,6 +141,7 @@ $ make rmcache
 
 ## REST operations
 
+
 DFC supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
 ```
@@ -179,7 +180,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Update individual DFC daemon (proxy or target) configuration (example: statistics logging interval) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8081/v1/daemon` |
 | Update individual DFC daemon (proxy or target) configuration (example: log level) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | ` curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setconfig","name":"loglevel","value":"4"}' http://192.168.176.128:8080/v1/daemon` |
 | Set cluster-wide configuration (proxy only) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8080/v1/cluster` |
-| Shutdown target | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
+| Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
 | Shutdown cluster (proxy only) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
 | Rebalance cluster (proxy only) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics (proxy only) | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
@@ -329,3 +330,38 @@ Range APIs take an optional prefix, a regular expression, and a numeric range. A
 | --- | --- | --- | --- | --- | --- |
 | "__tst/test-" | `"\d22\d"` | `"\\d22\\d"` | "1000:2000" | "__tst/test-`1223`"<br>"__tst/test-`1229`-4000.dat"<br>"__tst/test-1111-`1229`.dat"<br>"__tst/test-`1222`2-40000.dat" | "__prod/test-1223"<br>"__tst/test-1333"<br>"__tst/test-2222-4000.dat" |
 | "a/b/c" | `"^\d+1\d"` | `"^\\d+1\\d"` | ":100000" | "a/b/c/`110`"<br>"a/b/c/`99919`-200000.dat"<br>"a/b/c/`2314`video-big" | "a/b/110"<br>"a/b/c/d/110"<br>"a/b/c/video-99919-20000.dat"<br>"a/b/c/100012"<br>"a/b/c/30331" |
+
+## Multiple Proxies
+
+DFC can be run with multiple proxies. When there are multiple proxies, one of them is the primary proxy, and any others are secondary proxies. The primary proxy is the only one allowed to be used for actions related to the Smap (Registration, Local Bucket actions). The URL of the current primary proxy must be specified in the config file at the time a proxy or target is run. On startup, a proxy will start as Primary if the environment variable DFCPRIMARYPROXY is set. If it is unset, it will start as primary if its id matches the id of the current primary proxy in the configuration file, unless the command line variable -proxyurl is set.
+
+When any target or proxy discovers that the primary proxy is not working (because a keepalive fails), they intitiate a vote to determine the next primary proxy.
+The election process is as follows:
+
+- A candidate is selected via Highest Random Weight
+- That candidate is notified that an election is beginning
+- After the candidate confirms that the current primary proxy is down, it sends vote requests to all other proxies/targets
+- Each recipient responds affirmatively if they have not recently communicated with the primary proxy, and the candidate proxy has the Highest Random Weight according to their local Smap.
+- If the candidate receives a majority of affirmative responses it sends a confirmation message to all other targets and proxies and becomes the primary proxy.
+- Upon reception of the confirmation message, a recipient removes the previous primary proxy from their local Smap, and updates the primary proxy to the winning candidate.
+
+### Current Limitations
+
+- The ID and URL of the primary proxy must be specified in the config file, so when a primary proxy fails and is restarted, it will be unable to properly join the cluster unless its config file is updated. This also means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fail, and rejoin.
+- When the primary proxy fails and another proxy becomes the primary, if the original primary proxy becomes active again, there will be two proxies that think they are the primary. However, the original proxy will have a lower Smap version than the rest of the cluster, and so it will be treated as though it is no longer a part of the cluster.
+- DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
+
+### Tests
+
+The suite of tests for multiple proxies may be run by including the flag "-testmultipleproxies" in a test run. Note that these tests can result in the primary proxy changing. Multiple proxy tests can only be run on Linux, where the entire cluster is being run locally.
+
+#### Current Tests
+
+1. Proxy_Failure: Tests that a new proxy is successfully transitioned to after primary proxy failure.
+2. Multiple_Failures: Tests that a new proxy is successfully transitioned to after the primary proxy and a target fail at once.
+3. Rejoin: Tests that, after a primary proxy failure and transition, a target can fail and rejoin the cluster.
+4. Primary_Proxy_Rejoin: Tests the scenario where the primary proxy becomes inactive, and resumes activity during the voting process. The vote should complete and result in the primary proxy changing, with the previous primary proxy still alive, but with a lower Smap version.
+
+#### Stress Test
+
+The stress test runs a sequence of put/get/delete calls to a local bucket from multiple worker threads, and simultaneously kills, waits, and restores the primary proxy at random intervals. It can be run by including both the flag "-testmultipleproxies" and providing a value for the stress test length with the flag "-votestresstimeout."

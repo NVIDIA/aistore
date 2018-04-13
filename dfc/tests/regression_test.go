@@ -216,7 +216,7 @@ func regressionConfig(t *testing.T) {
 	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
-	oproxyconfig := oconfig["proxy"].(map[string]interface{})
+	oproxyconfig := oconfig["primaryproxy"].(map[string]interface{})
 
 	for k, v := range configRegression {
 		setConfig(k, v, proxyurl+"/v1/cluster", httpclient, t)
@@ -225,7 +225,7 @@ func regressionConfig(t *testing.T) {
 	nconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nrebconfig := nconfig["rebalance_conf"].(map[string]interface{})
-	nproxyconfig := nconfig["proxy"].(map[string]interface{})
+	nproxyconfig := nconfig["primaryproxy"].(map[string]interface{})
 
 	if nconfig["stats_time"] != configRegression["stats_time"] {
 		t.Errorf("StatsTime was not set properly: %v, should be: %v",

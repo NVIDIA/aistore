@@ -41,14 +41,16 @@ type cliVars struct {
 	loglevel  string
 	statstime time.Duration
 	ntargets  int
+	proxyurl  string
 }
 
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 // Smap contains id:daemonInfo pairs and related metadata
 type Smap struct {
 	sync.Mutex
-	Smap        map[string]*daemonInfo `json:"smap"`
-	ProxySI     *daemonInfo            `json:"proxy_si"`
+	Smap        map[string]*daemonInfo `json:"smap"` // daemonID -> daemonInfo
+	Pmap        map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
+	ProxySI     *proxyInfo             `json:"proxy_si"`
 	Version     int64                  `json:"version"`
 	syncversion int64
 }
@@ -62,7 +64,6 @@ type mountedFS struct {
 
 // daemon instance: proxy or storage target
 type daemon struct {
-	smap       *Smap
 	config     dfconfig
 	mountpaths mountedFS
 	rg         *rungroup
@@ -74,6 +75,11 @@ type daemonInfo struct {
 	DaemonPort string `json:"daemon_port"`
 	DaemonID   string `json:"daemon_id"`
 	DirectURL  string `json:"direct_url"`
+}
+
+type proxyInfo struct {
+	daemonInfo
+	Primary bool
 }
 
 // local (cache-only) bucket names and their TBD props
@@ -149,8 +155,18 @@ func (m *Smap) add(si *daemonInfo) {
 	m.Version++
 }
 
+func (m *Smap) addProxy(pi *proxyInfo) {
+	m.Pmap[pi.DaemonID] = pi
+	m.Version++
+}
+
 func (m *Smap) del(sid string) {
 	delete(m.Smap, sid)
+	m.Version++
+}
+
+func (m *Smap) delProxy(pid string) {
+	delete(m.Pmap, pid)
 	m.Version++
 }
 
@@ -168,6 +184,9 @@ func (m *Smap) count() int {
 	return len(m.Smap)
 }
 
+func (m *Smap) countProxies() int {
+	return len(m.Pmap)
+}
 func (m *Smap) countLocked() int {
 	m.lock()
 	defer m.unlock()
@@ -177,6 +196,11 @@ func (m *Smap) countLocked() int {
 func (m *Smap) get(sid string) *daemonInfo {
 	si := m.Smap[sid]
 	return si
+}
+
+func (m *Smap) getProxy(pid string) *proxyInfo {
+	pi := m.Pmap[pid]
+	return pi
 }
 
 func (m *Smap) lock() {
@@ -295,6 +319,7 @@ func dfcinit() {
 	flag.StringVar(&clivars.loglevel, "loglevel", "", "glog loglevel")
 	flag.DurationVar(&clivars.statstime, "statstime", 0, "http and capacity utilization statistics log interval")
 	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
+	flag.StringVar(&clivars.proxyurl, "proxyurl", "", "Override config Proxy settings")
 
 	flag.Parse()
 	if clivars.conffile == "" {
@@ -313,12 +338,7 @@ func dfcinit() {
 	}
 	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 	if clivars.role == xproxy {
-		if clivars.ntargets <= 0 {
-			glog.Fatalf("Unspecified or invalid number (%d) of storage targets (a hint for the http proxy)",
-				clivars.ntargets)
-		}
 		confdir := ctx.config.Confdir
-		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8)}
 		p := &proxyrunner{confdir: confdir}
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)

@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dfcprimaryproxy
+spec:
+  selector:
+    matchLabels:
+       app: dfcproxy-app
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: dfcproxy-app
+    spec:
+      hostNetwork: true
+      containers:
+      - name: dfcproxy
+        image: quay.io/nvidia/dfc
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /v1/health
+            port: 8081
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        env:
+         - name: ROLE
+           value: "proxy"
+         - name: DFCPRIMARYPROXY
+           value: "TRUE"
+        volumeMounts:
+         - name: dfc-config
+           mountPath: /etc/dfc/dfc.json
+           subPath: dfc.json
+         - name: collectd-config
+           mountPath: /etc/collectd/collectd.conf
+           subPath: collectd.conf
+         - name: statsd-config
+           mountPath: /opt/statsd/statsd.conf
+           subPath: statsd.conf
+         - name: aws-credentials
+           mountPath: /root/.aws/
+         - name: dfc-log
+           mountPath: /tmp/
+         - name: dfc-localbucket
+           mountPath: /usr/nvidia/
+        ports:
+          - containerPort: 8081
+      nodeSelector:
+          nodename: proxy
+      volumes:
+        - name: dfc-config
+          configMap:
+            name: dfc-config
+        - name: collectd-config
+          configMap:
+            name: collectd-config
+        - name: statsd-config
+          configMap:
+            name: statsd-config
+        - name: aws-credentials
+          secret:
+            secretName: aws-credentials
+        - name: dfc-log
+          hostPath:
+            path: /tmp
+            type: Directory
+        - name: dfc-localbucket
+          hostPath:
+            path: /usr/nvidia/
+            type: Directory

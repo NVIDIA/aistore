@@ -94,7 +94,7 @@ func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max i
 		if !acceptRegexRange(be.Name, prefix, re, min, max) {
 			continue
 		}
-		if si, errstr := hrwTarget(bucket+"/"+be.Name, t.smap); si.DaemonID == t.si.DaemonID {
+		if si, errstr := hrwTarget(bucket+"/"+be.Name, t.smap); si == nil || si.DaemonID == t.si.DaemonID {
 			if errstr != "" {
 				return nil, fmt.Errorf(errstr)
 			}

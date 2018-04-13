@@ -52,8 +52,16 @@ read servcount
 if ! [[ "$servcount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$servcount' is not a number"; exit 1
 fi
+echo "Enter number of proxies:"
+read proxycount
+if ! [[ "$proxycount" =~ ^[0-9]+$ ]] ; then
+	echo "Error: '$proxycount' is not a number"; exit 1
+elif  [ $proxycount -lt 1 ] ; then
+    echo "Error: $proxycount must be at least 1"; exit 1
+fi
+
 START=0
-END=$servcount
+END=$(( $servcount + $proxycount - 1 ))
 
 echo "Number of local cache directories (enter 0 to use preconfigured filesystems):"
 read testfspathcnt
@@ -113,10 +121,15 @@ do
 	if [ $c -eq 0 ]
 	then
 			set -x
-			$GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
+            (export DFCPRIMARYPROXY=="TRUE" && $GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2) &
 			{ set +x; } 2>/dev/null
 			# wait for the proxy to start up
 			sleep 2
+    elif [ $c -lt $proxycount ]
+    then
+            set -x
+            $GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
+			{ set +x; } 2>/dev/null
 	else
 			set -x
 			$GOPATH/bin/dfc -config=$CONFFILE -role=target $1 $2 &

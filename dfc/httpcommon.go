@@ -95,6 +95,8 @@ type httprunner struct {
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	statsif               statsif
 	kalive                kaliveif
+	proxysi               *proxyInfo
+	smap                  *Smap
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -105,6 +107,12 @@ func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 }
 
 func (h *httprunner) init(s statsif, isproxy bool) {
+	// clivars proxyurl overrides config proxy settings.
+	// If it is set, the proxy will not register as the primary proxy.
+	if clivars.proxyurl != "" {
+		ctx.config.PrimaryProxy.ID = ""
+		ctx.config.PrimaryProxy.URL = clivars.proxyurl
+	}
 	h.statsif = s
 	ipaddr, errstr := getipv4addr()
 	if errstr != "" {
@@ -122,17 +130,18 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	}
 	h.httpclient = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-		Timeout:   ctx.config.HTTP.Timeout,
+		Timeout:   ctx.config.Timeout.Default,
 	}
 	h.httpclientLongTimeout = &http.Client{
 		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-		Timeout:   ctx.config.HTTP.LongTimeout,
+		Timeout:   ctx.config.Timeout.DefaultLong,
 	}
+	h.smap = &Smap{}
+	h.proxysi = &proxyInfo{}
 	// init daemonInfo here
 	h.si = &daemonInfo{}
 	h.si.NodeIPAddr = ipaddr
 	h.si.DaemonPort = ctx.config.Listen.Port
-
 	id := os.Getenv("DFCDAEMONID")
 	if id != "" {
 		h.si.DaemonID = id
@@ -141,7 +150,6 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
 		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
 	}
-
 	h.si.DirectURL = "http://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
 }
 
@@ -169,7 +177,7 @@ func (h *httprunner) run() error {
 func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.name, err)
 
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTP.Timeout)
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
 	defer cancel()
 
 	if h.h == nil {
@@ -409,7 +417,7 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
 		} else {
-			ctx.config.Proxy.Passthru = v
+			ctx.config.PrimaryProxy.Passthru = v
 		}
 	case "lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {

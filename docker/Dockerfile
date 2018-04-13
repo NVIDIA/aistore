@@ -6,8 +6,8 @@ ENV TARGETS 1000
 ENV GOPATH /go
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
-RUN apt-get update
-RUN set -eux &&\
+RUN apt-get update &&\
+  set -eux &&\
   apt-get -y install curl &&\
   apt-get --no-install-recommends -y install git &&\
   apt-get --no-install-recommends -y install wget &&\

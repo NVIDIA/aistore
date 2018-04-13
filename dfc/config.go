@@ -51,29 +51,31 @@ const lbname = "localbuckets"
 //
 //==============================
 type dfconfig struct {
-	Log              logconfig         `json:"log"`
-	Confdir          string            `json:"confdir"`
-	CloudProvider    string            `json:"cloudprovider"`
-	CloudBuckets     string            `json:"cloud_buckets"`
-	LocalBuckets     string            `json:"local_buckets"`
-	StatsTimeStr     string            `json:"stats_time"`
-	StatsTime        time.Duration     `json:"-"` // omitempty
-	HTTP             httpconfig        `json:"http"`
-	KeepAliveTimeStr string            `json:"keep_alive_time"`
-	KeepAliveTime    time.Duration     `json:"-"` // omitempty
-	Listen           listenconfig      `json:"listen"`
-	Proxy            proxyconfig       `json:"proxy"`
-	S3               s3config          `json:"s3"`
-	LRUConfig        lruconfig         `json:"lru_config"`
-	RebalanceConf    rebalanceconf     `json:"rebalance_conf"`
-	CksumConfig      cksumconfig       `json:"cksum_config"`
-	VersionConfig    versionconfig     `json:"version_config"`
-	FSpaths          map[string]string `json:"fspaths"`
-	TestFSP          testfspathconf    `json:"test_fspaths"`
-	AckPolicy        ackpolicy         `json:"ack_policy"`
-	Network          netconfig         `json:"network"`
-	FSKeeper         fskeeperconf      `json:"fskeeper"`
-	H2c              bool              `json:"h2c"`
+	Log                  logconfig         `json:"log"`
+	Confdir              string            `json:"confdir"`
+	CloudProvider        string            `json:"cloudprovider"`
+	CloudBuckets         string            `json:"cloud_buckets"`
+	LocalBuckets         string            `json:"local_buckets"`
+	StatsTimeStr         string            `json:"stats_time"`
+	StatsTime            time.Duration     `json:"-"` // omitempty
+	HTTP                 httpconfig        `json:"http"`
+	KeepAliveTimeStr     string            `json:"keep_alive_time"`
+	KeepAliveTime        time.Duration     `json:"-"` // omitempty
+	Listen               listenconfig      `json:"listen"`
+	PrimaryProxy         proxyconfig       `json:"primaryproxy"`
+	OriginalPrimaryProxy proxyconfig       `json"originalprimaryproxy`
+	S3                   s3config          `json:"s3"`
+	LRUConfig            lruconfig         `json:"lru_config"`
+	RebalanceConf        rebalanceconf     `json:"rebalance_conf"`
+	CksumConfig          cksumconfig       `json:"cksum_config"`
+	VersionConfig        versionconfig     `json:"version_config"`
+	FSpaths              map[string]string `json:"fspaths"`
+	TestFSP              testfspathconf    `json:"test_fspaths"`
+	AckPolicy            ackpolicy         `json:"ack_policy"`
+	Network              netconfig         `json:"network"`
+	FSKeeper             fskeeperconf      `json:"fskeeper"`
+	Timeout              timeoutconfig     `json:"timeout"`
+	H2c                  bool              `json:"h2c"`
 }
 
 type logconfig struct {
@@ -118,7 +120,8 @@ type listenconfig struct {
 }
 
 type proxyconfig struct {
-	URL      string `json:"url"`      // used to register caching servers
+	ID       string `json:"id"`       // used to register caching servers/other proxies
+	URL      string `json:"url"`      // used to register caching servers/other proxies
 	Passthru bool   `json:"passthru"` // false: get then redirect, true (default): redirect right away
 }
 
@@ -134,12 +137,7 @@ type ackpolicy struct {
 
 // httpconfig configures parameters for the HTTP clients used by the Proxy
 type httpconfig struct {
-	TimeoutStr     string `json:"timeout"`         // httpclient (call) default timeout
-	LongTimeoutStr string `json:"long_timeout"`    // prefetch et al. timeout
-	MaxNumTargets  int    `json:"max_num_targets"` // estimated max num targets (to count idle conns)
-	// omitempty
-	Timeout     time.Duration `json:"-"`
-	LongTimeout time.Duration `json:"-"`
+	MaxNumTargets int `json:"max_num_targets"` // estimated max num targets (to count idle conns)
 }
 
 type versionconfig struct {
@@ -157,6 +155,20 @@ type fskeeperconf struct {
 	OfflineFSCheckTimeStr string        `json:"offline_fs_check_time"`
 	OfflineFSCheckTime    time.Duration `json:"-"` // omitempty
 	Enabled               bool          `json:"fskeeper_enabled"`
+}
+
+// timeoutconfig contains timeouts used for intra-cluster communication
+type timeoutconfig struct {
+	DefaultStr      string        `json:"default"`
+	Default         time.Duration `json:"-"` // omitempty
+	DefaultLongStr  string        `json:"default_long"`
+	DefaultLong     time.Duration `json:"-"` // omitempty
+	MaxKeepaliveStr string        `json:"max_keepalive"`
+	MaxKeepalive    time.Duration `json:"-"` // omitempty
+	ProxyPingStr    string        `json:"proxy_ping"`
+	ProxyPing       time.Duration `json:"-"` // omitempty
+	VoteRequestStr  string        `json:"vote_request"`
+	VoteRequest     time.Duration `json:"-"` // omitempty
 }
 
 //==============================
@@ -187,6 +199,10 @@ func initconfigparam() error {
 	// CLI override
 	if clivars.statstime != 0 {
 		ctx.config.StatsTime = clivars.statstime
+	}
+	if clivars.proxyurl != "" {
+		ctx.config.PrimaryProxy.ID = ""
+		ctx.config.PrimaryProxy.URL = clivars.proxyurl
 	}
 	if clivars.loglevel != "" {
 		if err = setloglevel(clivars.loglevel); err != nil {
@@ -241,11 +257,11 @@ func validateconf() (err error) {
 	if ctx.config.StatsTime, err = time.ParseDuration(ctx.config.StatsTimeStr); err != nil {
 		return fmt.Errorf("Bad stats-time format %s, err: %v", ctx.config.StatsTimeStr, err)
 	}
-	if ctx.config.HTTP.Timeout, err = time.ParseDuration(ctx.config.HTTP.TimeoutStr); err != nil {
-		return fmt.Errorf("Bad HTTP timeout format %s, err: %v", ctx.config.HTTP.TimeoutStr, err)
+	if ctx.config.Timeout.Default, err = time.ParseDuration(ctx.config.Timeout.DefaultStr); err != nil {
+		return fmt.Errorf("Bad Timeout default format %s, err: %v", ctx.config.Timeout.DefaultStr, err)
 	}
-	if ctx.config.HTTP.LongTimeout, err = time.ParseDuration(ctx.config.HTTP.LongTimeoutStr); err != nil {
-		return fmt.Errorf("Bad HTTP long_timeout format %s, err %v", ctx.config.HTTP.LongTimeoutStr, err)
+	if ctx.config.Timeout.DefaultLong, err = time.ParseDuration(ctx.config.Timeout.DefaultLongStr); err != nil {
+		return fmt.Errorf("Bad Timeout default_long format %s, err %v", ctx.config.Timeout.DefaultLongStr, err)
 	}
 	if ctx.config.KeepAliveTime, err = time.ParseDuration(ctx.config.KeepAliveTimeStr); err != nil {
 		return fmt.Errorf("Bad keep_alive_time format %s, err: %v", ctx.config.KeepAliveTimeStr, err)
@@ -285,6 +301,15 @@ func validateconf() (err error) {
 	if ctx.config.FSKeeper.OfflineFSCheckTime, err = time.ParseDuration(ctx.config.FSKeeper.OfflineFSCheckTimeStr); err != nil {
 		return fmt.Errorf("Bad FSKeeper offline_fs_check_time format %s, err %v", ctx.config.FSKeeper.OfflineFSCheckTimeStr, err)
 	}
+	if ctx.config.Timeout.MaxKeepalive, err = time.ParseDuration(ctx.config.Timeout.MaxKeepaliveStr); err != nil {
+		return fmt.Errorf("Bad Timeout max_keepalive format %s, err %v", ctx.config.Timeout.MaxKeepaliveStr, err)
+	}
+	if ctx.config.Timeout.ProxyPing, err = time.ParseDuration(ctx.config.Timeout.ProxyPingStr); err != nil {
+		return fmt.Errorf("Bad Timeout proxy_ping format %s, err %v", ctx.config.Timeout.ProxyPingStr, err)
+	}
+	if ctx.config.Timeout.VoteRequest, err = time.ParseDuration(ctx.config.Timeout.VoteRequestStr); err != nil {
+		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", ctx.config.Timeout.VoteRequestStr, err)
+	}
 	return nil
 }
 
@@ -298,4 +323,16 @@ func setloglevel(loglevel string) (err error) {
 		ctx.config.Log.Level = loglevel
 	}
 	return
+}
+
+func writeConfigFile() error {
+	jsbytes, err := json.MarshalIndent(ctx.config, "", "\t")
+	assert(err == nil)
+
+	conffile := clivars.conffile
+	if err := ioutil.WriteFile(conffile, jsbytes, os.ModePerm); err != nil {
+		return fmt.Errorf("Error writing Config File: %v", err)
+	}
+
+	return nil
 }
