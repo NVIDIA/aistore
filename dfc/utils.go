@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -430,4 +431,12 @@ func isSyscallWriteError(err error) bool {
 	default:
 		return false
 	}
+}
+
+func parsebool(s string) (value bool, err error) {
+	if s == "" {
+		return
+	}
+	value, err = strconv.ParseBool(s)
+	return
 }

@@ -1608,29 +1608,22 @@ func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {
 	useCacheStr := r.URL.Query().Get(URLParamCached)
-	if useCacheStr != "" && useCacheStr != "true" && useCacheStr != "false" {
+	var err error
+	if useCache, err = parsebool(useCacheStr); err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
 			URLParamCached, useCacheStr)
 		errcode = http.StatusInternalServerError
-		return
 	}
-
-	useCache = useCacheStr == "true"
 	return
 }
 
 func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) (islocal bool, errstr string, errcode int) {
-	// If a client provides the local parameter, but the bucket is not loca
 	islocal = t.islocalBucket(bucket)
 	proxylocalstr := r.URL.Query().Get(URLParamLocal)
-	if proxylocalstr != "" && proxylocalstr != "true" && proxylocalstr != "false" {
-		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
-			URLParamLocal, proxylocalstr)
+	if proxylocal, err := parsebool(proxylocalstr); err != nil {
+		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)", URLParamLocal, proxylocalstr)
 		errcode = http.StatusInternalServerError
-		return
-	}
-	proxylocal := proxylocalstr == "true"
-	if proxylocalstr != "" && islocal != proxylocal {
+	} else if proxylocalstr != "" && islocal != proxylocal {
 		errstr = fmt.Sprintf("Mismatch with islocalbucket: Client( %v ), Target( %v )", proxylocal, islocal)
 		errcode = http.StatusInternalServerError
 	}
@@ -1665,14 +1658,14 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 	// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
 	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
-		autorebalance := r.URL.Query().Get(URLParamAutoReb)
-		if autorebalance != "true" && autorebalance != "false" {
-			errstr := fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: true | false)",
-				URLParamAutoReb, autorebalance)
+		str := r.URL.Query().Get(URLParamAutoReb)
+		autorebalance, err := parsebool(str)
+		if err != nil {
+			errstr := fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: true | false)", URLParamAutoReb, str)
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		t.httpdaeputSmap(w, r, apitems, autorebalance == "true")
+		t.httpdaeputSmap(w, r, apitems, autorebalance)
 		return
 	}
 	// PUT '{lbmap}' /v1/daemon/localbuckets

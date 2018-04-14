@@ -539,18 +539,31 @@ func Test_bucketnames(t *testing.T) {
 		r   *http.Response
 		err error
 	)
+	tlogf("local bucket names:\n")
+	urlLocalOnly := fmt.Sprintf("%s?%s=%t", url, dfc.URLParamLocal, true)
+	r, err = http.Get(urlLocalOnly)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	printbucketnames(t, r)
+
+	tlogf("all bucket names:\n")
 	r, err = http.Get(url)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
 	}
+	printbucketnames(t, r)
+}
+
+func printbucketnames(t *testing.T, r *http.Response) {
 	defer r.Body.Close()
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
 		t.Errorf("Failed with HTTP status %d", r.StatusCode)
 		return
 	}
-	var b []byte
-	b, err = ioutil.ReadAll(r.Body)
+	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		t.Errorf("Failed to read response body: %v", err)
 		return
@@ -567,7 +580,6 @@ func Test_bucketnames(t *testing.T) {
 		return
 	}
 	fmt.Fprintln(os.Stdout, string(pretty))
-	return
 }
 
 func Test_coldgetmd5(t *testing.T) {

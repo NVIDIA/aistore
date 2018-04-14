@@ -231,18 +231,7 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	if len(objname) == 0 {
 		// all bucket names
 		if bucket == "*" {
-			var si *daemonInfo
-			for _, si = range p.smap.Smap {
-				break
-			}
-			url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
-			outjson, err, errstr, status := p.call(si, url, r.Method, nil)
-			if err != nil {
-				p.invalmsghdlr(w, r, errstr)
-				p.kalive.onerr(err, status)
-			} else {
-				p.writeJSON(w, r, outjson, "getbucketnames")
-			}
+			p.getbucketnames(w, r, bucket)
 			return
 		}
 		// list the bucket
@@ -274,6 +263,35 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	p.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
+}
+
+func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec string) {
+	q := r.URL.Query()
+	localonly, _ := parsebool(q.Get(URLParamLocal))
+	if localonly {
+		bucketnames := &BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
+		for bucket := range p.lbmap.LBmap {
+			bucketnames.Local = append(bucketnames.Local, bucket)
+		}
+		jsbytes, err := json.Marshal(bucketnames)
+		assert(err == nil, err)
+		p.writeJSON(w, r, jsbytes, "getbucketnames?local=true")
+		return
+	}
+
+	var si *daemonInfo
+	for _, si = range p.smap.Smap {
+		break
+	}
+	url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucketspec
+	outjson, err, errstr, status := p.call(si, url, r.Method, nil)
+	if err != nil {
+		p.invalmsghdlr(w, r, errstr)
+		p.kalive.onerr(err, status)
+	} else {
+		p.writeJSON(w, r, outjson, "getbucketnames")
+	}
+	return
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
@@ -327,23 +345,17 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
 // The target returns its list in batches `pageSize` length
 func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 	dataCh chan *localFilePage, wg *sync.WaitGroup, origmsg *GetMsg) {
-	const (
-		cachedObjects = true
-		islocal       = false
-	)
 	if wg != nil {
 		defer wg.Done()
 	}
-
 	var msg GetMsg
 	copyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
 	for {
-		// re-Marshall request arguments every time because PageMarker
-		// changes every loop run
+		// re-marshall with an updated PageMarker
 		listmsgjson, err := json.Marshal(&msg)
 		assert(err == nil, err)
-		resp, err := p.targetListBucket(bucket, daemon, listmsgjson, islocal, cachedObjects)
+		resp, err := p.targetListBucket(bucket, daemon, listmsgjson, false /* islocal */, true /* cachedObjects */)
 		if err != nil {
 			if dataCh != nil {
 				dataCh <- &localFilePage{
@@ -977,8 +989,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		}
 	case ActShutdown:
 		q := r.URL.Query()
-		forcestr := q.Get(URLParamForce)
-		force := (forcestr == "true")
+		force, _ := parsebool(q.Get(URLParamForce))
 		if p.primary && !force {
 			s := fmt.Sprintf("Cannot shutdown Primary Proxy without %s=true query parameter", URLParamForce)
 			p.invalmsghdlr(w, r, s)
