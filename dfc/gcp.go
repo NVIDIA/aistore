@@ -1,6 +1,6 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.  *
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.  *
  */
 package dfc
 
@@ -66,13 +66,15 @@ func createclient() (*storage.Client, context.Context, string) {
 	return client, gctx, ""
 }
 
-//======
+//==================
 //
-// methods
+// bucket operations
 //
-//======
+//==================
 func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
-	glog.Infof("gcp: listbucket %s", bucket)
+	if glog.V(4) {
+		glog.Infof("listbucket %s", bucket)
+	}
 	client, gctx, errstr := createclient()
 	if errstr != "" {
 		return
@@ -97,7 +99,7 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	nextPageToken, err := pager.NextPage(&objs)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to list objects of bucket %s, err: %v", bucket, err)
+		errstr = fmt.Sprintf("Failed to list objects of bucket %s, err: %v", bucket, err)
 	}
 
 	var reslist = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
@@ -135,7 +137,7 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 
 		reslist.Entries = append(reslist.Entries, entry)
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 	jsbytes, err = json.Marshal(reslist)
@@ -144,7 +146,9 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 }
 
 func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int) {
-	glog.Infof("gcp: headbucket %s", bucket)
+	if glog.V(4) {
+		glog.Infof("headbucket %s", bucket)
+	}
 	bucketprops = make(map[string]string)
 
 	client, gctx, errstr := createclient()
@@ -154,7 +158,7 @@ func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string
 	_, err := client.Bucket(bucket).Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to get attributes (bucket %s), err: %v", bucket, err)
+		errstr = fmt.Sprintf("Failed to get attributes (bucket %s), err: %v", bucket, err)
 		return
 	}
 	bucketprops[CloudProvider] = ProviderGoogle
@@ -164,8 +168,40 @@ func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string
 	return
 }
 
+func (gcpimpl *gcpimpl) getbucketnames() (buckets []string, errstr string, errcode int) {
+	client, gctx, errstr := createclient()
+	if errstr != "" {
+		return
+	}
+	buckets = make([]string, 0, 16)
+	it := client.Buckets(gctx, getProjID())
+	for {
+		battrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			errcode = gcpErrorToHTTP(err)
+			errstr = fmt.Sprintf("Failed to list all buckets, err: %v", err)
+			return
+		}
+		buckets = append(buckets, battrs.Name)
+		if glog.V(4) {
+			glog.Infof("%s: created %v, versioning %t", battrs.Name, battrs.Created, battrs.VersioningEnabled)
+		}
+	}
+	return
+}
+
+//============
+//
+// object meta
+//
+//============
 func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
-	glog.Infof("gcp: headobject %s/%s", bucket, objname)
+	if glog.V(4) {
+		glog.Infof("headobject %s/%s", bucket, objname)
+	}
 	objmeta = make(map[string]string)
 
 	client, gctx, errstr := createclient()
@@ -175,7 +211,7 @@ func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (objmeta map[s
 	attrs, err := client.Bucket(bucket).Object(objname).Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
 	objmeta[CloudProvider] = ProviderGoogle
@@ -183,6 +219,11 @@ func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (objmeta map[s
 	return
 }
 
+//=======================
+//
+// object data operations
+//
+//=======================
 func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
 	var v cksumvalue
 	client, gctx, errstr := createclient()
@@ -193,14 +234,14 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
 	v = newcksumvalue(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("gcp: The object %s/%s either does not exist or is not accessible, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("The object %s/%s either does not exist or is not accessible, err: %v", bucket, objname, err)
 		return
 	}
 	defer rc.Close()
@@ -210,7 +251,7 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("gcp: GET %s/%s", bucket, objname)
+		glog.Infof("GET %s/%s", bucket, objname)
 	}
 	return
 }
@@ -238,21 +279,21 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	defer slab.free(buf)
 	written, err := io.CopyBuffer(wc, file, buf)
 	if err != nil {
-		errstr = fmt.Sprintf("gcp: PUT %s/%s: failed to copy, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("PUT %s/%s: failed to copy, err: %v", bucket, objname, err)
 		return
 	}
 	if err := wc.Close(); err != nil {
-		errstr = fmt.Sprintf("gcp: PUT %s/%s: failed to close wc, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("PUT %s/%s: failed to close wc, err: %v", bucket, objname, err)
 		return
 	}
 	attr, err := gcpObj.Attrs(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("gcp: PUT %s/%s: failed to read updated object attributes, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("PUT %s/%s: failed to read updated object attributes, err: %v", bucket, objname, err)
 		return
 	}
 	version = fmt.Sprintf("%d", attr.Generation)
 	if glog.V(4) {
-		glog.Infof("gcp: PUT %s/%s, size %d, version %s", bucket, objname, written, version)
+		glog.Infof("PUT %s/%s, size %d, version %s", bucket, objname, written, version)
 	}
 	return
 }
@@ -266,11 +307,11 @@ func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string, errcod
 	err := o.Delete(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
-		errstr = fmt.Sprintf("gcp: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("gcp: DELETE %s/%s", bucket, objname)
+		glog.Infof("DELETE %s/%s", bucket, objname)
 	}
 	return
 }

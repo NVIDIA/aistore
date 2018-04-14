@@ -1,6 +1,6 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -64,13 +64,15 @@ func awsIsVersionSet(version *string) bool {
 	return version != nil && *version != "null" && *version != ""
 }
 
-//======
+//==================
 //
-// methods
+// bucket operations
 //
-//======
+//==================
 func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
-	glog.Infof("aws: listbucket %s", bucket)
+	if glog.V(4) {
+		glog.Infof("listbucket %s", bucket)
+	}
 	sess := createsession()
 	svc := s3.New(sess)
 
@@ -150,7 +152,7 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 		// TODO: other GetMsg props TBD
 		reslist.Entries = append(reslist.Entries, entry)
 	}
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 
@@ -166,7 +168,9 @@ func (awsimpl *awsimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 }
 
 func (awsimpl *awsimpl) headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int) {
-	glog.Infof("aws: headbucket %s", bucket)
+	if glog.V(4) {
+		glog.Infof("headbucket %s", bucket)
+	}
 	bucketprops = make(map[string]string)
 
 	sess := createsession()
@@ -176,7 +180,7 @@ func (awsimpl *awsimpl) headbucket(bucket string) (bucketprops map[string]string
 	_, err := svc.HeadBucket(input)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
+		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 		return
 	}
 	bucketprops[CloudProvider] = ProviderAmazon
@@ -185,7 +189,7 @@ func (awsimpl *awsimpl) headbucket(bucket string) (bucketprops map[string]string
 	result, err := svc.GetBucketVersioning(inputVers)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
+		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 	} else {
 		if result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled {
 			bucketprops[Versioning] = VersionCloud
@@ -193,12 +197,37 @@ func (awsimpl *awsimpl) headbucket(bucket string) (bucketprops map[string]string
 			bucketprops[Versioning] = VersionNone
 		}
 	}
-
 	return
 }
 
+func (awsimpl *awsimpl) getbucketnames() (buckets []string, errstr string, errcode int) {
+	sess := createsession()
+	svc := s3.New(sess)
+	result, err := svc.ListBuckets(&s3.ListBucketsInput{})
+	if err != nil {
+		errcode = awsErrorToHTTP(err)
+		errstr = fmt.Sprintf("Failed to list all buckets, err: %v", err)
+		return
+	}
+	buckets = make([]string, 0, 16)
+	for _, bkt := range result.Buckets {
+		if glog.V(4) {
+			glog.Infof("%s: created %v", aws.StringValue(bkt.Name), *bkt.CreationDate)
+		}
+		buckets = append(buckets, aws.StringValue(bkt.Name))
+	}
+	return
+}
+
+//============
+//
+// object meta
+//
+//============
 func (awsimpl *awsimpl) headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
-	glog.Infof("aws: headobject %s/%s", bucket, objname)
+	if glog.V(4) {
+		glog.Infof("headobject %s/%s", bucket, objname)
+	}
 	objmeta = make(map[string]string)
 
 	sess := createsession()
@@ -208,7 +237,7 @@ func (awsimpl *awsimpl) headobject(bucket string, objname string) (objmeta map[s
 	headOutput, err := svc.HeadObject(input)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
 	objmeta[CloudProvider] = ProviderAmazon
@@ -218,6 +247,11 @@ func (awsimpl *awsimpl) headobject(bucket string, objname string) (objmeta map[s
 	return
 }
 
+//=======================
+//
+// object data operations
+//
+//=======================
 func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int) {
 	var v cksumvalue
 	sess := createsession()
@@ -228,7 +262,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to GET %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to GET %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	defer obj.Body.Close()
@@ -254,7 +288,7 @@ func (awsimpl *awsimpl) getobj(fqn, bucket, objname string) (props *objectProps,
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("aws: GET %s/%s", bucket, objname)
+		glog.Infof("GET %s/%s", bucket, objname)
 	}
 	return
 }
@@ -282,15 +316,15 @@ func (awsimpl *awsimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to PUT %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to PUT %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(4) {
 		if uploadoutput.VersionID != nil {
 			version = *uploadoutput.VersionID
-			glog.Infof("aws: PUT %s/%s, version %s", bucket, objname, version)
+			glog.Infof("PUT %s/%s, version %s", bucket, objname, version)
 		} else {
-			glog.Infof("aws: PUT %s/%s", bucket, objname)
+			glog.Infof("PUT %s/%s", bucket, objname)
 		}
 	}
 	return
@@ -302,11 +336,11 @@ func (awsimpl *awsimpl) deleteobj(bucket, objname string) (errstr string, errcod
 	_, err := svc.DeleteObject(&s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(objname)})
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("aws: Failed to DELETE %s/%s, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("Failed to DELETE %s/%s, err: %v", bucket, objname, err)
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("aws: DELETE %s/%s", bucket, objname)
+		glog.Infof("DELETE %s/%s", bucket, objname)
 	}
 	return
 }

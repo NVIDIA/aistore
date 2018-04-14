@@ -288,10 +288,13 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	//
-	// list the bucket and return
-	//
 	if len(objname) == 0 {
+		// all cloud bucket names
+		if bucket == "*" {
+			t.getbucketnames(w, r)
+			return
+		}
+		// list the bucket and return
 		tag, ok := t.listbucket(w, r, bucket)
 		if ok {
 			lat := int64(time.Since(started) / 1000)
@@ -683,6 +686,26 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		PageMarker: marker,
 	}
 	return bucketList, nil
+}
+
+func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
+	buckets, errstr, errcode := getcloudif().getbucketnames()
+	if errstr != "" {
+		if errcode == 0 {
+			t.invalmsghdlr(w, r, errstr)
+		} else {
+			t.invalmsghdlr(w, r, errstr, errcode)
+		}
+		return
+	}
+	bucketnames := &BucketNames{Cloud: buckets, Local: make([]string, 0, 64)}
+	for bucket := range t.lbmap.LBmap {
+		bucketnames.Local = append(bucketnames.Local, bucket)
+	}
+	jsbytes, err := json.Marshal(bucketnames)
+	assert(err == nil, err)
+	t.writeJSON(w, r, jsbytes, "getbucketnames")
+	return
 }
 
 func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (errstr string, ok bool) {

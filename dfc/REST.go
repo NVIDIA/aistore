@@ -140,7 +140,8 @@ const (
 //
 //===================
 
-// BucketEntry contains file and directory metadata in response to the GetMsg
+// BucketEntry corresponds to a single entry in the BucketList and
+// contains file and directory metadata as per the GetMsg
 type BucketEntry struct {
 	Name     string `json:"name"`     // name of the object - note: does not include the bucket name
 	Size     int64  `json:"size"`     // size in bytes
@@ -153,10 +154,16 @@ type BucketEntry struct {
 	IsCached bool   `json:"iscached"` // if the file is cached on one of targets
 }
 
-// BucketList represents the response to a ListBucket call
+// BucketList represents the contents of a given bucket - somewhat analagous to the 'ls <bucket-name>'
 type BucketList struct {
 	Entries    []*BucketEntry `json:"entries"`
 	PageMarker string         `json:"pagemarker"`
+}
+
+// All bucket names known to the system
+type BucketNames struct {
+	Cloud []string `json:"cloud"`
+	Local []string `json:"local"`
 }
 
 // RESTful URL path: /v1/....

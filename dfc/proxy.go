@@ -208,7 +208,7 @@ func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
 	glog.Flush()
 }
 
-// e.g.: GET /v1/files/bucket/object
+// e.g.: GET /v1/files/bucket[/object]
 func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	if p.smap.count() < 1 {
@@ -228,8 +228,24 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	// listbucket
 	if len(objname) == 0 {
+		// all bucket names
+		if bucket == "*" {
+			var si *daemonInfo
+			for _, si = range p.smap.Smap {
+				break
+			}
+			url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucket
+			outjson, err, errstr, status := p.call(si, url, r.Method, nil)
+			if err != nil {
+				p.invalmsghdlr(w, r, errstr)
+				p.kalive.onerr(err, status)
+			} else {
+				p.writeJSON(w, r, outjson, "getbucketnames")
+			}
+			return
+		}
+		// list the bucket
 		started := time.Now()
 		ok := p.listbucket(w, r, bucket)
 		if ok {

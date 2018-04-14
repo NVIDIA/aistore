@@ -8,9 +8,11 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
@@ -529,6 +531,43 @@ func Test_list(t *testing.T) {
 			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
 		}
 	}
+}
+
+func Test_bucketnames(t *testing.T) {
+	var (
+		url = proxyurl + "/v1/files/" + "*"
+		r   *http.Response
+		err error
+	)
+	r, err = http.Get(url)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	defer r.Body.Close()
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		t.Errorf("Failed with HTTP status %d", r.StatusCode)
+		return
+	}
+	var b []byte
+	b, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("Failed to read response body: %v", err)
+		return
+	}
+	bucketnames := &dfc.BucketNames{}
+	err = json.Unmarshal(b, bucketnames)
+	if err != nil {
+		t.Errorf("Failed to unmarshal bucket names, err: %v", err)
+		return
+	}
+	pretty, err := json.MarshalIndent(bucketnames, "", "\t")
+	if err != nil {
+		t.Errorf("Failed to pretty-print bucket names, err: %v", err)
+		return
+	}
+	fmt.Fprintln(os.Stdout, string(pretty))
+	return
 }
 
 func Test_coldgetmd5(t *testing.T) {
