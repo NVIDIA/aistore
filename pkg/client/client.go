@@ -75,11 +75,12 @@ var (
 		Transport: transport,
 	}
 
-	ProxyProto      = "http"
-	ProxyIP         = "localhost"
-	ProxyPort       = 8080
-	RestAPIVersion  = "v1"
-	RestAPIResource = "files"
+	ProxyProto         = "http"
+	ProxyIP            = "localhost"
+	ProxyPort          = 8080
+	RestAPIVersion     = dfc.Rversion
+	RestAPIObjResource = dfc.Robjects
+	RestAPIBckResource = dfc.Rbuckets
 )
 
 // RoundTrip records the proxy redirect time and keeps track of requests.
@@ -233,7 +234,7 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		defer wg.Done()
 	}
 
-	url := proxyurl + "/v1/files/" + bucket + "/" + keyname
+	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
 	req, _ := http.NewRequest("GET", url, nil)
 
 	tr := &traceableTransport{
@@ -305,7 +306,7 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		defer wg.Done()
 	}
 
-	delurl := proxyurl + "/v1/files/" + bucket + "/" + keyname
+	delurl := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("DEL: %s\n", keyname)
 	}
@@ -336,7 +337,7 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
 func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) (*dfc.BucketList, error) {
 	var (
-		url     = proxyurl + "/v1/files/" + bucket
+		url     = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 		request *http.Request
 	)
 
@@ -425,7 +426,7 @@ func Evict(proxyurl, bucket string, fname string) error {
 		return fmt.Errorf("Failed to marshal EvictMsg: %v", err)
 	}
 
-	req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket+"/"+fname, bytes.NewBuffer(injson))
+	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Robjects+"/"+bucket+"/"+fname, bytes.NewBuffer(injson))
 	if err != nil {
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
@@ -454,7 +455,7 @@ func doListRangeCall(proxyurl, bucket, action, method string, listrangemsg inter
 	if err != nil {
 		return fmt.Errorf("Failed to marhsal ActionMsg: %v", err)
 	}
-	req, err = http.NewRequest(method, proxyurl+"/v1/files/"+bucket+"/", bytes.NewBuffer(injson))
+	req, err = http.NewRequest(method, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket+"/", bytes.NewBuffer(injson))
 	if err != nil {
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
@@ -533,7 +534,7 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 
 func HeadBucket(proxyurl, bucket string) (bucketprops *BucketProps, err error) {
 	var (
-		url = proxyurl + "/v1/files/" + bucket
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 		r   *http.Response
 	)
 	bucketprops = &BucketProps{}
@@ -571,7 +572,7 @@ func discardHTTPResp(resp *http.Response) {
 
 // Put sends a PUT request to the given URL
 func Put(proxyURL string, reader Reader, bucket string, key string, silent bool) error {
-	url := proxyURL + "/v1/files/" + bucket + "/" + key
+	url := proxyURL + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + key
 
 	if !silent {
 		fmt.Printf("PUT: %s/%s\n", bucket, key)
@@ -630,7 +631,7 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", proxyURL+"/v1/files/"+bucket, bytes.NewBuffer(msg))
+	req, err := http.NewRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 	if err != nil {
 		return err
 	}
@@ -652,7 +653,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("DELETE", proxyURL+"/v1/files/"+bucket, bytes.NewBuffer(msg))
+	req, err := http.NewRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 	if err != nil {
 		return err
 	}
@@ -687,7 +688,7 @@ func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]strin
 // GetConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {
-	url := server + "/v1/daemon"
+	url := server + "/" + dfc.Rversion + "/" + dfc.Rdaemon
 	msg, err := json.Marshal(&dfc.GetMsg{GetWhat: dfc.GetWhatConfig})
 	if err != nil {
 		return HTTPLatencies{}, err

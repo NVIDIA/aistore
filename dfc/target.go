@@ -142,7 +142,8 @@ func (t *targetrunner) run() error {
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", t.filehdlr)
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", t.buckethdlr)
+	t.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", t.objecthdlr)
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, t.daemonhdlr)
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", t.daemonhdlr) // FIXME
 	t.httprunner.registerhdlr("/"+Rversion+"/"+Rpush+"/", t.pushhdlr)
@@ -210,58 +211,78 @@ func (t *targetrunner) unregister() (status int, err error) {
 	return
 }
 
-//==============
+//===========================================================================================
 //
-// http handlers
+// http handlers: data and metadata
 //
-//==============
+//===========================================================================================
 
-// "/"+Rversion+"/"+Rfiles
-func (t *targetrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
+// verb /Rversion/Rbuckets
+func (t *targetrunner) buckethdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		t.httpfilget(w, r)
-	case http.MethodPut:
-		t.httpfilput(w, r)
+		t.httpbckget(w, r)
 	case http.MethodDelete:
-		t.httpfildelete(w, r)
+		t.httpbckdelete(w, r)
 	case http.MethodPost:
-		t.httpfilpost(w, r)
+		t.httpbckpost(w, r)
 	case http.MethodHead:
-		t.httpfilhead(w, r)
+		t.httpbckhead(w, r)
 	default:
 		invalhdlr(w, r)
 	}
 }
 
-// checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
-// and the object should be refreshed from Cloud storage
-// It should be called only in case of the object is present in DFC cache
-func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
-	var objmeta map[string]string
-	if objmeta, errstr, errcode = t.cloudif.headobject(bucket, objname); errstr != "" {
-		return
+// verb /Rversion/Robjects
+func (t *targetrunner) objecthdlr(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		t.httpobjget(w, r)
+	case http.MethodPut:
+		t.httpobjput(w, r)
+	case http.MethodDelete:
+		t.httpobjdelete(w, r)
+	case http.MethodPost:
+		t.httpobjpost(w, r)
+	default:
+		invalhdlr(w, r)
 	}
-	if cloudVersion, ok := objmeta["version"]; ok {
-		if version != cloudVersion {
-			glog.Infof("Object %s/%s version changed, current version %s (old/local %s)",
-				bucket, objname, cloudVersion, version)
-			vchanged = true
-		}
-	}
-	return
 }
 
-// "/"+Rversion+"/"+Rfiles+"/"+bucket [+"/"+objname]
-//
-// checks if the object exists locally (if not, downloads it)
-// and sends it back via http
-// If the bucket is cloud one and ValidateWarmGet is enabled then
-// there is extra check in case of the file exists locally:
-// - It reads the object version from cloud and compare to local version from xattrs.
-// - If local version is not empty and it differs from cloud one, it refetch the
-//	 object from cloud, updates xattrs, and increases stats numvchanged & bytesvchanged
-func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
+// GET /Rversion/Rbuckets/bucket-name
+func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	if strings.Contains(bucket, "/") {
+		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	// all cloud bucket names
+	if bucket == "*" {
+		t.getbucketnames(w, r)
+		return
+	}
+	// list the bucket and return
+	tag, ok := t.listbucket(w, r, bucket)
+	if ok {
+		lat := int64(time.Since(started) / 1000)
+		t.statsif.addMany("numlist", int64(1), "listlatency", lat)
+		if glog.V(3) {
+			glog.Infof("LIST %s: %s, %d µs", tag, bucket, lat)
+		}
+	}
+}
+
+// GET /Rversion/Robjects/bucket[+"/"+objname]
+// Checks if the object exists locally (if not, downloads it) and sends it back
+// If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
+// check whether the object exists locally. Version is checked as well if configured.
+func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
 		nhobj                  cksumvalue
 		bucket, objname, fqn   string
@@ -276,36 +297,15 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	cksumcfg := &ctx.config.CksumConfig
 	versioncfg := &ctx.config.VersionConfig
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
 	}
-	bucket, objname = apitems[0], ""
-	if len(apitems) > 1 {
-		objname = apitems[1]
-	}
+	bucket, objname = apitems[0], apitems[1]
 	if strings.Contains(bucket, "/") {
 		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if len(objname) == 0 {
-		// all cloud bucket names
-		if bucket == "*" {
-			t.getbucketnames(w, r)
-			return
-		}
-		// list the bucket and return
-		tag, ok := t.listbucket(w, r, bucket)
-		if ok {
-			lat := int64(time.Since(started) / 1000)
-			t.statsif.addMany("numlist", int64(1), "listlatency", lat)
-			if glog.V(3) {
-				glog.Infof("LIST %s: %s, %d µs", tag, bucket, lat)
-			}
-		}
-		return
-	}
-
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -405,6 +405,233 @@ func (t *targetrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 		glog.Infoln(s)
 	}
 	t.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
+}
+
+// PUT /Rversion/Robjects/bucket-name/object-name
+func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+		return
+	}
+	query := r.URL.Query()
+	from, to, bucket := query.Get(URLParamFromID), query.Get(URLParamToID), apitems[0]
+	objname := strings.Join(apitems[1:], "/")
+
+	if from != "" && to != "" {
+		// REBALANCE "?from_id="+from_id+"&to_id="+to_id
+		if objname == "" {
+			s := "Invalid URL: missing object name"
+			t.invalmsghdlr(w, r, s)
+			return
+		}
+		if errstr := t.dorebalance(r, from, to, bucket, objname); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		}
+	} else {
+		// PUT
+		errstr, errcode := t.doput(w, r, bucket, objname)
+		if errstr != "" {
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
+		}
+	}
+}
+
+// DELETE { action} /Rversion/Rbuckets/bucket-name
+func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket  string
+		msg     ActionMsg
+		started = time.Now()
+		ok      = true
+	)
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+	bucket = apitems[0]
+	b, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if ok && err == nil && bool(glog.V(4)) {
+			glog.Infof("DELETE list|range: %s, %d µs", bucket, time.Since(started)/1000)
+		}
+	}()
+	if err == nil && len(b) > 0 {
+		err = json.Unmarshal(b, &msg)
+	}
+	if err != nil {
+		s := fmt.Sprintf("Failed to read %s body, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+	if len(b) > 0 { // must be a List/Range request
+		t.deletefiles(w, r, msg) // FIXME: must return ok or err
+		return
+	}
+	s := fmt.Sprintf("Invalid API request: no message body")
+	t.invalmsghdlr(w, r, s)
+	ok = false
+}
+
+// DELETE [ { action } ] /Rversion/Robjects/bucket-name/object-name
+func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket, objname string
+		msg             ActionMsg
+		evict           bool
+		started         = time.Now()
+		ok              = true
+	)
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+		return
+	}
+	bucket = apitems[0]
+	objname = strings.Join(apitems[1:], "/")
+
+	b, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if ok && err == nil && bool(glog.V(4)) {
+			glog.Infof("DELETE: %s/%s, %d µs", bucket, objname, time.Since(started)/1000)
+		}
+	}()
+	if err == nil && len(b) > 0 {
+		err = json.Unmarshal(b, &msg)
+		if err == nil {
+			evict = (msg.Action == ActEvict)
+		}
+	} else if err != nil {
+		s := fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("fildelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+	if objname != "" {
+		err := t.fildelete(bucket, objname, evict)
+		if err != nil {
+			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
+			t.invalmsghdlr(w, r, s)
+		}
+		return
+	}
+	s := fmt.Sprintf("Invalid API request: No object name or message body.")
+	t.invalmsghdlr(w, r, s)
+	ok = false
+}
+
+// POST /Rversion/Rbuckets/bucket-name
+func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+	var msg ActionMsg
+	if t.readJSON(w, r, &msg) != nil {
+		return
+	}
+	switch msg.Action {
+	case ActPrefetch:
+		t.prefetchfiles(w, r, msg)
+	default:
+		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
+	}
+}
+
+// POST /Rversion/Robjects/bucket-name/object-name
+func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
+	var msg ActionMsg
+	if t.readJSON(w, r, &msg) != nil {
+		return
+	}
+	switch msg.Action {
+	case ActRename:
+		t.renamefile(w, r, msg)
+	default:
+		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
+	}
+}
+
+// HEAD /Rversion/Robjects/bucket-name
+func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket      string
+		islocal     bool
+		errstr      string
+		errcode     int
+		bucketprops map[string]string
+	)
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+	bucket = apitems[0]
+	if strings.Contains(bucket, "/") {
+		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+		return
+	}
+	if !islocal {
+		bucketprops, errstr, errcode = getcloudif().headbucket(bucket)
+		if errstr != "" {
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
+			return
+		}
+	} else {
+		bucketprops = make(map[string]string)
+		bucketprops[CloudProvider] = ProviderDfc
+		bucketprops[Versioning] = VersionLocal
+
+	}
+	// double check if we support versioning internally for the bucket
+	if !t.versioningConfigured(bucket) {
+		bucketprops[Versioning] = VersionNone
+	}
+	for k, v := range bucketprops {
+		w.Header().Add(k, v)
+	}
+}
+
+//====================================================================================
+//
+// supporting methods and misc
+//
+//====================================================================================
+
+// checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
+// and the object should be refreshed from Cloud storage
+// It should be called only in case of the object is present in DFC cache
+func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
+	var objmeta map[string]string
+	if objmeta, errstr, errcode = t.cloudif.headobject(bucket, objname); errstr != "" {
+		return
+	}
+	if cloudVersion, ok := objmeta["version"]; ok {
+		if version != cloudVersion {
+			glog.Infof("Object %s/%s version changed, current version %s (old/local %s)",
+				bucket, objname, cloudVersion, version)
+			vchanged = true
+		}
+	}
+	return
 }
 
 func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
@@ -541,14 +768,14 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, objname := range objnames {
-			err := pusher.Push("/v1/files/"+bucket+"/"+objname, nil)
+			err := pusher.Push("/"+Rversion+"/"+Robjects+"/"+bucket+"/"+objname, nil)
 			if err != nil {
-				t.invalmsghdlr(w, r, "Error Pushing "+"/v1/files/"+bucket+"/"+objname+": "+err.Error())
+				t.invalmsghdlr(w, r, "Error Pushing "+bucket+"/"+objname+": "+err.Error())
 				return
 			}
 		}
 	} else {
-		t.invalmsghdlr(w, r, "Pusher Unavailable - could not push files.")
+		t.invalmsghdlr(w, r, "Pusher Unavailable")
 		return
 	}
 
@@ -954,42 +1181,6 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	return ci.processRegularFile(fqn, osfi)
 }
 
-func (t *targetrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		fmt.Println("Problem in put with URL " + r.URL.Path)
-		return
-	}
-	query := r.URL.Query()
-
-	from, to, bucket, objname := query.Get(URLParamFromID), query.Get(URLParamToID), apitems[0], ""
-	if len(apitems) > 1 {
-		objname = strings.Join(apitems[1:], "/")
-	}
-
-	if from != "" && to != "" {
-		// Rebalance: "/"+Rversion+"/"+Rfiles + "/"+bucket+"/"+objname+"?from_id="+from_id+"&to_id="+to_id
-		if objname == "" {
-			s := "Invalid URL: missing object name to copy"
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		if errstr := t.dorebalance(r, from, to, bucket, objname); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		}
-	} else {
-		// PUT: "/"+Rversion+"/"+Rfiles+"/"+bucket+"/"+objname
-		errstr, errcode := t.doput(w, r, bucket, objname)
-		if errstr != "" {
-			if errcode == 0 {
-				t.invalmsghdlr(w, r, errstr)
-			} else {
-				t.invalmsghdlr(w, r, errstr, errcode)
-			}
-		}
-	}
-}
-
 // After putting a new version it updates xattr attrubutes for the object
 // Local bucket:
 //  - if bucket versioing is enable("all" or "local") then the version is autoincremented
@@ -1247,62 +1438,6 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 	return
 }
 
-func (t *targetrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucket, objname string
-		msg             ActionMsg
-		evict           bool
-		started         = time.Now()
-		ok              = true
-	)
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket, objname = apitems[0], ""
-	if len(apitems) > 1 {
-		objname = strings.Join(apitems[1:], "/")
-	}
-
-	b, err := ioutil.ReadAll(r.Body)
-	defer func() {
-		if ok && err == nil && bool(glog.V(4)) {
-			glog.Infof("DELETE: %s/%s, %d µs", bucket, objname, time.Since(started)/1000)
-		}
-	}()
-	if err == nil && len(b) > 0 {
-		err = json.Unmarshal(b, &msg)
-		if err == nil {
-			evict = (msg.Action == ActEvict)
-		}
-	} else if err != nil {
-		s := fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
-		if err == io.EOF {
-			trailer := r.Trailer.Get("Error")
-			if trailer != "" {
-				s = fmt.Sprintf("fildelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-			}
-		}
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-	if objname == "" && len(b) > 0 {
-		// It must be a List/Range request, since there is no object name
-		t.deletefiles(w, r, msg) // FIXME: must return ok or err
-		return
-	} else if objname != "" {
-		err := t.fildelete(bucket, objname, evict)
-		if err != nil {
-			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
-			t.invalmsghdlr(w, r, s)
-		}
-		return
-	}
-	s := fmt.Sprintf("Invalid API request: No object name or message body.")
-	t.invalmsghdlr(w, r, s)
-	ok = false
-}
-
 func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 	var (
 		errstr  string
@@ -1350,31 +1485,13 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 	return nil
 }
 
-func (t *targetrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
-	var msg ActionMsg
-	if t.readJSON(w, r, &msg) != nil {
-		return
-	}
-
-	switch msg.Action {
-	case ActPrefetch:
-		t.prefetchfiles(w, r, msg)
-	case ActRename:
-		t.renamefile(w, r, msg)
-	default:
-		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
-	}
-
-}
-
 func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
 	var errstr string
 
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
 	}
-
 	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
 	newobjname := msg.Name
 	fqn, uname := t.fqn(bucket, objname), t.uname(bucket, objname)
@@ -1487,7 +1604,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		newobjname = objname
 	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	url := destsi.DirectURL + "/" + Rversion + "/" + Rfiles + "/"
+	url := destsi.DirectURL + "/" + Rversion + "/" + Robjects + "/"
 	url += bucket + "/" + newobjname
 	url += fmt.Sprintf("?%s=%s&%s=%s", URLParamFromID, fromid, URLParamToID, toid)
 
@@ -1552,58 +1669,6 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	t.statsif.addMany("numsentfiles", int64(1), "numsentbytes", size)
 	return ""
-}
-
-func (t *targetrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucket      string
-		islocal     bool
-		errstr      string
-		errcode     int
-		bucketprops map[string]string
-	)
-
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket = apitems[0]
-	if strings.Contains(bucket, "/") {
-		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr, errcode)
-		return
-	}
-
-	if !islocal {
-		bucketprops, errstr, errcode = getcloudif().headbucket(bucket)
-		if errstr != "" {
-			if errcode == 0 {
-				t.invalmsghdlr(w, r, errstr)
-			} else {
-				t.invalmsghdlr(w, r, errstr, errcode)
-			}
-			return
-		}
-	} else {
-		bucketprops = make(map[string]string)
-		bucketprops[CloudProvider] = ProviderDfc
-		bucketprops[Versioning] = VersionLocal
-
-	}
-	// double check if we support versioning internally for the bucket
-	if !t.versioningConfigured(bucket) {
-		bucketprops[Versioning] = VersionNone
-	}
-
-	for k, v := range bucketprops {
-		w.Header().Add(k, v)
-	}
 }
 
 func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {

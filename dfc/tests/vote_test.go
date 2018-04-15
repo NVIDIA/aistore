@@ -494,7 +494,8 @@ type targetmocker interface {
 func runMockTarget(mocktgt targetmocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rfiles+"/", mocktgt.filehdlr)
+	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rbuckets+"/", mocktgt.filehdlr)
+	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Robjects+"/", mocktgt.filehdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rdaemon, mocktgt.daemonhdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rdaemon+"/", mocktgt.daemonhdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rvote+"/", mocktgt.votehdlr)

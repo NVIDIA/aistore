@@ -129,7 +129,7 @@ type rangef func(bucket, prefix, regex string, min, max int64, deadline time.Dur
 
 func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg ListMsg, operation listf) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -166,11 +166,9 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 }
 
 func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg RangeMsg, operation rangef) {
-	var (
-		err error
-	)
+	var err error
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]

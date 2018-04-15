@@ -117,7 +117,8 @@ func (p *proxyrunner) run() error {
 	//
 	// REST API: register proxy handlers and start listening
 	//
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rfiles+"/", p.filehdlr)
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", p.buckethdlr)
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", p.objecthdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", p.daemonhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
@@ -183,71 +184,94 @@ func (p *proxyrunner) stop(err error) {
 	p.httprunner.stop(err)
 }
 
-//==============
+//===========================================================================================
 //
-// http handlers
+// http handlers: data and metadata
 //
-//==============
+//===========================================================================================
 
-// handler for: "/"+Rversion+"/"+Rfiles+"/"
-func (p *proxyrunner) filehdlr(w http.ResponseWriter, r *http.Request) {
+// verb /Rversion/Rbuckets/
+func (p *proxyrunner) buckethdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		p.httpfilget(w, r)
-	case http.MethodPut:
-		p.httpfilput(w, r)
+		p.httpbckget(w, r)
 	case http.MethodDelete:
-		p.httpfildelete(w, r)
+		p.httpbckdelete(w, r)
 	case http.MethodPost:
-		p.httpfilpost(w, r)
+		p.httpbckpost(w, r)
 	case http.MethodHead:
-		p.httpfilhead(w, r)
+		p.httpbckhead(w, r)
 	default:
 		invalhdlr(w, r)
 	}
-	glog.Flush()
 }
 
-// e.g.: GET /v1/files/bucket[/object]
-func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
+// verb /Rversion/Robjects/
+func (p *proxyrunner) objecthdlr(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		p.httpobjget(w, r)
+	case http.MethodPut:
+		p.httpobjput(w, r)
+	case http.MethodDelete:
+		p.httpobjdelete(w, r)
+	case http.MethodPost:
+		p.httpobjpost(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+// GET /v1/buckets/bucket-name
+func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	if p.smap.count() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
 	}
-	bucket, objname := apitems[0], ""
-	if len(apitems) > 1 {
-		objname = apitems[1]
-	}
+	bucket := apitems[0]
 	if strings.Contains(bucket, "/") {
 		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	if len(objname) == 0 {
-		// all bucket names
-		if bucket == "*" {
-			p.getbucketnames(w, r, bucket)
-			return
-		}
-		// list the bucket
-		started := time.Now()
-		ok := p.listbucket(w, r, bucket)
-		if ok {
-			lat := int64(time.Since(started) / 1000)
-			p.statsif.addMany("numlist", int64(1), "listlatency", lat)
-			if glog.V(3) {
-				glog.Infof("LIST: %s, %d µs", bucket, lat)
-			}
-		}
+	// all bucket names
+	if bucket == "*" {
+		p.getbucketnames(w, r, bucket)
 		return
 	}
+	// list the bucket
+	ok := p.listbucket(w, r, bucket)
+	if ok {
+		lat := int64(time.Since(started) / 1000)
+		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
+		if glog.V(3) {
+			glog.Infof("LIST: %s, %d µs", bucket, lat)
+		}
+	}
+}
 
-	// GET
+// GET /v1/objects/bucket-name/object-name
+func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	if p.smap.count() < 1 {
+		p.invalmsghdlr(w, r, "No registered targets yet")
+		return
+	}
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+		return
+	}
+	bucket, objname := apitems[0], apitems[1]
+	if strings.Contains(bucket, "/") {
+		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
 	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
@@ -264,6 +288,182 @@ func (p *proxyrunner) httpfilget(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	p.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
 }
+
+// PUT "/"+Rversion+"/"+Robjects
+func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Robjects); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	//
+	// FIXME: add protection agaist putting into non-existing local bucket
+	//
+	objname := strings.Join(apitems[1:], "/")
+	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
+	}
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+	p.statsif.addMany("numput", int64(1), "putlatency", int64(time.Since(started)/1000))
+}
+
+// DELETE { action } /Rversion/Rbuckets
+func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
+	var msg ActionMsg
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	if err := p.readJSON(w, r, &msg); err != nil {
+		return
+	}
+	switch msg.Action {
+	case ActDestroyLB:
+		p.deleteLocalBucket(w, r, bucket)
+	case ActDelete, ActEvict:
+		p.actionlistrange(w, r, &msg)
+	default:
+		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
+	}
+}
+
+// DELETE /Rversion/Robjects/object-name
+func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	objname := strings.Join(apitems[1:], "/")
+	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	redirecturl := si.DirectURL + r.URL.Path
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
+	}
+	p.statsif.add("numdelete", 1)
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+}
+
+// GET /Rversion/Rhealth
+func (p *proxyrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+	proxycorestats := getproxystats()
+	jsbytes, err := json.Marshal(proxycorestats)
+	assert(err == nil, err)
+	p.writeJSON(w, r, jsbytes, "targetcorestats")
+}
+
+// POST { action } /v1/buckets/bucket-name
+func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+	var msg ActionMsg
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+	lbucket := apitems[0]
+	if strings.Contains(lbucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", lbucket)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	if p.readJSON(w, r, &msg) != nil {
+		return
+	}
+	switch msg.Action {
+	case ActCreateLB:
+		if !p.checkPrimaryProxy("create local bucket", w, r) {
+			return
+		}
+		p.lbmap.lock()
+		defer p.lbmap.unlock()
+		if !p.lbmap.add(lbucket) {
+			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+		p.synclbmap(w, r)
+	case ActSyncLB:
+		if !p.checkPrimaryProxy("synchronize LBmap", w, r) {
+			return
+		}
+		p.lbmap.lock()
+		defer p.lbmap.unlock()
+		p.synclbmap(w, r)
+	case ActPrefetch:
+		p.actionlistrange(w, r, &msg)
+	default:
+		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		p.invalmsghdlr(w, r, s)
+	}
+}
+
+// POST { action } /v1/objects/bucket-name
+func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
+	var msg ActionMsg
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Robjects); apitems == nil {
+		return
+	}
+	lbucket := apitems[0]
+	if strings.Contains(lbucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", lbucket)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	if p.readJSON(w, r, &msg) != nil {
+		return
+	}
+	switch msg.Action {
+	case ActRename:
+		p.filrename(w, r, &msg)
+		return
+	default:
+		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+}
+
+// HEAD /v1/buckets/bucket-name
+func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+	if strings.Contains(bucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	var si *daemonInfo
+	// Use random map iteration order to choose a random target to redirect to
+	for _, si = range p.smap.Smap {
+		break
+	}
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
+	if glog.V(3) {
+		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
+	}
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+}
+
+//====================================================================================
+//
+// supporting methods and misc
+//
+//====================================================================================
 
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec string) {
 	q := r.URL.Query()
@@ -283,7 +483,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	for _, si = range p.smap.Smap {
 		break
 	}
-	url := si.DirectURL + "/" + Rversion + "/" + Rfiles + "/" + bucketspec
+	url := si.DirectURL + "/" + Rversion + "/" + Rbuckets + "/" + bucketspec
 	outjson, err, errstr, status := p.call(si, url, r.Method, nil)
 	if err != nil {
 		p.invalmsghdlr(w, r, errstr)
@@ -298,7 +498,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
 	reqBody []byte, islocal bool, cached bool) (response *bucketResp, err error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
-		Rfiles, bucket, URLParamLocal, islocal, URLParamCached, cached)
+		Rbuckets, bucket, URLParamLocal, islocal, URLParamCached, cached)
 	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
 	if err != nil {
 		p.kalive.onerr(err, status)
@@ -635,78 +835,6 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	}
 }
 
-// PUT "/"+Rversion+"/"+Rfiles
-func (p *proxyrunner) httpfilput(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket := apitems[0]
-	//
-	// FIXME: add protection agaist putting into non-existing local bucket
-	//
-	objname := strings.Join(apitems[1:], "/")
-	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	if glog.V(4) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
-	}
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
-	p.statsif.addMany("numput", int64(1), "putlatency", int64(time.Since(started)/1000))
-}
-
-// { action } "/"+Rversion+"/"+Rfiles
-func (p *proxyrunner) httpfildelete(w http.ResponseWriter, r *http.Request) {
-	var msg ActionMsg
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket := apitems[0]
-	if len(apitems) > 1 {
-		// Redirect DELETE /v1/files/bucket/object
-		objname := strings.Join(apitems[1:], "/")
-		si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
-		if errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
-			return
-		}
-		redirecturl := si.DirectURL + r.URL.Path
-		if glog.V(4) {
-			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
-		}
-		p.statsif.add("numdelete", 1)
-		http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
-		return
-	}
-
-	if err := p.readJSON(w, r, &msg); err != nil {
-		return
-	}
-	p.statsif.add("numdelete", 1)
-	switch msg.Action {
-	case ActDestroyLB:
-		p.deleteLocalBucket(w, r, bucket)
-	case ActDelete, ActEvict:
-		p.actionlistrange(w, r, &msg)
-	default:
-		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
-	}
-}
-
-// "/"+Rversion+"/"+Rhealth
-func (p *proxyrunner) httphealth(w http.ResponseWriter, r *http.Request) {
-	proxycorestats := getproxystats()
-	jsbytes, err := json.Marshal(proxycorestats)
-	assert(err == nil, err)
-	p.writeJSON(w, r, jsbytes, "targetcorestats")
-}
-
 func (p *proxyrunner) deleteLocalBucket(w http.ResponseWriter, r *http.Request, lbucket string) {
 	if !p.checkPrimaryProxy("delete local bucket", w, r) {
 		return
@@ -727,56 +855,6 @@ func (p *proxyrunner) deleteLocalBucket(w http.ResponseWriter, r *http.Request, 
 	p.synclbmap(w, r)
 }
 
-func (p *proxyrunner) httpfilpost(w http.ResponseWriter, r *http.Request) {
-	var msg ActionMsg
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-
-	lbucket := apitems[0]
-
-	if strings.Contains(lbucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", lbucket)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-	if p.readJSON(w, r, &msg) != nil {
-		return
-	}
-	switch msg.Action {
-	case ActCreateLB:
-		if !p.checkPrimaryProxy("create local bucket", w, r) {
-			return
-		}
-		p.lbmap.lock()
-		defer p.lbmap.unlock()
-		if !p.lbmap.add(lbucket) {
-			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
-			p.invalmsghdlr(w, r, s)
-			return
-		}
-		p.synclbmap(w, r)
-	case ActSyncLB:
-		if !p.checkPrimaryProxy("synchronize LBmap", w, r) {
-			return
-		}
-		p.lbmap.lock()
-		defer p.lbmap.unlock()
-		p.synclbmap(w, r)
-	case ActRename:
-		p.filrename(w, r, &msg)
-		return
-	case ActPrefetch:
-		p.actionlistrange(w, r, &msg)
-		return
-	default:
-		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-}
-
 // synclbmap requires the caller to lock p.lbmap
 func (p *proxyrunner) synclbmap(w http.ResponseWriter, r *http.Request) {
 	lbpathname := p.confdir + "/" + lbname
@@ -791,7 +869,7 @@ func (p *proxyrunner) synclbmap(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *ActionMsg) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rfiles); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
 	}
 	lbucket, objname := apitems[0], strings.Join(apitems[1:], "/")
@@ -827,7 +905,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	)
 
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -868,7 +946,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 				err     error
 				errstr  string
 				errcode int
-				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rfiles, bucket, URLParamLocal, islocal)
+				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rbuckets, bucket, URLParamLocal, islocal)
 			)
 			if wait {
 				_, err, errstr, errcode = p.call(si, url, method, jsonbytes, 0)
@@ -883,29 +961,6 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		}(si)
 	}
 	wg.Wait()
-}
-
-func (p *proxyrunner) httpfilhead(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rfiles); apitems == nil {
-		return
-	}
-	bucket := apitems[0]
-	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-	var si *daemonInfo
-	// Use random map iteration order to choose a random target to redirect to
-	for _, si = range p.smap.Smap {
-		break
-	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
-	if glog.V(3) {
-		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
-	}
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
 //===========================

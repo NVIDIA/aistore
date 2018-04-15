@@ -169,7 +169,8 @@ type BucketNames struct {
 // RESTful URL path: /v1/....
 const (
 	Rversion   = "v1"
-	Rfiles     = "files"
+	Rbuckets   = "buckets"
+	Robjects   = "objects"
 	Rcluster   = "cluster"
 	Rdaemon    = "daemon"
 	Rsyncsmap  = ActSyncSmap

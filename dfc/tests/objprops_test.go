@@ -403,30 +403,30 @@ func propsMainTest(t *testing.T, versioning string) {
 		isLocalBucket = false
 		rbdelay       = "1s" // default startup_delay_time is 10m
 	)
-	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	versionCfg := config["version_config"].(map[string]interface{})
 	rebalanceCfg := config["rebalance_conf"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	oldRBDelay := rebalanceCfg["startup_delay_time"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("versioning", versioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
-	setConfig("startup_delay_time", rbdelay, proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("startup_delay_time", rbdelay, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/v1/cluster", httpclient, t)
+			setConfig("validate_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		}
 		if oldVersioning != versioning {
-			setConfig("versioning", oldVersioning, proxyurl+"/v1/cluster", httpclient, t)
+			setConfig("versioning", oldVersioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		}
 		if oldRBDelay != "" {
-			setConfig("startup_delay_time", oldRBDelay, proxyurl+"/v1/cluster", httpclient, t)
+			setConfig("startup_delay_time", oldRBDelay, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		}
 	}()
 

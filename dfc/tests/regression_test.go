@@ -32,7 +32,7 @@ type Test struct {
 }
 
 const (
-	RestAPIDaemonSuffix   = "/v1/daemon"
+	RestAPIDaemonSuffix   = "/" + dfc.Rversion + "/" + dfc.Rdaemon
 	TestLocalBucketName   = "TESTLOCALBUCKET"
 	RenameLocalBucketName = "renamebucket"
 	RenameDir             = "/tmp/dfc/rename"
@@ -217,16 +217,16 @@ func regressionStats(t *testing.T) {
 }
 
 func regressionConfig(t *testing.T) {
-	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
 	oproxyconfig := oconfig["primaryproxy"].(map[string]interface{})
 
 	for k, v := range configRegression {
-		setConfig(k, v, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig(k, v, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 
-	nconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	nconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nrebconfig := nconfig["rebalance_conf"].(map[string]interface{})
 	nproxyconfig := nconfig["primaryproxy"].(map[string]interface{})
@@ -236,28 +236,28 @@ func regressionConfig(t *testing.T) {
 			nconfig["stats_time"], configRegression["stats_time"])
 	} else {
 		o := oconfig["stats_time"].(string)
-		setConfig("stats_time", o, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("stats_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
 	} else {
 		o := olruconfig["dont_evict_time"].(string)
-		setConfig("dont_evict_time", o, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("dont_evict_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
 			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
 	} else {
 		o := olruconfig["capacity_upd_time"].(string)
-		setConfig("capacity_upd_time", o, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("capacity_upd_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if nrebconfig["startup_delay_time"] != configRegression["startup_delay_time"] {
 		t.Errorf("StartupDelayTime was not set properly: %v, should be: %v",
 			nrebconfig["startup_delay_time"], configRegression["startup_delay_time"])
 	} else {
 		o := orebconfig["startup_delay_time"].(string)
-		setConfig("startup_delay_time", o, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("startup_delay_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -266,7 +266,7 @@ func regressionConfig(t *testing.T) {
 			nlruconfig["highwm"], hw)
 	} else {
 		o := olruconfig["highwm"].(float64)
-		setConfig("highwm", strconv.Itoa(int(o)), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("highwm", strconv.Itoa(int(o)), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -275,7 +275,7 @@ func regressionConfig(t *testing.T) {
 			nlruconfig["lowwm"], lw)
 	} else {
 		o := olruconfig["lowwm"].(float64)
-		setConfig("lowwm", strconv.Itoa(int(o)), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("lowwm", strconv.Itoa(int(o)), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["passthru"]); err != nil {
 		t.Fatalf("Error parsing Passthru: %v", err)
@@ -284,7 +284,7 @@ func regressionConfig(t *testing.T) {
 			nproxyconfig["passthru"], pt)
 	} else {
 		o := oproxyconfig["passthru"].(bool)
-		setConfig("passthru", strconv.FormatBool(o), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("passthru", strconv.FormatBool(o), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)
@@ -293,7 +293,7 @@ func regressionConfig(t *testing.T) {
 			nlruconfig["lru_enabled"], pt)
 	} else {
 		o := olruconfig["lru_enabled"].(bool)
-		setConfig("lru_enabled", strconv.FormatBool(o), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("lru_enabled", strconv.FormatBool(o), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 }
 
@@ -344,7 +344,7 @@ func regressionLRU(t *testing.T) {
 		t.Fail()
 		return
 	}
-	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	if t.Failed() {
 		return
 	}
@@ -353,10 +353,10 @@ func regressionLRU(t *testing.T) {
 	//
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	defer func() {
-		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+"/v1/cluster", httpclient, t)
-		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+"/v1/cluster", httpclient, t)
-		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+"/v1/cluster", httpclient, t)
-		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		for k, di := range smap.Smap {
 			setConfig("highwm", fmt.Sprint(hwms[k]), di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
 			setConfig("lowwm", fmt.Sprint(lwms[k]), di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
@@ -371,16 +371,16 @@ func regressionLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
-	setConfig("dont_evict_time", dontevicttimestr, proxyurl+"/v1/cluster", httpclient, t)
-	setConfig("capacity_upd_time", capacityupdtimestr, proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("dont_evict_time", dontevicttimestr, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("capacity_upd_time", capacityupdtimestr, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	if t.Failed() {
 		return
 	}
-	setConfig("lowwm", fmt.Sprint(lowwm), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("lowwm", fmt.Sprint(lowwm), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	if t.Failed() {
 		return
 	}
-	setConfig("highwm", fmt.Sprint(highwm), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("highwm", fmt.Sprint(highwm), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	if t.Failed() {
 		return
 	}
@@ -433,16 +433,16 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 1. config
 	//
-	oconfig := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
 	defer func() {
-		setConfig("startup_delay_time", orebconfig["startup_delay_time"].(string), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("startup_delay_time", orebconfig["startup_delay_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}()
 	//
 	// cluster-wide reduce startup_delay_time
 	//
 	startupdelaytimestr := "20s"
-	setConfig("startup_delay_time", startupdelaytimestr, proxyurl+"/v1/cluster", httpclient, t) // NOTE: 1 second
+	setConfig("startup_delay_time", startupdelaytimestr, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t) // NOTE: 1 second
 	if t.Failed() {
 		return
 	}
@@ -595,7 +595,7 @@ func regressionRename(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to marshal RenameMsg: %v", err)
 		}
-		req, err = http.NewRequest("POST", proxyurl+"/v1/files/"+RenameLocalBucketName+"/"+RenameStr+"/"+fname, bytes.NewBuffer(injson))
+		req, err = http.NewRequest("POST", proxyurl+"/"+dfc.Rversion+"/"+dfc.Robjects+"/"+RenameLocalBucketName+"/"+RenameStr+"/"+fname, bytes.NewBuffer(injson))
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
 		}
@@ -1027,7 +1027,7 @@ func unregisterTarget(sid string, t *testing.T) {
 		r   *http.Response
 		err error
 	)
-	req, err = http.NewRequest("DELETE", proxyurl+"/v1/cluster"+"/"+"daemon"+"/"+sid, nil)
+	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster+"/"+"daemon"+"/"+sid, nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -1048,7 +1048,7 @@ func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
 		err error
 	)
 	si := smap.Smap[sid]
-	req, err = http.NewRequest("POST", si.DirectURL+"/v1/daemon", nil)
+	req, err = http.NewRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon, nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -1072,7 +1072,7 @@ func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	if err != nil {
 		t.Fatalf("Failed to marshal CreateLocalBucketMsg: %v", err)
 	}
-	req, err = http.NewRequest("POST", proxyurl+"/v1/files/"+bucket, bytes.NewBuffer(injson))
+	req, err = http.NewRequest("POST", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -1098,7 +1098,7 @@ func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	if err != nil {
 		t.Fatalf("Failed to marshal CreateLocalBucketMsg: %v", err)
 	}
-	req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket, bytes.NewBuffer(injson))
+	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -1124,7 +1124,7 @@ func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterSt
 	if err != nil {
 		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", proxyurl+"/v1/cluster", bytes.NewBuffer(injson))
+	req, err = http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -1199,7 +1199,7 @@ func getClusterMap(httpclient *http.Client, t *testing.T) (smap dfc.Smap) {
 	if err != nil {
 		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", proxyurl+"/v1/cluster", bytes.NewBuffer(injson))
+	req, err = http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}

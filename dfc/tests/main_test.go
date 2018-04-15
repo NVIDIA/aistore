@@ -535,7 +535,7 @@ func Test_list(t *testing.T) {
 
 func Test_bucketnames(t *testing.T) {
 	var (
-		url = proxyurl + "/v1/files/" + "*"
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + "*"
 		r   *http.Response
 		err error
 	)
@@ -600,7 +600,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
@@ -618,7 +618,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_cold_get", strconv.FormatBool(false), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", strconv.FormatBool(false), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	start := time.Now()
 	getfromfilelist(t, bucket, errch, fileslist, false)
@@ -631,7 +631,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_cold_get", strconv.FormatBool(true), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("validate_cold_get", strconv.FormatBool(true), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -642,7 +642,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
 cleanup:
-	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	for _, fn := range fileslist {
 		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
@@ -689,7 +689,7 @@ func Benchmark_get(b *testing.B) {
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
 	errch chan error, resch chan workres, bucket string) {
-	geturl := proxyurl + "/v1/files"
+	geturl := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -851,7 +851,7 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 
 func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg, limit int) *dfc.BucketList {
 	var (
-		url = proxyurl + "/v1/files/" + bucket
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 	)
 	tlogf("LIST %q (Number of objects: %d)\n", url, limit)
 	reslist, err := client.ListBucket(proxyurl, bucket, msg, limit)
@@ -895,7 +895,7 @@ func Test_checksum(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 	// Get Current Config
-	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
@@ -920,14 +920,14 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable checkum
 	if ochksum != dfc.ChecksumNone {
-		setConfig("checksum", dfc.ChecksumNone, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("checksum", dfc.ChecksumNone, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_cold_get", fmt.Sprint("false"), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("false"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -944,18 +944,18 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, fileslist)
 	switch clichecksum {
 	case "all":
-		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/v1/cluster", httpclient, t)
-		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case dfc.ChecksumXXHash:
-		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -976,8 +976,8 @@ func Test_checksum(t *testing.T) {
 cleanup:
 	deletefromfilelist(t, bucket, errch, fileslist)
 	// restore old config
-	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/v1/cluster", httpclient, t)
-	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	return
 }
 
