@@ -234,7 +234,11 @@ var (
 // doesBucketExist reads all buckets by reading root directory, returns true if the bucket's
 // name is included in the list.
 func doesBucketExist(t *testing.T, fs webdav.FileSystem, bucket string) bool {
-	buckets := readDir(t, fs, "/")
+	buckets, err := readDir(t, fs, "/")
+	if err != nil {
+		return false // Note: Assume read error = bucket doesn't exist
+	}
+
 	for _, b := range buckets {
 		if b.Name() == bucket {
 			return true
@@ -317,18 +321,13 @@ func get(t *testing.T, fs webdav.FileSystem, name string) string {
 	return string(testBuf[:n])
 }
 
-func readDir(t *testing.T, fs webdav.FileSystem, bucketFullName string) []os.FileInfo {
+func readDir(t *testing.T, fs webdav.FileSystem, bucketFullName string) ([]os.FileInfo, error) {
 	dir, err := fs.OpenFile(nil, bucketFullName, 0 /* flag */, 0 /* perm */)
 	if err != nil {
 		t.Fatalf("Failed to open root")
 	}
 
-	fis, err := dir.Readdir(100)
-	if err != nil {
-		t.Fatalf("Failed to read buckets, err = %v", err)
-	}
-
-	return fis
+	return dir.Readdir(100)
 }
 
 // Note: A DFC instance is required in order to run this test.
@@ -447,7 +446,7 @@ func TestFS(t *testing.T) {
 			t.Fatalf("Failed to stat directory, err = %v", err)
 		}
 
-		fis := readDir(t, fs, bucketFullName)
+		fis, _ := readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
 			&fileInfo{name: "dir2", size: 0, mode: defaultDirMode},
@@ -456,18 +455,18 @@ func TestFS(t *testing.T) {
 			&fileInfo{name: "testfile2", size: int64(len(content1)), mode: defaultFileMode},
 		})
 
-		fis = readDir(t, fs, bucketFullName+"dir1/")
+		fis, _ = readDir(t, fs, bucketFullName+"dir1/")
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir2", size: 0, mode: defaultDirMode},
 			&fileInfo{name: "testfile", size: int64(len(content2)), mode: defaultFileMode},
 		})
 
-		fis = readDir(t, fs, bucketFullName+"dir3/dir/")
+		fis, _ = readDir(t, fs, bucketFullName+"dir3/dir/")
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "testfile", size: int64(len(content1)), mode: defaultFileMode},
 		})
 
-		fis = readDir(t, fs, bucketFullName+"dir2/")
+		fis, _ = readDir(t, fs, bucketFullName+"dir2/")
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir", size: 0, mode: defaultDirMode},
 		})
@@ -476,7 +475,7 @@ func TestFS(t *testing.T) {
 	{
 		// rename
 		fs.Rename(nil, file1, file1+"_rn")
-		fis := readDir(t, fs, bucketFullName)
+		fis, _ := readDir(t, fs, bucketFullName)
 
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
@@ -594,7 +593,7 @@ func TestFS(t *testing.T) {
 		}
 
 		fs.RemoveAll(nil, file2)
-		fis := readDir(t, fs, bucketFullName)
+		fis, _ := readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
 			&fileInfo{name: "dir2", size: 0, mode: defaultDirMode},
@@ -603,7 +602,7 @@ func TestFS(t *testing.T) {
 		})
 
 		fs.RemoveAll(nil, bucketFullName+"dir1/dir2/")
-		fis = readDir(t, fs, bucketFullName)
+		fis, _ = readDir(t, fs, bucketFullName)
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
 			&fileInfo{name: "dir2", size: 0, mode: defaultDirMode},
