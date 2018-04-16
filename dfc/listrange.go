@@ -61,7 +61,7 @@ func (t *targetrunner) getListFromRangeCloud(bucket string, msg *GetMsg) (bucket
 		bucketList.Entries = append(bucketList.Entries, reslist.Entries...)
 		if reslist.PageMarker == "" {
 			break
-		} else if i == maxPrefetchPages {
+		} else if i == maxPrefetchPages-1 {
 			glog.Warningf("Did not prefetch all keys (More than %d pages)", maxPrefetchPages)
 		}
 		msg.GetPageMarker = reslist.PageMarker

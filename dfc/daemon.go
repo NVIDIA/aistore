@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sort"
 	"sync"
 	"time"
 
@@ -57,9 +56,8 @@ type Smap struct {
 
 type mountedFS struct {
 	sync.Mutex
-	available    map[string]*mountPath
-	offline      map[string]*mountPath
-	availOrdered []string
+	available map[string]*mountPath
+	offline   map[string]*mountPath
 }
 
 // daemon instance: proxy or storage target
@@ -127,23 +125,6 @@ var (
 	ctx     = &daemon{}
 	clivars = &cliVars{}
 )
-
-//====================
-//
-// MountedFS - utilities
-//
-//====================
-
-// Updates ordered list of available mountpaths
-// Stable order of mountpaths is kept to support local bucket/DFC cache list paging
-func (m *mountedFS) updateOrderedList() {
-	ordered := make([]string, 0, len(m.available))
-	for path := range m.available {
-		ordered = append(ordered, path)
-	}
-	sort.Strings(ordered)
-	m.availOrdered = ordered
-}
 
 //====================
 //

@@ -652,6 +652,13 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	for _, entry := range bucketMap {
 		fileList.Entries = append(fileList.Entries, entry)
 	}
+
+	// sort the result to be consistent with other API
+	ifLess := func(i, j int) bool {
+		return fileList.Entries[i].Name < fileList.Entries[j].Name
+	}
+	sort.Slice(fileList.Entries, ifLess)
+
 	return
 }
 
@@ -782,8 +789,8 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 }
 
 // Local bucket:
-//   - reads object list from all targets, combines them into one big list,
-//     and returns it
+//   - reads object list from all targets, combines, sorts and returns the
+//     first pageSize objects
 // Cloud bucket:
 //   - selects a random target to read the list of objects from cloud
 //   - if iscached or atime property is requested it does extra steps:

@@ -105,7 +105,6 @@ func (k *fskeeper) checkAlivePaths(err error) {
 			ctx.mountpaths.Lock()
 			delete(ctx.mountpaths.available, mp.Path)
 			ctx.mountpaths.offline[mp.Path] = mp
-			ctx.mountpaths.updateOrderedList()
 			ctx.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
@@ -124,7 +123,6 @@ func (k *fskeeper) checkOfflinePaths(err error) {
 			ctx.mountpaths.Lock()
 			delete(ctx.mountpaths.offline, mp.Path)
 			ctx.mountpaths.available[mp.Path] = mp
-			ctx.mountpaths.updateOrderedList()
 			ctx.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)

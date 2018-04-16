@@ -111,7 +111,6 @@ func (t *targetrunner) run() error {
 		t.fspath2mpath()
 		t.mpath2Fsid() // enforce FS uniqueness
 	}
-	ctx.mountpaths.updateOrderedList() // generate sorted list of mountpaths
 
 	for mpath := range ctx.mountpaths.available {
 		cloudbctsfqn := makePathCloud(mpath)
@@ -801,45 +800,11 @@ func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 
 // should not be called for local buckets
 func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes []byte, errstr string, errcode int) {
-	var err error
-
-	if t.islocalBucket(bucket) {
-		return nil, fmt.Sprintf("Cache is unavailable for local bucket %s", bucket), 0
-	}
-
-	allfinfos := t.newFileWalk(bucket, msg)
-
-	for _, mpath := range ctx.mountpaths.availOrdered {
-		localbucketfqn := filepath.Join(makePathCloud(mpath), bucket)
-		_, err = os.Stat(localbucketfqn)
-		if err != nil {
-			if os.IsNotExist(err) {
-				err = nil // nothing cached yet
-				continue
-			}
-			break
-		}
-
-		allfinfos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
-		if err = filepath.Walk(localbucketfqn, allfinfos.listwalkf); err != nil {
-			errstr = fmt.Sprintf("Failed to traverse mpath %q, err: %v", mpath, err)
-			glog.Errorf(errstr)
-			break
-		}
-	}
-
+	reslist, err := t.prepareLocalObjectList(bucket, msg)
 	if err != nil {
-		t.runFSKeeper(err)
-		errstr = fmt.Sprintf("Failed to traverse cached objects: %v", err.Error())
-		glog.Errorf(errstr)
-		return
+		return nil, err.Error(), 0
 	}
 
-	var reslist = BucketList{Entries: allfinfos.files}
-	// Mark the batch as truncated if it is full
-	if allfinfos.fileCount >= allfinfos.limit {
-		reslist.PageMarker = allfinfos.lastFilePath
-	}
 	outbytes, err = json.Marshal(reslist)
 	return
 }
@@ -849,17 +814,28 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		infos *allfinfos
 		err   error
 	}
-	ch := make(chan *mresp, len(ctx.mountpaths.availOrdered))
+	ch := make(chan *mresp, len(ctx.mountpaths.available))
 	wg := &sync.WaitGroup{}
+	isLocal := t.islocalBucket(bucket)
 
 	// function to traverse one mountpoint
-	fn := func(mpath string) {
+	fn := func(fqn string) {
 		defer wg.Done()
 		r := &mresp{t.newFileWalk(bucket, msg), nil}
-		localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
-		r.infos.rootLength = len(localbucketfqn) + 1 // +1 for separator between bucket and filename
-		if err = filepath.Walk(localbucketfqn, r.infos.listwalkf); err != nil {
-			glog.Errorf("Failed to traverse mpath %q, err: %v", mpath, err)
+
+		if _, err = os.Stat(fqn); err != nil {
+			if !os.IsNotExist(err) {
+				r.err = err
+			}
+			// it means there was no PUT(for local bucket) or GET(for cloud bucket - cache is empty) yet
+			// Not an error, just skip the path
+			ch <- r
+			return
+		}
+
+		r.infos.rootLength = len(fqn) + 1 // +1 for separator between bucket and filename
+		if err = filepath.Walk(fqn, r.infos.listwalkf); err != nil {
+			glog.Errorf("Failed to traverse path %q, err: %v", fqn, err)
 			r.err = err
 		}
 		ch <- r
@@ -869,9 +845,16 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	for _, mpath := range ctx.mountpaths.availOrdered {
+	for mpath := range ctx.mountpaths.available {
 		wg.Add(1)
-		go fn(mpath)
+		localbucketfqn := ""
+		if isLocal {
+			localbucketfqn = filepath.Join(makePathLocal(mpath), bucket)
+		} else {
+			localbucketfqn = filepath.Join(makePathCloud(mpath), bucket)
+		}
+
+		go fn(localbucketfqn)
 	}
 	wg.Wait()
 	close(ch)
@@ -1010,27 +993,23 @@ func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
 		markerDirs = markerDirs[:len(markerDirs)-1]
 	}
 
-	isLocal := t.islocalBucket(bucket)
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
-	// Some properties make no sense to read from local files for cached
-	// objects(for non-local bucket - ctime, version, and size),
-	// so they are disabled
 	ci := &allfinfos{make([]*BucketEntry, 0, DefaultPageSize),
 		0,                 // fileCount
 		0,                 // rootLength
 		msg.GetPrefix,     // prefix
 		msg.GetPageMarker, // marker
 		markerDirs,        // markerDirs
-		strings.Contains(msg.GetProps, GetPropsAtime),              // needAtime
-		strings.Contains(msg.GetProps, GetPropsCtime) && isLocal,   // needCtime
-		strings.Contains(msg.GetProps, GetPropsChecksum),           // needChkSum
-		strings.Contains(msg.GetProps, GetPropsVersion) && isLocal, // needVersion
+		strings.Contains(msg.GetProps, GetPropsAtime),    // needAtime
+		strings.Contains(msg.GetProps, GetPropsCtime),    // needCtime
+		strings.Contains(msg.GetProps, GetPropsChecksum), // needChkSum
+		strings.Contains(msg.GetProps, GetPropsVersion),  // needVersion
 		msg,             // GetMsg
 		"",              // lastFilePath - next page marker
 		t,               // targetrunner
 		bucket,          // bucket
-		DefaultPageSize, // limit
+		DefaultPageSize, // limit - maximun number of objects to return
 	}
 
 	if msg.GetPageSize != 0 {
@@ -1059,14 +1038,7 @@ func (ci *allfinfos) processDir(fqn string) error {
 	}
 
 	if len(ci.markerDirs) != 0 {
-		var dirs []string
-		if strings.HasPrefix(ci.marker, "/") {
-			// cache list - use full path
-			dirs = strings.Split(fqn, "/")
-		} else {
-			// local bucket - use relative path
-			dirs = strings.Split(relname, "/")
-		}
+		dirs := strings.Split(relname, "/")
 		maxIdx := len(dirs)
 		if len(ci.markerDirs) < maxIdx {
 			maxIdx = len(ci.markerDirs)
@@ -1091,16 +1063,8 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 		return nil
 	}
 
-	if ci.marker != "" {
-		if strings.HasPrefix(ci.marker, "/") {
-			// cached cloud object case
-			if fqn <= ci.marker {
-				return nil
-			}
-		} else if relname <= ci.marker {
-			// local bucket case
-			return nil
-		}
+	if ci.marker != "" && relname <= ci.marker {
+		return nil
 	}
 
 	si, errstr := hrwTarget(ci.bucket+"/"+relname, ci.t.smap)
@@ -1183,7 +1147,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 
 // After putting a new version it updates xattr attrubutes for the object
 // Local bucket:
-//  - if bucket versioing is enable("all" or "local") then the version is autoincremented
+//  - if bucket versioning is enable("all" or "local") then the version is autoincremented
 // Cloud bucket:
 //  - if the Cloud returns a new version id then save it to xattr
 // In both case a new checksum is saved to xattrs
@@ -1471,7 +1435,6 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 
 			// Do try to delete non-cached objects.
 			return nil
-
 		}
 	}
 	if !(evict && localbucket) {

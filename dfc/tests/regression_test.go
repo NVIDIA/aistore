@@ -76,7 +76,6 @@ var (
 		Test{"DeleteRange", regressionDeleteRange},
 		Test{"HeadBucket", regressionHeadBucket},
 		Test{"ListObjects", regressionListObjects},
-		Test{"ObjectProps", regressionObjectsVersions},
 		Test{"ObjectPrefix", regressionObjectPrefix},
 	}
 	failLRU = ""
