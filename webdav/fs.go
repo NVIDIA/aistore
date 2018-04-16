@@ -30,10 +30,11 @@ type (
 
 	// File represents a bucket or an object in DFC; it implements interface webdav.File
 	File struct {
-		fs   *FileSystem // back pointer to file system
-		name string      // original name when a file operation is called
-		flag int         // original flag when open is called
-		perm os.FileMode // original perm when open is called
+		fs     *FileSystem // back pointer to file system
+		name   string      // original name when a file operation is called
+		flag   int         // original flag when open is called
+		perm   os.FileMode // original perm when open is called
+		exists bool        // true if the object or directory already exists when the file is opened
 
 		typ    int
 		bucket string
@@ -103,7 +104,7 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 
 	case Directory:
 		n := strings.TrimSuffix(f.prefix, "/")
-		exists, err := fs.proxy.doesObjectExist(f.bucket, n)
+		exists, _, err := fs.proxy.doesObjectExist(f.bucket, n)
 		if err != nil {
 			return err
 		}
@@ -145,16 +146,10 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 	f.fs = fs
 	switch f.typ {
 	case Object:
-		f.fi.modTime = time.Now()
 		f.flag = flag
 		f.perm = perm
 
-		exists, info, err := f.fs.proxy.getObjectInfo(f.bucket, f.prefix)
-		if err != nil {
-			return nil, err
-		}
-
-		if exists {
+		if f.exists {
 			if flag&os.O_CREATE != 0 && flag&os.O_EXCL != 0 {
 				return nil, &os.PathError{
 					Op:   op,
@@ -163,9 +158,6 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 				}
 			}
 
-			f.fi.size = info.Size
-			f.fi.modTime, _ = time.Parse(time.RFC822, info.Ctime)
-			f.fi.modTime = f.fi.modTime.UTC()
 			if flag&os.O_TRUNC != 0 {
 				if flag&(os.O_RDWR|os.O_WRONLY) == 0 {
 					return nil, &os.PathError{
@@ -252,7 +244,7 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 		return fs.proxy.deleteObjects(f.bucket, names)
 
 	case Object:
-		exists, err := fs.proxy.doesObjectExist(f.bucket, f.prefix)
+		exists, _, err := fs.proxy.doesObjectExist(f.bucket, f.prefix)
 		if err != nil {
 			return err
 		}
@@ -299,7 +291,7 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 	}
 
 	// old file has to exist
-	exists, err := fs.proxy.doesObjectExist(oldf.bucket, oldf.prefix)
+	exists, _, err := fs.proxy.doesObjectExist(oldf.bucket, oldf.prefix)
 	if err != nil {
 		return err
 	}
@@ -330,7 +322,7 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 	}
 
 	// new file should not already exist
-	exists, err = fs.proxy.doesObjectExist(newf.bucket, newf.prefix)
+	exists, _, err = fs.proxy.doesObjectExist(newf.bucket, newf.prefix)
 	if err != nil {
 		return err
 	}
@@ -389,12 +381,7 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 
 	f.fs = fs
 	if f.typ == Object {
-		exists, info, err := f.fs.proxy.getObjectInfo(f.bucket, f.prefix)
-		if err != nil {
-			return nil, err
-		}
-
-		if !exists {
+		if !f.exists {
 			return nil, &os.PathError{
 				Op:   op,
 				Path: name,
@@ -402,14 +389,13 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 			}
 		}
 
-		f.fi.size = info.Size
 		// fall through
 	}
 
 	return f.Stat()
 }
 
-// newFile is a wrapper of the generic name parser newFile(), it checks if a name without ending "/"
+// newFile is a wrapper of the generic name parser newFile(), it checks whether a name without ending "/"
 // is actually an existing directory.
 func (fs *FileSystem) newFile(name string) (*File, error) {
 	f, err := newFile(name)
@@ -421,15 +407,22 @@ func (fs *FileSystem) newFile(name string) (*File, error) {
 		return f, nil
 	}
 
-	// check whether it is actually interested in a directory
-	exists, err := fs.proxy.doesObjectExist(f.bucket, f.prefix+"/")
+	exists, info, err := fs.proxy.doesObjectExist(f.bucket, f.prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	if exists {
+	if !exists {
+		return f, nil
+	}
+
+	if info.IsDir() {
 		f.typ = Directory
 		f.fi.mode |= os.ModeDir
+	} else {
+		f.exists = true
+		f.fi.size = info.Size()
+		f.fi.modTime = info.ModTime()
 	}
 
 	return f, nil
@@ -625,7 +618,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 		return f.list(count, fis)
 
 	case Bucket, Directory:
-		objs, err := f.fs.proxy.listObjectsDetails(f.bucket, f.prefix)
+		objs, err := f.fs.proxy.listObjectsDetails(f.bucket, f.prefix, 0 /* limit */)
 		if err != nil {
 			return nil, err
 		}

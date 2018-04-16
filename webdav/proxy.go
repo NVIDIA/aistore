@@ -7,6 +7,9 @@ package main
 
 import (
 	"io"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -31,15 +34,46 @@ func (p *proxyServer) doesBucketExist(bucket string) bool {
 	return err == nil
 }
 
-// doesObjectExists queries proxy to get a list of objects starting with a prefix.
-// if any objects are returned, it implies the prefix exists.
-func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, error) {
-	objs, err := client.ListObjects(p.url, bucket, prefix, 1)
-	if err != nil {
-		return false, err
+// listBuckets returns a slice of names of all buckets
+func (p *proxyServer) listBuckets(local bool) ([]string, error) {
+	if !local {
+		return nil, nil
 	}
 
-	return len(objs) == 1, nil
+	bns, err := client.ListBuckets(p.url, local)
+	if err != nil {
+		return nil, err
+	}
+
+	var buckets []string
+	for _, b := range bns.Local {
+		buckets = append(buckets, b)
+	}
+
+	return buckets, nil
+}
+
+// doesObjectExists checks whether a directory or an object exists by querying DFC.
+func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, error) {
+	entries, err := p.listObjectsDetails(bucket, prefix, 1)
+	if err != nil {
+		return false, nil, err
+	}
+
+	if len(entries) == 0 {
+		return false, nil, nil
+	}
+
+	if entries[0].Name == prefix {
+		t, _ := time.Parse(time.RFC822, entries[0].Ctime)
+		return true, &fileInfo{size: entries[0].Size, modTime: t.UTC()}, nil
+	}
+
+	if strings.HasPrefix(entries[0].Name, prefix+"/") {
+		return true, &fileInfo{mode: os.ModeDir}, nil
+	}
+
+	return false, nil, nil
 }
 
 // putObject creates a new file reader and uses it to make a proxy put call to save a new
@@ -64,33 +98,14 @@ func (p *proxyServer) deleteObject(bucket string, prefix string) error {
 	return client.Del(p.url, bucket, prefix, nil /* wg */, nil /* errch */, true /* silent */)
 }
 
-// listBuckets returns a slice of names of all buckets
-func (p *proxyServer) listBuckets(local bool) ([]string, error) {
-	if !local {
-		return nil, nil
-	}
-
-	bns, err := client.ListBuckets(p.url, local)
-	if err != nil {
-		return nil, err
-	}
-
-	var buckets []string
-	for _, b := range bns.Local {
-		buckets = append(buckets, b)
-	}
-
-	return buckets, nil
-}
-
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket
-func (p *proxyServer) listObjectsDetails(bucket string, prefix string) ([]*dfc.BucketEntry, error) {
+func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int) ([]*dfc.BucketEntry, error) {
 	msg := &dfc.GetMsg{
 		GetPrefix: prefix,
 		GetProps:  "size, ctime",
 	}
 
-	bl, err := client.ListBucket(p.url, bucket, msg, 0)
+	bl, err := client.ListBucket(p.url, bucket, msg, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -105,23 +120,14 @@ func (p *proxyServer) listObjectsNames(bucket string, prefix string) ([]string, 
 
 // getObjectInfo expects to find and return none or one object that matches the prefix in a bucket.
 func (p *proxyServer) getObjectInfo(bucket string, prefix string) (bool, *dfc.BucketEntry, error) {
-	msg := &dfc.GetMsg{
-		GetPrefix: prefix,
-		GetProps:  "size, ctime",
-	}
-
-	bl, err := client.ListBucket(p.url, bucket, msg, 0)
+	entries, err := p.listObjectsDetails(bucket, prefix, 0 /* limit */)
 	if err != nil {
 		return false, nil, err
 	}
 
-	if len(bl.Entries) == 0 {
-		return false, nil, nil
-	}
-
-	for i := 0; i < len(bl.Entries); i++ {
-		if bl.Entries[i].Name == prefix {
-			return true, bl.Entries[i], nil
+	for i := 0; i < len(entries); i++ {
+		if entries[i].Name == prefix {
+			return true, entries[i], nil
 		}
 	}
 

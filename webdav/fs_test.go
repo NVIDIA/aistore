@@ -396,6 +396,11 @@ func TestFS(t *testing.T) {
 		// put new object
 		put(t, fs, file1, 0, content1)
 
+		err := fs.RemoveAll(nil, file1[0:len(file1)-1])
+		if err == nil {
+			t.Fatalf("Opened non existing object which has prefix of an existing object as its name")
+		}
+
 		// open an object and close it without touching it(read or write or seek)
 		f, err := fs.OpenFile(nil, file1, 0, 0)
 		if err != nil {
@@ -476,7 +481,6 @@ func TestFS(t *testing.T) {
 		// rename
 		fs.Rename(nil, file1, file1+"_rn")
 		fis, _ := readDir(t, fs, bucketFullName)
-
 		cmpFileInfos(t, fis, []os.FileInfo{
 			&fileInfo{name: "dir1", size: 0, mode: defaultDirMode},
 			&fileInfo{name: "dir2", size: 0, mode: defaultDirMode},
