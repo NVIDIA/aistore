@@ -17,6 +17,7 @@
         - startproxy.sh
         - startclient.sh
         - starttarget.sh
+        - startprimaryproxy.sh
     - name: Execute the command in remote shell; stdout goes to the specified file on the remote.
       shell: /home/ubuntu/setupnodes.sh >> setupnodes.log
 ...
