@@ -185,21 +185,21 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Rebalance cluster (proxy only) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics (proxy only) | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
-| Get object (proxy only) | GET /v1/files/bucket/object | `curl -L -X GET http://192.168.176.128:8080/v1/files/myS3bucket/myS3object -o myS3object` <sup id="a1">[1](#ft1)</sup> |
-| List bucket | GET { properties-and-options... } /v1/files/bucket | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/files/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
-| Rename/move file (local buckets only) | POST {"action": "rename", "name": new-name} /v1/files/bucket | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/files/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
-| Copy file | PUT /v1/files/bucket/object?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/files/myS3bucket/myS3object?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
-| Delete file | DELETE /v1/files/bucket/object | `curl -i -X DELETE -L http://192.168.176.128:8080/v1/files/mybucket/mydirectory/myobject` |
-| Evict file from cache | DELETE '{"action": "evict"}' /v1/files/bucket/object | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://192.168.176.128:8080/v1/files/mybucket/myobject` |
-| Create local bucket (proxy only) | POST {"action": "createlb"} /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/files/abc` |
-| Destroy local bucket (proxy only) | DELETE {"action": "destroylb"} /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/files/abc` |
-| Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
-| Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
-| Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
-| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
-| Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
-| Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/files/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/files/abc` <sup>[5](#ft5)</sup> |
-| Get bucket props (local and cloud) | HEAD /v1/files/bucket | ``` curl --head http://192.168.176.128:8080/v1/files/abc ```|
+| Get object (proxy only) | GET /v1/buckets/bucket-name/object-name | `curl -L -X GET http://192.168.176.128:8080/v1/buckets/myS3bucket/myobject -o myobject` <sup id="a1">[1](#ft1)</sup> |
+| List bucket | GET { properties-and-options... } /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
+| Rename/move file (local buckets only) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
+| Copy file | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
+| Delete file | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L http://192.168.176.128:8080/v1/objects/mybucket/mydirectory/myobject` |
+| Evict file from cache | DELETE '{"action": "evict"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://192.168.176.128:8080/v1/objects/mybucket/myobject` |
+| Create local bucket (proxy only) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/buckets/abc` |
+| Destroy local bucket (proxy only) | DELETE {"action": "destroylb"} /v1/buckets/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/buckets/abc` |
+| Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
+| Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
+| Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
+| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
+| Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
+| Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
+| Get bucket props | HEAD /v1/buckets/bucket-name | ``` curl --head http://192.168.176.128:8080/v1/buckets/abc ```|
 
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/files/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
@@ -245,7 +245,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
 
 ```
-$ curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size, checksum", "prefix": "smoke/"}' http://192.168.176.128:8080/v1/files/myBucket
+$ curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size, checksum", "prefix": "smoke/"}' http://192.168.176.128:8080/v1/buckets/myBucket
 ```
 
 This request will produce an output that (in part) may look as follows:
@@ -256,11 +256,11 @@ For many more examples, please refer to the dfc/tests/*_test.go files in the rep
 
 ### Example: Listing All Pages
 
-The following Go code retrieves a list of all of the keys in a bucket (Error handling omitted).
+The following Go code retrieves a list of all of object names from a named bucket (note: error handling omitted):
 
 ```go
-// proxyurl, bucket are your DFC Proxy URL and your bucket.
-url := proxyurl + "/v1/files/" + bucket
+// e.g. proxyurl: "http://localhost:8080"
+url := proxyurl + "/v1/buckets/" + bucket
 
 msg := &dfc.GetMsg{}
 fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
