@@ -6,12 +6,17 @@
       raw: sudo apt-get -y install python-simplejson
   tasks:
     - copy:
-        src: "{{ playbook_dir }}/setupnodes.sh"
+        src: "{{ playbook_dir }}/{{ item }}"
         dest: /home/ubuntu
         owner: ubuntu
         group: ubuntu
         mode: 0777
+      with_items:
+        - setupnodes.sh
+        - mountdfc.sh
+        - startproxy.sh
+        - startclient.sh
+        - starttarget.sh
     - name: Execute the command in remote shell; stdout goes to the specified file on the remote.
       shell: /home/ubuntu/setupnodes.sh >> setupnodes.log
 ...
-
