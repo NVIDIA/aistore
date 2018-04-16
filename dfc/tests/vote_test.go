@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,33 +43,29 @@ var (
 		Test{"Majority Cluster Map Mismatch", majoritymismatchclustermap},
 		Test{"Multiple Proxy Operations", putgetmultipleproxies},
 	}
-	runMultipleProxyTests bool
-	keepaliveseconds      int64
 )
 
-func init() {
-	flag.BoolVar(&runMultipleProxyTests, "testmultipleproxies", false, "If present, Multiple Proxy tests will be run")
-	flag.Int64Var(&keepaliveseconds, "keepaliveseconds", 15, "The keepalive poll time for the cluster")
-}
+func canRunMultipleProxyTests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
-//===================
-//
-// Main Test Function
-//
-//===================
+	if !multiProxy {
+		t.Skip("Skipped")
+	}
 
-func Test_vote(t *testing.T) {
-	parse()
-
-	if !runMultipleProxyTests {
-		t.Skipf("-testmultipleproxies flag unset")
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux only")
 	}
 
 	smap := getClusterMap(httpclient, t)
 	if len(smap.Pmap) <= 1 {
-		t.Errorf("Not enough proxies to run Test_vote, must be more than 1")
-		return
+		t.Skip("Not enough proxies to run Test_vote, must be more than 1")
 	}
+}
+
+func Test_vote(t *testing.T) {
+	canRunMultipleProxyTests(t)
 
 	for _, test := range voteTests {
 		t.Run(test.name, test.method)

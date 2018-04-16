@@ -315,7 +315,6 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		sgl        *dfc.SGLIO
 	)
 
-	parse()
 	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
@@ -445,9 +444,17 @@ func propsMainTest(t *testing.T, versioning string) {
 }
 
 func Test_objpropsVersionEnabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
+
 	propsMainTest(t, dfc.VersionAll)
 }
 
 func Test_objpropsVersionDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
+
 	propsMainTest(t, dfc.VersionNone)
 }

@@ -8,7 +8,6 @@ package dfc_test
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -80,31 +79,13 @@ var (
 		Test{"ObjectProps", regressionObjectsVersions},
 		Test{"ObjectPrefix", regressionObjectPrefix},
 	}
-	abortonerr      = false
-	readerType      = readers.ReaderTypeSG
-	failLRU         = ""
-	prefetchPrefix  = "__bench/test-"
-	prefetchRegex   = "^\\d22\\d?"
-	prefetchRange   = "0:2000"
-	PhysMemSizeWarn = uint64(7 * 1024) // MBs
-
-	// Following flags are set by parse()
-	usingSG   bool // True if using SGL as reader backing memory
-	usingFile bool // True if using file as reader backing
+	failLRU = ""
 )
 
-func init() {
-	flag.BoolVar(&abortonerr, "abortonerr", abortonerr, "abort on error")
-	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
-	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
-	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
-	flag.StringVar(&readerType, "readertype", readers.ReaderTypeSG,
-		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", readers.ReaderTypeSG,
-			readers.ReaderTypeFile, readers.ReaderTypeInMem, readers.ReaderTypeRand))
-}
-
 func Test_regression(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)

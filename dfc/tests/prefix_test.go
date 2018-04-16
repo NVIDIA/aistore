@@ -10,7 +10,6 @@
 package dfc_test
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -29,21 +28,14 @@ const (
 )
 
 var (
-	prefix           string
 	prefixFileNumber int
 )
-
-func init() {
-	flag.StringVar(&prefix, "prefix", "", "Object name prefix")
-}
 
 // if the prefix flag is set via command line the test looks only for the prefix
 // and checks if the number of items equals the number of files with
 // the names starting with the prefix;
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func Test_prefix(t *testing.T) {
-	parse()
-
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)

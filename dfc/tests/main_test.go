@@ -4,13 +4,38 @@
  */
 package dfc_test
 
+// Before submit for review or push to master:
+// (From $GOPATH/src/github.com/NVIDIA/dfcpub; or adjust the ./... accordingly)
+// 1. Run all tests minus multi proxy tests:
+//    BUCKET=<bucket name> MULTIPROXY=0 go test -v -p 1 -count 1 -timeout 20m ./...
+// 2. Do a quick run:
+//    BUCKET=<bucket name> MULTIPROXY=0 go test -v -p 1 -count 1 -short ./...
+// 3. If the change might affect multi proxy (may take a long time, around an hour):
+//    BUCKET=<bucket name> MULTIPROXY=1 go test -v -p 1 -count 1 -timeout 1h ./...
+
+// Notes:
+// It is important to run with the above paramerts, here is why:
+// 1. "-p 1": run tests sequentially; since all tests share the same bucket, can't allow
+//    tests run in parallel.
+// 2. "-count=1": this is to disable go test cache; without it, when tests fail, go test might show
+//    ok if the same test passed before and results are cached.
+// 3. "-v": when used, go test shows result (PASS/FAIL) for each test; so if -v is used, check the results carefully, last line shows
+//    PASS doesn't mean the test passed, it only means the last test passed.
+// 4. the option "-timeout 20m" is just in case it takes 10+ minutes for all tests to finish on your setup.
+
+// To run individual tests as before:
+// BUCKET=<bucket name> go test ./tests -v -run=regression
+// BUCKET=<bucket name> go test ./tests -v -run=down -args -bucket=mybucket
+// BUCKET=<bucket name> go test ./tests -v -run=list -bucket=otherbucket -prefix=smoke/obj -props=atime,ctime,iscached,checksum,version,size
+// BUCKET=<bucket name> go test ./tests -v -run=smoke -numworkers=4
+// BUCKET=liding-dfc MULTIPROXY=1 go test -v -run=vote -duration=20m
+
 import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -22,45 +47,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
-)
-
-// usage examples:
-// # go test ./tests -v -run=regression
-// # go test ./tests -v -run=down -args -bucket=mybucket
-// # go test ./tests -v -run=list -bucket=otherbucket -prefix=smoke/obj -props=atime,ctime,iscached,checksum,version,size
-// # go test ./tests -v -run=smoke -numworkers=4
-// # go test ./tests -v -run=xxx -bench . -count 10
-
-const (
-	baseDir        = "/tmp/dfc"
-	LocalDestDir   = "/tmp/dfc/dest"         // client-side download destination
-	LocalSrcDir    = "/tmp/dfc/src"          // client-side src directory for upload
-	ProxyURL       = "http://localhost:8080" // assuming local proxy is listening on 8080
-	ColdValidStr   = "coldmd5"
-	ChksumValidStr = "chksum"
-	ColdMD5str     = "coldmd5"
-	DeleteDir      = "/tmp/dfc/delete"
-	DeleteStr      = "delete"
-	largefilesize  = 4 // in MB
-)
-
-// globals
-var (
-	clibucket   string
-	numfiles    int
-	numworkers  int
-	match       string
-	clichecksum string
-	totalio     int64
-	proxyurl    string
-	props       string
-	pagesize    int64
-	objlimit    int64
 )
 
 // worker's result
@@ -85,38 +74,7 @@ func newReqError(msg string, code int) reqError {
 	}
 }
 
-func init() {
-	flag.StringVar(&proxyurl, "proxyurl", ProxyURL, "Proxy URL")
-	flag.StringVar(&clibucket, "bucket", "shri-new", "AWS or GCP bucket")
-	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
-	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
-	flag.StringVar(&match, "match", ".*", "object name regex")
-	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
-	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
-	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
-	flag.Int64Var(&pagesize, "pagesize", 1000, "The maximum number of objects returned in one page")
-	flag.Int64Var(&objlimit, "objlimit", 0, "The maximum number of objects returned in one list bucket call (0 - no limit)")
-}
-
-func checkMemory() {
-	if readerType == readers.ReaderTypeSG || readerType == readers.ReaderTypeInMem {
-		megabytes, _ := dfc.TotalMemory()
-		if megabytes < PhysMemSizeWarn {
-			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider use other reader type\n", megabytes)
-		}
-	}
-}
-
-func parse() {
-	flag.Parse()
-	usingSG = readerType == readers.ReaderTypeSG
-	usingFile = readerType == readers.ReaderTypeFile
-	checkMemory()
-}
-
 func Test_download(t *testing.T) {
-	parse()
-
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)
@@ -200,8 +158,6 @@ func Test_download(t *testing.T) {
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
-	parse()
-
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
 	for i := 0; i < numworkers; i++ {
@@ -254,7 +210,9 @@ func Test_matchdelete(t *testing.T) {
 }
 
 func Test_putdeleteRange(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	const (
 		numFiles     = 100
@@ -397,7 +355,9 @@ func Test_putdeleteRange(t *testing.T) {
 
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	var sgl *dfc.SGLIO
 	if err := dfc.CreateDir(DeleteDir); err != nil {
@@ -506,8 +466,6 @@ func listObjects(t *testing.T, msg *dfc.GetMsg, bucket string, objLimit int) (*d
 }
 
 func Test_list(t *testing.T) {
-	parse()
-
 	var (
 		pageSize = int(pagesize)
 		objLimit = int(objlimit)
@@ -524,6 +482,7 @@ func Test_list(t *testing.T) {
 	if prefix != "" {
 		msg.GetPrefix = prefix
 	}
+
 	tlogf("Displaying properties: %s\n", msg.GetProps)
 	reslist, err := listObjects(t, msg, bucket, objLimit)
 	if err == nil {
@@ -876,6 +835,10 @@ func emitError(r *http.Response, err error, errch chan error) {
 }
 
 func Test_checksum(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
+
 	var (
 		filesput    = make(chan string, 100)
 		fileslist   = make([]string, 0, 100)
@@ -894,6 +857,7 @@ func Test_checksum(t *testing.T) {
 	if err := dfc.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
+
 	// Get Current Config
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
@@ -978,6 +942,7 @@ cleanup:
 	// restore old config
 	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+
 	return
 }
 

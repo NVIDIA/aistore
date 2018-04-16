@@ -1,7 +1,6 @@
 package dfc_test
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -16,15 +15,6 @@ const (
 	multiproxydir = "multipleproxy"
 	multiproxybkt = "multipleproxytmp"
 )
-
-var (
-	testlength string
-)
-
-func init() {
-	flag.StringVar(&testlength, "votestresslength", "", "The length to run the Multiple Proxy Stress Test for")
-
-}
 
 func rwdloop(seed int64, stopch <-chan struct{}, proxyurlch <-chan string, errch chan error) {
 	// Each iteration of the loop puts, then gets, then deletes. This way, failovers will theoretically happen in each step of the process.
@@ -127,6 +117,7 @@ loop:
 		if found {
 			args = append(args[:idx], args[idx+1:]...)
 		}
+
 		proxyurl = nextProxyURL
 		args = append(args, "-proxyurl="+nextProxyURL)
 		err = restore(httpclient, primaryProxyURL, cmd, args)
@@ -141,19 +132,7 @@ loop:
 }
 
 func Test_votestress(t *testing.T) {
-	parse()
-	var (
-		testduration time.Duration
-		err          error
-	)
-
-	if testlength == "" {
-		t.Skipf("No Vote Stress Test Length provided; skipping")
-	} else if !runMultipleProxyTests {
-		t.Skipf("-testmultipleproxies flag unset")
-	} else if testduration, err = time.ParseDuration(testlength); err != nil {
-		t.Fatalf("Failed to parse test length: %v", err)
-	}
+	canRunMultipleProxyTests(t)
 
 	client.CreateLocalBucket(proxyurl, multiproxybkt)
 
@@ -174,7 +153,7 @@ func Test_votestress(t *testing.T) {
 	stopchs[numworkers] = make(chan struct{}, 10)
 	go killLoop(t, bs, stopchs[numworkers], proxyurlchs, errchs[numworkers])
 
-	timer := time.After(testduration)
+	timer := time.After(multiProxyTestDuration)
 	var errs uint64 = 0
 loop:
 	for {

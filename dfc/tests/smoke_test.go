@@ -5,7 +5,6 @@
 package dfc_test
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -18,32 +17,15 @@ import (
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
-const (
-	SmokeDir        = "/tmp/dfc/smoke" // smoke test dir
-	SmokeStr        = "smoke"
-	blocksize       = 1048576
-	defaultbaseseed = 1062984096
-)
-
 var (
-	numops    int
-	fnlen     int
-	baseseed  int64
 	filesizes = [3]int{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
 	ratios    = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}         // #gets / #puts
 )
 
-func init() {
-	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
-	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
-	// When running multiple tests at the same time on different threads, ensure that
-	// They are given different seeds, as the tests are completely deterministic based on
-	// choice of seed, so they will interfere with each other.
-	flag.Int64Var(&baseseed, "seed", defaultbaseseed, "Seed to use for random number generators")
-}
-
 func Test_smoke(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
