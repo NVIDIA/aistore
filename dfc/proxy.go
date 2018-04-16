@@ -715,9 +715,9 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	}
 	sort.Slice(allentries.Entries, entryLess)
 
-	// shrink the result to `pageSize` entries if it is longer
-	// the result must be sorted to support paging and PageMarker
-	if len(allentries.Entries) > pageSize {
+	// shrink the result to `pageSize` entries. If the page is full than
+	// mark the result incomplete by setting PageMarker
+	if len(allentries.Entries) >= pageSize {
 		for i := pageSize; i < len(allentries.Entries); i++ {
 			allentries.Entries[i] = nil
 		}
