@@ -71,18 +71,10 @@ var (
 		TLSHandshakeTimeout: 600 * time.Second,
 		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}
-
 	client = &http.Client{
 		Timeout:   600 * time.Second,
 		Transport: transport,
 	}
-
-	ProxyProto         = "http"
-	ProxyIP            = "localhost"
-	ProxyPort          = 8080
-	RestAPIVersion     = dfc.Rversion
-	RestAPIObjResource = dfc.Robjects
-	RestAPIBckResource = dfc.Rbuckets
 )
 
 // RoundTrip records the proxy redirect time and keeps track of requests.
