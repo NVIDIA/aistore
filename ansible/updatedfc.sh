@@ -9,6 +9,6 @@ ansible targets -m shell -a "/home/ubuntu/mountdfc.sh > mountdfc.log" -i invento
 ansible targets -m shell -a "mount | grep dfc" -i inventory/cluster.ini --become
 parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/startproxy.sh >/dev/null 2>&1'
 parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/starttarget.sh >/dev/null 2>&1'
-sleep(10)
+sleep 10
 parallel-ssh -h inventory/proxy.txt -i 'cat ~/dfc.json'
 parallel-ssh -h inventory/proxy.txt -i 'cat /var/log/dfc/dfc.INFO'
