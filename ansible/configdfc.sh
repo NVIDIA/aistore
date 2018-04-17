@@ -12,7 +12,7 @@ export CONFFILE_COLLECTD=$HOME/collectd.json
 export GRAPHITE_SERVER=`cat ./inventory/graphana.txt`
 export TESTFSPATHCOUNT=0
 export c=0
-export FSPATHS='"/dfc/1": "", "/dfc/2": "", "/dfc/3": "", "/dfc/4": ""'
+export FSPATHS='"/dfc/1": "", "/dfc/2": "", "/dfc/3": "", "/dfc/4": "", "/dfc/5": "", "/dfc/6": ""'
 export IPV4LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$//')
 source /etc/profile.d/dfcpaths.sh
 $DFCSRC/setup/config.sh
