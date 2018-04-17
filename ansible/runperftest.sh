@@ -2,7 +2,21 @@
 set -o xtrace
 set -e
 
-parallel-ssh -h inventory/clients.txt -i './startclient.sh 100 5m'
+pctput=0
+duration=120m
+
+if [ -z "$1" ]; then
+        echo "Using default pctput 0"
+else
+        pctput=$1
+fi
+if [ -z "$2" ]; then
+        echo "Using default duration 120m"
+else
+        duration=$2
+fi
+cmd="./startclient.sh $pctput $duration"
+parallel-ssh -h inventory/clients.txt -i $cmd
 
 clients_running=`parallel-ssh -h inventory/clients.txt -i "screen -ls client" | grep client | wc -l`
 sleep 30
