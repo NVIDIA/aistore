@@ -12,7 +12,9 @@ import (
 	"math/rand"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,19 +28,40 @@ type (
 	FileSystem struct {
 		proxy    *proxyServer
 		localDir string // local directory where DFC objects are temporarily stored while they are being used for read/write
+
+		// in memory directory cache
+		// to avoid putting webdav specific objects in DFC, this in memory directory cache helps webdav keep track of directories
+		// that do not have any objects in DFC. this is in memory only and is not persisted, it will get lost if webdav dies or shutdown.
+		// first level directories are buckets.
+		// to extent the usage beyond empty directories only, this can be used for caching all buckets and directories, this will
+		// help speed up bucket and directory look ups.
+		// downside is concurrent access and transaction protection, for example, access to DFC not through webdav.
+		// concurrent access should be done by webdav locking.
+		// transaction protection: TBD
+		// if too much memory is used to cache all directories, can implement cache empty directory only, might
+		// affect performance because more trips to DFC.
+		// objects can also be cached; needs to implements it as when too many nodes cached, can evict
+		// object nodes.
+		root *inode
 	}
 
 	// File represents a bucket or an object in DFC; it implements interface webdav.File
 	File struct {
-		fs     *FileSystem // back pointer to file system
-		name   string      // original name when a file operation is called
-		flag   int         // original flag when open is called
-		perm   os.FileMode // original perm when open is called
-		exists bool        // true if the object or directory already exists when the file is opened
+		fs   *FileSystem // back pointer to file system
+		name string      // original name when a file operation is called
+		flag int         // original flag when open is called
+		perm os.FileMode // original perm when open is called
 
 		typ    int
 		bucket string
-		prefix string
+		path   string
+		prefix string // path + fi.name -> "path/base"
+
+		// Note: Following flags are set at the time when the resourcce is requested, they don't reflects the updated status, for
+		//       example, if a file doesn't exists, flag resourceExists is false; after the file is created, resourceExists is still false.
+		bucketExists   bool // true if the resource's bucket exists
+		pathExists     bool // true if the resource's path exists
+		resourceExists bool // true if the resource exists
 
 		// Runtime information
 		fi    fileInfo
@@ -58,6 +81,13 @@ type (
 		mode    os.FileMode
 		modTime time.Time
 	}
+
+	// inode is a simple implementation of file system's inode; currently used for directory only.
+	inode struct {
+		name     string
+		parent   *inode
+		children map[string]*inode
+	}
 )
 
 var (
@@ -74,6 +104,8 @@ const (
 
 	defaultFileMode os.FileMode = 0660
 	defaultDirMode  os.FileMode = defaultFileMode | os.ModeDir
+
+	separator = "/"
 )
 
 // Mkdir creates a new bucket or verifies whether a directory exists or not
@@ -91,41 +123,62 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 	}
 
 	switch f.typ {
-	case Bucket:
-		if fs.proxy.doesBucketExist(f.bucket) {
-			return &os.PathError{
-				Op:   op,
-				Path: name,
-				Err:  os.ErrExist,
-			}
-		}
-
-		return fs.proxy.createBucket(f.bucket)
-
-	case Directory:
-		n := strings.TrimSuffix(f.prefix, "/")
-		exists, _, err := fs.proxy.doesObjectExist(f.bucket, n)
-		if err != nil {
-			return err
-		}
-
-		if exists {
-			return &os.PathError{
-				Op:   op,
-				Path: name,
-				Err:  os.ErrExist,
-			}
-		}
-
-		return nil
-
-	default:
+	case Root:
 		return &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  os.ErrInvalid,
 		}
+
+	case Bucket:
+		if f.bucketExists {
+			return &os.PathError{
+				Op:   op,
+				Path: name,
+				Err:  os.ErrExist,
+			}
+		}
+
+		err := fs.proxy.createBucket(f.bucket)
+		if err != nil {
+			return err
+		}
+
+		_, err = fs.root.addChild(f.bucket)
+		return err
+
+	case Object:
+		// Note: Since this call is Mkdir(), Object really means it is a new directory
+		if !f.bucketExists || !f.pathExists {
+			return &os.PathError{
+				Op:   op,
+				Path: name,
+				Err:  os.ErrNotExist,
+			}
+		}
+
+		if f.resourceExists {
+			return &os.PathError{
+				Op:   op,
+				Path: name,
+				Err:  os.ErrExist,
+			}
+		}
+
+		parent := f.parent()
+		parent.addChild(f.fi.name)
+		return nil
+
+	case Directory:
+		// Since it is identified as a directory, it implies the directory already exists
+		return &os.PathError{
+			Op:   op,
+			Path: name,
+			Err:  os.ErrExist,
+		}
 	}
+
+	return fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
 }
 
 // OpenFile opens a file or a directory and returns a File.
@@ -143,18 +196,39 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 		}
 	}
 
-	f.fs = fs
 	switch f.typ {
+	case Root, Directory:
+		// Node: for directory type, if it is identified s directory, it means it already exists
+		return f, nil
+
+	case Bucket:
+		if !f.bucketExists {
+			return nil, &os.PathError{
+				Op:   op,
+				Path: name,
+				Err:  os.ErrNotExist,
+			}
+		}
+
+		return f, nil
+
 	case Object:
+		if !f.bucketExists || !f.pathExists {
+			return nil, &os.PathError{
+				Op:   op,
+				Path: name,
+				Err:  os.ErrNotExist,
+			}
+		}
+
 		f.flag = flag
 		f.perm = perm
-
-		if f.exists {
+		if f.resourceExists {
 			if flag&os.O_CREATE != 0 && flag&os.O_EXCL != 0 {
 				return nil, &os.PathError{
 					Op:   op,
 					Path: name,
-					Err:  os.ErrExist,
+					Err:  os.ErrInvalid,
 				}
 			}
 
@@ -192,10 +266,9 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 		}
 
 		return f, nil
-
-	default:
-		return f, nil
 	}
+
+	return nil, fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
 }
 
 // RemoveAll removes things depends on the 'name':
@@ -225,7 +298,7 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 		}
 
 	case Bucket:
-		if !fs.proxy.doesBucketExist(f.bucket) {
+		if !f.bucketExists {
 			return &os.PathError{
 				Op:   op,
 				Path: name,
@@ -233,23 +306,16 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 			}
 		}
 
-		return fs.proxy.deleteBucket(f.bucket)
-
-	case Directory:
-		names, err := fs.proxy.listObjectsNames(f.bucket, f.prefix)
+		err := fs.proxy.deleteBucket(f.bucket)
 		if err != nil {
 			return err
 		}
 
-		return fs.proxy.deleteObjects(f.bucket, names)
+		fs.root.deleteChild(f.bucket)
+		return nil
 
 	case Object:
-		exists, _, err := fs.proxy.doesObjectExist(f.bucket, f.prefix)
-		if err != nil {
-			return err
-		}
-
-		if !exists {
+		if !f.resourceExists {
 			return &os.PathError{
 				Op:   op,
 				Path: name,
@@ -259,13 +325,19 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 
 		return fs.proxy.deleteObject(f.bucket, f.prefix)
 
-	default:
-		return &os.PathError{
-			Op:   op,
-			Path: name,
-			Err:  os.ErrInvalid,
+	case Directory:
+		// if name is identified as a directory, it exists for sure
+		names, err := fs.proxy.listObjectsNames(f.bucket, f.prefix)
+		if err != nil {
+			return err
 		}
+
+		// f.parent() should not return nil since the directory
+		f.parent().deleteChild(f.fi.name)
+		return fs.proxy.deleteObjects(f.bucket, names)
 	}
+
+	return fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
 }
 
 // Rename renames an object; rename root/bucket/directory is not supported.
@@ -290,13 +362,7 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 		}
 	}
 
-	// old file has to exist
-	exists, _, err := fs.proxy.doesObjectExist(oldf.bucket, oldf.prefix)
-	if err != nil {
-		return err
-	}
-
-	if !exists {
+	if !oldf.resourceExists {
 		return &os.PathError{
 			Op:   op,
 			Path: oldName,
@@ -321,17 +387,19 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 		}
 	}
 
-	// new file should not already exist
-	exists, _, err = fs.proxy.doesObjectExist(newf.bucket, newf.prefix)
-	if err != nil {
-		return err
-	}
-
-	if exists {
+	if newf.resourceExists {
 		return &os.PathError{
 			Op:   op,
-			Path: newName,
+			Path: oldName,
 			Err:  os.ErrExist,
+		}
+	}
+
+	if !newf.bucketExists || !newf.pathExists {
+		return &os.PathError{
+			Op:   op,
+			Path: oldName,
+			Err:  os.ErrNotExist,
 		}
 	}
 
@@ -379,9 +447,12 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 		}
 	}
 
-	f.fs = fs
-	if f.typ == Object {
-		if !f.exists {
+	switch f.typ {
+	case Root, Directory:
+		return f.Stat()
+
+	case Bucket:
+		if !f.bucketExists {
 			return nil, &os.PathError{
 				Op:   op,
 				Path: name,
@@ -389,21 +460,77 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 			}
 		}
 
-		// fall through
+		return f.Stat()
+
+	case Object:
+		if !f.resourceExists {
+			return nil, &os.PathError{
+				Op:   op,
+				Path: name,
+				Err:  os.ErrNotExist,
+			}
+		}
+
+		return f.Stat()
 	}
 
-	return f.Stat()
+	return nil, fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
 }
 
-// newFile is a wrapper of the generic name parser newFile(), it checks whether a name without ending "/"
-// is actually an existing directory.
+// newFile is a wrapper of the generic name parser, it does extra check and populate more fields in 'File' after parsing the resource name.
 func (fs *FileSystem) newFile(name string) (*File, error) {
-	f, err := newFile(name)
+	f, err := parseResource(name)
 	if err != nil {
 		return nil, err
 	}
 
-	if f.typ != Object {
+	f.fs = fs
+	f.prefix = join(f.path, f.fi.name)
+
+	if f.typ == Root {
+		return f, nil
+	}
+
+	if f.bucketNode() != nil {
+		f.bucketExists = true
+	} else {
+		if fs.proxy.doesBucketExist(f.bucket) {
+			fs.root.addChild(f.bucket)
+			f.bucketExists = true
+		}
+	}
+
+	if f.typ == Bucket || !f.bucketExists {
+		return f, nil
+	}
+
+	if f.path != "" {
+		if f.parent() != nil {
+			f.pathExists = true
+		} else {
+			exists, _, err := fs.proxy.doesObjectExist(f.bucket, f.path)
+			if err != nil {
+				return nil, err
+			}
+
+			f.pathExists = exists
+		}
+	} else {
+		f.pathExists = true
+	}
+
+	if !f.pathExists {
+		return f, nil
+	}
+
+	n, _ := f.bucketNode().addPath(f.path)
+
+	// check if it is a directory in memory; if it is not in memory and the path does exists, it will be find later
+	// when dfc is consulted
+	if f.parent().find(f.fi.name) != nil {
+		f.typ = Directory
+		f.fi.mode |= os.ModeDir
+		f.resourceExists = true
 		return f, nil
 	}
 
@@ -419,13 +546,24 @@ func (fs *FileSystem) newFile(name string) (*File, error) {
 	if info.IsDir() {
 		f.typ = Directory
 		f.fi.mode |= os.ModeDir
+		n.addChild(f.fi.name)
 	} else {
-		f.exists = true
 		f.fi.size = info.Size()
 		f.fi.modTime = info.ModTime()
 	}
 
-	return f, nil
+	f.resourceExists = true
+	return f, err
+}
+
+// join is a helper for path's join to ignore the empty path to "."
+// conversion done by path.Join()
+func join(pth string, base string) string {
+	if pth == "" {
+		return base
+	}
+
+	return path.Join(pth, base)
 }
 
 // NewFS returns a DFC file system
@@ -433,97 +571,71 @@ func NewFS(url url.URL, localDir string) webdav.FileSystem {
 	return &FileSystem{
 		&proxyServer{url.String()},
 		localDir,
+		newRoot(),
 	}
 }
 
-// newFile parses a name of an object and returns a File represents the object.
-// WebDAV object to DFC conversion
-// +--------------------------+------------+--------------+------------------+------------+
-// | Name                     | Type       | Bucket Name  | Prefix           | BaseName   |
-// +--------------------------+------------+--------------+------------------+------------+
-// | "/"                      | Root       | N/A          | N/A              | N/A        |
-// | "/bucket"                | Bucket     | bucket       | N/A              | N/A        |
-// | "/bucket/dir/"           | Dir        | bucket       | dir/             | N/A        |
-// | "/bucket/dir1/dir2/"     | Dir        | bucket       | dir1/dir2/       | N/A        |
-// | "/bucket/dir/file"       | File       | bucket       | dir/file         | file       |
-// | "/bucket/dir1/dir2/file" | File       | bucket       | dir1/dir2/file   | file       |
-// +--------------------------+------------+--------------+------------------+------------+
-// Note: When there is no trailing "/", it can mean either a file or a diretory, based on the operation, caller needs to treat it accordingly.
-func newFile(name string) (*File, error) {
-	if !strings.HasPrefix(name, "/") {
+// parseResource parses a webdav resource and returns a File represents it.
+// it can't tell whether it is a file or a directory
+// +--------------------------+--------+--------+------------+------+
+// | Name                     | Type   | Bucket | Path       | Base |
+// +--------------------------+--------+--------+------------+------+
+// | "/"                      | Root   | ""     | ""         | ""   |
+// | "/bucket"                | Bucket | bucket | ""         | ""   |
+// | "/bucket/dir/"           | File   | bucket | ""         | dir  |
+// | "/bucket/dir1/dir2/"     | File   | bucket | dir1       | dir2 |
+// | "/bucket/dir/file"       | File   | bucket | dir        | file |
+// | "/bucket/dir1/dir2/file" | File   | bucket | dir1/dir2  | file |
+// +--------------------------+--------+--------+------------+------+
+func parseResource(name string) (*File, error) {
+	n := path.Clean(name)
+	if !path.IsAbs(n) {
 		return nil, os.ErrInvalid
 	}
 
-	if name == "/" {
+	if name == separator {
 		return &File{
-			name: "/",
+			name: name,
 			typ:  Root,
 			fi: fileInfo{
-				name: "/",
+				name: "",
 				mode: defaultDirMode,
 			},
 		}, nil
 	}
 
-	// Verifies none of the parts between two "/"s are empty
-	n := strings.TrimPrefix(name, "/")
-	n = strings.TrimSuffix(n, "/")
-	parts := strings.Split(n, "/")
-	if len(parts) == 0 {
-		return nil, os.ErrInvalid
-	}
-
-	for _, p := range parts {
-		if len(p) < 1 {
-			return nil, os.ErrInvalid
-		}
-	}
-
-	parts = strings.Split(name, "/")
-	if len(parts) == 2 {
+	if path.Dir(n) == separator {
 		return &File{
 			name:   name,
 			typ:    Bucket,
-			bucket: parts[1],
+			bucket: path.Base(n),
 			fi: fileInfo{
-				name: parts[1],
+				name: "",
 				mode: defaultDirMode,
 			},
 		}, nil
 	}
 
-	if strings.HasSuffix(name, "/") {
-		if len(parts) == 3 {
-			return &File{
-				name:   name,
-				typ:    Bucket,
-				bucket: parts[1],
-				fi: fileInfo{
-					name: parts[1],
-					mode: defaultDirMode,
-				},
-			}, nil
-		}
+	n = strings.TrimPrefix(n, separator)
+	segs := strings.Split(n, separator)
+	// guaranteed there will be at least two segment
+	bucket := segs[0]
+	// trim bucket name + "/" of the string to get the rest of it
+	n = strings.TrimPrefix(n, bucket+separator)
 
-		return &File{
-			name:   name,
-			typ:    Directory,
-			bucket: parts[1],
-			prefix: name[len(parts[1])+2:],
-			fi: fileInfo{
-				name: parts[1],
-				mode: defaultDirMode,
-			},
-		}, nil
+	pth := path.Dir(n)
+	base := path.Base(n)
+	if pth == "." {
+		pth = ""
 	}
 
 	return &File{
 		name:   name,
 		typ:    Object,
-		bucket: parts[1],
-		prefix: name[len(parts[1])+2:],
+		bucket: bucket,
+		path:   pth,
 		fi: fileInfo{
-			name: parts[len(parts)-1],
+			name: base,
 			mode: defaultFileMode,
 		},
 	}, nil
@@ -623,16 +735,27 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 			return nil, err
 		}
 
+		var n *inode
+		if f.typ == Bucket {
+			n = f.bucketNode()
+		} else {
+			n = f.inode(f.prefix)
+		}
+
+		for _, c := range n.children {
+			// adding a "/" at the end to indicate to DFC this is a directory
+			objs = append(objs, &dfc.BucketEntry{Name: c.name + separator})
+		}
+
 		fis, err := group(objs, f.prefix)
 		if err != nil {
 			return nil, err
 		}
 
 		return f.list(count, fis)
-
-	default:
-		return nil, os.ErrInvalid
 	}
+
+	return nil, os.ErrInvalid
 }
 
 // Seek moves current position of an object
@@ -654,12 +777,9 @@ func (f *File) Stat() (os.FileInfo, error) {
 	return &f.fi, nil
 }
 
+// createLocalFile creates a local file for read/write of a dfc object
 func (f *File) createLocalFile(perm os.FileMode) error {
 	var err error
-
-	if f.handle != nil {
-		panic(fmt.Errorf("creating an already opened file"))
-	}
 
 	f.localPath = f.fs.localFileName()
 	f.handle, err = os.Create(f.localPath)
@@ -672,10 +792,6 @@ func (f *File) createLocalFile(perm os.FileMode) error {
 
 // downlaodFile creates a local file, get the file from DFC.
 func (f *File) downlaodFile() error {
-	if f.handle != nil {
-		panic(fmt.Errorf("downloading an already opened file"))
-	}
-
 	err := f.createLocalFile(f.perm)
 	if err != nil {
 		return err
@@ -716,6 +832,21 @@ func (f *File) list(count int, fis []os.FileInfo) ([]os.FileInfo, error) {
 	return fis[old:f.pos], nil
 }
 
+// inode search in memory directory nodes to find inode of a path relative to bucket name.
+func (f *File) inode(pth string) *inode {
+	return f.fs.root.find(join(f.bucket, pth))
+}
+
+// parent returns the parent inode.
+func (f *File) parent() *inode {
+	return f.inode(f.path)
+}
+
+// bucketNode returns the inode for the bucket that 'f' belongs to.
+func (f *File) bucketNode() *inode {
+	return f.inode("")
+}
+
 func (fi *fileInfo) Name() string {
 	return fi.name
 }
@@ -740,6 +871,83 @@ func (fi *fileInfo) Sys() interface{} {
 	return nil
 }
 
+// newRoot returns a new root directory
+func newRoot() *inode {
+	return &inode{
+		name:     separator,
+		parent:   nil,
+		children: make(map[string]*inode),
+	}
+}
+
+// addChild adds 'name' as a child of node 'd' and returns the addChild node if there is no error
+func (d *inode) addChild(name string) (*inode, error) {
+	c, ok := d.children[name]
+	if ok {
+		return c, os.ErrExist
+	}
+
+	n := &inode{
+		name:     name,
+		parent:   d,
+		children: make(map[string]*inode),
+	}
+
+	d.children[name] = n
+	return n, nil
+}
+
+// deleteChild deletes node d's child 'name'
+func (d *inode) deleteChild(name string) {
+	delete(d.children, name)
+}
+
+// addPath adds every segments on path as a child starting from node 'd'; last node added is returned
+func (d *inode) addPath(pth string) (*inode, error) {
+	if path.IsAbs(pth) {
+		return nil, os.ErrInvalid
+	}
+
+	if pth == "" {
+		return d, nil
+	}
+
+	p := path.Clean(pth)
+	segs := strings.Split(p, separator)
+
+	n := d
+	for _, s := range segs {
+		n, _ = n.addChild(s)
+	}
+
+	return n, nil
+}
+
+// find returns the node corresponding to a path; nil if not exists
+// the search starts from node 'd' and walks through each segment in 'pth'
+func (d *inode) find(pth string) *inode {
+	if path.IsAbs(pth) {
+		return nil
+	}
+
+	p := path.Clean(pth)
+	segs := strings.Split(p, separator)
+
+	var (
+		n  = d
+		ok bool
+	)
+
+	for _, s := range segs {
+		n, ok = n.children[s]
+		if !ok {
+			return nil
+		}
+	}
+
+	return n
+}
+
 // group groups the objects into unique directories and files.
 // for example, if input = "loader/obj1", "loader/obj2", "obj3", "loader/dir/obj4", prefix = ""
 // output will be: loader(directory), obj3(file)
@@ -749,14 +957,10 @@ func group(objs []*dfc.BucketEntry, prefix string) ([]os.FileInfo, error) {
 	var fis []os.FileInfo
 
 	for _, o := range objs {
-		n := strings.TrimPrefix(o.Name, prefix)
-		parts := strings.Split(n, "/")
+		n := strings.TrimPrefix(o.Name, prefix+separator)
+		parts := strings.Split(n, separator)
 
 		if len(parts) == 1 {
-			if _, ok := keys[parts[0]]; ok {
-				return nil, fmt.Errorf("duplicate file name %s", o.Name)
-			}
-
 			keys[parts[0]] = true
 			mTime, _ := time.Parse(time.RFC822, o.Ctime)
 			mTime = mTime.UTC()
@@ -770,11 +974,7 @@ func group(objs []*dfc.BucketEntry, prefix string) ([]os.FileInfo, error) {
 			continue
 		}
 
-		isFile, ok := keys[parts[0]]
-		if ok && isFile {
-			return nil, fmt.Errorf("duplicate dir and file name %s", o.Name)
-		}
-
+		_, ok := keys[parts[0]]
 		if !ok {
 			keys[parts[0]] = false
 			fis = append(fis, &fileInfo{
@@ -784,6 +984,7 @@ func group(objs []*dfc.BucketEntry, prefix string) ([]os.FileInfo, error) {
 		}
 	}
 
+	sort.Sort(fiSortByName(fis))
 	return fis, nil
 }
 
@@ -791,4 +992,18 @@ func group(objs []*dfc.BucketEntry, prefix string) ([]os.FileInfo, error) {
 func (fs *FileSystem) localFileName() string {
 	return filepath.Join(fs.localDir,
 		client.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32 /* length */))
+}
+
+type fiSortByName []os.FileInfo
+
+func (fis fiSortByName) Len() int {
+	return len(fis)
+}
+
+func (fis fiSortByName) Swap(i, j int) {
+	fis[i], fis[j] = fis[j], fis[i]
+}
+
+func (fis fiSortByName) Less(i, j int) bool {
+	return fis[i].Name() < fis[j].Name()
 }

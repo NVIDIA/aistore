@@ -5,12 +5,13 @@
 
 // Limitations:
 // 1. Support local bucket only (not hard to support non local buckets)
-// 2. Can't support empty directory
+// 2. Empty directories are only support in memory, not persisted
 // 3. ATime: format, how do i know the time format returned (RFC822 or format string)
 // 4. Objects for read and write are downloaded locally first.
 // 5. Not all O_Flags are supported, for example, O_APPEND.
 // 6. Permissions may not be correct.
 // 7. Performance improvement
+// 8. Have not tried running webdav on windows and connects with any Windows clients
 
 package main
 

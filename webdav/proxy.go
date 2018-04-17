@@ -53,7 +53,7 @@ func (p *proxyServer) listBuckets(local bool) ([]string, error) {
 	return buckets, nil
 }
 
-// doesObjectExists checks whether a directory or an object exists by querying DFC.
+// doesObjectExists checks whether a resource exists by querying DFC.
 func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, error) {
 	entries, err := p.listObjectsDetails(bucket, prefix, 1)
 	if err != nil {
@@ -116,22 +116,6 @@ func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int
 // listObjectsNames returns names of all objects that matches the prefix in a bucket
 func (p *proxyServer) listObjectsNames(bucket string, prefix string) ([]string, error) {
 	return client.ListObjects(p.url, bucket, prefix, 0)
-}
-
-// getObjectInfo expects to find and return none or one object that matches the prefix in a bucket.
-func (p *proxyServer) getObjectInfo(bucket string, prefix string) (bool, *dfc.BucketEntry, error) {
-	entries, err := p.listObjectsDetails(bucket, prefix, 0 /* limit */)
-	if err != nil {
-		return false, nil, err
-	}
-
-	for i := 0; i < len(entries); i++ {
-		if entries[i].Name == prefix {
-			return true, entries[i], nil
-		}
-	}
-
-	return false, nil, nil
 }
 
 // deleteObjects deletes all objects in the list of names from a bucket
