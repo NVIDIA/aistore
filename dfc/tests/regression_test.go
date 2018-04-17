@@ -1006,12 +1006,14 @@ func regressionObjectPrefix(t *testing.T) {
 //========
 
 func waitProgressBar(prefix string, wait time.Duration) {
-	ticker := time.NewTicker(time.Second * 5)
+	const tickerStep = time.Second * 5
+
+	ticker := time.NewTicker(tickerStep)
 	tlogf(prefix)
 	idx := 1
 waitloop:
 	for range ticker.C {
-		elapsed := time.Second * 2 * time.Duration(idx)
+		elapsed := tickerStep * time.Duration(idx)
 		if elapsed >= wait {
 			tlogln("")
 			break waitloop
@@ -1019,6 +1021,7 @@ waitloop:
 		tlogf("----%d%%", (elapsed * 100 / wait))
 		idx++
 	}
+	ticker.Stop()
 }
 
 func unregisterTarget(sid string, t *testing.T) {

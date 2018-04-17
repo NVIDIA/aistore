@@ -8,16 +8,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
 	"golang.org/x/net/context/ctxhttp"
 )
@@ -35,6 +39,9 @@ var (
 		Test{"Multiple Failures", multiple_failures},
 		Test{"Rejoin", rejoin},
 		Test{"Primary Proxy Rejoin", primaryproxyrejoin},
+		Test{"Minority Cluster Map Mismatch", minoritymismatchclustermap},
+		Test{"Majority Cluster Map Mismatch", majoritymismatchclustermap},
+		Test{"Multiple Proxy Operations", putgetmultipleproxies},
 	}
 	runMultipleProxyTests bool
 	keepaliveseconds      int64
@@ -96,7 +103,7 @@ func proxy_failure(t *testing.T) {
 		t.Errorf("Error killing Primary Proxy: %v", err)
 	}
 	// Wait the maxmimum time it should take to switch.
-	time.Sleep(time.Duration(2*keepaliveseconds) * time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
 
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
@@ -145,7 +152,7 @@ func multiple_failures(t *testing.T) {
 	}
 
 	// Wait the maxmimum time it should take to switch.
-	time.Sleep(time.Duration(2*keepaliveseconds) * time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
 
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
@@ -186,7 +193,7 @@ func rejoin(t *testing.T) {
 	}
 
 	// Wait the maxmimum time it should take to switch.
-	time.Sleep(time.Duration(2*keepaliveseconds) * time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
 
 	// Kill a Target
 	targetURLToKill := ""
@@ -274,8 +281,8 @@ func primaryproxyrejoin(t *testing.T) {
 	go runMockTarget(mocktgt, stopch, &smap)
 
 	<-smapch
-	// Allow smap propogation
-	time.Sleep(time.Duration(keepaliveseconds) * time.Second)
+	// Allow smap propagation
+	waitProgressBar("Propagating Smap: ", time.Duration(keepaliveseconds)*time.Second)
 
 	// Pause the original primary proxy
 	err = syscall.Kill(pidint, syscall.SIGSTOP)
@@ -283,7 +290,7 @@ func primaryproxyrejoin(t *testing.T) {
 		t.Errorf("Error pausing primary proxy: %v", err)
 	}
 
-	time.Sleep(time.Duration(4*keepaliveseconds) * time.Second)
+	waitProgressBar("Switching Primary Proxy: ", time.Duration(4*keepaliveseconds)*time.Second)
 
 	// The expected behavior is that the original primary proxy exists with an old version of the SMap, but the rest of the cluster is now using a newer Smap version
 
@@ -312,6 +319,156 @@ func primaryproxyrejoin(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
+}
+
+func minoritymismatchclustermap(t *testing.T) {
+	f := func(i int) int {
+		return i/4 + 1
+	}
+	mismatchclustermap(f, t)
+}
+
+func majoritymismatchclustermap(t *testing.T) {
+	f := func(i int) int {
+		return i/2 + 1
+	}
+	mismatchclustermap(f, t)
+}
+
+func mismatchclustermap(getnumtargets func(int) int, t *testing.T) {
+	// Get Smap
+	smap := getClusterMap(httpclient, t)
+	smapversion := smap.Version
+
+	// Update the version of the Smap for some of the targets
+	smap.Version = smapversion + 1
+	targetstoupdate := getnumtargets(len(smap.Smap) + len(smap.Pmap) - 1)
+	jsbytes, err := json.Marshal(smap)
+	if err != nil {
+		t.Fatalf("Unexpected failure to marshal Smap: %v", err)
+	}
+	for _, target := range smap.Smap {
+		if targetstoupdate == 0 {
+			break
+		}
+		url := fmt.Sprintf("%s/%s/%s/%s?%s=%t", target.DirectURL, dfc.Rversion, dfc.Rdaemon, dfc.Rsyncsmap, dfc.URLParamAutoReb, false)
+		req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsbytes))
+		if err != nil {
+			t.Errorf("Unexpected failure to create request: %v", err)
+			return
+		}
+		r, err := httpclient.Do(req)
+		if err != nil {
+			t.Errorf("Unexpected failure to do http request: %v", err)
+			return
+		}
+		defer func(r *http.Response) {
+			if r.Body != nil {
+				r.Body.Close()
+			}
+		}(r)
+		_, err = ioutil.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("Unexpected failure to read response body: %v", err)
+			return
+		}
+		targetstoupdate--
+	}
+
+	// hrwProxy to find next proxy
+	delete(smap.Pmap, smap.ProxySI.DaemonID)
+	nextProxyID, nextProxyURL, err := hrwProxy(&smap)
+	if err != nil {
+		t.Errorf("Error performing HRW: %v", err)
+	}
+
+	// Kill original primary proxy
+	primaryProxyURL := smap.ProxySI.DirectURL
+	cmd, args, err := kill(httpclient, primaryProxyURL, smap.ProxySI.DaemonPort)
+	if err != nil {
+		t.Errorf("Error killing Primary Proxy: %v", err)
+	}
+	// Wait the maxmimum time it should take to switch. It is longer for these tests, because elections
+	// Might fail due to cluster map mismatch, but one should eventually succeed.
+	waitProgressBar("Chaning Primary Proxy: ", time.Duration(4*keepaliveseconds)*time.Second)
+
+	// Check if the next proxy is the one we found from hrw
+	proxyurl = nextProxyURL
+	smap = getClusterMap(httpclient, t)
+	if smap.ProxySI.DaemonID != nextProxyID {
+		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
+	}
+
+	args = append(args, "-proxyurl="+nextProxyURL)
+	err = restore(httpclient, primaryProxyURL, cmd, args)
+	if err != nil {
+		t.Errorf("Error restoring proxy: %v", err)
+	}
+}
+
+func putgetmultipleproxies(t *testing.T) {
+	// Get Smap
+	smap := getClusterMap(httpclient, t)
+
+	primaryURL := smap.ProxySI.DirectURL
+	var secondaryURL string
+	for _, si := range smap.Pmap {
+		if si.DaemonID != smap.ProxySI.DaemonID {
+			secondaryURL = si.DirectURL
+			break
+		}
+	}
+
+	// Put, Get, Delete from 2 different proxies at once.
+	errch := make(chan error, 2)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errch <- singleProxyPutGetDelete(int64(baseseed), 100, primaryURL, testing.Verbose())
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errch <- singleProxyPutGetDelete(int64(baseseed)+1, 100, secondaryURL, testing.Verbose())
+	}()
+	wg.Wait()
+	close(errch)
+	for err := range errch {
+		if err != nil {
+			t.Errorf("Error executing PutGetDelete loop: %v", err)
+		}
+	}
+
+}
+
+func singleProxyPutGetDelete(seed int64, nloops int, proxyurl string, verbose bool) error {
+	random := rand.New(rand.NewSource(seed))
+	for i := 0; i < nloops; i++ {
+		if verbose && i%10 == 0 {
+			fmt.Printf("Requests to %s: %d%% done\n", proxyurl, int(float64(i)/float64(nloops)*100))
+		}
+		reader, err := readers.NewRandReader(fileSize, true)
+		if err != nil {
+			return fmt.Errorf("Error creating reader: %v", err)
+		}
+		fname := client.FastRandomFilename(random, fnlen)
+		keyname := fmt.Sprintf("%s/%s", multiproxydir, fname)
+		err = client.Put(proxyurl, reader, clibucket, keyname, true)
+		if err != nil {
+			return fmt.Errorf("Error executing put: %v", err)
+		}
+		time.Sleep(250 * time.Millisecond)
+		client.Get(proxyurl, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */, false /* validate */)
+		time.Sleep(250 * time.Millisecond)
+		err = client.Del(proxyurl, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */)
+		if err != nil {
+			return fmt.Errorf("Error executing del: %v", err)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	return nil
 }
 
 //=========

@@ -333,7 +333,7 @@ Range APIs take an optional prefix, a regular expression, and a numeric range. A
 
 ## Multiple Proxies
 
-DFC can be run with multiple proxies. When there are multiple proxies, one of them is the primary proxy, and any others are secondary proxies. The primary proxy is the only one allowed to be used for actions related to the Smap (Registration, Local Bucket actions). The URL of the current primary proxy must be specified in the config file at the time a proxy or target is run. On startup, a proxy will start as Primary if the environment variable DFCPRIMARYPROXY is set. If it is unset, it will start as primary if its id matches the id of the current primary proxy in the configuration file, unless the command line variable -proxyurl is set.
+DFC can be run with multiple proxies. When there are multiple proxies, one of them is the primary proxy, and any others are secondary proxies. The primary proxy is the only one allowed to be used for actions related to the Smap (Registration, Local Bucket actions). The URL of the current primary proxy must be specified in the config file at the time a proxy or target is run. On startup, a proxy will start as Primary if the environment variable DFCPRIMARYPROXY is set to any non-empty string. If it is unset, it will start as primary if its id matches the id of the current primary proxy in the configuration file, unless the command line variable -proxyurl is set.
 
 When any target or proxy discovers that the primary proxy is not working (because a keepalive fails), they intitiate a vote to determine the next primary proxy.
 The election process is as follows:
