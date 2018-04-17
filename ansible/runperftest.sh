@@ -4,6 +4,8 @@ set -e
 
 pctput=0
 duration=120m
+minsize=8192
+maxsize=8192
 
 if [ -z "$1" ]; then
         echo "Using default pctput 0"
@@ -15,7 +17,17 @@ if [ -z "$2" ]; then
 else
         duration=$2
 fi
-cmd="./startclient.sh $pctput $duration"
+if [ -z "$3" ]; then
+        echo "Using default minzise -" $minsize
+else
+        minsize=$3
+fi
+if [ -z "$4" ]; then
+        echo "Using default maxsize -" $maxsize
+else
+        maxsize=$4
+fi
+cmd="./startclient.sh $pctput $duration $minsize $maxsize"
 parallel-ssh -h inventory/clients.txt -i $cmd
 
 clients_running=`parallel-ssh -h inventory/clients.txt -i "screen -ls client" | grep client | wc -l`
@@ -26,7 +38,7 @@ while [ $clients_running -gt 0 ]; do
 	parallel-ssh -h inventory/clients.txt -i 'tail -10 /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/cmd/dfcloader/screenlog.0'
 	parallel-ssh -h inventory/targets.txt -i "iostat -xm 5 -c 2 | tail -33"
 	parallel-ssh -h inventory/targets.txt -i "netstat -s | grep transmit"
-	sleep 10 
+	sleep 20 
 done
 
-parallel-ssh -h inventory/clients.txt -i 'tail -10 /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/cmd/dfcloader/screenlog.0'
+parallel-ssh -h inventory/clients.txt -i 'tail -20 /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/cmd/dfcloader/screenlog.0'

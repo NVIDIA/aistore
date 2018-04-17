@@ -1,29 +1,37 @@
 #!/bin/bash
-set -o xtrace
 set -e
+
+PROXYIP=`cat /home/ubuntu/inventory/proxy.txt`
+PROXYPORT='8081'
 
 bucket=`hostname`
 pctput=0
 duration=120m
+minsize=8192
+maxsize=8192
 
 if [ -z "$1" ]; then
-	echo "Using default pctput 0"
+        echo "Using default pctput 0"
 else
-	pctput=$1
+        pctput=$1
 fi
 if [ -z "$2" ]; then
-	echo "Using default duration 120m"
+        echo "Using default duration 120m"
 else
-	duration=$2
+        duration=$2
 fi
 if [ -z "$3" ]; then
-	echo "Using default bucket -" $bucket
+        echo "Using default minzise -" $minsize
 else
-	bucket=$3
+        minsize=$3
+fi
+if [ -z "$4" ]; then
+        echo "Using default maxsize -" $maxsize
+else
+        maxsize=$4
 fi
 
 source /etc/profile.d/dfcpaths.sh
 cd $DFCSRC/../cmd/dfcloader
-
-bucket=`hostname`
-screen -mdSL client go run main.go worker.go -ip=10.0.1.170 -port=8081 -bucket=$bucket -local=true -minsize=8192 -maxsize=8192 -statsinterval=1 -readertype=rand -cleanup=false -pctput=$1 -duration=$2 -totalputsize=4048000000 -numworkers=64
+sudo rm -rf screenlog.0
+screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$3 -maxsize=$4 -statsinterval=5 -readertype=rand -cleanup=false -pctput=$1 -duration=$2 -totalputsize=4048000000 -numworkers=64
