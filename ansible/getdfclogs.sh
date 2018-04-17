@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 parallel-ssh -h inventory/proxy.txt -i 'sudo tar czf /tmp/primaryproxy_$(hostname)_$(date +%Y%m%d-%H%M%S).tar.gz /var/log/dfc >/dev/null 2>&1'
 parallel-ssh -h inventory/targets.txt -i 'sudo tar czf /tmp/stubproxy_$(hostname)_$(date +%Y%m%d-%H%M%S).tar.gz /var/log/dfcproxy >/dev/null 2>&1'
 parallel-ssh -h inventory/targets.txt -i 'sudo tar czf /tmp/target_$(hostname)_$(date +%Y%m%d-%H%M%S).tar.gz /var/log/dfc >/dev/null 2>&1'
