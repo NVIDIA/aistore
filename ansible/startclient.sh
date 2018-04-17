@@ -34,4 +34,4 @@ fi
 source /etc/profile.d/dfcpaths.sh
 cd $DFCSRC/../cmd/dfcloader
 sudo rm -rf screenlog.0
-screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$3 -maxsize=$4 -statsinterval=5 -readertype=rand -cleanup=false -pctput=$1 -duration=$2 -totalputsize=4048000000 -numworkers=64
+screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$3 -maxsize=$4 -statsinterval=1 -readertype=rand -cleanup=false -pctput=$1 -duration=$2 -totalputsize=4048000000 -numworkers=64
