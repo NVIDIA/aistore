@@ -7,7 +7,7 @@ DFC is a simple distributed caching service written in Go. The service
 currently consists of a single http proxy (with a well-known address)
 and an arbitrary number of storage targets (aka targets):
 
-<img src="images/dfc-overview.png" alt="DFC overview" width="440">
+<img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
 
 Users (i.e., http/https clients) connect to the proxy and execute RESTful
 commands. Data then moves directly between storage targets (that cache this data)
