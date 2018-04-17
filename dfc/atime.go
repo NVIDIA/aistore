@@ -52,10 +52,9 @@ func (r *atimerunner) run() error {
 			r.atimemap.Unlock()
 		case <-r.chstop:
 			ticker.Stop() // NOTE: not flushing cached atimes
-			return nil
+			break
 		}
 	}
-
 	return nil
 }
 

@@ -120,9 +120,11 @@ do
 	CONFFILE="$CONFDIR/dfc$c.json"
 	if [ $c -eq 0 ]
 	then
+		export DFCPRIMARYPROXY="true"
 		set -x
-            	(export DFCPRIMARYPROXY=="TRUE" && $GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2) &
+		$GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
 		{ set +x; } 2>/dev/null
+		unset DFCPRIMARYPROXY
 		# wait for the proxy to start up
 		sleep 2
 	elif [ $c -lt $proxycount ]

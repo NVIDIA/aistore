@@ -82,7 +82,12 @@ func (p *proxyrunner) run() error {
 	isproxy := os.Getenv("DFCPRIMARYPROXY")
 	// Register proxy if it isn't the Primary proxy
 	if isproxy == "" && ctx.config.PrimaryProxy.ID != p.si.DaemonID {
-		glog.Infof("Proxy (%s) is not primary proxy (%s), registering.", p.si.DaemonID, ctx.config.PrimaryProxy.ID)
+		if ctx.config.PrimaryProxy.ID == "" {
+			glog.Infof("Proxy (%s) is not a primary proxy - registering...", p.si.DaemonID)
+		} else {
+			glog.Infof("Proxy (%s) is not a primary proxy - registering with %s (the primary)",
+				p.si.DaemonID, ctx.config.PrimaryProxy.ID)
+		}
 		if status, err := p.register(0); err != nil {
 			glog.Errorf("Proxy %s failed to register with primary proxy, err: %v", p.si.DaemonID, err)
 			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
@@ -97,7 +102,6 @@ func (p *proxyrunner) run() error {
 				return err
 			}
 		}
-		glog.Infof("Success: proxy %s joined the cluster", p.si.DaemonID)
 		p.primary = false
 	} else {
 		p.smap.Smap = make(map[string]*daemonInfo, 8)
@@ -126,7 +130,7 @@ func (p *proxyrunner) run() error {
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", p.votehdlr)
 	p.httprunner.registerhdlr("/", invalhdlr)
-	glog.Infof("Proxy %s is ready", p.si.DaemonID)
+	glog.Infof("Proxy %s is ready, primary=%t", p.si.DaemonID, p.primary)
 	glog.Flush()
 	p.starttime = time.Now()
 
@@ -245,12 +249,16 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// list the bucket
-	ok := p.listbucket(w, r, bucket)
+	pagemarker, ok := p.listbucket(w, r, bucket)
 	if ok {
 		lat := int64(time.Since(started) / 1000)
 		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
 		if glog.V(3) {
-			glog.Infof("LIST: %s, %d µs", bucket, lat)
+			if pagemarker != "" {
+				glog.Infof("LIST: %s, page %s, %d µs", bucket, pagemarker, lat)
+			} else {
+				glog.Infof("LIST: %s, %d µs", bucket, lat)
+			}
 		}
 	}
 }
@@ -782,7 +790,7 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (ok bool) {
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (pagemarker string, ok bool) {
 	var allentries *BucketList
 	listmsgjson, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -809,6 +817,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	jsbytes, err := json.Marshal(allentries)
 	assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "listbucket")
+	pagemarker = allentries.PageMarker
 	return
 }
 
@@ -1098,14 +1107,16 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 		p.httpcluget(w, r)
 	case http.MethodPost:
 		p.httpclupost(w, r)
+		glog.Flush()
 	case http.MethodDelete:
 		p.httpcludel(w, r)
+		glog.Flush()
 	case http.MethodPut:
 		p.httpcluput(w, r)
+		glog.Flush()
 	default:
 		invalhdlr(w, r)
 	}
-	glog.Flush()
 }
 
 // gets target info
@@ -1217,10 +1228,8 @@ func (p *proxyrunner) shouldAddToSmap(nsi *daemonInfo, osi *daemonInfo, keepaliv
 		if osi.NodeIPAddr == nsi.NodeIPAddr && osi.DaemonPort == nsi.DaemonPort && osi.DirectURL == nsi.DirectURL {
 			glog.Infof("register %s %s: already done", kind, nsi.DaemonID)
 			return false
-		} else {
-			glog.Errorf("register %s %s: renewing the registration %+v => %+v", kind, nsi.DaemonID, osi, nsi)
-			return true
 		}
+		glog.Errorf("register %s %s: renewing the registration %+v => %+v", kind, nsi.DaemonID, osi, nsi)
 	}
 	return true
 }
@@ -1287,7 +1296,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if proxy && p.smap.getProxy(sid) == nil {
-		glog.Errorf("Unknown proxy %s,", sid)
+		glog.Errorf("Unknown proxy %s", sid)
 		p.smap.unlock()
 		return
 	}
@@ -1398,8 +1407,9 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string) {
 	smapversion := p.smap.version()
 	delay := syncmapsdelay
 	if lbversion == p.lbmap.syncversion && smapversion == p.smap.syncversion {
-		glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync with the targets",
-			smapversion, lbversion)
+		if glog.V(4) {
+			glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync cluster-wide", smapversion, lbversion)
+		}
 		p.lbmap.unlock()
 		p.smap.unlock()
 		return
