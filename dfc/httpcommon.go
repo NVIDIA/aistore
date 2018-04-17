@@ -8,6 +8,7 @@ package dfc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -29,9 +30,8 @@ import (
 const ( // => Transport.MaxIdleConnsPerHost
 	targetMaxIdleConnsPer = 4
 	proxyMaxIdleConnsPer  = 8
+	initialBucketListSize = 512
 )
-
-const initialBucketListSize = 512
 
 type objectProps struct {
 	version string
@@ -131,13 +131,29 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	if numDaemons < 4 {
 		numDaemons = 4
 	}
-	h.httpclient = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-		Timeout:   ctx.config.Timeout.Default,
-	}
-	h.httpclientLongTimeout = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-		Timeout:   ctx.config.Timeout.DefaultLong,
+	if ctx.config.Net.HTTP.UseHTTPS {
+		// TODO: insecure way to make targets and proxies talk between
+		//   each other (e.g, Man-In-The-Middle attack).
+		// Using secured way to talk between nodes requires every node has
+		// stable fqdn and no node must use IPs - use only fqdn to send data
+		tt := &tls.Config{InsecureSkipVerify: true}
+		h.httpclient = &http.Client{
+			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons, TLSClientConfig: tt},
+			Timeout:   ctx.config.Timeout.Default,
+		}
+		h.httpclientLongTimeout = &http.Client{
+			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons, TLSClientConfig: tt},
+			Timeout:   ctx.config.Timeout.DefaultLong,
+		}
+	} else {
+		h.httpclient = &http.Client{
+			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
+			Timeout:   ctx.config.Timeout.Default,
+		}
+		h.httpclientLongTimeout = &http.Client{
+			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
+			Timeout:   ctx.config.Timeout.DefaultLong,
+		}
 	}
 	h.smap = &Smap{}
 	h.proxysi = &proxyInfo{}
@@ -153,7 +169,12 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
 		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Net.L4.Port
 	}
-	h.si.DirectURL = "http://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
+
+	proto := "http"
+	if ctx.config.Net.HTTP.UseHTTPS {
+		proto = "https"
+	}
+	h.si.DirectURL = proto + "://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
 }
 
 func (h *httprunner) run() error {
@@ -164,15 +185,26 @@ func (h *httprunner) run() error {
 	if ctx.config.H2c {
 		handler = h2c.Server{Handler: handler}
 	}
-
 	portstring := ":" + ctx.config.Net.L4.Port
-	h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
-	if err := h.h.ListenAndServe(); err != nil {
-		if err != http.ErrServerClosed {
-			glog.Errorf("Terminated %s with err: %v", h.name, err)
-			return err
+
+	if ctx.config.Net.HTTP.UseHTTPS {
+		h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+		if err := h.h.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
+			if err != http.ErrServerClosed {
+				glog.Errorf("Terminated %s with err: %v", h.name, err)
+				return err
+			}
+		}
+	} else {
+		h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+		if err := h.h.ListenAndServe(); err != nil {
+			if err != http.ErrServerClosed {
+				glog.Errorf("Terminated %s with err: %v", h.name, err)
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 

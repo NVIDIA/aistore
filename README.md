@@ -104,6 +104,12 @@ To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "
 targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh)
 that'd be further used to deploy the cluster.
 
+### Enabling HTTPS
+
+To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify
+"server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key
+files respectively.
+
 ## Miscellaneous
 
 The following sequence downloads 100 objects from the bucket called "myS3bucket":

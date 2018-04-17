@@ -150,7 +150,10 @@ type l4cnf struct {
 }
 
 type httpcnf struct {
-	MaxNumTargets int `json:"max_num_targets"` // estimated max num targets (to count idle conns)
+	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
+	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
+	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
+	Key           string `json:"server_key"`         // HTTPS: openssl key
 }
 
 type cksumconfig struct {

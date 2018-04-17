@@ -68,7 +68,10 @@ $FSPATHS
 			"port":		"${PORT}"
 		},
 		"http": {
-			"max_num_targets":	16
+			"max_num_targets":    16,
+			"use_https":          false,
+			"server_certificate": "server.pem",
+			"server_key":         "server.key"
 		}
 	},
 	"fskeeper": {
