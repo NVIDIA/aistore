@@ -44,7 +44,8 @@ def load_dfc_cluster(cluster):
             raise Exception("Failed to fetch cluster")
 
     cluster_inventory = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.ini')
-    with open(cluster_inventory, 'w') as c:
+    cluster_txt = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.txt')
+    with open(cluster_inventory, 'w') as c, open(cluster_txt, 'w') as ct:
         for key in dfc:
             print key
             c.write('['+key+']\n')
@@ -54,6 +55,7 @@ def load_dfc_cluster(cluster):
                     ip = instance.private_ip_address
                     print ip
                     c.write(ip+'\n')
+                    ct.write(ip+'\n')
                     f.write(ip+'\n')
     return dfc
 
