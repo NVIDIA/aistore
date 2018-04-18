@@ -200,7 +200,7 @@ def start_stop_instance(instances, state):
             instance.update()
             logger.info("Instance {0} state changed to {1}".format(instance.id, instance.state))
     #Additional sleep to make sure every instance is up for SSH connection
-    time.sleep(5)
+    time.sleep(15)
 
 def terminate_instance(region_name,ip_address):
     ec2_conn = ec2_connect_to_region(region_name)
