@@ -34,16 +34,5 @@ fi
 source /etc/profile.d/dfcpaths.sh
 cd $DFCSRC/../cmd/dfcloader
 sudo rm -rf screenlog.0
-go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=1m -totalputsize=4048000000 -numworkers=64
+
 screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=64
-
-echo "started dfcloader, wait for screnlog file to show up with timeout of 2min"
-x=0
-while [ "$x" -lt 24 -a ! -f screenlog.0 ]
-do
-  sleep 5
-  x=$((x+1))
-
-done
-
-echo "screenlog file created"
