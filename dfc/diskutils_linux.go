@@ -23,9 +23,9 @@ const (
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
 	r.chsts = make(chan struct{}, 1)
-	r.Disk = make(map[string]deviometrics, 8)
+	r.Disk = make(map[string]deviometrics, 0)
 	r.metricnames = make([]string, 0)
-	iostatival := strconv.Itoa(int(ctx.config.StatsTime / time.Second))
+	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
 	r.cmd = exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
 	stdout, err := r.cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)

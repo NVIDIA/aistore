@@ -181,7 +181,7 @@ func (t *targetrunner) register(timeout time.Duration) (status int, err error) {
 		url = t.proxysi.DirectURL
 	} else {
 		// Smap has not yet been synced:
-		url = ctx.config.PrimaryProxy.URL
+		url = ctx.config.Proxy.Primary.URL
 	}
 	url += "/" + Rversion + "/" + Rcluster
 	var si *daemonInfo
@@ -203,7 +203,7 @@ func (t *targetrunner) unregister() (status int, err error) {
 		url = t.proxysi.DirectURL
 	} else {
 		// Smap has not yet been synched:
-		url = ctx.config.PrimaryProxy.URL
+		url = ctx.config.Proxy.Primary.URL
 	}
 	url += "/" + Rversion + "/" + Rcluster + "/" + Rdaemon + "/" + t.si.DaemonID
 	_, err, _, status = t.call(&t.proxysi.daemonInfo, url, http.MethodDelete, nil)
@@ -293,8 +293,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		coldget, vchanged      bool
 	)
 	started = time.Now()
-	cksumcfg := &ctx.config.CksumConfig
-	versioncfg := &ctx.config.VersionConfig
+	cksumcfg := &ctx.config.Cksum
+	versioncfg := &ctx.config.Ver
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -638,7 +638,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 		fqn        = t.fqn(bucket, objname)
 		uname      = t.uname(bucket, objname)
 		getfqn     = t.fqn2workfile(fqn)
-		versioncfg = &ctx.config.VersionConfig
+		versioncfg = &ctx.config.Ver
 		errv       = ""
 		vchanged   = false
 	)
@@ -663,7 +663,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 		props = &objectProps{version: version, size: size}
 		xxhashval, _ := Getxattr(fqn, xattrXXHashVal)
 		if xxhashval != nil {
-			cksumcfg := &ctx.config.CksumConfig
+			cksumcfg := &ctx.config.Cksum
 			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxhashval))
 		}
 		glog.Infof("cold GET race: %s/%s, size=%d, version=%s - nothing to do", bucket, objname, size, version)
@@ -1162,7 +1162,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		started                    time.Time
 	)
 	started = time.Now()
-	cksumcfg := &ctx.config.CksumConfig
+	cksumcfg := &ctx.config.Cksum
 	fqn := t.fqn(bucket, objname)
 	putfqn := t.fqn2workfile(fqn)
 	hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
@@ -1197,7 +1197,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			}
 		}
 	}
-	inmem := (ctx.config.AckPolicy.Put == AckWhenInMem)
+	inmem := (ctx.config.Experimental.AckPut == AckWhenInMem)
 	if sgl, nhobj, _, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
@@ -1562,7 +1562,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if size == 0 {
 		return fmt.Sprintf("Unexpected: %s/%s size is zero", bucket, objname)
 	}
-	cksumcfg := &ctx.config.CksumConfig
+	cksumcfg := &ctx.config.Cksum
 	if newobjname == "" {
 		newobjname = objname
 	}
@@ -1774,12 +1774,12 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 	// config checks
 	if autorebalance {
-		if !ctx.config.RebalanceConf.RebalancingEnabled {
+		if !ctx.config.Rebalance.RebalancingEnabled {
 			glog.Infoln("auto-rebalancing disabled")
 			return
 		}
-		if time.Since(t.starttime()) < ctx.config.RebalanceConf.StartupDelayTime {
-			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime()), ctx.config.RebalanceConf.StartupDelayTime)
+		if time.Since(t.starttime()) < ctx.config.Rebalance.StartupDelayTime {
+			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime()), ctx.config.Rebalance.StartupDelayTime)
 			return
 		}
 	}
@@ -1899,7 +1899,7 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		file                 *os.File
 		filewriter           io.Writer
 		ohtype, ohval, nhval string
-		cksumcfg             = &ctx.config.CksumConfig
+		cksumcfg             = &ctx.config.Cksum
 	)
 	// ack policy = memory
 	if inmem {
@@ -2144,7 +2144,7 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
 func (t *targetrunner) versioningConfigured(bucket string) bool {
 	islocal := t.islocalBucket(bucket)
-	versioning := ctx.config.VersionConfig.Versioning
+	versioning := ctx.config.Ver.Versioning
 	if islocal {
 		return versioning == VersionAll || versioning == VersionLocal
 	}

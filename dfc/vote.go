@@ -190,8 +190,8 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	h.proxysi = proxyinfo
 	h.smap.delProxy(vr.Primary)
 	h.smap.ProxySI = proxyinfo
-	ctx.config.PrimaryProxy.ID = proxyinfo.DaemonID
-	ctx.config.PrimaryProxy.URL = proxyinfo.DirectURL
+	ctx.config.Proxy.Primary.ID = proxyinfo.DaemonID
+	ctx.config.Proxy.Primary.URL = proxyinfo.DirectURL
 	err = writeConfigFile()
 	if err != nil {
 		glog.Errorf("Error writing config file: %v", err)
@@ -392,8 +392,8 @@ func (p *proxyrunner) becomePrimaryProxy(vr *VoteRecord) {
 	p.primary = true
 	psi := p.updateSmapPrimaryProxy(vr)
 	p.proxysi = psi
-	ctx.config.PrimaryProxy.ID = psi.DaemonID
-	ctx.config.PrimaryProxy.URL = psi.DirectURL
+	ctx.config.Proxy.Primary.ID = psi.DaemonID
+	ctx.config.Proxy.Primary.URL = psi.DirectURL
 	err := writeConfigFile()
 	if err != nil {
 		glog.Errorf("Error writing config file: %v", err)
@@ -492,7 +492,7 @@ func (h *httprunner) voteOnProxy(candidate string) (bool, error) {
 	// this will always vote no, as we believe the original proxy is still alive.
 	lastKeepaliveTime := h.kalive.getTimestamp(h.proxysi.DaemonID)
 	timeSinceLastKalive := time.Since(lastKeepaliveTime)
-	if timeSinceLastKalive < ctx.config.KeepAliveTime/2 {
+	if timeSinceLastKalive < ctx.config.Periodic.KeepAliveTime/2 {
 		// KeepAliveTime/2 is the expected amount time since the last keepalive was sent
 		return false, nil
 	}

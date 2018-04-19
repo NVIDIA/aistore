@@ -81,12 +81,12 @@ func (p *proxyrunner) run() error {
 
 	isproxy := os.Getenv("DFCPRIMARYPROXY")
 	// Register proxy if it isn't the Primary proxy
-	if isproxy == "" && ctx.config.PrimaryProxy.ID != p.si.DaemonID {
-		if ctx.config.PrimaryProxy.ID == "" {
+	if isproxy == "" && ctx.config.Proxy.Primary.ID != p.si.DaemonID {
+		if ctx.config.Proxy.Primary.ID == "" {
 			glog.Infof("Proxy (%s) is not a primary proxy - registering...", p.si.DaemonID)
 		} else {
 			glog.Infof("Proxy (%s) is not a primary proxy - registering with %s (the primary)",
-				p.si.DaemonID, ctx.config.PrimaryProxy.ID)
+				p.si.DaemonID, ctx.config.Proxy.Primary.ID)
 		}
 		if status, err := p.register(0); err != nil {
 			glog.Errorf("Proxy %s failed to register with primary proxy, err: %v", p.si.DaemonID, err)
@@ -146,7 +146,7 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 		url = p.proxysi.DirectURL
 	} else {
 		// Smap has not yet been synced
-		url = ctx.config.PrimaryProxy.URL
+		url = ctx.config.Proxy.Primary.URL
 	}
 	url += "/" + Rversion + "/" + Rcluster + "/" + Rproxy
 	if timeout > 0 {
@@ -159,7 +159,7 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 }
 
 func (p *proxyrunner) unregister() (status int, err error) {
-	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.PrimaryProxy.URL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
+	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.Proxy.Primary.URL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
 	_, err, _, status = p.call(nil, url, http.MethodDelete, nil)
 	return
 }
@@ -289,7 +289,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	if !ctx.config.PrimaryProxy.Passthru && len(objname) > 0 {
+	if !ctx.config.Proxy.Primary.Passthru && len(objname) > 0 {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}

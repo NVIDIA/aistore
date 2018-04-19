@@ -46,7 +46,7 @@ func (t *targetrunner) runLRU() {
 	}
 	fschkwg := &sync.WaitGroup{}
 
-	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRUConfig.DontEvictTime)
+	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
 	for mpath := range ctx.mountpaths.available {
 		fschkwg.Add(1)
 		go t.oneLRU(makePathLocal(mpath), fschkwg, xlru)
@@ -65,9 +65,9 @@ func (t *targetrunner) runLRU() {
 		rr.updateCapacity()
 		for mpath := range ctx.mountpaths.available {
 			fscapacity := rr.Capacity[mpath]
-			if fscapacity.Usedpct > ctx.config.LRUConfig.LowWM+1 {
+			if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
 				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
-					mpath, ctx.config.LRUConfig.LowWM, fscapacity.Usedpct)
+					mpath, ctx.config.LRU.LowWM, fscapacity.Usedpct)
 			}
 		}
 		rr.Unlock()
@@ -84,7 +84,7 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	h := &maxheap{}
 	heap.Init(h)
 
-	toevict, err := getToEvict(bucketdir, ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM)
+	toevict, err := getToEvict(bucketdir, ctx.config.LRU.HighWM, ctx.config.LRU.LowWM)
 	if err != nil {
 		return
 	}
@@ -165,7 +165,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		usetime = mtime
 	}
 	now := time.Now()
-	dontevictime := now.Add(-ctx.config.LRUConfig.DontEvictTime)
+	dontevictime := now.Add(-ctx.config.LRU.DontEvictTime)
 	if usetime.After(dontevictime) {
 		if glog.V(3) {
 			glog.Infof("DEBUG: not evicting %s (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)

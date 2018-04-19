@@ -92,7 +92,7 @@ func (r *kalive) skipCheck(sid string) bool {
 	r.okmap.Lock()
 	last, ok := r.okmap.okmap[sid]
 	r.okmap.Unlock()
-	return ok && time.Since(last) < ctx.config.KeepAliveTime
+	return ok && time.Since(last) < ctx.config.Periodic.KeepAliveTime
 }
 
 func (r *kalive) run() error {
@@ -100,7 +100,7 @@ func (r *kalive) run() error {
 	r.chstop = make(chan struct{}, 4)
 	r.checknow = make(chan error, 16)
 	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
-	ticker := time.NewTicker(ctx.config.KeepAliveTime)
+	ticker := time.NewTicker(ctx.config.Periodic.KeepAliveTime)
 	lastcheck := time.Time{}
 	for {
 		select {

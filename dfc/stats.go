@@ -146,7 +146,7 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	r.chsts = make(chan struct{}, 4)
 
 	glog.Infof("Starting %s", r.name)
-	ticker := time.NewTicker(ctx.config.StatsTime)
+	ticker := time.NewTicker(ctx.config.Periodic.StatsTime)
 	for {
 		select {
 		case <-ticker.C:
@@ -301,7 +301,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 		lines = append(lines, string(b))
 	}
 	// capacity
-	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRUConfig.CapacityUpdTime {
+	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRU.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for _, mpath := range r.fsmap {
@@ -341,7 +341,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 func (r *storstatsrunner) housekeep(runlru bool) {
 	t := gettarget()
 
-	if runlru && ctx.config.LRUConfig.LRUEnabled {
+	if runlru && ctx.config.LRU.LRUEnabled {
 		go t.runLRU()
 	}
 
@@ -427,7 +427,7 @@ func (r *storstatsrunner) updateCapacity() (runlru bool) {
 		}
 		fscapacity := r.Capacity[mpath]
 		r.fillfscap(fscapacity, statfs)
-		if fscapacity.Usedpct >= ctx.config.LRUConfig.HighWM {
+		if fscapacity.Usedpct >= ctx.config.LRU.HighWM {
 			runlru = true
 		}
 	}

@@ -218,8 +218,8 @@ func getipv4addr() (ipv4addr string, errstr string) {
 		return
 	}
 
-	if ctx.config.Network.IPv4 != "" {
-		return selectConfiguredIPv4(addrlist, ctx.config.Network.IPv4)
+	if ctx.config.Net.IPv4 != "" {
+		return selectConfiguredIPv4(addrlist, ctx.config.Net.IPv4)
 	}
 
 	return detectLocalIPv4(addrlist)

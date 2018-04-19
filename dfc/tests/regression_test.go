@@ -200,7 +200,9 @@ func regressionConfig(t *testing.T) {
 	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
-	oproxyconfig := oconfig["primaryproxy"].(map[string]interface{})
+	oproxyconfig := oconfig["proxyconfig"].(map[string]interface{})
+	oprimary := oproxyconfig["primary"].(map[string]interface{})
+	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
 		setConfig(k, v, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
@@ -209,13 +211,15 @@ func regressionConfig(t *testing.T) {
 	nconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nrebconfig := nconfig["rebalance_conf"].(map[string]interface{})
-	nproxyconfig := nconfig["primaryproxy"].(map[string]interface{})
+	nproxyconfig := nconfig["proxyconfig"].(map[string]interface{})
+	nprimary := nproxyconfig["primary"].(map[string]interface{})
+	nperiodic := nconfig["periodic"].(map[string]interface{})
 
-	if nconfig["stats_time"] != configRegression["stats_time"] {
+	if nperiodic["stats_time"] != configRegression["stats_time"] {
 		t.Errorf("StatsTime was not set properly: %v, should be: %v",
-			nconfig["stats_time"], configRegression["stats_time"])
+			nperiodic["stats_time"], configRegression["stats_time"])
 	} else {
-		o := oconfig["stats_time"].(string)
+		o := operiodic["stats_time"].(string)
 		setConfig("stats_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
@@ -259,11 +263,11 @@ func regressionConfig(t *testing.T) {
 	}
 	if pt, err := strconv.ParseBool(configRegression["passthru"]); err != nil {
 		t.Fatalf("Error parsing Passthru: %v", err)
-	} else if nproxyconfig["passthru"] != pt {
+	} else if nprimary["passthru"] != pt {
 		t.Errorf("Proxy Passthru was not set properly: %v, should be %v",
-			nproxyconfig["passthru"], pt)
+			nprimary["passthru"], pt)
 	} else {
-		o := oproxyconfig["passthru"].(bool)
+		o := oprimary["passthru"].(bool)
 		setConfig("passthru", strconv.FormatBool(o), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
@@ -332,6 +336,7 @@ func regressionLRU(t *testing.T) {
 	// all targets: set new watermarks; restore upon exit
 	//
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
+	operiodic := oconfig["periodic"].(map[string]interface{})
 	defer func() {
 		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
@@ -347,7 +352,7 @@ func regressionLRU(t *testing.T) {
 	//
 	dontevicttimestr := "30s"
 	capacityupdtimestr := "5s"
-	sleeptime, err := time.ParseDuration(oconfig["stats_time"].(string)) // to make sure the stats get updated
+	sleeptime, err := time.ParseDuration(operiodic["stats_time"].(string)) // to make sure the stats get updated
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}

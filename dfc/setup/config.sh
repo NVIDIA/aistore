@@ -1,46 +1,37 @@
 	cat > $CONFFILE <<EOL
 {
+	"confdir":                	"$CONFDIR",
+	"cloudprovider":		"${CLDPROVIDER}",
+	"cloud_buckets":		"cloud",
+	"local_buckets":		"local",
 	"log": {
 		"logdir":		"$LOGDIR",
 		"loglevel": 		"${LOGLEVEL}",
 		"logmaxsize": 		4194304,
 		"logmaxtotal":		67108864
 	},
-	"confdir":                	"$CONFDIR",
-	"cloudprovider":		"${CLDPROVIDER}",
-	"cloud_buckets":		"cloud",
-	"local_buckets":		"local",
-	"stats_time":			"10s",
-	"http": {
-		"max_num_targets":      16
+	"periodic": {
+		"stats_time":		"10s",
+		"keep_alive_time":	"20s"
 	},
-	"keep_alive_time":		"20s",
-	"listen": {
-		"proto": 		"tcp",
-		"port":			"${PORT}"
+	"timeout": {
+		"default":		"30s",
+		"default_long":		"30m",
+		"max_keepalive":	"4s",
+		"proxy_ping":		"100ms",
+		"vote_request":		"2s"
 	},
-	"primaryproxy": {
-		"id":			"${PROXYID}",
-		"url": 			"${PROXYURL}",
-		"passthru": 		true
-	},
-	"originalprimaryproxy": {
-		"id":			"${PROXYID}",
-		"url": 			"${PROXYURL}",
-		"passthru": 		true
-	},
-	"s3": {
-		"maxconcurrdownld":	64,
-		"maxconcurrupld":	64,
-		"maxpartsize":		4294967296
-	},
-	"cksum_config": {
-                 "checksum":		"xxhash",
-                 "validate_cold_get":	true
-	},
-	"version_config": {
-		"validate_warm_get":	false,
-		"versioning":		"all"
+	"proxyconfig": {
+		"primary": {
+			"id":		"${PROXYID}",
+			"url": 		"${PROXYURL}",
+			"passthru": 	true
+		},
+		"original": {
+			"id":		"${PROXYID}",
+			"url": 		"${PROXYURL}",
+			"passthru": 	true
+		}
 	},
 	"lru_config": {
 		"lowwm":		75,
@@ -54,32 +45,40 @@
 		"startup_delay_time":	"10m",
 		"rebalancing_enabled": 	true
 	},
+	"cksum_config": {
+                 "checksum":		"xxhash",
+                 "validate_cold_get":	true
+	},
+	"version_config": {
+		"validate_warm_get":	false,
+		"versioning":		"all"
+	},
+	"fspaths": {
+$FSPATHS
+	},
 	"test_fspaths": {
 		"root":			"/tmp/dfc/",
 		"count":		$TESTFSPATHCOUNT,
 		"instance":		$c
 	},
-	"fspaths": {
-$FSPATHS
-	},
-	"network": {
-		"ipv4": "$IPV4LIST"
-	},
-	"ack_policy": {
-		"put":			"disk",
-		"max_mem_mb":		16
+	"netconfig": {
+		"ipv4": "$IPV4LIST",
+		"l4": {
+			"proto": 	"tcp",
+			"port":		"${PORT}"
+		},
+		"http": {
+			"max_num_targets":	16
+		}
 	},
 	"fskeeper": {
 		"fs_check_time":         "0",
 		"offline_fs_check_time": "0",
 		"fskeeper_enabled":      false
 	},
-	"timeout": {
-		"default":		"30s",
-		"default_long":		"30m",
-		"max_keepalive":	"4s",
-		"proxy_ping":		"100ms",
-		"vote_request":		"2s"
+	"experimental": {
+		"ack_put":		"disk",
+		"max_mem_mb":		16
 	},
 	"h2c": 				false
 }

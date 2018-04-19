@@ -365,7 +365,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 		vchanged, coldget bool
 		props             *objectProps
 	)
-	versioncfg := &ctx.config.VersionConfig
+	versioncfg := &ctx.config.Ver
 	fqn := t.fqn(bucket, objname)
 	islocal := t.islocalBucket(bucket)
 	//

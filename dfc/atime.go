@@ -66,13 +66,13 @@ func (r *atimerunner) stop(err error) {
 }
 
 func (r *atimerunner) touch(fqn string) {
-	if ctx.config.LRUConfig.LRUEnabled {
+	if ctx.config.LRU.LRUEnabled {
 		r.chfqn <- fqn
 	}
 }
 
 func (r *atimerunner) atime(fqn string) (atime time.Time, ok bool) {
-	if !ctx.config.LRUConfig.LRUEnabled {
+	if !ctx.config.LRU.LRUEnabled {
 		return
 	}
 	r.atimemap.Lock()
@@ -82,7 +82,7 @@ func (r *atimerunner) atime(fqn string) (atime time.Time, ok bool) {
 }
 
 func (r *atimerunner) heuristics() (n int) {
-	if !ctx.config.LRUConfig.LRUEnabled {
+	if !ctx.config.LRU.LRUEnabled {
 		return
 	}
 	l := len(r.atimemap.m)
@@ -91,8 +91,8 @@ func (r *atimerunner) heuristics() (n int) {
 	}
 	maxutil := float64(-1)
 	wm := 100
-	if uint64(l) < ctx.config.LRUConfig.AtimeCacheMax {
-		wm = int(uint64(l) * 100 / ctx.config.LRUConfig.AtimeCacheMax)
+	if uint64(l) < ctx.config.LRU.AtimeCacheMax {
+		wm = int(uint64(l) * 100 / ctx.config.LRU.AtimeCacheMax)
 	}
 	riostat := getiostatrunner()
 	if riostat != nil {

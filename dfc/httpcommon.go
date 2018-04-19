@@ -113,8 +113,8 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	// clivars proxyurl overrides config proxy settings.
 	// If it is set, the proxy will not register as the primary proxy.
 	if clivars.proxyurl != "" {
-		ctx.config.PrimaryProxy.ID = ""
-		ctx.config.PrimaryProxy.URL = clivars.proxyurl
+		ctx.config.Proxy.Primary.ID = ""
+		ctx.config.Proxy.Primary.URL = clivars.proxyurl
 	}
 	h.statsif = s
 	ipaddr, errstr := getipv4addr()
@@ -126,8 +126,8 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	if isproxy {
 		perhost = proxyMaxIdleConnsPer
 	}
-	numDaemons := ctx.config.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
-	assert(numDaemons < 1024)                       // not a limitation!
+	numDaemons := ctx.config.Net.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
+	assert(numDaemons < 1024)                           // not a limitation!
 	if numDaemons < 4 {
 		numDaemons = 4
 	}
@@ -144,14 +144,14 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	// init daemonInfo here
 	h.si = &daemonInfo{}
 	h.si.NodeIPAddr = ipaddr
-	h.si.DaemonPort = ctx.config.Listen.Port
+	h.si.DaemonPort = ctx.config.Net.L4.Port
 	id := os.Getenv("DFCDAEMONID")
 	if id != "" {
 		h.si.DaemonID = id
 	} else {
 		split := strings.Split(ipaddr, ".")
 		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
-		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
+		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Net.L4.Port
 	}
 	h.si.DirectURL = "http://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
 }
@@ -165,7 +165,7 @@ func (h *httprunner) run() error {
 		handler = h2c.Server{Handler: handler}
 	}
 
-	portstring := ":" + ctx.config.Listen.Port
+	portstring := ":" + ctx.config.Net.L4.Port
 	h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
 	if err := h.h.ListenAndServe(); err != nil {
 		if err != http.ErrServerClosed {
@@ -369,7 +369,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 //
 //=================
 func (h *httprunner) setconfig(name, value string) (errstr string) {
-	lm, hm := ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM
+	lm, hm := ctx.config.LRU.LowWM, ctx.config.LRU.HighWM
 	checkwm := false
 	atoi := func(value string) (uint32, error) {
 		v, err := strconv.Atoi(value)
@@ -384,77 +384,77 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)
 		} else {
-			ctx.config.StatsTime, ctx.config.StatsTimeStr = v, value
+			ctx.config.Periodic.StatsTime, ctx.config.Periodic.StatsTimeStr = v, value
 		}
 	case "dont_evict_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.DontEvictTime, ctx.config.LRUConfig.DontEvictTimeStr = v, value
+			ctx.config.LRU.DontEvictTime, ctx.config.LRU.DontEvictTimeStr = v, value
 		}
 	case "capacity_upd_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse capacity_upd_time, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.CapacityUpdTime, ctx.config.LRUConfig.CapacityUpdTimeStr = v, value
+			ctx.config.LRU.CapacityUpdTime, ctx.config.LRU.CapacityUpdTimeStr = v, value
 		}
 	case "startup_delay_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse startup_delay_time, err: %v", err)
 		} else {
-			ctx.config.RebalanceConf.StartupDelayTime, ctx.config.RebalanceConf.StartupDelayTimeStr = v, value
+			ctx.config.Rebalance.StartupDelayTime, ctx.config.Rebalance.StartupDelayTimeStr = v, value
 		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.LowWM, checkwm = v, true
+			ctx.config.LRU.LowWM, checkwm = v, true
 		}
 	case "highwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert highwm, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.HighWM, checkwm = v, true
+			ctx.config.LRU.HighWM, checkwm = v, true
 		}
 	case "passthru":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
 		} else {
-			ctx.config.PrimaryProxy.Passthru = v
+			ctx.config.Proxy.Primary.Passthru = v
 		}
 	case "lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.LRUEnabled = v
+			ctx.config.LRU.LRUEnabled = v
 		}
 	case "rebalancing_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse rebalancing_enabled, err: %v", err)
 		} else {
-			ctx.config.RebalanceConf.RebalancingEnabled = v
+			ctx.config.Rebalance.RebalancingEnabled = v
 		}
 	case "validate_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_cold_get, err: %v", err)
 		} else {
-			ctx.config.CksumConfig.ValidateColdGet = v
+			ctx.config.Cksum.ValidateColdGet = v
 		}
 	case "validate_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_warm_get, err: %v", err)
 		} else {
-			ctx.config.VersionConfig.ValidateWarmGet = v
+			ctx.config.Ver.ValidateWarmGet = v
 		}
 	case "checksum":
 		if value == ChecksumXXHash || value == ChecksumNone {
-			ctx.config.CksumConfig.Checksum = value
+			ctx.config.Cksum.Checksum = value
 		} else {
 			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, ChecksumXXHash, ChecksumNone)
 		}
 	case "versioning":
 		if err := validateVersion(value); err == nil {
-			ctx.config.VersionConfig.Versioning = value
+			ctx.config.Ver.Versioning = value
 		} else {
 			return err.Error()
 		}
@@ -462,10 +462,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)
 	}
 	if checkwm {
-		hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
+		hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-			ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM = lm, hm
-			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig)
+			ctx.config.LRU.LowWM, ctx.config.LRU.HighWM = lm, hm
+			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRU)
 		}
 	}
 	return
