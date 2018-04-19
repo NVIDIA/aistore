@@ -448,7 +448,7 @@ func (r *storstatsrunner) init() {
 	// local filesystems and their cap-s
 	r.Capacity = make(map[string]*fscapacity)
 	r.fsmap = make(map[syscall.Fsid]string)
-	for mpath, mountpath := range ctx.mountpaths.available {
+	for mpath, mountpath := range ctx.mountpaths.Available {
 		mp1, ok := r.fsmap[mountpath.Fsid]
 		if ok {
 			// the same filesystem: usage cannot be different..

@@ -40,10 +40,13 @@ const (
 
 const (
 	AckWhenInMem  = "memory"
-	AckWhenOnDisk = "disk"
+	AckWhenOnDisk = "disk" // the default
 )
 
-const lbname = "localbuckets"
+const (
+	lbname = "localbuckets" // base name of the lbconfig file; not to confuse with config.Localbuckets mpath sub-directory
+	mpname = "mpaths"       // base name to persist ctx.mountpaths
+)
 
 //==============================
 //

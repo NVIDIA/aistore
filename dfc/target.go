@@ -35,8 +35,8 @@ const (
 )
 
 type mountPath struct {
-	Path string
-	Fsid syscall.Fsid
+	Path string       `json:"path"`
+	Fsid syscall.Fsid `json:"fsid"`
 }
 
 type allfinfos struct {
@@ -101,27 +101,8 @@ func (t *targetrunner) run() error {
 			return err
 		}
 	}
-	// fill-in mpaths
-	ctx.mountpaths.available = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	ctx.mountpaths.offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	if t.testingFSPpaths() {
-		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
-		t.testCachepathMounts()
-	} else {
-		t.fspath2mpath()
-		t.mpath2Fsid() // enforce FS uniqueness
-	}
-
-	for mpath := range ctx.mountpaths.available {
-		cloudbctsfqn := makePathCloud(mpath)
-		if err := CreateDir(cloudbctsfqn); err != nil {
-			glog.Fatalf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
-		}
-		localbctsfqn := makePathLocal(mpath)
-		if err := CreateDir(localbctsfqn); err != nil {
-			glog.Fatalf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
-		}
-	}
+	// fill-in, detect changes, persist
+	t.startupMpaths()
 
 	// cloud provider
 	if ctx.config.CloudProvider == ProviderAmazon {
@@ -814,7 +795,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		infos *allfinfos
 		err   error
 	}
-	ch := make(chan *mresp, len(ctx.mountpaths.available))
+	ch := make(chan *mresp, len(ctx.mountpaths.Available))
 	wg := &sync.WaitGroup{}
 	isLocal := t.islocalBucket(bucket)
 
@@ -845,7 +826,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	for mpath := range ctx.mountpaths.available {
+	for mpath := range ctx.mountpaths.Available {
 		wg.Add(1)
 		localbucketfqn := ""
 		if isLocal {
@@ -1824,7 +1805,7 @@ func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, a
 		_, ok := newlbmap.LBmap[bucket]
 		if !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
-			for mpath := range ctx.mountpaths.available {
+			for mpath := range ctx.mountpaths.Available {
 				localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
 				if err := os.RemoveAll(localbucketfqn); err != nil {
 					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
@@ -1833,7 +1814,7 @@ func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, a
 		}
 	}
 	t.lbmap = newlbmap
-	for mpath := range ctx.mountpaths.available {
+	for mpath := range ctx.mountpaths.Available {
 		for bucket := range t.lbmap.LBmap {
 			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
 			if err := CreateDir(localbucketfqn); err != nil {
@@ -2051,7 +2032,7 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
 		return false
 	}
 	ok := true
-	for mpath := range ctx.mountpaths.available {
+	for mpath := range ctx.mountpaths.Available {
 		if fn(makePathCloud(mpath) + "/") {
 			ok = len(objname) > 0 && t.fqn(bucket, objname) == fqn
 			break
@@ -2114,9 +2095,9 @@ func (t *targetrunner) fspath2mpath() {
 			glog.Fatalf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
 		}
 		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
-		_, ok := ctx.mountpaths.available[mp.Path]
+		_, ok := ctx.mountpaths.Available[mp.Path]
 		assert(!ok)
-		ctx.mountpaths.available[mp.Path] = mp
+		ctx.mountpaths.Available[mp.Path] = mp
 	}
 }
 
@@ -2124,15 +2105,15 @@ func (t *targetrunner) fspath2mpath() {
 func (t *targetrunner) testCachepathMounts() {
 	var instpath string
 	if ctx.config.TestFSP.Instance > 0 {
-		instpath = ctx.config.TestFSP.Root + strconv.Itoa(ctx.config.TestFSP.Instance) + "/"
+		instpath = filepath.Join(ctx.config.TestFSP.Root, strconv.Itoa(ctx.config.TestFSP.Instance))
 	} else {
-		// e.g. when docker
+		// container, VM, etc.
 		instpath = ctx.config.TestFSP.Root
 	}
 	for i := 0; i < ctx.config.TestFSP.Count; i++ {
 		var mpath string
 		if ctx.config.TestFSP.Count > 1 {
-			mpath = instpath + strconv.Itoa(i+1)
+			mpath = filepath.Join(instpath, strconv.Itoa(i+1))
 		} else {
 			mpath = instpath[0 : len(instpath)-1]
 		}
@@ -2146,15 +2127,15 @@ func (t *targetrunner) testCachepathMounts() {
 			return
 		}
 		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
-		_, ok := ctx.mountpaths.available[mp.Path]
+		_, ok := ctx.mountpaths.Available[mp.Path]
 		assert(!ok)
-		ctx.mountpaths.available[mp.Path] = mp
+		ctx.mountpaths.Available[mp.Path] = mp
 	}
 }
 
 func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
-	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths.available))
-	for _, mountpath := range ctx.mountpaths.available {
+	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths.Available))
+	for _, mountpath := range ctx.mountpaths.Available {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
 			if !t.testingFSPpaths() {
@@ -2165,6 +2146,74 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 		fsmap[mountpath.Fsid] = mountpath.Path
 	}
 	return
+}
+
+func (t *targetrunner) startupMpaths() {
+	// fill-in mpaths
+	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	if t.testingFSPpaths() {
+		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
+		t.testCachepathMounts()
+	} else {
+		t.fspath2mpath()
+		t.mpath2Fsid() // enforce FS uniqueness
+	}
+
+	for mpath := range ctx.mountpaths.Available {
+		cloudbctsfqn := makePathCloud(mpath)
+		if err := CreateDir(cloudbctsfqn); err != nil {
+			glog.Fatalf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
+		}
+		localbctsfqn := makePathLocal(mpath)
+		if err := CreateDir(localbctsfqn); err != nil {
+			glog.Fatalf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
+		}
+	}
+	// mpath config dir
+	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
+	if ctx.config.TestFSP.Instance > 0 {
+		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
+		if err := CreateDir(instancedir); err != nil {
+			glog.Errorf("Failed to create instance confdir %q, err: %v", instancedir, err)
+			return
+		}
+		mpathconfigfqn = filepath.Join(instancedir, mpname)
+	}
+	// load old/prev and compare
+	if _, err := os.Stat(mpathconfigfqn); err == nil {
+		var (
+			changed bool
+			old     = &mountedFS{}
+		)
+		old.Available, old.Offline = make(map[string]*mountPath), make(map[string]*mountPath)
+		if err := localLoad(mpathconfigfqn, old); err != nil {
+			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
+		} else if len(old.Available) != len(ctx.mountpaths.Available) {
+			changed = true
+		} else {
+			for k := range old.Available {
+				if _, ok := ctx.mountpaths.Available[k]; !ok {
+					changed = true
+				}
+			}
+		}
+		if changed {
+			glog.Errorf("Detected change in the mpath configuration at %s", mpathconfigfqn)
+			if b, err := json.MarshalIndent(old, "", "\t"); err == nil {
+				glog.Errorln("OLD: ====================")
+				glog.Errorln(string(b))
+			}
+			if b, err := json.MarshalIndent(ctx.mountpaths, "", "\t"); err == nil {
+				glog.Errorln("NEW: ====================")
+				glog.Errorln(string(b))
+			}
+		}
+	}
+	// persist
+	if err := localSave(mpathconfigfqn, ctx.mountpaths); err != nil {
+		glog.Errorf("Error writing config file: %v", err)
+	}
 }
 
 // versioningConfigured returns true if versioning for a given bucket is enabled

@@ -55,9 +55,9 @@ type Smap struct {
 }
 
 type mountedFS struct {
-	sync.Mutex
-	available map[string]*mountPath
-	offline   map[string]*mountPath
+	sync.Mutex `json:"-"`
+	Available  map[string]*mountPath `json:"available"`
+	Offline    map[string]*mountPath `json:"offline"`
 }
 
 // daemon instance: proxy or storage target

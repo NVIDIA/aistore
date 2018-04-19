@@ -55,7 +55,7 @@ func hrwProxyWithSkip(smap *Smap, idToSkip string) (pi *proxyInfo, errstr string
 
 func hrwMpath(name string) (mpath string) {
 	var max uint64
-	for path := range ctx.mountpaths.available {
+	for path := range ctx.mountpaths.Available {
 		cs := xxhash.ChecksumString64S(path+":"+name, mLCG32)
 		if cs > max {
 			max = cs

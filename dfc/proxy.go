@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,7 +70,7 @@ func (p *proxyrunner) run() error {
 	p.xactinp = newxactinp()
 	// local (aka cache-only) buckets
 	p.lbmap = &lbmap{LBmap: make(map[string]string)}
-	lbpathname := p.confdir + "/" + lbname
+	lbpathname := filepath.Join(p.confdir, lbname)
 	p.lbmap.lock()
 	if localLoad(lbpathname, p.lbmap) != nil {
 		// create empty

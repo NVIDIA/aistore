@@ -23,7 +23,7 @@ func (t *targetrunner) runRebalance() {
 		return
 	}
 	glog.Infoln(xreb.tostring())
-	for mpath := range ctx.mountpaths.available {
+	for mpath := range ctx.mountpaths.Available {
 		aborted := t.oneRebalance(makePathCloud(mpath), xreb)
 		if aborted {
 			break
