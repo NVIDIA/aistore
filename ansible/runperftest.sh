@@ -38,9 +38,7 @@ while [ $clients_running -gt 0 ]; do
 	parallel-ssh -h inventory/clients.txt -i 'tail -10 /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/cmd/dfcloader/screenlog.0'
 	parallel-ssh -h inventory/targets.txt -i "iostat -xm 5 -c 2 | tail -33" || true
 	parallel-ssh -h inventory/targets.txt -i "netstat -s | grep transmit" || true
-	parallel-ssh -h inventory/targets.txt -i "tail -5 /var/log/dfc/dfc.ERROR" || true
-	parallel-ssh -h inventory/proxy.txt -i "tail -5 /var/log/dfcproxy/dfc.ERROR" || true
-	sleep 20 
+	sleep 30 
 done
 
 parallel-ssh -h inventory/clients.txt -i 'tail -20 /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/cmd/dfcloader/screenlog.0'
