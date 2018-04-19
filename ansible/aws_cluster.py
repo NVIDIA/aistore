@@ -239,6 +239,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cluster = args.cluster
+    clients = args.clients
     dfc = load_dfc_cluster(cluster, clients)
 
     if args.command == 'restart':
