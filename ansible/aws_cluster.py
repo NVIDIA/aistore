@@ -27,7 +27,7 @@ def setupLogger():
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
-def load_dfc_cluster(cluster):
+def load_dfc_cluster(cluster, clients):
     dfc = {
         'targets' : None,
         'proxy'   : None,
@@ -37,6 +37,9 @@ def load_dfc_cluster(cluster):
     dfc['targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Target*'})
     dfc['proxy'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Proxy*'})
     dfc['clients'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Client*'})
+    if len(dfc['clients'] > clients):
+        dfc['clients'] = dfc['clients'][:clients]
+        logger.info("Considering reduced number of clients {}".format(len(dfc['clients'])))
 
     for key in dfc:
         if not dfc[key]:    
@@ -50,6 +53,7 @@ def load_dfc_cluster(cluster):
             print key
             c.write('['+key+']\n')
             file = os.path.join(os.path.dirname(__file__), 'inventory', key+'.txt')
+            client_count = 0
             with open(file, 'w') as f:
                 for instance in dfc[key]:
                     ip = instance.private_ip_address
@@ -231,10 +235,11 @@ if __name__ == '__main__':
     parser.add_argument("--help", action="help")
     parser.add_argument("--cluster", dest='cluster', required=True, help="Name of the cluster to operate on")
     parser.add_argument("--command", dest="command", required=True, help="Supported commands - create, terminate, restart, shutdown, update")
+    parser.add_argument("--clients", dest="clients", required=False, help="Number of clients to use, default 4", default=4)
     args = parser.parse_args()
 
     cluster = args.cluster
-    dfc = load_dfc_cluster(cluster)
+    dfc = load_dfc_cluster(cluster, clients)
 
     if args.command == 'restart':
         start_dfc_cluster(dfc)
