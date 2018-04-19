@@ -199,8 +199,6 @@ def start_stop_instance(instances, state):
             time.sleep(5)
             instance.update()
             logger.info("Instance {0} state changed to {1}".format(instance.id, instance.state))
-    #Additional sleep to make sure every instance is up for SSH connection
-    time.sleep(15)
 
 def terminate_instance(region_name,ip_address):
     ec2_conn = ec2_connect_to_region(region_name)
@@ -214,6 +212,8 @@ def start_dfc_cluster(dfc):
     for key in dfc:
         logger.info("Booting dfc {}".format(key))
         start_stop_instance(dfc[key], 'running')
+    #Additional sleep to make sure every instance is up for SSH connection
+    time.sleep(15)
 
 def stop_dfc_cluster(dfc):
     for key in dfc:
