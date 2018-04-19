@@ -83,7 +83,7 @@ func init() {
 	// choice of seed, so they will interfere with each other.
 	flag.Int64Var(&baseseed, "seed", baseseed, "Seed to use for random number generators")
 	flag.Int64Var(&keepaliveseconds, "keepaliveseconds", 15, "The keepalive poll time for the cluster")
-	flag.DurationVar(&multiProxyTestDuration, "duration", 30*time.Minute,
+	flag.DurationVar(&multiProxyTestDuration, "duration", 10*time.Minute,
 		"The length to run the Multiple Proxy Stress Test for")
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.IntVar(&cycles, "cycles", 15, "Number of PUT cycles")

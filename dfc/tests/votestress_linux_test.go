@@ -133,8 +133,8 @@ loop:
 			errch <- fmt.Errorf("Error restoring proxy: %v", err)
 		}
 
-		durationmillis := (random.NormFloat64() + 1.5) * 60     // [30, 150]
-		sleepdir := time.Duration(durationmillis) * time.Second // [30s, 150s)
+		durationmillis := (random.NormFloat64()) * 30           // [0, 30]
+		sleepdir := time.Duration(durationmillis) * time.Second // [0, 30s)
 		time.Sleep(sleepdir)
 	}
 }
