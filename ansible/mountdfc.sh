@@ -1,3 +1,5 @@
+#!/bin/bash
+set -e
 #mount file systems
 echo umount dfc file system if any mounted
 mount

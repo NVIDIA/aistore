@@ -11,5 +11,5 @@
         src: /tmp/log.tgz
         dest: "{{ playbook_dir }}/logs/{{ inventory_hostname }}/log.tgz"
         flat: yes
-...
+        serial: 100%
 

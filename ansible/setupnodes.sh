@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 echo 'Add GOPATH and GOBIN'
 sudo touch /etc/profile.d/dfcpaths.sh
 sudo sh -c "echo export PATH=$PATH:/usr/local/go/bin > /etc/profile.d/dfcpaths.sh"

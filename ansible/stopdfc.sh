@@ -1,1 +1,5 @@
-ps -C dfc -o pid= | xargs sudo kill -9
+#!/bin/bash
+set -e
+for pid in `ps -C dfc -o pid= `; do
+	sudo kill $pid
+done

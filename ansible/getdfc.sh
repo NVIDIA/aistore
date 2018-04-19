@@ -1,9 +1,8 @@
 #!/bin/bash
+set -e
 . /etc/profile.d/dfcpaths.sh
-echo 'Kill current DFC daemons, if any'
-ps -C dfc -o pid= | xargs sudo kill -9
 echo 'Go get DFC'
-rm -rf ~/dfc
+rm -rf ~/dfc || true
 mkdir -p ~/dfc/{bin,pkg,src}
 /usr/local/go/bin/go get -u -v github.com/NVIDIA/dfcpub/dfc
 cd $DFCSRC

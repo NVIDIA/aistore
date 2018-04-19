@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 export LOGDIR=/var/log/dfc
 export CONFDIR=/dfc
 export CONFFILE=$HOME/dfc.json

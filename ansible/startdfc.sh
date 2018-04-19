@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+
 echo Starting primary proxy
 parallel-ssh -h inventory/proxy.txt -i 'nohup /home/ubuntu/startprimaryproxy.sh >/dev/null 2>&1'
 sleep 5

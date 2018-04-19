@@ -1,5 +1,5 @@
 ---
-- hosts: targets
+- hosts: all
   gather_facts: no
   tasks:
     - copy:
@@ -7,6 +7,6 @@
         dest: /home/ubuntu/
         owner: ubuntu
         group: ubuntu
-        mode: 0777
+        mode: 0644
 ...
 
