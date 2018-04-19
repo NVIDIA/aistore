@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,7 +17,8 @@ const (
 	multiproxybkt = "multipleproxytmp"
 )
 
-func rwdloop(seed int64, stopch <-chan struct{}, proxyurlch <-chan string, errch chan error) {
+func rwdloop(seed int64, stopch <-chan struct{}, proxyurlch <-chan string, errch chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
 	// Each iteration of the loop puts, then gets, then deletes. This way, failovers will theoretically happen in each step of the process.
 
 	random := rand.New(rand.NewSource(seed))
@@ -25,6 +27,7 @@ loop:
 	for {
 		select {
 		case <-stopch:
+			close(errch)
 			break loop
 		default:
 		}
@@ -77,13 +80,18 @@ loop:
 	}
 }
 
-func killLoop(t *testing.T, seed int64, stopch <-chan struct{}, proxyurlchs []chan string, errch chan error) {
+func killLoop(t *testing.T, seed int64, stopch <-chan struct{}, proxyurlchs []chan string, errch chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
 	random := rand.New(rand.NewSource(seed))
 
 loop:
 	for {
 		select {
 		case <-stopch:
+			close(errch)
+			for _, ch := range proxyurlchs {
+				close(ch)
+			}
 			break loop
 		default:
 		}
@@ -132,7 +140,8 @@ loop:
 }
 
 func Test_votestress(t *testing.T) {
-	canRunMultipleProxyTests(t)
+	originalproxyid := canRunMultipleProxyTests(t)
+	originalproxyurl := proxyurl
 
 	client.CreateLocalBucket(proxyurl, multiproxybkt)
 
@@ -140,18 +149,21 @@ func Test_votestress(t *testing.T) {
 	errchs := make([]chan error, numworkers+1)
 	stopchs := make([]chan struct{}, numworkers+1)
 	proxyurlchs := make([]chan string, numworkers)
+	wg := &sync.WaitGroup{}
 	for i := 0; i < numworkers; i++ {
 		errchs[i] = make(chan error, 10)
 		stopchs[i] = make(chan struct{}, 10)
 		proxyurlchs[i] = make(chan string, 10)
-		go rwdloop(bs, stopchs[i], proxyurlchs[i], errchs[i])
+		wg.Add(1)
+		go rwdloop(bs, stopchs[i], proxyurlchs[i], errchs[i], wg)
 		bs += 1
 		time.Sleep(50 * time.Millisecond) // stagger
 	}
 
 	errchs[numworkers] = make(chan error, 10)
 	stopchs[numworkers] = make(chan struct{}, 10)
-	go killLoop(t, bs, stopchs[numworkers], proxyurlchs, errchs[numworkers])
+	wg.Add(1)
+	go killLoop(t, bs, stopchs[numworkers], proxyurlchs, errchs[numworkers], wg)
 
 	timer := time.After(multiProxyTestDuration)
 	var errs uint64 = 0
@@ -178,12 +190,10 @@ loop:
 		stopch <- v
 		close(stopch)
 	}
-	for _, errch := range errchs {
-		close(errch)
-	}
-	for _, proxyurlch := range proxyurlchs {
-		close(proxyurlch)
-	}
+
+	wg.Wait()
 
 	client.DestroyLocalBucket(proxyurl, multiproxybkt)
+	resetPrimaryProxy(originalproxyid, t)
+	proxyurl = originalproxyurl
 }

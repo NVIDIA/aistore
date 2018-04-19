@@ -53,11 +53,10 @@ var (
 	clichecksum            string
 	cycles                 int
 
-	multiProxy = false
-	clibucket  string
-	proxyurl   string
-	usingSG    bool // True if using SGL as reader backing memory
-	usingFile  bool // True if using file as reader backing
+	clibucket string
+	proxyurl  string
+	usingSG   bool // True if using SGL as reader backing memory
+	usingFile bool // True if using file as reader backing
 )
 
 func init() {
@@ -110,10 +109,6 @@ func TestMain(m *testing.M) {
 	if len(clibucket) == 0 {
 		fmt.Println("Bucket name is empty.")
 		os.Exit(1)
-	}
-
-	if os.Getenv("MULTIPROXY") == "1" {
-		multiProxy = true
 	}
 
 	os.Exit(m.Run())

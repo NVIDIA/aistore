@@ -1684,22 +1684,30 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-	// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
-	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
-		str := r.URL.Query().Get(URLParamAutoReb)
-		autorebalance, err := parsebool(str)
-		if err != nil {
-			errstr := fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: true | false)", URLParamAutoReb, str)
-			t.invalmsghdlr(w, r, errstr)
+
+	if len(apitems) > 0 {
+		switch apitems[0] {
+		// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
+		case Rsyncsmap, Rebalance:
+			str := r.URL.Query().Get(URLParamAutoReb)
+			autorebalance, err := parsebool(str)
+			if err != nil {
+				errstr := fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: true | false)", URLParamAutoReb, str)
+				t.invalmsghdlr(w, r, errstr)
+				return
+			}
+			t.httpdaeputSmap(w, r, apitems, autorebalance)
 			return
+		// PUT '{lbmap}' /v1/daemon/localbuckets
+		case Rsynclb:
+			t.httpdaeputLBMap(w, r, apitems)
+			return
+		// PUT /v1/daemon/proxy/newprimaryproxyid
+		case Rproxy:
+			t.httpdaesetprimaryproxy(w, r, apitems)
+			return
+		default:
 		}
-		t.httpdaeputSmap(w, r, apitems, autorebalance)
-		return
-	}
-	// PUT '{lbmap}' /v1/daemon/localbuckets
-	if len(apitems) > 0 && apitems[0] == Rsynclb {
-		t.httpdaeputLBMap(w, r, apitems)
-		return
 	}
 	//
 	// other PUT /daemon actions
@@ -1833,6 +1841,28 @@ func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, a
 			}
 		}
 	}
+}
+
+func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request, apitems []string) {
+	var (
+		prepare bool
+		err     error
+	)
+	if len(apitems) != 2 {
+		s := fmt.Sprintf("Incorrect number of API items: %d, should be: %d", len(apitems), 2)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+
+	proxyid := apitems[1]
+	query := r.URL.Query()
+	preparestr := query.Get(URLParamPrepare)
+	if prepare, err = strconv.ParseBool(preparestr); err != nil {
+		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", URLParamPrepare, err)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+	t.setPrimaryProxy(proxyid, "" /* primaryToRemove */, prepare)
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {

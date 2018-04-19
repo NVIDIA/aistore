@@ -58,6 +58,7 @@ const (
 	URLParamSuspectedTarget  = "suspect"    // suspect=string - id of target suspected of failure
 	URLParamPrimaryCandidate = "candidate"  // candidate=string - id of candidate for primary proxy
 	URLParamForce            = "force"      // force=bool - Must be true to shutdown the primary proxy
+	URLParamPrepare          = "prepare"    // prepare=bool - if true, this request is the prepare phase for primary proxy change
 )
 
 // TODO: sort and some props are TBD

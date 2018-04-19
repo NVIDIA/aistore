@@ -133,7 +133,11 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.smap = &msg.Record.Smap
 	} else if v > h.smap.version() {
 		glog.Errorf("VoteRecord smap Version (%v) is older than local Smap (%v), voting No\n", msg.Record.Smap.version(), v)
-		w.Write([]byte(VoteNo))
+		_, err = w.Write([]byte(VoteNo))
+		if err != nil {
+			s := fmt.Sprintf("Error writing no vote: %v", err)
+			h.invalmsghdlr(w, r, s)
+		}
 		return
 	}
 
@@ -149,9 +153,17 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if vote {
-		w.Write([]byte(VoteYes))
+		_, err = w.Write([]byte(VoteYes))
+		if err != nil {
+			s := fmt.Sprintf("Error writing yes vote: %v", err)
+			h.invalmsghdlr(w, r, s)
+		}
 	} else {
-		w.Write([]byte(VoteNo))
+		_, err = w.Write([]byte(VoteNo))
+		if err != nil {
+			s := fmt.Sprintf("Error writing no vote: %v", err)
+			h.invalmsghdlr(w, r, s)
+		}
 	}
 }
 
@@ -171,30 +183,13 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	}
 
 	vr := msg.Result
-
 	glog.Infof("%v recieved vote result: %v\n", h.si.DaemonID, vr)
 
-	h.smap.lock()
-	defer h.smap.unlock()
-
-	proxyinfo, ok := h.smap.Pmap[vr.Candidate]
-	if !ok {
-		s := fmt.Sprintf("Candidate not present in proxy smap: %s", vr.Candidate)
+	err = h.setPrimaryProxy(vr.Candidate, vr.Primary, false)
+	if err != nil {
+		s := fmt.Sprintf("Error setting Primary Proxy: %v", err)
 		h.invalmsghdlr(w, r, s)
 		return
-	} else if proxyinfo == nil {
-		glog.Warningf("Primary Proxy nil in Smap: %v", vr.Candidate)
-	}
-
-	proxyinfo.Primary = true
-	h.proxysi = proxyinfo
-	h.smap.delProxy(vr.Primary)
-	h.smap.ProxySI = proxyinfo
-	ctx.config.Proxy.Primary.ID = proxyinfo.DaemonID
-	ctx.config.Proxy.Primary.URL = proxyinfo.DirectURL
-	err = writeConfigFile()
-	if err != nil {
-		glog.Errorf("Error writing config file: %v", err)
 	}
 }
 
@@ -248,11 +243,11 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 //
 //===================
 
-func (p *proxyrunner) proxyElection(vr *VoteRecord) error {
+func (p *proxyrunner) proxyElection(vr *VoteRecord) {
 	xele := p.xactinp.renewElection(p, vr)
 	if xele == nil {
 		glog.Infoln("An election is already in progress, returning.")
-		return nil
+		return
 	}
 	defer func() {
 		xele.etime = time.Now()
@@ -261,7 +256,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) error {
 	}()
 	if p.primary {
 		glog.Infoln("Already in Primary state.")
-		return nil
+		return
 	}
 	// First, ping current proxy with a short timeout: (Primary? State)
 	url := p.proxysi.DirectURL + "/" + Rversion + "/" + Rhealth
@@ -269,7 +264,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) error {
 	if proxyup {
 		// Move back to Idle state
 		glog.Infoln("Moving back to Idle state")
-		return nil
+		return
 	}
 	glog.Infof("%v: Primary Proxy %v is confirmed down\n", p.si.DaemonID, p.proxysi.DaemonID)
 	glog.Infoln("Moving to Election state")
@@ -278,14 +273,14 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) error {
 	if !elected {
 		// Move back to Idle state
 		glog.Infoln("Moving back to Idle state")
-		return nil
+		return
 	}
 	glog.Infoln("Moving to Election2 State")
 	// Begin Election2 State
 	confirmationErrors := p.confirmElectionVictory(vr)
 
 	// Check for errors that did not occurr in the voting stage:
-	for sid, _ := range confirmationErrors {
+	for sid := range confirmationErrors {
 		if _, ok := votingErrors[sid]; !ok {
 			// A node errored while confirming that did not error while voting:
 			glog.Errorf("An error occurred confirming the election with a node that was healthy when voting: %v", err)
@@ -294,9 +289,9 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) error {
 
 	glog.Infoln("Moving to Primary state")
 	// Begin Primary State
-	p.becomePrimaryProxy(vr)
+	p.becomePrimaryProxy(vr.Primary /* proxyidToRemove */)
 
-	return nil
+	return
 }
 
 func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map[string]bool) {
@@ -388,9 +383,9 @@ func (p *proxyrunner) broadcastElectionVictory(vr *VoteRecord, wg *sync.WaitGrou
 	return errch
 }
 
-func (p *proxyrunner) becomePrimaryProxy(vr *VoteRecord) {
+func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	p.primary = true
-	psi := p.updateSmapPrimaryProxy(vr)
+	psi := p.updateSmapPrimaryProxy(proxyidToRemove)
 	p.proxysi = psi
 	ctx.config.Proxy.Primary.ID = psi.DaemonID
 	ctx.config.Proxy.Primary.URL = psi.DirectURL
@@ -401,15 +396,26 @@ func (p *proxyrunner) becomePrimaryProxy(vr *VoteRecord) {
 	p.synchronizeMaps(0, "")
 }
 
-func (p *proxyrunner) updateSmapPrimaryProxy(vr *VoteRecord) *proxyInfo {
+func (p *proxyrunner) updateSmapPrimaryProxy(proxyidToRemove string) *proxyInfo {
 	p.smap.lock()
 	defer p.smap.unlock()
-	p.smap.delProxy(vr.Primary)
+	if proxyidToRemove != "" {
+		p.smap.delProxy(proxyidToRemove)
+	}
 	psi := p.smap.getProxy(p.si.DaemonID)
 	psi.Primary = true
 	p.smap.ProxySI = psi
+	p.smap.Version++
 
 	return psi
+}
+
+func (p *proxyrunner) becomeNonPrimaryProxy() {
+	p.primary = false
+	p.smap.Lock()
+	defer p.smap.Unlock()
+	psi := p.smap.getProxy(p.si.DaemonID)
+	psi.Primary = false
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
@@ -505,6 +511,39 @@ func (h *httprunner) voteOnProxy(candidate string) (bool, error) {
 	}
 
 	return hrwmax.DaemonID == proxyinfo.DaemonID, nil
+}
+
+// Sets the primary proxy to the proxy in the cluster map with the ID newPrimaryProxy.
+// Removes primaryToRemove from the cluster map, if primaryToRemove is provided.
+func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, prepare bool) error {
+	h.smap.lock()
+	defer h.smap.unlock()
+
+	proxyinfo, ok := h.smap.Pmap[newPrimaryProxy]
+	if !ok {
+		return fmt.Errorf("New Primary Proxy not present in proxy smap: %s", newPrimaryProxy)
+	} else if proxyinfo == nil {
+		return fmt.Errorf("New Primary Proxy nil in Smap: %v", newPrimaryProxy)
+	}
+
+	if prepare {
+		// If prepare=true, return before making any changes
+		return nil
+	}
+
+	proxyinfo.Primary = true
+	h.proxysi = proxyinfo
+	if primaryToRemove != "" {
+		h.smap.delProxy(primaryToRemove)
+	}
+	h.smap.ProxySI = proxyinfo
+	ctx.config.Proxy.Primary.ID = proxyinfo.DaemonID
+	ctx.config.Proxy.Primary.URL = proxyinfo.DirectURL
+	err := writeConfigFile()
+	if err != nil {
+		glog.Errorf("Error writing config file: %v", err)
+	}
+	return nil
 }
 
 //==================

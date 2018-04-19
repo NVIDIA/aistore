@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,30 +41,26 @@ var (
 		Test{"Minority Cluster Map Mismatch", minoritymismatchclustermap},
 		Test{"Majority Cluster Map Mismatch", majoritymismatchclustermap},
 		Test{"Multiple Proxy Operations", putgetmultipleproxies},
+		Test{"Set Primary Proxy", setPrimaryProxy},
 	}
 )
 
-func canRunMultipleProxyTests(t *testing.T) {
+func canRunMultipleProxyTests(t *testing.T) (proxyid string) {
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
 
-	if !multiProxy {
-		t.Skip("Skipped")
-	}
-
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux only")
-	}
-
 	smap := getClusterMap(httpclient, t)
 	if len(smap.Pmap) <= 1 {
-		t.Skip("Not enough proxies to run Test_vote, must be more than 1")
+		t.Errorf("Not enough proxies to run Test_vote: %v, must be more than 1", len(smap.Pmap))
 	}
+
+	return smap.ProxySI.DaemonID
 }
 
 func Test_vote(t *testing.T) {
-	canRunMultipleProxyTests(t)
+	originalproxyid := canRunMultipleProxyTests(t)
+	originalproxyurl := proxyurl
 
 	for _, test := range voteTests {
 		t.Run(test.name, test.method)
@@ -73,6 +68,9 @@ func Test_vote(t *testing.T) {
 			t.FailNow()
 		}
 	}
+
+	resetPrimaryProxy(originalproxyid, t)
+	proxyurl = originalproxyurl
 }
 
 //==========
@@ -286,7 +284,7 @@ func primaryproxyrejoin(t *testing.T) {
 		t.Errorf("Error pausing primary proxy: %v", err)
 	}
 
-	waitProgressBar("Switching Primary Proxy: ", time.Duration(4*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(4*keepaliveseconds)*time.Second)
 
 	// The expected behavior is that the original primary proxy exists with an old version of the SMap, but the rest of the cluster is now using a newer Smap version
 
@@ -315,6 +313,7 @@ func primaryproxyrejoin(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
+	time.Sleep(5 * time.Second)
 }
 
 func minoritymismatchclustermap(t *testing.T) {
@@ -386,7 +385,7 @@ func mismatchclustermap(getnumtargets func(int) int, t *testing.T) {
 	}
 	// Wait the maxmimum time it should take to switch. It is longer for these tests, because elections
 	// Might fail due to cluster map mismatch, but one should eventually succeed.
-	waitProgressBar("Chaning Primary Proxy: ", time.Duration(4*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(5*keepaliveseconds)*time.Second)
 
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
@@ -465,6 +464,22 @@ func singleProxyPutGetDelete(seed int64, nloops int, proxyurl string, verbose bo
 	}
 
 	return nil
+}
+
+func setPrimaryProxy(t *testing.T) {
+	// Get Smap
+	smap := getClusterMap(httpclient, t)
+	// Set primary proxy to each proxy, in a random order:
+	for _, si := range smap.Pmap {
+		fmt.Printf("Setting primary proxy to %v\n", si.DaemonID)
+		resetPrimaryProxy(si.DaemonID, t)
+		proxyurl = si.DirectURL
+		time.Sleep(5 * time.Second)
+		smap = getClusterMap(httpclient, t)
+		if smap.ProxySI.DaemonID != si.DaemonID {
+			t.Errorf("Primary Proxy is %v; should be %v", smap.ProxySI.DaemonID, si.DaemonID)
+		}
+	}
 }
 
 //=========
@@ -624,6 +639,30 @@ func getOutboundIP() net.IP {
 	return conn.LocalAddr().(*net.UDPAddr).IP
 }
 
+func resetPrimaryProxy(proxyid string, t *testing.T) {
+	smap := getClusterMap(httpclient, t)
+	url := smap.ProxySI.DirectURL + "/" + dfc.Rversion + "/" + dfc.Rcluster + "/" + dfc.Rproxy + "/" + proxyid
+	req, err := http.NewRequest(http.MethodPut, url, nil)
+	if err != nil {
+		t.Errorf("Unexpected failure to create HTTP Request: %v", err)
+	}
+	r, err := httpclient.Do(req)
+	if err != nil {
+		t.Errorf("Unexpected failure to do HTTP Request: %v", err)
+	}
+	defer func() {
+		if r.Body != nil {
+			r.Body.Close()
+		}
+	}()
+	_, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("Unexpected failure to read HTTP Response Body: %v", err)
+	}
+	time.Sleep(5 * time.Second)
+	return
+}
+
 //=============
 //
 // Mock Target
@@ -688,7 +727,6 @@ func registerMockTarget(mocktgt targetmocker, smap *dfc.Smap) error {
 	if err != nil {
 		return err
 	}
-
 	r, err := httpclient.Do(req)
 	if err != nil {
 		return err

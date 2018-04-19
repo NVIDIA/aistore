@@ -201,6 +201,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Get bucket props | HEAD /v1/buckets/bucket-name | ``` curl --head http://192.168.176.128:8080/v1/buckets/abc ```|
+| Set primary proxy (primary proxy only )| PUT /v1/cluster/proxy/new primary-proxy-id | ``` curl -i -X PUT http://192.1168.176.128:8080/v1/cluster/proxy/26869:8080 ``` |
 
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
@@ -348,13 +349,14 @@ The election process is as follows:
 
 ### Current Limitations
 
-- The ID and URL of the primary proxy must be specified in the config file, so when a primary proxy fails and is restarted, it will be unable to properly join the cluster unless its config file is updated. This also means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fail, and rejoin.
+- Whether or not a proxy starts as primary is determined by the existence of the DFCPRIMARYPROXY environment variable, the -proxyurl command line variable, and the ID in the config file (in that order of precendence). This means that if a primary proxy fails, if it is restarted with the same command and config file, it will restart as primary instead of attempting to join the cluster. As such, it will be cut off from the rest of the cluster.
+- The current primary proxy is determined at startup, through either the configuration file or the -proxyurl command line variable. This means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fail, and rejoin.
 - When the primary proxy fails and another proxy becomes the primary, if the original primary proxy becomes active again, there will be two proxies that think they are the primary. However, the original proxy will have a lower Smap version than the rest of the cluster, and so it will be treated as though it is no longer a part of the cluster.
 - DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
 
 ### Tests
 
-The suite of tests for multiple proxies may be run by including the flag "-testmultipleproxies" in a test run. Note that these tests can result in the primary proxy changing. Multiple proxy tests can only be run on Linux, where the entire cluster is being run locally.
+The suite of tests for multiple proxies may be run by setting the environment variable "MULTIPROXY" to 1 for a test run. Multiple proxy tests can only be run on Linux, where the entire cluster is being run locally.
 
 #### Current Tests
 
@@ -362,7 +364,4 @@ The suite of tests for multiple proxies may be run by including the flag "-testm
 2. Multiple_Failures: Tests that a new proxy is successfully transitioned to after the primary proxy and a target fail at once.
 3. Rejoin: Tests that, after a primary proxy failure and transition, a target can fail and rejoin the cluster.
 4. Primary_Proxy_Rejoin: Tests the scenario where the primary proxy becomes inactive, and resumes activity during the voting process. The vote should complete and result in the primary proxy changing, with the previous primary proxy still alive, but with a lower Smap version.
-
-#### Stress Test
-
-The stress test runs a sequence of put/get/delete calls to a local bucket from multiple worker threads, and simultaneously kills, waits, and restores the primary proxy at random intervals. It can be run by including both the flag "-testmultipleproxies" and providing a value for the stress test length with the flag "-votestresstimeout."
+5. Test_votestress: The stress test runs a sequence of put/get/delete calls to a local bucket from multiple worker threads, and simultaneously kills, waits, and restores the primary proxy at random intervals.

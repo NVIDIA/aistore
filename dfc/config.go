@@ -328,13 +328,5 @@ func setloglevel(loglevel string) (err error) {
 }
 
 func writeConfigFile() error {
-	jsbytes, err := json.MarshalIndent(ctx.config, "", "\t")
-	assert(err == nil)
-
-	conffile := clivars.conffile
-	if err := ioutil.WriteFile(conffile, jsbytes, os.ModePerm); err != nil {
-		return fmt.Errorf("Error writing Config File: %v", err)
-	}
-
-	return nil
+	return localSave(clivars.conffile, ctx.config)
 }

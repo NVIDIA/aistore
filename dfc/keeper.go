@@ -234,6 +234,7 @@ func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 		if responded {
 			continue
 		}
+		// FIXME: Seek confirmation when keepalive fails
 		// the verdict
 		if status > 0 {
 			glog.Errorf("Target %s fails keepalive with status %d, err: %v - removing from the cluster map", sid, status, err)

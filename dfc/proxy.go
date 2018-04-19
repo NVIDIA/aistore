@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1023,13 +1024,19 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(apitems) > 0 && apitems[0] == Rsynclb {
-		p.httpdaeputLBMap(w, r, apitems)
-		return
-	}
-	if len(apitems) > 0 && (apitems[0] == Rsyncsmap || apitems[0] == Rebalance) {
-		p.httpdaeputSmap(w, r, apitems)
-		return
+	if len(apitems) > 0 {
+		switch apitems[0] {
+		case Rsynclb:
+			p.httpdaeputLBMap(w, r, apitems)
+			return
+		case Rsyncsmap, Rebalance:
+			p.httpdaeputSmap(w, r, apitems)
+			return
+		case Rproxy:
+			p.httpdaesetprimaryproxy(w, r)
+			return
+		default:
+		}
 	}
 
 	//
@@ -1105,6 +1112,93 @@ func (p *proxyrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, ap
 	}
 	glog.Infof("%s: new lbmap version %d (old %d)", apitems[0], newlbmap.Version, curversion)
 	p.lbmap = newlbmap
+}
+
+func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request) {
+	var (
+		prepare bool
+		err     error
+	)
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rdaemon); apitems == nil {
+		return
+	}
+	if p.primary {
+		s := fmt.Sprint("Must use cluster handler to set primary proxy for the Primary Proxy")
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	proxyid := apitems[1]
+	query := r.URL.Query()
+	preparestr := query.Get(URLParamPrepare)
+	if prepare, err = strconv.ParseBool(preparestr); err != nil {
+		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", URLParamPrepare, err)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	if p.si.DaemonID == proxyid {
+		if !prepare {
+			p.becomePrimaryProxy("" /* proxyIDToRemove */)
+		}
+		return
+	}
+	p.setPrimaryProxy(proxyid, "" /* primaryToRemove */, prepare)
+}
+
+func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
+		return
+	}
+	if !p.checkPrimaryProxy("set primary proxy", w, r) {
+		return
+	}
+
+	proxyid := apitems[1]
+
+	if proxyid == p.si.DaemonID {
+		return
+	}
+
+	// 1st phase: Confirm that all proxies/targets are able to perform this primary proxy change.
+	err := p.setPrimaryProxy(proxyid, "" /* primaryToRemove */, true)
+	if err != nil {
+		s := fmt.Sprintf("Could not set primary proxy: %v", err)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	urlfmt := fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, true)
+	method := http.MethodPut
+	errch := make(chan error, p.smap.count()+p.smap.countProxies())
+	f := func(si *daemonInfo, _ []byte, err error, _ string, status int) {
+		if err != nil {
+			errch <- fmt.Errorf("Error from %v in prepare phase of Set Primary Proxy: %v", si.DaemonID, err)
+		}
+	}
+	p.broadcast(urlfmt, method, nil, f, ctx.config.Timeout.VoteRequest)
+	select {
+	case err := <-errch:
+		// If there are any proxies/targets that error during this phase, the change is not enacted.
+		s := fmt.Sprintf("Could not set primary proxy: %v", err)
+		p.invalmsghdlr(w, r, s)
+		return
+	default:
+	}
+
+	// If phase 1 passed without error, broadcast phase 2:
+	// After this point, errors will not result in any rollback.
+	urlfmt = fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, false)
+	f = func(si *daemonInfo, _ []byte, err error, _ string, status int) {
+		if err != nil {
+			glog.Errorf("Error from %v in commit phase of Set Primary Proxy: %v", si.DaemonID, err)
+		}
+	}
+	p.broadcast(urlfmt, method, nil, f, ctx.config.Timeout.VoteRequest)
+
+	p.becomeNonPrimaryProxy()
+	_ = p.setPrimaryProxy(proxyid, "" /* primaryToRemove */, false)
 }
 
 // handler for: "/"+Rversion+"/"+Rcluster
@@ -1236,7 +1330,7 @@ func (p *proxyrunner) shouldAddToSmap(nsi *daemonInfo, osi *daemonInfo, keepaliv
 			glog.Infof("register %s %s: already done", kind, nsi.DaemonID)
 			return false
 		}
-		glog.Errorf("register %s %s: renewing the registration %+v => %+v", kind, nsi.DaemonID, osi, nsi)
+		glog.Warningf("register %s %s: renewing the registration %+v => %+v", kind, nsi.DaemonID, osi, nsi)
 	}
 	return true
 }
@@ -1335,6 +1429,12 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
+
+	if len(apitems) > 0 && apitems[0] == Rproxy {
+		p.httpclusetprimaryproxy(w, r)
+		return
+	}
+
 	var msg ActionMsg
 	if p.readJSON(w, r, &msg) != nil {
 		return
