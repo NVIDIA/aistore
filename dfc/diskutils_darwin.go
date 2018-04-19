@@ -19,6 +19,10 @@ func iostatverok() (ok bool) {
 	return
 }
 
+func (r *iostatrunner) isZeroUtil(dev string) bool {
+	return true
+}
+
 func (r *iostatrunner) getMaxUtil() (maxutil float64) {
 	return float64(-1)
 }

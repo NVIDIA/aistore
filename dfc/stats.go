@@ -317,11 +317,14 @@ func (r *storstatsrunner) log() (runlru bool) {
 	if riostat != nil {
 		riostat.Lock()
 		r.CPUidle = riostat.CPUidle
-		for k, v := range riostat.Disk {
-			r.Disk[k] = v // copy
-			b, err := json.Marshal(r.Disk[k])
+		for dev, iometrics := range riostat.Disk {
+			r.Disk[dev] = iometrics // copy
+			if riostat.isZeroUtil(dev) {
+				continue // skip zeros
+			}
+			b, err := json.Marshal(r.Disk[dev])
 			if err == nil {
-				lines = append(lines, k+": "+string(b))
+				lines = append(lines, dev+": "+string(b))
 			}
 		}
 		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))

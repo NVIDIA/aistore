@@ -1208,7 +1208,6 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 		p.httpcluget(w, r)
 	case http.MethodPost:
 		p.httpclupost(w, r)
-		glog.Flush()
 	case http.MethodDelete:
 		p.httpcludel(w, r)
 		glog.Flush()

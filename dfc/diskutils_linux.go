@@ -90,6 +90,18 @@ func (r *iostatrunner) stop(err error) {
 	}
 }
 
+func (r *iostatrunner) isZeroUtil(dev string) bool {
+	iometrics := r.Disk[dev]
+	if utilstr, ok := iometrics["%util"]; ok {
+		if util, err := strconv.ParseFloat(utilstr, 32); err == nil {
+			if util == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (r *iostatrunner) getMaxUtil() (maxutil float64) {
 	maxutil = -1
 	r.Lock()
