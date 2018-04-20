@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/golang/glog"
 )
 
@@ -60,6 +61,7 @@ type proxyrunner struct {
 	lbmap       *lbmap
 	syncmapinp  int64
 	primary     bool
+	statsdC     statsd.Client
 }
 
 // start proxy runner
@@ -136,6 +138,16 @@ func (p *proxyrunner) run() error {
 	glog.Flush()
 	p.starttime = time.Now()
 
+	// Note: hard coding statsd's ip and port for two reasons:
+	// 1. it is well known, conflicts are unlikely, less config is better
+	// 2. if do need configuable, will make a separate change, easier to manage
+	var err error
+	p.statsdC, err = statsd.New("localhost", 8125,
+		fmt.Sprintf("dfcproxy.%s", strings.Replace(p.si.DaemonID, ":", "_", -1)))
+	if err != nil {
+		glog.Info("Failed to connect to statd, running without statsd")
+	}
+
 	return p.httprunner.run()
 }
 
@@ -187,6 +199,8 @@ func (p *proxyrunner) stop(err error) {
 	if p.httprunner.h != nil {
 		p.unregister()
 	}
+
+	p.statsdC.Close()
 	p.httprunner.stop(err)
 }
 
@@ -253,8 +267,23 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	// list the bucket
 	pagemarker, ok := p.listbucket(w, r, bucket)
 	if ok {
-		lat := int64(time.Since(started) / 1000)
+		delta := time.Since(started)
+		p.statsdC.Send("list",
+			statsd.Metric{
+				Type:  statsd.Counter,
+				Name:  "count",
+				Value: 1,
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency",
+				Value: float64(delta / time.Millisecond),
+			},
+		)
+
+		lat := int64(delta / 1000)
 		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
+
 		if glog.V(3) {
 			if pagemarker != "" {
 				glog.Infof("LIST: %s, page %s, %d µs", bucket, pagemarker, lat)
@@ -296,7 +325,25 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
 	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
-	p.statsif.addMany("numget", int64(1), "getlatency", int64(time.Since(started)/1000))
+
+	// Note: ideally, would prefer to call statsd in statsif.add(), but it doesn't have type support,
+	//       the name schema is different(statd doesn't need dup 'numget', it is get.count), statsif's dependency
+	//       on the names, and (not that importantly) the unit is different (ms vs us).
+	delta := time.Since(started)
+	p.statsdC.Send("get",
+		statsd.Metric{
+			Type:  statsd.Counter,
+			Name:  "count",
+			Value: 1,
+		},
+		statsd.Metric{
+			Type:  statsd.Timer,
+			Name:  "latency",
+			Value: float64(delta / time.Millisecond),
+		},
+	)
+
+	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
 }
 
 // PUT "/"+Rversion+"/"+Robjects
@@ -321,7 +368,22 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
-	p.statsif.addMany("numput", int64(1), "putlatency", int64(time.Since(started)/1000))
+
+	delta := time.Since(started)
+	p.statsdC.Send("put",
+		statsd.Metric{
+			Type:  statsd.Counter,
+			Name:  "count",
+			Value: 1,
+		},
+		statsd.Metric{
+			Type:  statsd.Timer,
+			Name:  "latency",
+			Value: float64(delta / time.Millisecond),
+		},
+	)
+
+	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta/1000))
 }
 
 // DELETE { action } /Rversion/Rbuckets
@@ -362,6 +424,15 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
+
+	p.statsdC.Send("delete",
+		statsd.Metric{
+			Type:  statsd.Counter,
+			Name:  "count",
+			Value: 1,
+		},
+	)
+
 	p.statsif.add("numdelete", 1)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
@@ -909,7 +980,17 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	if glog.V(3) {
 		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
+
+	p.statsdC.Send("rename",
+		statsd.Metric{
+			Type:  statsd.Counter,
+			Name:  "count",
+			Value: 1,
+		},
+	)
+
 	p.statsif.add("numrename", 1)
+
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
 	//       original JSON payload (GetMsg - see REST.go)
@@ -1303,7 +1384,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, s)
 		return
 	}
+
+	p.statsdC.Send("post",
+		statsd.Metric{
+			Type:  statsd.Counter,
+			Name:  "count",
+			Value: 1,
+		},
+	)
+
 	p.statsif.add("numpost", 1)
+
 	if proxy {
 		p.registerproxy(nsi, keepalive)
 	} else {

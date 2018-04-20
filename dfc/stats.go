@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
+
 	"github.com/golang/glog"
 )
 
@@ -316,6 +318,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 			}
 		}
 	}
+
 	// disk
 	riostat := getiostatrunner()
 	if riostat != nil {
@@ -330,7 +333,19 @@ func (r *storstatsrunner) log() (runlru bool) {
 			if err == nil {
 				lines = append(lines, dev+": "+string(b))
 			}
+
+			var stats []statsd.Metric
+			for k, v := range iometrics {
+				stats = append(stats, statsd.Metric{
+					Type:  statsd.Gauge,
+					Name:  k,
+					Value: v,
+				})
+			}
+
+			gettarget().statsdC.Send("iostat_"+dev, stats...)
 		}
+
 		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
 		riostat.Unlock()
 	}
