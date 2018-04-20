@@ -288,15 +288,6 @@ func validateconf() (err error) {
 	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 		return fmt.Errorf("Invalid LRU configuration %+v", ctx.config.LRU)
 	}
-	if ctx.config.TestFSP.Count == 0 {
-		for fp1 := range ctx.config.FSpaths {
-			for fp2 := range ctx.config.FSpaths {
-				if fp1 != fp2 && (strings.HasPrefix(fp1, fp2) || strings.HasPrefix(fp2, fp1)) {
-					return fmt.Errorf("Invalid fspaths: %q is a prefix or includes as a prefix %q", fp1, fp2)
-				}
-			}
-		}
-	}
 	if ctx.config.Cksum.Checksum != ChecksumXXHash && ctx.config.Cksum.Checksum != ChecksumNone {
 		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
 	}

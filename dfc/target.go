@@ -2270,7 +2270,9 @@ func (t *targetrunner) fspath2mpath() {
 		}
 		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
 		_, ok := ctx.mountpaths.Available[mp.Path]
-		assert(!ok)
+		if ok {
+			glog.Fatalf("FATAL: invalid config: duplicated fspath %q", fp)
+		}
 		ctx.mountpaths.Available[mp.Path] = mp
 	}
 }
