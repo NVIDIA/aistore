@@ -916,8 +916,8 @@ func TestINode(t *testing.T) {
 		}
 
 		dir11 = dir1.find("/dir11")
-		if dir11 != nil {
-			t.Fatal("Found absoluate path from non-root")
+		if dir11 == nil {
+			t.Fatal("Failed to find absoluate path from non-root")
 		}
 
 		dir11 = dir1.find("dir11")

@@ -921,12 +921,10 @@ func (d *inode) addPath(pth string) (*inode, error) {
 
 // find returns the node corresponding to a path; nil if not exists
 // the search starts from node 'd' and walks through each segment in 'pth'
+// note: should not expect to look for an absoluate path; first "/" is trimmed before looking
 func (d *inode) find(pth string) *inode {
-	if path.IsAbs(pth) {
-		return nil
-	}
-
 	p := path.Clean(pth)
+	p = strings.TrimPrefix(p, separator)
 	segs := strings.Split(p, separator)
 
 	var (
