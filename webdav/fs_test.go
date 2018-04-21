@@ -925,12 +925,12 @@ func TestINode(t *testing.T) {
 			t.Fatal("Failed to find an existing directory")
 		}
 
-		dir11 = root.find("/dir1/dir11")
+		dir11 = root.find("dir1/dir11")
 		if dir11 == nil {
 			t.Fatal("Failed to find an existing directory")
 		}
 
-		if dir11.find("/dir1/dir11") != nil {
+		if dir11.find("dir1/dir11") != nil {
 			t.Fatal("Found non-existing directory")
 		}
 
@@ -938,7 +938,7 @@ func TestINode(t *testing.T) {
 			t.Fatal("Found non-existing directory")
 		}
 
-		if root.find("/dir1/dir111") != nil {
+		if root.find("dir1/dir111") != nil {
 			t.Fatal("Found non-existing directory")
 		}
 
@@ -947,17 +947,17 @@ func TestINode(t *testing.T) {
 			t.Fatal("Failed to find existing directory")
 		}
 
-		n = root.find("/dir1/dir11")
+		n = root.find("dir1/dir11")
 		if n == nil || n.name != "dir11" {
 			t.Fatal("Failed to find existing directory")
 		}
 
 		dir1.deleteChild("dir11")
-		if root.find("/dir1/dir11") != nil {
+		if root.find("dir1/dir11") != nil {
 			t.Fatal("Found non-existing directory")
 		}
 
-		if root.find("/dir1") == nil || root.find("/dir1/") == nil || root.find("dir1") == nil {
+		if root.find("dir1") == nil || root.find("dir1/") == nil || root.find("dir1") == nil {
 			t.Fatal("Failed to find an existing directory")
 		}
 
@@ -966,7 +966,7 @@ func TestINode(t *testing.T) {
 		dir2.addChild("dir21")
 		dir2.addChild("dir22")
 		dir2.addChild("dir23")
-		dir22 := root.find("/dir2/dir22")
+		dir22 := root.find("dir2/dir22")
 		if dir22 == nil || dir22.name != "dir22" {
 			t.Fatal("Failed to find existing directory")
 		}
@@ -977,11 +977,11 @@ func TestINode(t *testing.T) {
 			t.Fatal("Failed to find existing directory")
 		}
 
-		if root.find("/dir2/dir22") != nil {
+		if root.find("dir2/dir224") != nil {
 			t.Fatal("Found non-existing directory")
 		}
 
-		if root.find("dir2") != nil {
+		if root.find("dir28") != nil {
 			t.Fatal("Found non-existing directory")
 		}
 	}
