@@ -747,11 +747,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 			objs = append(objs, &dfc.BucketEntry{Name: c.name + separator})
 		}
 
-		fis, err := group(objs, f.prefix)
-		if err != nil {
-			return nil, err
-		}
-
+		fis := group(objs, f.prefix)
 		return f.list(count, fis)
 	}
 
@@ -952,7 +948,8 @@ func (d *inode) find(pth string) *inode {
 // for example, if input = "loader/obj1", "loader/obj2", "obj3", "loader/dir/obj4", prefix = ""
 // output will be: loader(directory), obj3(file)
 // prefix is removed from object name before grouping.
-func group(objs []*dfc.BucketEntry, prefix string) ([]os.FileInfo, error) {
+// do not expect duplicate keys (upper layer should not allow that to happen)
+func group(objs []*dfc.BucketEntry, prefix string) []os.FileInfo {
 	keys := make(map[string]bool) // string = first part after split by "/", bool = true if it is a file
 	var fis []os.FileInfo
 
@@ -985,7 +982,7 @@ func group(objs []*dfc.BucketEntry, prefix string) ([]os.FileInfo, error) {
 	}
 
 	sort.Sort(fiSortByName(fis))
-	return fis, nil
+	return fis
 }
 
 // localFileName returns a full path of a temporary file used while a DFC object is opened for read or write
