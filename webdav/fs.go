@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"golang.org/x/net/webdav"
 )
 
 type (

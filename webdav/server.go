@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"golang.org/x/net/webdav"
+	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
 )
 
 const (

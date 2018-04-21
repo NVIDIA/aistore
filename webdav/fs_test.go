@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"golang.org/x/net/webdav"
 )
 
 func TestName(t *testing.T) {
