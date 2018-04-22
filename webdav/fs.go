@@ -110,36 +110,46 @@ const (
 
 // Mkdir creates a new bucket or verifies whether a directory exists or not
 func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
-	op := "mkdir"
-	webdavLog(logLevelDFC, "%-15s: %-70s perm = %-30v", "FS "+op, name, perm)
+	var (
+		op  = "mkdir"
+		f   *File
+		err error
+	)
 
-	f, err := fs.newFile(name)
+	defer func() {
+		webdavLog(logLevelDFC, "%-15s: %-70s perm = %-30v err = %v", "FS "+op, name, perm, err)
+	}()
+
+	f, err = fs.newFile(name)
 	if err != nil {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  err,
 		}
+		return err
 	}
 
 	switch f.typ {
 	case Root:
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  os.ErrInvalid,
 		}
+		return err
 
 	case Bucket:
 		if f.bucketExists {
-			return &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrExist,
 			}
+			return err
 		}
 
-		err := fs.proxy.createBucket(f.bucket)
+		err = fs.proxy.createBucket(f.bucket)
 		if err != nil {
 			return err
 		}
@@ -150,19 +160,21 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 	case Object:
 		// Note: Since this call is Mkdir(), Object really means it is a new directory
 		if !f.bucketExists || !f.pathExists {
-			return &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return err
 		}
 
 		if f.resourceExists {
-			return &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrExist,
 			}
+			return err
 		}
 
 		parent := f.parent()
@@ -171,29 +183,39 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 
 	case Directory:
 		// Since it is identified as a directory, it implies the directory already exists
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  os.ErrExist,
 		}
+		return err
 	}
 
-	return fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	return err
 }
 
 // OpenFile opens a file or a directory and returns a File.
 // If it is an object, a local file may be created depends on the flag.
 func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
-	op := "openfile"
-	webdavLog(logLevelDFC, "%-15s: %-70s flag = %-10d perm = %-30v", "FS "+op, name, flag, perm)
+	var (
+		op  = "openfile"
+		f   *File
+		err error
+	)
 
-	f, err := fs.newFile(name)
+	defer func() {
+		webdavLog(logLevelDFC, "%-15s: %-70s flag = %-10d perm = %-30v err = %v", "FS "+op, name, flag, perm, err)
+	}()
+
+	f, err = fs.newFile(name)
 	if err != nil {
-		return nil, &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  err,
 		}
+		return nil, err
 	}
 
 	switch f.typ {
@@ -203,45 +225,49 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 
 	case Bucket:
 		if !f.bucketExists {
-			return nil, &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return nil, err
 		}
 
 		return f, nil
 
 	case Object:
 		if !f.bucketExists || !f.pathExists {
-			return nil, &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return nil, err
 		}
 
 		f.flag = flag
 		f.perm = perm
 		if f.resourceExists {
 			if flag&os.O_CREATE != 0 && flag&os.O_EXCL != 0 {
-				return nil, &os.PathError{
+				err = &os.PathError{
 					Op:   op,
 					Path: name,
 					Err:  os.ErrInvalid,
 				}
+				return nil, err
 			}
 
 			if flag&os.O_TRUNC != 0 {
 				if flag&(os.O_RDWR|os.O_WRONLY) == 0 {
-					return nil, &os.PathError{
+					err = &os.PathError{
 						Op:   op,
 						Path: name,
 						Err:  os.ErrInvalid,
 					}
+					return nil, err
 				}
 
-				err := f.createLocalFile(perm)
+				err = f.createLocalFile(perm)
 				if err != nil {
 					return nil, err
 				}
@@ -250,25 +276,27 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 			}
 		} else {
 			if flag&os.O_CREATE != 0 {
-				err := f.createLocalFile(perm)
+				err = f.createLocalFile(perm)
 				if err != nil {
 					return nil, err
 				}
 
 				f.dirty = true
 			} else {
-				return nil, &os.PathError{
+				err = &os.PathError{
 					Op:   op,
 					Path: name,
 					Err:  os.ErrNotExist,
 				}
+				return nil, err
 			}
 		}
 
 		return f, nil
 	}
 
-	return nil, fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	return nil, err
 }
 
 // RemoveAll removes things depends on the 'name':
@@ -277,36 +305,46 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 // 3. Directory: deletes all objects under the directory (with the same prefix)
 // 4. Object:    deletes the single object
 func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
-	op := "removeall"
-	webdavLog(logLevelDFC, "%-15s: %-70s", "FS "+op, name)
+	var (
+		op  = "removeall"
+		f   *File
+		err error
+	)
 
-	f, err := fs.newFile(name)
+	defer func() {
+		webdavLog(logLevelDFC, "%-15s: %-70s err = %v", "FS "+op, name, err)
+	}()
+
+	f, err = fs.newFile(name)
 	if err != nil {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  err,
 		}
+		return err
 	}
 
 	switch f.typ {
 	case Root:
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  os.ErrInvalid,
 		}
+		return err
 
 	case Bucket:
 		if !f.bucketExists {
-			return &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return err
 		}
 
-		err := fs.proxy.deleteBucket(f.bucket)
+		err = fs.proxy.deleteBucket(f.bucket)
 		if err != nil {
 			return err
 		}
@@ -316,96 +354,119 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 
 	case Object:
 		if !f.resourceExists {
-			return &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return err
 		}
 
-		return fs.proxy.deleteObject(f.bucket, f.prefix)
+		err = fs.proxy.deleteObject(f.bucket, f.prefix)
+		return err
 
 	case Directory:
 		// if name is identified as a directory, it exists for sure
-		names, err := fs.proxy.listObjectsNames(f.bucket, f.prefix)
+		var names []string
+		names, err = fs.proxy.listObjectsNames(f.bucket, f.prefix)
 		if err != nil {
 			return err
 		}
 
 		// f.parent() should not return nil since the directory
 		f.parent().deleteChild(f.fi.name)
-		return fs.proxy.deleteObjects(f.bucket, names)
+		err = fs.proxy.deleteObjects(f.bucket, names)
+		return err
 	}
 
-	return fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	return err
 }
 
 // Rename renames an object; rename root/bucket/directory is not supported.
 func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error {
-	op := "rename"
-	webdavLog(logLevelDFC, "%-15s: %-70s %-50s", "FS "+op, oldName, newName)
+	var (
+		op         = "rename"
+		oldf, newf *File
+		err        error
+	)
 
-	oldf, err := fs.newFile(oldName)
+	defer func() {
+		webdavLog(logLevelDFC, "%-15s: %-70s %-50s err = %v", "FS "+op, oldName, newName, err)
+	}()
+
+	oldf, err = fs.newFile(oldName)
 	if err != nil {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: oldName,
 			Err:  err,
 		}
+		return err
 	}
 
 	if oldf.typ != Object {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: oldName,
 			Err:  os.ErrInvalid,
 		}
+		return err
 	}
 
 	if !oldf.resourceExists {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: oldName,
 			Err:  os.ErrNotExist,
 		}
+		return err
 	}
 
-	newf, err := fs.newFile(newName)
+	newf, err = fs.newFile(newName)
 	if err != nil {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: newName,
 			Err:  err,
 		}
+		return err
 	}
 
 	if newf.typ != Object {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: newName,
 			Err:  os.ErrInvalid,
 		}
+		return err
 	}
 
 	if newf.resourceExists {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: oldName,
 			Err:  os.ErrExist,
 		}
+		return err
 	}
 
 	if !newf.bucketExists || !newf.pathExists {
-		return &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: oldName,
 			Err:  os.ErrNotExist,
 		}
+		return err
 	}
 
 	// get old
-	localPath := fs.localFileName()
-	h, err := os.Create(localPath)
+	var (
+		localPath string
+		h         *os.File
+	)
+	localPath = fs.localFileName()
+	h, err = os.Create(localPath)
 	if err != nil {
 		return err
 	}
@@ -430,51 +491,67 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 		return err
 	}
 
-	return fs.proxy.deleteObject(oldf.bucket, oldf.prefix)
+	err = fs.proxy.deleteObject(oldf.bucket, oldf.prefix)
+	return err
 }
 
 // Stat returns a file info
 func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	op := "stat"
-	webdavLog(logLevelDFC, "%-15s: %-70s", "FS "+op, name)
+	var (
+		op  = "stat"
+		f   *File
+		fi  os.FileInfo
+		err error
+	)
 
-	f, err := fs.newFile(name)
+	defer func() {
+		webdavLog(logLevelDFC, "%-15s: %-70s err = %v", "FS "+op, name, err)
+	}()
+
+	f, err = fs.newFile(name)
 	if err != nil {
-		return nil, &os.PathError{
+		err = &os.PathError{
 			Op:   op,
 			Path: name,
 			Err:  err,
 		}
+		return nil, err
 	}
 
 	switch f.typ {
 	case Root, Directory:
-		return f.Stat()
+		fi, err = f.Stat()
+		return fi, err
 
 	case Bucket:
 		if !f.bucketExists {
-			return nil, &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return nil, err
 		}
 
-		return f.Stat()
+		fi, err = f.Stat()
+		return fi, err
 
 	case Object:
 		if !f.resourceExists {
-			return nil, &os.PathError{
+			err = &os.PathError{
 				Op:   op,
 				Path: name,
 				Err:  os.ErrNotExist,
 			}
+			return nil, err
 		}
 
-		return f.Stat()
+		fi, err = f.Stat()
+		return fi, err
 	}
 
-	return nil, fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	err = fmt.Errorf("Unknown resource type for %s: %s, %d", op, name, f.typ)
+	return nil, err
 }
 
 // newFile is a wrapper of the generic name parser, it does extra check and populate more fields in 'File' after parsing the resource name.
