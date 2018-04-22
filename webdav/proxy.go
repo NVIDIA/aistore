@@ -30,8 +30,22 @@ func (p *proxyServer) deleteBucket(bucket string) error {
 }
 
 func (p *proxyServer) doesBucketExist(bucket string) bool {
-	_, err := client.HeadBucket(p.url, bucket)
-	return err == nil
+	// note: webdav works with local bucket only (at least for now)
+	// _, err := client.HeadBucket(p.url, bucket)
+	// return err == nil
+
+	bns, err := client.ListBuckets(p.url, true /* local */)
+	if err != nil {
+		return false
+	}
+
+	for _, b := range bns.Local {
+		if b == bucket {
+			return true
+		}
+	}
+
+	return false
 }
 
 // listBuckets returns a slice of names of all buckets
