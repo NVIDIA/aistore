@@ -665,7 +665,10 @@ func NewFS(url url.URL, localDir string) webdav.FileSystem {
 // | "/bucket/dir1/dir2/file" | File   | bucket | dir1/dir2  | file |
 // +--------------------------+--------+--------+------------+------+
 func parseResource(name string) (*File, error) {
-	n := path.Clean(name)
+	// Note: path.Clean() removes anything before "..", this is not what webdav thinks.
+	//       replace ".." with "/" before clean
+	n := strings.Replace(name, "..", "/", -1)
+	n = path.Clean(n)
 	if !path.IsAbs(n) {
 		return nil, os.ErrInvalid
 	}

@@ -82,6 +82,32 @@ func TestName(t *testing.T) {
 			nil,
 		},
 		{
+			"/bucket/../file",
+			&File{
+				name:   "/bucket/../file",
+				typ:    Object,
+				bucket: "bucket",
+				path:   "",
+				fi: fileInfo{
+					name: "file",
+					mode: defaultFileMode,
+				}},
+			nil,
+		},
+		{
+			"/bucket/../../file",
+			&File{
+				name:   "/bucket/../../file",
+				typ:    Object,
+				bucket: "bucket",
+				path:   "",
+				fi: fileInfo{
+					name: "file",
+					mode: defaultFileMode,
+				}},
+			nil,
+		},
+		{
 			"/bucket/dir1/dir2/file",
 			&File{
 				name:   "/bucket/dir1/dir2/file",
