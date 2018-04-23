@@ -373,9 +373,15 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 			return err
 		}
 
-		// f.parent() should not return nil since the directory
-		f.parent().deleteChild(f.fi.name)
-		err = fs.proxy.deleteObjects(f.bucket, names)
+		if len(names) != 0 {
+			// f.parent() should not return nil since the directory
+			err = fs.proxy.deleteObjects(f.bucket, names)
+		}
+
+		if err == nil {
+			f.parent().deleteChild(f.fi.name)
+		}
+
 		return err
 	}
 
