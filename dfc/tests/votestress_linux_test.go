@@ -128,7 +128,7 @@ loop:
 
 		proxyurl = nextProxyURL
 		args = append(args, "-proxyurl="+nextProxyURL)
-		err = restore(httpclient, primaryProxyURL, cmd, args)
+		err = restore(httpclient, primaryProxyURL, cmd, args, false)
 		if err != nil {
 			errch <- fmt.Errorf("Error restoring proxy: %v", err)
 		}

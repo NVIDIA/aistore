@@ -1905,7 +1905,13 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 	assert(existentialQ)
 
-	t.smap, t.proxysi = newsmap, newsmap.ProxySI
+	err := t.setPrimaryProxyAndSmap(newsmap)
+	if err != nil {
+		s := fmt.Sprintf("Failed to Set Primary Proxy to %v, err: %v", newsmap.ProxySI.DaemonID, err)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+
 	if apitems[0] == Rsyncsmap {
 		return
 	}
@@ -1991,7 +1997,12 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	t.setPrimaryProxy(proxyid, "" /* primaryToRemove */, prepare)
+	err = t.setPrimaryProxyLocked(proxyid, "" /* primaryToRemove */, prepare)
+	if err != nil {
+		s := fmt.Sprintf("Failed to Set Primary Proxy to %v: %v", err)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {

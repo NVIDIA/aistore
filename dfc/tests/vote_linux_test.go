@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -107,7 +108,7 @@ func proxy_failure(t *testing.T) {
 	}
 
 	args = append(args, "-proxyurl="+nextProxyURL)
-	err = restore(httpclient, primaryProxyURL, cmd, args)
+	err = restore(httpclient, primaryProxyURL, cmd, args, false)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
@@ -157,12 +158,12 @@ func multiple_failures(t *testing.T) {
 
 	// Restore the killed target
 	targs = append(targs, "-proxyurl="+nextProxyURL)
-	err = restore(httpclient, targetURLToKill, tcmd, targs)
+	err = restore(httpclient, targetURLToKill, tcmd, targs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
 	pargs = append(pargs, "-proxyurl="+nextProxyURL)
-	err = restore(httpclient, primaryProxyURL, pcmd, pargs)
+	err = restore(httpclient, primaryProxyURL, pcmd, pargs, false)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
@@ -229,7 +230,7 @@ func rejoin(t *testing.T) {
 	}
 
 	// Restart that Target
-	err = restore(httpclient, targetURLToKill, tcmd, targs)
+	err = restore(httpclient, targetURLToKill, tcmd, targs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
@@ -241,7 +242,7 @@ func rejoin(t *testing.T) {
 	}
 
 	pargs = append(pargs, "-proxyurl="+nextProxyURL)
-	err = restore(httpclient, primaryProxyURL, pcmd, pargs)
+	err = restore(httpclient, primaryProxyURL, pcmd, pargs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
@@ -309,7 +310,7 @@ func primaryproxyrejoin(t *testing.T) {
 	}
 	time.Sleep(5 * time.Second)
 	pargs = append(pargs, "-proxyurl="+nextProxyURL)
-	err = restore(httpclient, oldproxyurl, pcmd, pargs)
+	err = restore(httpclient, oldproxyurl, pcmd, pargs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
@@ -390,12 +391,14 @@ func mismatchclustermap(getnumtargets func(int) int, t *testing.T) {
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
 	smap = getClusterMap(httpclient, t)
-	if smap.ProxySI.DaemonID != nextProxyID {
+	if smap.ProxySI == nil {
+		t.Errorf("Nil ProxySI in retrieved cluster map.")
+	} else if smap.ProxySI.DaemonID != nextProxyID {
 		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
 	}
 
 	args = append(args, "-proxyurl="+nextProxyURL)
-	err = restore(httpclient, primaryProxyURL, cmd, args)
+	err = restore(httpclient, primaryProxyURL, cmd, args, false)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
@@ -546,9 +549,15 @@ func kill(httpclient *http.Client, url, port string) (cmd string, args []string,
 	return
 }
 
-func restore(httpclient *http.Client, url, cmd string, args []string) error {
+func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary bool) error {
 	// Restart it
 	cmdStart := exec.Command(cmd, args...)
+	if asPrimary {
+		// Sets the environment variable to start as Primary Proxy to true
+		env := os.Environ()
+		env = append(env, "DFCPRIMARYPROXY=TRUE")
+		cmdStart.Env = env
+	}
 	var stderr bytes.Buffer
 	cmdStart.Stderr = &stderr
 	go func() {

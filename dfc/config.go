@@ -6,10 +6,8 @@
 package dfc
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -44,8 +42,9 @@ const (
 )
 
 const (
-	lbname = "localbuckets" // base name of the lbconfig file; not to confuse with config.Localbuckets mpath sub-directory
-	mpname = "mpaths"       // base name to persist ctx.mountpaths
+	lbname   = "localbuckets" // base name of the lbconfig file; not to confuse with config.Localbuckets mpath sub-directory
+	mpname   = "mpaths"       // base name to persist ctx.mountpaths
+	smapname = "smap.json"
 )
 
 //==============================
@@ -105,8 +104,10 @@ type timeoutconfig struct {
 }
 
 type proxyconfig struct {
-	Primary  proxycnf `json:"primary"`
-	Original proxycnf `json:"original"`
+	Primary                    proxycnf      `json:"primary"`
+	Original                   proxycnf      `json:"original"`
+	StartupConfirmationTimeStr string        `json:"startup_confirmation_time"`
+	StartupConfirmationTime    time.Duration `json:"-"` //
 }
 
 type proxycnf struct {
@@ -231,14 +232,9 @@ func initconfigparam() error {
 }
 
 func getConfig(fpath string) {
-	raw, err := ioutil.ReadFile(fpath)
+	err := localLoad(fpath, &ctx.config)
 	if err != nil {
-		glog.Errorf("Failed to read config %q, err: %v", fpath, err)
-		os.Exit(1)
-	}
-	err = json.Unmarshal(raw, &ctx.config)
-	if err != nil {
-		glog.Errorf("Failed to json-unmarshal config %q, err: %v", fpath, err)
+		glog.Errorf("Failed to load config %q, err: %v", fpath, err)
 		os.Exit(1)
 	}
 }
@@ -308,6 +304,9 @@ func validateconf() (err error) {
 	}
 	if ctx.config.Timeout.VoteRequest, err = time.ParseDuration(ctx.config.Timeout.VoteRequestStr); err != nil {
 		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", ctx.config.Timeout.VoteRequestStr, err)
+	}
+	if ctx.config.Proxy.StartupConfirmationTime, err = time.ParseDuration(ctx.config.Proxy.StartupConfirmationTimeStr); err != nil {
+		return fmt.Errorf("Bad Proxy startup_suspect_time format %s, err %v", ctx.config.Proxy.StartupConfirmationTimeStr, err)
 	}
 	return nil
 }

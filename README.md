@@ -353,12 +353,20 @@ The election process is as follows:
 - If the candidate receives a majority of affirmative responses it sends a confirmation message to all other targets and proxies and becomes the primary proxy.
 - Upon reception of the confirmation message, a recipient removes the previous primary proxy from their local Smap, and updates the primary proxy to the winning candidate.
 
+### Proxy Confirmation Process
+
+When a proxy starts up as primary, after a configurable period of time (config.Proxy.StartupConfirmationTime), it confirms whether or not it is the primary proxy. This allows a proxy to be rerun with the same command and environment variables, even if it should no longer be primary. The confirmation process is as follows:
+
+- If this proxy recieved any registrations, it is the primary proxy.
+- If not, it queries each proxy from the cluster map stored from the previous run to get the current primary proxy.
+- It registers with the first primary proxy found this way, and becomes non-primary.
+- If no primary proxy is found, it remains primary.
+
 ### Current Limitations
 
-- Whether or not a proxy starts as primary is determined by the existence of the DFCPRIMARYPROXY environment variable, the -proxyurl command line variable, and the ID in the config file (in that order of precendence). This means that if a primary proxy fails, if it is restarted with the same command and config file, it will restart as primary instead of attempting to join the cluster. As such, it will be cut off from the rest of the cluster.
 - The current primary proxy is determined at startup, through either the configuration file or the -proxyurl command line variable. This means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fail, and rejoin.
-- When the primary proxy fails and another proxy becomes the primary, if the original primary proxy becomes active again, there will be two proxies that think they are the primary. However, the original proxy will have a lower Smap version than the rest of the cluster, and so it will be treated as though it is no longer a part of the cluster.
 - DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
+- If multiple proxies restart as primary the same time, it is possible for one of them to register to the other one (when neither of them should remain primary), resulting in both proxies not rejoining the cluster.
 
 ### Tests
 

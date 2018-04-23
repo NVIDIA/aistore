@@ -33,8 +33,8 @@ func hrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 }
 
 func hrwProxyWithSkip(smap *Smap, idToSkip string) (pi *proxyInfo, errstr string) {
-	smap.Lock()
-	defer smap.Unlock()
+	smap.lock()
+	defer smap.unlock()
 	if smap.countProxies() == 0 {
 		errstr = "DFC cluster map is empty: no proxies"
 		return

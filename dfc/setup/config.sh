@@ -22,6 +22,7 @@
 		"vote_request":		"2s"
 	},
 	"proxyconfig": {
+		"startup_confirmation_time":	"30s",
 		"primary": {
 			"id":		"${PROXYID}",
 			"url": 		"${PROXYURL}",

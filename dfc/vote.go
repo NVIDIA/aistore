@@ -183,9 +183,9 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	}
 
 	vr := msg.Result
-	glog.Infof("%v recieved vote result: %v\n", h.si.DaemonID, vr)
+	glog.Infof("%v received vote result: %v\n", h.si.DaemonID, vr)
 
-	err = h.setPrimaryProxy(vr.Candidate, vr.Primary, false)
+	err = h.setPrimaryProxyLocked(vr.Candidate, vr.Primary, false)
 	if err != nil {
 		s := fmt.Sprintf("Error setting Primary Proxy: %v", err)
 		h.invalmsghdlr(w, r, s)
@@ -410,12 +410,13 @@ func (p *proxyrunner) updateSmapPrimaryProxy(proxyidToRemove string) *proxyInfo 
 	return psi
 }
 
+// Caller must lock smapLock
 func (p *proxyrunner) becomeNonPrimaryProxy() {
 	p.primary = false
-	p.smap.Lock()
-	defer p.smap.Unlock()
 	psi := p.smap.getProxy(p.si.DaemonID)
-	psi.Primary = false
+	if psi != nil {
+		psi.Primary = false
+	}
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
@@ -513,11 +514,25 @@ func (h *httprunner) voteOnProxy(candidate string) (bool, error) {
 	return hrwmax.DaemonID == proxyinfo.DaemonID, nil
 }
 
-// Sets the primary proxy to the proxy in the cluster map with the ID newPrimaryProxy.
-// Removes primaryToRemove from the cluster map, if primaryToRemove is provided.
-func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, prepare bool) error {
+func (h *httprunner) setPrimaryProxyAndSmap(smap *Smap) error {
+	smapLock.Lock()
+	defer smapLock.Unlock()
+	h.smap = smap
+	return h.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+}
+
+func (h *httprunner) setPrimaryProxyLocked(newPrimaryProxy, primaryToRemove string, prepare bool) error {
 	h.smap.lock()
 	defer h.smap.unlock()
+	err := h.setPrimaryProxy(newPrimaryProxy, primaryToRemove, prepare)
+	return err
+}
+
+// Sets the primary proxy to the proxy in the cluster map with the ID newPrimaryProxy.
+// Removes primaryToRemove from the cluster map, if primaryToRemove is provided.
+// Caller must lock smapLock
+func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, prepare bool) error {
+	glog.Infof("Set primary proxy: %v (prepare: %v)", newPrimaryProxy, prepare)
 
 	proxyinfo, ok := h.smap.Pmap[newPrimaryProxy]
 	if !ok {
@@ -539,10 +554,12 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 	h.smap.ProxySI = proxyinfo
 	ctx.config.Proxy.Primary.ID = proxyinfo.DaemonID
 	ctx.config.Proxy.Primary.URL = proxyinfo.DirectURL
-	err := writeConfigFile()
-	if err != nil {
-		glog.Errorf("Error writing config file: %v", err)
-	}
+	go func() {
+		err := writeConfigFile()
+		if err != nil {
+			glog.Errorf("Error writing config file: %v", err)
+		}
+	}()
 	return nil
 }
 

@@ -518,7 +518,7 @@ func parseRangeMsg(jsmap map[string]interface{}) (pm *RangeMsg, errstr string) {
 	if prefix, ok := v.(string); ok {
 		pm.Prefix = prefix
 	} else {
-		return pm, fmt.Sprintf("%s couldn't parse prefix (%v, %T)", v, v)
+		return pm, fmt.Sprintf("%s couldn't parse prefix (%v, %T)", s, v, v)
 	}
 
 	v, ok = jsmap["regex"]
@@ -528,7 +528,7 @@ func parseRangeMsg(jsmap map[string]interface{}) (pm *RangeMsg, errstr string) {
 	if regex, ok := v.(string); ok {
 		pm.Regex = regex
 	} else {
-		return pm, fmt.Sprintf("%s couldn't parse regex (%v, %T)", v, v)
+		return pm, fmt.Sprintf("%s couldn't parse regex (%v, %T)", s, v, v)
 	}
 
 	v, ok = jsmap["range"]
@@ -538,7 +538,7 @@ func parseRangeMsg(jsmap map[string]interface{}) (pm *RangeMsg, errstr string) {
 	if rng, ok := v.(string); ok {
 		pm.Range = rng
 	} else {
-		return pm, fmt.Sprintf("%s couldn't parse range (%v, %T)", v, v)
+		return pm, fmt.Sprintf("%s couldn't parse range (%v, %T)", s, v, v)
 	}
 	return
 }

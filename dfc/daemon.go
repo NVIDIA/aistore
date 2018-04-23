@@ -46,7 +46,6 @@ type cliVars struct {
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 // Smap contains id:daemonInfo pairs and related metadata
 type Smap struct {
-	sync.Mutex
 	Smap        map[string]*daemonInfo `json:"smap"` // daemonID -> daemonInfo
 	Pmap        map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
 	ProxySI     *proxyInfo             `json:"proxy_si"`
@@ -121,9 +120,10 @@ type gstopError struct {
 //
 //====================
 var (
-	build   string
-	ctx     = &daemon{}
-	clivars = &cliVars{}
+	build    string
+	ctx      = &daemon{}
+	clivars  = &cliVars{}
+	smapLock = sync.Mutex{}
 )
 
 //====================
@@ -185,11 +185,11 @@ func (m *Smap) getProxy(pid string) *proxyInfo {
 }
 
 func (m *Smap) lock() {
-	m.Lock()
+	smapLock.Lock()
 }
 
 func (m *Smap) unlock() {
-	m.Unlock()
+	smapLock.Unlock()
 }
 
 //====================
