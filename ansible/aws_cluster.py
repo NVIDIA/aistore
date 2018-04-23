@@ -37,9 +37,6 @@ def load_dfc_cluster(cluster, clients):
     dfc['targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Target*'})
     dfc['proxy'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Proxy*'})
     dfc['clients'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Client*'})
-    print len(dfc['clients'])
-    print clients
-    print type(clients) 
     if len(dfc['clients']) > clients:
         dfc['clients'] = dfc['clients'][:clients]
         logger.info("Considering reduced number of clients {}".format(len(dfc['clients'])))
