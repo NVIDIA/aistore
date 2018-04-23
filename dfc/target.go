@@ -46,7 +46,7 @@ type allfinfos struct {
 	rootLength   int
 	prefix       string
 	marker       string
-	markerDirs   []string
+	markerDir    string
 	needAtime    bool
 	needCtime    bool
 	needChkSum   bool
@@ -875,11 +875,11 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 	isLocal := t.islocalBucket(bucket)
 
 	// function to traverse one mountpoint
-	fn := func(fqn string) {
+	walkMpath := func(dir string) {
 		defer wg.Done()
 		r := &mresp{t.newFileWalk(bucket, msg), nil}
 
-		if _, err = os.Stat(fqn); err != nil {
+		if _, err = os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
 				r.err = err
 			}
@@ -889,9 +889,9 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 			return
 		}
 
-		r.infos.rootLength = len(fqn) + 1 // +1 for separator between bucket and filename
-		if err = filepath.Walk(fqn, r.infos.listwalkf); err != nil {
-			glog.Errorf("Failed to traverse path %q, err: %v", fqn, err)
+		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
+		if err = filepath.Walk(dir, r.infos.listwalkf); err != nil {
+			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 			r.err = err
 		}
 		ch <- r
@@ -903,14 +903,14 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 	// makes paging inconsistent
 	for mpath := range ctx.mountpaths.Available {
 		wg.Add(1)
-		localbucketfqn := ""
+		localdir := ""
 		if isLocal {
-			localbucketfqn = filepath.Join(makePathLocal(mpath), bucket)
+			localdir = filepath.Join(makePathLocal(mpath), bucket)
 		} else {
-			localbucketfqn = filepath.Join(makePathCloud(mpath), bucket)
+			localdir = filepath.Join(makePathCloud(mpath), bucket)
 		}
 
-		go fn(localbucketfqn)
+		go walkMpath(localdir)
 	}
 	wg.Wait()
 	close(ch)
@@ -1038,15 +1038,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 }
 
 func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
-	// Split a marker into separate directory list to make pagination
-	// more effective. All directories in the list are skipped by
-	// filepath.Walk. The last directory of the marker must be excluded
-	// from the list because the marker can point to the middle of it
-	markerDirs := make([]string, 0)
-	if msg.GetPageMarker != "" && strings.Contains(msg.GetPageMarker, "/") {
-		idx := strings.LastIndex(msg.GetPageMarker, "/")
-		markerDirs = strings.Split(msg.GetPageMarker[:idx], "/")
-		markerDirs = markerDirs[:len(markerDirs)-1]
+	// Marker is always a file name, so we need to strip filename from path
+	markerDir := ""
+	if msg.GetPageMarker != "" {
+		markerDir = filepath.Dir(msg.GetPageMarker)
 	}
 
 	// A small optimization: set boolean variables need* to avoid
@@ -1056,7 +1051,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
 		0,                 // rootLength
 		msg.GetPrefix,     // prefix
 		msg.GetPageMarker, // marker
-		markerDirs,        // markerDirs
+		markerDir,         // markerDir
 		strings.Contains(msg.GetProps, GetPropsAtime),    // needAtime
 		strings.Contains(msg.GetProps, GetPropsCtime),    // needCtime
 		strings.Contains(msg.GetProps, GetPropsChecksum), // needChkSum
@@ -1093,17 +1088,8 @@ func (ci *allfinfos) processDir(fqn string) error {
 		return filepath.SkipDir
 	}
 
-	if len(ci.markerDirs) != 0 {
-		dirs := strings.Split(relname, "/")
-		maxIdx := len(dirs)
-		if len(ci.markerDirs) < maxIdx {
-			maxIdx = len(ci.markerDirs)
-		}
-		for idx := 0; idx < maxIdx; idx++ {
-			if dirs[idx] < ci.markerDirs[idx] {
-				return filepath.SkipDir
-			}
-		}
+	if ci.markerDir != "" && relname < ci.markerDir {
+		return filepath.SkipDir
 	}
 
 	return nil
@@ -1120,16 +1106,6 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 	}
 
 	if ci.marker != "" && relname <= ci.marker {
-		return nil
-	}
-
-	si, errstr := hrwTarget(ci.bucket+"/"+relname, ci.t.smap)
-	if errstr != "" {
-		glog.Errorln(errstr)
-		return nil
-	}
-	if si.DaemonID != ci.t.si.DaemonID {
-		// this target is not responsible for returning this object
 		return nil
 	}
 
