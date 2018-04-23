@@ -53,6 +53,11 @@ func main() {
 		FileSystem: NewFS(url, tmpDir),
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
+			litmus := r.Header.Get("X-Litmus")
+			if len(litmus) > 29 {
+				litmus = litmus[:26] + "..."
+			}
+
 			switch r.Method {
 			case "COPY", "MOVE":
 				dst := ""
@@ -61,10 +66,10 @@ func main() {
 				}
 
 				o := r.Header.Get("Overwrite")
-				webdavLog(logLevelWebDAV, "%-15s: %-70s %-30s o=%-2s err = %v", r.Method, r.URL.Path, dst, o, err)
+				webdavLog(logLevelWebDAV, "%-30s%-15s: %-70s %-30s o=%-2s err = %v", litmus, r.Method, r.URL.Path, dst, o, err)
 
 			default:
-				webdavLog(logLevelWebDAV, "%-15s: %-70s err = %v", r.Method, r.URL.Path, err)
+				webdavLog(logLevelWebDAV, "%-30s%-15s: %-70s err = %v", litmus, r.Method, r.URL.Path, err)
 			}
 		},
 	}
