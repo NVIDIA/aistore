@@ -2,9 +2,9 @@
 set -o xtrace
 set -e
 
-cmd = "./startclient.sh "$@
+cmd="./startclient.sh "$@
 echo Running client cmd - $cmd
-parallel-ssh -t 0 -h inventory/clients.txt -i ./startclient.sh $@
+parallel-ssh -t 0 -h inventory/clients.txt -i $cmd
 
 clients_running=`parallel-ssh -h inventory/clients.txt -i "screen -ls client" | grep client | wc -l`
 sleep 20
