@@ -16,8 +16,8 @@ nbuckets=1
 while getopts ":b:p:d:m:x:t:n:" opt; do
     case $opt in
         b)
-            echo "Using bucket suffix $OPTARG"
             bucket=`hostname`$OPTARG
+            echo "Using bucket $bucket"
             ;;
         p)
             echo "Using pctput $OPTARG"
