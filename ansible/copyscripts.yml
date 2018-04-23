@@ -1,0 +1,17 @@
+---
+- hosts: all
+  gather_facts: no
+  tasks:
+    - copy:
+        src: "{{ playbook_dir }}/{{ item }}"
+        dest: /home/ubuntu
+        owner: ubuntu
+        group: ubuntu
+        mode: 0777
+      with_items:
+        - mountdfc.sh
+        - startproxy.sh
+        - startclient.sh
+        - starttarget.sh
+        - startprimaryproxy.sh
+        - enablestats.sh
