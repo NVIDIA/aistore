@@ -1613,22 +1613,23 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 }
 
 func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
+	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
 	jsmap, ok := msg.Value.(map[string]interface{})
 	if !ok {
-		t.invalmsghdlr(w, r, "Could not parse List/Range Message: ActionMsg.Value was not map[string]interface{}")
+		t.invalmsghdlr(w, r, "Unexpected ActionMsg.Value format"+detail)
 		return
 	}
 	if _, ok := jsmap["objnames"]; ok {
 		// Prefetch with List
-		if prefetchMsg, err := parseListMsg(jsmap); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		if prefetchMsg, errstr := parseListMsg(jsmap); errstr != "" {
+			t.invalmsghdlr(w, r, errstr+detail)
 		} else {
 			t.prefetchList(w, r, prefetchMsg)
 		}
 	} else {
 		// Prefetch with Range
-		if prefetchRangeMsg, err := parseRangeMsg(jsmap); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		if prefetchRangeMsg, errstr := parseRangeMsg(jsmap); errstr != "" {
+			t.invalmsghdlr(w, r, errstr+detail)
 		} else {
 			t.prefetchRange(w, r, prefetchRangeMsg)
 		}
@@ -1637,15 +1638,16 @@ func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg
 
 func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
 	evict := msg.Action == ActEvict
+	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
 	jsmap, ok := msg.Value.(map[string]interface{})
 	if !ok {
-		t.invalmsghdlr(w, r, "Could not parse List/Range Message: ActionMsg.Value was not map[string]interface{}")
+		t.invalmsghdlr(w, r, "deletefiles: invalid ActionMsg.Value format"+detail)
 		return
 	}
 	if _, ok := jsmap["objnames"]; ok {
 		// Delete with List
-		if deleteMsg, err := parseListMsg(jsmap); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		if deleteMsg, errstr := parseListMsg(jsmap); errstr != "" {
+			t.invalmsghdlr(w, r, errstr+detail)
 		} else if evict {
 			t.evictList(w, r, deleteMsg)
 		} else {
@@ -1653,8 +1655,8 @@ func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg A
 		}
 	} else {
 		// Delete with Range
-		if deleteMsg, err := parseRangeMsg(jsmap); err != nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Could not parse PrefetchMsg: %v", err))
+		if deleteMsg, errstr := parseRangeMsg(jsmap); errstr != "" {
+			t.invalmsghdlr(w, r, errstr+detail)
 		} else if evict {
 			t.evictRange(w, r, deleteMsg)
 		} else {

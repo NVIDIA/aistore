@@ -127,7 +127,7 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 type listf func(objects []string, bucket string, deadline time.Duration, done chan struct{}) error
 type rangef func(bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error
 
-func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg ListMsg, operation listf) {
+func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg *ListMsg, operation listf) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
@@ -165,7 +165,7 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 	}
 }
 
-func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg RangeMsg, operation rangef) {
+func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg *RangeMsg, operation rangef) {
 	var err error
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
@@ -204,19 +204,19 @@ func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, ra
 //
 //=============
 
-func (t *targetrunner) deleteList(w http.ResponseWriter, r *http.Request, deleteMsg ListMsg) {
+func (t *targetrunner) deleteList(w http.ResponseWriter, r *http.Request, deleteMsg *ListMsg) {
 	t.listOperation(w, r, deleteMsg, t.doListDelete)
 }
 
-func (t *targetrunner) evictList(w http.ResponseWriter, r *http.Request, evictMsg ListMsg) {
+func (t *targetrunner) evictList(w http.ResponseWriter, r *http.Request, evictMsg *ListMsg) {
 	t.listOperation(w, r, evictMsg, t.doListEvict)
 }
 
-func (t *targetrunner) deleteRange(w http.ResponseWriter, r *http.Request, deleteRangeMsg RangeMsg) {
+func (t *targetrunner) deleteRange(w http.ResponseWriter, r *http.Request, deleteRangeMsg *RangeMsg) {
 	t.rangeOperation(w, r, deleteRangeMsg, t.doRangeDelete)
 }
 
-func (t *targetrunner) evictRange(w http.ResponseWriter, r *http.Request, evictMsg RangeMsg) {
+func (t *targetrunner) evictRange(w http.ResponseWriter, r *http.Request, evictMsg *RangeMsg) {
 	t.rangeOperation(w, r, evictMsg, t.doRangeEvict)
 }
 
@@ -320,11 +320,11 @@ func (xact *xactDeleteEvict) tostring() string {
 //
 //=========
 
-func (t *targetrunner) prefetchList(w http.ResponseWriter, r *http.Request, prefetchMsg ListMsg) {
+func (t *targetrunner) prefetchList(w http.ResponseWriter, r *http.Request, prefetchMsg *ListMsg) {
 	t.listOperation(w, r, prefetchMsg, t.addPrefetchList)
 }
 
-func (t *targetrunner) prefetchRange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg RangeMsg) {
+func (t *targetrunner) prefetchRange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg *RangeMsg) {
 	t.rangeOperation(w, r, prefetchRangeMsg, t.addPrefetchRange)
 }
 
@@ -458,88 +458,89 @@ func (xact *xactPrefetch) tostring() string {
 //
 //================
 
-func parseRangeListMsgBase(jsmap map[string]interface{}) (RangeListMsgBase, error) {
-	pmb := RangeListMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
+func parseRangeListMsgBase(jsmap map[string]interface{}) (pmb *RangeListMsgBase, errstr string) {
+	const s = "Error parsing PrefetchMsgBase:"
+	pmb = &RangeListMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
 	if v, ok := jsmap["deadline"]; ok {
 		deadline, err := time.ParseDuration(v.(string))
 		if err != nil {
-			return pmb, fmt.Errorf("Error parsing PrefetchMsgBase Deadline: %v", err)
+			return pmb, fmt.Sprintf("%s (Deadline: %v, %T, %v)", s, v, v, err)
 		}
 		pmb.Deadline = deadline
 	}
 	if v, ok := jsmap["wait"]; ok {
 		wait, ok := v.(bool)
 		if !ok {
-			return pmb, fmt.Errorf("Error parsing PrefetchMsgBase Wait: Not a boolean")
+			return pmb, fmt.Sprintf("%s (Wait: %v, %T)", s, v, v)
 		}
 		pmb.Wait = wait
 	}
-	return pmb, nil
+	return
 }
 
-func parseListMsg(jsmap map[string]interface{}) (ListMsg, error) {
-	pm := ListMsg{}
-	pmb, err := parseRangeListMsgBase(jsmap)
-	if err != nil {
-		return pm, err
+func parseListMsg(jsmap map[string]interface{}) (pm *ListMsg, errstr string) {
+	const s = "Error parsing PrefetchMsg: "
+	pmb, errstr := parseRangeListMsgBase(jsmap)
+	if errstr != "" {
+		return
 	}
-	pm.RangeListMsgBase = pmb
+	pm = &ListMsg{RangeListMsgBase: *pmb}
 	v, ok := jsmap["objnames"]
 	if !ok {
-		return pm, fmt.Errorf("Error parsing PrefetchMsg: No objnames field")
+		return pm, s + "No objnames field"
 	}
 	if objnames, ok := v.([]interface{}); ok {
 		pm.Objnames = make([]string, 0)
 		for _, obj := range objnames {
 			objname, ok := obj.(string)
 			if !ok {
-				return pm, fmt.Errorf("Error parsing PrefetchMsg: Non-string Object Name")
+				return pm, s + "Non-string Object Name"
 			}
 			pm.Objnames = append(pm.Objnames, objname)
 		}
 	} else {
-		return pm, fmt.Errorf("Error parsing PrefetchMsg: Couldn't parse objnames")
+		return pm, s + "Couldn't parse objnames"
 	}
-	return pm, nil
+	return
 }
 
-func parseRangeMsg(jsmap map[string]interface{}) (RangeMsg, error) {
-	pm := RangeMsg{}
-	pmb, err := parseRangeListMsgBase(jsmap)
-	if err != nil {
-		return pm, err
+func parseRangeMsg(jsmap map[string]interface{}) (pm *RangeMsg, errstr string) {
+	const s = "Error parsing PrefetchRangeMsg:"
+	pmb, errstr := parseRangeListMsgBase(jsmap)
+	if errstr != "" {
+		return
 	}
-	pm.RangeListMsgBase = pmb
+	pm = &RangeMsg{RangeListMsgBase: *pmb}
 	v, ok := jsmap["prefix"]
 	if !ok {
-		return pm, fmt.Errorf("Error parsing PrefetchRangeMsg: no prefix field")
+		return pm, s + " no prefix"
 	}
 	if prefix, ok := v.(string); ok {
 		pm.Prefix = prefix
 	} else {
-		return pm, fmt.Errorf("Error parsing PrefetchMsg: couldn't parse prefix")
+		return pm, fmt.Sprintf("%s couldn't parse prefix (%v, %T)", v, v)
 	}
 
 	v, ok = jsmap["regex"]
 	if !ok {
-		return pm, fmt.Errorf("Error parsing PrefetchRangeMsg: no regex field")
+		return pm, s + " no regex"
 	}
 	if regex, ok := v.(string); ok {
 		pm.Regex = regex
 	} else {
-		return pm, fmt.Errorf("Error parsing PrefetchMsg: couldn't parse regex")
+		return pm, fmt.Sprintf("%s couldn't parse regex (%v, %T)", v, v)
 	}
 
 	v, ok = jsmap["range"]
 	if !ok {
-		return pm, fmt.Errorf("Error parsing PrefetchRangeMsg: no range field")
+		return pm, s + " no range"
 	}
 	if rng, ok := v.(string); ok {
 		pm.Range = rng
 	} else {
-		return pm, fmt.Errorf("Error parsing PrefetchMsg: couldn't parse range")
+		return pm, fmt.Sprintf("%s couldn't parse range (%v, %T)", v, v)
 	}
-	return pm, nil
+	return
 }
 
 func parseRange(rangestr string) (min, max int64, err error) {
