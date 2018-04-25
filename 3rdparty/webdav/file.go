@@ -822,10 +822,7 @@ func (w *walker) walk(item walkItem) error {
 
 	for _, fileInfo := range fileInfos {
 		filename := path.Join(item.dir, fileInfo.Name())
-		fileInfo, err := w.fs.Stat(w.ctx, filename)
-		if err == nil {
-			w.enqueue(walkItem{dir: filename, fi: fileInfo, depth: item.depth + 1})
-		}
+		w.enqueue(walkItem{dir: filename, fi: fileInfo, depth: item.depth + 1})
 	}
 
 	return nil
