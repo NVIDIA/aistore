@@ -43,6 +43,7 @@ type FileSystem interface {
 	RemoveAll(ctx context.Context, name string) error
 	Rename(ctx context.Context, oldName, newName string) error
 	Stat(ctx context.Context, name string) (os.FileInfo, error)
+	SupportDeadProp() bool
 }
 
 // A File is returned by a FileSystem's OpenFile method and can be served by a
@@ -126,6 +127,10 @@ func (d Dir) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
 	}
 	return os.Stat(name)
+}
+
+func (d Dir) SupportDeadProp() bool {
+	return false
 }
 
 // NewMemFS returns a new in-memory FileSystem implementation.
@@ -399,6 +404,10 @@ func (fs *memFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 		return n.stat(path.Base(name)), nil
 	}
 	return nil, os.ErrNotExist
+}
+
+func (fs *memFS) SupportDeadProp() bool {
+	return true
 }
 
 // A memFSNode represents a single entry in the in-memory filesystem and also

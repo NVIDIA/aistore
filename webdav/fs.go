@@ -560,6 +560,11 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 	return nil, err
 }
 
+// SupportDeadProp returns false to indicate FileSystem doesn't support dead properties
+func (fs *FileSystem) SupportDeadProp() bool {
+	return false
+}
+
 // newFile is a wrapper of the generic name parser, it does extra check and populate more fields in 'File' after parsing the resource name.
 func (fs *FileSystem) newFile(name string) (*File, error) {
 	f, err := parseResource(name)

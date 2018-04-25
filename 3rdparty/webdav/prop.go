@@ -166,23 +166,29 @@ var liveProps = map[xml.Name]struct {
 //
 // Each Propstat has a unique status and each property name will only be part
 // of one Propstat element.
-func props(ctx context.Context, fs FileSystem, ls LockSystem, name string, pnames []xml.Name) ([]Propstat, error) {
-	f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	isDir := fi.IsDir()
+//
+// DFC Note: passing both name and fi is with performance in mind, the two provide overlapping
+//           information, this is just to save a pair of file open and close calls in case dead
+//           property is not supported.
+func props(ctx context.Context, fs FileSystem, ls LockSystem, name string, fi os.FileInfo,
+	pnames []xml.Name) ([]Propstat, error) {
+	var (
+		deadProps map[xml.Name]Property
+		isDir     = fi.IsDir()
+	)
 
-	var deadProps map[xml.Name]Property
-	if dph, ok := f.(DeadPropsHolder); ok {
-		deadProps, err = dph.DeadProps()
+	if fs.SupportDeadProp() {
+		f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0)
 		if err != nil {
 			return nil, err
+		}
+		defer f.Close()
+
+		if dph, ok := f.(DeadPropsHolder); ok {
+			deadProps, err = dph.DeadProps()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -254,7 +260,8 @@ func propnames(ctx context.Context, fs FileSystem, ls LockSystem, name string) (
 // returned if they are named in 'include'.
 //
 // See http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
-func allprop(ctx context.Context, fs FileSystem, ls LockSystem, name string, include []xml.Name) ([]Propstat, error) {
+func allprop(ctx context.Context, fs FileSystem, ls LockSystem, name string, fi os.FileInfo,
+	include []xml.Name) ([]Propstat, error) {
 	pnames, err := propnames(ctx, fs, ls, name)
 	if err != nil {
 		return nil, err
@@ -269,7 +276,7 @@ func allprop(ctx context.Context, fs FileSystem, ls LockSystem, name string, inc
 			pnames = append(pnames, pn)
 		}
 	}
-	return props(ctx, fs, ls, name, pnames)
+	return props(ctx, fs, ls, name, fi, pnames)
 }
 
 // Patch patches the properties of resource name. The return values are
@@ -305,26 +312,30 @@ loop:
 		return makePropstats(pstatForbidden, pstatFailedDep), nil
 	}
 
-	f, err := fs.OpenFile(ctx, name, os.O_RDWR, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	if dph, ok := f.(DeadPropsHolder); ok {
-		ret, err := dph.Patch(patches)
+	if fs.SupportDeadProp() {
+		f, err := fs.OpenFile(ctx, name, os.O_RDWR, 0)
 		if err != nil {
 			return nil, err
 		}
-		// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat says that
-		// "The contents of the prop XML element must only list the names of
-		// properties to which the result in the status element applies."
-		for _, pstat := range ret {
-			for i, p := range pstat.Props {
-				pstat.Props[i] = Property{XMLName: p.XMLName}
+		defer f.Close()
+
+		if dph, ok := f.(DeadPropsHolder); ok {
+			ret, err := dph.Patch(patches)
+			if err != nil {
+				return nil, err
 			}
+			// http://www.webdav.org/specs/rfc4918.html#ELEMENT_propstat says that
+			// "The contents of the prop XML element must only list the names of
+			// properties to which the result in the status element applies."
+			for _, pstat := range ret {
+				for i, p := range pstat.Props {
+					pstat.Props[i] = Property{XMLName: p.XMLName}
+				}
+			}
+			return ret, nil
 		}
-		return ret, nil
 	}
+
 	// The file doesn't implement the optional DeadPropsHolder interface, so
 	// all patches are forbidden.
 	pstat := Propstat{Status: http.StatusForbidden}
@@ -333,6 +344,7 @@ loop:
 			pstat.Props = append(pstat.Props, Property{XMLName: p.XMLName})
 		}
 	}
+
 	return []Propstat{pstat}, nil
 }
 
@@ -379,7 +391,7 @@ func findLastModified(ctx context.Context, fs FileSystem, ls LockSystem, name st
 	return fi.ModTime().Format(http.TimeFormat), nil
 }
 
-func findContentType(ctx context.Context, fs FileSystem, ls LockSystem, name string, fi os.FileInfo) (string, error) {
+func findContentType(ctx context.Context, fs FileSystem, ls LockSystem, name string, _ os.FileInfo) (string, error) {
 	f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0)
 	if err != nil {
 		return "", err
