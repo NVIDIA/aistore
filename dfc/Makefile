@@ -11,6 +11,7 @@ build:
 
 kill:
 	@pkill -SIGINT dfc 2>/dev/null; sleep 1; true
+	@pkill authn 2>/dev/null; sleep 1; true
 
 # delete only caches, not logs
 rmcache:

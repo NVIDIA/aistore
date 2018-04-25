@@ -73,6 +73,7 @@ type dfconfig struct {
 	Net          netconfig         `json:"netconfig"`
 	FSKeeper     fskeeperconf      `json:"fskeeper"`
 	Experimental experimental      `json:"experimental"`
+	Auth         authconf          `json:"auth"`
 	H2c          bool              `json:"h2c"`
 }
 
@@ -186,6 +187,11 @@ type experimental struct {
 	MaxMemMB int    `json:"max_mem_mb"` // max memory size for the "memory" option - FIXME: niy
 }
 
+type authconf struct {
+	Secret  string `json:"secret"`
+	Enabled bool   `json:"enabled"`
+}
+
 //==============================
 //
 // config functions
@@ -238,7 +244,7 @@ func initconfigparam() error {
 }
 
 func getConfig(fpath string) {
-	err := localLoad(fpath, &ctx.config)
+	err := LocalLoad(fpath, &ctx.config)
 	if err != nil {
 		glog.Errorf("Failed to load config %q, err: %v", fpath, err)
 		os.Exit(1)
@@ -334,5 +340,5 @@ func setloglevel(loglevel string) (err error) {
 }
 
 func writeConfigFile() error {
-	return localSave(clivars.conffile, ctx.config)
+	return LocalSave(clivars.conffile, ctx.config)
 }

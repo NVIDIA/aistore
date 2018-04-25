@@ -358,7 +358,7 @@ func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
 // local (config) save and restore
 //
 //===========================================================================
-func localSave(pathname string, v interface{}) error {
+func LocalSave(pathname string, v interface{}) error {
 	tmp := pathname + ".tmp"
 	file, err := os.Create(tmp)
 	if err != nil {
@@ -385,7 +385,7 @@ func localSave(pathname string, v interface{}) error {
 	return err
 }
 
-func localLoad(pathname string, v interface{}) (err error) {
+func LocalLoad(pathname string, v interface{}) (err error) {
 	file, err := os.Open(pathname)
 	if err != nil {
 		return

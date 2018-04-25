@@ -21,6 +21,11 @@ PROXYURL="http://localhost:8080"
 PORT=8079
 LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
 LOGROOT="/tmp/dfc"
+#### Authentication setup #########
+SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"
+AUTHENABLED="${AUTHENABLED:-false}"
+AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
+AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -113,6 +118,11 @@ do
 	LOGDIR="$LOGROOT/$c/log"
 	source $DIR/config.sh
 done
+# conf file for authn
+CONFFILE="$CONFDIR/authn.json"
+LOGDIR="$LOGROOT/authn/log"
+source $DIR/authn.sh
+
 
 # -logtostderr=false 		# Logs are written to standard error
 # -alsologtostderr=false 	# Logs are written to standard error and files
@@ -128,6 +138,11 @@ else
 	rm $LOGROOT/*.cov
 	go test . -c -run=TestCoverage -v -o $EXE -cover
 fi
+if [ $? -ne 0 ]; then
+	exit 1
+fi
+# build authn
+go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" ../authn
 if [ $? -ne 0 ]; then
 	exit 1
 fi
@@ -166,5 +181,13 @@ do
 		{ set +x; } 2>/dev/null
 	fi
 done
+
+if [[ $AUTHENABLED = "true" ]]; then
+	CONFFILE="$CONFDIR/authn.json"
+	set -x
+	$GOPATH/bin/authn -config=$CONFFILE &
+	{ set +x; } 2>/dev/null
+fi
+
 sleep 2
 echo done

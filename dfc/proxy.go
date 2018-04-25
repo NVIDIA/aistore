@@ -30,6 +30,7 @@ import (
 const (
 	syncmapldelay = time.Second * 3
 	syncmapsdelay = time.Second * 1
+	tokenStart    = "Bearer"
 )
 
 // Keeps a target response when doing parallel requests to all targets
@@ -48,6 +49,14 @@ type localFilePage struct {
 	marker  string
 }
 
+func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
+	for _, w := range wraps {
+		h = w(h)
+	}
+
+	return h
+}
+
 //===========================================================================
 //
 // proxy runner
@@ -64,6 +73,7 @@ type proxyrunner struct {
 	syncmapinp  int64
 	primary     bool
 	statsdC     statsd.Client
+	authn       *authManager
 }
 
 // start proxy runner
@@ -76,10 +86,10 @@ func (p *proxyrunner) run() error {
 	p.lbmap = &lbmap{LBmap: make(map[string]string)}
 	lbpathname := filepath.Join(p.confdir, lbname)
 	p.lbmap.lock()
-	if localLoad(lbpathname, p.lbmap) != nil {
+	if LocalLoad(lbpathname, p.lbmap) != nil {
 		// create empty
 		p.lbmap.Version = 1
-		if err := localSave(lbpathname, p.lbmap); err != nil {
+		if err := LocalSave(lbpathname, p.lbmap); err != nil {
 			glog.Fatalf("FATAL: cannot store localbucket config, err: %v", err)
 		}
 	}
@@ -122,7 +132,7 @@ func (p *proxyrunner) run() error {
 			smappathname = filepath.Join(instancedir, smapname)
 		}
 		p.hintsmap = &Smap{Smap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
-		if err := localLoad(smappathname, p.hintsmap); err != nil && !os.IsNotExist(err) {
+		if err := LocalLoad(smappathname, p.hintsmap); err != nil && !os.IsNotExist(err) {
 			glog.Warningf("Failed to load existing hint smap: %v", err)
 		}
 		p.smap.Smap = make(map[string]*daemonInfo, 8)
@@ -156,14 +166,21 @@ func (p *proxyrunner) run() error {
 	//
 	// REST API: register proxy handlers and start listening
 	//
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", p.buckethdlr)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", p.objecthdlr)
+	if ctx.config.Auth.Enabled {
+		p.authn = &authManager{}
+		p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", wrapHandler(p.buckethdlr, p.checkHTTPAuth))
+		p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", wrapHandler(p.objecthdlr, p.checkHTTPAuth))
+	} else {
+		p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", p.buckethdlr)
+		p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", p.objecthdlr)
+	}
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", p.daemonhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster+"/", p.clusterhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", p.votehdlr)
+	p.httprunner.registerhdlr("/"+Rversion+"/"+Rtokens, p.tokenhdlr)
 	p.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Proxy %s is ready, primary=%t", p.si.DaemonID, p.primary)
 	glog.Flush()
@@ -1134,7 +1151,7 @@ func (p *proxyrunner) deleteLocalBucket(w http.ResponseWriter, r *http.Request, 
 // synclbmap requires the caller to lock p.lbmap
 func (p *proxyrunner) synclbmap(w http.ResponseWriter, r *http.Request) {
 	lbpathname := filepath.Join(p.confdir, lbname)
-	if err := localSave(lbpathname, p.lbmap); err != nil {
+	if err := LocalSave(lbpathname, p.lbmap); err != nil {
 		s := fmt.Sprintf("Failed to store localbucket config %s, err: %v", lbpathname, err)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -1149,7 +1166,7 @@ func (p *proxyrunner) syncsmap(w http.ResponseWriter, r *http.Request, newtarget
 		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
 		smappathname = filepath.Join(instancedir, smapname)
 	}
-	if err := localSave(smappathname, p.smap); err != nil {
+	if err := LocalSave(smappathname, p.smap); err != nil {
 		s := fmt.Sprintf("Failed to store smap %s, err : %v", smappathname, err)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -1427,7 +1444,7 @@ func (p *proxyrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, ap
 		return
 	}
 	lbpathname := filepath.Join(p.confdir, lbname)
-	if err := localSave(lbpathname, p.lbmap); err != nil {
+	if err := LocalSave(lbpathname, p.lbmap); err != nil {
 		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
 	}
 }
@@ -1547,6 +1564,16 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		p.httpcluput(w, r)
 		glog.Flush()
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+// handler for: "/"+Rversion+"/"+Rtokens
+func (p *proxyrunner) tokenhdlr(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		p.httptokenpost(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -2048,4 +2075,83 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 		}
 	}
 	wg.Wait()
+}
+
+// update list of valid tokens
+func (p *proxyrunner) httptokenpost(w http.ResponseWriter, r *http.Request) {
+	var (
+		tokenList = &TokenList{}
+	)
+
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
+		return
+	}
+
+	if err := p.readJSON(w, r, tokenList); err != nil {
+		s := fmt.Sprintf("Invalid token list: %v", err)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	newAuth, err := newAuthList(tokenList)
+	if err != nil {
+		s := fmt.Sprintf("Invalid token list: %v", err)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	p.authn.Lock()
+	defer p.authn.Unlock()
+	p.authn.tokens = newAuth
+}
+
+// Read a token from request header and validates it
+// Header format:
+//		'Authorization: Bearer <token>'
+func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
+	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(s) != 2 || s[0] != tokenStart {
+		return nil, fmt.Errorf("Invalid request")
+	}
+
+	if p.authn == nil {
+		return nil, fmt.Errorf("Invalid credentials")
+	}
+
+	auth, err := p.authn.validateToken(s[1])
+	if err != nil {
+		glog.Errorf("Invalid token: %v", err)
+		return nil, fmt.Errorf("Invalid token")
+	}
+
+	return auth, nil
+}
+
+// A wrapper to check any request before delegating the request to real handler
+// If authentication is disabled, it does nothing.
+// If authentication is enabled, it looks for token in request header and
+// makes sure that it is valid
+func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
+	wrappedFunc := func(w http.ResponseWriter, r *http.Request) {
+		var (
+			auth *authRec
+			err  error
+		)
+
+		if ctx.config.Auth.Enabled {
+			if auth, err = p.validateToken(r); err != nil {
+				glog.Error(err)
+				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
+				return
+			}
+			if glog.V(3) {
+				glog.Infof("Logged as %s", auth.userID)
+			}
+		}
+
+		h.ServeHTTP(w, r)
+	}
+
+	return wrappedFunc
 }

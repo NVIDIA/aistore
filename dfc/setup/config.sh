@@ -86,6 +86,10 @@ $FSPATHS
 		"ack_put":		"disk",
 		"max_mem_mb":		16
 	},
+	"auth": {
+		"secret": "$SECRETKEY",
+		"enabled": $AUTHENABLED
+	},
 	"h2c": 				false
 }
 EOL

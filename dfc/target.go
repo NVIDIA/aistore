@@ -2575,7 +2575,7 @@ func (t *targetrunner) startupMpaths() {
 		old     = &mountedFS{}
 	)
 	old.Available, old.Offline = make(map[string]*mountPath), make(map[string]*mountPath)
-	if err := localLoad(mpathconfigfqn, old); err != nil {
+	if err := LocalLoad(mpathconfigfqn, old); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
@@ -2600,7 +2600,7 @@ func (t *targetrunner) startupMpaths() {
 		}
 	}
 	// persist
-	if err := localSave(mpathconfigfqn, ctx.mountpaths); err != nil {
+	if err := LocalSave(mpathconfigfqn, ctx.mountpaths); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

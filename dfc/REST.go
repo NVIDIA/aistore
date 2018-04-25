@@ -192,4 +192,5 @@ const (
 	Rproxy     = "proxy"
 	Rvoteres   = "result"
 	Rvoteinit  = "init"
+	Rtokens    = "tokens"
 )
