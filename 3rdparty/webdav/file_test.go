@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -1118,7 +1119,11 @@ func TestWalkFS(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: cannot create test filesystem: %v", tc.desc, err)
 		}
-		var got []string
+		var (
+			got   []string
+			mutex sync.Mutex
+		)
+
 		traceFn := func(path string, info os.FileInfo, err error) error {
 			if tc.walkFn != nil {
 				err = tc.walkFn(path, info, err)
@@ -1126,7 +1131,10 @@ func TestWalkFS(t *testing.T) {
 					return err
 				}
 			}
+
+			mutex.Lock()
 			got = append(got, path)
+			mutex.Unlock()
 			return nil
 		}
 		fi, err := fs.Stat(ctx, tc.startAt)

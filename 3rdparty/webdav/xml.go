@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	// As of https://go-review.googlesource.com/#/c/12772/ which was submitted
@@ -313,8 +314,9 @@ type multistatusWriter struct {
 	// written.
 	responseDescription string
 
-	w   http.ResponseWriter
-	enc *ixml.Encoder
+	w     http.ResponseWriter
+	enc   *ixml.Encoder
+	mutex sync.Mutex
 }
 
 // Write validates and emits a DAV response as part of a multistatus response
@@ -326,6 +328,9 @@ type multistatusWriter struct {
 // of r with a multistatus tag. Callers must call close after the last response
 // has been written.
 func (w *multistatusWriter) write(r *response) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
 	switch len(r.Href) {
 	case 0:
 		return errInvalidResponse
@@ -352,6 +357,7 @@ func (w *multistatusWriter) writeHeader() error {
 	if w.enc != nil {
 		return nil
 	}
+
 	w.w.Header().Add("Content-Type", "text/xml; charset=utf-8")
 	w.w.WriteHeader(StatusMulti)
 	_, err := fmt.Fprintf(w.w, `<?xml version="1.0" encoding="UTF-8"?>`)
@@ -376,6 +382,9 @@ func (w *multistatusWriter) writeHeader() error {
 // return value and field enc of w are nil, then no multistatus response has
 // been written.
 func (w *multistatusWriter) close() error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
 	if w.enc == nil {
 		return nil
 	}

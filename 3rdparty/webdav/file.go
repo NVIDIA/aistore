@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -753,53 +754,157 @@ func copyFiles(ctx context.Context, fs FileSystem, src, dst string, overwrite bo
 	return http.StatusNoContent, nil
 }
 
+// parallel FS walker
+// Note: Copied idea from golang/tools/internal/fastwalk
+type walker struct {
+	ctx   context.Context
+	fs    FileSystem
+	fn    func(path string, fi os.FileInfo, err error) error
+	depth int
+
+	donec    chan struct{}
+	workc    chan walkItem
+	enqueuec chan walkItem
+	resc     chan error
+}
+
+func (w *walker) doWork(wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case <-w.donec:
+			return
+		case item := <-w.workc:
+			select {
+			case <-w.donec:
+				return
+			case w.resc <- w.walk(item):
+			}
+		}
+	}
+}
+
+func (w *walker) enqueue(item walkItem) {
+	select {
+	case w.enqueuec <- item:
+	case <-w.donec:
+	}
+}
+
+func (w *walker) walk(item walkItem) error {
+	err := w.fn(item.dir, item.fi, nil)
+	if err != nil {
+		if item.fi.IsDir() && err == filepath.SkipDir {
+			return nil
+		}
+
+		return err
+	}
+
+	if !item.fi.IsDir() {
+		return nil
+	}
+
+	if w.depth != infiniteDepth && item.depth >= w.depth {
+		return nil
+	}
+
+	f, err := w.fs.OpenFile(w.ctx, item.dir, os.O_RDONLY, 0)
+	if err != nil {
+		return w.fn(item.dir, item.fi, err)
+	}
+
+	fileInfos, err := f.Readdir(0)
+	f.Close()
+	if err != nil {
+		return w.fn(item.dir, item.fi, err)
+	}
+
+	for _, fileInfo := range fileInfos {
+		filename := path.Join(item.dir, fileInfo.Name())
+		fileInfo, err := w.fs.Stat(w.ctx, filename)
+		if err == nil {
+			w.enqueue(walkItem{dir: filename, fi: fileInfo, depth: item.depth + 1})
+		}
+	}
+
+	return nil
+}
+
+type walkItem struct {
+	dir   string
+	fi    os.FileInfo
+	depth int
+}
+
 // walkFS traverses filesystem fs starting at name up to depth levels.
 //
 // Allowed values for depth are 0, 1 or infiniteDepth. For each visited node,
 // walkFS calls walkFn. If a visited file system node is a directory and
 // walkFn returns filepath.SkipDir, walkFS will skip traversal of this node.
 func walkFS(ctx context.Context, fs FileSystem, depth int, name string, info os.FileInfo, walkFn filepath.WalkFunc) error {
-	// This implementation is based on Walk's code in the standard path/filepath package.
-	err := walkFn(name, info, nil)
-	if err != nil {
-		if info.IsDir() && err == filepath.SkipDir {
-			return nil
+	numWorkers := runtime.NumCPU()
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	w := &walker{
+		ctx:      ctx,
+		fs:       fs,
+		fn:       walkFn,
+		depth:    depth,
+		enqueuec: make(chan walkItem, numWorkers),
+		workc:    make(chan walkItem, numWorkers),
+		donec:    make(chan struct{}),
+		resc:     make(chan error, numWorkers),
+	}
+	defer close(w.donec)
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go w.doWork(&wg)
+	}
+
+	// start from the root
+	todo := []walkItem{{dir: name, fi: info, depth: 0}}
+	out := 0
+
+	for {
+		workc := w.workc
+		var workItem walkItem
+
+		if len(todo) == 0 {
+			workc = nil
+		} else {
+			workItem = todo[len(todo)-1]
 		}
-		return err
-	}
-	if !info.IsDir() || depth == 0 {
-		return nil
-	}
-	if depth == 1 {
-		depth = 0
-	}
 
-	// Read directory names.
-	f, err := fs.OpenFile(ctx, name, os.O_RDONLY, 0)
-	if err != nil {
-		return walkFn(name, info, err)
-	}
-	fileInfos, err := f.Readdir(0)
-	f.Close()
-	if err != nil {
-		return walkFn(name, info, err)
-	}
-
-	for _, fileInfo := range fileInfos {
-		filename := path.Join(name, fileInfo.Name())
-		fileInfo, err := fs.Stat(ctx, filename)
-		if err != nil {
-			if err := walkFn(filename, fileInfo, err); err != nil && err != filepath.SkipDir {
+		select {
+		case workc <- workItem:
+			todo = todo[:len(todo)-1]
+			out++
+		case item := <-w.enqueuec:
+			todo = append(todo, item)
+		case err := <-w.resc:
+			out--
+			if err != nil {
 				return err
 			}
-		} else {
-			err = walkFS(ctx, fs, depth, filename, fileInfo, walkFn)
-			if err != nil {
-				if !fileInfo.IsDir() || err != filepath.SkipDir {
-					return err
+
+			if out == 0 && len(todo) == 0 {
+				// It's safe to quit here, as long as the buffered
+				// enqueue channel isn't also readable, which might
+				// happen if the worker sends both another unit of
+				// work and its result before the other select was
+				// scheduled and both w.resc and w.enqueuec were
+				// readable.
+				select {
+				case item := <-w.enqueuec:
+					todo = append(todo, item)
+				default:
+					return nil
 				}
 			}
 		}
 	}
-	return nil
 }
