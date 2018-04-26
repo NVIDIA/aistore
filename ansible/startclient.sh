@@ -11,6 +11,7 @@ minsize=8192
 maxsize=8192
 threads=64
 nbuckets=1
+cleanup='false'
 
 # Parse args
 while getopts ":b:p:d:m:x:t:n:" opt; do
@@ -43,6 +44,10 @@ while getopts ":b:p:d:m:x:t:n:" opt; do
             echo "Using number of buckets $OPTARG"
             nbuckets=$OPTARG
             ;;
+        c)
+            echo "Using cleanup $OPTARG"
+            cleanup=$OPTARG
+            ;;
 
         \?)
             echo "Invalid option: -$OPTARG"
@@ -58,7 +63,7 @@ done
 source /etc/profile.d/dfcpaths.sh
 cd $DFCSRC/../cmd/dfcloader
 sudo rm -rf screenlog.0
-screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
+screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=$cleanup -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
 
 echo "started dfcloader, wait for screnlog file to show up with timeout of 2min"
 x=0
