@@ -1,6 +1,5 @@
 ---
 - hosts: all 
-  become: true
   gather_facts: no
   tasks:
     - copy:
