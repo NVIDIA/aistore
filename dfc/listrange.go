@@ -371,7 +371,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	//
 	// NOTE: lockless
 	//
-	if coldget, _, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
+	if coldget, _, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
 		glog.Errorln(errstr)
 		return
 	}

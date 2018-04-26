@@ -10,6 +10,9 @@ package dfc
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -41,6 +44,7 @@ type xactRebalance struct {
 	xactBase
 	curversion   int64
 	targetrunner *targetrunner
+	aborted      bool
 }
 
 type xactLRU struct {
@@ -173,6 +177,35 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 	xreb.targetrunner = t
 	q.add(xreb)
 	return xreb
+}
+
+// persistent mark indicating rebalancing in progress
+func (q *xactInProgress) rebalanceInProgress() (pmarker string) {
+	pmarker = filepath.Join(ctx.config.Confdir, rebinpname)
+	if ctx.config.TestFSP.Instance > 0 {
+		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
+		pmarker = filepath.Join(instancedir, mpname)
+	}
+	return
+}
+
+func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
+	pmarker := q.rebalanceInProgress()
+	_, err := os.Stat(pmarker)
+	if err == nil {
+		aborted = true
+	}
+
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	_, xx := q.find(ActRebalance)
+	if xx != nil {
+		xreb := xx.(*xactRebalance)
+		if !xreb.finished() {
+			running = true
+		}
+	}
+	return
 }
 
 func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {

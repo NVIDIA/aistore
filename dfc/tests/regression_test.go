@@ -127,6 +127,56 @@ func regressionLocalBuckets(t *testing.T) {
 	destroyLocalBucket(httpclient, t, bucket)
 }
 
+/* uncomment when/if needed
+func Test_putlb(t *testing.T) {
+	bucket := TestLocalBucketName
+	createLocalBucketNoFail(httpclient, t, bucket)
+	time.Sleep(time.Second)
+	var (
+		num      = 10000
+		filesput = make(chan string, num)
+		errch    = make(chan error, 100)
+		sgl      *dfc.SGLIO
+		filesize = uint64(1024)
+		seed     = int64(111)
+	)
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+	if numfiles != 100 { // default
+		num = numfiles
+	}
+	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filesput, SmokeDir, SmokeStr, "", false, sgl)
+	close(filesput)
+	selectErr(errch, "put", t, false)
+	close(errch)
+}
+
+func Test_getlb(t *testing.T) {
+	var (
+		bucket = TestLocalBucketName
+		seed   = int64(111)
+		src    = rand.NewSource(seed)
+		random = rand.New(src)
+		num    = 10000
+	)
+	if numfiles != 100 { // default
+		num = numfiles
+	}
+	for i := 0; i < num; i++ {
+		fname := client.FastRandomFilename(random, fnlen)
+		tlogln("GET: " + SmokeStr + "/" + fname)
+		client.Get(proxyurl, bucket, SmokeStr+"/"+fname, nil, nil, false, false)
+	}
+}
+
+func Test_rmlb(t *testing.T) {
+	bucket := TestLocalBucketName
+	destroyLocalBucket(httpclient, t, bucket)
+}
+*/
+
 func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	var (
 		numPuts  = 10
@@ -1049,12 +1099,11 @@ func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
 	}
 }
 
-func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
+func createLocalBucketNoFail(httpclient *http.Client, t *testing.T, bucket string) (err error) {
 	var (
 		req    *http.Request
 		r      *http.Response
 		injson []byte
-		err    error
 	)
 	injson, err = json.Marshal(CreateLocalBucketMsg)
 	if err != nil {
@@ -1070,7 +1119,12 @@ func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, "Create Local Bucket", r, nil, t) {
+	return
+}
+
+func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
+	err := createLocalBucketNoFail(httpclient, t, bucket)
+	if testfail(err, "Create Local Bucket", nil, nil, t) {
 		return
 	}
 }

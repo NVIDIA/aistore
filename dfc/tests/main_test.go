@@ -677,9 +677,8 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 		failed = true
 		return
 	}
-	defer func(r *http.Response) {
-		r.Body.Close()
-	}(r)
+	defer r.Body.Close()
+
 	// Create a local copy
 	fname := LocalDestDir + "/" + keyname
 	file, err := dfc.CreateFile(fname)

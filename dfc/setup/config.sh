@@ -15,11 +15,12 @@
 		"keep_alive_time":	"20s"
 	},
 	"timeout": {
-		"default":		"30s",
-		"default_long":		"30m",
+		"default_timeout":	"30s",
+		"default_long_timeout":	"30m",
 		"max_keepalive":	"4s",
 		"proxy_ping":		"100ms",
-		"vote_request":		"2s"
+		"vote_request":		"2s",
+		"send_file_time":	"5m"
 	},
 	"proxyconfig": {
 		"startup_confirmation_time":	"30s",
@@ -43,7 +44,8 @@
 		"lru_enabled":  	true
 	},
 	"rebalance_conf": {
-		"startup_delay_time":	"10m",
+		"startup_delay_time":	"3m",
+		"dest_retry_time":	"2m",
 		"rebalancing_enabled": 	true
 	},
 	"cksum_config": {

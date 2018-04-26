@@ -8,13 +8,13 @@ package dfc
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"runtime/debug"
@@ -132,28 +132,12 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		numDaemons = 4
 	}
 	if ctx.config.Net.HTTP.UseHTTPS {
-		// TODO: insecure way to make targets and proxies talk between
-		//   each other (e.g, Man-In-The-Middle attack).
-		// Using secured way to talk between nodes requires every node has
-		// stable fqdn and no node must use IPs - use only fqdn to send data
-		tt := &tls.Config{InsecureSkipVerify: true}
-		h.httpclient = &http.Client{
-			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons, TLSClientConfig: tt},
-			Timeout:   ctx.config.Timeout.Default,
-		}
-		h.httpclientLongTimeout = &http.Client{
-			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons, TLSClientConfig: tt},
-			Timeout:   ctx.config.Timeout.DefaultLong,
-		}
+		glog.Fatalf("HTTPS for inter-cluster communications is not yet supported (and better be avoided)")
 	} else {
-		h.httpclient = &http.Client{
-			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-			Timeout:   ctx.config.Timeout.Default,
-		}
-		h.httpclientLongTimeout = &http.Client{
-			Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-			Timeout:   ctx.config.Timeout.DefaultLong,
-		}
+		h.httpclient =
+			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
+		h.httpclientLongTimeout =
+			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
 	}
 	h.smap = &Smap{}
 	h.proxysi = &proxyInfo{}
@@ -175,6 +159,26 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		proto = "https"
 	}
 	h.si.DirectURL = proto + "://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
+}
+
+func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+	transport := &http.Transport{
+		// defaults
+		Proxy: defaultTransport.Proxy,
+		DialContext: (&net.Dialer{ // defaultTransport.DialContext,
+			Timeout:   30 * time.Second, // must be reduced & configurable
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
+		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
+		// custom
+		MaxIdleConnsPerHost: perhost,
+		MaxIdleConns:        perhost * numDaemons,
+	}
+	return transport
 }
 
 func (h *httprunner) run() error {
@@ -436,6 +440,30 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.Rebalance.StartupDelayTime, ctx.config.Rebalance.StartupDelayTimeStr = v, value
 		}
+	case "dest_retry_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse dest_retry_time, err: %v", err)
+		} else {
+			ctx.config.Rebalance.DestRetryTime, ctx.config.Rebalance.DestRetryTimeStr = v, value
+		}
+	case "send_file_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse send_file_time, err: %v", err)
+		} else {
+			ctx.config.Timeout.SendFile, ctx.config.Timeout.SendFileStr = v, value
+		}
+	case "default_timeout":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse default_timeout, err: %v", err)
+		} else {
+			ctx.config.Timeout.Default, ctx.config.Timeout.DefaultStr = v, value
+		}
+	case "default_long_timeout":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse default_long_timeout, err: %v", err)
+		} else {
+			ctx.config.Timeout.DefaultLong, ctx.config.Timeout.DefaultLongStr = v, value
+		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
@@ -464,7 +492,7 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse rebalancing_enabled, err: %v", err)
 		} else {
-			ctx.config.Rebalance.RebalancingEnabled = v
+			ctx.config.Rebalance.Enabled = v
 		}
 	case "validate_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {

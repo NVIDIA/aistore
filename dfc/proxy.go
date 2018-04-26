@@ -1017,7 +1017,7 @@ func (p *proxyrunner) deleteLocalBucket(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if !p.islocalBucket(lbucket) {
-		p.invalmsghdlr(w, r, "Cannot delete non-local bucket %s", lbucket)
+		p.invalmsghdlr(w, r, fmt.Sprintf("Cannot delete non-local bucket %s", lbucket))
 		return
 	}
 

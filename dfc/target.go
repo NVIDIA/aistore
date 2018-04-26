@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
@@ -34,6 +35,8 @@ const (
 	MaxPageSize      = 64 * 1024 // the maximum number of objects in a page (waring is logged in case of requested page size exceeds the limit)
 	workfileprefix   = ".~~~."
 )
+
+const doesnotexist = "does not exist"
 
 type mountPath struct {
 	Path string       `json:"path"`
@@ -151,7 +154,7 @@ func (t *targetrunner) run() error {
 func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	sleep := t.xactinp.abortAll()
-	close(t.rtnamemap.abrt)
+	t.rtnamemap.stop()
 	if t.httprunner.h != nil {
 		t.unregister() // ignore errors
 	}
@@ -234,6 +237,8 @@ func (t *targetrunner) objecthdlr(w http.ResponseWriter, r *http.Request) {
 		t.httpobjdelete(w, r)
 	case http.MethodPost:
 		t.httpobjpost(w, r)
+	case http.MethodHead:
+		t.httpobjhead(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -321,12 +326,24 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	fqn, uname = t.fqn(bucket, objname), t.uname(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	// existence, access & versioning
-	if coldget, size, version, errstr = t.isObjectCached(bucket, objname, fqn); errstr != "" {
-		t.runFSKeeper(fmt.Errorf("%s", fqn))
+	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
+		//
+		// given certain conditions (below) make an effort to locate the object cluster-wide
+		//
+		if islocal && strings.Contains(errstr, doesnotexist) {
+			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+			if aborted || running {
+				if props := t.getFromNeighbor(bucket, objname, r, islocal); props != nil {
+					size, nhobj = props.size, props.nhobj
+					goto existslocally
+				}
+			}
+		}
 		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		t.rtnamemap.unlockname(uname, false)
 		return
 	}
+
 	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		if vchanged, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
@@ -349,6 +366,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		size, nhobj = props.size, props.nhobj
 	}
 
+existslocally:
 	// note: coldget() keeps the read lock if successful
 	defer t.rtnamemap.unlockname(uname, false)
 
@@ -629,6 +647,127 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HEAD /Rversion/Robjects/bucket-name/object-name
+func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
+	var (
+		bucket, objname, errstr string
+		islocal                 bool
+		errcode                 int
+	)
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+		return
+	}
+	bucket, objname = apitems[0], apitems[1]
+	if strings.Contains(bucket, "/") {
+		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr, errcode)
+		return
+	}
+	var objmeta map[string]string
+	if !islocal {
+		objmeta, errstr, errcode = getcloudif().headobject(bucket, objname)
+		if errstr != "" {
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
+			return
+		}
+	} else {
+		fqn := t.fqn(bucket, objname)
+		var (
+			size    int64
+			version string
+		)
+		if _, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
+			status := http.StatusNotFound
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
+		objmeta = make(map[string]string)
+		objmeta["size"] = strconv.FormatInt(size, 10)
+		objmeta["version"] = version
+		glog.Infoln("httpobjhead FOUND:", bucket, objname, size, version)
+	}
+	for k, v := range objmeta {
+		w.Header().Add(k, v)
+	}
+}
+
+// GET /Rversion/Rhealth
+func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	from := query.Get(URLParamFromID)
+	targetcorestats := getstorstats()
+	jsbytes, err := json.Marshal(targetcorestats)
+	assert(err == nil, err)
+	ok := t.writeJSON(w, r, jsbytes, "proxycorestats")
+	if ok && from == t.proxysi.DaemonID {
+		t.kalive.timestamp(t.proxysi.DaemonID)
+	}
+}
+
+//  /Rversion/Rpush/bucket-name
+func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rpush); apitems == nil {
+		return
+	}
+	bucket := apitems[0]
+
+	if strings.Contains(bucket, "/") {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+	if pusher, ok := w.(http.Pusher); ok {
+		objnamebytes, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			s := fmt.Sprintf("Could not read Request Body: %v", err)
+			if err == io.EOF {
+				trailer := r.Trailer.Get("Error")
+				if trailer != "" {
+					s = fmt.Sprintf("pushhdlr: Failed to read %s request, err: %v, trailer: %s",
+						r.Method, err, trailer)
+				}
+			}
+			t.invalmsghdlr(w, r, s)
+			return
+		}
+		objnames := make([]string, 0)
+		err = json.Unmarshal(objnamebytes, &objnames)
+		if err != nil {
+			s := fmt.Sprintf("Could not unmarshal objnames: %v", err)
+			t.invalmsghdlr(w, r, s)
+			return
+		}
+
+		for _, objname := range objnames {
+			err := pusher.Push("/"+Rversion+"/"+Robjects+"/"+bucket+"/"+objname, nil)
+			if err != nil {
+				t.invalmsghdlr(w, r, "Error Pushing "+bucket+"/"+objname+": "+err.Error())
+				return
+			}
+		}
+	} else {
+		t.invalmsghdlr(w, r, "Pusher Unavailable")
+		return
+	}
+
+	_, err := w.Write([]byte("Pushed Object List "))
+	if err != nil {
+		s := fmt.Sprintf("Error writing response: %v", err)
+		t.invalmsghdlr(w, r, s)
+	}
+}
+
 //====================================================================================
 //
 // supporting methods and misc
@@ -653,6 +792,76 @@ func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchan
 	return
 }
 
+func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, islocal bool) (props *objectProps) {
+	neighsi := t.lookupRemotely(bucket, objname)
+	if neighsi == nil {
+		return
+	}
+	if glog.V(4) {
+		glog.Infof("getFromNeighbor: found %s/%s at %s", bucket, objname, neighsi.DaemonID)
+	}
+
+	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.DirectURL, r.URL.Path, URLParamLocal, islocal)
+	//
+	// http request
+	//
+	newr, err := http.NewRequest(http.MethodGet, geturl, nil)
+	if err != nil {
+		glog.Errorf("Unexpected failure to create %s request %s, err: %v", http.MethodGet, geturl, err)
+		return
+	}
+	// Do
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.SendFile)
+	defer cancel()
+	newrequest := newr.WithContext(contextwith)
+
+	response, err := t.httpclientLongTimeout.Do(newrequest)
+	if err != nil {
+		glog.Errorf("Failed to GET redirect URL %q, err: %v", geturl, err)
+		return
+	}
+	defer response.Body.Close()
+	var (
+		nhobj   cksumvalue
+		errstr  string
+		size    int64
+		hval    = response.Header.Get(HeaderDfcChecksumVal)
+		htype   = response.Header.Get(HeaderDfcChecksumType)
+		hdhobj  = newcksumvalue(htype, hval)
+		version = response.Header.Get(HeaderDfcObjVersion)
+		fqn     = t.fqn(bucket, objname)
+		getfqn  = t.fqn2workfile(fqn)
+		inmem   = false // TODO: optimize
+	)
+	if _, nhobj, size, errstr = t.receive(getfqn, inmem, objname, "", hdhobj, response.Body); errstr != "" {
+		glog.Errorf(errstr)
+		return
+	}
+	if nhobj != nil {
+		nhtype, nhval := nhobj.get()
+		assert(hdhobj == nil || htype == nhtype)
+		if hval != "" && nhval != "" && hval != nhval {
+			glog.Errorf("Bad checksum: %s/%s %s %s... != %s...", bucket, objname, htype, hval[:8], nhval[:8])
+			return
+		}
+	}
+	// commit
+	if err = os.Rename(getfqn, fqn); err != nil {
+		glog.Errorf("Failed to rename %s => %s, err: %v", getfqn, fqn, err)
+		return
+	}
+	props = &objectProps{version: version, size: size, nhobj: nhobj}
+	if errstr = t.finalizeobj(fqn, props); errstr != "" {
+		glog.Errorf("finalizeobj %s/%s: %s (%+v)", bucket, objname, errstr, props)
+		props = nil
+		return
+	}
+	if glog.V(4) {
+		glog.Infof("getFromNeighbor: got %s/%s from %s, size %d, cksum %+v", bucket, objname, neighsi.DaemonID, size, nhobj)
+	}
+	return
+}
+
 func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
 		fqn        = t.fqn(bucket, objname)
@@ -672,7 +881,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	}
 	// existence, access & versioning
-	coldget, size, version, eexists := t.isObjectCached(bucket, objname, fqn)
+	coldget, size, version, eexists := t.lookupLocally(bucket, objname, fqn)
 	if !coldget && eexists == "" && !t.islocalBucket(bucket) && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		vchanged, errv, _ = t.checkCloudVersion(bucket, objname, version)
 		if errv == "" {
@@ -763,13 +972,13 @@ ret:
 	return
 }
 
-func (t *targetrunner) isObjectCached(bucket, objname, fqn string) (coldget bool, size int64, version string, errstr string) {
+func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool, size int64, version, errstr string) {
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
 			if t.islocalBucket(bucket) {
-				errstr = fmt.Sprintf("GET local: file %s (object %s/%s) does not exist", fqn, bucket, objname)
+				errstr = fmt.Sprintf("GET local: %s (%s/%s) %s", fqn, bucket, objname, doesnotexist)
 				return
 			}
 			coldget = true
@@ -777,81 +986,50 @@ func (t *targetrunner) isObjectCached(bucket, objname, fqn string) (coldget bool
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
 		default:
 			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
+			t.runFSKeeper(fmt.Errorf("%s", fqn))
 		}
 		return
 	}
 	size = finfo.Size()
 	if bytes, errs := Getxattr(fqn, xattrObjVersion); errs == "" {
 		version = string(bytes)
+	} else {
+		t.runFSKeeper(fmt.Errorf("%s", fqn))
 	}
 	return
 }
 
-// "/"+Rversion+"/"+Rpush+"/"+bucket
-func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, "push"); apitems == nil {
+func (t *targetrunner) lookupRemotely(bucket, objname string) (tsi *daemonInfo) {
+	if len(t.smap.Smap) < 2 {
 		return
 	}
-	bucket := apitems[0]
-
-	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-	if pusher, ok := w.(http.Pusher); ok {
-		objnamebytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			s := fmt.Sprintf("Could not read Request Body: %v", err)
-			if err == io.EOF {
-				trailer := r.Trailer.Get("Error")
-				if trailer != "" {
-					s = fmt.Sprintf("pushhdlr: Failed to read %s request, err: %v, trailer: %s",
-						r.Method, err, trailer)
-				}
+	wg := &sync.WaitGroup{}
+	resch := make(chan *daemonInfo, len(t.smap.Smap)-1)
+	for sid, si := range t.smap.Smap {
+		if sid == t.si.DaemonID {
+			continue
+		}
+		wg.Add(1)
+		go func(si *daemonInfo) {
+			defer wg.Done()
+			url := si.DirectURL + "/" + Rversion + "/" + Robjects + "/" + bucket + "/" + objname
+			_, err, _, _ := t.call(si, url, http.MethodHead, nil, ctx.config.Timeout.MaxKeepalive)
+			if err == nil {
+				resch <- si
+			} else {
+				resch <- nil
 			}
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		objnames := make([]string, 0)
-		err = json.Unmarshal(objnamebytes, &objnames)
-		if err != nil {
-			s := fmt.Sprintf("Could not unmarshal objnames: %v", err)
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-
-		for _, objname := range objnames {
-			err := pusher.Push("/"+Rversion+"/"+Robjects+"/"+bucket+"/"+objname, nil)
-			if err != nil {
-				t.invalmsghdlr(w, r, "Error Pushing "+bucket+"/"+objname+": "+err.Error())
-				return
-			}
-		}
-	} else {
-		t.invalmsghdlr(w, r, "Pusher Unavailable")
-		return
+		}(si)
 	}
-
-	_, err := w.Write([]byte("Pushed Object List "))
-	if err != nil {
-		s := fmt.Sprintf("Error writing response: %v", err)
-		t.invalmsghdlr(w, r, s)
+	wg.Wait()
+	close(resch)
+	for res := range resch {
+		if res != nil {
+			tsi = res
+			break
+		}
 	}
-}
-
-// "/"+Rversion+"/"+Rhealth
-func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	from := query.Get(URLParamFromID)
-	targetcorestats := getstorstats()
-	jsbytes, err := json.Marshal(targetcorestats)
-	assert(err == nil, err)
-	ok := t.writeJSON(w, r, jsbytes, "proxycorestats")
-	if ok && from == t.proxysi.DaemonID {
-		t.kalive.timestamp(t.proxysi.DaemonID)
-	}
+	return
 }
 
 // should not be called for local buckets
@@ -1367,7 +1545,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 	}
 	renamed = true
 	if errstr = t.finalizeobj(fqn, objprops); errstr != "" {
-		glog.Errorf("finalizeobj %s/%s: %s", bucket, objname, errstr)
+		glog.Errorf("finalizeobj %s/%s: %s (%+v)", bucket, objname, errstr, objprops)
 		return
 	}
 	return
@@ -1394,7 +1572,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("Rebalance %s/%s from %s (self) to %s", bucket, objname, from, to)
 		}
 		if err != nil && os.IsNotExist(err) {
-			errstr = fmt.Sprintf("File copy: %s does not exist at the source %s", fqn, t.si.DaemonID)
+			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, doesnotexist, t.si.DaemonID)
 			return
 		}
 		si, ok := t.smap.Smap[to]
@@ -1497,8 +1675,7 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if localbucket && !evict {
-				return fmt.Errorf("DELETE local: file %s (local bucket %s, object %s) does not exist",
-					fqn, bucket, objname)
+				return fmt.Errorf("DELETE local: file %s (local bucket %s, object %s) %s", fqn, bucket, objname, doesnotexist)
 			}
 
 			// Do try to delete non-cached objects.
@@ -1689,7 +1866,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si.DaemonID, err)
 	}
 	//
-	// do send
+	// http request
 	//
 	request, err := http.NewRequest(method, url, file)
 	if err != nil {
@@ -1702,26 +1879,34 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if len(version) != 0 {
 		request.Header.Set(HeaderDfcObjVersion, string(version))
 	}
-	response, err := t.httpclient.Do(request)
+	// Do
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.SendFile)
+	defer cancel()
+	newrequest := request.WithContext(contextwith)
+
+	response, err := t.httpclientLongTimeout.Do(newrequest)
+
+	// err handle
 	if err != nil {
-		return fmt.Sprintf("Failed to send %q from %s, err: %v", fqn, t.si.DaemonID, err)
-	}
-	if response != nil {
-		defer response.Body.Close()
-		_, err = ioutil.ReadAll(response.Body)
-		if err != nil {
-			s := fmt.Sprintf("Failed to read response body %q from %s, err: %v", fqn, t.si.DaemonID, err)
-			if err == io.EOF {
-				trailer := response.Trailer.Get("Error")
-				if trailer != "" {
-					s = fmt.Sprintf("Failed to read response body %q from %s, err: %v, trailer: %s",
-						fqn, t.si.DaemonID, err, trailer)
-				}
-			}
-			return s
+		errstr = fmt.Sprintf("Failed to sendfile %s/%s %s => %s, err: %v", bucket, objname, fromid, toid, err)
+		if response != nil && response.StatusCode > 0 {
+			errstr += fmt.Sprintf(", status %s", response.Status)
 		}
+		return errstr
+	}
+	defer response.Body.Close()
+	if _, err = ioutil.ReadAll(response.Body); err != nil {
+		errstr = fmt.Sprintf("Failed to read sendfile response: %s/%s %s => %s, err: %v", bucket, objname, fromid, toid, err)
+		if err == io.EOF {
+			trailer := response.Trailer.Get("Error")
+			if trailer != "" {
+				errstr += fmt.Sprintf(", trailer: %s", trailer)
+			}
+		}
+		return errstr
 	}
 
+	// stats
 	t.statsdC.Send("rebalance.send",
 		statsd.Metric{
 			Type:  statsd.Counter,
@@ -1845,35 +2030,42 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string, autorebalance bool) {
-	curversion := t.smap.Version
-	var newsmap *Smap
-	if t.readJSON(w, r, &newsmap) != nil {
+	var newsmap = &Smap{}
+	if t.readJSON(w, r, newsmap) != nil {
 		return
 	}
+
+	newlen := len(newsmap.Smap)
+	glog.Infof("%s: new Smap version %d, num targets %d, autorebalance=%t", apitems[0], newsmap.Version, newlen, autorebalance)
+
+	smapLock.Lock() //=======================================================
+
+	curversion := t.smap.Version
 	if curversion == newsmap.Version {
+		smapLock.Unlock()
 		return
 	}
 	if curversion > newsmap.Version {
+		smapLock.Unlock()
 		err := fmt.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, newsmap.Version)
 		glog.Errorln(err)
 		t.kalive.onerr(err, 0)
 		return
 	}
-	newlen, oldlen := len(newsmap.Smap), len(t.smap.Smap)
-	glog.Infof("%s: new Smap version %d (old %d), num targets %d (%d), autorebalance=%t",
-		apitems[0], newsmap.Version, curversion, newlen, oldlen, autorebalance)
+	oldlen := len(t.smap.Smap)
 
 	// check whether this target is present in the new Smap
 	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
 	// assign proxysi
 	// log
 	existentialQ, isSubset := false, true
+	infoln := make([]string, 0, newlen)
 	for id, si := range newsmap.Smap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
-			glog.Infoln("target:", si, "<= self")
+			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si))
 		} else {
-			glog.Infoln("target:", si)
+			infoln = append(infoln, fmt.Sprintf("target: %s", si))
 		}
 		if _, ok := t.smap.Smap[id]; !ok {
 			isSubset = false
@@ -1881,7 +2073,13 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 	assert(existentialQ)
 
-	err := t.setPrimaryProxyAndSmap(newsmap)
+	err := t.setPrimaryProxyAndSmapUnlocked(newsmap)
+	smapLock.Unlock() //=====================================================
+
+	for _, ln := range infoln {
+		glog.Infoln(ln)
+	}
+
 	if err != nil {
 		s := fmt.Sprintf("Failed to Set Primary Proxy to %v, err: %v", newsmap.ProxySI.DaemonID, err)
 		t.invalmsghdlr(w, r, s)
@@ -1893,12 +2091,26 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 	// config checks
 	if autorebalance {
-		if !ctx.config.Rebalance.RebalancingEnabled {
+		if !ctx.config.Rebalance.Enabled {
 			glog.Infoln("auto-rebalancing disabled")
 			return
 		}
 		if time.Since(t.starttime()) < ctx.config.Rebalance.StartupDelayTime {
 			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime()), ctx.config.Rebalance.StartupDelayTime)
+
+			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+			if aborted && !running {
+				f := func() {
+					time.Sleep(ctx.config.Rebalance.StartupDelayTime - time.Since(t.starttime()))
+					currsmap := &Smap{}
+					smapLock.Lock()
+					copyStruct(currsmap, t.smap)
+					smapLock.Unlock()
+					t.runRebalance(currsmap)
+				}
+				go runRebalanceOnce.Do(f) // only once at startup
+			}
+
 			return
 		}
 	}
@@ -1913,7 +2125,7 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 
 	// xaction
-	go t.runRebalance()
+	go t.runRebalance(newsmap)
 }
 
 func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, apitems []string) {
@@ -2251,7 +2463,7 @@ func (t *targetrunner) fspath2mpath() {
 			fp = strings.TrimSuffix(fp, "/")
 		}
 		if _, err := os.Stat(fp); err != nil {
-			glog.Fatalf("FATAL: fspath %q does not exist, err: %v", fp, err)
+			glog.Fatalf("FATAL: fspath %q %s, err: %v", fp, doesnotexist, err)
 		}
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(fp, &statfs); err != nil {
@@ -2346,33 +2558,33 @@ func (t *targetrunner) startupMpaths() {
 		mpathconfigfqn = filepath.Join(instancedir, mpname)
 	}
 	// load old/prev and compare
-	if _, err := os.Stat(mpathconfigfqn); err == nil {
-		var (
-			changed bool
-			old     = &mountedFS{}
-		)
-		old.Available, old.Offline = make(map[string]*mountPath), make(map[string]*mountPath)
-		if err := localLoad(mpathconfigfqn, old); err != nil {
+	var (
+		changed bool
+		old     = &mountedFS{}
+	)
+	old.Available, old.Offline = make(map[string]*mountPath), make(map[string]*mountPath)
+	if err := localLoad(mpathconfigfqn, old); err != nil {
+		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
-		} else if len(old.Available) != len(ctx.mountpaths.Available) {
-			changed = true
-		} else {
-			for k := range old.Available {
-				if _, ok := ctx.mountpaths.Available[k]; !ok {
-					changed = true
-				}
+		}
+	} else if len(old.Available) != len(ctx.mountpaths.Available) {
+		changed = true
+	} else {
+		for k := range old.Available {
+			if _, ok := ctx.mountpaths.Available[k]; !ok {
+				changed = true
 			}
 		}
-		if changed {
-			glog.Errorf("Detected change in the mpath configuration at %s", mpathconfigfqn)
-			if b, err := json.MarshalIndent(old, "", "\t"); err == nil {
-				glog.Errorln("OLD: ====================")
-				glog.Errorln(string(b))
-			}
-			if b, err := json.MarshalIndent(ctx.mountpaths, "", "\t"); err == nil {
-				glog.Errorln("NEW: ====================")
-				glog.Errorln(string(b))
-			}
+	}
+	if changed {
+		glog.Errorf("Detected change in the mpath configuration at %s", mpathconfigfqn)
+		if b, err := json.MarshalIndent(old, "", "\t"); err == nil {
+			glog.Errorln("OLD: ====================")
+			glog.Errorln(string(b))
+		}
+		if b, err := json.MarshalIndent(ctx.mountpaths, "", "\t"); err == nil {
+			glog.Errorln("NEW: ====================")
+			glog.Errorln(string(b))
 		}
 	}
 	// persist

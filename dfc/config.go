@@ -41,10 +41,12 @@ const (
 	AckWhenOnDisk = "disk" // the default
 )
 
+// $CONFDIR/*
 const (
-	lbname   = "localbuckets" // base name of the lbconfig file; not to confuse with config.Localbuckets mpath sub-directory
-	mpname   = "mpaths"       // base name to persist ctx.mountpaths
-	smapname = "smap.json"
+	lbname     = "localbuckets" // base name of the lbconfig file; not to confuse with config.Localbuckets mpath sub-directory
+	mpname     = "mpaths"       // base name to persist ctx.mountpaths
+	smapname   = "smap.json"
+	rebinpname = ".rebalancing"
 )
 
 //==============================
@@ -91,9 +93,9 @@ type periodic struct {
 
 // timeoutconfig contains timeouts used for intra-cluster communication
 type timeoutconfig struct {
-	DefaultStr      string        `json:"default"`
+	DefaultStr      string        `json:"default_timeout"`
 	Default         time.Duration `json:"-"` // omitempty
-	DefaultLongStr  string        `json:"default_long"`
+	DefaultLongStr  string        `json:"default_long_timeout"`
 	DefaultLong     time.Duration `json:"-"` //
 	MaxKeepaliveStr string        `json:"max_keepalive"`
 	MaxKeepalive    time.Duration `json:"-"` //
@@ -101,6 +103,8 @@ type timeoutconfig struct {
 	ProxyPing       time.Duration `json:"-"` //
 	VoteRequestStr  string        `json:"vote_request"`
 	VoteRequest     time.Duration `json:"-"` //
+	SendFileStr     string        `json:"send_file_time"`
+	SendFile        time.Duration `json:"-"` //
 }
 
 type proxyconfig struct {
@@ -130,7 +134,9 @@ type lruconfig struct {
 type rebalanceconf struct {
 	StartupDelayTimeStr string        `json:"startup_delay_time"`
 	StartupDelayTime    time.Duration `json:"-"` // omitempty
-	RebalancingEnabled  bool          `json:"rebalancing_enabled"`
+	DestRetryTimeStr    string        `json:"dest_retry_time"`
+	DestRetryTime       time.Duration `json:"-"` //
+	Enabled             bool          `json:"rebalancing_enabled"`
 }
 
 type testfspathconf struct {
@@ -254,8 +260,6 @@ func validateVersion(version string) error {
 	return nil
 }
 
-//	StartupDelayTimeStr string        `json:"startup_delay_time"`
-//	StartupDelayTime    time.Duration `json:"-"` // omitempty
 func validateconf() (err error) {
 	// durations
 	if ctx.config.Periodic.StatsTime, err = time.ParseDuration(ctx.config.Periodic.StatsTimeStr); err != nil {
@@ -278,6 +282,9 @@ func validateconf() (err error) {
 	}
 	if ctx.config.Rebalance.StartupDelayTime, err = time.ParseDuration(ctx.config.Rebalance.StartupDelayTimeStr); err != nil {
 		return fmt.Errorf("Bad startup_delay_time format %s, err: %v", ctx.config.Rebalance.StartupDelayTimeStr, err)
+	}
+	if ctx.config.Rebalance.DestRetryTime, err = time.ParseDuration(ctx.config.Rebalance.DestRetryTimeStr); err != nil {
+		return fmt.Errorf("Bad dest_retry_time format %s, err: %v", ctx.config.Rebalance.DestRetryTimeStr, err)
 	}
 
 	hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
@@ -304,6 +311,9 @@ func validateconf() (err error) {
 	}
 	if ctx.config.Timeout.VoteRequest, err = time.ParseDuration(ctx.config.Timeout.VoteRequestStr); err != nil {
 		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", ctx.config.Timeout.VoteRequestStr, err)
+	}
+	if ctx.config.Timeout.SendFile, err = time.ParseDuration(ctx.config.Timeout.SendFileStr); err != nil {
+		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", ctx.config.Timeout.SendFileStr, err)
 	}
 	if ctx.config.Proxy.StartupConfirmationTime, err = time.ParseDuration(ctx.config.Proxy.StartupConfirmationTimeStr); err != nil {
 		return fmt.Errorf("Bad Proxy startup_suspect_time format %s, err %v", ctx.config.Proxy.StartupConfirmationTimeStr, err)
