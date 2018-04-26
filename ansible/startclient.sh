@@ -14,7 +14,7 @@ nbuckets=1
 cleanup='false'
 
 # Parse args
-while getopts ":b:p:d:m:x:t:n:" opt; do
+while getopts ":b:p:d:m:x:t:n:c:" opt; do
     case $opt in
         b)
             bucket=`hostname`$OPTARG
