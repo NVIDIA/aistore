@@ -192,6 +192,24 @@ func (m *Smap) unlock() {
 	smapLock.Unlock()
 }
 
+// SmapUnion computes the union of A and B, where keys in B override keys shared with A
+func SmapUnion(A *Smap, B *Smap) *Smap {
+	unionsmap := &Smap{Smap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	for k, v := range A.Smap {
+		unionsmap.Smap[k] = v
+	}
+	for k, v := range A.Pmap {
+		unionsmap.Pmap[k] = v
+	}
+	for k, v := range B.Smap {
+		unionsmap.Smap[k] = v
+	}
+	for k, v := range B.Pmap {
+		unionsmap.Pmap[k] = v
+	}
+	return unionsmap
+}
+
 //====================
 //
 // lbmap wrapper - NOTE - caller must take the lock

@@ -23,7 +23,7 @@
 		"send_file_time":	"5m"
 	},
 	"proxyconfig": {
-		"startup_confirmation_time":	"30s",
+		"startup_get_smap_maximum":	"1m",
 		"primary": {
 			"id":		"${PROXYID}",
 			"url": 		"${PROXYURL}",

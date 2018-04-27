@@ -1241,7 +1241,7 @@ func getClusterMap(httpclient *http.Client, t *testing.T) (smap dfc.Smap) {
 	if err != nil {
 		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, bytes.NewBuffer(injson))
+	req, err = http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}

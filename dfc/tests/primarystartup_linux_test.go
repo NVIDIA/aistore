@@ -1,32 +1,39 @@
 package dfc_test
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/dfc"
 )
 
 var (
-	confirmationTests = []Test{
-		Test{"Basic", confirmation_basic},
-		Test{"Multiple", confirmation_multiple_failures},
-		Test{"Fast Restore", confirmation_fast_restore},
-		Test{"Non Primary", confirmation_non_primary},
+	primarystartupTests = []Test{
+		Test{"Basic", primaryStartupBasic},
+		Test{"Multiple", primaryStartupMultipleFailures},
+		Test{"Fast Restore", primaryStartupFastRestore},
+		Test{"Non Primary", primaryStartupNonPrimary},
+		Test{"Vote Retry", primaryStartupVoteRetry},
 	}
 )
 
-func Test_confirmation(t *testing.T) {
-	originalproxyid := canRunMultipleProxyTests(t)
-	originalproxyurl := proxyurl
+func Test_primarystartup(t *testing.T) {
+	originalProxyID := canRunMultipleProxyTests(t)
+	originalProxyURL := proxyurl
 
-	for _, test := range confirmationTests {
+	for _, test := range primarystartupTests {
 		t.Run(test.name, test.method)
 		if t.Failed() && abortonerr {
 			t.FailNow()
 		}
 	}
 
-	resetPrimaryProxy(originalproxyid, t)
-	proxyurl = originalproxyurl
+	time.Sleep(10 * time.Second)
+	resetPrimaryProxy(originalProxyID, t)
+	proxyurl = originalProxyURL
 }
 
 //==========
@@ -35,7 +42,7 @@ func Test_confirmation(t *testing.T) {
 //
 //==========
 
-func confirmation_basic(t *testing.T) {
+func primaryStartupBasic(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -54,14 +61,14 @@ func confirmation_basic(t *testing.T) {
 		t.Errorf("Error killing Primary Proxy: %v", err)
 	}
 	// Wait the maxmimum time it should take to switch.
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveSeconds)*time.Second)
 
 	err = restore(httpclient, primaryProxyURL, cmd, args, true)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
 
-	waitProgressBar("Proxy Suspect Time: ", time.Duration(startupconfirmationseconds+5)*time.Second)
+	waitProgressBar("Proxy Startup: ", time.Duration(startupGetSmapDelay+5)*time.Second)
 
 	// Check if the previous primary proxy correctly rejoined the cluster
 	proxyurl = nextProxyURL
@@ -74,7 +81,7 @@ func confirmation_basic(t *testing.T) {
 	}
 }
 
-func confirmation_fast_restore(t *testing.T) {
+func primaryStartupFastRestore(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -91,28 +98,16 @@ func confirmation_fast_restore(t *testing.T) {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
 
-	waitProgressBar("Proxy Suspect Time: ", time.Duration(startupconfirmationseconds+5)*time.Second)
+	waitProgressBar("Proxy Startup: ", time.Duration(startupGetSmapDelay+5)*time.Second)
 
 	// Check if the previous primary proxy correctly remained primary
 	smap = getClusterMap(httpclient, t)
 	if smap.ProxySI.DaemonID != primaryProxyID {
 		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, primaryProxyID)
 	}
-	// FIXME: Currently, map will be out of sync after running this test.
-	// The proposed solution is sending back the cluster map when the version is higher.
-	// For now, we fix this by resetting the primary proxy to another proxy/target
-
-	for sid, si := range smap.Pmap {
-		if sid == primaryProxyID {
-			continue
-		}
-		resetPrimaryProxy(sid, t)
-		proxyurl = si.DirectURL
-		time.Sleep(5 * time.Second)
-	}
 }
 
-func confirmation_multiple_failures(t *testing.T) {
+func primaryStartupMultipleFailures(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 	if len(smap.Pmap) < 3 {
@@ -153,20 +148,20 @@ func confirmation_multiple_failures(t *testing.T) {
 	}
 
 	// Wait the maxmimum time it should take to switch.
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveSeconds)*time.Second)
 
 	// Restore the killed proxies
 	err = restore(httpclient, secondProxyURL, spcmd, spargs, true)
 	if err != nil {
 		t.Errorf("Error restoring second proxy: %v", err)
 	}
-	waitProgressBar("Startup Suspect Time (second proxy): ", time.Duration(startupconfirmationseconds+5)*time.Second)
+	waitProgressBar("Proxy Startup (second proxy): ", time.Duration(startupGetSmapDelay+5)*time.Second)
 	err = restore(httpclient, primaryProxyURL, pcmd, pargs, true)
 	if err != nil {
 		t.Errorf("Error restoring first proxy: %v", err)
 	}
 
-	waitProgressBar("Startup Suspect Time (first proxy): ", time.Duration(startupconfirmationseconds+5)*time.Second)
+	waitProgressBar("Proxy Startup (first proxy): ", time.Duration(startupGetSmapDelay+5)*time.Second)
 
 	// Check if the killed proxies successfully rejoin the cluster.
 	proxyurl = nextProxyURL
@@ -181,7 +176,8 @@ func confirmation_multiple_failures(t *testing.T) {
 		t.Errorf("Second Proxy did not rejoin the cluster.")
 	}
 }
-func confirmation_non_primary(t *testing.T) {
+
+func primaryStartupNonPrimary(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -208,11 +204,124 @@ func confirmation_non_primary(t *testing.T) {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
 
-	waitProgressBar("Proxy Suspect Time: ", time.Duration(startupconfirmationseconds+5)*time.Second)
+	waitProgressBar("Proxy Startup: ", time.Duration(startupGetSmapDelay+5)*time.Second)
 
 	// Check if the previous primary proxy correctly remained primary
 	smap = getClusterMap(httpclient, t)
 	if _, ok := smap.Pmap[nonPrimaryID]; !ok {
 		t.Errorf("Proxy did not rejoin the cluster.")
 	}
+}
+
+func primaryStartupVoteRetry(t *testing.T) {
+	// Get Smap
+	smap := getClusterMap(httpclient, t)
+
+	// hrwProxy to find next proxy
+	delete(smap.Pmap, smap.ProxySI.DaemonID)
+	nextProxyID, nextProxyURL, err := hrwProxy(&smap)
+	if err != nil {
+		t.Errorf("Error performing HRW: %v", err)
+	}
+
+	stopch := make(chan struct{})
+	errch := make(chan error, 10)
+	mocktgt := &primaryStartupVoteRetryMockTarget{
+		vote:  true,
+		errch: errch,
+	}
+	go runMockTarget(mocktgt, stopch, &smap)
+
+	// Kill original primary proxy
+	primaryProxyURL := smap.ProxySI.DirectURL
+	primaryProxyID := smap.ProxySI.DaemonID
+	cmd, args, err := kill(httpclient, primaryProxyURL, smap.ProxySI.DaemonPort)
+	if err != nil {
+		t.Errorf("Error killing Primary Proxy: %v", err)
+	}
+	// Wait the maxmimum time it should take to switch.
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveSeconds)*time.Second)
+
+	err = restore(httpclient, primaryProxyURL, cmd, args, true)
+	if err != nil {
+		t.Errorf("Error restoring proxy: %v", err)
+	}
+
+	waitProgressBar("Proxy Startup: ", time.Duration(startupGetSmapDelay+5)*time.Second)
+
+	// Check if the previous primary proxy has not yet rejoined the cluster
+	// It should be waiting for the mock target to return vote=false
+	proxyurl = nextProxyURL
+	smap = getClusterMap(httpclient, t)
+	if smap.ProxySI.DaemonID != nextProxyID {
+		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
+	}
+	if _, ok := smap.Pmap[primaryProxyID]; ok {
+		t.Errorf("Previous Primary Proxy rejoined the cluster during a vote")
+	}
+
+	mocktgt.vote = false
+
+	waitProgressBar("Proxy Rejoin: ", time.Duration(startupGetSmapDelay+5)*time.Second)
+	// Check if the previous primary proxy has now rejoined the cluster
+	// Mock target is now returning vote=false
+	smap = getClusterMap(httpclient, t)
+	if smap.ProxySI.DaemonID != nextProxyID {
+		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
+	}
+	if _, ok := smap.Pmap[primaryProxyID]; !ok {
+		t.Errorf("Previous Primary Proxy did not rejoin the cluster")
+	}
+
+	// Kill the mock target
+	var v struct{}
+	stopch <- v
+	close(stopch)
+	select {
+	case err := <-errch:
+		t.Errorf("Mock Target Error: %v", err)
+	default:
+	}
+	time.Sleep(time.Duration(keepaliveSeconds) * time.Second)
+}
+
+//=======================
+//
+// Vote Retry Mock Target
+//
+//=======================
+
+type primaryStartupVoteRetryMockTarget struct {
+	vote  bool
+	errch chan error
+}
+
+func (*primaryStartupVoteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
+	// Ignore all file requests
+	return
+}
+
+func (p *primaryStartupVoteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		// Treat all Get requests as requests for a VoteMsg
+		msg := dfc.SmapVoteMsg{
+			VoteInProgress: p.vote,
+			// The VoteMessage must have a Smap with non-zero version
+			Smap: &dfc.Smap{Version: 1},
+		}
+		jsbytes, err := json.Marshal(msg)
+		if err == nil {
+			_, err = w.Write(jsbytes)
+		}
+		if err != nil {
+			p.errch <- fmt.Errorf("Error writing message: %v\n", err)
+		}
+	default:
+	}
+}
+
+func (p *primaryStartupVoteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
+	// Always vote yes.
+	w.Write([]byte(dfc.VoteYes))
 }

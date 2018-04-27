@@ -786,7 +786,7 @@ func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outp
 func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
 	if err != nil {
 		if dfc.IsErrConnectionRefused(err) {
-			t.Fatalf("http connection refused - terminating")
+			t.Fatalf("%s, http connection refused - terminating", str)
 		}
 		s := fmt.Sprintf("%s, err: %v", str, err)
 		t.Error(s)

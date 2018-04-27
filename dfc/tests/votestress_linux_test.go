@@ -3,7 +3,6 @@ package dfc_test
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -63,7 +62,7 @@ loop:
 		if err != nil {
 			errch <- err
 			// Skip the get/delete state
-			time.Sleep(time.Duration(keepaliveseconds) * time.Second)
+			time.Sleep(time.Duration(keepaliveSeconds) * time.Second)
 			continue
 		}
 		time.Sleep(1 * time.Second)
@@ -109,32 +108,20 @@ loop:
 			errch <- fmt.Errorf("Error killing Primary Proxy: %v", err)
 		}
 
-		time.Sleep(time.Duration(2*keepaliveseconds) * time.Second)
+		time.Sleep(time.Duration(2*keepaliveSeconds) * time.Second)
 		for _, ch := range proxyurlchs {
 			ch <- nextProxyURL
 		}
 
-		var idx int
-		found := false
-		for i, arg := range args {
-			if strings.Contains(arg, "-proxyurl") {
-				idx = i
-				found = true
-			}
-		}
-		if found {
-			args = append(args[:idx], args[idx+1:]...)
-		}
-
 		proxyurl = nextProxyURL
-		args = append(args, "-proxyurl="+nextProxyURL)
+		args = setProxyURLArg(args, nextProxyURL)
 		err = restore(httpclient, primaryProxyURL, cmd, args, false)
 		if err != nil {
 			errch <- fmt.Errorf("Error restoring proxy: %v", err)
 		}
 
-		durationmillis := (random.NormFloat64()) * 30           // [0, 30]
-		sleepdir := time.Duration(durationmillis) * time.Second // [0, 30s)
+		DurationMilliseconds := (random.NormFloat64())*15 + 15        // [15, 30]
+		sleepdir := time.Duration(DurationMilliseconds) * time.Second // [15s, 30s]
 		time.Sleep(sleepdir)
 	}
 }
@@ -143,7 +130,8 @@ func Test_votestress(t *testing.T) {
 	originalproxyid := canRunMultipleProxyTests(t)
 	originalproxyurl := proxyurl
 
-	client.CreateLocalBucket(proxyurl, multiproxybkt)
+	createLocalBucketNoFail(httpclient, t, multiproxybkt)
+	time.Sleep(5 * time.Second)
 
 	bs := int64(baseseed)
 	errchs := make([]chan error, numworkers+1)

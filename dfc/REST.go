@@ -93,6 +93,12 @@ type RangeMsg struct {
 	Range  string `json:"range"`
 }
 
+// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
+type SmapVoteMsg struct {
+	VoteInProgress bool  `json:"vote_in_progress"`
+	Smap           *Smap `json:"smap"`
+}
+
 //===================
 //
 // RESTful GET
@@ -101,10 +107,11 @@ type RangeMsg struct {
 
 // GetMsg.GetWhat enum
 const (
-	GetWhatFile   = "file" // { "what": "file" } is implied by default and can be omitted
-	GetWhatConfig = "config"
-	GetWhatSmap   = "smap"
-	GetWhatStats  = "stats"
+	GetWhatFile     = "file" // { "what": "file" } is implied by default and can be omitted
+	GetWhatConfig   = "config"
+	GetWhatSmap     = "smap"
+	GetWhatStats    = "stats"
+	GetWhatSmapVote = "smapvote"
 )
 
 // GetMsg.GetSort enum

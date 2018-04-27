@@ -229,7 +229,8 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		Candidate: msg.Request.Candidate,
 		Primary:   msg.Request.Primary,
 		StartTime: time.Now(),
-		Smap:      *p.smap,
+		Smap:      p.copySmap(), // If smap is not copied, then it can be changed while being marshalled
+		// By copying it, the lock does not need to be held while broadcasting.
 		Initiator: p.si.DaemonID,
 	}
 
@@ -290,8 +291,6 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) {
 	glog.Infoln("Moving to Primary state")
 	// Begin Primary State
 	p.becomePrimaryProxy(vr.Primary /* proxyidToRemove */)
-
-	return
 }
 
 func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map[string]bool) {
@@ -351,7 +350,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) (chan bool, chan ErrPair) {
 		resch <- (VoteYes == Vote(r))
 	}
 
-	p.broadcast(urlfmt, http.MethodGet, jsbytes, callback, ctx.config.Timeout.VoteRequest)
+	p.broadcast(urlfmt, http.MethodGet, jsbytes, p.smap, callback, ctx.config.Timeout.VoteRequest)
 	close(resch)
 	close(errch)
 	return resch, errch
@@ -378,7 +377,7 @@ func (p *proxyrunner) broadcastElectionVictory(vr *VoteRecord, wg *sync.WaitGrou
 			errch <- ErrPair{err: e, daemonID: si.DaemonID}
 		}
 	}
-	p.broadcast(urlfmt, http.MethodPut, jsbytes, callback, ctx.config.Timeout.VoteRequest)
+	p.broadcast(urlfmt, http.MethodPut, jsbytes, p.smap, callback, ctx.config.Timeout.VoteRequest)
 	close(errch)
 	return errch
 }
@@ -396,6 +395,7 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	p.synchronizeMaps(0, "")
 }
 
+// updateSmapPrimaryProxy is used by becomePrimaryProxy to perform the smap updates that must be locked.
 func (p *proxyrunner) updateSmapPrimaryProxy(proxyidToRemove string) *proxyInfo {
 	p.smap.lock()
 	defer p.smap.unlock()
@@ -403,9 +403,12 @@ func (p *proxyrunner) updateSmapPrimaryProxy(proxyidToRemove string) *proxyInfo 
 		p.smap.delProxy(proxyidToRemove)
 	}
 	psi := p.smap.getProxy(p.si.DaemonID)
+	// If psi == nil, then this proxy is not currently in the local cluster map. This should never happen.
+	assert(psi != nil, "This proxy should always exist in the local Smap")
 	psi.Primary = true
 	p.smap.ProxySI = psi
-	p.smap.Version++
+	// Version is increased by 100 to make a clear distinction between smap versions before and after the primary proxy is updated.
+	p.smap.Version += 100
 
 	return psi
 }
@@ -436,16 +439,19 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		vr := &VoteRecord{
 			Candidate: nextPrimaryProxy.DaemonID,
 			Primary:   p.proxysi.DaemonID,
-			Smap:      *p.smap,
+			Smap:      p.copySmap(), // If smap is not copied, then it can be changed while being marshalled
+			// By copying it, the lock does not need to be held while broadcasting.
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
 		p.proxyElection(vr)
 	} else {
+		glog.Infof("%v: Requesting Election from %v", p.si.DaemonID, nextPrimaryProxy.DaemonID)
 		vr := &VoteInitiation{
 			Candidate: nextPrimaryProxy.DaemonID,
 			Primary:   p.proxysi.DaemonID,
-			Smap:      *p.smap,
+			Smap:      p.copySmap(), // If smap is not copied, then it can be changed while being marshalled
+			// By copying it, the lock does not need to be held while broadcasting.
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
@@ -466,10 +472,12 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		glog.Warningf("Primary Proxy failed, but there are no candidates to fall back on.")
 		return
 	}
+
 	vr := &VoteInitiation{
 		Candidate: nextPrimaryProxy.DaemonID,
 		Primary:   t.proxysi.DaemonID,
-		Smap:      *t.smap,
+		Smap:      t.copySmap(), // If smap is not copied, then it can be changed while being marshalled
+		// By copying it, the lock does not need to be held while broadcasting.
 		StartTime: time.Now(),
 		Initiator: t.si.DaemonID,
 	}
@@ -490,8 +498,8 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *p
 }
 
 func (h *httprunner) voteOnProxy(candidate string) (bool, error) {
-	proxyinfo, ok := h.getProxyLocked(candidate)
-	if !ok {
+	proxyinfo := h.getProxyLocked(candidate)
+	if proxyinfo == nil {
 		return false, fmt.Errorf("Candidate not present in proxy smap: %s (%v)", candidate, h.smap.Pmap)
 	}
 
@@ -569,11 +577,11 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 //
 //==================
 
-func (h *httprunner) getProxyLocked(candidate string) (*proxyInfo, bool) {
+func (h *httprunner) getProxyLocked(candidate string) *proxyInfo {
 	h.smap.lock()
 	defer h.smap.unlock()
 	proxyinfo := h.smap.getProxy(candidate)
-	return proxyinfo, (proxyinfo != nil)
+	return proxyinfo
 }
 
 func (p *proxyrunner) pingWithTimeout(url string, timeout time.Duration) (bool, error) {
@@ -587,4 +595,12 @@ func (p *proxyrunner) pingWithTimeout(url string, timeout time.Duration) (bool, 
 		return false, nil
 	}
 	return false, err
+}
+
+func (h *httprunner) copySmap() Smap {
+	h.smap.lock()
+	defer h.smap.unlock()
+	var smap Smap
+	copyStruct(&smap /* dst */, h.smap /* src */)
+	return smap
 }

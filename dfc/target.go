@@ -2013,7 +2013,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		} else if errstr := t.setconfig(msg.Name, value); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		} else if msg.Name == "lru_enabled" && value == "false" {
-			_, lruxact := t.xactinp.find(ActLRU)
+			_, lruxact := t.xactinp.findUnlocked(ActLRU)
 			if lruxact != nil {
 				if glog.V(3) {
 					glog.Infof("Aborting LRU due to lru_enabled config change")
@@ -2187,7 +2187,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	}
 	err = t.setPrimaryProxyLocked(proxyid, "" /* primaryToRemove */, prepare)
 	if err != nil {
-		s := fmt.Sprintf("Failed to Set Primary Proxy to %v: %v", err)
+		s := fmt.Sprintf("Failed to Set Primary Proxy to %v: %v", proxyid, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2211,8 +2211,16 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = json.Marshal(ctx.config)
 		assert(err == nil, err)
 	case GetWhatSmap:
-		jsbytes, err = json.Marshal(t.si)
+		jsbytes, err = json.Marshal(t.smap)
 		assert(err == nil, err)
+	case GetWhatSmapVote:
+		msg := SmapVoteMsg{
+			VoteInProgress: false,
+			Smap:           t.smap,
+		}
+		jsbytes, err := json.Marshal(msg)
+		assert(err == nil, err)
+		t.writeJSON(w, r, jsbytes, "httpdaeget")
 	case GetWhatStats:
 		rr := getstorstatsrunner()
 		rr.Lock()

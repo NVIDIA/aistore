@@ -181,7 +181,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 |--- | --- | ---|
 | Unregister storage target (proxy only) | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://192.168.176.128:8080/v1/cluster/daemon/15205:8083` |
 | Register storage target | POST /v1//daemon | `curl -i -X POST http://192.168.176.128:8083/v1/daemon` |
-| Get cluster map (proxy only) | GET {"what": "smap"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "smap"}' http://192.168.176.128:8080/v1/cluster` |
+| Get cluster map | GET {"what": "smap"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "smap"}' http://192.168.176.128:8080/v1/daemon` |
 | Get proxy or target configuration| GET {"what": "config"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/daemon` |
 | Update individual DFC daemon (proxy or target) configuration (example: statistics logging interval) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8081/v1/daemon` |
 | Update individual DFC daemon (proxy or target) configuration (example: log level) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | ` curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setconfig","name":"loglevel","value":"4"}' http://192.168.176.128:8080/v1/daemon` |
@@ -353,20 +353,23 @@ The election process is as follows:
 - If the candidate receives a majority of affirmative responses it sends a confirmation message to all other targets and proxies and becomes the primary proxy.
 - Upon reception of the confirmation message, a recipient removes the previous primary proxy from their local Smap, and updates the primary proxy to the winning candidate.
 
-### Proxy Confirmation Process
+### Proxy Startup Process
 
-When a proxy starts up as primary, after a configurable period of time (config.Proxy.StartupConfirmationTime), it confirms whether or not it is the primary proxy. This allows a proxy to be rerun with the same command and environment variables, even if it should no longer be primary. The confirmation process is as follows:
+While it is running, a proxy persists the cluster map when it changes, loading it as the hint cluster map on startup. When a proxy starts up as primary, it performs the following process:
 
-- If this proxy recieved any registrations, it is the primary proxy.
-- If not, it queries each proxy from the cluster map stored from the previous run to get the current primary proxy.
-- It registers with the first primary proxy found this way, and becomes non-primary.
-- If no primary proxy is found, it remains primary.
+- It requests the cluster map from each proxy and target in the union of the current cluster map and the hint cluster map.
+- If any target or proxy signaled that a vote is in progress, it waits a short time, and restarts the process.
+- If not, it picks the cluster map with the maximum version to be the current cluster map.
+- If it is the primary proxy in that cluster map: It continues as primary.
+- If it is not the primary proxy in that cluster map: It registers to the primary proxy from that cluster map, becoming non-primary.
+
+This process allows a proxy to be rerun with the same command and environment variables, even if it should no longer be primary.
 
 ### Current Limitations
 
 - The current primary proxy is determined at startup, through either the configuration file or the -proxyurl command line variable. This means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fail, and rejoin.
 - DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
-- If multiple proxies restart as primary the same time, it is possible for one of them to register to the other one (when neither of them should remain primary), resulting in both proxies not rejoining the cluster.
+- Currently, only the candidate primary proxy keeps track of the fact that a vote is happening. This means that if the candidate primary proxy is not in the hint cluster map when a proxy starts up, a proxy may start as primary at the same time as an election completes, changing the primary proxy.
 
 ### Tests
 

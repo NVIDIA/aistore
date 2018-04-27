@@ -35,14 +35,14 @@ const (
 
 var (
 	voteTests = []Test{
-		Test{"Proxy Failure", proxy_failure},
-		Test{"Multiple Failures", multiple_failures},
-		Test{"Rejoin", rejoin},
-		Test{"Primary Proxy Rejoin", primaryproxyrejoin},
-		Test{"Minority Cluster Map Mismatch", minoritymismatchclustermap},
-		Test{"Majority Cluster Map Mismatch", majoritymismatchclustermap},
-		Test{"Multiple Proxy Operations", putgetmultipleproxies},
-		Test{"Set Primary Proxy", setPrimaryProxy},
+		Test{"Proxy Failure", voteProxyFailure},
+		Test{"Multiple Failures", voteMultipleFailures},
+		Test{"Rejoin", voteRejoin},
+		Test{"Primary Proxy Rejoin", votePrimaryProxyRejoin},
+		Test{"Minority Cluster Map Mismatch", voteMinorityMismatchClusterMap},
+		Test{"Majority Cluster Map Mismatch", voteMajorityMismatchClusterMap},
+		Test{"Multiple Proxy Operations", votePutGetMultipleProxies},
+		Test{"Set Primary Proxy", voteSetPrimaryProxy},
 	}
 )
 
@@ -60,8 +60,8 @@ func canRunMultipleProxyTests(t *testing.T) (proxyid string) {
 }
 
 func Test_vote(t *testing.T) {
-	originalproxyid := canRunMultipleProxyTests(t)
-	originalproxyurl := proxyurl
+	OriginalProxyID := canRunMultipleProxyTests(t)
+	OriginalProxyURL := proxyurl
 
 	for _, test := range voteTests {
 		t.Run(test.name, test.method)
@@ -70,8 +70,9 @@ func Test_vote(t *testing.T) {
 		}
 	}
 
-	resetPrimaryProxy(originalproxyid, t)
-	proxyurl = originalproxyurl
+	time.Sleep(10 * time.Second)
+	resetPrimaryProxy(OriginalProxyID, t)
+	proxyurl = OriginalProxyURL
 }
 
 //==========
@@ -80,7 +81,7 @@ func Test_vote(t *testing.T) {
 //
 //==========
 
-func proxy_failure(t *testing.T) {
+func voteProxyFailure(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -98,7 +99,7 @@ func proxy_failure(t *testing.T) {
 		t.Errorf("Error killing Primary Proxy: %v", err)
 	}
 	// Wait the maxmimum time it should take to switch.
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveSeconds)*time.Second)
 
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
@@ -107,14 +108,14 @@ func proxy_failure(t *testing.T) {
 		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
 	}
 
-	args = append(args, "-proxyurl="+nextProxyURL)
+	args = setProxyURLArg(args, nextProxyURL)
 	err = restore(httpclient, primaryProxyURL, cmd, args, false)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
 }
 
-func multiple_failures(t *testing.T) {
+func voteMultipleFailures(t *testing.T) {
 
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
@@ -147,7 +148,7 @@ func multiple_failures(t *testing.T) {
 	}
 
 	// Wait the maxmimum time it should take to switch.
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveSeconds)*time.Second)
 
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
@@ -157,19 +158,19 @@ func multiple_failures(t *testing.T) {
 	}
 
 	// Restore the killed target
-	targs = append(targs, "-proxyurl="+nextProxyURL)
+	targs = setProxyURLArg(targs, nextProxyURL)
 	err = restore(httpclient, targetURLToKill, tcmd, targs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
-	pargs = append(pargs, "-proxyurl="+nextProxyURL)
+	pargs = setProxyURLArg(pargs, nextProxyURL)
 	err = restore(httpclient, primaryProxyURL, pcmd, pargs, false)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
 }
 
-func rejoin(t *testing.T) {
+func voteRejoin(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -188,7 +189,7 @@ func rejoin(t *testing.T) {
 	}
 
 	// Wait the maxmimum time it should take to switch.
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(2*keepaliveSeconds)*time.Second)
 
 	// Kill a Target
 	targetURLToKill := ""
@@ -203,7 +204,8 @@ func rejoin(t *testing.T) {
 	}
 
 	tcmd, targs, err := kill(httpclient, targetURLToKill, targetPortToKill)
-	time.Sleep(5 * time.Second) // FIXME: Deterministic wait for smap propogation
+	// Wait the maxmimum time it should take to switch.
+	waitProgressBar("Target Failure Discovery: ", time.Duration(3*keepaliveSeconds)*time.Second)
 
 	proxyurl = nextProxyURL
 	smap = getClusterMap(httpclient, t)
@@ -216,20 +218,8 @@ func rejoin(t *testing.T) {
 		t.Errorf("Killed Target was not removed from the cluster map: %v", targetIDToKill)
 	}
 
-	// Remove proxyurl CLI Variable
-	var idx int
-	found := false
-	for i, arg := range targs {
-		if strings.Contains(arg, "-proxyurl") {
-			idx = i
-			found = true
-		}
-	}
-	if found {
-		targs = append(targs[:idx], targs[idx+1:]...)
-	}
-
 	// Restart that Target
+	targs = removeProxyURLArg(targs)
 	err = restore(httpclient, targetURLToKill, tcmd, targs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
@@ -241,14 +231,14 @@ func rejoin(t *testing.T) {
 		t.Errorf("Restarted Target did not rejoin the cluster: %v", targetIDToKill)
 	}
 
-	pargs = append(pargs, "-proxyurl="+nextProxyURL)
+	pargs = setProxyURLArg(pargs, nextProxyURL)
 	err = restore(httpclient, primaryProxyURL, pcmd, pargs, false)
 	if err != nil {
 		t.Errorf("Error restoring target: %v", err)
 	}
 }
 
-func primaryproxyrejoin(t *testing.T) {
+func votePrimaryProxyRejoin(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -272,20 +262,21 @@ func primaryproxyrejoin(t *testing.T) {
 	// Run a mock target to unpause the original primary proxy during the confirmation stage.
 	stopch := make(chan struct{})
 	smapch := make(chan struct{}, 10)
-	mocktgt := &PrimaryProxyRejoinMockTarget{pid: pidint, smapsynch: smapch}
+	mocktgt := &primaryProxyRejoinMockTarget{pid: pidint, smapSyncCh: smapch}
 	go runMockTarget(mocktgt, stopch, &smap)
 
 	<-smapch
 	// Allow smap propagation
-	waitProgressBar("Propagating Smap: ", time.Duration(keepaliveseconds)*time.Second)
+	waitProgressBar("Propagating Smap: ", time.Duration(keepaliveSeconds)*time.Second)
 
 	// Pause the original primary proxy
+	// It will be resumed by the primaryProxyRejoinMockTarget during the Vote Confirmation phase.
 	err = syscall.Kill(pidint, syscall.SIGSTOP)
 	if err != nil {
 		t.Errorf("Error pausing primary proxy: %v", err)
 	}
 
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(4*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(4*keepaliveSeconds)*time.Second)
 
 	// The expected behavior is that the original primary proxy exists with an old version of the SMap, but the rest of the cluster is now using a newer Smap version
 
@@ -309,22 +300,22 @@ func primaryproxyrejoin(t *testing.T) {
 		t.Errorf("Error killing Primary Proxy: %v", err)
 	}
 	time.Sleep(5 * time.Second)
-	pargs = append(pargs, "-proxyurl="+nextProxyURL)
+	pargs = setProxyURLArg(pargs, nextProxyURL)
 	err = restore(httpclient, oldproxyurl, pcmd, pargs, false)
 	if err != nil {
-		t.Errorf("Error restoring target: %v", err)
+		t.Errorf("Error restoring Primary Proxy: %v", err)
 	}
 	time.Sleep(5 * time.Second)
 }
 
-func minoritymismatchclustermap(t *testing.T) {
+func voteMinorityMismatchClusterMap(t *testing.T) {
 	f := func(i int) int {
 		return i/4 + 1
 	}
 	mismatchclustermap(f, t)
 }
 
-func majoritymismatchclustermap(t *testing.T) {
+func voteMajorityMismatchClusterMap(t *testing.T) {
 	f := func(i int) int {
 		return i/2 + 1
 	}
@@ -386,7 +377,7 @@ func mismatchclustermap(getnumtargets func(int) int, t *testing.T) {
 	}
 	// Wait the maxmimum time it should take to switch. It is longer for these tests, because elections
 	// Might fail due to cluster map mismatch, but one should eventually succeed.
-	waitProgressBar("Primary Proxy Changing: ", time.Duration(5*keepaliveseconds)*time.Second)
+	waitProgressBar("Primary Proxy Changing: ", time.Duration(5*keepaliveSeconds)*time.Second)
 
 	// Check if the next proxy is the one we found from hrw
 	proxyurl = nextProxyURL
@@ -397,14 +388,14 @@ func mismatchclustermap(getnumtargets func(int) int, t *testing.T) {
 		t.Errorf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
 	}
 
-	args = append(args, "-proxyurl="+nextProxyURL)
+	args = setProxyURLArg(args, nextProxyURL)
 	err = restore(httpclient, primaryProxyURL, cmd, args, false)
 	if err != nil {
 		t.Errorf("Error restoring proxy: %v", err)
 	}
 }
 
-func putgetmultipleproxies(t *testing.T) {
+func votePutGetMultipleProxies(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 
@@ -469,7 +460,7 @@ func singleProxyPutGetDelete(seed int64, nloops int, proxyurl string, verbose bo
 	return nil
 }
 
-func setPrimaryProxy(t *testing.T) {
+func voteSetPrimaryProxy(t *testing.T) {
 	// Get Smap
 	smap := getClusterMap(httpclient, t)
 	// Set primary proxy to each proxy, in a random order:
@@ -510,39 +501,21 @@ func hrwProxy(smap *dfc.Smap) (proxyid, proxyurl string, err error) {
 }
 
 func kill(httpclient *http.Client, url, port string) (cmd string, args []string, err error) {
-	cmd, args, err = getProcessOnPort(port)
+	var pid string
+
+	pid, cmd, args, err = getProcessOnPort(port)
 	if err != nil {
 		err = fmt.Errorf("Error retrieving process on port %v: %v", port, err)
 		return
 	}
 
-	killurl := url + "/" + dfc.Rversion + "/" + dfc.Rdaemon + "?" + dfc.URLParamForce + "=true"
-	msg := &dfc.ActionMsg{Action: dfc.ActShutdown}
-	jsbytes, err := json.Marshal(&msg)
+	// Do not shut down gracefully.
+	syscallKill := "kill"
+	argsKill := []string{"-9", pid}
+	commandKill := exec.Command(syscallKill, argsKill...)
+	output, err := commandKill.CombinedOutput()
 	if err != nil {
-		err = fmt.Errorf("Unexpected failure to marshal VoteMessage: %v", err)
-		return
-	}
-
-	req, err := http.NewRequest(http.MethodPut, killurl, bytes.NewBuffer(jsbytes))
-	if err != nil {
-		err = fmt.Errorf("Unexpected failure to create http request %s %s, err: %v", http.MethodPut, killurl, err)
-		return
-	}
-
-	r, err := httpclient.Do(req)
-	if err != nil {
-		err = fmt.Errorf("Error sending HTTP request %v %v: %v", http.MethodGet, killurl, err)
-		return
-	}
-	defer func() {
-		if r.Body != nil {
-			r.Body.Close()
-		}
-	}()
-	_, err = dfc.ReadToNull(r.Body)
-	if err != nil {
-		err = fmt.Errorf("Error reading HTTP Body: %v", err)
+		err = fmt.Errorf("Error executing kill command, output: %v, err: %v", output, err)
 		return
 	}
 
@@ -562,7 +535,8 @@ func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary 
 	cmdStart.Stderr = &stderr
 	go func() {
 		err := cmdStart.Run()
-		if err != nil {
+		if err != nil && !strings.HasPrefix(err.Error(), "signal:") {
+			// Don't print signal errors, because they're generally created by this test.
 			fmt.Printf("Error running command %v %v: %v (%v)\n", cmd, args, err, stderr.String())
 		}
 	}()
@@ -612,8 +586,8 @@ func getPidOnPort(port string) (string, error) {
 	return pid, nil
 }
 
-func getProcessOnPort(port string) (command string, args []string, err error) {
-	pid, err := getPidOnPort(port)
+func getProcessOnPort(port string) (pid, command string, args []string, err error) {
+	pid, err = getPidOnPort(port)
 	if err != nil {
 		err = fmt.Errorf("Error getting pid on port: %v", err)
 		return
@@ -634,7 +608,9 @@ func getProcessOnPort(port string) (command string, args []string, err error) {
 		err = fmt.Errorf("No returned fields")
 		return
 	}
-	return fields[0], fields[1:], nil
+	command = fields[0]
+	args = fields[1:]
+	return
 }
 
 // getOutboundIP taken from https://stackoverflow.com/a/37382208
@@ -658,6 +634,7 @@ func resetPrimaryProxy(proxyid string, t *testing.T) {
 	r, err := httpclient.Do(req)
 	if err != nil {
 		t.Errorf("Unexpected failure to do HTTP Request: %v", err)
+		return
 	}
 	defer func() {
 		if r.Body != nil {
@@ -672,6 +649,28 @@ func resetPrimaryProxy(proxyid string, t *testing.T) {
 	return
 }
 
+func removeProxyURLArg(args []string) []string {
+	var idx int
+	found := false
+	for i, arg := range args {
+		if strings.Contains(arg, "-proxyurl") {
+			idx = i
+			found = true
+			break
+		}
+	}
+	if found {
+		args = append(args[:idx], args[idx+1:]...)
+	}
+	return args
+}
+
+func setProxyURLArg(args []string, proxyurl string) []string {
+	args = removeProxyURLArg(args)
+	args = append(args, "-proxyurl="+proxyurl)
+	return args
+}
+
 //=============
 //
 // Mock Target
@@ -680,10 +679,10 @@ func resetPrimaryProxy(proxyid string, t *testing.T) {
 //=============
 
 const (
-	mocktgtport = "8079"
+	mockTargetPort = "8079"
 )
 
-type targetmocker interface {
+type targetMocker interface {
 	// /version/files handler
 	filehdlr(w http.ResponseWriter, r *http.Request)
 	// /version/daemon handler
@@ -692,7 +691,7 @@ type targetmocker interface {
 	votehdlr(w http.ResponseWriter, r *http.Request)
 }
 
-func runMockTarget(mocktgt targetmocker, stopch chan struct{}, smap *dfc.Smap) {
+func runMockTarget(mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rbuckets+"/", mocktgt.filehdlr)
@@ -701,7 +700,7 @@ func runMockTarget(mocktgt targetmocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rdaemon+"/", mocktgt.daemonhdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rvote+"/", mocktgt.votehdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rhealth, func(w http.ResponseWriter, r *http.Request) {})
-	s := &http.Server{Addr: ":" + mocktgtport, Handler: mux}
+	s := &http.Server{Addr: ":" + mockTargetPort, Handler: mux}
 
 	registerMockTarget(mocktgt, smap)
 	go s.ListenAndServe()
@@ -710,7 +709,7 @@ func runMockTarget(mocktgt targetmocker, stopch chan struct{}, smap *dfc.Smap) {
 	s.Shutdown(context.Background())
 }
 
-func registerMockTarget(mocktgt targetmocker, smap *dfc.Smap) error {
+func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 	// Borrow a random DaemonInfo to register with:
 	var (
 		jsbytes []byte
@@ -721,9 +720,9 @@ func registerMockTarget(mocktgt targetmocker, smap *dfc.Smap) error {
 		outboundIP := getOutboundIP().String()
 
 		di.DaemonID = "MOCK"
-		di.DaemonPort = mocktgtport
+		di.DaemonPort = mockTargetPort
 		di.NodeIPAddr = outboundIP
-		di.DirectURL = "http://" + outboundIP + ":" + mocktgtport
+		di.DirectURL = "http://" + outboundIP + ":" + mockTargetPort
 		jsbytes, err = json.Marshal(di)
 		if err != nil {
 			return err
@@ -753,7 +752,7 @@ func registerMockTarget(mocktgt targetmocker, smap *dfc.Smap) error {
 	return nil
 }
 
-func unregisterMockTarget(mocktgt targetmocker) error {
+func unregisterMockTarget(mocktgt targetMocker) error {
 	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rcluster + "/" + dfc.Rdaemon + "/" + "MOCK"
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
@@ -783,24 +782,24 @@ func unregisterMockTarget(mocktgt targetmocker) error {
 //
 //=====================
 
-type PrimaryProxyRejoinMockTarget struct {
-	pid       int
-	smapsynch chan struct{}
+type primaryProxyRejoinMockTarget struct {
+	pid        int
+	smapSyncCh chan struct{}
 }
 
-func (*PrimaryProxyRejoinMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
+func (*primaryProxyRejoinMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
 	// Ignore all file requests
 	return
 }
 
-func (p *PrimaryProxyRejoinMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request) {
+func (p *primaryProxyRejoinMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 	// Treat all daemonhdlr requests as smap syncs: notify on reciept
 	var v struct{}
-	p.smapsynch <- v
+	p.smapSyncCh <- v
 	return
 }
 
-func (p *PrimaryProxyRejoinMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
+func (p *primaryProxyRejoinMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		w.Write([]byte(dfc.VoteYes))

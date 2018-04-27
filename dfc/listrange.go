@@ -430,7 +430,7 @@ func (t *targetrunner) addPrefetchRange(bucket, prefix, regex string, min, max i
 func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.find(ActPrefetch)
+	_, xx := q.findUnlocked(ActPrefetch)
 	if xx != nil {
 		xpre := xx.(*xactPrefetch)
 		glog.Infof("%s already running, nothing to do", xpre.tostring())

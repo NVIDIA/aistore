@@ -32,27 +32,27 @@ const (
 )
 
 var (
-	numops                     int
-	numfiles                   int
-	numworkers                 int
-	match                      = ".*"
-	props                      string
-	pagesize                   int64
-	fnlen                      int
-	objlimit                   int64
-	prefix                     string
-	abortonerr                 = false
-	readerType                 = readers.ReaderTypeSG
-	prefetchPrefix             = "__bench/test-"
-	prefetchRegex              = "^\\d22\\d?"
-	prefetchRange              = "0:2000"
-	skipdel                    bool
-	baseseed                   = int64(1062984096)
-	keepaliveseconds           int64
-	startupconfirmationseconds int64
-	multiProxyTestDuration     time.Duration
-	clichecksum                string
-	cycles                     int
+	numops                 int
+	numfiles               int
+	numworkers             int
+	match                  = ".*"
+	props                  string
+	pagesize               int64
+	fnlen                  int
+	objlimit               int64
+	prefix                 string
+	abortonerr             = false
+	readerType             = readers.ReaderTypeSG
+	prefetchPrefix         = "__bench/test-"
+	prefetchRegex          = "^\\d22\\d?"
+	prefetchRange          = "0:2000"
+	skipdel                bool
+	baseseed               = int64(1062984096)
+	keepaliveSeconds       int64
+	startupGetSmapDelay    int64
+	multiProxyTestDuration time.Duration
+	clichecksum            string
+	cycles                 int
 
 	clibucket string
 	proxyurl  string
@@ -83,8 +83,8 @@ func init() {
 	// They are given different seeds, as the tests are completely deterministic based on
 	// choice of seed, so they will interfere with each other.
 	flag.Int64Var(&baseseed, "seed", baseseed, "Seed to use for random number generators")
-	flag.Int64Var(&keepaliveseconds, "keepaliveseconds", 15, "The keepalive poll time for the cluster")
-	flag.Int64Var(&startupconfirmationseconds, "startupconfirmationseconds", 30, "The Startup Suspect time for proxies")
+	flag.Int64Var(&keepaliveSeconds, "keepaliveseconds", 15, "The keepalive poll time for the cluster")
+	flag.Int64Var(&startupGetSmapDelay, "startupgetsmapdelay", 10, "The Startup Get Smap Delay time for proxies")
 	flag.DurationVar(&multiProxyTestDuration, "duration", 10*time.Minute,
 		"The length to run the Multiple Proxy Stress Test for")
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")

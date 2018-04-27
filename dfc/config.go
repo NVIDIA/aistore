@@ -108,10 +108,10 @@ type timeoutconfig struct {
 }
 
 type proxyconfig struct {
-	Primary                    proxycnf      `json:"primary"`
-	Original                   proxycnf      `json:"original"`
-	StartupConfirmationTimeStr string        `json:"startup_confirmation_time"`
-	StartupConfirmationTime    time.Duration `json:"-"` //
+	Primary                  proxycnf      `json:"primary"`
+	Original                 proxycnf      `json:"original"`
+	StartupGetSmapMaximumStr string        `json:"startup_get_smap_maximum"`
+	StartupGetSmapMaximum    time.Duration `json:"-"` //
 }
 
 type proxycnf struct {
@@ -315,8 +315,8 @@ func validateconf() (err error) {
 	if ctx.config.Timeout.SendFile, err = time.ParseDuration(ctx.config.Timeout.SendFileStr); err != nil {
 		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", ctx.config.Timeout.SendFileStr, err)
 	}
-	if ctx.config.Proxy.StartupConfirmationTime, err = time.ParseDuration(ctx.config.Proxy.StartupConfirmationTimeStr); err != nil {
-		return fmt.Errorf("Bad Proxy startup_suspect_time format %s, err %v", ctx.config.Proxy.StartupConfirmationTimeStr, err)
+	if ctx.config.Proxy.StartupGetSmapMaximum, err = time.ParseDuration(ctx.config.Proxy.StartupGetSmapMaximumStr); err != nil {
+		return fmt.Errorf("Bad Proxy startup_get_smap_maximum format %s, err %v", ctx.config.Proxy.StartupGetSmapMaximumStr, err)
 	}
 	return nil
 }
