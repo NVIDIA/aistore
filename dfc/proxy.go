@@ -281,7 +281,7 @@ func (p *proxyrunner) getSmapFromHintCluster() (retry bool) {
 	unionsmap := p.unionSmapAndHintsmap()
 	svms := make(chan SmapVoteMsg, unionsmap.count()+unionsmap.countProxies())
 
-	callback := func(si *daemonInfo, r []byte, err error, _ string, status int) {
+	callback := func(si *daemonInfo, r []byte, err error, status int) {
 		// Get all non-zero version smaps retrieved.
 		if err != nil {
 			glog.Warningf("Error retrieving cluster map from %v: %v", si.DaemonID, err)
@@ -1476,7 +1476,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, true)
 	method := http.MethodPut
 	errch := make(chan error, p.smap.count()+p.smap.countProxies())
-	f := func(si *daemonInfo, _ []byte, err error, _ string, status int) {
+	f := func(si *daemonInfo, _ []byte, err error, status int) {
 		if err != nil {
 			errch <- fmt.Errorf("Error from %v in prepare phase of Set Primary Proxy: %v", si.DaemonID, err)
 		}
@@ -1494,7 +1494,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// If phase 1 passed without error, broadcast phase 2:
 	// After this point, errors will not result in any rollback.
 	urlfmt = fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, false)
-	f = func(si *daemonInfo, _ []byte, err error, _ string, status int) {
+	f = func(si *daemonInfo, _ []byte, err error, status int) {
 		if err != nil {
 			glog.Errorf("Error from %v in commit phase of Set Primary Proxy: %v", si.DaemonID, err)
 		}
@@ -1776,7 +1776,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 
 		urlfmt := fmt.Sprintf("%%s/%s/%s", Rversion, Rdaemon)
-		callback := func(_ *daemonInfo, _ []byte, _ error, _ string, _ int) {}
+		callback := func(_ *daemonInfo, _ []byte, _ error, _ int) {}
 		p.smap.lock()
 		defer p.smap.unlock()
 		p.broadcast(urlfmt, http.MethodPut, msgbytes, p.smap, callback)
@@ -1895,7 +1895,7 @@ func (p *proxyrunner) httpcluputSmap(action string, autorebalance bool) {
 	assert(err == nil, err)
 	glog.Infof("%s: %s", action, string(jsbytes))
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, action, URLParamAutoReb, autorebalance)
-	callback := func(_ *daemonInfo, _ []byte, err error, _ string, status int) {
+	callback := func(_ *daemonInfo, _ []byte, err error, status int) {
 		if err != nil {
 			p.kalive.onerr(err, status)
 		}
@@ -1911,7 +1911,7 @@ func (p *proxyrunner) httpfilputLB() {
 
 	glog.Infoln(string(jsbytes))
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rdaemon, Rsynclb)
-	callback := func(_ *daemonInfo, _ []byte, err error, _ string, status int) {
+	callback := func(_ *daemonInfo, _ []byte, err error, status int) {
 		if err != nil {
 			p.kalive.onerr(err, status)
 		}
@@ -1951,15 +1951,16 @@ Sending to each node happens in parallel, and callback will be called with the r
 
 The caller must lock p.smap.
 */
-func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Smap, callback func(*daemonInfo, []byte, error, string, int), timeout ...time.Duration) {
+func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Smap,
+	callback func(*daemonInfo, []byte, error, int), timeout ...time.Duration) {
 	wg := &sync.WaitGroup{}
 	for _, si := range smap.Smap {
 		wg.Add(1)
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			r, err, errstr, status := p.call(si, url, method, jsbytes, timeout...)
-			callback(si, r, err, errstr, status)
+			r, err, _, status := p.call(si, url, method, jsbytes, timeout...)
+			callback(si, r, err, status)
 		}(si)
 	}
 	for _, si := range smap.Pmap {
@@ -1969,8 +1970,8 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 			go func(si *proxyInfo) {
 				defer wg.Done()
 				url := fmt.Sprintf(urlfmt, si.DirectURL)
-				r, err, errstr, status := p.call(&si.daemonInfo, url, method, jsbytes, timeout...)
-				callback(&si.daemonInfo, r, err, errstr, status)
+				r, err, _, status := p.call(&si.daemonInfo, url, method, jsbytes, timeout...)
+				callback(&si.daemonInfo, r, err, status)
 			}(si)
 		}
 	}
