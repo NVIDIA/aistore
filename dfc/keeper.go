@@ -35,7 +35,6 @@ type okmap struct {
 type kalive struct {
 	namedrunner
 	k        kaliveif
-	h        *httprunner
 	checknow chan error
 	chstop   chan struct{}
 	atomic   int64
@@ -54,13 +53,13 @@ type targetkalive struct {
 
 // construction
 func newproxykalive(p *proxyrunner) *proxykalive {
-	k := &proxykalive{p: p, kalive: kalive{h: &p.httprunner}}
+	k := &proxykalive{p: p}
 	k.kalive.k = k
 	return k
 }
 
 func newtargetkalive(t *targetrunner) *targetkalive {
-	k := &targetkalive{t: t, kalive: kalive{h: &t.httprunner}}
+	k := &targetkalive{t: t}
 	k.kalive.k = k
 	return k
 }
