@@ -382,3 +382,9 @@ The suite of tests for multiple proxies may be run by setting the environment va
 3. Rejoin: Tests that, after a primary proxy failure and transition, a target can fail and rejoin the cluster.
 4. Primary_Proxy_Rejoin: Tests the scenario where the primary proxy becomes inactive, and resumes activity during the voting process. The vote should complete and result in the primary proxy changing, with the previous primary proxy still alive, but with a lower Smap version.
 5. Test_votestress: The stress test runs a sequence of put/get/delete calls to a local bucket from multiple worker threads, and simultaneously kills, waits, and restores the primary proxy at random intervals.
+
+## WebDAV
+
+WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
+
+For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
