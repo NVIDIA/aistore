@@ -264,26 +264,21 @@ func (g *rungroup) run() error {
 		return nil
 	}
 	g.errch = make(chan error, len(g.runarr))
-	g.idxch = make(chan int, len(g.runarr))
 	g.stpch = make(chan error, 1)
 	for i, r := range g.runarr {
 		go func(i int, r runner) {
 			g.errch <- r.run()
-			g.idxch <- i
 		}(i, r)
 	}
-	// wait here
+
+	// wait here for the first completed runner(likely signal runner)
 	err := <-g.errch
-	idx := <-g.idxch
 
 	for _, r := range g.runarr {
 		r.stop(err)
 	}
 	glog.Flush()
-	for i := 0; i < cap(g.errch); i++ {
-		if i == idx {
-			continue
-		}
+	for i := 0; i < cap(g.errch)-1; i++ {
 		<-g.errch
 		glog.Flush()
 	}

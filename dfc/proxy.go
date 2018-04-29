@@ -215,22 +215,25 @@ func (p *proxyrunner) unregister() (status int, err error) {
 
 // stop gracefully
 func (p *proxyrunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", p.name, err)
+	glog.Infof("Stopping %s(primary=%v), err: %v", p.name, p.primary, err)
 	p.xactinp.abortAll()
-	//
-	// give targets a limited time to unregister
-	//
-	version := p.smap.versionLocked()
-	for i := 0; i < 5; i++ {
-		time.Sleep(time.Second)
-		v := p.smap.versionLocked()
-		if version != v {
-			version = v
+
+	if p.primary {
+		// give targets and non primary proxies some time to unregister
+		// FIXME: What if there is no map version change but still has unregistered proxy/targets?
+		//        may be wait until all are unregistered by counting numbers
+		version := p.smap.versionLocked()
+		for i := 0; i < 20; i++ {
 			time.Sleep(time.Second)
-			continue
+			v := p.smap.versionLocked()
+			if version == v {
+				break
+			}
+
+			version = v
 		}
-		break
 	}
+
 	if p.httprunner.h != nil && !p.primary {
 		// FIXME: The primary proxy should not unregister
 		// If it unregisters, then the cluster map will be incorrect.

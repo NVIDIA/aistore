@@ -40,6 +40,7 @@ func (r *atimerunner) run() error {
 	r.atimemap = &atimemap{m: make(map[string]time.Time, atimeCacheIni)}
 
 	ticker := time.NewTicker(atimeSyncTime)
+loop:
 	for {
 		select {
 		case <-ticker.C:
@@ -52,7 +53,7 @@ func (r *atimerunner) run() error {
 			r.atimemap.Unlock()
 		case <-r.chstop:
 			ticker.Stop() // NOTE: not flushing cached atimes
-			break
+			break loop
 		}
 	}
 	return nil

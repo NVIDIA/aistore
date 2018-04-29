@@ -11,7 +11,6 @@ build:
 
 kill:
 	@pkill -SIGINT dfc 2>/dev/null; sleep 1; true
-	@pkill -SIGKILL dfc 2>/dev/null; sleep 1; true
 
 # delete only caches, not logs
 rmcache:
