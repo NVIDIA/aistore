@@ -286,12 +286,7 @@ func (g *rungroup) run() error {
 	return err
 }
 
-//==================
-//
-// daemon init & run
-//
-//==================
-func dfcinit() {
+func init() {
 	// CLI to override dfc JSON config
 	flag.StringVar(&clivars.role, "role", "", "role: proxy OR target")
 	flag.StringVar(&clivars.conffile, "config", "", "config filename")
@@ -299,8 +294,16 @@ func dfcinit() {
 	flag.DurationVar(&clivars.statstime, "statstime", 0, "http and capacity utilization statistics log interval")
 	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 	flag.StringVar(&clivars.proxyurl, "proxyurl", "", "Override config Proxy settings")
+}
 
+//==================
+//
+// daemon init & run
+//
+//==================
+func dfcinit() {
 	flag.Parse()
+
 	if clivars.conffile == "" {
 		fmt.Fprintf(os.Stderr, "Missing configuration file - must be provided via command line\n")
 		fmt.Fprintf(os.Stderr, "Usage: ... -role=<proxy|target> -config=<json> ...\n")

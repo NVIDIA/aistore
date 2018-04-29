@@ -4,6 +4,16 @@
 #
 # Usage: deploy.sh [-loglevel=0|1|2|3] [-statstime=<DURATION>]
 #
+# To deploy DFC with code coverage enabled, set ENABLE_CODE_COVERAGE=1.
+# After runs, to collect code coverage data:
+# 1. run: make kill
+#    wait until all DFC processes are stopped, currently this is not automated, on screen, it will
+#    show "coverage: x.y% of statements" for each process, this indicates the proper termination and
+#    successful creation of coverage data for one process.
+# 2. run: make code-coverage
+#    this will generate dfc_cov.html file under /tmp/dfc
+# 3. view the result
+#    open /tmp/dfc/dfc_cov.html in a browser
 ############################################
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
@@ -109,7 +119,15 @@ done
 # -stderrthreshold=ERROR 	# Log errors and above are written to stderr and files
 # build
 BUILD=`git rev-parse --short HEAD`
-go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" setup/dfc.go
+if [ "$ENABLE_CODE_COVERAGE" == "" ]
+then
+	EXE=$GOPATH/bin/dfc
+	go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" setup/dfc.go
+else
+	EXE=$GOPATH/bin/dfc_coverage.test
+	rm $LOGROOT/*.cov
+	go test . -c -run=TestCoverage -v -o $EXE -cover
+fi
 if [ $? -ne 0 ]; then
 	exit 1
 fi
@@ -118,11 +136,21 @@ fi
 for (( c=$START; c<=$END; c++ ))
 do
 	CONFFILE="$CONFDIR/dfc$c.json"
+
+	PROXY_PARAM="-config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2"
+	TARGET_PARAM="-config=$CONFFILE -role=target $1 $2"
+	if [ "$ENABLE_CODE_COVERAGE" == "" ]
+	then
+		CMD=$EXE
+	else
+		CMD="$EXE -coverageTest -test.coverprofile dfc$c.cov -test.outputdir $LOGROOT"
+	fi
+
 	if [ $c -eq 0 ]
 	then
 		export DFCPRIMARYPROXY="true"
 		set -x
-		$GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
+		$CMD $PROXY_PARAM&
 		{ set +x; } 2>/dev/null
 		unset DFCPRIMARYPROXY
 		# wait for the proxy to start up
@@ -130,11 +158,11 @@ do
 	elif [ $c -lt $proxycount ]
 	then
 		set -x
-		$GOPATH/bin/dfc -config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2 &
+		$CMD $PROXY_PARAM&
 		{ set +x; } 2>/dev/null
 	else
 		set -x
-		$GOPATH/bin/dfc -config=$CONFFILE -role=target $1 $2 &
+		$CMD $TARGET_PARAM&
 		{ set +x; } 2>/dev/null
 	fi
 done

@@ -61,7 +61,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&proxyurl, "proxyurl", ProxyURL, "Proxy URL")
+	flag.StringVar(&proxyurl, "url", ProxyURL, "Proxy URL")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")

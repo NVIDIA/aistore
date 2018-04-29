@@ -33,3 +33,6 @@ cpuprof:
 
 flamegraph: cpuprof
 	@go-torch dfc.test /tmp/cpu.prof -u http://localhost:6060/
+
+code-coverage:
+	@./setup/code_coverage.sh
