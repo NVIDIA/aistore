@@ -1049,11 +1049,11 @@ func waitProgressBar(prefix string, wait time.Duration) {
 waitloop:
 	for range ticker.C {
 		elapsed := tickerStep * time.Duration(idx)
+		tlogf("----%d%%", (elapsed * 100 / wait))
 		if elapsed >= wait {
 			tlogln("")
 			break waitloop
 		}
-		tlogf("----%d%%", (elapsed * 100 / wait))
 		idx++
 	}
 	ticker.Stop()
@@ -1230,40 +1230,68 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats ma
 	return
 }
 
-func getClusterMap(httpclient *http.Client, t *testing.T) (smap dfc.Smap) {
+// getClusterMap consults primary proxy for the cluster server map
+// unfortunately it requires 't' as a parameters, sometime the aller doesn't have 't'
+// and way to many places this is called, not much i can do now but make a wrapper
+func getClusterMap(httpclient *http.Client, t *testing.T) dfc.Smap {
+	smap, err := getClusterMapGeneric(httpclient, proxyurl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return smap
+}
+
+func getClusterMapGeneric(httpclient *http.Client, url string) (dfc.Smap, error) {
 	var (
 		req    *http.Request
 		r      *http.Response
 		injson []byte
 		err    error
 	)
+
 	injson, err = json.Marshal(GetSmapMsg)
 	if err != nil {
-		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
+		return dfc.Smap{}, fmt.Errorf("Failed to marshal GetStatsMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
+
+	req, err = http.NewRequest("GET", url+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
 	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		return dfc.Smap{}, fmt.Errorf("Failed to create request: %v", err)
 	}
+
 	r, err = httpclient.Do(req)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, "Get configuration", r, nil, t) {
-		return
+
+	if err != nil {
+		// Note: might return connection refused if the servet is not ready
+		//       caller can retry in that case
+		return dfc.Smap{}, err
 	}
-	var b []byte
+
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		return dfc.Smap{}, fmt.Errorf("get cluster map, http status %d", r.StatusCode)
+	}
+
+	var (
+		b    []byte
+		smap dfc.Smap
+	)
 	b, err = ioutil.ReadAll(r.Body)
 	if err != nil {
-		t.Fatalf("Failed to read response body")
+		return dfc.Smap{}, fmt.Errorf("Failed to read response body")
 	}
+
 	err = json.Unmarshal(b, &smap)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal Dfconfig: %v", err)
+		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal smap: %v", err)
 	}
-	return
+
+	return smap, nil
 }
 
 func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[string]interface{}) {

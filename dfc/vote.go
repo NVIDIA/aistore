@@ -387,6 +387,7 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	if err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
+
 	p.synchronizeMaps(0, "", nil)
 }
 
@@ -394,9 +395,11 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 func (p *proxyrunner) updateSmapPrimaryProxy(proxyidToRemove string) *proxyInfo {
 	p.smap.lock()
 	defer p.smap.unlock()
+
 	if proxyidToRemove != "" {
 		p.smap.delProxy(proxyidToRemove)
 	}
+
 	psi := p.smap.getProxy(p.si.DaemonID)
 	// If psi == nil, then this proxy is not currently in the local cluster map. This should never happen.
 	assert(psi != nil, "This proxy should always exist in the local Smap")
@@ -513,6 +516,7 @@ func (h *httprunner) setPrimaryProxyAndSmap(smap *Smap) error {
 	defer smapLock.Unlock()
 	return h.setPrimaryProxyAndSmapUnlocked(smap)
 }
+
 func (h *httprunner) setPrimaryProxyAndSmapUnlocked(smap *Smap) error {
 	h.smap = smap
 	return h.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
@@ -534,18 +538,22 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 	} else if proxyinfo == nil {
 		return fmt.Errorf("New Primary Proxy nil in Smap: %v", newPrimaryProxy)
 	}
+
 	if prepare {
 		// If prepare=true, return before making any changes
 		return nil
 	}
+
 	proxyinfo.Primary = true
 	h.proxysi = proxyinfo
 	if primaryToRemove != "" {
 		h.smap.delProxy(primaryToRemove)
 	}
+
 	h.smap.ProxySI = proxyinfo
 	ctx.config.Proxy.Primary.ID = proxyinfo.DaemonID
 	ctx.config.Proxy.Primary.URL = proxyinfo.DirectURL
+
 	go func() {
 		glog.Infof("Set primary proxy: %v (prepare: %t)", newPrimaryProxy, prepare)
 		err := writeConfigFile()
@@ -553,6 +561,7 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 			glog.Errorf("Error writing config file: %v", err)
 		}
 	}()
+
 	return nil
 }
 

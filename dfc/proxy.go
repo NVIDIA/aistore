@@ -1482,6 +1482,7 @@ func (p *proxyrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, ap
 		p.invalmsghdlr(w, r, "Primary Proxy is the distributor of the lbmap, not the receiver")
 		return
 	}
+
 	curversion := p.lbmap.Version
 	newlbmap := &lbmap{LBmap: make(map[string]string)}
 	if p.readJSON(w, r, newlbmap) != nil {
@@ -1539,11 +1540,11 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		}
 		return
 	}
+
 	err = p.setPrimaryProxyLocked(proxyid, "" /* primaryToRemove */, prepare)
 	if err != nil {
 		s := fmt.Sprintf("Failed to set Primary Proxy to %v, err: %v", proxyid, err)
 		p.invalmsghdlr(w, r, s)
-		return
 	}
 }
 
@@ -1770,15 +1771,17 @@ func (p *proxyrunner) registerproxy(nsi *daemonInfo, keepalive bool) {
 		daemonInfo: *nsi,
 		Primary:    false, // this proxy is the primary, so the newly registered one cannot be
 	}
+
 	osi := p.smap.getProxy(nsi.DaemonID)
 	var osidi *daemonInfo
 	if osi != nil {
 		osidi = &osi.daemonInfo
-
 	}
+
 	if !p.shouldAddToSmap(nsi, osidi, keepalive, "proxy") {
 		return
 	}
+
 	p.smap.addProxy(&pi)
 	if glog.V(3) {
 		glog.Infof("register proxy %s (count %d)", nsi.DaemonID, p.smap.count())
@@ -1999,7 +2002,6 @@ func (p *proxyrunner) mapsAlreadyInSync() bool {
 
 func (c *mapsBcastContext) callback(si *daemonInfo, _ []byte, err error, status int) {
 	if err != nil {
-		glog.Errorf("Failed to %s %s, err: %v", c.action, si.DaemonID, err)
 		if IsErrConnectionRefused(err) {
 			c.Lock()
 			c.retry = true
@@ -2010,6 +2012,7 @@ func (c *mapsBcastContext) callback(si *daemonInfo, _ []byte, err error, status 
 				glog.Warningf("Retrying %s target=%s, err: %v", c.action, si.DaemonID, err)
 			}
 		} else {
+			glog.Errorf("Failed to %s %s, err: %v", c.action, si.DaemonID, err)
 			c.p.kalive.onerr(err, status)
 		}
 	}

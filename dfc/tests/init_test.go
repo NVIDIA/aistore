@@ -49,6 +49,7 @@ var (
 	skipdel                bool
 	baseseed               = int64(1062984096)
 	keepaliveSeconds       int64
+	proxyChangeLatency     time.Duration // time for a cluster to stabilize after proxy changes
 	startupGetSmapDelay    int64
 	multiProxyTestDuration time.Duration
 	clichecksum            string
@@ -85,10 +86,12 @@ func init() {
 	flag.Int64Var(&baseseed, "seed", baseseed, "Seed to use for random number generators")
 	flag.Int64Var(&keepaliveSeconds, "keepaliveseconds", 15, "The keepalive poll time for the cluster")
 	flag.Int64Var(&startupGetSmapDelay, "startupgetsmapdelay", 10, "The Startup Get Smap Delay time for proxies")
-	flag.DurationVar(&multiProxyTestDuration, "duration", 10*time.Minute,
+	flag.DurationVar(&multiProxyTestDuration, "duration", 3*time.Minute,
 		"The length to run the Multiple Proxy Stress Test for")
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.IntVar(&cycles, "cycles", 15, "Number of PUT cycles")
+	flag.DurationVar(&proxyChangeLatency, "proxychangelatency", time.Minute,
+		"Time for cluster to stablize after a proxy change")
 
 	flag.Parse()
 

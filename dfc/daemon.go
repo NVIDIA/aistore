@@ -211,6 +211,26 @@ func (m *Smap) copyLocked(dst *Smap) {
 	copyStruct(dst, m)
 }
 
+// Dump prints the smap
+func (m *Smap) Dump() {
+	fmt.Printf("Smap: version = %d, sync version = %d\n", m.Version, m.syncversion)
+	fmt.Printf("Targets\n")
+	for _, v := range m.Smap {
+		fmt.Printf("\tid = %-15s\turl = %s\n", v.DaemonID, v.DirectURL)
+	}
+
+	fmt.Printf("Proxies\n")
+	for _, v := range m.Pmap {
+		fmt.Printf("\tid = %-15s\turl = %-30s\tPrimary = %v\n", v.DaemonID, v.DirectURL, v.Primary)
+	}
+
+	fmt.Printf("Primary proxy\n")
+	if m.ProxySI != nil {
+		fmt.Printf("\tid = %-15s\turl = %-30s\tPrimary = %v\n",
+			m.ProxySI.DaemonID, m.ProxySI.DirectURL, m.ProxySI.Primary)
+	}
+}
+
 //====================
 //
 // lbmap wrapper - NOTE - caller must take the lock
