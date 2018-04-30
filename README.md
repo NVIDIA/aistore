@@ -15,7 +15,7 @@ and the requesting user.
 
 ## Prerequisites
 
-* Linux or macOS
+* Linux or Mac
 * Go 1.8 or later
 * Optionally, extended attributes (xattrs)
 * Optionally, Amazon (AWS) or Google Cloud (GCP) account
@@ -29,10 +29,9 @@ If this is the case - that is, if you happen not to have xattrs handy, you can c
 not to use them at all (section **Configuration** below).
 
 To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket.
-But if you don't have any Cloud-based buckets, you can first create a local bucket as illustrated
-in the **API** section below
-and in the [test sources](dfc/tests/regression_test.go). Note that DFC local buckets support the same exact
-API as the Cloud-based ones.
+If you don't have Amazon and/or Google Cloud accounts, you can use DFC local buckets as illustrated
+a) in the **API** section below and b) in the [test sources](dfc/tests/regression_test.go).
+Note that the local buckets support the same exact API as the Cloud-based ones.
 
 ## Getting Started
 
@@ -206,8 +205,8 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Get bucket props | HEAD /v1/buckets/bucket-name | ``` curl --head http://192.168.176.128:8080/v1/buckets/abc ```|
-| Set primary proxy (primary proxy only )| PUT /v1/cluster/proxy/new primary-proxy-id | ``` curl -i -X PUT http://192.1168.176.128:8080/v1/cluster/proxy/26869:8080 ``` |
+| Get bucket props | HEAD /v1/buckets/bucket-name | `curl --head http://192.168.176.128:8080/v1/buckets/abc` |
+| Set primary proxy (primary proxy only )| PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT http://192.1168.176.128:8080/v1/cluster/proxy/26869:8080` |
 
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
