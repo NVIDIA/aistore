@@ -50,15 +50,15 @@ const (
 
 // URL Query Parameter enum
 const (
-	URLParamLocal            = "local"      //local=bool - true if bucket is expected to be local, false otherwise.
-	URLParamToID             = "to_id"      // to_id=string - ID to copy to
-	URLParamFromID           = "from_id"    // from_id=string - ID to copy from
-	URLParamCached           = "cachedonly" //cachedonly=bool - true if target should return cached objects info instead of reqesting object list from cloud
-	URLParamAutoReb          = "auto_reb"   // true: auto-rebalance upon Smap version change, false: RESTful
-	URLParamSuspectedTarget  = "suspect"    // suspect=string - id of target suspected of failure
-	URLParamPrimaryCandidate = "candidate"  // candidate=string - id of candidate for primary proxy
-	URLParamForce            = "force"      // force=bool - Must be true to shutdown the primary proxy
-	URLParamPrepare          = "prepare"    // prepare=bool - if true, this request is the prepare phase for primary proxy change
+	URLParamLocal            = "local"       // true: bucket is expected to be local
+	URLParamToID             = "to_id"       // to_id=string - ID to copy to
+	URLParamFromID           = "from_id"     // from_id=string - ID to copy from
+	URLParamCached           = "cachedonly"  // true: return cached objects (names, metadata) instead of requesting the list from the cloud
+	URLParamNewTargetID      = "newtargetid" // ID of the new target joining the cluster
+	URLParamSuspectedTarget  = "suspect"     // suspect=string - ID of the target suspected of failure
+	URLParamPrimaryCandidate = "candidate"   // candidate=string - ID of the candidate for primary proxy
+	URLParamForce            = "force"       // true: shutdown the primary proxy
+	URLParamPrepare          = "prepare"     // true: request is the prepare phase for primary proxy change
 )
 
 // TODO: sort and some props are TBD

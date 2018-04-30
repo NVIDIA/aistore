@@ -6,6 +6,8 @@
 package dfc
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -28,7 +30,7 @@ type xrebpathrunner struct {
 	aborted   bool
 }
 
-func (t *targetrunner) runRebalance(newsmap *Smap) {
+func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	//
 	// first, check whether all the Smap-ed targets are up and running
 	//
@@ -59,7 +61,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap) {
 			if time.Since(pollstarted) > ctx.config.Rebalance.DestRetryTime {
 				break
 			}
-			time.Sleep(time.Second * 10)
+			time.Sleep(proxypollival * 2)
 		}
 		if !ok {
 			glog.Errorf("Not starting rebalancing x-action: target %s appears to be offline", sid)
@@ -111,9 +113,49 @@ func (t *targetrunner) runRebalance(newsmap *Smap) {
 			}
 		}
 	}
+	if newtargetid == t.si.DaemonID {
+		t.pollRebalancingDone(newsmap) // until the cluster is fully rebalanced - see t.httpobjget
+	}
 	xreb.etime = time.Now()
 	glog.Infoln(xreb.tostring())
 	t.xactinp.del(xreb.id)
+}
+
+func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
+	for {
+		count := 0
+		for sid, si := range newsmap.Smap {
+			if sid == t.si.DaemonID {
+				continue
+			}
+			url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+			outjson, err, _, _ := t.call(si, url, http.MethodGet, nil, kalivetimeout)
+			// retry once
+			if err == context.DeadlineExceeded {
+				outjson, err, _, _ = t.call(si, url, http.MethodGet, nil, kalivetimeout*2)
+			}
+			if err != nil {
+				glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", sid, err)
+				continue
+			}
+			status := &thealthstatus{}
+			err = json.Unmarshal(outjson, status)
+			if err == nil {
+				if status.IsRebalancing {
+					time.Sleep(proxypollival * 2)
+					count++
+				}
+			} else {
+				glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", url, err, string(outjson))
+			}
+		}
+		if glog.V(4) {
+			glog.Infof("in-progress count=%d (targets)", count)
+		}
+		if count == 0 {
+			break
+		}
+	}
 }
 
 //=========================

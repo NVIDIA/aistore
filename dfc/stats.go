@@ -380,39 +380,38 @@ func (r *storstatsrunner) housekeep(runlru bool) {
 }
 
 func (r *storstatsrunner) removeLogs(maxtotal uint64) {
-	var (
-		tot   int64
-		infos = []os.FileInfo{}
-	)
 	logfinfos, err := ioutil.ReadDir(ctx.config.Log.Dir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", ctx.config.Log.Dir, err)
 		return // ignore error
 	}
 	// sample name dfc.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-	for _, logfi := range logfinfos {
-		if logfi.IsDir() {
-			continue
+	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+	for _, logtype := range logtypes {
+		var (
+			tot   = int64(0)
+			infos = []os.FileInfo{}
+		)
+		for _, logfi := range logfinfos {
+			if logfi.IsDir() {
+				continue
+			}
+			if !strings.Contains(logfi.Name(), ".log.") {
+				continue
+			}
+			if strings.Contains(logfi.Name(), logtype) {
+				tot += logfi.Size()
+				infos = append(infos, logfi)
+			}
 		}
-		if !strings.HasPrefix(logfi.Name(), "dfc.") {
-			continue
-		}
-		if !strings.Contains(logfi.Name(), ".log.") {
-			continue
-		}
-		tot += logfi.Size()
-		if strings.Contains(logfi.Name(), ".INFO.") { // GC "INFO" logs only
-			infos = append(infos, logfi)
+		if tot > int64(maxtotal) {
+			if len(infos) <= 1 {
+				glog.Errorf("GC logs: %s, total %d for type %s, max %d", ctx.config.Log.Dir, tot, logtype, maxtotal)
+				continue
+			}
+			r.removeOlderLogs(tot, int64(maxtotal), infos)
 		}
 	}
-	if tot < int64(maxtotal) {
-		return
-	}
-	if len(infos) <= 1 {
-		glog.Errorf("GC logs err: log dir %s, total %d, maxtotal %d", ctx.config.Log.Dir, tot, maxtotal)
-		return
-	}
-	r.removeOlderLogs(tot, int64(maxtotal), infos)
 }
 
 func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileInfo) {

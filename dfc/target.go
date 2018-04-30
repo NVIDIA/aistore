@@ -67,6 +67,11 @@ type uxprocess struct {
 	pid       int64
 }
 
+type thealthstatus struct {
+	IsRebalancing bool `json:"is_rebalancing"`
+	// NOTE: include core stats and other info as needed
+}
+
 //===========================================================================
 //
 // target runner
@@ -705,10 +710,13 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	from := query.Get(URLParamFromID)
-	targetcorestats := getstorstats()
-	jsbytes, err := json.Marshal(targetcorestats)
+
+	aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+	status := &thealthstatus{IsRebalancing: aborted || running}
+
+	jsbytes, err := json.Marshal(status)
 	assert(err == nil, err)
-	ok := t.writeJSON(w, r, jsbytes, "proxycorestats")
+	ok := t.writeJSON(w, r, jsbytes, "thealthstatus")
 	if ok && from == t.proxysi.DaemonID {
 		t.kalive.timestamp(t.proxysi.DaemonID)
 	}
@@ -1939,10 +1947,10 @@ func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) 
 	islocal = t.islocalBucket(bucket)
 	proxylocalstr := r.URL.Query().Get(URLParamLocal)
 	if proxylocal, err := parsebool(proxylocalstr); err != nil {
-		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)", URLParamLocal, proxylocalstr)
+		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, URLParamLocal, proxylocalstr)
 		errcode = http.StatusInternalServerError
 	} else if proxylocalstr != "" && islocal != proxylocal {
-		errstr = fmt.Sprintf("Mismatch with islocalbucket: Client( %v ), Target( %v )", proxylocal, islocal)
+		errstr = fmt.Sprintf("islocalbucket(%s) mismatch: %t (proxy) != %t (target %s)", bucket, proxylocal, islocal, t.si.DaemonID)
 		errcode = http.StatusInternalServerError
 	}
 	return
@@ -1979,14 +1987,8 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		switch apitems[0] {
 		// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
 		case Rsyncsmap, Rebalance:
-			str := r.URL.Query().Get(URLParamAutoReb)
-			autorebalance, err := parsebool(str)
-			if err != nil {
-				errstr := fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: true | false)", URLParamAutoReb, str)
-				t.invalmsghdlr(w, r, errstr)
-				return
-			}
-			t.httpdaeputSmap(w, r, apitems, autorebalance)
+			newtargetid := r.URL.Query().Get(URLParamNewTargetID)
+			t.httpdaeputSmap(w, r, apitems, newtargetid)
 			return
 		// PUT '{lbmap}' /v1/daemon/localbuckets
 		case Rsynclb:
@@ -2029,14 +2031,13 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string, autorebalance bool) {
+func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string, newtargetid string) {
 	var newsmap = &Smap{}
 	if t.readJSON(w, r, newsmap) != nil {
 		return
 	}
-
 	newlen := len(newsmap.Smap)
-	glog.Infof("%s: new Smap version %d, num targets %d, autorebalance=%t", apitems[0], newsmap.Version, newlen, autorebalance)
+	glog.Infof("%s: new Smap version %d, num targets %d, newtargetid=%s", apitems[0], newsmap.Version, newlen, newtargetid)
 
 	smapLock.Lock() //=======================================================
 
@@ -2073,46 +2074,26 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	}
 	assert(existentialQ)
 
+	// t.smap = newsmap & set primary
 	err := t.setPrimaryProxyAndSmapUnlocked(newsmap)
+
+	// rebalancing x-action to get its own copy
+	assert(t.smap == newsmap)
+	smap4xaction := &Smap{}
+	copyStruct(smap4xaction, t.smap)
+
 	smapLock.Unlock() //=====================================================
 
 	for _, ln := range infoln {
 		glog.Infoln(ln)
 	}
-
 	if err != nil {
-		s := fmt.Sprintf("Failed to Set Primary Proxy to %v, err: %v", newsmap.ProxySI.DaemonID, err)
+		s := fmt.Sprintf("Failed to set Primary Proxy to %s, err: %v", newsmap.ProxySI.DaemonID, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-
 	if apitems[0] == Rsyncsmap {
 		return
-	}
-	// config checks
-	if autorebalance {
-		if !ctx.config.Rebalance.Enabled {
-			glog.Infoln("auto-rebalancing disabled")
-			return
-		}
-		if time.Since(t.starttime()) < ctx.config.Rebalance.StartupDelayTime {
-			glog.Infof("not auto-rebalancing: uptime %v < %v", time.Since(t.starttime()), ctx.config.Rebalance.StartupDelayTime)
-
-			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
-			if aborted && !running {
-				f := func() {
-					time.Sleep(ctx.config.Rebalance.StartupDelayTime - time.Since(t.starttime()))
-					currsmap := &Smap{}
-					smapLock.Lock()
-					copyStruct(currsmap, t.smap)
-					smapLock.Unlock()
-					t.runRebalance(currsmap)
-				}
-				go runRebalanceOnce.Do(f) // only once at startup
-			}
-
-			return
-		}
 	}
 	if isSubset {
 		if newlen != oldlen {
@@ -2123,9 +2104,32 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 		}
 		return
 	}
+	if newtargetid != "" {
+		if !ctx.config.Rebalance.Enabled { // config check
+			glog.Infoln("auto-rebalancing disabled")
+			return
+		}
+		uptime := time.Since(t.starttime())
+		if uptime < ctx.config.Rebalance.StartupDelayTime && t.si.DaemonID != newtargetid {
+			glog.Infof("not auto-rebalancing: uptime %v < %v", uptime, ctx.config.Rebalance.StartupDelayTime)
+			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+			if aborted && !running {
+				f := func() {
+					time.Sleep(ctx.config.Rebalance.StartupDelayTime - uptime)
+					currsmap := &Smap{}
+					smapLock.Lock()
+					copyStruct(currsmap, t.smap)
+					smapLock.Unlock()
+					t.runRebalance(currsmap, "")
+				}
+				go runRebalanceOnce.Do(f) // only once at startup
+			}
+			return
+		}
+	}
 
 	// xaction
-	go t.runRebalance(newsmap)
+	go t.runRebalance(smap4xaction, newtargetid)
 }
 
 func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, apitems []string) {

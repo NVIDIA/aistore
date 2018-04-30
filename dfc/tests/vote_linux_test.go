@@ -338,7 +338,7 @@ func mismatchclustermap(getnumtargets func(int) int, t *testing.T) {
 		if targetstoupdate == 0 {
 			break
 		}
-		url := fmt.Sprintf("%s/%s/%s/%s?%s=%t", target.DirectURL, dfc.Rversion, dfc.Rdaemon, dfc.Rsyncsmap, dfc.URLParamAutoReb, false)
+		url := fmt.Sprintf("%s/%s/%s/%s", target.DirectURL, dfc.Rversion, dfc.Rdaemon, dfc.Rsyncsmap)
 		req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsbytes))
 		if err != nil {
 			t.Errorf("Unexpected failure to create request: %v", err)

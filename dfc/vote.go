@@ -389,7 +389,7 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	if err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
-	p.synchronizeMaps(0, "")
+	p.synchronizeMaps(0, "", nil)
 }
 
 // updateSmapPrimaryProxy is used by becomePrimaryProxy to perform the smap updates that must be locked.
