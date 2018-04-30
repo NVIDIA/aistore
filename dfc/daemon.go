@@ -98,8 +98,6 @@ type namedrunner struct {
 	name string
 }
 
-func (r *namedrunner) run() error       { assert(false); return nil }
-func (r *namedrunner) stop(error)       { assert(false) }
 func (r *namedrunner) setname(n string) { r.name = n }
 
 // rungroup
@@ -109,9 +107,6 @@ type rungroup struct {
 	errch  chan error
 	idxch  chan int
 	stpch  chan error
-}
-
-type gstopError struct {
 }
 
 //====================
@@ -294,16 +289,6 @@ func (g *rungroup) run() error {
 	}
 	g.stpch <- nil
 	return err
-}
-
-func (g *rungroup) stop() {
-	g.errch <- &gstopError{}
-	g.idxch <- -1
-	<-g.stpch
-}
-
-func (ge *gstopError) Error() string {
-	return "rungroup stop"
 }
 
 //==================
