@@ -72,6 +72,12 @@ type thealthstatus struct {
 	// NOTE: include core stats and other info as needed
 }
 
+type renamectx struct {
+	bucketFrom string
+	bucketTo   string
+	t          *targetrunner
+}
+
 //===========================================================================
 //
 // target runner
@@ -257,9 +263,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	if strings.Contains(bucket, "/") {
-		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, errstr)
+	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	// all cloud bucket names
@@ -315,9 +319,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname = apitems[0], apitems[1]
-	if strings.Contains(bucket, "/") {
-		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, errstr)
+	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
@@ -455,10 +457,13 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
 	}
+	bucket := apitems[0]
+	if !t.validatebckname(w, r, bucket) {
+		return
+	}
 	query := r.URL.Query()
-	from, to, bucket := query.Get(URLParamFromID), query.Get(URLParamToID), apitems[0]
+	from, to := query.Get(URLParamFromID), query.Get(URLParamToID)
 	objname := strings.Join(apitems[1:], "/")
-
 	if from != "" && to != "" {
 		// REBALANCE "?from_id="+from_id+"&to_id="+to_id
 		if objname == "" {
@@ -495,6 +500,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket = apitems[0]
+	if !t.validatebckname(w, r, bucket) {
+		return
+	}
 	b, err := ioutil.ReadAll(r.Body)
 	defer func() {
 		if ok && err == nil && bool(glog.V(4)) {
@@ -538,6 +546,9 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket = apitems[0]
+	if !t.validatebckname(w, r, bucket) {
+		return
+	}
 	objname = strings.Join(apitems[1:], "/")
 
 	b, err := ioutil.ReadAll(r.Body)
@@ -584,6 +595,36 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case ActPrefetch:
 		t.prefetchfiles(w, r, msg)
+	case ActRenameLB:
+		apitems := t.restAPIItems(r.URL.Path, 5)
+		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+			return
+		}
+		lbucket := apitems[0]
+		if !t.validatebckname(w, r, lbucket) {
+			return
+		}
+		bucketFrom, bucketTo := lbucket, msg.Name
+		lbmap4ren, ok := msg.Value.(map[string]interface{})
+		if !ok {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Action.Value format %+v, %T", msg.Value, msg.Value))
+		}
+		//
+		// convert/cast generic ActionMsg.Value
+		//
+		versionfloat, ok := lbmap4ren["version"].(float64)
+		if !ok {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Action.Value format (version) %+v, %T", msg.Value, msg.Value))
+		}
+		version := int64(versionfloat)
+		lbmapif, ok := lbmap4ren["l_bmap"].(map[string]interface{})
+		if !ok {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Action.Value format (l_bmap) %+v, %T", msg.Value, msg.Value))
+		}
+		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, version, lbmapif); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		}
+		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, t.lbmap.versionLocked())
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -617,9 +658,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket = apitems[0]
-	if strings.Contains(bucket, "/") {
-		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, errstr)
+	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
@@ -664,9 +703,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname = apitems[0], apitems[1]
-	if strings.Contains(bucket, "/") {
-		errstr = fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, errstr)
+	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
@@ -729,10 +766,7 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-
-	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		t.invalmsghdlr(w, r, s)
+	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	if pusher, ok := w.(http.Pusher); ok {
@@ -781,6 +815,84 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
+func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, version int64, lbmapif map[string]interface{}) (errstr string) {
+	t.lbmap.lock()
+	defer t.lbmap.unlock()
+
+	if t.lbmap.version() != version {
+		glog.Warning("lbmap version %d != %d - proceeding to rename anyway", t.lbmap.version(), version)
+	}
+	// FIXME: TODO: (temp shortcut)
+	//              must be two-phase Tx with the 1st phase to copy (and rollback if need be),
+	//              and the 2nd phase - to confirm and delete old
+	//              there's also the risk of races vs ongoing GETs and PUTs generating workfiles, etc.
+
+	// 1. lbmap = lbmap-from-the-request
+	t.lbmap.Version = version
+	t.lbmap.LBmap = make(map[string]string, len(lbmapif))
+	for k, v := range lbmapif {
+		t.lbmap.LBmap[k] = v.(string)
+	}
+	for mpath := range ctx.mountpaths.Available {
+		todir := filepath.Join(makePathLocal(mpath), bucketTo)
+		if err := CreateDir(todir); err != nil {
+			errstr = fmt.Sprintf("Failed to create dir %s, err: %v", todir, err)
+			return
+		}
+	}
+	// 2. rename
+	t.lbmap.add(bucketTo) // must be done before
+	for mpath := range ctx.mountpaths.Available {
+		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
+		if errstr = t.renameOne(fromdir, bucketFrom, bucketTo); errstr != "" {
+			glog.Errorln(errstr) /* beyond the point of no return */
+		}
+	}
+	// 3. delete
+	for mpath := range ctx.mountpaths.Available {
+		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
+		if err := os.RemoveAll(fromdir); err != nil {
+			glog.Errorf("Failed to remove dir %s", fromdir)
+		}
+	}
+	// 4. cleanup - NOTE that the local lbmap version is advanced by +=2 at this point
+	t.lbmap.del(bucketFrom)
+	return
+}
+
+func (t *targetrunner) renameOne(fromdir, bucketFrom, bucketTo string) (errstr string) {
+	renctx := &renamectx{bucketFrom: bucketFrom, bucketTo: bucketTo, t: t}
+
+	if err := filepath.Walk(fromdir, renctx.walkf); err != nil {
+		errstr = fmt.Sprintf("Failed to rename %s, err: %v", fromdir, err)
+	}
+	return
+}
+
+func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
+	if err != nil {
+		glog.Errorf("walkf invoked with err: %v", err)
+		return err
+	}
+	if osfi.Mode().IsDir() {
+		return nil
+	}
+	if iswork, _ := renctx.t.isworkfile(fqn); iswork { // FIXME: work files indicate work in progress..
+		return nil
+	}
+	bucket, objname, errstr := renctx.t.fqn2bckobj(fqn)
+	if errstr == "" {
+		if bucket != renctx.bucketFrom {
+			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
+		}
+	}
+	newfqn := renctx.t.fqn(renctx.bucketTo, objname)
+	dirname := filepath.Dir(newfqn)
+	if err := CreateDir(dirname); err != nil {
+		return fmt.Errorf("Error creating local dir %s, err: %v", dirname, err)
+	}
+	return os.Rename(fqn, newfqn)
+}
 
 // checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
 // and the object should be refreshed from Cloud storage
@@ -1722,6 +1834,9 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 		return
 	}
 	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
+	if !t.validatebckname(w, r, bucket) {
+		return
+	}
 	newobjname := msg.Name
 	fqn, uname := t.fqn(bucket, objname), t.uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
@@ -2501,7 +2616,7 @@ func (t *targetrunner) testCachepathMounts() {
 	}
 	for i := 0; i < ctx.config.TestFSP.Count; i++ {
 		var mpath string
-		if ctx.config.TestFSP.Count > 1 {
+		if t.testingFSPpaths() {
 			mpath = filepath.Join(instpath, strconv.Itoa(i+1))
 		} else {
 			mpath = instpath[0 : len(instpath)-1]

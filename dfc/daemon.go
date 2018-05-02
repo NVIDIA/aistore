@@ -205,6 +205,12 @@ func SmapUnion(A *Smap, B *Smap) *Smap {
 	return unionsmap
 }
 
+func (m *Smap) copyLocked(dst *Smap) {
+	m.lock()
+	defer m.unlock()
+	copyStruct(dst, m)
+}
+
 //====================
 //
 // lbmap wrapper - NOTE - caller must take the lock
@@ -218,6 +224,11 @@ func (m *lbmap) add(b string) bool {
 	m.LBmap[b] = ""
 	m.Version++
 	return true
+}
+
+func (m *lbmap) contains(b string) (ok bool) {
+	_, ok = m.LBmap[b]
+	return
 }
 
 func (m *lbmap) del(b string) bool {

@@ -103,7 +103,7 @@ func (p *proxyrunner) votehdlr(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET "/"+Rversion+"/"+Rvote+"/"+Rvotepxy
+// GET /Rversion/Rvote
 func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	apitems := h.restAPIItems(r.URL.Path, 5)
 	if apitems = h.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
@@ -228,10 +228,9 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		Candidate: msg.Request.Candidate,
 		Primary:   msg.Request.Primary,
 		StartTime: time.Now(),
-		Smap:      p.copySmap(), // If smap is not copied, then it can be changed while being marshalled
-		// By copying it, the lock does not need to be held while broadcasting.
 		Initiator: p.si.DaemonID,
 	}
+	p.smap.copyLocked(&vr.Smap)
 
 	// The election should be started in a goroutine, as it must not hang the http handler
 	go p.proxyElection(vr)
@@ -375,7 +374,6 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 			errors[errpair.daemonID] = true
 		}
 	}
-
 	return errors
 }
 
@@ -436,22 +434,20 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		vr := &VoteRecord{
 			Candidate: nextPrimaryProxy.DaemonID,
 			Primary:   p.proxysi.DaemonID,
-			Smap:      p.copySmap(), // If smap is not copied, then it can be changed while being marshalled
-			// By copying it, the lock does not need to be held while broadcasting.
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
+		p.smap.copyLocked(&vr.Smap)
 		p.proxyElection(vr)
 	} else {
 		glog.Infof("%v: Requesting Election from %v", p.si.DaemonID, nextPrimaryProxy.DaemonID)
 		vr := &VoteInitiation{
 			Candidate: nextPrimaryProxy.DaemonID,
 			Primary:   p.proxysi.DaemonID,
-			Smap:      p.copySmap(), // If smap is not copied, then it can be changed while being marshalled
-			// By copying it, the lock does not need to be held while broadcasting.
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
+		p.smap.copyLocked(&vr.Smap)
 		p.sendElectionRequest(vr, nextPrimaryProxy)
 	}
 }
@@ -473,11 +469,10 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	vr := &VoteInitiation{
 		Candidate: nextPrimaryProxy.DaemonID,
 		Primary:   t.proxysi.DaemonID,
-		Smap:      t.copySmap(), // If smap is not copied, then it can be changed while being marshalled
-		// By copying it, the lock does not need to be held while broadcasting.
 		StartTime: time.Now(),
 		Initiator: t.si.DaemonID,
 	}
+	t.smap.copyLocked(&vr.Smap)
 	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 
@@ -510,7 +505,6 @@ func (h *httprunner) voteOnProxy(daemonID string) (bool, error) {
 	if errstr != "" {
 		return false, fmt.Errorf("Error executing HRW: %v", errstr)
 	}
-
 	return hrwmax.DaemonID == daemonID, nil
 }
 
@@ -573,12 +567,4 @@ func (p *proxyrunner) pingWithTimeout(url string, timeout time.Duration) (bool, 
 		return false, nil
 	}
 	return false, err
-}
-
-func (h *httprunner) copySmap() Smap {
-	h.smap.lock()
-	defer h.smap.unlock()
-	var smap Smap
-	copyStruct(&smap /* dst */, h.smap /* src */)
-	return smap
 }

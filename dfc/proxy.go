@@ -467,9 +467,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	if strings.Contains(bucket, "/") {
-		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		p.invalmsghdlr(w, r, errstr)
+	if !p.validatebckname(w, r, bucket) {
 		return
 	}
 	// all bucket names
@@ -519,9 +517,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
-	if strings.Contains(bucket, "/") {
-		errstr := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		p.invalmsghdlr(w, r, errstr)
+	if !p.validatebckname(w, r, bucket) {
 		return
 	}
 	si, errstr := hrwTarget(bucket+"/"+objname, p.smap)
@@ -666,9 +662,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lbucket := apitems[0]
-	if strings.Contains(lbucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", lbucket)
-		p.invalmsghdlr(w, r, s)
+	if !p.validatebckname(w, r, lbucket) {
 		return
 	}
 	if p.readJSON(w, r, &msg) != nil {
@@ -687,6 +681,40 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p.synclbmap(w, r)
+	case ActRenameLB:
+		if !p.checkPrimaryProxy("rename local bucket", w, r) {
+			return
+		}
+		bucketFrom, bucketTo := lbucket, msg.Name
+		if bucketFrom == "" || bucketTo == "" {
+			errstr := fmt.Sprintf("Invalid rename local bucket request: empty name %s => %s",
+				bucketFrom, bucketTo)
+			p.invalmsghdlr(w, r, errstr)
+			return
+		}
+		p.lbmap.lock()
+		lbmap4ren := &lbmap{}
+		copyStruct(lbmap4ren, p.lbmap)
+		p.lbmap.unlock()
+
+		_, ok := lbmap4ren.LBmap[bucketFrom]
+		if !ok {
+			s := fmt.Sprintf("Local bucket %s does not exist", bucketFrom)
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+		_, ok = lbmap4ren.LBmap[bucketTo]
+		if ok {
+			s := fmt.Sprintf("Local bucket %s already exists", bucketTo)
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+		// FIXME: must be 2-phase with the 1st phase to copy and the 2nd phase to confirm and delete old
+		if !p.renamelocalbucket(bucketFrom, bucketTo, lbmap4ren, &msg, r.Method) {
+			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
+			p.invalmsghdlr(w, r, errstr)
+		}
+		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, p.lbmap.versionLocked())
 	case ActSyncLB:
 		if !p.checkPrimaryProxy("synchronize LBmap", w, r) {
 			return
@@ -710,9 +738,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lbucket := apitems[0]
-	if strings.Contains(lbucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", lbucket)
-		p.invalmsghdlr(w, r, s)
+	if !p.validatebckname(w, r, lbucket) {
 		return
 	}
 	if p.readJSON(w, r, &msg) != nil {
@@ -736,9 +762,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	if strings.Contains(bucket, "/") {
-		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
-		p.invalmsghdlr(w, r, s)
+	if !p.validatebckname(w, r, bucket) {
 		return
 	}
 	var si *daemonInfo
@@ -758,6 +782,33 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
+func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *lbmap, msg *ActionMsg, method string) bool {
+	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rbuckets, bucketFrom)
+	smap4bcast := &Smap{}
+	p.smap.copyLocked(smap4bcast)
+	f := func(si *daemonInfo, _ []byte, err error, status int) {
+		if err != nil {
+			glog.Errorf("Target %s failed to rename local bucket %s => %s, err: %v (%d)",
+				si.DaemonID, bucketFrom, bucketTo, err, status)
+		}
+	}
+	msg.Value = lbmap4ren
+	jsbytes, err := json.Marshal(msg)
+	assert(err == nil, err)
+	p.broadcast(urlfmt, method, jsbytes, smap4bcast, f, ctx.config.Timeout.Default)
+
+	p.lbmap.lock()
+	defer p.lbmap.unlock()
+
+	p.lbmap.del(bucketFrom)
+	p.lbmap.add(bucketTo)
+	lbpathname := filepath.Join(p.confdir, lbname)
+	if err := LocalSave(lbpathname, p.lbmap); err != nil {
+		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
+		return false
+	}
+	return true
+}
 
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec string) {
 	q := r.URL.Query()

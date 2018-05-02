@@ -23,6 +23,7 @@ const (
 	ActSyncLB    = "synclb"
 	ActCreateLB  = "createlb"
 	ActDestroyLB = "destroylb"
+	ActRenameLB  = "renamelb"
 	ActSetConfig = "setconfig"
 	ActRename    = "rename"
 	ActEvict     = "evict"
@@ -51,8 +52,10 @@ const (
 // URL Query Parameter enum
 const (
 	URLParamLocal            = "local"       // true: bucket is expected to be local
-	URLParamToID             = "to_id"       // to_id=string - ID to copy to
 	URLParamFromID           = "from_id"     // from_id=string - ID to copy from
+	URLParamToID             = "to_id"       // to_id=string - ID to copy to
+	URLParamFromName         = "from_name"   // rename from
+	URLParamToName           = "to_name"     // rename to
 	URLParamCached           = "cachedonly"  // true: return cached objects (names, metadata) instead of requesting the list from the cloud
 	URLParamNewTargetID      = "newtargetid" // ID of the new target joining the cluster
 	URLParamSuspectedTarget  = "suspect"     // suspect=string - ID of the target suspected of failure

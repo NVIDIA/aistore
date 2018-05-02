@@ -17,6 +17,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -331,6 +333,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	if len(apitems) > 0 && ver != "" {
 		if apitems[0] != ver {
 			s := fmt.Sprintf("Invalid API version: %s (expecting %s)", apitems[0], ver)
+			if _, file, line, ok := runtime.Caller(1); ok {
+				f := filepath.Base(file)
+				s += fmt.Sprintf("(%s, #%d)", f, line)
+			}
 			h.invalmsghdlr(w, r, s)
 			return nil
 		}
@@ -339,6 +345,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	if len(apitems) > 0 && res != "" {
 		if apitems[0] != res {
 			s := fmt.Sprintf("Invalid API resource: %s (expecting %s)", apitems[0], res)
+			if _, file, line, ok := runtime.Caller(1); ok {
+				f := filepath.Base(file)
+				s += fmt.Sprintf("(%s, #%d)", f, line)
+			}
 			h.invalmsghdlr(w, r, s)
 			return nil
 		}
@@ -346,6 +356,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	}
 	if len(apitems) < n {
 		s := fmt.Sprintf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		h.invalmsghdlr(w, r, s)
 		return nil
 	}
@@ -362,6 +376,10 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
 			}
 		}
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		h.invalmsghdlr(w, r, s)
 		return err
 	}
@@ -369,6 +387,10 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 	err = json.Unmarshal(b, out)
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		h.invalmsghdlr(w, r, s)
 		return err
 	}
@@ -388,15 +410,36 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	if isSyscallWriteError(err) {
 		// apparently, cannot write to this w: broken-pipe and similar
 		glog.Errorf("isSyscallWriteError: %v", err)
-		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path
+		if _, file, line, ok2 := runtime.Caller(1); ok2 {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		glog.Errorln(s)
 		glog.Flush()
 		h.statsif.add("numerr", 1)
 		return
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
+	if _, file, line, ok := runtime.Caller(1); ok {
+		f := filepath.Base(file)
+		errstr += fmt.Sprintf("(%s, #%d)", f, line)
+	}
 	h.invalmsghdlr(w, r, errstr)
 	return
+}
+
+func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, bucket string) bool {
+	if strings.Contains(bucket, string(filepath.Separator)) {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+		h.invalmsghdlr(w, r, s)
+		return false
+	}
+	return true
 }
 
 //=================
@@ -541,8 +584,13 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specif
 	if len(other) > 0 {
 		status = other[0].(int)
 	}
-	s := http.StatusText(status) + ": " + specific
-	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+	s := http.StatusText(status) + ": " + specific + ": " + r.Method + " " + r.URL.Path
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if !strings.Contains(specific, ".go, #") {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+	}
 	glog.Errorln(s)
 	glog.Flush()
 	http.Error(w, s, status)
