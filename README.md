@@ -31,7 +31,8 @@ not to use them at all (section **Configuration** below).
 To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket.
 If you don't have Amazon and/or Google Cloud accounts, you can use DFC local buckets as illustrated
 a) in the **API** section below and b) in the [test sources](dfc/tests/regression_test.go).
-Note that the local buckets support the same exact API as the Cloud-based ones.
+Note that local and Cloud-based buckets support the same API with minor exceptions
+(only local buckets can be renamed, for instance).
 
 ## Getting Started
 
@@ -199,7 +200,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Evict file from cache | DELETE '{"action": "evict"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://192.168.176.128:8080/v1/objects/mybucket/myobject` |
 | Create local bucket (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/buckets/abc` |
 | Destroy local bucket (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/buckets/abc` |
-| Rename local bucket (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "xyz"}' http://192.168.176.128:8080/v1/buckets/abc` |
+| Rename local bucket (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' http://192.168.176.128:8080/v1/buckets/oldname` |
 | Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
