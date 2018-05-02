@@ -28,9 +28,10 @@ import (
 )
 
 const (
-	syncmapldelay = time.Second * 3
-	syncmapsdelay = time.Second * 1
-	tokenStart    = "Bearer"
+	syncmapldelay     = time.Second * 3
+	syncmapsdelay     = time.Second
+	maxmapsyncretries = 10
+	tokenStart        = "Bearer"
 )
 
 // Keeps a target response when doing parallel requests to all targets
@@ -47,6 +48,14 @@ type localFilePage struct {
 	err     error
 	id      string
 	marker  string
+}
+
+type mapsBcastContext struct {
+	sync.Mutex
+	p           *proxyrunner
+	action      string
+	newtargetid string
+	retry       bool
 }
 
 func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {
@@ -1878,7 +1887,8 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string, newtarget *da
 	if p.mapsAlreadyInSync() {
 		return
 	}
-	for converged := false; ; {
+	retrycnt := 0
+	for ; retrycnt < maxmapsyncretries; retrycnt++ {
 		if ntargets > 0 { // if provided, use ntargets as a hint
 			ntargetsCur := p.smap.countLocked()
 			if ntargetsCur >= ntargets {
@@ -1892,31 +1902,29 @@ func (p *proxyrunner) synchronizeMaps(ntargets int, action string, newtarget *da
 		}
 		// change in the cluster map warrants broadcasting of every other config that
 		// must be shared across the cluster; the opposite it not true though
-		var retrysm, retrylb bool
-		retrylb = p.httpfilputLB(newtarget)
+		p.httpfilputLB(newtarget)
 		if action == Rebalance {
-			retrysm = p.httpcluputSmap(Rebalance, nil) // REST API
+			p.httpcluputSmap(Rebalance, nil) // REST API
 		} else if p.smap.syncversion != p.smap.versionLocked() {
 			if ntargets > 0 {
-				retrysm = p.httpcluputSmap(Rsyncsmap, nil)
+				p.httpcluputSmap(Rsyncsmap, nil)
 			} else {
-				retrysm = p.httpcluputSmap(Rebalance, newtarget)
+				p.httpcluputSmap(Rebalance, newtarget)
 			}
 		}
-		converged = !(retrylb || retrysm)
-		if !converged {
-			glog.Infoln("synchronizeMaps - retrying (1)", retrylb, retrysm)
-		}
-		if !p.mapsAlreadyInSync() {
-			converged = false
-			glog.Infoln("synchronizeMaps - retrying (2)")
-		}
-		if converged {
+		if p.mapsAlreadyInSync() {
 			break
 		}
-		time.Sleep(syncmapsdelay)
+		if retrycnt < maxmapsyncretries-1 {
+			time.Sleep(syncmapsdelay)
+		}
 	}
-	glog.Infof("Smap (v%d) and lbmap (v%d) in-sync cluster wide", p.smap.syncversion, p.lbmap.syncversion)
+	if retrycnt == maxmapsyncretries {
+		glog.Errorf("Critical: Smap v(%d, %d) and lbmap v(%d, %d) out-of-sync cluster-wide",
+			p.smap.syncversion, p.smap.Version, p.lbmap.syncversion, p.lbmap.Version)
+	} else {
+		glog.Infof("Smap (v%d) and lbmap (v%d) in-sync cluster-wide", p.smap.syncversion, p.lbmap.syncversion)
+	}
 }
 
 func (p *proxyrunner) mapsAlreadyInSync() bool {
@@ -1926,18 +1934,37 @@ func (p *proxyrunner) mapsAlreadyInSync() bool {
 	defer p.lbmap.unlock()
 	if p.lbmap.version() == p.lbmap.syncversion && p.smap.version() == p.smap.syncversion {
 		if glog.V(4) {
-			glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync cluster-wide", p.smap.syncversion, p.lbmap.syncversion)
+			glog.Infof("Smap (v%d) and lbmap (v%d) are already in sync cluster-wide",
+				p.smap.syncversion, p.lbmap.syncversion)
 		}
 		return true
 	}
-	if glog.V(4) {
-		glog.Infof("Smap v(%d, %d) and lbmap v(%d, %d) are to get sync-ed",
+	if glog.V(3) {
+		glog.Infof("Smap v(%d, %d) and lbmap v(%d, %d) are yet to be synchronized",
 			p.smap.syncversion, p.smap.version(), p.lbmap.syncversion, p.lbmap.version())
 	}
 	return false
 }
 
-func (p *proxyrunner) httpcluputSmap(action string, newtarget *daemonInfo) (retry bool) {
+func (c *mapsBcastContext) callback(si *daemonInfo, _ []byte, err error, status int) {
+	if err != nil {
+		glog.Errorf("Failed to %s %s, err: %v", c.action, si.DaemonID, err)
+		if IsErrConnectionRefused(err) {
+			c.Lock()
+			c.retry = true
+			c.Unlock()
+			if si.DaemonID == c.newtargetid {
+				glog.Infof("Retrying %s newtarget=%s, err: %v", c.action, si.DaemonID, err)
+			} else {
+				glog.Warningf("Retrying %s target=%s, err: %v", c.action, si.DaemonID, err)
+			}
+		} else {
+			c.p.kalive.onerr(err, status)
+		}
+	}
+}
+
+func (p *proxyrunner) httpcluputSmap(action string, newtarget *daemonInfo) {
 	var newtargetid string
 	if newtarget != nil {
 		newtargetid = newtarget.DaemonID
@@ -1957,29 +1984,18 @@ func (p *proxyrunner) httpcluputSmap(action string, newtarget *daemonInfo) (retr
 
 	assert(err == nil, err)
 
-	callback := func(si *daemonInfo, _ []byte, err error, status int) {
-		if err != nil {
-			glog.Errorf("Failed to %s %s, err: %v", action, si.DaemonID, err)
-			if IsErrConnectionRefused(err) && si.DaemonID == newtargetid {
-				retry = true
-				glog.Infof("Retrying %s %s, err: %v", action, si.DaemonID, err)
-			} else {
-				p.kalive.onerr(err, status)
-			}
-		}
-	}
-	p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, callback)
+	c := &mapsBcastContext{p: p, action: action, newtargetid: newtargetid}
+	p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, c.callback)
 
-	if !retry {
+	if !c.retry {
 		p.smap.lock()
 		p.smap.syncversion = syncversion
 		p.smap.unlock()
 	}
 	glog.Infof("new Smap syncversion %d", p.smap.syncversion)
-	return
 }
 
-func (p *proxyrunner) httpfilputLB(newtarget *daemonInfo) (retry bool) {
+func (p *proxyrunner) httpfilputLB(newtarget *daemonInfo) {
 	var newtargetid string
 	if newtarget != nil {
 		newtargetid = newtarget.DaemonID
@@ -1994,30 +2010,21 @@ func (p *proxyrunner) httpfilputLB(newtarget *daemonInfo) (retry bool) {
 	if glog.V(3) {
 		glog.Infoln(urlfmt[2:], string(jsbytes))
 	}
-	callback := func(si *daemonInfo, _ []byte, err error, status int) {
-		if err != nil {
-			glog.Errorf("Failed to %s %s, err: %v", Rsynclb, si.DaemonID, err)
-			if IsErrConnectionRefused(err) && si.DaemonID == newtargetid {
-				retry = true
-				glog.Infof("Retrying %s %s, err: %v", Rsynclb, si.DaemonID, err)
-			} else {
-				p.kalive.onerr(err, status)
-			}
-		}
-	}
+
 	p.smap.lock()
 	smap4bcast := &Smap{}
 	copyStruct(smap4bcast, p.smap)
 	p.smap.unlock()
-	p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, callback)
 
-	if !retry {
+	c := &mapsBcastContext{p: p, action: Rsynclb, newtargetid: newtargetid}
+	p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, c.callback)
+
+	if !c.retry {
 		p.lbmap.lock()
 		p.lbmap.syncversion = syncversion
 		p.lbmap.unlock()
 	}
 	glog.Infof("new lbmap syncversion %d", p.lbmap.syncversion)
-	return
 }
 
 //===================
