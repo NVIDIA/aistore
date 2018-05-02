@@ -1,6 +1,8 @@
 ## Getting Started: Ansible
 
-DFC can be run in bare VM or bare metal cluster. Here you can find simple ansible scripts that are meant to help configring DFC and start/stop it on Ubuntu base image. 
+DFC can be run in bare VM or bare metal cluster. Here you can find simple ansible scripts that are meant to help configure DFC and start/stop it on Ubuntu base image. 
+
+Ansible is used mostly to install few modules and copy simple DFC helper bash scripts over to DFC cluster. Most of the DFC operations are done using parallel-ssh.
 
 This README documents the steps to install and run DFC
 
@@ -9,6 +11,10 @@ https://community.spiceworks.com/how_to/110622-install-ansible-on-64-bit-ubuntu-
 https://www.server-world.info/en/note?os=Ubuntu_14.04&p=ssh&f=8
 
 #### Download dfc_ansible 
+```
+git clone git://github.com/NVIDIA/dfcpub
+git checkout dfc_ansible
+```
 
 #### Configure DFC cluster
 1. Create inventory file, see example inventory in dfc_ansible/inventory folder. 
