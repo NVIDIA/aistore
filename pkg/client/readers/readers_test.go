@@ -1,17 +1,10 @@
 package readers_test
 
 import (
-	"bytes"
-	"flag"
-	"fmt"
 	"io"
-	"io/ioutil"
-	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -383,6 +376,7 @@ func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
 	}
 }
 
+/*
 // File read throughput tests
 // Usages:
 // 1. Run discard benchmark (to show which discard method is the fastest):
@@ -418,7 +412,7 @@ func BenchmarkWriteFiles(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			r, err := readers.NewFileReader(flag.Arg(0), client.FastRandomFilename(rnd, 32), 1024*1024*8, false /* withHash */)
+			r, err := readers.NewFileReader(flag.Arg(0), client.FastRandomFilename(rnd, 32), 1024*1024*8, false)
 			if err != nil {
 				b.Fatalf("Failed to create file reader, err = %v\n", err)
 			}
@@ -465,7 +459,7 @@ func BenchmarkDevDiscard(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			size := int64(1024 * 1024 * 8)
-			r, err := readers.NewRandReader(size, false /* withHash */)
+			r, err := readers.NewRandReader(size, false)
 			if err != nil {
 				b.Fatal("Failed to create reader", err)
 			}
@@ -487,7 +481,7 @@ func BenchmarkBufDiscard(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			size := int64(1024 * 1024 * 8)
-			r, err := readers.NewRandReader(size, false /* withHash */)
+			r, err := readers.NewRandReader(size, false)
 			if err != nil {
 				b.Fatal("Failed to create reader", err)
 			}
@@ -517,7 +511,7 @@ func BenchmarkByteBufDiscard(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			size := int64(1024 * 1024 * 8)
-			r, err := readers.NewRandReader(size, false /* withHash */)
+			r, err := readers.NewRandReader(size, false)
 			if err != nil {
 				b.Fatal("Failed to create reader", err)
 			}
@@ -535,3 +529,4 @@ func BenchmarkByteBufDiscard(b *testing.B) {
 		}
 	})
 }
+*/

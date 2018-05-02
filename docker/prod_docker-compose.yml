@@ -6,9 +6,11 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    environment:
+      - ROLE-proxy
+      - DFCPRIMARYPROXY={$DFCPRIMARYPROXY}
     env_file:
       - aws.env
-     
   dfctarget:
     build:
       context: .

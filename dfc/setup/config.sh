@@ -1,34 +1,52 @@
 	cat > $CONFFILE <<EOL
 {
+	"confdir":                	"$CONFDIR",
+	"cloudprovider":		"${CLDPROVIDER}",
+	"cloud_buckets":		"cloud",
+	"local_buckets":		"local",
 	"log": {
 		"logdir":		"$LOGDIR",
 		"loglevel": 		"${LOGLEVEL}",
 		"logmaxsize": 		4194304,
 		"logmaxtotal":		67108864
 	},
-	"confdir":                	"$CONFDIR",
-	"cloudprovider":		"${CLDPROVIDER}",
-	"cloud_buckets":		"cloud",
-	"local_buckets":		"local",
-	"stats_time":			"10s",
-	"http": {
-		"timeout":		"30s",
-		"long_timeout":		"30m",
-		"max_num_targets":      16
+	"periodic": {
+		"stats_time":		"10s",
+		"keep_alive_time":	"20s"
 	},
-	"keep_alive_time":		"20s",
-	"listen": {
-		"proto": 		"tcp",
-		"port":			"${PORT}"
+	"timeout": {
+		"default_timeout":	"30s",
+		"default_long_timeout":	"30m",
+		"max_keepalive":	"4s",
+		"proxy_ping":		"100ms",
+		"vote_request":		"2s",
+		"send_file_time":	"5m"
 	},
-	"proxy": {
-		"url": 			"${PROXYURL}",
-		"passthru": 		true
+	"proxyconfig": {
+		"startup_get_smap_maximum":	"1m",
+		"primary": {
+			"id":		"${PROXYID}",
+			"url": 		"${PROXYURL}",
+			"passthru": 	true
+		},
+		"original": {
+			"id":		"${PROXYID}",
+			"url": 		"${PROXYURL}",
+			"passthru": 	true
+		}
 	},
-	"s3": {
-		"maxconcurrdownld":	64,
-		"maxconcurrupld":	64,
-		"maxpartsize":		4294967296
+	"lru_config": {
+		"lowwm":		75,
+		"highwm":		90,
+		"atime_cache_max":	65536,
+		"dont_evict_time":	"120m",
+		"capacity_upd_time":	"10m",
+		"lru_enabled":  	true
+	},
+	"rebalance_conf": {
+		"startup_delay_time":	"3m",
+		"dest_retry_time":	"2m",
+		"rebalancing_enabled": 	true
 	},
 	"cksum_config": {
                  "checksum":		"xxhash",
@@ -38,36 +56,39 @@
 		"validate_warm_get":	false,
 		"versioning":		"all"
 	},
-	"lru_config": {
-		"lowwm":		75,
-		"highwm":		90,
-		"dont_evict_time":	"120m",
-		"capacity_upd_time":	"10m",
-		"lru_enabled":  	true
-	},
-	"rebalance_conf": {
-		"startup_delay_time":	"10m",
-		"rebalancing_enabled": 	true
+	"fspaths": {
+$FSPATHS
 	},
 	"test_fspaths": {
 		"root":			"/tmp/dfc/",
 		"count":		$TESTFSPATHCOUNT,
 		"instance":		$c
 	},
-	"fspaths": {
-$FSPATHS
-	},
-	"network": {
-		"ipv4": "$IPV4LIST"
-	},
-	"ack_policy": {
-		"put":			"disk",
-		"max_mem_mb":		16
+	"netconfig": {
+		"ipv4": "$IPV4LIST",
+		"l4": {
+			"proto": 	"tcp",
+			"port":		"${PORT}"
+		},
+		"http": {
+			"max_num_targets":    16,
+			"use_https":          false,
+			"server_certificate": "server.pem",
+			"server_key":         "server.key"
+		}
 	},
 	"fskeeper": {
 		"fs_check_time":         "0",
 		"offline_fs_check_time": "0",
 		"fskeeper_enabled":      false
+	},
+	"experimental": {
+		"ack_put":		"disk",
+		"max_mem_mb":		16
+	},
+	"auth": {
+		"secret": "$SECRETKEY",
+		"enabled": $AUTHENABLED
 	},
 	"h2c": 				false
 }

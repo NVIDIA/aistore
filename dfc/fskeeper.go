@@ -60,7 +60,7 @@ func (k *fskeeper) skipCheck(mpath string) bool {
 	}
 
 	interval := ctx.config.FSKeeper.FSCheckTime
-	if _, avail := ctx.mountpaths.available[mpath]; !avail {
+	if _, avail := ctx.mountpaths.Available[mpath]; !avail {
 		interval = ctx.config.FSKeeper.OfflineFSCheckTime
 	}
 
@@ -94,7 +94,7 @@ func (k *fskeeper) stop(err error) {
 }
 
 func (k *fskeeper) checkAlivePaths(err error) {
-	for _, mp := range ctx.mountpaths.available {
+	for _, mp := range ctx.mountpaths.Available {
 		if err == nil && k.skipCheck(mp.Path) {
 			continue
 		}
@@ -103,9 +103,8 @@ func (k *fskeeper) checkAlivePaths(err error) {
 		if !ok {
 			glog.Errorf("Mountpath %s is unavailable. Disabling it...", mp.Path)
 			ctx.mountpaths.Lock()
-			delete(ctx.mountpaths.available, mp.Path)
-			ctx.mountpaths.offline[mp.Path] = mp
-			ctx.mountpaths.updateOrderedList()
+			delete(ctx.mountpaths.Available, mp.Path)
+			ctx.mountpaths.Offline[mp.Path] = mp
 			ctx.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
@@ -113,7 +112,7 @@ func (k *fskeeper) checkAlivePaths(err error) {
 }
 
 func (k *fskeeper) checkOfflinePaths(err error) {
-	for _, mp := range ctx.mountpaths.offline {
+	for _, mp := range ctx.mountpaths.Offline {
 		if err == nil && k.skipCheck(mp.Path) {
 			continue
 		}
@@ -122,9 +121,8 @@ func (k *fskeeper) checkOfflinePaths(err error) {
 		if ok {
 			glog.Infof("Mountpath %s is back. Enabling it...", mp.Path)
 			ctx.mountpaths.Lock()
-			delete(ctx.mountpaths.offline, mp.Path)
-			ctx.mountpaths.available[mp.Path] = mp
-			ctx.mountpaths.updateOrderedList()
+			delete(ctx.mountpaths.Offline, mp.Path)
+			ctx.mountpaths.Available[mp.Path] = mp
 			ctx.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
@@ -149,7 +147,7 @@ func (k *fskeeper) checkPaths(err error) {
 		k.checkOfflinePaths(err)
 	}
 
-	if len(ctx.mountpaths.available) == 0 && len(ctx.mountpaths.offline) != 0 {
+	if len(ctx.mountpaths.Available) == 0 && len(ctx.mountpaths.Offline) != 0 {
 		glog.Fatal("All mounted filesystems are down")
 	}
 }

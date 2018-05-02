@@ -10,6 +10,9 @@ package dfc
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -41,11 +44,18 @@ type xactRebalance struct {
 	xactBase
 	curversion   int64
 	targetrunner *targetrunner
+	aborted      bool
 }
 
 type xactLRU struct {
 	xactBase
 	targetrunner *targetrunner
+}
+
+type xactElection struct {
+	xactBase
+	proxyrunner *proxyrunner
+	vr          *VoteRecord
 }
 
 //====================
@@ -94,7 +104,7 @@ func newxactinp() *xactInProgress {
 func (q *xactInProgress) uniqueid() int64 {
 	id := time.Now().UTC().UnixNano() & 0xffff
 	for i := 0; i < 10; i++ {
-		if _, x := q.find(id); x == nil {
+		if _, x := q.findUnlocked(id); x == nil {
 			return id
 		}
 		id = (time.Now().UTC().UnixNano() + id) & 0xffff
@@ -109,7 +119,7 @@ func (q *xactInProgress) add(xact xactInterface) {
 	q.xactinp[l] = xact
 }
 
-func (q *xactInProgress) find(by interface{}) (idx int, xact xactInterface) {
+func (q *xactInProgress) findUnlocked(by interface{}) (idx int, xact xactInterface) {
 	var id int64
 	var kind string
 	switch by.(type) {
@@ -131,10 +141,16 @@ func (q *xactInProgress) find(by interface{}) (idx int, xact xactInterface) {
 	return -1, nil
 }
 
+func (q *xactInProgress) findLocked(by interface{}) (idx int, xact xactInterface) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	return q.findUnlocked(by)
+}
+
 func (q *xactInProgress) del(by interface{}) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	k, xact := q.find(by)
+	k, xact := q.findUnlocked(by)
 	if xact == nil {
 		glog.Errorf("Failed to find xact by %#v", by)
 		return
@@ -150,7 +166,7 @@ func (q *xactInProgress) del(by interface{}) {
 func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xactRebalance {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.find(ActRebalance)
+	_, xx := q.findUnlocked(ActRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
@@ -169,10 +185,39 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 	return xreb
 }
 
+// persistent mark indicating rebalancing in progress
+func (q *xactInProgress) rebalanceInProgress() (pmarker string) {
+	pmarker = filepath.Join(ctx.config.Confdir, rebinpname)
+	if ctx.config.TestFSP.Instance > 0 {
+		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
+		pmarker = filepath.Join(instancedir, mpname)
+	}
+	return
+}
+
+func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
+	pmarker := q.rebalanceInProgress()
+	_, err := os.Stat(pmarker)
+	if err == nil {
+		aborted = true
+	}
+
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	_, xx := q.findUnlocked(ActRebalance)
+	if xx != nil {
+		xreb := xx.(*xactRebalance)
+		if !xreb.finished() {
+			running = true
+		}
+	}
+	return
+}
+
 func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.find(ActLRU)
+	_, xx := q.findUnlocked(ActLRU)
 	if xx != nil {
 		xlru := xx.(*xactLRU)
 		glog.Infof("%s already running, nothing to do", xlru.tostring())
@@ -183,6 +228,25 @@ func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	xlru.targetrunner = t
 	q.add(xlru)
 	return xlru
+}
+
+func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	_, xx := q.findUnlocked(ActElection)
+	if xx != nil {
+		xele := xx.(*xactElection)
+		glog.Infof("%s already running, nothing to do", xele.tostring())
+		return nil
+	}
+	id := q.uniqueid()
+	xele := &xactElection{
+		xactBase:    *newxactBase(id, ActElection),
+		proxyrunner: p,
+		vr:          vr,
+	}
+	q.add(xele)
+	return xele
 }
 
 func (q *xactInProgress) abortAll() (sleep bool) {
@@ -226,6 +290,25 @@ func (xact *xactRebalance) tostring() string {
 }
 
 func (xact *xactRebalance) abort() {
+	xact.xactBase.abort()
+	glog.Infof("ABORT: " + xact.tostring())
+}
+
+//==============
+//
+// xactElection
+//
+//==============
+func (xact *xactElection) tostring() string {
+	start := xact.stime.Sub(xact.proxyrunner.starttime)
+	if !xact.finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+	}
+	fin := time.Since(xact.proxyrunner.starttime)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
+}
+
+func (xact *xactElection) abort() {
 	xact.xactBase.abort()
 	glog.Infof("ABORT: " + xact.tostring())
 }

@@ -5,7 +5,6 @@
 package dfc_test
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -18,32 +17,15 @@ import (
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
-const (
-	SmokeDir        = "/tmp/dfc/smoke" // smoke test dir
-	SmokeStr        = "smoke"
-	blocksize       = 1048576
-	defaultbaseseed = 1062984096
-)
-
 var (
-	numops    int
-	fnlen     int
-	baseseed  int64
 	filesizes = [3]int{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
 	ratios    = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}         // #gets / #puts
 )
 
-func init() {
-	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
-	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
-	// When running multiple tests at the same time on different threads, ensure that
-	// They are given different seeds, as the tests are completely deterministic based on
-	// choice of seed, so they will interfere with each other.
-	flag.Int64Var(&baseseed, "seed", defaultbaseseed, "Seed to use for random number generators")
-}
-
 func Test_smoke(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
@@ -130,7 +112,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		} else {
 			wg.Add(1)
 			go func(i int) {
-				getRandomFiles(i, bseed+int64(i), numops, clibucket, t, nil, errch)
+				getRandomFiles(i, bseed+int64(i), numops, clibucket, SmokeStr+"/", t, nil, errch)
 				wg.Done()
 			}(i)
 			nGet--
@@ -144,16 +126,16 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	}
 }
 
-func getRandomFiles(id int, seed int64, numGets int, bucket string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
-	var msg = &dfc.GetMsg{}
+	var msg = &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
-		items, cerr := client.ListBucket(proxyurl, bucket, msg)
+		items, cerr := client.ListBucket(proxyurl, bucket, msg, 0)
 		if testfail(cerr, "List files with prefix failed", nil, errch, t) {
 			return
 		}

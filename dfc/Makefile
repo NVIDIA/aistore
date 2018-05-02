@@ -11,7 +11,7 @@ build:
 
 kill:
 	@pkill -SIGINT dfc 2>/dev/null; sleep 1; true
-	@pkill -SIGKILL dfc 2>/dev/null; sleep 1; true
+	@pkill authn 2>/dev/null; sleep 1; true
 
 # delete only caches, not logs
 rmcache:
@@ -34,3 +34,6 @@ cpuprof:
 
 flamegraph: cpuprof
 	@go-torch dfc.test /tmp/cpu.prof -u http://localhost:6060/
+
+code-coverage:
+	@./setup/code_coverage.sh

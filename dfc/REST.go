@@ -23,6 +23,7 @@ const (
 	ActSyncLB    = "synclb"
 	ActCreateLB  = "createlb"
 	ActDestroyLB = "destroylb"
+	ActRenameLB  = "renamelb"
 	ActSetConfig = "setconfig"
 	ActRename    = "rename"
 	ActEvict     = "evict"
@@ -44,15 +45,23 @@ const (
 	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation
+	HeaderPrimaryProxyURL = "PrimaryProxyURL"       // URL of Primary Proxy
+	HeaderPrimaryProxyID  = "PrimaryProxyID"        // ID of Primary Proxy
 )
 
 // URL Query Parameter enum
 const (
-	URLParamLocal   = "local"      // true if bucket is expected to be local, false otherwise
-	URLParamToID    = "to_id"      // target ID to copy to (string)
-	URLParamFromID  = "from_id"    // target ID to copy from (string)
-	URLParamCached  = "cachedonly" // true: return cached objects, false: object list from the cloud
-	URLParamAutoReb = "auto_reb"   // true: auto-rebalance upon Smap version change, false: RESTful
+	URLParamLocal            = "local"       // true: bucket is expected to be local
+	URLParamFromID           = "from_id"     // from_id=string - ID to copy from
+	URLParamToID             = "to_id"       // to_id=string - ID to copy to
+	URLParamFromName         = "from_name"   // rename from
+	URLParamToName           = "to_name"     // rename to
+	URLParamCached           = "cachedonly"  // true: return cached objects (names, metadata) instead of requesting the list from the cloud
+	URLParamNewTargetID      = "newtargetid" // ID of the new target joining the cluster
+	URLParamSuspectedTarget  = "suspect"     // suspect=string - ID of the target suspected of failure
+	URLParamPrimaryCandidate = "candidate"   // candidate=string - ID of the candidate for primary proxy
+	URLParamForce            = "force"       // true: shutdown the primary proxy
+	URLParamPrepare          = "prepare"     // true: request is the prepare phase for primary proxy change
 )
 
 // TODO: sort and some props are TBD
@@ -87,6 +96,12 @@ type RangeMsg struct {
 	Range  string `json:"range"`
 }
 
+// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
+type SmapVoteMsg struct {
+	VoteInProgress bool  `json:"vote_in_progress"`
+	Smap           *Smap `json:"smap"`
+}
+
 //===================
 //
 // RESTful GET
@@ -95,10 +110,11 @@ type RangeMsg struct {
 
 // GetMsg.GetWhat enum
 const (
-	GetWhatFile   = "file" // { "what": "file" } is implied by default and can be omitted
-	GetWhatConfig = "config"
-	GetWhatSmap   = "smap"
-	GetWhatStats  = "stats"
+	GetWhatFile     = "file" // { "what": "file" } is implied by default and can be omitted
+	GetWhatConfig   = "config"
+	GetWhatSmap     = "smap"
+	GetWhatStats    = "stats"
+	GetWhatSmapVote = "smapvote"
 )
 
 // GetMsg.GetSort enum
@@ -135,7 +151,8 @@ const (
 //
 //===================
 
-// BucketEntry contains file and directory metadata in response to the GetMsg
+// BucketEntry corresponds to a single entry in the BucketList and
+// contains file and directory metadata as per the GetMsg
 type BucketEntry struct {
 	Name     string `json:"name"`     // name of the object - note: does not include the bucket name
 	Size     int64  `json:"size"`     // size in bytes
@@ -148,16 +165,23 @@ type BucketEntry struct {
 	IsCached bool   `json:"iscached"` // if the file is cached on one of targets
 }
 
-// BucketList represents the response to a ListBucket call
+// BucketList represents the contents of a given bucket - somewhat analagous to the 'ls <bucket-name>'
 type BucketList struct {
 	Entries    []*BucketEntry `json:"entries"`
 	PageMarker string         `json:"pagemarker"`
 }
 
+// All bucket names known to the system
+type BucketNames struct {
+	Cloud []string `json:"cloud"`
+	Local []string `json:"local"`
+}
+
 // RESTful URL path: /v1/....
 const (
 	Rversion   = "v1"
-	Rfiles     = "files"
+	Rbuckets   = "buckets"
+	Robjects   = "objects"
 	Rcluster   = "cluster"
 	Rdaemon    = "daemon"
 	Rsyncsmap  = ActSyncSmap
@@ -166,4 +190,10 @@ const (
 	Rpush      = "push"
 	Rkeepalive = "keepalive"
 	Rhealth    = "health"
+	Rvote      = "vote"
+	Rtarget    = "target"
+	Rproxy     = "proxy"
+	Rvoteres   = "result"
+	Rvoteinit  = "init"
+	Rtokens    = "tokens"
 )

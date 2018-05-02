@@ -290,7 +290,29 @@ func NewFileReader(path, name string, size int64, withHash bool) (client.Reader,
 		return nil, err
 	}
 
+	// FIXME: No need to have 'f' in fileReader?
 	return &fileReader{f, fn, name, hash}, nil
+}
+
+// NewFileReaderFromFile opens an existing file, read data to compute hash, closes it and returns
+// a new fileReader.
+// Note: The difference between NewFileReader and this is NewFileReader generates a file from random
+//       data first, then returns the file as the source for DFC put. This reader doesn't generate a
+//       file but reads an existing file to compute xxHash, then returns the same file as source for
+//       DFC put.
+func NewFileReaderFromFile(fn string, withHash bool) (client.Reader, error) {
+	f, err := os.Open(fn)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var hash string
+	if withHash {
+		_, hash, err = client.ReadWriteWithHash(f, ioutil.Discard)
+	}
+
+	return &fileReader{nil, fn, "" /* dfc prefix */, hash}, nil
 }
 
 type sgReader struct {

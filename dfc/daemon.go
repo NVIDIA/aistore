@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sort"
 	"sync"
 	"time"
 
@@ -41,28 +40,27 @@ type cliVars struct {
 	loglevel  string
 	statstime time.Duration
 	ntargets  int
+	proxyurl  string
 }
 
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 // Smap contains id:daemonInfo pairs and related metadata
 type Smap struct {
-	sync.Mutex
-	Smap        map[string]*daemonInfo `json:"smap"`
-	ProxySI     *daemonInfo            `json:"proxy_si"`
+	Smap        map[string]*daemonInfo `json:"smap"` // daemonID -> daemonInfo
+	Pmap        map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
+	ProxySI     *proxyInfo             `json:"proxy_si"`
 	Version     int64                  `json:"version"`
 	syncversion int64
 }
 
 type mountedFS struct {
-	sync.Mutex
-	available    map[string]*mountPath
-	offline      map[string]*mountPath
-	availOrdered []string
+	sync.Mutex `json:"-"`
+	Available  map[string]*mountPath `json:"available"`
+	Offline    map[string]*mountPath `json:"offline"`
 }
 
 // daemon instance: proxy or storage target
 type daemon struct {
-	smap       *Smap
 	config     dfconfig
 	mountpaths mountedFS
 	rg         *rungroup
@@ -74,6 +72,11 @@ type daemonInfo struct {
 	DaemonPort string `json:"daemon_port"`
 	DaemonID   string `json:"daemon_id"`
 	DirectURL  string `json:"direct_url"`
+}
+
+type proxyInfo struct {
+	daemonInfo
+	Primary bool
 }
 
 // local (cache-only) bucket names and their TBD props
@@ -95,8 +98,6 @@ type namedrunner struct {
 	name string
 }
 
-func (r *namedrunner) run() error       { assert(false); return nil }
-func (r *namedrunner) stop(error)       { assert(false) }
 func (r *namedrunner) setname(n string) { r.name = n }
 
 // rungroup
@@ -108,36 +109,17 @@ type rungroup struct {
 	stpch  chan error
 }
 
-type gstopError struct {
-}
-
 //====================
 //
 // globals
 //
 //====================
 var (
-	build   string
-	ctx     = &daemon{}
-	clivars = &cliVars{}
+	build    string
+	ctx      = &daemon{}
+	clivars  = &cliVars{}
+	smapLock = sync.Mutex{}
 )
-
-//====================
-//
-// MountedFS - utilities
-//
-//====================
-
-// Updates ordered list of available mountpaths
-// Stable order of mountpaths is kept to support local bucket/DFC cache list paging
-func (m *mountedFS) updateOrderedList() {
-	ordered := make([]string, 0, len(m.available))
-	for path := range m.available {
-		ordered = append(ordered, path)
-	}
-	sort.Strings(ordered)
-	m.availOrdered = ordered
-}
 
 //====================
 //
@@ -149,8 +131,18 @@ func (m *Smap) add(si *daemonInfo) {
 	m.Version++
 }
 
+func (m *Smap) addProxy(pi *proxyInfo) {
+	m.Pmap[pi.DaemonID] = pi
+	m.Version++
+}
+
 func (m *Smap) del(sid string) {
 	delete(m.Smap, sid)
+	m.Version++
+}
+
+func (m *Smap) delProxy(pid string) {
+	delete(m.Pmap, pid)
 	m.Version++
 }
 
@@ -168,6 +160,9 @@ func (m *Smap) count() int {
 	return len(m.Smap)
 }
 
+func (m *Smap) countProxies() int {
+	return len(m.Pmap)
+}
 func (m *Smap) countLocked() int {
 	m.lock()
 	defer m.unlock()
@@ -179,12 +174,41 @@ func (m *Smap) get(sid string) *daemonInfo {
 	return si
 }
 
+func (m *Smap) getProxy(pid string) *proxyInfo {
+	pi := m.Pmap[pid]
+	return pi
+}
+
 func (m *Smap) lock() {
-	m.Lock()
+	smapLock.Lock()
 }
 
 func (m *Smap) unlock() {
-	m.Unlock()
+	smapLock.Unlock()
+}
+
+// SmapUnion computes the union of A and B, where keys in B override keys shared with A
+func SmapUnion(A *Smap, B *Smap) *Smap {
+	unionsmap := &Smap{Smap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	for k, v := range A.Smap {
+		unionsmap.Smap[k] = v
+	}
+	for k, v := range A.Pmap {
+		unionsmap.Pmap[k] = v
+	}
+	for k, v := range B.Smap {
+		unionsmap.Smap[k] = v
+	}
+	for k, v := range B.Pmap {
+		unionsmap.Pmap[k] = v
+	}
+	return unionsmap
+}
+
+func (m *Smap) copyLocked(dst *Smap) {
+	m.lock()
+	defer m.unlock()
+	copyStruct(dst, m)
 }
 
 //====================
@@ -200,6 +224,11 @@ func (m *lbmap) add(b string) bool {
 	m.LBmap[b] = ""
 	m.Version++
 	return true
+}
+
+func (m *lbmap) contains(b string) (ok bool) {
+	_, ok = m.LBmap[b]
+	return
 }
 
 func (m *lbmap) del(b string) bool {
@@ -246,26 +275,21 @@ func (g *rungroup) run() error {
 		return nil
 	}
 	g.errch = make(chan error, len(g.runarr))
-	g.idxch = make(chan int, len(g.runarr))
 	g.stpch = make(chan error, 1)
 	for i, r := range g.runarr {
 		go func(i int, r runner) {
 			g.errch <- r.run()
-			g.idxch <- i
 		}(i, r)
 	}
-	// wait here
+
+	// wait here for the first completed runner(likely signal runner)
 	err := <-g.errch
-	idx := <-g.idxch
 
 	for _, r := range g.runarr {
 		r.stop(err)
 	}
 	glog.Flush()
-	for i := 0; i < cap(g.errch); i++ {
-		if i == idx {
-			continue
-		}
+	for i := 0; i < cap(g.errch)-1; i++ {
 		<-g.errch
 		glog.Flush()
 	}
@@ -273,14 +297,14 @@ func (g *rungroup) run() error {
 	return err
 }
 
-func (g *rungroup) stop() {
-	g.errch <- &gstopError{}
-	g.idxch <- -1
-	<-g.stpch
-}
-
-func (ge *gstopError) Error() string {
-	return "rungroup stop"
+func init() {
+	// CLI to override dfc JSON config
+	flag.StringVar(&clivars.role, "role", "", "role: proxy OR target")
+	flag.StringVar(&clivars.conffile, "config", "", "config filename")
+	flag.StringVar(&clivars.loglevel, "loglevel", "", "glog loglevel")
+	flag.DurationVar(&clivars.statstime, "statstime", 0, "http and capacity utilization statistics log interval")
+	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
+	flag.StringVar(&clivars.proxyurl, "proxyurl", "", "Override config Proxy settings")
 }
 
 //==================
@@ -289,14 +313,8 @@ func (ge *gstopError) Error() string {
 //
 //==================
 func dfcinit() {
-	// CLI to override dfc JSON config
-	flag.StringVar(&clivars.role, "role", "", "role: proxy OR target")
-	flag.StringVar(&clivars.conffile, "config", "", "config filename")
-	flag.StringVar(&clivars.loglevel, "loglevel", "", "glog loglevel")
-	flag.DurationVar(&clivars.statstime, "statstime", 0, "http and capacity utilization statistics log interval")
-	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
-
 	flag.Parse()
+
 	if clivars.conffile == "" {
 		fmt.Fprintf(os.Stderr, "Missing configuration file - must be provided via command line\n")
 		fmt.Fprintf(os.Stderr, "Usage: ... -role=<proxy|target> -config=<json> ...\n")
@@ -313,12 +331,7 @@ func dfcinit() {
 	}
 	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 	if clivars.role == xproxy {
-		if clivars.ntargets <= 0 {
-			glog.Fatalf("Unspecified or invalid number (%d) of storage targets (a hint for the http proxy)",
-				clivars.ntargets)
-		}
 		confdir := ctx.config.Confdir
-		ctx.smap = &Smap{Smap: make(map[string]*daemonInfo, 8)}
 		p := &proxyrunner{confdir: confdir}
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)

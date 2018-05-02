@@ -4,13 +4,40 @@
  */
 package dfc_test
 
+// Before submit for review or push to master:
+// (From $GOPATH/src/github.com/NVIDIA/dfcpub; or adjust the ./... accordingly)
+// 1. Run all tests minus multi proxy tests:
+//    BUCKET=<bucket name> MULTIPROXY=0 go test -v -p 1 -count 1 -timeout 20m ./...
+// 2. Do a quick run:
+//    BUCKET=<bucket name> MULTIPROXY=0 go test -v -p 1 -count 1 -short ./...
+// 3. If the change might affect multi proxy (may take a long time, around an hour):
+//    BUCKET=<bucket name> MULTIPROXY=1 go test -v -p 1 -count 1 -timeout 1h ./...
+
+// Notes:
+// It is important to run with the above paramerts, here is why:
+// 1. "-p 1": run tests sequentially; since all tests share the same bucket, can't allow
+//    tests run in parallel.
+// 2. "-count=1": this is to disable go test cache; without it, when tests fail, go test might show
+//    ok if the same test passed before and results are cached.
+// 3. "-v": when used, go test shows result (PASS/FAIL) for each test; so if -v is used, check the results carefully, last line shows
+//    PASS doesn't mean the test passed, it only means the last test passed.
+// 4. the option "-timeout 20m" is just in case it takes 10+ minutes for all tests to finish on your setup.
+
+// To run individual tests as before:
+// BUCKET=<bucket name> go test ./tests -v -run=regression
+// BUCKET=<bucket name> go test ./tests -v -run=down -args -bucket=mybucket
+// BUCKET=<bucket name> go test ./tests -v -run=list -bucket=otherbucket -prefix=smoke/obj -props=atime,ctime,iscached,checksum,version,size
+// BUCKET=<bucket name> go test ./tests -v -run=smoke -numworkers=4
+// BUCKET=liding-dfc MULTIPROXY=1 go test -v -run=vote -duration=20m
+
 import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
@@ -20,44 +47,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
-)
-
-// usage examples:
-// # go test ./tests -v -run=regression
-// # go test ./tests -v -run=down -args -bucket=mybucket
-// # go test ./tests -v -run=list -bucket=otherbucket -prefix=smoke/obj -props=atime,ctime,iscached,checksum,version,size
-// # go test ./tests -v -run=smoke -numworkers=4
-// # go test ./tests -v -run=xxx -bench . -count 10
-
-const (
-	baseDir        = "/tmp/dfc"
-	LocalDestDir   = "/tmp/dfc/dest"         // client-side download destination
-	LocalSrcDir    = "/tmp/dfc/src"          // client-side src directory for upload
-	ProxyURL       = "http://localhost:8080" // assuming local proxy is listening on 8080
-	ColdValidStr   = "coldmd5"
-	ChksumValidStr = "chksum"
-	ColdMD5str     = "coldmd5"
-	DeleteDir      = "/tmp/dfc/delete"
-	DeleteStr      = "delete"
-	largefilesize  = 4 // in MB
-)
-
-// globals
-var (
-	clibucket   string
-	numfiles    int
-	numworkers  int
-	match       string
-	clichecksum string
-	totalio     int64
-	proxyurl    string
-	props       string
-	pagesize    int64
 )
 
 // worker's result
@@ -82,37 +74,7 @@ func newReqError(msg string, code int) reqError {
 	}
 }
 
-func init() {
-	flag.StringVar(&proxyurl, "proxyurl", ProxyURL, "Proxy URL")
-	flag.StringVar(&clibucket, "bucket", "shri-new", "AWS or GCP bucket")
-	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
-	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
-	flag.StringVar(&match, "match", ".*", "object name regex")
-	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
-	flag.Int64Var(&totalio, "totalio", 80, "Total IO Size in MB")
-	flag.StringVar(&props, "props", "", "List of object properties to return. Empty value means default set of properties")
-	flag.Int64Var(&pagesize, "pagesize", 1000, "The maximum number of object returned by one list bucket call")
-}
-
-func checkMemory() {
-	if readerType == readers.ReaderTypeSG || readerType == readers.ReaderTypeInMem {
-		megabytes, _ := dfc.TotalMemory()
-		if megabytes < PhysMemSizeWarn {
-			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider use other reader type\n", megabytes)
-		}
-	}
-}
-
-func parse() {
-	flag.Parse()
-	usingSG = readerType == readers.ReaderTypeSG
-	usingFile = readerType == readers.ReaderTypeFile
-	checkMemory()
-}
-
 func Test_download(t *testing.T) {
-	parse()
-
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)
@@ -196,8 +158,6 @@ func Test_download(t *testing.T) {
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
-	parse()
-
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
 	for i := 0; i < numworkers; i++ {
@@ -214,8 +174,8 @@ func Test_matchdelete(t *testing.T) {
 	}
 
 	// list the bucket
-	var msg = &dfc.GetMsg{}
-	reslist, err := client.ListBucket(proxyurl, clibucket, msg)
+	var msg = &dfc.GetMsg{GetPageSize: int(pagesize)}
+	reslist, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
 		t.Fail()
@@ -250,7 +210,9 @@ func Test_matchdelete(t *testing.T) {
 }
 
 func Test_putdeleteRange(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	const (
 		numFiles     = 100
@@ -338,7 +300,7 @@ func Test_putdeleteRange(t *testing.T) {
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
+		bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -351,7 +313,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tlogf("Cleaning up remained objects...\n")
 	msg := &dfc.GetMsg{GetPrefix: commonPrefix + "/"}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, msg)
+	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -393,7 +355,9 @@ func Test_putdeleteRange(t *testing.T) {
 
 // PUT, then delete
 func Test_putdelete(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	var sgl *dfc.SGLIO
 	if err := dfc.CreateDir(DeleteDir); err != nil {
@@ -446,52 +410,33 @@ func Test_putdelete(t *testing.T) {
 	selectErr(errch, "delete", t, false)
 }
 
-func Test_list(t *testing.T) {
-	parse()
-
+func listObjects(t *testing.T, msg *dfc.GetMsg, bucket string, objLimit int) (*dfc.BucketList, error) {
 	var (
-		copy     bool
-		reslist  *dfc.BucketList
-		file     *os.File
-		err      error
-		pageSize = int(pagesize)
+		copy    bool
+		file    *os.File
+		err     error
+		reslist *dfc.BucketList
 	)
-
-	// list the names, sizes, creation times and MD5 checksums
-	var msg *dfc.GetMsg
-	if props == "" {
-		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion, GetPageSize: pageSize}
-	} else {
-		msg = &dfc.GetMsg{GetProps: props, GetPageSize: pageSize}
-	}
-	if prefix != "" {
-		msg.GetPrefix = prefix
-	}
-	tlogf("Displaying properties: %s\n", msg.GetProps)
-
-	bucket := clibucket
+	tlogf("LIST %s [prefix %s]\n", bucket, msg.GetPrefix)
 	fname := LocalDestDir + "/" + bucket
 	if copy {
 		// Write list to a local filename = bucket
 		if err = dfc.CreateDir(LocalDestDir); err != nil {
 			t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
-			return
+			return nil, err
 		}
 		file, err = os.Create(fname)
 		if err != nil {
 			t.Errorf("Failed to create file %s, err: %v", fname, err)
-			return
+			return nil, err
 		}
 	}
 
 	totalObjs := 0
 	for {
-		reslist = testListBucket(t, bucket, msg)
+		reslist = testListBucket(t, bucket, msg, objLimit)
 		if reslist == nil {
-			return
-		}
-		if pageSize != 0 && len(reslist.Entries) > pageSize {
-			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
+			return nil, fmt.Errorf("Failed to list bucket %s", bucket)
 		}
 		if copy {
 			for _, m := range reslist.Entries {
@@ -517,6 +462,83 @@ func Test_list(t *testing.T) {
 		tlogf("PageMarker for the next page: %s\n", reslist.PageMarker)
 	}
 	tlogf("-----------------\nTotal objects listed: %v\n", totalObjs)
+	return reslist, nil
+}
+
+func Test_list(t *testing.T) {
+	var (
+		pageSize = int(pagesize)
+		objLimit = int(objlimit)
+		bucket   = clibucket
+	)
+
+	// list the names, sizes, creation times and MD5 checksums
+	var msg *dfc.GetMsg
+	if props == "" {
+		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion, GetPageSize: pageSize}
+	} else {
+		msg = &dfc.GetMsg{GetProps: props, GetPageSize: pageSize}
+	}
+	if prefix != "" {
+		msg.GetPrefix = prefix
+	}
+
+	tlogf("Displaying properties: %s\n", msg.GetProps)
+	reslist, err := listObjects(t, msg, bucket, objLimit)
+	if err == nil {
+		if objLimit != 0 && len(reslist.Entries) > objLimit {
+			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
+		}
+	}
+}
+
+func Test_bucketnames(t *testing.T) {
+	var (
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + "*"
+		r   *http.Response
+		err error
+	)
+	tlogf("local bucket names:\n")
+	urlLocalOnly := fmt.Sprintf("%s?%s=%t", url, dfc.URLParamLocal, true)
+	r, err = http.Get(urlLocalOnly)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	printbucketnames(t, r)
+
+	tlogf("all bucket names:\n")
+	r, err = http.Get(url)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
+	printbucketnames(t, r)
+}
+
+func printbucketnames(t *testing.T, r *http.Response) {
+	defer r.Body.Close()
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		t.Errorf("Failed with HTTP status %d", r.StatusCode)
+		return
+	}
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		t.Errorf("Failed to read response body: %v", err)
+		return
+	}
+	bucketnames := &dfc.BucketNames{}
+	err = json.Unmarshal(b, bucketnames)
+	if err != nil {
+		t.Errorf("Failed to unmarshal bucket names, err: %v", err)
+		return
+	}
+	pretty, err := json.MarshalIndent(bucketnames, "", "\t")
+	if err != nil {
+		t.Errorf("Failed to pretty-print bucket names, err: %v", err)
+		return
+	}
+	fmt.Fprintln(os.Stdout, string(pretty))
 }
 
 func Test_coldgetmd5(t *testing.T) {
@@ -537,7 +559,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_cold_get"].(bool)
 
@@ -555,7 +577,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_cold_get", strconv.FormatBool(false), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", strconv.FormatBool(false), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	start := time.Now()
 	getfromfilelist(t, bucket, errch, fileslist, false)
@@ -568,7 +590,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_cold_get", strconv.FormatBool(true), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("validate_cold_get", strconv.FormatBool(true), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -579,7 +601,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
 cleanup:
-	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	for _, fn := range fileslist {
 		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
@@ -626,7 +648,7 @@ func Benchmark_get(b *testing.B) {
 
 func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
 	errch chan error, resch chan workres, bucket string) {
-	geturl := proxyurl + "/v1/files"
+	geturl := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects
 	res := workres{0, 0}
 	defer wg.Done()
 
@@ -655,9 +677,8 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 		failed = true
 		return
 	}
-	defer func(r *http.Response) {
-		r.Body.Close()
-	}(r)
+	defer r.Body.Close()
+
 	// Create a local copy
 	fname := LocalDestDir + "/" + keyname
 	file, err := dfc.CreateFile(fname)
@@ -733,8 +754,8 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 
 func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
 	// list the bucket
-	var msg = &dfc.GetMsg{}
-	reslist := testListBucket(t, bucket, msg)
+	var msg = &dfc.GetMsg{GetPageSize: int(pagesize)}
+	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		return 0
 	}
@@ -765,7 +786,7 @@ func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outp
 func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
 	if err != nil {
 		if dfc.IsErrConnectionRefused(err) {
-			t.Fatalf("http connection refused - terminating")
+			t.Fatalf("%s, http connection refused - terminating", str)
 		}
 		s := fmt.Sprintf("%s, err: %v", str, err)
 		t.Error(s)
@@ -786,32 +807,12 @@ func testfail(err error, str string, r *http.Response, errch chan error, t *test
 	return false
 }
 
-func testListBucketAll(t *testing.T, bucket string, msg dfc.GetMsg) *dfc.BucketList {
+func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg, limit int) *dfc.BucketList {
 	var (
-		url = proxyurl + "/v1/files/" + bucket
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 	)
-	tlogf("LIST ALL %q\n", url)
-	fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
-	for {
-		bucketlist := testListBucket(t, bucket, &msg)
-		if bucketlist == nil {
-			return nil
-		}
-		fullbucketlist.Entries = append(fullbucketlist.Entries, bucketlist.Entries...)
-		if bucketlist.PageMarker == "" {
-			break
-		}
-		msg.GetPageMarker = bucketlist.PageMarker
-	}
-	return fullbucketlist
-}
-
-func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg) *dfc.BucketList {
-	var (
-		url = proxyurl + "/v1/files/" + bucket
-	)
-	tlogf("LIST %q\n", url)
-	reslist, err := client.ListBucket(proxyurl, bucket, msg)
+	tlogf("LIST %q (Number of objects: %d)\n", url, limit)
+	reslist, err := client.ListBucket(proxyurl, bucket, msg, limit)
 	if testfail(err, fmt.Sprintf("List bucket %s failed", bucket), nil, nil, t) {
 		return nil
 	}
@@ -833,6 +834,10 @@ func emitError(r *http.Response, err error, errch chan error) {
 }
 
 func Test_checksum(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
+
 	var (
 		filesput    = make(chan string, 100)
 		fileslist   = make([]string, 0, 100)
@@ -851,8 +856,9 @@ func Test_checksum(t *testing.T) {
 	if err := dfc.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
+
 	// Get Current Config
-	config := getConfig(proxyurl+"/v1/daemon", httpclient, t)
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
@@ -877,14 +883,14 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable checkum
 	if ochksum != dfc.ChecksumNone {
-		setConfig("checksum", dfc.ChecksumNone, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("checksum", dfc.ChecksumNone, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_cold_get", fmt.Sprint("false"), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("false"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -901,18 +907,18 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, fileslist)
 	switch clichecksum {
 	case "all":
-		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/v1/cluster", httpclient, t)
-		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case dfc.ChecksumXXHash:
-		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/v1/cluster", httpclient, t)
+		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -933,8 +939,9 @@ func Test_checksum(t *testing.T) {
 cleanup:
 	deletefromfilelist(t, bucket, errch, fileslist)
 	// restore old config
-	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/v1/cluster", httpclient, t)
-	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/v1/cluster", httpclient, t)
+	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+
 	return
 }
 

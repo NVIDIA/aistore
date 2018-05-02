@@ -15,8 +15,9 @@ import (
 
 type rtnamemap struct {
 	sync.Mutex
-	m    map[string]*pendinginfo
-	abrt chan struct{}
+	m       map[string]*pendinginfo
+	abrt    chan struct{}
+	aborted bool
 }
 
 // in-progress file/object GETs, PUTs and DELETEs
@@ -84,7 +85,9 @@ func (rtnamemap *rtnamemap) downgradelock(name string) {
 func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
 	rtnamemap.Lock()
 	defer rtnamemap.Unlock()
-
+	if rtnamemap.aborted {
+		return
+	}
 	info, ok := rtnamemap.m[name]
 	assert(ok)
 	if exclusive {
@@ -115,6 +118,7 @@ func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendingi
 			glog.Infof("rtnamemap: lockname %s (%v) - retrying...", info.fqn, exclusive)
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(10)+1))
 		case <-rtnamemap.abrt:
+			rtnamemap.aborted = true
 			return
 		}
 	}
@@ -127,4 +131,8 @@ func (rtnamemap *rtnamemap) log() {
 	for name, info := range rtnamemap.m {
 		glog.Infof("rtnamemap: %s => %s", name, info.String())
 	}
+}
+
+func (rtnamemap *rtnamemap) stop() {
+	close(rtnamemap.abrt)
 }

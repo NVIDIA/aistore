@@ -22,7 +22,8 @@ const (
 
 type kaliveif interface {
 	onerr(err error, status int)
-	timestamp(directurl string)
+	timestamp(sid string)
+	getTimestamp(sid string) time.Time
 	keepalive(err error) (stopped bool)
 }
 
@@ -34,7 +35,6 @@ type okmap struct {
 type kalive struct {
 	namedrunner
 	k        kaliveif
-	h        *httprunner
 	checknow chan error
 	chstop   chan struct{}
 	atomic   int64
@@ -53,13 +53,13 @@ type targetkalive struct {
 
 // construction
 func newproxykalive(p *proxyrunner) *proxykalive {
-	k := &proxykalive{p: p, kalive: kalive{h: &p.httprunner}}
+	k := &proxykalive{p: p}
 	k.kalive.k = k
 	return k
 }
 
 func newtargetkalive(t *targetrunner) *targetkalive {
-	k := &targetkalive{t: t, kalive: kalive{h: &t.httprunner}}
+	k := &targetkalive{t: t}
 	k.kalive.k = k
 	return k
 }
@@ -77,15 +77,21 @@ func (r *kalive) onerr(err error, status int) {
 
 func (r *kalive) timestamp(sid string) {
 	r.okmap.Lock()
+	defer r.okmap.Unlock()
 	r.okmap.okmap[sid] = time.Now()
-	r.okmap.Unlock()
+}
+
+func (r *kalive) getTimestamp(sid string) time.Time {
+	r.okmap.Lock()
+	defer r.okmap.Unlock()
+	return r.okmap.okmap[sid]
 }
 
 func (r *kalive) skipCheck(sid string) bool {
 	r.okmap.Lock()
 	last, ok := r.okmap.okmap[sid]
 	r.okmap.Unlock()
-	return ok && time.Since(last) < ctx.config.KeepAliveTime
+	return ok && time.Since(last) < ctx.config.Periodic.KeepAliveTime
 }
 
 func (r *kalive) run() error {
@@ -93,7 +99,7 @@ func (r *kalive) run() error {
 	r.chstop = make(chan struct{}, 4)
 	r.checknow = make(chan error, 16)
 	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
-	ticker := time.NewTicker(ctx.config.KeepAliveTime)
+	ticker := time.NewTicker(ctx.config.Periodic.KeepAliveTime)
 	lastcheck := time.Time{}
 	for {
 		select {
@@ -122,12 +128,79 @@ func (r *kalive) stop(err error) {
 	close(r.chstop)
 }
 
+//===============================================
+//
+// Generic Keepalive (Non-Primary Proxy & Target)
+//
+//===============================================
+type Registerer interface {
+	register(timeout time.Duration) (int, error)
+}
+
+func keepalive(r Registerer, chstop chan struct{}, err error) (stopped bool) {
+	timeout := kalivetimeout
+	status, err := r.register(timeout)
+	if err == nil {
+		return
+	}
+	if status > 0 {
+		glog.Infof("Warning: keepalive failed with status %d, err: %v", status, err)
+	} else {
+		glog.Infof("Warning: keepalive failed, err: %v", err)
+	}
+	// until success or stop
+	poller := time.NewTicker(targetpollivl)
+	defer poller.Stop()
+	for {
+		select {
+		case <-poller.C:
+			status, err := r.register(timeout)
+			if err == nil {
+				glog.Infoln("keepalive: successfully re-registered")
+				return
+			}
+			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
+			if timeout > ctx.config.Timeout.MaxKeepalive || IsErrConnectionRefused(err) {
+				stopped = true
+				return
+			}
+			if status > 0 {
+				glog.Infof("Warning: keepalive failed with status %d, err: %v", status, err)
+			} else {
+				glog.Infof("Warning: keepalive failed, err: %v", err)
+			}
+			if status == http.StatusRequestTimeout {
+				continue
+			}
+			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
+		case <-chstop:
+			stopped = true
+			return
+		}
+	}
+}
+
 //==========================================
 //
 // proxykalive: implements kaliveif
 //
 //===========================================
 func (r *proxykalive) keepalive(err error) (stopped bool) {
+	if r.p.primary {
+		return r.primarykeepalive(err)
+	}
+
+	if r.p.proxysi == nil || r.skipCheck(r.p.proxysi.DaemonID) {
+		return
+	}
+	stopped = keepalive(r.p, r.chstop, err)
+	if stopped {
+		r.p.onPrimaryProxyFailure()
+	}
+	return stopped
+}
+
+func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 	aval := time.Now().Unix()
 	if !atomic.CompareAndSwapInt64(&r.atomic, 0, aval) {
 		glog.Infof("keepalive-alltargets is in progress...")
@@ -138,7 +211,7 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 		glog.Infof("keepalive-alltargets: got err %v, checking now...", err)
 	}
 	from := "?" + URLParamFromID + "=" + r.p.si.DaemonID
-	for sid, si := range ctx.smap.Smap {
+	for sid, si := range r.p.smap.Smap {
 		if r.skipCheck(sid) {
 			continue
 		}
@@ -160,15 +233,16 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 		if responded {
 			continue
 		}
+		// FIXME: Seek confirmation when keepalive fails
 		// the verdict
 		if status > 0 {
 			glog.Errorf("Target %s fails keepalive with status %d, err: %v - removing from the cluster map", sid, status, err)
 		} else {
 			glog.Errorf("Target %s fails keepalive, err: %v - removing from the cluster map", sid, err)
 		}
-		ctx.smap.lock()
-		ctx.smap.del(sid)
-		ctx.smap.unlock()
+		r.p.smap.lock()
+		r.p.smap.del(sid)
+		r.p.smap.unlock()
 	}
 	return false
 }
@@ -191,8 +265,8 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 				return true, false
 			}
 			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
-			if timeout > ctx.config.HTTP.Timeout {
-				timeout = ctx.config.HTTP.Timeout
+			if timeout > ctx.config.Timeout.MaxKeepalive {
+				timeout = ctx.config.Timeout.Default
 				maxedout++
 			}
 			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
@@ -215,38 +289,9 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
 		return
 	}
-	timeout := kalivetimeout
-	status, err := r.t.register(timeout)
-	if err == nil {
-		return
+	stopped = keepalive(r.t, r.chstop, err)
+	if stopped {
+		r.t.onPrimaryProxyFailure()
 	}
-	if status > 0 {
-		glog.Infof("Warning: keepalive failed with status %d, err: %v", status, err)
-	} else {
-		glog.Infof("Warning: keepalive failed, err: %v", err)
-	}
-	// until success or stop
-	poller := time.NewTicker(targetpollivl)
-	defer poller.Stop()
-	for {
-		select {
-		case <-poller.C:
-			status, err := r.t.register(timeout)
-			if err == nil {
-				glog.Infoln("keepalive: successfully re-registered")
-				return
-			}
-			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
-			if timeout > ctx.config.HTTP.Timeout {
-				timeout = ctx.config.HTTP.Timeout
-			}
-			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-				continue
-			}
-			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
-		case <-r.chstop:
-			stopped = true
-			return
-		}
-	}
+	return stopped
 }

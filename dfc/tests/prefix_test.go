@@ -10,7 +10,6 @@
 package dfc_test
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -29,21 +28,14 @@ const (
 )
 
 var (
-	prefix           string
 	prefixFileNumber int
 )
-
-func init() {
-	flag.StringVar(&prefix, "prefix", "", "Object name prefix")
-}
 
 // if the prefix flag is set via command line the test looks only for the prefix
 // and checks if the number of items equals the number of files with
 // the names starting with the prefix;
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
 func Test_prefix(t *testing.T) {
-	parse()
-
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)
@@ -90,6 +82,22 @@ func prefixCreateFiles(t *testing.T) {
 		go client.PutAsync(wg, proxyurl, r, clibucket, keyName, errch, false /* silent */)
 		fileNames = append(fileNames, fileName)
 	}
+
+	// create specific files to test corner cases
+	extranames := []string{"dir/obj01", "dir/obj02", "dir/obj03", "dir1/dir2/obj04", "dir1/dir2/obj05"}
+	for _, fName := range extranames {
+		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
+		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
+		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wg.Add(1)
+		go client.PutAsync(wg, proxyurl, r, clibucket, keyName, errch, false /* silent */)
+		fileNames = append(fileNames, fName)
+	}
+
 	wg.Wait()
 
 	select {
@@ -104,7 +112,7 @@ func prefixLookupOne(t *testing.T) {
 	fmt.Printf("Looking up for files than names start with %s\n", prefix)
 	var msg = &dfc.GetMsg{GetPrefix: prefix}
 	numFiles := 0
-	objList, err := client.ListBucket(proxyurl, clibucket, msg)
+	objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if testfail(err, "List files with prefix failed", nil, nil, t) {
 		return
 	}
@@ -130,7 +138,7 @@ func prefixLookupDefault(t *testing.T) {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &dfc.GetMsg{GetPrefix: lookFor}
-		objList, err := client.ListBucket(proxyurl, clibucket, msg)
+		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 		if testfail(err, "List files with prefix failed", nil, nil, t) {
 			return
 		}
@@ -144,6 +152,45 @@ func prefixLookupDefault(t *testing.T) {
 			}
 		} else {
 			t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", key, realNumFiles, numFiles)
+			tlogf("Objects returned:\n")
+			for id, oo := range objList.Entries {
+				tlogf("    %d[%d]. %s\n", i, id, oo.Name)
+			}
+		}
+	}
+}
+
+func prefixLookupCornerCases(t *testing.T) {
+	fmt.Printf("Testing corner cases\n")
+
+	type testProps struct {
+		title    string
+		prefix   string
+		objCount int
+	}
+	tests := []testProps{
+		{"Entire list (dir)", "dir", 5},
+		{"dir/", "dir/", 3},
+		{"dir1", "dir1", 2},
+		{"dir1/", "dir1/", 2},
+	}
+
+	for idx, test := range tests {
+		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
+		tlogf("%d. Prefix: %s [%s]\n", idx, test.title, p)
+		var msg = &dfc.GetMsg{GetPrefix: p}
+		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
+		if testfail(err, "List files with prefix failed", nil, nil, t) {
+			return
+		}
+
+		if len(objList.Entries) != test.objCount {
+			t.Errorf("Expected number of objects with prefix '%s' is %d but found %d",
+				test.prefix, test.objCount, len(objList.Entries))
+			tlogf("Objects returned:\n")
+			for id, oo := range objList.Entries {
+				tlogf("    %d[%d]. %s\n", idx, id, oo.Name)
+			}
 		}
 	}
 }
@@ -151,6 +198,7 @@ func prefixLookupDefault(t *testing.T) {
 func prefixLookup(t *testing.T) {
 	if prefix == "" {
 		prefixLookupDefault(t)
+		prefixLookupCornerCases(t)
 	} else {
 		prefixLookupOne(t)
 	}

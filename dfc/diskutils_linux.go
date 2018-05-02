@@ -23,9 +23,9 @@ const (
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
 	r.chsts = make(chan struct{}, 1)
-	r.Disk = make(map[string]deviometrics, 8)
+	r.Disk = make(map[string]deviometrics, 0)
 	r.metricnames = make([]string, 0)
-	iostatival := strconv.Itoa(int(ctx.config.StatsTime / time.Second))
+	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
 	r.cmd = exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
 	stdout, err := r.cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)
@@ -56,9 +56,16 @@ func (r *iostatrunner) run() (err error) {
 			} else {
 				r.Lock()
 				device := fields[0]
-				iometrics := make(map[string]string, iostatnumdsk-1)
+				var (
+					iometrics deviometrics
+					ok        bool
+				)
+				if iometrics, ok = r.Disk[device]; !ok {
+					iometrics = make(map[string]string, iostatnumdsk-1) // first time
+				}
 				for i := 1; i < iostatnumdsk; i++ {
-					iometrics[r.metricnames[i-1]] = fields[i]
+					name := r.metricnames[i-1]
+					iometrics[name] = fields[i]
 				}
 				r.Disk[device] = iometrics
 				r.Unlock()
@@ -81,6 +88,34 @@ func (r *iostatrunner) stop(err error) {
 	if err := r.cmd.Process.Kill(); err != nil {
 		glog.Errorf("Failed to kill iostat, err: %v", err)
 	}
+}
+
+func (r *iostatrunner) isZeroUtil(dev string) bool {
+	iometrics := r.Disk[dev]
+	if utilstr, ok := iometrics["%util"]; ok {
+		if util, err := strconv.ParseFloat(utilstr, 32); err == nil {
+			if util == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *iostatrunner) getMaxUtil() (maxutil float64) {
+	maxutil = -1
+	r.Lock()
+	defer r.Unlock()
+	for _, iometrics := range r.Disk {
+		if utilstr, ok := iometrics["%util"]; ok {
+			if util, err := strconv.ParseFloat(utilstr, 32); err == nil {
+				if util > maxutil {
+					maxutil = util
+				}
+			}
+		}
+	}
+	return
 }
 
 //===========================

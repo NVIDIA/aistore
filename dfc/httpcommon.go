@@ -14,8 +14,11 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -29,9 +32,8 @@ import (
 const ( // => Transport.MaxIdleConnsPerHost
 	targetMaxIdleConnsPer = 4
 	proxyMaxIdleConnsPer  = 8
+	initialBucketListSize = 512
 )
-
-const initialBucketListSize = 512
 
 type objectProps struct {
 	version string
@@ -47,7 +49,10 @@ type objectProps struct {
 type cloudif interface {
 	listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
 	headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int)
+	getbucketnames() (buckets []string, errstr string, errcode int)
+	//
 	headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int)
+	//
 	getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
 	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
 	deleteobj(bucket, objname string) (errstr string, errcode int)
@@ -95,6 +100,8 @@ type httprunner struct {
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	statsif               statsif
 	kalive                kaliveif
+	proxysi               *proxyInfo
+	smap                  *Smap
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -105,6 +112,12 @@ func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 }
 
 func (h *httprunner) init(s statsif, isproxy bool) {
+	// clivars proxyurl overrides config proxy settings.
+	// If it is set, the proxy will not register as the primary proxy.
+	if clivars.proxyurl != "" {
+		ctx.config.Proxy.Primary.ID = ""
+		ctx.config.Proxy.Primary.URL = clivars.proxyurl
+	}
 	h.statsif = s
 	ipaddr, errstr := getipv4addr()
 	if errstr != "" {
@@ -115,34 +128,59 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	if isproxy {
 		perhost = proxyMaxIdleConnsPer
 	}
-	numDaemons := ctx.config.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
-	assert(numDaemons < 1024)                       // not a limitation!
+	numDaemons := ctx.config.Net.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
+	assert(numDaemons < 1024)                           // not a limitation!
 	if numDaemons < 4 {
 		numDaemons = 4
 	}
-	h.httpclient = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-		Timeout:   ctx.config.HTTP.Timeout,
+	if ctx.config.Net.HTTP.UseHTTPS {
+		glog.Fatalf("HTTPS for inter-cluster communications is not yet supported (and better be avoided)")
+	} else {
+		h.httpclient =
+			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
+		h.httpclientLongTimeout =
+			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
 	}
-	h.httpclientLongTimeout = &http.Client{
-		Transport: &http.Transport{MaxIdleConnsPerHost: perhost, MaxIdleConns: perhost * numDaemons},
-		Timeout:   ctx.config.HTTP.LongTimeout,
-	}
+	h.smap = &Smap{}
+	h.proxysi = &proxyInfo{}
 	// init daemonInfo here
 	h.si = &daemonInfo{}
 	h.si.NodeIPAddr = ipaddr
-	h.si.DaemonPort = ctx.config.Listen.Port
-
+	h.si.DaemonPort = ctx.config.Net.L4.Port
 	id := os.Getenv("DFCDAEMONID")
 	if id != "" {
 		h.si.DaemonID = id
 	} else {
 		split := strings.Split(ipaddr, ".")
 		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
-		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Listen.Port
+		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Net.L4.Port
 	}
 
-	h.si.DirectURL = "http://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
+	proto := "http"
+	if ctx.config.Net.HTTP.UseHTTPS {
+		proto = "https"
+	}
+	h.si.DirectURL = proto + "://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
+}
+
+func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+	transport := &http.Transport{
+		// defaults
+		Proxy: defaultTransport.Proxy,
+		DialContext: (&net.Dialer{ // defaultTransport.DialContext,
+			Timeout:   30 * time.Second, // must be reduced & configurable
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
+		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
+		// custom
+		MaxIdleConnsPerHost: perhost,
+		MaxIdleConns:        perhost * numDaemons,
+	}
+	return transport
 }
 
 func (h *httprunner) run() error {
@@ -153,15 +191,26 @@ func (h *httprunner) run() error {
 	if ctx.config.H2c {
 		handler = h2c.Server{Handler: handler}
 	}
+	portstring := ":" + ctx.config.Net.L4.Port
 
-	portstring := ":" + ctx.config.Listen.Port
-	h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
-	if err := h.h.ListenAndServe(); err != nil {
-		if err != http.ErrServerClosed {
-			glog.Errorf("Terminated %s with err: %v", h.name, err)
-			return err
+	if ctx.config.Net.HTTP.UseHTTPS {
+		h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+		if err := h.h.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
+			if err != http.ErrServerClosed {
+				glog.Errorf("Terminated %s with err: %v", h.name, err)
+				return err
+			}
+		}
+	} else {
+		h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+		if err := h.h.ListenAndServe(); err != nil {
+			if err != http.ErrServerClosed {
+				glog.Errorf("Terminated %s with err: %v", h.name, err)
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -169,7 +218,7 @@ func (h *httprunner) run() error {
 func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.name, err)
 
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.HTTP.Timeout)
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
 	defer cancel()
 
 	if h.h == nil {
@@ -284,6 +333,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	if len(apitems) > 0 && ver != "" {
 		if apitems[0] != ver {
 			s := fmt.Sprintf("Invalid API version: %s (expecting %s)", apitems[0], ver)
+			if _, file, line, ok := runtime.Caller(1); ok {
+				f := filepath.Base(file)
+				s += fmt.Sprintf("(%s, #%d)", f, line)
+			}
 			h.invalmsghdlr(w, r, s)
 			return nil
 		}
@@ -292,6 +345,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	if len(apitems) > 0 && res != "" {
 		if apitems[0] != res {
 			s := fmt.Sprintf("Invalid API resource: %s (expecting %s)", apitems[0], res)
+			if _, file, line, ok := runtime.Caller(1); ok {
+				f := filepath.Base(file)
+				s += fmt.Sprintf("(%s, #%d)", f, line)
+			}
 			h.invalmsghdlr(w, r, s)
 			return nil
 		}
@@ -299,6 +356,10 @@ func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitem
 	}
 	if len(apitems) < n {
 		s := fmt.Sprintf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		h.invalmsghdlr(w, r, s)
 		return nil
 	}
@@ -315,6 +376,10 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
 			}
 		}
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		h.invalmsghdlr(w, r, s)
 		return err
 	}
@@ -322,6 +387,10 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 	err = json.Unmarshal(b, out)
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		h.invalmsghdlr(w, r, s)
 		return err
 	}
@@ -341,15 +410,36 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 	if isSyscallWriteError(err) {
 		// apparently, cannot write to this w: broken-pipe and similar
 		glog.Errorf("isSyscallWriteError: %v", err)
-		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+		s := "isSyscallWriteError: " + r.Method + " " + r.URL.Path
+		if _, file, line, ok2 := runtime.Caller(1); ok2 {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
 		glog.Errorln(s)
 		glog.Flush()
 		h.statsif.add("numerr", 1)
 		return
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
+	if _, file, line, ok := runtime.Caller(1); ok {
+		f := filepath.Base(file)
+		errstr += fmt.Sprintf("(%s, #%d)", f, line)
+	}
 	h.invalmsghdlr(w, r, errstr)
 	return
+}
+
+func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, bucket string) bool {
+	if strings.Contains(bucket, string(filepath.Separator)) {
+		s := fmt.Sprintf("Invalid bucket name %s (contains '/')", bucket)
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+		h.invalmsghdlr(w, r, s)
+		return false
+	}
+	return true
 }
 
 //=================
@@ -358,7 +448,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 //
 //=================
 func (h *httprunner) setconfig(name, value string) (errstr string) {
-	lm, hm := ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM
+	lm, hm := ctx.config.LRU.LowWM, ctx.config.LRU.HighWM
 	checkwm := false
 	atoi := func(value string) (uint32, error) {
 		v, err := strconv.Atoi(value)
@@ -373,77 +463,101 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)
 		} else {
-			ctx.config.StatsTime, ctx.config.StatsTimeStr = v, value
+			ctx.config.Periodic.StatsTime, ctx.config.Periodic.StatsTimeStr = v, value
 		}
 	case "dont_evict_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.DontEvictTime, ctx.config.LRUConfig.DontEvictTimeStr = v, value
+			ctx.config.LRU.DontEvictTime, ctx.config.LRU.DontEvictTimeStr = v, value
 		}
 	case "capacity_upd_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse capacity_upd_time, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.CapacityUpdTime, ctx.config.LRUConfig.CapacityUpdTimeStr = v, value
+			ctx.config.LRU.CapacityUpdTime, ctx.config.LRU.CapacityUpdTimeStr = v, value
 		}
 	case "startup_delay_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse startup_delay_time, err: %v", err)
 		} else {
-			ctx.config.RebalanceConf.StartupDelayTime, ctx.config.RebalanceConf.StartupDelayTimeStr = v, value
+			ctx.config.Rebalance.StartupDelayTime, ctx.config.Rebalance.StartupDelayTimeStr = v, value
+		}
+	case "dest_retry_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse dest_retry_time, err: %v", err)
+		} else {
+			ctx.config.Rebalance.DestRetryTime, ctx.config.Rebalance.DestRetryTimeStr = v, value
+		}
+	case "send_file_time":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse send_file_time, err: %v", err)
+		} else {
+			ctx.config.Timeout.SendFile, ctx.config.Timeout.SendFileStr = v, value
+		}
+	case "default_timeout":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse default_timeout, err: %v", err)
+		} else {
+			ctx.config.Timeout.Default, ctx.config.Timeout.DefaultStr = v, value
+		}
+	case "default_long_timeout":
+		if v, err := time.ParseDuration(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse default_long_timeout, err: %v", err)
+		} else {
+			ctx.config.Timeout.DefaultLong, ctx.config.Timeout.DefaultLongStr = v, value
 		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.LowWM, checkwm = v, true
+			ctx.config.LRU.LowWM, checkwm = v, true
 		}
 	case "highwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert highwm, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.HighWM, checkwm = v, true
+			ctx.config.LRU.HighWM, checkwm = v, true
 		}
 	case "passthru":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
 		} else {
-			ctx.config.Proxy.Passthru = v
+			ctx.config.Proxy.Primary.Passthru = v
 		}
 	case "lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
 		} else {
-			ctx.config.LRUConfig.LRUEnabled = v
+			ctx.config.LRU.LRUEnabled = v
 		}
 	case "rebalancing_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse rebalancing_enabled, err: %v", err)
 		} else {
-			ctx.config.RebalanceConf.RebalancingEnabled = v
+			ctx.config.Rebalance.Enabled = v
 		}
 	case "validate_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_cold_get, err: %v", err)
 		} else {
-			ctx.config.CksumConfig.ValidateColdGet = v
+			ctx.config.Cksum.ValidateColdGet = v
 		}
 	case "validate_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_warm_get, err: %v", err)
 		} else {
-			ctx.config.VersionConfig.ValidateWarmGet = v
+			ctx.config.Ver.ValidateWarmGet = v
 		}
 	case "checksum":
 		if value == ChecksumXXHash || value == ChecksumNone {
-			ctx.config.CksumConfig.Checksum = value
+			ctx.config.Cksum.Checksum = value
 		} else {
 			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, ChecksumXXHash, ChecksumNone)
 		}
 	case "versioning":
 		if err := validateVersion(value); err == nil {
-			ctx.config.VersionConfig.Versioning = value
+			ctx.config.Ver.Versioning = value
 		} else {
 			return err.Error()
 		}
@@ -451,10 +565,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)
 	}
 	if checkwm {
-		hwm, lwm := ctx.config.LRUConfig.HighWM, ctx.config.LRUConfig.LowWM
+		hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-			ctx.config.LRUConfig.LowWM, ctx.config.LRUConfig.HighWM = lm, hm
-			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRUConfig)
+			ctx.config.LRU.LowWM, ctx.config.LRU.HighWM = lm, hm
+			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRU)
 		}
 	}
 	return
@@ -470,8 +584,13 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specif
 	if len(other) > 0 {
 		status = other[0].(int)
 	}
-	s := http.StatusText(status) + ": " + specific
-	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+	s := http.StatusText(status) + ": " + specific + ": " + r.Method + " " + r.URL.Path
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if !strings.Contains(specific, ".go, #") {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+	}
 	glog.Errorln(s)
 	glog.Flush()
 	http.Error(w, s, status)

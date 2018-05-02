@@ -1,13 +1,18 @@
 FROM ubuntu
+
+#Setting ENV variables 
 ENV GOLANG_VERSION 1.9
 ENV CONFFILE /etc/dfc/dfc.json
 ENV ROLE proxy
 ENV TARGETS 1000
 ENV GOPATH /go
+ENV GOBIN /go/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
-RUN apt-get update
-RUN set -eux &&\
+
+#Installing go
+RUN apt-get update &&\
+  set -eux &&\
   apt-get -y install curl &&\
   apt-get --no-install-recommends -y install git &&\
   apt-get --no-install-recommends -y install wget &&\
@@ -22,8 +27,19 @@ RUN wget https://bootstrap.pypa.io/get-pip.py
 RUN python get-pip.py
 RUN pip install awscli
 RUN rm -rf go$GOLANG_VERSION.linux-amd64.tar.gz
+
+#Get Source code with a specific hash 
 RUN go get -u -v github.com/NVIDIA/dfcpub/dfc
-RUN rm -rf %WORKDIR/*
+ARG HASH
+RUN rm -rf $GOPATH/src/github.com/NVIDIA/dfcpub
+RUN cd $GOPATH/src/github.com/NVIDIA &&\
+    git clone https://github.com/NVIDIA/dfcpub.git &&\
+    cd $WORKDIR &&\
+    git reset --hard $HASH
+WORKDIR $WORKDIR
+RUN go get -v
+RUN go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$HASH" setup/dfc.go
+
 RUN apt-get -y remove wget
 RUN mkdir /etc/dfc
 RUN mkdir /usr/nvidia
@@ -41,13 +57,14 @@ COPY $STATSD_CONF $STATSD_PATH
 RUN apt-get -y install collectd collectd-utils
 COPY collectd.conf /etc/collectd
 
-WORKDIR $WORKDIR
+
 RUN echo "\
 service collectd start \n \
 node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
-go run setup/dfc.go -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
+$GOBIN/dfc -config=\$1 -role=\$2 -ntargets=\$3  -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
 CMD ["sh","-c", "DFCDAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETS"]
 
 HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1
+

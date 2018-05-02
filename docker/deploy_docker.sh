@@ -60,6 +60,7 @@ if [ -z "$aws_env" ]; then
 fi
 
 PROXYURL="http://dfcproxy:8080"
+PROXYID="ORIGINAL_PRIMARY"
 PORT=8080
 SERVICENAME="dfc"
 LOGDIR="/tmp/dfc/log"
@@ -77,6 +78,13 @@ echo Enter number of cache servers:
 read servcount
 if ! [[ "$servcount" =~ ^[0-9]+$ ]] ; then
   echo "Error: '$servcount' is not a number"; exit 1
+fi
+echo Enter number of proxy servers:
+read proxycount
+if ! [[ "$proxycount" =~ ^[0-9]+$ ]] ; then
+  echo "Error: '$proxycount' must be at least 1"; exit 1
+elif [ $proxycount -lt 1 ] ; then
+  echo "Error: $proxycount is less than 1"; exit 1
 fi
 START=0
 END=$servcount
@@ -165,12 +173,19 @@ if [ "$environment" == "k8s" ]; then
     echo Stopping DFC cluster
     kubectl delete -f dfctarget_deployment.yml
     kubectl delete -f dfcproxy_deployment.yml
+    kubectl delete -f dfcprimaryproxy_deployment.yml
+
+    echo Starting Primary Proxy Deployment
+    kubectl create -f dfcprimaryproxy_deployment.yml
+
+    echo Wating for proxy to start ....
+    sleep 100
 
     echo Starting Proxy Deployment
     kubectl create -f dfcproxy_deployment.yml
 
-    echo Wating for proxy to start ....
-    sleep 100
+    echo Scaling proxies
+    kubectl scale --replicas=$proxycount -f dfcproxy_deployment.yml
 
     echo Starting Target Deployment
     kubectl create -f dfctarget_deployment.yml
@@ -186,8 +201,10 @@ else
     sudo docker-compose -f $environment"_docker-compose.yml" down
     echo Building Image..
     sudo docker-compose -f $environment"_docker-compose.yml" build
+    echo Starting Primary Proxy
+    sudo DFCPRIMARYPROXY=TRUE docker-compose -f $environment"_docker-compose.yml" up -d dfcproxy
     echo Starting cluster ..
-    sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale dfctarget=$servcount
+    sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale dfctarget=$servcount --scale dfcproxy=$proxycount --no-recreate
     sleep 3
     sudo docker ps
     echo "Cleaning up files.."

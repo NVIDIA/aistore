@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -217,8 +218,8 @@ func getipv4addr() (ipv4addr string, errstr string) {
 		return
 	}
 
-	if ctx.config.Network.IPv4 != "" {
-		return selectConfiguredIPv4(addrlist, ctx.config.Network.IPv4)
+	if ctx.config.Net.IPv4 != "" {
+		return selectConfiguredIPv4(addrlist, ctx.config.Net.IPv4)
 	}
 
 	return detectLocalIPv4(addrlist)
@@ -357,7 +358,7 @@ func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
 // local (config) save and restore
 //
 //===========================================================================
-func localSave(pathname string, v interface{}) error {
+func LocalSave(pathname string, v interface{}) error {
 	tmp := pathname + ".tmp"
 	file, err := os.Create(tmp)
 	if err != nil {
@@ -384,7 +385,7 @@ func localSave(pathname string, v interface{}) error {
 	return err
 }
 
-func localLoad(pathname string, v interface{}) (err error) {
+func LocalLoad(pathname string, v interface{}) (err error) {
 	file, err := os.Open(pathname)
 	if err != nil {
 		return
@@ -430,4 +431,12 @@ func isSyscallWriteError(err error) bool {
 	default:
 		return false
 	}
+}
+
+func parsebool(s string) (value bool, err error) {
+	if s == "" {
+		return
+	}
+	value, err = strconv.ParseBool(s)
+	return
 }

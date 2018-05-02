@@ -8,6 +8,8 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,17 +71,10 @@ var (
 		TLSHandshakeTimeout: 600 * time.Second,
 		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}
-
 	client = &http.Client{
 		Timeout:   600 * time.Second,
 		Transport: transport,
 	}
-
-	ProxyProto      = "http"
-	ProxyIP         = "localhost"
-	ProxyPort       = 8080
-	RestAPIVersion  = "v1"
-	RestAPIResource = "files"
 )
 
 // RoundTrip records the proxy redirect time and keeps track of requests.
@@ -191,22 +186,39 @@ func Tcping(url string) (err error) {
 	return
 }
 
-func discardResponse(r *http.Response, err error, src string) (int64, error) {
-	var len int64
+func readResponse(r *http.Response, w io.Writer, err error, src string, validate bool) (int64, string, error) {
+	var (
+		len  int64
+		hash string
+	)
 
+	// Note: This code can use some cleanup.
 	if err == nil {
 		if r.StatusCode >= http.StatusBadRequest {
-			return 0, fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
+			return 0, "", fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
 		}
+
 		bufreader := bufio.NewReader(r.Body)
-		if len, err = dfc.ReadToNull(bufreader); err != nil {
-			return 0, fmt.Errorf("Failed to read http response, err: %v", err)
+		if validate {
+			len, hash, err = ReadWriteWithHash(bufreader, w)
+			if err != nil {
+				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
+			}
+		} else {
+			if len, err = io.Copy(w, bufreader); err != nil {
+				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
+			}
 		}
 	} else {
-		return 0, fmt.Errorf("%s failed, err: %v", src, err)
+		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
 	}
 
-	return len, nil
+	return len, hash, nil
+}
+
+func discardResponse(r *http.Response, err error, src string) (int64, error) {
+	len, _, err := readResponse(r, ioutil.Discard, err, src, false /* validate */)
+	return len, err
 }
 
 func emitError(r *http.Response, err error, errch chan error) {
@@ -222,18 +234,17 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
-	silent bool, validate bool) (int64, HTTPLatencies, error) {
+func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
-		errstr                   string
 	)
 
 	if wg != nil {
 		defer wg.Done()
 	}
 
-	url := proxyurl + "/v1/files/" + bucket + "/" + keyname
+	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
 	req, _ := http.NewRequest("GET", url, nil)
 
 	tr := &traceableTransport{
@@ -259,30 +270,26 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 
 	tr.tsHTTPEnd = time.Now()
 
-	if validate && err == nil {
+	if validate {
 		hdhash = resp.Header.Get(dfc.HeaderDfcChecksumVal)
 		hdhashtype = resp.Header.Get(dfc.HeaderDfcChecksumType)
-		if hdhashtype == dfc.ChecksumXXHash {
-			xx := xxhash.New64()
-			if hash, errstr = dfc.ComputeXXHash(resp.Body, nil, xx); errstr != "" {
-				if errch != nil {
-					errch <- errors.New(errstr)
-				}
+	}
+
+	v := hdhashtype == dfc.ChecksumXXHash
+	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
+	if err != nil && v {
+		if hdhash != hash {
+			s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
+			if errch != nil {
+				errch <- errors.New(s)
 			}
-			if hdhash != hash {
-				s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
-				if errch != nil {
-					errch <- errors.New(s)
-				}
-			} else {
-				if !silent {
-					fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
-				}
+		} else {
+			if !silent {
+				fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
 			}
 		}
 	}
 
-	len, err := discardResponse(resp, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket))
 	emitError(resp, err, errch)
 	l := HTTPLatencies{
 		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
@@ -300,12 +307,24 @@ func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return len, l, err
 }
 
+// Get sends a get request to proxy and discard the data returned
+func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool) (int64, HTTPLatencies, error) {
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard)
+}
+
+// GetFile sends a get request to proxy and save the data returned to an io.Writer
+func GetFile(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w)
+}
+
 func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
 	if wg != nil {
 		defer wg.Done()
 	}
 
-	delurl := proxyurl + "/v1/files/" + bucket + "/" + keyname
+	delurl := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
 	if !silent {
 		fmt.Printf("DEL: %s\n", keyname)
 	}
@@ -332,16 +351,31 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return err
 }
 
-// ListBucket returns properties of all objects in a bucket
-func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg) (*dfc.BucketList, error) {
+// ListBucket returns list of objects in a bucket. objectCountLimit is the
+// maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
+func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) (*dfc.BucketList, error) {
 	var (
-		url     = proxyurl + "/v1/files/" + bucket
+		url     = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 		request *http.Request
 	)
 
 	reslist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0, 1000)}
+	// An optimization to read as few objects from bucket as possible.
+	// toRead is the current number of objects ListBucket must read before
+	// returning the list. Every cycle the loop reads objects by pages and
+	// decreases toRead by the number of received objects. When toRead gets less
+	// than pageSize, the loop does the final request with reduced pageSize
+	toRead := objectCountLimit
 	for {
 		var r *http.Response
+
+		if toRead != 0 {
+			if (msg.GetPageSize == 0 && toRead < dfc.DefaultPageSize) ||
+				(msg.GetPageSize != 0 && msg.GetPageSize > toRead) {
+				msg.GetPageSize = toRead
+			}
+		}
+
 		injson, err := json.Marshal(msg)
 		if err != nil {
 			return nil, err
@@ -383,6 +417,13 @@ func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg) (*dfc.BucketList, erro
 			break
 		}
 
+		if objectCountLimit != 0 {
+			if len(reslist.Entries) >= objectCountLimit {
+				break
+			}
+			toRead -= len(page.Entries)
+		}
+
 		msg.GetPageMarker = page.PageMarker
 	}
 
@@ -403,7 +444,7 @@ func Evict(proxyurl, bucket string, fname string) error {
 		return fmt.Errorf("Failed to marshal EvictMsg: %v", err)
 	}
 
-	req, err = http.NewRequest("DELETE", proxyurl+"/v1/files/"+bucket+"/"+fname, bytes.NewBuffer(injson))
+	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Robjects+"/"+bucket+"/"+fname, bytes.NewBuffer(injson))
 	if err != nil {
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
@@ -432,7 +473,7 @@ func doListRangeCall(proxyurl, bucket, action, method string, listrangemsg inter
 	if err != nil {
 		return fmt.Errorf("Failed to marhsal ActionMsg: %v", err)
 	}
-	req, err = http.NewRequest(method, proxyurl+"/v1/files/"+bucket+"/", bytes.NewBuffer(injson))
+	req, err = http.NewRequest(method, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket+"/", bytes.NewBuffer(injson))
 	if err != nil {
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
@@ -511,7 +552,7 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 
 func HeadBucket(proxyurl, bucket string) (bucketprops *BucketProps, err error) {
 	var (
-		url = proxyurl + "/v1/files/" + bucket
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 		r   *http.Response
 	)
 	bucketprops = &BucketProps{}
@@ -549,7 +590,7 @@ func discardHTTPResp(resp *http.Response) {
 
 // Put sends a PUT request to the given URL
 func Put(proxyURL string, reader Reader, bucket string, key string, silent bool) error {
-	url := proxyURL + "/v1/files/" + bucket + "/" + key
+	url := proxyURL + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + key
 
 	if !silent {
 		fmt.Printf("PUT: %s/%s\n", bucket, key)
@@ -608,7 +649,7 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", proxyURL+"/v1/files/"+bucket, bytes.NewBuffer(msg))
+	req, err := http.NewRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 	if err != nil {
 		return err
 	}
@@ -630,7 +671,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("DELETE", proxyURL+"/v1/files/"+bucket, bytes.NewBuffer(msg))
+	req, err := http.NewRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 	if err != nil {
 		return err
 	}
@@ -644,9 +685,9 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
-func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
+func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &dfc.GetMsg{GetPrefix: prefix}
-	data, err := ListBucket(proxyURL, bucket, msg)
+	data, err := ListBucket(proxyURL, bucket, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +706,7 @@ func ListObjects(proxyURL, bucket, prefix string) ([]string, error) {
 // GetConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {
-	url := server + "/v1/daemon"
+	url := server + "/" + dfc.Rversion + "/" + dfc.Rdaemon
 	msg, err := json.Marshal(&dfc.GetMsg{GetWhat: dfc.GetWhatConfig})
 	if err != nil {
 		return HTTPLatencies{}, err
@@ -698,4 +739,63 @@ func GetConfig(server string) (HTTPLatencies, error) {
 		Proxy:     time.Now().Sub(tr.tsProxyConn),
 	}
 	return l, err
+}
+
+// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and calculate
+// xxHash on the data.
+func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
+	var (
+		total   int64
+		bufSize = 32768
+	)
+
+	buf := make([]byte, bufSize)
+	h := xxhash.New64()
+	mw := io.MultiWriter(h, w)
+	for {
+		n, err := r.Read(buf)
+		total += int64(n)
+		if err != nil && err != io.EOF {
+			return 0, "", err
+		}
+
+		if n == 0 {
+			break
+		}
+
+		mw.Write(buf[:n])
+	}
+
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
+	return total, hex.EncodeToString(b), nil
+}
+
+// ListBuckets returns all buckets in DFC (cloud and local)
+func ListBuckets(proxy string, local bool) (*dfc.BucketNames, error) {
+	url := proxy + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*"
+	if local {
+		url += "?local=true"
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("HTTP failed, status = %d", resp.StatusCode)
+	}
+
+	var b []byte
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	buckets := &dfc.BucketNames{}
+	err = json.Unmarshal(b, buckets)
+	return buckets, err
 }

@@ -1,7 +1,7 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
 //
 // Example run:
-// 	go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel -numops=5
+//     go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel -numops=5
 //
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
@@ -10,7 +10,6 @@
 package dfc_test
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -52,9 +51,6 @@ type fileLocks struct {
 }
 
 var (
-	cycles  int
-	skipdel bool
-
 	fileNames []string
 	filelock  fileLocks
 
@@ -64,13 +60,6 @@ var (
 	getCounter int64
 	delCounter int64
 )
-
-// default number of files is 100, default number of loops to write files is 15
-// it results in 230-260 seconds long test
-func init() {
-	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
-	flag.IntVar(&cycles, "cycles", 15, "Number of PUT cycles")
-}
 
 func tryLockFile(idx int) bool {
 	filelock.mtx.Lock()
@@ -389,7 +378,9 @@ func regressionRWStress(t *testing.T) {
 // If the test runs asynchronusly all three kinds of operations then after the
 //    test finishes it executes extra loop to delete all files
 func Test_rwstress(t *testing.T) {
-	parse()
+	if testing.Short() {
+		t.Skip("Long run only")
+	}
 
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
@@ -398,6 +389,5 @@ func Test_rwstress(t *testing.T) {
 
 	numLoops = cycles
 	numFiles = numfiles
-
 	rwstress(t)
 }

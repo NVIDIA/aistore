@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
+
 	"github.com/golang/glog"
 )
 
@@ -129,9 +131,9 @@ type iostatrunner struct {
 // c-tor and methods
 //
 //==============================================================
-func newClusterStats() *ClusterStats {
-	targets := make(map[string]*storstatsrunner, ctx.smap.count())
-	for _, si := range ctx.smap.Smap {
+func (p *proxyrunner) newClusterStats() *ClusterStats {
+	targets := make(map[string]*storstatsrunner, p.smap.count())
+	for _, si := range p.smap.Smap {
 		targets[si.DaemonID] = &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 	}
 	return &ClusterStats{Target: targets}
@@ -146,7 +148,7 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	r.chsts = make(chan struct{}, 4)
 
 	glog.Infof("Starting %s", r.name)
-	ticker := time.NewTicker(ctx.config.StatsTime)
+	ticker := time.NewTicker(ctx.config.Periodic.StatsTime)
 	for {
 		select {
 		case <-ticker.C:
@@ -277,6 +279,10 @@ func (r *storstatsrunner) run() error {
 }
 
 func (r *storstatsrunner) log() (runlru bool) {
+	if r.Disk == nil {
+		glog.Errorf("not initialized yet - targetrunner is taking more than %v to start", ctx.config.Periodic.StatsTime)
+		return
+	}
 	r.Lock()
 	if r.Core.logged {
 		r.Unlock()
@@ -301,7 +307,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 		lines = append(lines, string(b))
 	}
 	// capacity
-	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRUConfig.CapacityUpdTime {
+	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRU.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for _, mpath := range r.fsmap {
@@ -312,18 +318,34 @@ func (r *storstatsrunner) log() (runlru bool) {
 			}
 		}
 	}
+
 	// disk
 	riostat := getiostatrunner()
 	if riostat != nil {
 		riostat.Lock()
 		r.CPUidle = riostat.CPUidle
-		for k, v := range riostat.Disk {
-			r.Disk[k] = v // copy
-			b, err := json.Marshal(r.Disk[k])
-			if err == nil {
-				lines = append(lines, k+": "+string(b))
+		for dev, iometrics := range riostat.Disk {
+			r.Disk[dev] = iometrics // copy
+			if riostat.isZeroUtil(dev) {
+				continue // skip zeros
 			}
+			b, err := json.Marshal(r.Disk[dev])
+			if err == nil {
+				lines = append(lines, dev+": "+string(b))
+			}
+
+			var stats []statsd.Metric
+			for k, v := range iometrics {
+				stats = append(stats, statsd.Metric{
+					Type:  statsd.Gauge,
+					Name:  k,
+					Value: v,
+				})
+			}
+
+			gettarget().statsdC.Send("iostat_"+dev, stats...)
 		}
+
 		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
 		riostat.Unlock()
 	}
@@ -341,7 +363,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 func (r *storstatsrunner) housekeep(runlru bool) {
 	t := gettarget()
 
-	if runlru && ctx.config.LRUConfig.LRUEnabled {
+	if runlru && ctx.config.LRU.LRUEnabled {
 		go t.runLRU()
 	}
 
@@ -358,39 +380,38 @@ func (r *storstatsrunner) housekeep(runlru bool) {
 }
 
 func (r *storstatsrunner) removeLogs(maxtotal uint64) {
-	var (
-		tot   int64
-		infos = []os.FileInfo{}
-	)
 	logfinfos, err := ioutil.ReadDir(ctx.config.Log.Dir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", ctx.config.Log.Dir, err)
 		return // ignore error
 	}
 	// sample name dfc.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
-	for _, logfi := range logfinfos {
-		if logfi.IsDir() {
-			continue
+	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
+	for _, logtype := range logtypes {
+		var (
+			tot   = int64(0)
+			infos = []os.FileInfo{}
+		)
+		for _, logfi := range logfinfos {
+			if logfi.IsDir() {
+				continue
+			}
+			if !strings.Contains(logfi.Name(), ".log.") {
+				continue
+			}
+			if strings.Contains(logfi.Name(), logtype) {
+				tot += logfi.Size()
+				infos = append(infos, logfi)
+			}
 		}
-		if !strings.HasPrefix(logfi.Name(), "dfc.") {
-			continue
-		}
-		if !strings.Contains(logfi.Name(), ".log.") {
-			continue
-		}
-		tot += logfi.Size()
-		if strings.Contains(logfi.Name(), ".INFO.") { // GC "INFO" logs only
-			infos = append(infos, logfi)
+		if tot > int64(maxtotal) {
+			if len(infos) <= 1 {
+				glog.Errorf("GC logs: %s, total %d for type %s, max %d", ctx.config.Log.Dir, tot, logtype, maxtotal)
+				continue
+			}
+			r.removeOlderLogs(tot, int64(maxtotal), infos)
 		}
 	}
-	if tot < int64(maxtotal) {
-		return
-	}
-	if len(infos) <= 1 {
-		glog.Errorf("GC logs err: log dir %s, total %d, maxtotal %d", ctx.config.Log.Dir, tot, maxtotal)
-		return
-	}
-	r.removeOlderLogs(tot, int64(maxtotal), infos)
 }
 
 func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileInfo) {
@@ -427,7 +448,7 @@ func (r *storstatsrunner) updateCapacity() (runlru bool) {
 		}
 		fscapacity := r.Capacity[mpath]
 		r.fillfscap(fscapacity, statfs)
-		if fscapacity.Usedpct >= ctx.config.LRUConfig.HighWM {
+		if fscapacity.Usedpct >= ctx.config.LRU.HighWM {
 			runlru = true
 		}
 	}
@@ -445,7 +466,7 @@ func (r *storstatsrunner) init() {
 	// local filesystems and their cap-s
 	r.Capacity = make(map[string]*fscapacity)
 	r.fsmap = make(map[syscall.Fsid]string)
-	for mpath, mountpath := range ctx.mountpaths.available {
+	for mpath, mountpath := range ctx.mountpaths.Available {
 		mp1, ok := r.fsmap[mountpath.Fsid]
 		if ok {
 			// the same filesystem: usage cannot be different..
