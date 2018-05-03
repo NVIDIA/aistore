@@ -565,7 +565,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	//
-	// FIXME: add protection agaist putting into non-existing local bucket
+	// FIXME: add protection against putting into non-existing local bucket
 	//
 	objname := strings.Join(apitems[1:], "/")
 	si, errstr := HrwTarget(bucket+"/"+objname, p.smap)

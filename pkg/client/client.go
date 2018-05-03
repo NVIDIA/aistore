@@ -665,6 +665,25 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 	return err
 }
 
+// RenameLocalBucket changes the name of a bucket to newBucketName
+func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActRenameLB, Name: newBucketName})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	return err
+}
+
 // DestroyLocalBucket deletes a local bucket
 func DestroyLocalBucket(proxyURL, bucket string) error {
 	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActDestroyLB})

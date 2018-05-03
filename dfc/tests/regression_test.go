@@ -36,7 +36,6 @@ const (
 	RenameLocalBucketName = "renamebucket"
 	RenameDir             = "/tmp/dfc/rename"
 	RenameStr             = "rename"
-	ListRangeDir          = "/tmp/dfc/listrange"
 	ListRangeStr          = "__listrange"
 )
 
@@ -63,6 +62,7 @@ var (
 	httpclient = &http.Client{}
 	tests      = []Test{
 		Test{"Local Bucket", regressionLocalBuckets},
+		Test{"Rename Local Bucket", regressionRenameLocalBuckets},
 		Test{"Cloud Bucket", regressionCloudBuckets},
 		Test{"Stats", regressionStats},
 		Test{"Config", regressionConfig},
@@ -119,15 +119,24 @@ func Test_regression(t *testing.T) {
 }
 
 func regressionCloudBuckets(t *testing.T) {
-	regressionBucket(httpclient, t, clibucket)
+	doBucketRegressionTest(t, clibucket, clibucket)
 }
 
 func regressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
-	createLocalBucket(httpclient, t, bucket)
-	time.Sleep(time.Second * 2) // FIXME: must be deterministic
-	regressionBucket(httpclient, t, bucket)
+	err := client.CreateLocalBucket(proxyurl, bucket)
+	testfail(err, "client.CreateLocalBucket", nil, nil, t)
+	doBucketRegressionTest(t, bucket, bucket)
 	destroyLocalBucket(httpclient, t, bucket)
+}
+
+func regressionRenameLocalBuckets(t *testing.T) {
+	bucket := TestLocalBucketName
+	newBucketName := bucket + "_renamed"
+	err := client.CreateLocalBucket(proxyurl, bucket)
+	testfail(err, "client.CreateLocalBucket", nil, nil, t)
+	doBucketRegressionTest(t, bucket, newBucketName)
+	destroyLocalBucket(httpclient, t, newBucketName)
 }
 
 /* uncomment when/if needed
@@ -180,7 +189,7 @@ func Test_rmlb(t *testing.T) {
 }
 */
 
-func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
+func doBucketRegressionTest(t *testing.T, bucket string, newBucketName string) {
 	var (
 		numPuts  = 10
 		filesput = make(chan string, numPuts)
@@ -198,6 +207,11 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		SmokeStr, "", !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "put", t, false)
+	if newBucketName != bucket {
+		err := client.RenameLocalBucket(proxyurl, bucket, newBucketName)
+		testfail(err, "client.RenameLocalBucket", nil, nil, t)
+		bucket = newBucketName
+	}
 	getRandomFiles(0, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {
@@ -1132,9 +1146,7 @@ func createLocalBucketNoFail(httpclient *http.Client, t *testing.T, bucket strin
 
 func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	err := createLocalBucketNoFail(httpclient, t, bucket)
-	if testfail(err, "Create Local Bucket", nil, nil, t) {
-		return
-	}
+	testfail(err, "Create Local Bucket", nil, nil, t)
 }
 
 func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
@@ -1146,7 +1158,7 @@ func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 	)
 	injson, err = json.Marshal(DeleteLocalBucketMsg)
 	if err != nil {
-		t.Fatalf("Failed to marshal CreateLocalBucketMsg: %v", err)
+		t.Fatalf("Failed to marshal DeleteLocalBucketMsg: %v", err)
 	}
 	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(injson))
 	if err != nil {
@@ -1158,9 +1170,7 @@ func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
 			r.Body.Close()
 		}
 	}()
-	if testfail(err, "Delete Local Bucket", r, nil, t) {
-		return
-	}
+	testfail(err, "Delete Local Bucket", r, nil, t)
 }
 
 func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterStats) {
