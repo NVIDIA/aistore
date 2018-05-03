@@ -1849,7 +1849,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	si, errstr := hrwTarget(bucket+"/"+newobjname, t.smap)
+	si, errstr := HrwTarget(bucket+"/"+newobjname, t.smap)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return

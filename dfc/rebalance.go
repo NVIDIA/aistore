@@ -208,7 +208,7 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 		glog.Warningf("%s - skipping...", errstr)
 		return nil
 	}
-	si, errstr := hrwTarget(bucket+"/"+objname, rcl.newsmap)
+	si, errstr := HrwTarget(bucket+"/"+objname, rcl.newsmap)
 	if errstr != "" {
 		return fmt.Errorf(errstr)
 	}

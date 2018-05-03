@@ -14,7 +14,7 @@ const mLCG32 = 1103515245
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
 
-func hrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
+func HrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 	// NOTE: commented out on purpose - trading off read access to unlocked map
 	//       smap.Lock(); defer smap.Unlock()
 	if smap.count() == 0 {
@@ -32,7 +32,7 @@ func hrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 	return
 }
 
-func hrwProxyWithSkip(smap *Smap, idToSkip string) (pi *proxyInfo, errstr string) {
+func HrwProxy(smap *Smap, idToSkip string) (pi *proxyInfo, errstr string) {
 	smap.lock()
 	defer smap.unlock()
 	if smap.countProxies() == 0 {

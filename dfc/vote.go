@@ -212,7 +212,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		p.smap = &msg.Request.Smap
 	}
 
-	psi, errstr := hrwProxyWithSkip(p.smap, p.proxysi.DaemonID)
+	psi, errstr := HrwProxy(p.smap, p.proxysi.DaemonID)
 	if errstr != "" {
 		s := fmt.Sprintf("Error preforming HRW: %s", errstr)
 		p.invalmsghdlr(w, r, s)
@@ -423,7 +423,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 		glog.Warningf("No additional proxies to request vote from")
 		return
 	}
-	nextPrimaryProxy, errstr := hrwProxyWithSkip(p.smap, p.proxysi.DaemonID)
+	nextPrimaryProxy, errstr := HrwProxy(p.smap, p.proxysi.DaemonID)
 	if errstr != "" {
 		glog.Errorf("Failed to execute hrwProxy after Primary Proxy Failure: %v", errstr)
 		return
@@ -455,7 +455,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 func (t *targetrunner) onPrimaryProxyFailure() {
 	glog.Infof("%v: Primary Proxy (%v @ %v) Failed\n", t.si.DaemonID, t.proxysi.DaemonID, t.proxysi.DirectURL)
 
-	nextPrimaryProxy, errstr := hrwProxyWithSkip(t.smap, t.proxysi.DaemonID)
+	nextPrimaryProxy, errstr := HrwProxy(t.smap, t.proxysi.DaemonID)
 	if errstr != "" {
 		glog.Errorf("Failed to execute hrwProxy after Primary Proxy Failure: %v", errstr)
 	}
@@ -501,7 +501,7 @@ func (h *httprunner) voteOnProxy(daemonID string) (bool, error) {
 
 	// Second: Vote according to whether or not the candidate is the Highest Random Weight remaining
 	// in the Smap
-	hrwmax, errstr := hrwProxyWithSkip(h.smap, h.proxysi.DaemonID)
+	hrwmax, errstr := HrwProxy(h.smap, h.proxysi.DaemonID)
 	if errstr != "" {
 		return false, fmt.Errorf("Error executing HRW: %v", errstr)
 	}
