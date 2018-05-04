@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"errors"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -28,6 +30,13 @@ import (
 type Test struct {
 	name   string
 	method func(*testing.T)
+}
+
+type regressionTestData struct {
+	bucket          string
+	renamedBucket   string
+	numLocalBuckets int
+	rename          bool
 }
 
 const (
@@ -104,7 +113,7 @@ func Test_regression(t *testing.T) {
 	// get objects for LRU tests
 	errch := make(chan error, 100)
 	getRandomFiles(0, 0, 20, clibucket, "", t, nil, errch)
-	// the error culd be no object in the bucket, in that case, consider it as not an error
+	// the error could be no object in the bucket, in that case, consider it as not an error
 	// lru test will be skipped
 	if len(errch) != 0 {
 		failLRU = "LRU: need a cloud bucket with at least 20 objects"
@@ -119,24 +128,28 @@ func Test_regression(t *testing.T) {
 }
 
 func regressionCloudBuckets(t *testing.T) {
-	doBucketRegressionTest(t, clibucket, clibucket)
+	doBucketRegressionTest(t, regressionTestData{bucket: clibucket})
 }
 
 func regressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	err := client.CreateLocalBucket(proxyurl, bucket)
 	testfail(err, "client.CreateLocalBucket", nil, nil, t)
-	doBucketRegressionTest(t, bucket, bucket)
+	doBucketRegressionTest(t, regressionTestData{bucket: bucket})
 	destroyLocalBucket(httpclient, t, bucket)
 }
 
 func regressionRenameLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
-	newBucketName := bucket + "_renamed"
+	renamedBucket := bucket + "_renamed"
 	err := client.CreateLocalBucket(proxyurl, bucket)
 	testfail(err, "client.CreateLocalBucket", nil, nil, t)
-	doBucketRegressionTest(t, bucket, newBucketName)
-	destroyLocalBucket(httpclient, t, newBucketName)
+	b, err := client.ListBuckets(proxyurl, true)
+	testfail(err, "client.ListBuckets", nil, nil, t)
+	doBucketRegressionTest(t, regressionTestData{
+		bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true,
+	})
+	destroyLocalBucket(httpclient, t, renamedBucket)
 }
 
 /* uncomment when/if needed
@@ -189,7 +202,46 @@ func Test_rmlb(t *testing.T) {
 }
 */
 
-func doBucketRegressionTest(t *testing.T, bucket string, newBucketName string) {
+func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
+	err := client.RenameLocalBucket(proxyurl, rtd.bucket, rtd.renamedBucket)
+	testfail(err, "client.RenameLocalBucket", nil, nil, t)
+
+	buckets, err := client.ListBuckets(proxyurl, true)
+	testfail(err, "client.ListBuckets", nil, nil, t)
+
+	if len(buckets.Local) != rtd.numLocalBuckets {
+		testfail(
+			errors.New("wrong number of local buckets"),
+			fmt.Sprintf("Expected: %d. Actual: %d", rtd.numLocalBuckets, len(buckets.Local)),
+			nil, nil, t)
+	}
+
+	renamedBucketExists := false
+	for _, b := range buckets.Local {
+		if b == rtd.renamedBucket {
+			renamedBucketExists = true
+		} else if b == rtd.bucket {
+			testfail(
+				errors.New("original local bucket still exists"),
+				fmt.Sprintf("Original bucket name: %s", rtd.bucket), nil, nil, t)
+		}
+	}
+	if !renamedBucketExists {
+		testfail(
+			errors.New("renamed local bucket does not exist"),
+			fmt.Sprintf("Renamed bucket: %s", rtd.renamedBucket), nil, nil, t)
+	}
+
+	objs, err := client.ListObjects(proxyurl, rtd.renamedBucket, "", numPuts+1)
+	testfail(err, "client.ListObjects", nil, nil, t)
+	if len(objs) != numPuts {
+		testfail(
+			errors.New("unexpected number of objects in renamed local bucket"),
+			fmt.Sprintf("Expected: %d. Actual: %d", numPuts, len(objs)), nil, nil, t)
+	}
+}
+
+func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 	var (
 		numPuts  = 10
 		filesput = make(chan string, numPuts)
@@ -197,21 +249,24 @@ func doBucketRegressionTest(t *testing.T, bucket string, newBucketName string) {
 		wg       = &sync.WaitGroup{}
 		sgl      *dfc.SGLIO
 		filesize = uint64(1024)
+		bucket   = rtd.bucket
 	)
 
 	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
+
 	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
 		SmokeStr, "", !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "put", t, false)
-	if newBucketName != bucket {
-		err := client.RenameLocalBucket(proxyurl, bucket, newBucketName)
-		testfail(err, "client.RenameLocalBucket", nil, nil, t)
-		bucket = newBucketName
+
+	if rtd.rename {
+		doRenameRegressionTest(t, rtd, numPuts)
+		bucket = rtd.renamedBucket
 	}
+
 	getRandomFiles(0, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {

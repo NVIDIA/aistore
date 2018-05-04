@@ -792,8 +792,8 @@ func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
 }
 
 // ListBuckets returns all buckets in DFC (cloud and local)
-func ListBuckets(proxy string, local bool) (*dfc.BucketNames, error) {
-	url := proxy + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*"
+func ListBuckets(proxyURL string, local bool) (*dfc.BucketNames, error) {
+	url := proxyURL + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*"
 	if local {
 		url += "?local=true"
 	}
