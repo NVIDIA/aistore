@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,6 +26,7 @@ const (
 )
 
 type filesWithDeadline struct {
+	ctx      context.Context
 	objnames []string
 	bucket   string
 	deadline time.Time
@@ -47,10 +49,10 @@ type xactDeleteEvict struct {
 //
 //===========================
 
-func (t *targetrunner) getListFromRangeCloud(bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
+func (t *targetrunner) getListFromRangeCloud(ct context.Context, bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
 	bucketList = &BucketList{Entries: make([]*BucketEntry, 0)}
 	for i := 0; i < maxPrefetchPages; i++ {
-		jsbytes, errstr, errcode := getcloudif().listbucket(bucket, msg)
+		jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
 		if errstr != "" {
 			return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
 		}
@@ -70,7 +72,7 @@ func (t *targetrunner) getListFromRangeCloud(bucket string, msg *GetMsg) (bucket
 	return
 }
 
-func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max int64) ([]string, error) {
+func (t *targetrunner) getListFromRange(ct context.Context, bucket, prefix, regex string, min, max int64) ([]string, error) {
 	msg := &GetMsg{GetPrefix: prefix}
 	var (
 		fullbucketlist *BucketList
@@ -79,7 +81,7 @@ func (t *targetrunner) getListFromRange(bucket, prefix, regex string, min, max i
 	if t.islocalBucket(bucket) {
 		fullbucketlist, err = t.prepareLocalObjectList(bucket, msg)
 	} else {
-		fullbucketlist, err = t.getListFromRangeCloud(bucket, msg)
+		fullbucketlist, err = t.getListFromRangeCloud(ct, bucket, msg)
 	}
 	if err != nil {
 		return nil, err
@@ -124,8 +126,8 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 	return false
 }
 
-type listf func(objects []string, bucket string, deadline time.Duration, done chan struct{}) error
-type rangef func(bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error
+type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
+type rangef func(ct context.Context, bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error
 
 func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg *ListMsg, operation listf) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
@@ -152,7 +154,7 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 
 		// Asynchronously perform operation
 		go func() {
-			if err := operation(objs, bucket, listMsg.Deadline, done); err != nil {
+			if err := operation(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done); err != nil {
 				glog.Errorf("Error performing list operation: %v", err)
 				t.statsif.add("numerr", 1)
 			}
@@ -185,7 +187,7 @@ func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, ra
 
 	// Asynchronously perform operation
 	go func() {
-		if err := operation(bucket, rangeMsg.Prefix, rangeMsg.Regex,
+		if err := operation(t.contextWithAuth(r), bucket, rangeMsg.Prefix, rangeMsg.Regex,
 			min, max, rangeMsg.Deadline, done); err != nil {
 			glog.Errorf("Error performing range operation: %v", err)
 			t.statsif.add("numerr", 1)
@@ -220,7 +222,7 @@ func (t *targetrunner) evictRange(w http.ResponseWriter, r *http.Request, evictM
 	t.rangeOperation(w, r, evictMsg, t.doRangeEvict)
 }
 
-func (t *targetrunner) doListEvictDelete(evict bool, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
+func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
 	var xdel *xactDeleteEvict
 	if evict {
 		xdel = t.xactinp.newEvict()
@@ -250,7 +252,7 @@ func (t *targetrunner) doListEvictDelete(evict bool, objs []string, bucket strin
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
-		err := t.fildelete(bucket, objname, evict)
+		err := t.fildelete(ct, bucket, objname, evict)
 		if err != nil {
 			return err
 		}
@@ -259,32 +261,32 @@ func (t *targetrunner) doListEvictDelete(evict bool, objs []string, bucket strin
 	return nil
 }
 
-func (t *targetrunner) doRangeEvictDelete(evict bool, bucket, prefix, regex string, min, max int64,
+func (t *targetrunner) doRangeEvictDelete(ct context.Context, evict bool, bucket, prefix, regex string, min, max int64,
 	deadline time.Duration, done chan struct{}) error {
 
-	objs, err := t.getListFromRange(bucket, prefix, regex, min, max)
+	objs, err := t.getListFromRange(ct, bucket, prefix, regex, min, max)
 	if err != nil {
 		return err
 	}
 
-	return t.doListEvictDelete(evict, objs, bucket, deadline, done)
+	return t.doListEvictDelete(ct, evict, objs, bucket, deadline, done)
 }
 
-func (t *targetrunner) doListDelete(objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(false /* evict */, objs, bucket, deadline, done)
+func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
+	return t.doListEvictDelete(ct, false /* evict */, objs, bucket, deadline, done)
 }
 
-func (t *targetrunner) doListEvict(objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	return t.doListEvictDelete(true /* evict */, objs, bucket, deadline, done)
+func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
+	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, deadline, done)
 }
 
-func (t *targetrunner) doRangeDelete(bucket, prefix, regex string, min, max int64,
+func (t *targetrunner) doRangeDelete(ct context.Context, bucket, prefix, regex string, min, max int64,
 	deadline time.Duration, done chan struct{}) error {
-	return t.doRangeEvictDelete(false /* evict */, bucket, prefix, regex, min, max, deadline, done)
+	return t.doRangeEvictDelete(ct, false /* evict */, bucket, prefix, regex, min, max, deadline, done)
 }
-func (t *targetrunner) doRangeEvict(bucket, prefix, regex string, min, max int64,
+func (t *targetrunner) doRangeEvict(ct context.Context, bucket, prefix, regex string, min, max int64,
 	deadline time.Duration, done chan struct{}) error {
-	return t.doRangeEvictDelete(true /* evict */, bucket, prefix, regex, min, max, deadline, done)
+	return t.doRangeEvictDelete(ct, true /* evict */, bucket, prefix, regex, min, max, deadline, done)
 }
 
 func (q *xactInProgress) newDelete() *xactDeleteEvict {
@@ -342,7 +344,7 @@ loop:
 			}
 			bucket := fwd.bucket
 			for _, objname := range fwd.objnames {
-				t.prefetchMissing(objname, bucket)
+				t.prefetchMissing(fwd.ctx, objname, bucket)
 			}
 
 			// Signal completion of prefetch
@@ -359,7 +361,7 @@ loop:
 	t.xactinp.del(xpre.id)
 }
 
-func (t *targetrunner) prefetchMissing(objname, bucket string) {
+func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket string) {
 	var (
 		errstr, version   string
 		vchanged, coldget bool
@@ -376,7 +378,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 		return
 	}
 	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		if vchanged, errstr, _ = t.checkCloudVersion(bucket, objname, version); errstr != "" {
+		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, version); errstr != "" {
 			return
 		}
 		coldget = vchanged
@@ -384,7 +386,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	if !coldget {
 		return
 	}
-	if props, errstr, _ = t.coldget(bucket, objname, true); errstr != "" {
+	if props, errstr, _ = t.coldget(ct, bucket, objname, true); errstr != "" {
 		if errstr != "skip" {
 			glog.Errorln(errstr)
 		}
@@ -401,7 +403,7 @@ func (t *targetrunner) prefetchMissing(objname, bucket string) {
 	}
 }
 
-func (t *targetrunner) addPrefetchList(objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
+func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
 	if t.islocalBucket(bucket) {
 		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
 	}
@@ -410,21 +412,21 @@ func (t *targetrunner) addPrefetchList(objs []string, bucket string, deadline ti
 		// 0 is no deadline - if deadline == 0, the absolute deadline is 0 time.
 		absdeadline = time.Now().Add(deadline)
 	}
-	t.prefetchQueue <- filesWithDeadline{objnames: objs, bucket: bucket, deadline: absdeadline, done: done}
+	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bucket: bucket, deadline: absdeadline, done: done}
 	return nil
 }
 
-func (t *targetrunner) addPrefetchRange(bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error {
+func (t *targetrunner) addPrefetchRange(ct context.Context, bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error {
 	if t.islocalBucket(bucket) {
 		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
 	}
 
-	objs, err := t.getListFromRange(bucket, prefix, regex, min, max)
+	objs, err := t.getListFromRange(ct, bucket, prefix, regex, min, max)
 	if err != nil {
 		return err
 	}
 
-	return t.addPrefetchList(objs, bucket, deadline, done)
+	return t.addPrefetchList(ct, objs, bucket, deadline, done)
 }
 
 func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {

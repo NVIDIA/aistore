@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 const (
@@ -27,6 +29,12 @@ const (
 
 	gcpPageSize = 1000
 )
+
+// To get projectID from gcp auth json file, to get rid of reading projectID
+// from environment variable
+type gcpAuthRec struct {
+	ProjectID string `json:"project_id"`
+}
 
 //======
 //
@@ -54,16 +62,65 @@ func gcpErrorToHTTP(gcpError error) int {
 	return http.StatusInternalServerError
 }
 
-func createclient() (*storage.Client, context.Context, string) {
+func defaultClient(gctx context.Context) (*storage.Client, context.Context, string, string) {
 	if getProjID() == "" {
-		return nil, nil, "Failed to get ProjectID from GCP"
+		return nil, nil, "", "Failed to get ProjectID from GCP"
 	}
-	gctx := context.Background()
 	client, err := storage.NewClient(gctx)
 	if err != nil {
-		return nil, nil, fmt.Sprintf("Failed to create client, err: %v", err)
+		return nil, nil, "", fmt.Sprintf("Failed to create client, err: %v", err)
 	}
-	return client, gctx, ""
+	return client, gctx, getProjID(), ""
+}
+
+// createClient support two ways of creating a connection to cloud:
+// 1. With Authn server disabled (old way):
+//    In this case all are read from environment variables and a user
+//    should be logged in to the cloud
+// 2. If Authn is enabled and directory with user credentials is set:
+//    The directory contains credentials for every user who want to connect
+//    storage. A file per a user.  A userID is retrieved from a token - it the
+//    file name with the user's credentials. Full path to user credentials is
+//    CredDir + userID + ".json"
+//    The file is standard GCP credentials file (e.g, check ~/gcp_creds.json
+//    for details). If the file does not include project_id, the function reads
+//    it from environment variable GOOGLE_CLOUD_PROJECT
+// The function returns:
+//   connection to the cloud, GCP context, project_id, error_string
+// project_id is used only by getbucketnames function
+func createClient(ct context.Context) (*storage.Client, context.Context, string, string) {
+	gctx := context.Background()
+	userID := userIDFromContext(ct)
+	if userID == "" {
+		return defaultClient(gctx)
+	}
+
+	credPath, err := userCredsPathFromContext(ct, userID)
+	if err != nil {
+		glog.Errorf("Failed to read user credentials: %v", err)
+		return defaultClient(gctx)
+	}
+
+	// read credentials file to retreive projectID
+	bytes, err := ioutil.ReadFile(credPath)
+	gcprec := &gcpAuthRec{}
+	if err != nil {
+		glog.Errorf("Failed to read credentials file: %v", err)
+		return nil, nil, "", "Failed to read credentials file"
+	}
+	err = json.Unmarshal(bytes, gcprec)
+	if err != nil {
+		glog.Errorf("Failed to unmarshal credentials file: %v", err)
+		return nil, nil, "", "Invalid credentials file format"
+	}
+
+	// create a new session
+	client, err := storage.NewClient(gctx, option.WithCredentialsFile(credPath))
+	if err != nil {
+		return nil, nil, "", fmt.Sprintf("Failed to create client, err: %v", err)
+	}
+
+	return client, gctx, gcprec.ProjectID, ""
 }
 
 //==================
@@ -71,11 +128,11 @@ func createclient() (*storage.Client, context.Context, string) {
 // bucket operations
 //
 //==================
-func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("listbucket %s", bucket)
 	}
-	client, gctx, errstr := createclient()
+	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -145,13 +202,13 @@ func (gcpimpl *gcpimpl) listbucket(bucket string, msg *GetMsg) (jsbytes []byte, 
 	return
 }
 
-func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketprops map[string]string, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headbucket %s", bucket)
 	}
 	bucketprops = make(map[string]string)
 
-	client, gctx, errstr := createclient()
+	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -168,13 +225,13 @@ func (gcpimpl *gcpimpl) headbucket(bucket string) (bucketprops map[string]string
 	return
 }
 
-func (gcpimpl *gcpimpl) getbucketnames() (buckets []string, errstr string, errcode int) {
-	client, gctx, errstr := createclient()
+func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, errstr string, errcode int) {
+	client, gctx, projectID, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
 	buckets = make([]string, 0, 16)
-	it := client.Buckets(gctx, getProjID())
+	it := client.Buckets(gctx, projectID)
 	for {
 		battrs, err := it.Next()
 		if err == iterator.Done {
@@ -198,13 +255,13 @@ func (gcpimpl *gcpimpl) getbucketnames() (buckets []string, errstr string, errco
 // object meta
 //
 //============
-func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headobject %s/%s", bucket, objname)
 	}
 	objmeta = make(map[string]string)
 
-	client, gctx, errstr := createclient()
+	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -224,9 +281,9 @@ func (gcpimpl *gcpimpl) headobject(bucket string, objname string) (objmeta map[s
 // object data operations
 //
 //=======================
-func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
 	var v cksumvalue
-	client, gctx, errstr := createclient()
+	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -256,12 +313,12 @@ func (gcpimpl *gcpimpl) getobj(fqn string, bucket string, objname string) (props
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
 	var (
 		htype, hval string
 		md          map[string]string
 	)
-	client, gctx, errstr := createclient()
+	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -298,8 +355,8 @@ func (gcpimpl *gcpimpl) putobj(file *os.File, bucket, objname string, ohash cksu
 	return
 }
 
-func (gcpimpl *gcpimpl) deleteobj(bucket, objname string) (errstr string, errcode int) {
-	client, gctx, errstr := createclient()
+func (gcpimpl *gcpimpl) deleteobj(ct context.Context, bucket, objname string) (errstr string, errcode int) {
+	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}

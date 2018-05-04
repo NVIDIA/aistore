@@ -89,7 +89,8 @@ $FSPATHS
 	},
 	"auth": {
 		"secret": "$SECRETKEY",
-		"enabled": $AUTHENABLED
+		"enabled": $AUTHENABLED,
+		"creddir": "$CREDDIR"
 	},
 	"h2c": 				false
 }

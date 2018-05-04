@@ -192,6 +192,7 @@ type experimental struct {
 type authconf struct {
 	Secret  string `json:"secret"`
 	Enabled bool   `json:"enabled"`
+	CredDir string `json:"creddir"`
 }
 
 //==============================

@@ -504,12 +504,12 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *p
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
 
-	_, err, _, _ = h.call(&nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+	_, err, _, _ = h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
 	if err != nil {
 		if IsErrConnectionRefused(err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(time.Second)
-				_, err, _, _ = h.call(&nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+				_, err, _, _ = h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
 				if err == nil {
 					break
 				}
@@ -589,7 +589,7 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 }
 
 func (p *proxyrunner) pingWithTimeout(url string, timeout time.Duration) (bool, error) {
-	_, err, _, _ := p.call(nil, url, http.MethodGet, nil, timeout)
+	_, err, _, _ := p.call(nil, nil, url, http.MethodGet, nil, timeout)
 	if err == nil {
 		// There is no issue with the current primary proxy
 		return true, nil

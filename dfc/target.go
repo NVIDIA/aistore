@@ -195,9 +195,9 @@ func (t *targetrunner) register(timeout time.Duration) (status int, err error) {
 	}
 	if timeout > 0 { // keepalive
 		url += "/" + Rkeepalive
-		_, err, _, status = t.call(si, url, http.MethodPost, jsbytes, timeout)
+		_, err, _, status = t.call(nil, si, url, http.MethodPost, jsbytes, timeout)
 	} else {
-		_, err, _, status = t.call(si, url, http.MethodPost, jsbytes)
+		_, err, _, status = t.call(nil, si, url, http.MethodPost, jsbytes)
 	}
 	return
 }
@@ -211,7 +211,7 @@ func (t *targetrunner) unregister() (status int, err error) {
 		url = ctx.config.Proxy.Primary.URL
 	}
 	url += "/" + Rversion + "/" + Rcluster + "/" + Rdaemon + "/" + t.si.DaemonID
-	_, err, _, status = t.call(&t.proxysi.daemonInfo, url, http.MethodDelete, nil)
+	_, err, _, status = t.call(nil, &t.proxysi.daemonInfo, url, http.MethodDelete, nil)
 
 	return
 }
@@ -315,6 +315,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	started = time.Now()
 	cksumcfg := &ctx.config.Cksum
 	versioncfg := &ctx.config.Ver
+	ct := t.contextWithAuth(r)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -353,7 +354,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		if vchanged, errstr, errcode = t.checkCloudVersion(bucket, objname, version); errstr != "" {
+		if vchanged, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, version); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 			t.rtnamemap.unlockname(uname, false)
 			return
@@ -363,7 +364,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	if coldget {
 		t.rtnamemap.unlockname(uname, false)
-		if props, errstr, errcode = t.coldget(bucket, objname, false); errstr != "" {
+		if props, errstr, errcode = t.coldget(ct, bucket, objname, false); errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
 			} else {
@@ -573,7 +574,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if objname != "" {
-		err := t.fildelete(bucket, objname, evict)
+		err := t.fildelete(t.contextWithAuth(r), bucket, objname, evict)
 		if err != nil {
 			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
 			t.invalmsghdlr(w, r, s)
@@ -669,7 +670,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !islocal {
-		bucketprops, errstr, errcode = getcloudif().headbucket(bucket)
+		bucketprops, errstr, errcode = getcloudif().headbucket(t.contextWithAuth(r), bucket)
 		if errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
@@ -715,7 +716,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	var objmeta map[string]string
 	if !islocal {
-		objmeta, errstr, errcode = getcloudif().headobject(bucket, objname)
+		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r), bucket, objname)
 		if errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
@@ -902,9 +903,9 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 // checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
 // and the object should be refreshed from Cloud storage
 // It should be called only in case of the object is present in DFC cache
-func (t *targetrunner) checkCloudVersion(bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
+func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
 	var objmeta map[string]string
-	if objmeta, errstr, errcode = t.cloudif.headobject(bucket, objname); errstr != "" {
+	if objmeta, errstr, errcode = t.cloudif.headobject(ct, bucket, objname); errstr != "" {
 		return
 	}
 	if cloudVersion, ok := objmeta["version"]; ok {
@@ -987,7 +988,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 	return
 }
 
-func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
+func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
 		fqn        = t.fqn(bucket, objname)
 		uname      = t.uname(bucket, objname)
@@ -1008,7 +1009,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 	// existence, access & versioning
 	coldget, size, version, eexists := t.lookupLocally(bucket, objname, fqn)
 	if !coldget && eexists == "" && !t.islocalBucket(bucket) && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		vchanged, errv, _ = t.checkCloudVersion(bucket, objname, version)
+		vchanged, errv, _ = t.checkCloudVersion(ct, bucket, objname, version)
 		if errv == "" {
 			coldget = vchanged
 		}
@@ -1024,7 +1025,7 @@ func (t *targetrunner) coldget(bucket, objname string, prefetch bool) (props *ob
 		goto ret
 	}
 	// cold
-	if props, errstr, errcode = getcloudif().getobj(getfqn, bucket, objname); errstr != "" {
+	if props, errstr, errcode = getcloudif().getobj(ct, getfqn, bucket, objname); errstr != "" {
 		t.rtnamemap.unlockname(uname, true)
 		return
 	}
@@ -1138,7 +1139,7 @@ func (t *targetrunner) lookupRemotely(bucket, objname string) (tsi *daemonInfo) 
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := si.DirectURL + "/" + Rversion + "/" + Robjects + "/" + bucket + "/" + objname
-			_, err, _, _ := t.call(si, url, http.MethodHead, nil, ctx.config.Timeout.MaxKeepalive)
+			_, err, _, _ := t.call(nil, si, url, http.MethodHead, nil, ctx.config.Timeout.MaxKeepalive)
 			if err == nil {
 				resch <- si
 			} else {
@@ -1258,7 +1259,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 }
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
-	buckets, errstr, errcode := getcloudif().getbucketnames()
+	buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
 	if errstr != "" {
 		if errcode == 0 {
 			t.invalmsghdlr(w, r, errstr)
@@ -1326,7 +1327,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
 	} else {
 		tag = "cloud"
-		jsbytes, errstr, errcode = getcloudif().listbucket(bucket, msg)
+		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r), bucket, msg)
 	}
 	if errstr != "" {
 		if errcode == 0 {
@@ -1548,7 +1549,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	// commit
 	props := &objectProps{nhobj: nhobj}
 	if sgl == nil {
-		errstr, errcode = t.putCommit(bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 		if errstr == "" {
 			delta := time.Since(started)
 			t.statsdC.Send("put",
@@ -1573,11 +1574,11 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		return
 	}
 	// FIXME: use xaction
-	go t.sglToCloudAsync(sgl, bucket, objname, putfqn, fqn, props)
+	go t.sglToCloudAsync(t.contextWithAuth(r), sgl, bucket, objname, putfqn, fqn, props)
 	return
 }
 
-func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn string, objprops *objectProps) {
+func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, objname, putfqn, fqn string, objprops *objectProps) {
 	slab := selectslab(sgl.Size())
 	buf := slab.alloc()
 	defer func() {
@@ -1613,7 +1614,7 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 		}
 		return
 	}
-	errstr, _ := t.putCommit(bucket, objname, putfqn, fqn, objprops, false /*rebalance*/)
+	errstr, _ := t.putCommit(ct, bucket, objname, putfqn, fqn, objprops, false /*rebalance*/)
 	if errstr != "" {
 		glog.Errorln("sglToCloudAsync: commit", errstr)
 		return
@@ -1621,7 +1622,7 @@ func (t *targetrunner) sglToCloudAsync(sgl *SGLIO, bucket, objname, putfqn, fqn 
 	glog.Infof("sglToCloudAsync: %s/%s", bucket, objname)
 }
 
-func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
+func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fqn string,
 	objprops *objectProps, rebalance bool) (errstr string, errcode int) {
 	var (
 		file          *os.File
@@ -1643,7 +1644,7 @@ func (t *targetrunner) putCommit(bucket, objname, putfqn, fqn string,
 			errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
 			return
 		}
-		if objprops.version, errstr, errcode = getcloudif().putobj(file, bucket, objname, objprops.nhobj); errstr != "" {
+		if objprops.version, errstr, errcode = getcloudif().putobj(ct, file, bucket, objname, objprops.nhobj); errstr != "" {
 			_ = file.Close()
 			return
 		}
@@ -1743,7 +1744,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 				return
 			}
 		}
-		errstr, _ = t.putCommit(bucket, objname, putfqn, fqn, props, true /*rebalance*/)
+		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
 			t.statsdC.Send("rebalance.receive",
 				statsd.Metric{
@@ -1764,7 +1765,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 	return
 }
 
-func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
+func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evict bool) error {
 	var (
 		errstr  string
 		errcode int
@@ -1777,7 +1778,7 @@ func (t *targetrunner) fildelete(bucket, objname string, evict bool) error {
 	defer t.rtnamemap.unlockname(uname, true)
 
 	if !localbucket && !evict {
-		errstr, errcode = getcloudif().deleteobj(bucket, objname)
+		errstr, errcode = getcloudif().deleteobj(ct, bucket, objname)
 		if errstr != "" {
 			if errcode == 0 {
 				return fmt.Errorf("%s", errstr)
@@ -2674,6 +2675,26 @@ func (t *targetrunner) runFSKeeper(err error) {
 	if ctx.config.FSKeeper.Enabled {
 		getfskeeper().onerr(err)
 	}
+}
+
+// If Authn server is enabled then the function tries to read a user credentials
+// (at this moment userID is enough) from HTTP request header: looks for
+// 'Authorization' header and decrypts it.
+// Extracted user information is put to context that is passed to all consumers
+func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
+	ct := context.Background()
+
+	if ctx.config.Auth.CredDir == "" || !ctx.config.Auth.Enabled {
+		return ct
+	}
+
+	userID := userIDFromRequest(r)
+	if userID != "" {
+		ct = context.WithValue(ct, ctxUserID, userID)
+		ct = context.WithValue(ct, ctxCredsDir, ctx.config.Auth.CredDir)
+	}
+
+	return ct
 }
 
 // builds fqn of directory for local buckets from mountpath

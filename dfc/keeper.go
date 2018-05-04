@@ -237,7 +237,7 @@ func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 		}
 		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
 		url += from
-		_, err, _, status := r.p.call(si, url, http.MethodGet, nil, kalivetimeout)
+		_, err, _, status := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
 		if err == nil {
 			continue
 		}
@@ -280,7 +280,7 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 		}
 		select {
 		case <-poller.C:
-			_, err, _, status := r.p.call(si, url, http.MethodGet, nil, timeout)
+			_, err, _, status := r.p.call(nil, si, url, http.MethodGet, nil, timeout)
 			if err == nil {
 				return true, false
 			}

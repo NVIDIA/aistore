@@ -113,7 +113,7 @@ func (p *proxyrunner) run() error {
 			return fmt.Errorf("Failed to create json message: %v", err)
 		}
 
-		reply, err, _, _ := p.call(&p.proxysi.daemonInfo, url, http.MethodGet, jsbytes)
+		reply, err, _, _ := p.call(nil, &p.proxysi.daemonInfo, url, http.MethodGet, jsbytes)
 		if err != nil {
 			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", err)
 		}
@@ -219,16 +219,16 @@ func (p *proxyrunner) registerWithURL(proxyurl string, timeout time.Duration) (s
 	url := proxyurl + "/" + Rversion + "/" + Rcluster + "/" + Rproxy
 	if timeout > 0 {
 		url += "/" + Rkeepalive
-		_, err, _, status = p.call(nil, url, http.MethodPost, jsbytes, timeout)
+		_, err, _, status = p.call(nil, nil, url, http.MethodPost, jsbytes, timeout)
 	} else {
-		_, err, _, status = p.call(nil, url, http.MethodPost, jsbytes)
+		_, err, _, status = p.call(nil, nil, url, http.MethodPost, jsbytes)
 	}
 	return
 }
 
 func (p *proxyrunner) unregister() (status int, err error) {
 	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.Proxy.Primary.URL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
-	_, err, _, status = p.call(nil, url, http.MethodDelete, nil)
+	_, err, _, status = p.call(nil, nil, url, http.MethodDelete, nil)
 	return
 }
 
@@ -871,7 +871,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		break
 	}
 	url := si.DirectURL + "/" + Rversion + "/" + Rbuckets + "/" + bucketspec
-	outjson, err, errstr, status := p.call(si, url, r.Method, nil)
+	outjson, err, errstr, status := p.call(r, si, url, r.Method, nil)
 	if err != nil {
 		p.invalmsghdlr(w, r, errstr)
 		p.kalive.onerr(err, status)
@@ -882,11 +882,11 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
-func (p *proxyrunner) targetListBucket(bucket string, dinfo *daemonInfo,
+func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
 	reqBody []byte, islocal bool, cached bool) (response *bucketResp, err error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
 		Rbuckets, bucket, URLParamLocal, islocal, URLParamCached, cached)
-	outjson, err, _, status := p.call(dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
+	outjson, err, _, status := p.call(r, dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
 	if err != nil {
 		p.kalive.onerr(err, status)
 	}
@@ -942,7 +942,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
 		// re-marshall with an updated PageMarker
 		listmsgjson, err := json.Marshal(&msg)
 		assert(err == nil, err)
-		resp, err := p.targetListBucket(bucket, daemon, listmsgjson, false /* islocal */, true /* cachedObjects */)
+		resp, err := p.targetListBucket(nil, bucket, daemon, listmsgjson, false /* islocal */, true /* cachedObjects */)
 		if err != nil {
 			if dataCh != nil {
 				dataCh <- &localFilePage{
@@ -1068,7 +1068,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 
 	targetCallFn := func(si *daemonInfo) {
 		defer wg.Done()
-		resp, err := p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjs)
+		resp, err := p.targetListBucket(nil, bucket, si, listmsgjson, islocal, cachedObjs)
 		chresult <- &targetReply{resp, err}
 	}
 
@@ -1123,7 +1123,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	return allentries, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
+func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
 	const (
 		islocal       = false
 		cachedObjects = false
@@ -1141,7 +1141,7 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 
 	// first, get the cloud object list from a random target
 	for _, si := range p.smap.Tmap {
-		resp, err = p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjects)
+		resp, err = p.targetListBucket(r, bucket, si, listmsgjson, islocal, cachedObjects)
 		if err != nil {
 			return
 		}
@@ -1194,7 +1194,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	if p.islocalBucket(bucket) {
 		allentries, err = p.getLocalBucketObjects(bucket, listmsgjson)
 	} else {
-		allentries, err = p.getCloudBucketObjects(bucket, listmsgjson)
+		allentries, err = p.getCloudBucketObjects(r, bucket, listmsgjson)
 	}
 	if err != nil {
 		p.invalmsghdlr(w, r, err.Error())
@@ -1338,9 +1338,9 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rbuckets, bucket, URLParamLocal, islocal)
 			)
 			if wait {
-				_, err, errstr, errcode = p.call(si, url, method, jsonbytes, 0)
+				_, err, errstr, errcode = p.call(r, si, url, method, jsonbytes, 0)
 			} else {
-				_, err, errstr, errcode = p.call(si, url, method, jsonbytes)
+				_, err, errstr, errcode = p.call(r, si, url, method, jsonbytes)
 			}
 			if err != nil {
 				s := fmt.Sprintf("Failed to execute List/Range request: %v (%d: %s)", err, errcode, errstr)
@@ -1636,7 +1636,7 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 		out.Target[si.DaemonID] = stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		outjson, err, errstr, status := p.call(si, url, r.Method, getstatsmsg)
+		outjson, err, errstr, status := p.call(r, si, url, r.Method, getstatsmsg)
 		if err != nil {
 			p.invalmsghdlr(w, r, errstr)
 			p.kalive.onerr(err, status)
@@ -1729,7 +1729,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 		if register {
 			url := nsi.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rregister
-			if _, err, errStr, status := p.call(&nsi, url, http.MethodPost, nil, ProxyPingTimeout); err != nil {
+			if _, err, errStr, status := p.call(nil, &nsi, url, http.MethodPost, nil, ProxyPingTimeout); err != nil {
 				p.invalmsghdlr(w, r, fmt.Sprintf("%v, %s", err, errStr), status)
 				p.kalive.onerr(err, status)
 			}
@@ -1825,7 +1825,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("Unregistered target {%s} (count %d)", sid, p.smap.count())
 		}
 		url := osi.DirectURL + "/" + Rversion + "/" + Rdaemon
-		p.call(osi, url, http.MethodDelete, nil, ProxyPingTimeout)
+		p.call(nil, osi, url, http.MethodDelete, nil, ProxyPingTimeout)
 		msg = &ActionMsg{Action: ActUnregTarget}
 	}
 	if !p.startedup { // see clusterStartup()
@@ -1877,7 +1877,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			// FIXME: broadcast is not used here (yet) because these changes should only be propagated to targets
 			for _, si := range p.smap.Tmap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-				if _, err, errstr, status := p.call(si, url, http.MethodPut, msgbytes); err != nil {
+				if _, err, errstr, status := p.call(r, si, url, http.MethodPut, msgbytes); err != nil {
 					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, errstr))
 					p.kalive.onerr(err, status)
 					break
@@ -1991,7 +1991,7 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			r, err, _, status := p.call(si, url, method, jsbytes, timeout...)
+			r, err, _, status := p.call(nil, si, url, method, jsbytes, timeout...)
 			callback(si, r, err, status)
 		}(si)
 	}
@@ -2002,7 +2002,7 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 			go func(si *proxyInfo) {
 				defer wg.Done()
 				url := fmt.Sprintf(urlfmt, si.DirectURL)
-				r, err, _, status := p.call(&si.daemonInfo, url, method, jsbytes, timeout...)
+				r, err, _, status := p.call(nil, &si.daemonInfo, url, method, jsbytes, timeout...)
 				callback(&si.daemonInfo, r, err, status)
 			}(si)
 		}

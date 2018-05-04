@@ -47,15 +47,15 @@ type objectProps struct {
 //
 //===========
 type cloudif interface {
-	listbucket(bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
-	headbucket(bucket string) (bucketprops map[string]string, errstr string, errcode int)
-	getbucketnames() (buckets []string, errstr string, errcode int)
+	listbucket(ctx context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
+	headbucket(ctx context.Context, bucket string) (bucketprops map[string]string, errstr string, errcode int)
+	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//
-	headobject(bucket string, objname string) (objmeta map[string]string, errstr string, errcode int)
+	headobject(ctx context.Context, bucket string, objname string) (objmeta map[string]string, errstr string, errcode int)
 	//
-	getobj(fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
-	putobj(file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
-	deleteobj(bucket, objname string) (errstr string, errcode int)
+	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
+	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
+	deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int)
 }
 
 //===========
@@ -68,6 +68,44 @@ func invalhdlr(w http.ResponseWriter, r *http.Request) {
 	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
 	glog.Errorln(s)
 	http.Error(w, s, http.StatusBadRequest)
+}
+
+// Copies headers from original request(from client) to
+// a new one(inter-cluster call)
+func copyHeaders(rOrig, rNew *http.Request) {
+	if rOrig == nil || rNew == nil {
+		return
+	}
+
+	for key, value := range rOrig.Header {
+		rNew.Header[key] = value
+	}
+}
+
+// Decrypts token and retreive userID from it
+// Returns empty userID in case of token is invalid
+func userIDFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	token := ""
+	tokenParts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(tokenParts) == 2 && tokenParts[0] == tokenStart {
+		token = tokenParts[1]
+	}
+
+	if token == "" {
+		return ""
+	}
+
+	authrec, err := decryptToken(token)
+	if err != nil {
+		glog.Errorf("Failed to decrypt token [%s]: %v", token, err)
+		return ""
+	}
+
+	return authrec.userID
 }
 
 //===========================================================================
@@ -236,7 +274,7 @@ func (h *httprunner) stop(err error) {
 
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
 // optionally, sends a json-encoded body to the callee
-func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
+func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method string, injson []byte,
 	timeout ...time.Duration) (outjson []byte, err error, errstr string, status int) {
 	var (
 		request  *http.Request
@@ -268,11 +306,13 @@ func (h *httprunner) call(si *daemonInfo, url, method string, injson []byte,
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
 		return
 	}
+	copyHeaders(rOrig, request)
 	if len(timeout) > 0 {
 		if timeout[0] != 0 {
 			contextwith, cancel := context.WithTimeout(context.Background(), timeout[0])
 			defer cancel()
 			newrequest := request.WithContext(contextwith)
+			copyHeaders(rOrig, newrequest)
 			response, err = h.httpclient.Do(newrequest) // timeout => context.deadlineExceededError
 		} else { // zero timeout means the client wants no timeout
 			response, err = h.httpclientLongTimeout.Do(request)

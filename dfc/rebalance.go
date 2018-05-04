@@ -45,7 +45,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		pollstarted, ok := time.Now(), false
 		timeout := kalivetimeout
 		for {
-			_, err, _, status := t.call(si, url, http.MethodGet, nil, timeout)
+			_, err, _, status := t.call(nil, si, url, http.MethodGet, nil, timeout)
 			if err == nil {
 				ok = true
 				break
@@ -132,10 +132,10 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 				continue
 			}
 			url := si.DirectURL + "/" + Rversion + "/" + Rhealth
-			outjson, err, _, _ := t.call(si, url, http.MethodGet, nil)
+			outjson, err, _, _ := t.call(nil, si, url, http.MethodGet, nil)
 			// retry once
 			if err == context.DeadlineExceeded {
-				outjson, err, _, _ = t.call(si, url, http.MethodGet, nil, kalivetimeout*2)
+				outjson, err, _, _ = t.call(nil, si, url, http.MethodGet, nil, kalivetimeout*2)
 			}
 			if err != nil {
 				glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", sid, err)
