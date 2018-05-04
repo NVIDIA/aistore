@@ -39,7 +39,7 @@ func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]stri
 		t.Fail()
 	}
 	for fname, _ := range oldVersions {
-		err = client.Put(proxyurl, r, bucket, fname, false)
+		err = client.Put(proxyurl, r, bucket, fname, !testing.Verbose())
 		if err != nil {
 			t.Errorf("Failed to put new data to object %s/%s, err: %v", bucket, fname, err)
 			t.Fail()
@@ -295,7 +295,7 @@ func propsCleanupObjects(t *testing.T, bucket string, newVersions map[string]str
 	wg := &sync.WaitGroup{}
 	for objname, _ := range newVersions {
 		wg.Add(1)
-		go client.Del(proxyurl, bucket, objname, wg, errch, false)
+		go client.Del(proxyurl, bucket, objname, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -324,7 +324,8 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	tlogf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
 	htype := dfc.ChecksumNone
-	putRandomFiles(0, baseseed+110, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, versionDir, htype, true, sgl)
+	putRandomFiles(0, baseseed+110, filesize, int(numPuts), bucket, t, nil, errch, filesput,
+		ldir, versionDir, htype, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {

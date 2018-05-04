@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"sync"
+	"testing"
 
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 
@@ -73,7 +74,7 @@ func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket s
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			client.PutAsync(wg, proxyurl, r, bucket, "__bench/"+fname, errch, false)
+			client.PutAsync(wg, proxyurl, r, bucket, "__bench/"+fname, errch, !testing.Verbose())
 		}
 	}
 	close(pool)

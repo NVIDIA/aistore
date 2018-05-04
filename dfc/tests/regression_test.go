@@ -96,17 +96,20 @@ func Test_regression(t *testing.T) {
 	if err := dfc.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
+
 	if err := dfc.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
-	// get them early to LRU later
+
+	// get objects for LRU tests
 	errch := make(chan error, 100)
 	getRandomFiles(0, 0, 20, clibucket, "", t, nil, errch)
-	selectErr(errch, "get", t, false)
-	if t.Failed() {
+	// the error culd be no object in the bucket, in that case, consider it as not an error
+	// lru test will be skipped
+	if len(errch) != 0 {
 		failLRU = "LRU: need a cloud bucket with at least 20 objects"
 	}
-	// run tests
+
 	for _, test := range tests {
 		t.Run(test.name, test.method)
 		if t.Failed() && abortonerr {
@@ -191,7 +194,8 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir, SmokeStr, "", false, sgl)
+	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
+		SmokeStr, "", !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "put", t, false)
 	getRandomFiles(0, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
@@ -205,7 +209,7 @@ func regressionBucket(httpclient *http.Client, t *testing.T, bucket string) {
 		}
 
 		wg.Add(1)
-		go client.Del(proxyurl, bucket, "smoke/"+fname, wg, errch, false)
+		go client.Del(proxyurl, bucket, "smoke/"+fname, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -333,8 +337,8 @@ func regressionConfig(t *testing.T) {
 
 func regressionLRU(t *testing.T) {
 	if failLRU != "" {
-		t.Errorf(failLRU)
-		t.Fail()
+		t.Logf(failLRU)
+		t.Skip()
 		return
 	}
 	var (
@@ -374,8 +378,8 @@ func regressionLRU(t *testing.T) {
 		highwm = usedpct - 1
 	)
 	if int(lowwm) < 10 {
-		t.Errorf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
-		t.Fail()
+		t.Logf("The current space usage is too low (%d) for the LRU to be tested", lowwm)
+		t.Skip()
 		return
 	}
 	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
@@ -507,7 +511,8 @@ func regressionRebalance(t *testing.T) {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir, SmokeStr, "", false, sgl)
+	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
+		SmokeStr, "", !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 
 	//
@@ -555,7 +560,7 @@ func regressionRebalance(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.Del(proxyurl, clibucket, "smoke/"+fname, wg, errch, false)
+		go client.Del(proxyurl, clibucket, "smoke/"+fname, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -586,7 +591,7 @@ func regressionRename(t *testing.T) {
 		wg := &sync.WaitGroup{}
 		for _, fname := range bnewnames {
 			wg.Add(1)
-			go client.Del(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, false)
+			go client.Del(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, !testing.Verbose())
 		}
 
 		if usingFile {
@@ -615,7 +620,8 @@ func regressionRename(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir, RenameStr, "", false, sgl)
+	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir,
+		RenameStr, "", !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {
@@ -649,7 +655,8 @@ func regressionRename(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
-		client.Get(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, nil, errch, false, false)
+		client.Get(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, nil,
+			errch, !testing.Verbose(), false /* validate */)
 	}
 	selectErr(errch, "get", t, false)
 }
@@ -828,7 +835,8 @@ func regressionDeleteRange(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyurl, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch, false /* silent */)
+		go client.PutAsync(wg, proxyurl, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch,
+			!testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "put", t, true)
@@ -890,7 +898,7 @@ func regressionDeleteList(t *testing.T) {
 		keyname := fmt.Sprintf("%s%d", prefix, i)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyurl, r, clibucket, keyname, errch, false /* silent */)
+		go client.PutAsync(wg, proxyurl, r, clibucket, keyname, errch, !testing.Verbose())
 		files = append(files, keyname)
 
 	}
@@ -933,7 +941,7 @@ func regressionListObjects(t *testing.T) {
 		fname := fmt.Sprintf("obj%d", i+1)
 		fileList = append(fileList, fname)
 	}
-	fillWithRandomData(seed, fileSize, fileList, bucket, t, errch, filesput, dir, prefix, false, sgl)
+	fillWithRandomData(seed, fileSize, fileList, bucket, t, errch, filesput, dir, prefix, !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
 

@@ -371,18 +371,6 @@ This process allows a proxy to be rerun with the same command and environment va
 - DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
 - Currently, only the candidate primary proxy keeps track of the fact that a vote is happening. This means that if the candidate primary proxy is not in the hint cluster map when a proxy starts up, a proxy may start as primary at the same time as an election completes, changing the primary proxy.
 
-### Tests
-
-The suite of tests for multiple proxies may be run by setting the environment variable "MULTIPROXY" to 1 for a test run. Multiple proxy tests can only be run on Linux, where the entire cluster is being run locally.
-
-#### Current Tests
-
-1. Proxy_Failure: Tests that a new proxy is successfully transitioned to after primary proxy failure.
-2. Multiple_Failures: Tests that a new proxy is successfully transitioned to after the primary proxy and a target fail at once.
-3. Rejoin: Tests that, after a primary proxy failure and transition, a target can fail and rejoin the cluster.
-4. Primary_Proxy_Rejoin: Tests the scenario where the primary proxy becomes inactive, and resumes activity during the voting process. The vote should complete and result in the primary proxy changing, with the previous primary proxy still alive, but with a lower Smap version.
-5. Test_votestress: The stress test runs a sequence of put/get/delete calls to a local bucket from multiple worker threads, and simultaneously kills, waits, and restores the primary proxy at random intervals.
-
 ## WebDAV
 
 WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).

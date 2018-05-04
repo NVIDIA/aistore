@@ -4,31 +4,7 @@
  */
 package dfc_test
 
-// Before submit for review or push to master:
-// (From $GOPATH/src/github.com/NVIDIA/dfcpub; or adjust the ./... accordingly)
-// 1. Run all tests minus multi proxy tests:
-//    BUCKET=<bucket name> MULTIPROXY=0 go test -v -p 1 -count 1 -timeout 20m ./...
-// 2. Do a quick run:
-//    BUCKET=<bucket name> MULTIPROXY=0 go test -v -p 1 -count 1 -short ./...
-// 3. If the change might affect multi proxy (may take a long time, around an hour):
-//    BUCKET=<bucket name> MULTIPROXY=1 go test -v -p 1 -count 1 -timeout 1h ./...
-
-// Notes:
-// It is important to run with the above paramerts, here is why:
-// 1. "-p 1": run tests sequentially; since all tests share the same bucket, can't allow
-//    tests run in parallel.
-// 2. "-count=1": this is to disable go test cache; without it, when tests fail, go test might show
-//    ok if the same test passed before and results are cached.
-// 3. "-v": when used, go test shows result (PASS/FAIL) for each test; so if -v is used, check the results carefully, last line shows
-//    PASS doesn't mean the test passed, it only means the last test passed.
-// 4. the option "-timeout 20m" is just in case it takes 10+ minutes for all tests to finish on your setup.
-
-// To run individual tests as before:
-// BUCKET=<bucket name> go test ./tests -v -run=regression
-// BUCKET=<bucket name> go test ./tests -v -run=down -args -bucket=mybucket
-// BUCKET=<bucket name> go test ./tests -v -run=list -bucket=otherbucket -prefix=smoke/obj -props=atime,ctime,iscached,checksum,version,size
-// BUCKET=<bucket name> go test ./tests -v -run=smoke -numworkers=4
-// BUCKET=liding-dfc MULTIPROXY=1 go test -v -run=vote -duration=20m
+// For how to run tests, see README
 
 import (
 	"crypto/md5"
@@ -240,7 +216,8 @@ func Test_putdeleteRange(t *testing.T) {
 		fname = fmt.Sprintf("b-%04d", i)
 		filenameList = append(filenameList, fname)
 	}
-	fillWithRandomData(baseseed, filesize, filenameList, clibucket, t, errch, filesput, DeleteDir, commonPrefix, false, sgl)
+	fillWithRandomData(baseseed, filesize, filenameList, clibucket, t, errch, filesput, DeleteDir,
+		commonPrefix, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
 	close(filesput)
 
@@ -373,7 +350,8 @@ func Test_putdelete(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput, DeleteDir, DeleteStr, "", false, sgl)
+	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput,
+		DeleteDir, DeleteStr, "", !testing.Verbose(), sgl)
 	close(filesput)
 
 	// Declare one channel per worker to pass the keyname
@@ -568,7 +546,8 @@ func Test_coldgetmd5(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir, ColdValidStr, "", true, sgl)
+	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir,
+		ColdValidStr, "", true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -608,7 +587,7 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go client.Del(proxyurl, bucket, fn, wg, errch, false)
+		go client.Del(proxyurl, bucket, fn, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
@@ -635,7 +614,7 @@ func Benchmark_get(b *testing.B) {
 		for i := 0; i < 10; i++ {
 			wg.Add(1)
 			keyname := "dir" + strconv.Itoa(i%3+1) + "/a" + strconv.Itoa(i)
-			go client.Get(proxyurl, clibucket, keyname, wg, errch, false, false)
+			go client.Get(proxyurl, clibucket, keyname, wg, errch, !testing.Verbose(), false /* validate */)
 		}
 		wg.Wait()
 		select {
@@ -747,7 +726,7 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go client.Del(proxyurl, bucket, keyname, dwg, errch, false)
+		go client.Del(proxyurl, bucket, keyname, dwg, errch, !testing.Verbose())
 	}
 	dwg.Wait()
 }
@@ -871,7 +850,8 @@ func Test_checksum(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir, ChksumValidStr, htype, true, sgl)
+	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir,
+		ChksumValidStr, htype, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -955,9 +935,11 @@ func deletefromfilelist(t *testing.T, bucket string, errch chan error, fileslist
 				t.Error(err)
 			}
 		}
+
 		wg.Add(1)
 		go client.Del(proxyurl, bucket, fn, wg, errch, true)
 	}
+
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
 	close(errch)
@@ -968,7 +950,7 @@ func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go client.Get(proxyurl, bucket, fileslist[i], getsGroup, errch, false, validate)
+			go client.Get(proxyurl, bucket, fileslist[i], getsGroup, errch, !testing.Verbose(), validate)
 		}
 	}
 	getsGroup.Wait()

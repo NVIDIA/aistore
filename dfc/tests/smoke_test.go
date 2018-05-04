@@ -62,7 +62,7 @@ func Test_smoke(t *testing.T) {
 			}
 		}
 		wg.Add(1)
-		go client.Del(proxyurl, clibucket, "smoke/"+file, wg, errch, false)
+		go client.Del(proxyurl, clibucket, "smoke/"+file, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	select {
@@ -105,7 +105,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 				}
 
 				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
-					SmokeDir, SmokeStr, "", false, sgl)
+					SmokeDir, SmokeStr, "", !testing.Verbose(), sgl)
 				wg.Done()
 			}(i)
 			nPut--
@@ -130,6 +130,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *t
 	if wg != nil {
 		defer wg.Done()
 	}
+
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
@@ -144,6 +145,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *t
 			errch <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
 			return
 		}
+
 		files := make([]string, 0)
 		for _, it := range items.Entries {
 			// directories show up as files with '/' endings - filter them out
@@ -151,15 +153,17 @@ func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *t
 				files = append(files, it.Name)
 			}
 		}
+
 		if len(files) == 0 {
 			errch <- fmt.Errorf("Cannot retrieve from an empty bucket %s", bucket)
 			return
 		}
+
 		keyname := files[random.Intn(len(files))]
-		tlogln("GET: " + keyname)
 		getsGroup.Add(1)
-		go client.Get(proxyurl, bucket, keyname, getsGroup, errch, false, false)
+		go client.Get(proxyurl, bucket, keyname, getsGroup, errch, !testing.Verbose(), false /* validate */)
 	}
+
 	getsGroup.Wait()
 }
 

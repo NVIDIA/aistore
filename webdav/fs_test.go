@@ -448,7 +448,7 @@ func TestFS(t *testing.T) {
 		t.Fatalf("webdav test bucket already exists")
 	}
 
-	if fs.Mkdir(nil, bucketFullName, os.ModePerm) != nil {
+	if err = fs.Mkdir(nil, bucketFullName, os.ModePerm); err != nil {
 		t.Fatalf("Failed to create bucket, err = %v", err)
 	}
 

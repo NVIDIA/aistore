@@ -630,7 +630,8 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 }
 
 // PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string, key string, errch chan error, silent bool) {
+func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string, key string,
+	errch chan error, silent bool) {
 	defer wg.Done()
 	err := Put(proxyURL, reader, bucket, key, silent)
 	if err != nil {
