@@ -217,7 +217,7 @@ func regressionStats(t *testing.T) {
 	stats := getClusterStats(httpclient, t)
 
 	for k, v := range stats.Target {
-		tdstats := getDaemonStats(httpclient, t, smap.Smap[k].DirectURL)
+		tdstats := getDaemonStats(httpclient, t, smap.Tmap[k].DirectURL)
 		tdcapstats := tdstats["capacity"].(map[string]interface{})
 		dcapstats := v.Capacity
 		for fspath, fstats := range dcapstats {
@@ -349,7 +349,7 @@ func regressionLRU(t *testing.T) {
 	hwms := make(map[string]interface{})
 	bytesEvictedOrig := make(map[string]int64)
 	filesEvictedOrig := make(map[string]int64)
-	for k, di := range smap.Smap {
+	for k, di := range smap.Tmap {
 		cfg := getConfig(di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
 		lrucfg := cfg["lru_config"].(map[string]interface{})
 		lwms[k] = lrucfg["lowwm"]
@@ -392,7 +392,7 @@ func regressionLRU(t *testing.T) {
 		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-		for k, di := range smap.Smap {
+		for k, di := range smap.Tmap {
 			setConfig("highwm", fmt.Sprint(hwms[k]), di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
 			setConfig("lowwm", fmt.Sprint(lwms[k]), di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
 		}
@@ -487,7 +487,7 @@ func regressionRebalance(t *testing.T) {
 	// step 2. unregister random target
 	//
 	smap := getClusterMap(httpclient, t)
-	l := len(smap.Smap)
+	l := len(smap.Tmap)
 	if l < 3 { // NOTE: proxy is counted; FIXME: will have to be fixed for "multi-proxies"...
 		if l == 0 {
 			t.Fatal("DFC cluster is empty - zero targets")
@@ -495,7 +495,7 @@ func regressionRebalance(t *testing.T) {
 			t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 		}
 	}
-	for sid = range smap.Smap {
+	for sid = range smap.Tmap {
 		break
 	}
 	unregisterTarget(sid, t)
@@ -517,11 +517,11 @@ func regressionRebalance(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)
-		if len(smap.Smap) == l {
+		if len(smap.Tmap) == l {
 			break
 		}
 	}
-	if len(smap.Smap) != l {
+	if len(smap.Tmap) != l {
 		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", sid, l)
 		return
 	}
@@ -672,7 +672,7 @@ func regressionPrefetchList(t *testing.T) {
 
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(httpclient, t)
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
@@ -702,7 +702,7 @@ func regressionPrefetchList(t *testing.T) {
 	}
 
 	// 5. Ensure that all the prefetches occurred.
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
@@ -736,7 +736,7 @@ func regressionPrefetchRange(t *testing.T) {
 
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(httpclient, t)
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
@@ -792,7 +792,7 @@ func regressionPrefetchRange(t *testing.T) {
 	}
 
 	// 5. Ensure that all the prefetches occurred.
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
@@ -1085,7 +1085,7 @@ func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
 		r   *http.Response
 		err error
 	)
-	si := smap.Smap[sid]
+	si := smap.Tmap[sid]
 	req, err = http.NewRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon, nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)

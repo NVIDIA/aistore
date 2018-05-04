@@ -1,6 +1,6 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -381,9 +381,7 @@ existslocally:
 	// local file => http response
 	//
 	if size == 0 {
-		errstr = fmt.Sprintf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
-		t.invalmsghdlr(w, r, errstr)
-		return // likely, an error
+		glog.Warningf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
 	}
 	if !coldget && cksumcfg.Checksum != ChecksumNone {
 		hashbinary, errstr := Getxattr(fqn, xattrXXHashVal)
@@ -607,22 +605,25 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bucketFrom, bucketTo := lbucket, msg.Name
 		lbmap4ren, ok := msg.Value.(map[string]interface{})
 		if !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Action.Value format %+v, %T", msg.Value, msg.Value))
+			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value))
+			return
 		}
 		//
 		// convert/cast generic ActionMsg.Value
 		//
-		versionfloat, ok := lbmap4ren["version"].(float64)
-		if !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Action.Value format (version) %+v, %T", msg.Value, msg.Value))
+		v1, ok1 := lbmap4ren["version"]
+		v2, ok2 := v1.(float64)
+		v3, ok3 := lbmap4ren["l_bmap"]
+		v4, ok4 := v3.(map[string]interface{})
+		if !ok1 || !ok2 || !ok3 || !ok4 {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T), (%+v, %T), (%+v, %T)",
+				v1, v1, v2, v2, v3, v3, v4, v4))
+			return
 		}
-		version := int64(versionfloat)
-		lbmapif, ok := lbmap4ren["l_bmap"].(map[string]interface{})
-		if !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Action.Value format (l_bmap) %+v, %T", msg.Value, msg.Value))
-		}
+		version, lbmapif := int64(v2), v4
 		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, version, lbmapif); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
+			return
 		}
 		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, t.lbmap.versionLocked())
 	default:
@@ -831,7 +832,12 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, version in
 	t.lbmap.Version = version
 	t.lbmap.LBmap = make(map[string]string, len(lbmapif))
 	for k, v := range lbmapif {
-		t.lbmap.LBmap[k] = v.(string)
+		vs, ok := v.(string)
+		if !ok {
+			errstr = fmt.Sprintf("Invalid lbmap format %s => (%+v, %T)", k, v, v)
+			return
+		}
+		t.lbmap.LBmap[k] = vs
 	}
 	for mpath := range ctx.mountpaths.Available {
 		todir := filepath.Join(makePathLocal(mpath), bucketTo)
@@ -886,12 +892,10 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
-	newfqn := renctx.t.fqn(renctx.bucketTo, objname)
-	dirname := filepath.Dir(newfqn)
-	if err := CreateDir(dirname); err != nil {
-		return fmt.Errorf("Error creating local dir %s, err: %v", dirname, err)
+	if errstr = renctx.t.renameobject(bucket, objname, renctx.bucketTo, objname); errstr != "" {
+		return fmt.Errorf(errstr)
 	}
-	return os.Rename(fqn, newfqn)
+	return nil
 }
 
 // checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
@@ -1120,12 +1124,12 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 }
 
 func (t *targetrunner) lookupRemotely(bucket, objname string) (tsi *daemonInfo) {
-	if len(t.smap.Smap) < 2 {
+	if len(t.smap.Tmap) < 2 {
 		return
 	}
 	wg := &sync.WaitGroup{}
-	resch := make(chan *daemonInfo, len(t.smap.Smap)-1)
-	for sid, si := range t.smap.Smap {
+	resch := make(chan *daemonInfo, len(t.smap.Tmap)-1)
+	for sid, si := range t.smap.Tmap {
 		if sid == t.si.DaemonID {
 			continue
 		}
@@ -1695,13 +1699,13 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, doesnotexist, t.si.DaemonID)
 			return
 		}
-		si, ok := t.smap.Smap[to]
+		si, ok := t.smap.Tmap[to]
 		if !ok {
 			errstr = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
 			return
 		}
 		size = finfo.Size()
-		if errstr = t.sendfile(r.Method, bucket, objname, si, size, ""); errstr != "" {
+		if errstr = t.sendfile(r.Method, bucket, objname, si, size, "", ""); errstr != "" {
 			return
 		}
 		if glog.V(4) {
@@ -1842,28 +1846,30 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
-	finfo, err := os.Stat(fqn)
-	if err != nil {
-		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (local bucket %s, object %s), err: %v",
-			fqn, bucket, objname, err)
+	if errstr = t.renameobject(bucket, objname, bucket, newobjname); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
+	}
+}
+
+func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
+	var si *daemonInfo
+	if si, errstr = HrwTarget(bucketTo+"/"+objnameTo, t.smap); errstr != "" {
 		return
 	}
-	si, errstr := HrwTarget(bucket+"/"+newobjname, t.smap)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
+	fqn := t.fqn(bucketFrom, objnameFrom)
+	finfo, err := os.Stat(fqn)
+	if err != nil {
+		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
 		return
 	}
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
-		newfqn := t.fqn(bucket, newobjname)
+		newfqn := t.fqn(bucketTo, objnameTo)
 		dirname := filepath.Dir(newfqn)
 		if err := CreateDir(dirname); err != nil {
 			errstr = fmt.Sprintf("Unexpected failure to create local dir %s, err: %v", dirname, err)
-			t.invalmsghdlr(w, r, errstr)
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
-			t.invalmsghdlr(w, r, errstr)
 		} else {
 			t.statsdC.Send("rename",
 				statsd.Metric{
@@ -1872,7 +1878,6 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 					Value: 1,
 				},
 			)
-
 			t.statsif.add("numrename", 1)
 			if glog.V(3) {
 				glog.Infof("Renamed %s => %s", fqn, newfqn)
@@ -1881,11 +1886,10 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 		return
 	}
 	// move/migrate
-	glog.Infof("Migrating [%s %s => %s] %s => %s", bucket, objname, newobjname, t.si.DaemonID, si.DaemonID)
+	glog.Infof("Migrating %s/%s at %s => %s/%s at %s", bucketFrom, objnameFrom, t.si.DaemonID, bucketTo, objnameTo, si.DaemonID)
 
-	if errstr = t.sendfile(http.MethodPut, bucket, objname, si, finfo.Size(), newobjname); errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-	}
+	errstr = t.sendfile(http.MethodPut, bucketFrom, objnameFrom, si, finfo.Size(), bucketTo, objnameTo)
+	return
 }
 
 func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
@@ -1944,22 +1948,25 @@ func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg A
 // Rebalancing supports versioning. If an object in DFC cache has version in
 // xattrs then the sender adds to HTTP header object version. A receiver side
 // reads version from headers and set xattrs if the version is not empty
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newobjname string) string {
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newbucket, newobjname string) string {
 	var (
 		xxhashval string
 		errstr    string
 		version   []byte
 	)
 	if size == 0 {
-		return fmt.Sprintf("Unexpected: %s/%s size is zero", bucket, objname)
+		glog.Warningf("Unexpected: %s/%s size is zero", bucket, objname)
 	}
 	cksumcfg := &ctx.config.Cksum
 	if newobjname == "" {
 		newobjname = objname
 	}
+	if newbucket == "" {
+		newbucket = bucket
+	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	url := destsi.DirectURL + "/" + Rversion + "/" + Robjects + "/"
-	url += bucket + "/" + newobjname
+	url += newbucket + "/" + newobjname
 	url += fmt.Sprintf("?%s=%s&%s=%s", URLParamFromID, fromid, URLParamToID, toid)
 
 	fqn := t.fqn(bucket, objname)
@@ -2011,7 +2018,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 
 	// err handle
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to sendfile %s/%s %s => %s, err: %v", bucket, objname, fromid, toid, err)
+		errstr = fmt.Sprintf("Failed to sendfile %s/%s at %s => %s/%s at %s, err: %v",
+			bucket, objname, fromid, newbucket, newobjname, toid, err)
 		if response != nil && response.StatusCode > 0 {
 			errstr += fmt.Sprintf(", status %s", response.Status)
 		}
@@ -2019,7 +2027,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	defer response.Body.Close()
 	if _, err = ioutil.ReadAll(response.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to read sendfile response: %s/%s %s => %s, err: %v", bucket, objname, fromid, toid, err)
+		errstr = fmt.Sprintf("Failed to read sendfile response: %s/%s at %s => %s/%s at %s, err: %v",
+			bucket, objname, fromid, newbucket, newobjname, toid, err)
 		if err == io.EOF {
 			trailer := response.Trailer.Get("Error")
 			if trailer != "" {
@@ -2028,7 +2037,6 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		}
 		return errstr
 	}
-
 	// stats
 	t.statsdC.Send("rebalance.send",
 		statsd.Metric{
@@ -2042,7 +2050,6 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 			Value: size,
 		},
 	)
-
 	t.statsif.addMany("numsentfiles", int64(1), "numsentbytes", size)
 	return ""
 }
@@ -2151,7 +2158,7 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	if t.readJSON(w, r, newsmap) != nil {
 		return
 	}
-	newlen := len(newsmap.Smap)
+	newlen := len(newsmap.Tmap)
 	glog.Infof("%s: new Smap version %d, num targets %d, newtargetid=%s", apitems[0], newsmap.Version, newlen, newtargetid)
 
 	smapLock.Lock() //=======================================================
@@ -2168,7 +2175,7 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 		t.kalive.onerr(err, 0)
 		return
 	}
-	oldlen := len(t.smap.Smap)
+	oldlen := len(t.smap.Tmap)
 
 	// check whether this target is present in the new Smap
 	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
@@ -2176,14 +2183,14 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	// log
 	existentialQ, isSubset := false, true
 	infoln := make([]string, 0, newlen)
-	for id, si := range newsmap.Smap { // log
+	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
 			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si))
 		} else {
 			infoln = append(infoln, fmt.Sprintf("target: %s", si))
 		}
-		if _, ok := t.smap.Smap[id]; !ok {
+		if _, ok := t.smap.Tmap[id]; !ok {
 			isSubset = false
 		}
 	}

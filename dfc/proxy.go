@@ -1,6 +1,6 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -140,11 +140,11 @@ func (p *proxyrunner) run() error {
 			instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
 			smappathname = filepath.Join(instancedir, smapname)
 		}
-		p.hintsmap = &Smap{Smap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		p.hintsmap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
 		if err := LocalLoad(smappathname, p.hintsmap); err != nil && !os.IsNotExist(err) {
 			glog.Warningf("Failed to load existing hint smap: %v", err)
 		}
-		p.smap.Smap = make(map[string]*daemonInfo, 8)
+		p.smap.Tmap = make(map[string]*daemonInfo, 8)
 		p.smap.Pmap = make(map[string]*proxyInfo, 8)
 		p.smap.addProxy(&proxyInfo{
 			daemonInfo: *p.si,
@@ -167,6 +167,7 @@ func (p *proxyrunner) run() error {
 		}()
 	}
 	p.smap.ProxySI = &proxyInfo{daemonInfo: *p.si, Primary: p.primary}
+
 	// startup: sync local buckets and cluster map when the latter stabilizes
 	if p.primary {
 		go p.synchronizeMaps(clivars.ntargets, "", nil)
@@ -767,7 +768,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	var si *daemonInfo
 	// Use random map iteration order to choose a random target to redirect to
-	for _, si = range p.smap.Smap {
+	for _, si = range p.smap.Tmap {
 		break
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
@@ -825,7 +826,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	}
 
 	var si *daemonInfo
-	for _, si = range p.smap.Smap {
+	for _, si = range p.smap.Tmap {
 		break
 	}
 	url := si.DirectURL + "/" + Rversion + "/" + Rbuckets + "/" + bucketspec
@@ -971,7 +972,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	reqParams.GetPageMarker = ""
 
 	wg := &sync.WaitGroup{}
-	for _, daemon := range p.smap.Smap {
+	for _, daemon := range p.smap.Tmap {
 		wg.Add(1)
 		go p.generateCachedList(bucket, daemon, dataCh, wg, reqParams)
 	}
@@ -1021,7 +1022,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		glog.Warningf("Page size(%d) for local bucket %s exceeds the limit(%d)", msg.GetPageSize, bucket, MaxPageSize)
 	}
 
-	chresult := make(chan *targetReply, len(p.smap.Smap))
+	chresult := make(chan *targetReply, len(p.smap.Tmap))
 	wg := &sync.WaitGroup{}
 
 	targetCallFn := func(si *daemonInfo) {
@@ -1030,7 +1031,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		chresult <- &targetReply{resp, err}
 	}
 
-	for _, si := range p.smap.Smap {
+	for _, si := range p.smap.Tmap {
 		wg.Add(1)
 		go targetCallFn(si)
 	}
@@ -1098,7 +1099,7 @@ func (p *proxyrunner) getCloudBucketObjects(bucket string, listmsgjson []byte) (
 	}
 
 	// first, get the cloud object list from a random target
-	for _, si := range p.smap.Smap {
+	for _, si := range p.smap.Tmap {
 		resp, err = p.targetListBucket(bucket, si, listmsgjson, islocal, cachedObjects)
 		if err != nil {
 			return
@@ -1315,7 +1316,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	}
 
 	wg := &sync.WaitGroup{}
-	for _, si := range p.smap.Smap {
+	for _, si := range p.smap.Tmap {
 		wg.Add(1)
 		go func(si *daemonInfo) {
 			defer wg.Done()
@@ -1664,7 +1665,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 // FIXME: read-lock
 func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
 	out := p.newClusterStats()
-	for _, si := range p.smap.Smap {
+	for _, si := range p.smap.Tmap {
 		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 		out.Target[si.DaemonID] = stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
@@ -1876,8 +1877,8 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else {
 			msgbytes, err := json.Marshal(msg) // same message -> all targets
 			assert(err == nil, err)
-			// Broadcast is not used here, because these changes should only be propogated to targets.
-			for _, si := range p.smap.Smap {
+			// FIXME: broadcast is not used here (yet) because these changes should only be propagated to targets
+			for _, si := range p.smap.Tmap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
 				if _, err, errstr, status := p.call(si, url, http.MethodPut, msgbytes); err != nil {
 					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, errstr))
@@ -2114,7 +2115,7 @@ The caller must lock p.smap.
 func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Smap,
 	callback func(*daemonInfo, []byte, error, int), timeout ...time.Duration) {
 	wg := &sync.WaitGroup{}
-	for _, si := range smap.Smap {
+	for _, si := range smap.Tmap {
 		wg.Add(1)
 		go func(si *daemonInfo) {
 			defer wg.Done()

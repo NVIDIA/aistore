@@ -1,6 +1,6 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -35,7 +35,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	// first, check whether all the Smap-ed targets are up and running
 	//
 	from := "?" + URLParamFromID + "=" + t.si.DaemonID
-	for sid, si := range newsmap.Smap {
+	for sid, si := range newsmap.Tmap {
 		if sid == t.si.DaemonID {
 			continue
 		}
@@ -124,7 +124,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 	for {
 		count := 0
-		for sid, si := range newsmap.Smap {
+		for sid, si := range newsmap.Tmap {
 			if sid == t.si.DaemonID {
 				continue
 			}
@@ -218,7 +218,7 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 
 	// do rebalance
 	glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si.DaemonID, si.DaemonID)
-	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), ""); errstr != "" {
+	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", ""); errstr != "" {
 		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
 	} else {
 		// FIXME: TODO: delay the removal or (even) rely on the LRU

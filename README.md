@@ -4,14 +4,13 @@ DFC: Distributed File Cache with Amazon and Google Cloud backends
 ## Overview
 
 DFC is a simple distributed caching service written in Go. The service
-consists of any numbers of http proxy servers (with well-known addresses)
-and storage targets (aka targets) utilizing local disks:
+consists of any numbers of gateways (realized as http proxy servers aka proxies),
+and storage targets (aka targets) that utilize local disks:
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
 
-Users (i.e., http/https clients) connect to the proxies and execute RESTful
-commands. Data then moves directly between storage targets (that cache this data)
-and the requesting user.
+Users connect to the proxies and execute RESTful commands. Data then moves
+directly between storage targets that cache this data and the requesting http(s) clients.
 
 ## Prerequisites
 

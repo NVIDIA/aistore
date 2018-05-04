@@ -211,13 +211,13 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	propsCleanupObjects(t, bucket, objects)
 
 	smap := getClusterMap(httpclient, t)
-	l := len(smap.Smap)
+	l := len(smap.Tmap)
 	if l < 2 {
 		t.Skipf("Only %d targets found, need at least 2", l)
 	}
 
 	var removedSid string
-	for sid := range smap.Smap {
+	for sid := range smap.Tmap {
 		removedSid = sid
 		break
 	}
@@ -236,14 +236,14 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)
-		if len(smap.Smap) == l {
+		if len(smap.Tmap) == l {
 			break
 		}
 	}
 
 	smap = getClusterMap(httpclient, t)
-	if l != len(smap.Smap) {
-		t.Errorf("Target failed to reregister. Current number of targets: %d (expected %d)", len(smap.Smap), l)
+	if l != len(smap.Tmap) {
+		t.Errorf("Target failed to reregister. Current number of targets: %d (expected %d)", len(smap.Tmap), l)
 	}
 	//
 	// wait for rebalance to run its course

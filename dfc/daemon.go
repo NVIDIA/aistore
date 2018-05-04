@@ -1,6 +1,6 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -46,7 +46,7 @@ type cliVars struct {
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 // Smap contains id:daemonInfo pairs and related metadata
 type Smap struct {
-	Smap        map[string]*daemonInfo `json:"smap"` // daemonID -> daemonInfo
+	Tmap        map[string]*daemonInfo `json:"smap"` // daemonID -> daemonInfo
 	Pmap        map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
 	ProxySI     *proxyInfo             `json:"proxy_si"`
 	Version     int64                  `json:"version"`
@@ -127,7 +127,7 @@ var (
 //
 //====================
 func (m *Smap) add(si *daemonInfo) {
-	m.Smap[si.DaemonID] = si
+	m.Tmap[si.DaemonID] = si
 	m.Version++
 }
 
@@ -137,7 +137,7 @@ func (m *Smap) addProxy(pi *proxyInfo) {
 }
 
 func (m *Smap) del(sid string) {
-	delete(m.Smap, sid)
+	delete(m.Tmap, sid)
 	m.Version++
 }
 
@@ -157,7 +157,7 @@ func (m *Smap) versionLocked() int64 {
 }
 
 func (m *Smap) count() int {
-	return len(m.Smap)
+	return len(m.Tmap)
 }
 
 func (m *Smap) countProxies() int {
@@ -170,7 +170,7 @@ func (m *Smap) countLocked() int {
 }
 
 func (m *Smap) get(sid string) *daemonInfo {
-	si := m.Smap[sid]
+	si := m.Tmap[sid]
 	return si
 }
 
@@ -189,15 +189,15 @@ func (m *Smap) unlock() {
 
 // SmapUnion computes the union of A and B, where keys in B override keys shared with A
 func SmapUnion(A *Smap, B *Smap) *Smap {
-	unionsmap := &Smap{Smap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
-	for k, v := range A.Smap {
-		unionsmap.Smap[k] = v
+	unionsmap := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	for k, v := range A.Tmap {
+		unionsmap.Tmap[k] = v
 	}
 	for k, v := range A.Pmap {
 		unionsmap.Pmap[k] = v
 	}
-	for k, v := range B.Smap {
-		unionsmap.Smap[k] = v
+	for k, v := range B.Tmap {
+		unionsmap.Tmap[k] = v
 	}
 	for k, v := range B.Pmap {
 		unionsmap.Pmap[k] = v
@@ -215,7 +215,7 @@ func (m *Smap) copyLocked(dst *Smap) {
 func (m *Smap) Dump() {
 	fmt.Printf("Smap: version = %d, sync version = %d\n", m.Version, m.syncversion)
 	fmt.Printf("Targets\n")
-	for _, v := range m.Smap {
+	for _, v := range m.Tmap {
 		fmt.Printf("\tid = %-15s\turl = %s\n", v.DaemonID, v.DirectURL)
 	}
 

@@ -1,6 +1,6 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc
@@ -22,7 +22,7 @@ func HrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
 		return
 	}
 	var max uint64
-	for id, sinfo := range smap.Smap {
+	for id, sinfo := range smap.Tmap {
 		cs := xxhash.ChecksumString64S(id+":"+name, mLCG32)
 		if cs > max {
 			max = cs

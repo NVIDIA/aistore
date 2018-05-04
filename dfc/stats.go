@@ -1,4 +1,4 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
@@ -133,7 +133,7 @@ type iostatrunner struct {
 //==============================================================
 func (p *proxyrunner) newClusterStats() *ClusterStats {
 	targets := make(map[string]*storstatsrunner, p.smap.count())
-	for _, si := range p.smap.Smap {
+	for _, si := range p.smap.Tmap {
 		targets[si.DaemonID] = &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 	}
 	return &ClusterStats{Target: targets}

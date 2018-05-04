@@ -62,7 +62,7 @@ func TestProxy(t *testing.T) {
 		t.Fatal("Not enough proxies to run proxy tests, must be more than 2")
 	}
 
-	if len(smapBefore.Smap) < 1 {
+	if len(smapBefore.Tmap) < 1 {
 		t.Fatal("Not enough targets to run proxy tests, must be at least 1")
 	}
 
@@ -83,9 +83,9 @@ func TestProxy(t *testing.T) {
 // note: add verify primary if primary is reset
 func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 	smapAfter := getClusterMap(httpclient, t)
-	if len(smapAfter.Smap) != len(smapBefore.Smap) {
+	if len(smapAfter.Tmap) != len(smapBefore.Tmap) {
 		t.Fatalf("Number of targets mismatch, before = %d, after = %d",
-			len(smapBefore.Smap), len(smapAfter.Smap))
+			len(smapBefore.Tmap), len(smapAfter.Tmap))
 	}
 
 	if len(smapAfter.Pmap) != len(smapBefore.Pmap) {
@@ -93,8 +93,8 @@ func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 			len(smapBefore.Pmap), len(smapAfter.Pmap))
 	}
 
-	for _, b := range smapBefore.Smap {
-		a, ok := smapAfter.Smap[b.DaemonID]
+	for _, b := range smapBefore.Tmap {
+		a, ok := smapAfter.Tmap[b.DaemonID]
 		if !ok {
 			t.Fatalf("Failed to find target %s", b.DaemonID)
 		}
@@ -120,7 +120,7 @@ func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 	}
 
 	// no proxy/target died (or not restored)
-	for _, b := range smapBefore.Smap {
+	for _, b := range smapBefore.Tmap {
 		_, err := getPID(b.DaemonPort)
 		if err != nil {
 			t.Fatal(err)
@@ -203,7 +203,7 @@ func primaryAndTargetCrash(t *testing.T) {
 		targetPort string
 	)
 
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		targetURL = v.DirectURL
 		targetPort = v.DaemonPort
 		break
@@ -324,7 +324,7 @@ func targetRejoin(t *testing.T) {
 	)
 
 	smap := getClusterMap(httpclient, t)
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		url = v.DirectURL
 		id = v.DaemonID
 		port = v.DaemonPort
@@ -337,7 +337,7 @@ func targetRejoin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, ok := smap.Smap[id]; ok {
+	if _, ok := smap.Tmap[id]; ok {
 		t.Fatalf("Killed Target was not removed from the cluster map: %v", id)
 	}
 
@@ -352,7 +352,7 @@ func targetRejoin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, ok := smap.Smap[id]; !ok {
+	if _, ok := smap.Tmap[id]; !ok {
 		t.Fatalf("Restarted Target did not rejoin the cluster: %v", id)
 	}
 }
@@ -498,8 +498,8 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	n := getNum(len(smap.Smap) + len(smap.Pmap) - 1)
-	for _, v := range smap.Smap {
+	n := getNum(len(smap.Tmap) + len(smap.Pmap) - 1)
+	for _, v := range smap.Tmap {
 		if n == 0 {
 			break
 		}
@@ -1035,7 +1035,7 @@ func waitForMapSync() error {
 	}
 
 	urls := make(map[string]struct{})
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		// mock targets do not handle all requests, ignore them
 		if v.DaemonID != mockDaemonID {
 			urls[v.DirectURL] = struct{}{}
@@ -1108,7 +1108,7 @@ func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 	)
 
 	// borrow a random target's ip but using a different port to register the mock target
-	for _, v := range smap.Smap {
+	for _, v := range smap.Tmap {
 		ip := getOutboundIP().String()
 
 		v.DaemonID = mockDaemonID
