@@ -95,7 +95,8 @@ func (t *traceableTransport) GotConn(info httptrace.GotConnInfo) {
 	case 1:
 		t.tsTargetConn = time.Now()
 	default:
-		fmt.Println("Unexpected multiple redirection")
+		// ignore
+		// this can happen during proxy stress test when the proxy dies
 	}
 	t.connCnt++
 }
@@ -108,7 +109,7 @@ func (t *traceableTransport) WroteHeaders() {
 	case 2:
 		t.tsTargetWroteHeaders = time.Now()
 	default:
-		fmt.Println("Unexpected")
+		// ignore
 	}
 }
 
@@ -120,7 +121,7 @@ func (t *traceableTransport) WroteRequest(wr httptrace.WroteRequestInfo) {
 	case 2:
 		t.tsTargetWroteRequest = time.Now()
 	default:
-		fmt.Println("Unexpected")
+		// ignore
 	}
 }
 
@@ -132,7 +133,7 @@ func (t *traceableTransport) GotFirstResponseByte() {
 	case 2:
 		t.tsTargetFirstResponse = time.Now()
 	default:
-		fmt.Println("Unexpected")
+		// ignore
 	}
 }
 
@@ -671,7 +672,7 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 	}
 
 	// FIXME: A few places are doing this already, need to address them
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 3)
 	return nil
 }
 

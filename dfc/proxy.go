@@ -1373,18 +1373,24 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err := json.Marshal(ctx.config)
 		assert(err == nil)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
+
 	case GetWhatSmap:
+		p.smap.lock()
 		jsbytes, err := json.Marshal(p.smap)
+		p.smap.unlock()
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
+
 	case GetWhatSmapVote:
 		_, xx := p.xactinp.findLocked(ActElection)
 		vote := (xx != nil)
+		p.smap.lock()
 		msg := SmapVoteMsg{
 			VoteInProgress: vote,
 			Smap:           p.smap,
 		}
 		jsbytes, err := json.Marshal(msg)
+		p.smap.unlock()
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
 	default:

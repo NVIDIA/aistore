@@ -653,8 +653,12 @@ func regressionRename(t *testing.T) {
 		bnewnames = make([]string, 0, numPuts) // new basenames
 		sgl       *dfc.SGLIO
 	)
-	// create & put
-	createLocalBucket(httpclient, t, RenameLocalBucketName)
+
+	err = client.CreateLocalBucket(proxyurl, RenameLocalBucketName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	defer func() {
 		// cleanup
 		wg := &sync.WaitGroup{}
@@ -1174,34 +1178,6 @@ func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
 	if t.Failed() || testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
 		return
 	}
-}
-
-func createLocalBucketNoFail(httpclient *http.Client, t *testing.T, bucket string) (err error) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-	)
-	injson, err = json.Marshal(CreateLocalBucketMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal CreateLocalBucketMsg: %v", err)
-	}
-	req, err = http.NewRequest("POST", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(injson))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-	r, err = httpclient.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	return
-}
-
-func createLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
-	err := createLocalBucketNoFail(httpclient, t, bucket)
-	testfail(err, "Create Local Bucket", nil, nil, t)
 }
 
 func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {

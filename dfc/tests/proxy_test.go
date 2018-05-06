@@ -763,7 +763,7 @@ func proxyStress(t *testing.T) {
 		wg          sync.WaitGroup
 	)
 
-	err := createLocalBucketNoFail(httpclient, t, localBucketName)
+	err := client.CreateLocalBucket(proxyurl, localBucketName)
 	if err != nil {
 		t.Fatal(err)
 	}
