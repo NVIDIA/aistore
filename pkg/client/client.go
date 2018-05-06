@@ -655,14 +655,24 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	r, err := client.Do(req)
-	if r != nil {
-		r.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp != nil {
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= http.StatusBadRequest {
+			buf := make([]byte, 256)
+			_, err = resp.Body.Read(buf)
+			return fmt.Errorf("http error %d, %s", resp.StatusCode, string(buf))
+		}
 	}
 
 	// FIXME: A few places are doing this already, need to address them
 	time.Sleep(time.Second * 2)
-	return err
+	return nil
 }
 
 // RenameLocalBucket changes the name of a bucket to newBucketName

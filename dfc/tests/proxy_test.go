@@ -57,12 +57,12 @@ func TestProxy(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	smapBefore := getClusterMap(httpclient, t)
-	if len(smapBefore.Pmap) < 3 {
+	smap := getClusterMap(httpclient, t)
+	if len(smap.Pmap) < 3 {
 		t.Fatal("Not enough proxies to run proxy tests, must be more than 2")
 	}
 
-	if len(smapBefore.Tmap) < 1 {
+	if len(smap.Tmap) < 1 {
 		t.Fatal("Not enough targets to run proxy tests, must be at least 1")
 	}
 
@@ -73,7 +73,8 @@ func TestProxy(t *testing.T) {
 		}
 	}
 
-	clusterHealthCheck(t, smapBefore)
+	clusterHealthCheck(t, smap)
+
 	// note: enable after set primary is fixed in dfc
 	// resetPrimaryProxy(originalPrimaryProxyID, t)
 	// proxyurl = originalPrimaryProxyURL
@@ -828,11 +829,45 @@ func kill(httpclient *http.Client, url, port string) (string, []string, error) {
 		return "", nil, err
 	}
 
-	_, err = exec.Command("kill", "-9", pid).CombinedOutput()
+	// use a mixed of -9 and -2 to terminate the proxy/targets to test both clean termination and
+	// sudden death
+	howToDie := "-9"
+	if time.Now().UnixNano()%2 == 0 {
+		howToDie = "-2"
+	}
+
+	_, err = exec.Command("kill", howToDie, pid).CombinedOutput()
+	if err != nil {
+		return "", nil, err
+	}
+
+	// wait for the process to actually disappear
+	to := time.Now().Add(time.Minute)
+	for {
+		_, _, _, err := getProcess(port)
+		if err != nil {
+			// assume it failed because the process is gone
+			break
+		}
+
+		if time.Now().After(to) {
+			return "", nil, fmt.Errorf("Failed to kill process at port %s", port)
+		}
+
+		time.Sleep(time.Second)
+	}
+
 	return cmd, args, err
 }
 
 func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary bool) error {
+	// note: when starting a process, it has a stderr pipe, not the standard fd = 2,
+	//       when glog.Errorf() is called, it returned EPIPE, which causes the process to die,
+	//       didn't find out why.
+	//       as a work around, start the background process without logging to stderr.
+	//       may be all dfc process should be deployed with this option.
+	args = append(args, "-stderrthreshold=100")
+
 	cmdStart := exec.Command(cmd, args...)
 	if asPrimary {
 		// Sets the environment variable to start as Primary Proxy to true
