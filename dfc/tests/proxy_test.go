@@ -866,7 +866,17 @@ func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary 
 	//       didn't find out why.
 	//       as a work around, start the background process without logging to stderr.
 	//       may be all dfc process should be deployed with this option.
-	args = append(args, "-stderrthreshold=100")
+	//       only needs to add the option once.
+	var found bool
+	for _, v := range args {
+		if strings.Contains(v, "stderrthreshold") {
+			found = true
+		}
+	}
+
+	if !found {
+		args = append(args, "-stderrthreshold=100")
+	}
 
 	cmdStart := exec.Command(cmd, args...)
 	if asPrimary {
@@ -1016,7 +1026,7 @@ func waitForPrimaryProxy(reason string, beginingVersion int64, verbose bool) (df
 	}
 
 	for {
-		smap, err := getClusterMapGeneric(httpclient, proxyurl)
+		smap, err := client.GetClusterMap(proxyurl)
 		if err != nil && !dfc.IsErrConnectionRefused(err) {
 			return dfc.Smap{}, err
 		}
@@ -1053,7 +1063,7 @@ func waitForMapSync() error {
 	to := time.Now().Add(proxyChangeLatency)
 	// get primary proxy's map
 	for {
-		smap, err = getClusterMapGeneric(httpclient, proxyurl)
+		smap, err = client.GetClusterMap(proxyurl)
 		if err == nil {
 			break
 		}
@@ -1086,7 +1096,7 @@ func waitForMapSync() error {
 
 	verExpected := smap.Version
 	for k, _ := range urls {
-		smap, err = getClusterMapGeneric(httpclient, k)
+		smap, err = client.GetClusterMap(k)
 		if err != nil && !dfc.IsErrConnectionRefused(err) {
 			return err
 		}

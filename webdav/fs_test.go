@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 func TestName(t *testing.T) {
@@ -368,10 +369,16 @@ func readDir(t *testing.T, fs webdav.FileSystem, pth string) ([]os.FileInfo, err
 
 // Note: A DFC instance is required in order to run this test.
 // This requirement can be removed after proxy/target can be started in unit test
-// It also assumes the primary proxy is local host:8080
+// Also assumes the localhost:8080 is one of the proxy
 func TestFS(t *testing.T) {
+	leader, err := client.GetPrimaryProxy("http://127.0.0.1:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leader = strings.TrimPrefix(leader, "http://")
 	existingFilesInTestRoot := readTestRoot(t)
-	fs := NewFS(url.URL{Scheme: "http", Host: "127.0.0.1:8080"}, rootDir)
+	fs := NewFS(url.URL{Scheme: "http", Host: leader}, rootDir)
 
 	// clean up
 	defer func() {
@@ -867,7 +874,7 @@ func TestFS(t *testing.T) {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)
 		}
 
-		fs1 := NewFS(url.URL{Scheme: "http", Host: "127.0.0.1:8080"}, rootDir)
+		fs1 := NewFS(url.URL{Scheme: "http", Host: leader}, rootDir)
 		_, err = fs1.Stat(nil, dir30Path) // file6Path)
 		if err != nil {
 			t.Fatalf("Stat existing file with multi level directory should not fail, err = %v", err)

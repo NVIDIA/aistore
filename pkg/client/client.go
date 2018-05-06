@@ -829,3 +829,67 @@ func ListBuckets(proxyURL string, local bool) (*dfc.BucketNames, error) {
 	err = json.Unmarshal(b, buckets)
 	return buckets, err
 }
+
+// GetClusterMap retrives a DFC's server map
+// Note: this may not be a good idea to expose the map to clients, but this how it is for now.
+func GetClusterMap(url string) (dfc.Smap, error) {
+	var (
+		req    *http.Request
+		r      *http.Response
+		injson []byte
+		err    error
+	)
+
+	injson, err = json.Marshal(dfc.GetMsg{GetWhat: dfc.GetWhatSmap})
+	if err != nil {
+		return dfc.Smap{}, fmt.Errorf("Failed to marshal GetStatsMsg: %v", err)
+	}
+
+	req, err = http.NewRequest("GET", url+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
+	if err != nil {
+		return dfc.Smap{}, fmt.Errorf("Failed to create request: %v", err)
+	}
+
+	r, err = client.Do(req)
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
+
+	if err != nil {
+		// Note: might return connection refused if the servet is not ready
+		//       caller can retry in that case
+		return dfc.Smap{}, err
+	}
+
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		return dfc.Smap{}, fmt.Errorf("get cluster map, http status %d", r.StatusCode)
+	}
+
+	var (
+		b    []byte
+		smap dfc.Smap
+	)
+	b, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		return dfc.Smap{}, fmt.Errorf("Failed to read response body")
+	}
+
+	err = json.Unmarshal(b, &smap)
+	if err != nil {
+		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal smap: %v", err)
+	}
+
+	return smap, nil
+}
+
+// GetPrimaryProxy returns the primary proxy's url of a cluster
+func GetPrimaryProxy(url string) (string, error) {
+	smap, err := GetClusterMap(url)
+	if err != nil {
+		return "", err
+	}
+
+	return smap.ProxySI.DirectURL, nil
+}
