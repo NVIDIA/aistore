@@ -182,8 +182,8 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Register storage target | POST /v1//daemon | `curl -i -X POST http://192.168.176.128:8083/v1/daemon` |
 | Get cluster map | GET {"what": "smap"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "smap"}' http://192.168.176.128:8080/v1/daemon` |
 | Get proxy or target configuration| GET {"what": "config"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://192.168.176.128:8080/v1/daemon` |
-| Update individual DFC daemon (proxy or target) configuration (example: statistics logging interval) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8081/v1/daemon` |
-| Update individual DFC daemon (proxy or target) configuration (example: log level) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | ` curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setconfig","name":"loglevel","value":"4"}' http://192.168.176.128:8080/v1/daemon` |
+| Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8081/v1/daemon` |
+| Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | ` curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setconfig","name":"loglevel","value":"4"}' http://192.168.176.128:8080/v1/daemon` |
 | Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://192.168.176.128:8080/v1/cluster` |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8082/v1/daemon` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
@@ -192,7 +192,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET http://192.168.176.128:8080/v1/objects/myS3bucket/myobject -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://192.168.176.128:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |
-| Get bucket names | GET /v1/buckets/\*[?local=true|false] | `curl -X GET -L http://192.168.176.128:8080/v1/buckets/*?local=true` |
+| Get bucket names | GET /v1/buckets/\* | `curl -L -X GET http://192.168.176.128:8080/v1/buckets/*?local=true` |
 | List bucket | GET { properties-and-options... } /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
 | Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
 | Copy object | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
@@ -209,7 +209,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://192.168.176.128:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Get bucket props | HEAD /v1/buckets/bucket-name | `curl --head http://192.168.176.128:8080/v1/buckets/abc` |
 | Set primary proxy (primary proxy only)| PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT http://192.1168.176.128:8080/v1/cluster/proxy/26869:8080` |
-
+___
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
 <a name="ft2">2</a>: See the List Bucket section for details. [↩](#a2)
