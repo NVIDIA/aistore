@@ -234,6 +234,7 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 			t.Fatalf("original local bucket %s still exists after rename", rtd.bucket)
 		}
 	}
+
 	if !renamedBucketExists {
 		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
 	}

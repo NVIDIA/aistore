@@ -2106,16 +2106,18 @@ func (p *proxyrunner) islocalBucket(bucket string) bool {
 }
 
 func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
-	if !p.primary {
-		if p.proxysi != nil {
-			w.Header().Add(HeaderPrimaryProxyURL, p.proxysi.DirectURL)
-			w.Header().Add(HeaderPrimaryProxyID, p.proxysi.DaemonID)
-		}
-		s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
-		p.invalmsghdlr(w, r, s)
-		return false
+	if p.primary {
+		return true
 	}
-	return true
+
+	if p.proxysi != nil {
+		w.Header().Add(HeaderPrimaryProxyURL, p.proxysi.DirectURL)
+		w.Header().Add(HeaderPrimaryProxyID, p.proxysi.DaemonID)
+	}
+
+	s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
+	p.invalmsghdlr(w, r, s)
+	return false
 }
 
 /* Broadcasts jsbytes using the given method to all targets and proxies in the cluster.

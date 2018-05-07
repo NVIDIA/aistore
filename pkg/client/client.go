@@ -655,24 +655,9 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
+	err = HTTPRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 	if err != nil {
 		return err
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp != nil {
-		defer resp.Body.Close()
-
-		if resp.StatusCode >= http.StatusBadRequest {
-			buf := make([]byte, 256)
-			_, err = resp.Body.Read(buf)
-			return fmt.Errorf("http error %d, %s", resp.StatusCode, string(buf))
-		}
 	}
 
 	// FIXME: A few places are doing this already, need to address them
@@ -687,16 +672,7 @@ func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
-	if err != nil {
-		return err
-	}
-	resp, err := client.Do(req)
-	if resp != nil {
-		resp.Body.Close()
-	}
-
-	return err
+	return HTTPRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 }
 
 // DestroyLocalBucket deletes a local bucket
@@ -706,17 +682,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
-	if err != nil {
-		return err
-	}
-
-	resp, err := client.Do(req)
-	if resp != nil {
-		resp.Body.Close()
-	}
-
-	return err
+	return HTTPRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
