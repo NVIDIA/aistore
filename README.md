@@ -4,8 +4,8 @@ DFC: Distributed File Cache with Amazon and Google Cloud backends
 ## Overview
 
 DFC is a simple distributed caching service written in Go. The service
-consists of any numbers of gateways (realized as http proxy servers aka proxies),
-and storage targets (aka targets) that utilize local disks:
+consists of arbitrary number of gateways (realized as http **proxy** servers),
+and any number of storage **targets** utilizing local disks:
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
 
@@ -192,11 +192,12 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET http://192.168.176.128:8080/v1/objects/myS3bucket/myobject -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://192.168.176.128:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |
+| Get bucket names | GET /v1/buckets/\*[?local=true|false] | `curl -X GET -L http://192.168.176.128:8080/v1/buckets/*?local=true` |
 | List bucket | GET { properties-and-options... } /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://192.168.176.128:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
-| Rename/move file (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
-| Copy file | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
-| Delete file | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L http://192.168.176.128:8080/v1/objects/mybucket/mydirectory/myobject` |
-| Evict file from cache | DELETE '{"action": "evict"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://192.168.176.128:8080/v1/objects/mybucket/myobject` |
+| Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://192.168.176.128:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
+| Copy object | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://192.168.176.128:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
+| Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L http://192.168.176.128:8080/v1/objects/mybucket/mydirectory/myobject` |
+| Evict object from cache | DELETE '{"action": "evict"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://192.168.176.128:8080/v1/objects/mybucket/myobject` |
 | Create local bucket (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://192.168.176.128:8080/v1/buckets/abc` |
 | Destroy local bucket (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://192.168.176.128:8080/v1/buckets/abc` |
 | Rename local bucket (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' http://192.168.176.128:8080/v1/buckets/oldname` |
@@ -260,7 +261,7 @@ This request will produce an output that (in part) may look as follows:
 
 <img src="images/dfc-ls-subdir.png" alt="DFC list directory" width="440">
 
-For many more examples, please refer to the dfc/tests/*_test.go files in the repository.
+For many more examples, please refer to the [test sources](dfc/tests/) in the repository.
 
 ### Example: Listing All Pages
 
