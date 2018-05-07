@@ -113,24 +113,38 @@ func (p *proxyrunner) run() error {
 
 	isproxy := os.Getenv("DFCPRIMARYPROXY")
 
-	/* A proxy starts as primary if either (or both):
-	1. The DFCPRIMARYPROXY environment variable is set to a non-empty-string value.
-	2. The ID of the primary proxy in the config file is its ID
-	*/
+	// A proxy starts as primary if either (or both):
+	// 1. The DFCPRIMARYPROXY environment variable is set to a non-empty-string value.
+	// 2. The ID of the primary proxy in the config file is its ID
 	if isproxy == "" && ctx.config.Proxy.Primary.ID != p.si.DaemonID {
 		// Register proxy if it isn't the Primary proxy
 		err := p.registerWithRetry(ctx.config.Proxy.Primary.URL, 0)
 		if err != nil {
 			return fmt.Errorf("Failed to register with primary proxy: %v", err)
 		}
+
 		p.primary = false
 
-		smap, err := p.getSmapFromPrimary()
+		// ask current primary for cluster smap
+		url := fmt.Sprintf("%s/%s/%s", ctx.config.Proxy.Primary.URL, Rversion, Rdaemon)
+		msg := GetMsg{GetWhat: GetWhatSmap}
+		jsbytes, err := json.Marshal(msg)
 		if err != nil {
-			p.smap = &Smap{}
-			return fmt.Errorf("Failed to get cluster map from Primary Proxy: %v", err)
+			return fmt.Errorf("Failed to create json message: %v", err)
 		}
-		err = p.setPrimaryProxyAndSmap(smap)
+
+		reply, err, _, _ := p.call(&p.proxysi.daemonInfo, url, http.MethodGet, jsbytes)
+		if err != nil {
+			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", err)
+		}
+
+		var smap Smap
+		err = json.Unmarshal(reply, &smap)
+		if err != nil {
+			return fmt.Errorf("Error unmarshalling cluster map from Primary Proxy: %v", err)
+		}
+
+		err = p.setPrimaryProxyAndSmap(&smap)
 		if err != nil {
 			return fmt.Errorf("Failed to set Primary Proxy and Smap: %v", err)
 		}
@@ -166,6 +180,7 @@ func (p *proxyrunner) run() error {
 			}
 		}()
 	}
+
 	p.smap.ProxySI = &proxyInfo{daemonInfo: *p.si, Primary: p.primary}
 
 	// startup: sync local buckets and cluster map when the latter stabilizes
@@ -184,6 +199,7 @@ func (p *proxyrunner) run() error {
 		p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", p.buckethdlr)
 		p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", p.objecthdlr)
 	}
+
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", p.daemonhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
@@ -293,13 +309,13 @@ func (p *proxyrunner) registerWithRetry(url string, timeout time.Duration) error
 	return nil
 }
 
+// getSmapFromHintCluster broadcasts a Get VoteSmap request to all nodes of the union of the current
+// Smap and the hint Smap.
+// If any of these requests return the fact that a vote is in progress, the function exits with
+// retry = true.
+// It not, it chooses the maximum version Smap returned and considers it the most recent cluster map.
+// If it is not the primary in that Smap, it registers with the current primary.
 func (p *proxyrunner) getSmapFromHintCluster() (retry bool) {
-	/*
-		getSmapFromHintCluster broadcasts a Get VoteSmap request to all nodes in the union of the current Smap and the hint Smap.
-		If any of these requests return the fact that a vote is in progress, the function exits with retry = true.
-		It not, it chooses the maximum version Smap returned and considers it the most recent cluster map.
-		If it is not the primary in that Smap, it registers with the current primary.
-	*/
 	glog.Infoln("Starting smap broadcast")
 
 	msg := GetMsg{GetWhat: GetWhatSmapVote}
@@ -309,27 +325,29 @@ func (p *proxyrunner) getSmapFromHintCluster() (retry bool) {
 	urlfmt := fmt.Sprintf("%%s/%s/%s", Rversion, Rdaemon)
 
 	// Broadcast to all nodes in the current Smap and the hint Smap
-	unionsmap := p.unionSmapAndHintsmap()
-	svms := make(chan SmapVoteMsg, unionsmap.count()+unionsmap.countProxies())
-
+	u := p.unionSmapAndHintsmap()
+	svms := make(chan SmapVoteMsg, u.count()+u.countProxies())
 	callback := func(si *daemonInfo, r []byte, err error, status int) {
 		// Get all non-zero version smaps retrieved.
 		if err != nil {
 			glog.Warningf("Error retrieving cluster map from %v: %v", si.DaemonID, err)
 			return
 		}
+
 		svm := SmapVoteMsg{}
 		if err = json.Unmarshal(r, &svm); err != nil {
 			glog.Warningf("Error unmarshalling cluster map from %v: %v", si.DaemonID, err)
 			return
 		}
+
 		if svm.Smap == nil || svm.Smap.version() == 0 {
 			return
 		}
+
 		svms <- svm
 	}
 
-	p.broadcast(urlfmt, method, jsbytes, unionsmap, callback)
+	p.broadcast(urlfmt, method, jsbytes, u, callback)
 	// Retrieve maximum version Smap
 	var maxVersionSmap *Smap
 maxloop:
@@ -383,39 +401,29 @@ maxloop:
 	return
 }
 
+// unionSmapAndHintsmap merge hint map and current smap (overrides hint map in case of duplicates)
 func (p *proxyrunner) unionSmapAndHintsmap() *Smap {
 	p.smap.lock()
 	defer p.smap.unlock()
-	// Keys in p.smap will override any shared keys with p.hintsmap
-	return SmapUnion(p.hintsmap, p.smap)
-}
 
-func (p *proxyrunner) getSmapFromPrimary() (*Smap, error) {
-	msg := GetMsg{GetWhat: GetWhatSmap}
-	jsbytes, err := json.Marshal(msg)
-	assert(err == nil)
-	method := http.MethodGet
-	var url string
-	if p.proxysi.DaemonID != "" {
-		url = p.proxysi.DirectURL
-	} else {
-		// Smap has not yet been synced
-		url = ctx.config.Proxy.Primary.URL
-	}
-	url = fmt.Sprintf("%s/%s/%s", url, Rversion, Rdaemon)
-
-	r, err, _, _ := p.call(&p.proxysi.daemonInfo, url, method, jsbytes)
-	if err != nil {
-		err = fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", err)
-		return nil, err
-	}
-	smap := Smap{}
-	if err = json.Unmarshal(r, &smap); err != nil {
-		err = fmt.Errorf("Error unmarshalling cluster map from Primary Proxy: %v", err)
-		return nil, err
+	u := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	for k, v := range p.hintsmap.Tmap {
+		u.Tmap[k] = v
 	}
 
-	return &smap, nil
+	for k, v := range p.hintsmap.Pmap {
+		u.Pmap[k] = v
+	}
+
+	for k, v := range p.smap.Tmap {
+		u.Tmap[k] = v
+	}
+
+	for k, v := range p.smap.Pmap {
+		u.Pmap[k] = v
+	}
+
+	return u
 }
 
 //===========================================================================================

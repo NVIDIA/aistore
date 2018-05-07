@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
@@ -116,5 +117,14 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test
+	// find out who is the current primary proxy
+	url, err := client.GetPrimaryProxy(proxyurl)
+	if err != nil {
+		fmt.Printf("Failed to get primary proxy, err = %v", err)
+		os.Exit(1)
+	}
+
+	proxyurl = url
 	os.Exit(m.Run())
 }

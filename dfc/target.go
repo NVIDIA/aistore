@@ -2158,10 +2158,11 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	if t.readJSON(w, r, newsmap) != nil {
 		return
 	}
+
 	newlen := len(newsmap.Tmap)
 	glog.Infof("%s: new Smap version %d, num targets %d, newtargetid=%s", apitems[0], newsmap.Version, newlen, newtargetid)
 
-	smapLock.Lock() //=======================================================
+	smapLock.Lock()
 
 	curversion := t.smap.Version
 	if curversion == newsmap.Version {
@@ -2204,7 +2205,7 @@ func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, ap
 	smap4xaction := &Smap{}
 	copyStruct(smap4xaction, t.smap)
 
-	smapLock.Unlock() //=====================================================
+	smapLock.Unlock()
 
 	for _, ln := range infoln {
 		glog.Infoln(ln)

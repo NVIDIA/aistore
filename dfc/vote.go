@@ -528,15 +528,14 @@ func (h *httprunner) setPrimaryProxyLocked(newPrimaryProxy, primaryToRemove stri
 	return h.setPrimaryProxy(newPrimaryProxy, primaryToRemove, prepare)
 }
 
-// Sets the primary proxy to the proxy in the cluster map with the ID newPrimaryProxy.
-// Removes primaryToRemove from the cluster map, if primaryToRemove is provided.
-// Caller must lock smapLock
+// setPrimaryProxy sets the primary proxy to the proxy in the cluster map with the ID newPrimaryProxy.
+// removes primaryToRemove from the cluster map, if primaryToRemove is provided.
+// if prepare is true, nothing is done but verify the new primary proxy is in the proxt map.
+// caller must lock smapLock
 func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, prepare bool) error {
 	proxyinfo, ok := h.smap.Pmap[newPrimaryProxy]
 	if !ok {
 		return fmt.Errorf("New Primary Proxy not present in proxy smap: %s", newPrimaryProxy)
-	} else if proxyinfo == nil {
-		return fmt.Errorf("New Primary Proxy nil in Smap: %v", newPrimaryProxy)
 	}
 
 	if prepare {

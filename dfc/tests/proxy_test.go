@@ -46,11 +46,11 @@ var (
 )
 
 // Note: This sounds stupid but it is true, proxyurl is a global variable used to get primary proxy
-//       url from command line whern the tests start, but it is used globally everywhere, for example,
+//       url from command line when the tests start, but it is used globally everywhere, for example,
 //       in getClusterMap(), for proxy tests, since the primary proxy will change, in order to use
 //       functions like getClusterMap(), it has to maintain proxyurl always points to the current
 //       primary proxy, the right way to do it is remove the dependency of proxyurl from getClusterMap(),
-//       but who know how many such things exist.
+//       but who knows how many such things exist.
 
 func TestProxy(t *testing.T) {
 	if testing.Short() {
