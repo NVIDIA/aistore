@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"strconv"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/OneOfOne/xxhash"
 )
@@ -145,6 +147,11 @@ type ReqError struct {
 type BucketProps struct {
 	CloudProvider string
 	Versioning    string
+}
+
+type ObjectProps struct {
+	Size    int
+	Version string
 }
 
 // Reader is the interface a client works with to read in data and send to a HTTP server
@@ -569,11 +576,50 @@ func HeadBucket(proxyurl, bucket string) (bucketprops *BucketProps, err error) {
 		r.Body.Close()
 	}()
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		err = fmt.Errorf("Head bucket %s failed, HTTP status %d", bucket, r.StatusCode)
+		b, ioErr := ioutil.ReadAll(r.Body)
+		if ioErr != nil {
+			err = fmt.Errorf("failed to read response body, err = %s", ioErr)
+			return
+		}
+		err = fmt.Errorf("head bucket: %s failed, HTTP status code: %d, HTTP response body: %s",
+			bucket, r.StatusCode, string(b))
 		return
 	}
 	bucketprops.CloudProvider = r.Header.Get(dfc.CloudProvider)
 	bucketprops.Versioning = r.Header.Get(dfc.Versioning)
+	return
+}
+
+func HeadObject(proxyurl, bucket, objname string) (objProps *ObjectProps, err error) {
+	var (
+		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + objname
+		r   *http.Response
+	)
+	objProps = &ObjectProps{}
+	r, err = client.Head(url)
+	if err != nil {
+		return
+	}
+	defer func() {
+		r.Body.Close()
+	}()
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		b, ioErr := ioutil.ReadAll(r.Body)
+		if ioErr != nil {
+			err = fmt.Errorf("failed to read response body, err = %s", ioErr)
+			return
+		}
+		err = fmt.Errorf("head bucket/object: %s/%s failed, HTTP status code: %d, HTTP response body: %s",
+			bucket, objname, r.StatusCode, string(b))
+		return
+	}
+	size, err := strconv.Atoi(r.Header.Get(dfc.Size))
+	if err != nil {
+		return
+	}
+
+	objProps.Size = size
+	objProps.Version = r.Header.Get(dfc.Version)
 	return
 }
 

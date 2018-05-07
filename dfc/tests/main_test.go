@@ -23,8 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"reflect"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -595,7 +598,7 @@ cleanup:
 	close(errch)
 }
 
-func Test_headbucket(t *testing.T) {
+func TestHeadBucket(t *testing.T) {
 	err := client.CreateLocalBucket(proxyurl, TestLocalBucketName)
 	if err != nil {
 		t.Fatal(err)
@@ -609,6 +612,41 @@ func Test_headbucket(t *testing.T) {
 	}
 
 	destroyLocalBucket(httpclient, t, TestLocalBucketName)
+}
+
+func TestHeadObject(t *testing.T) {
+	if err := client.CreateLocalBucket(proxyurl, TestLocalBucketName); err != nil {
+		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
+	}
+	defer destroyLocalBucket(httpclient, t, TestLocalBucketName)
+
+	fileName := "headobject_test_file"
+	fileSize := 1024
+	r, frErr := readers.NewRandReader(int64(fileSize), false)
+	defer r.Close()
+
+	if frErr != nil {
+		t.Fatalf("readers.NewFileReader failed, err = %v", frErr)
+	}
+
+	if err := client.Put(proxyurl, r, TestLocalBucketName, fileName, true); err != nil {
+		t.Fatalf("client.Put failed, err = %v", err)
+	}
+
+	propsExp := &client.ObjectProps{Size: fileSize, Version: "1"}
+	props, err := client.HeadObject(proxyurl, TestLocalBucketName, fileName)
+	if err != nil {
+		t.Errorf("client.HeadObject failed, err = %v", err)
+	}
+
+	if !reflect.DeepEqual(props, propsExp) {
+		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
+	}
+
+	props, err = client.HeadObject(proxyurl, TestLocalBucketName, "this_file_should_not_exist")
+	if err == nil {
+		t.Errorf("Expected non-nil error (404) from client.HeadObject, received nil error")
+	}
 }
 
 func Benchmark_get(b *testing.B) {

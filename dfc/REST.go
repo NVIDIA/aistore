@@ -47,6 +47,8 @@ const (
 	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation
 	HeaderPrimaryProxyURL = "PrimaryProxyURL"       // URL of Primary Proxy
 	HeaderPrimaryProxyID  = "PrimaryProxyID"        // ID of Primary Proxy
+	Size                  = "Size"                  // Size of object in bytes
+	Version               = "Version"               // Object version number
 )
 
 // URL Query Parameter enum

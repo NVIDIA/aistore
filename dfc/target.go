@@ -645,7 +645,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HEAD /Rversion/Robjects/bucket-name
+// HEAD /Rversion/Rbuckets/bucket-name
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket      string

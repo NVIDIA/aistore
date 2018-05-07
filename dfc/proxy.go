@@ -459,6 +459,8 @@ func (p *proxyrunner) objecthdlr(w http.ResponseWriter, r *http.Request) {
 		p.httpobjdelete(w, r)
 	case http.MethodPost:
 		p.httpobjpost(w, r)
+	case http.MethodHead:
+		p.httpobjhead(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -782,6 +784,28 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
 	if glog.V(3) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
+	}
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+}
+
+// HEAD /v1/objects/bucket-name/object-name
+func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+		return
+	}
+	bucket, objname := apitems[0], apitems[1]
+	if !p.validatebckname(w, r, bucket) {
+		return
+	}
+	var si *daemonInfo
+	si, errstr := HrwTarget(bucket+"/"+objname, p.smap)
+	if errstr != "" {
+		return
+	}
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
+	if glog.V(3) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
