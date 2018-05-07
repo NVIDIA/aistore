@@ -136,13 +136,16 @@ func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *t
 	getsGroup := &sync.WaitGroup{}
 	var msg = &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
-		items, cerr := client.ListBucket(proxyurl, bucket, msg, 0)
-		if testfail(cerr, "List files with prefix failed", nil, errch, t) {
+		items, err := client.ListBucket(proxyurl, bucket, msg, 0)
+		if err != nil {
+			errch <- err
+			t.Error(err)
 			return
 		}
 
 		if items == nil {
 			errch <- fmt.Errorf("listbucket %s: is empty - no entries", bucket)
+			// not considered as a failure, just can't do the test
 			return
 		}
 
@@ -156,6 +159,7 @@ func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *t
 
 		if len(files) == 0 {
 			errch <- fmt.Errorf("Cannot retrieve from an empty bucket %s", bucket)
+			// not considered as a failure, just can't do the test
 			return
 		}
 

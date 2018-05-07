@@ -113,7 +113,8 @@ func prefixLookupOne(t *testing.T) {
 	var msg = &dfc.GetMsg{GetPrefix: prefix}
 	numFiles := 0
 	objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
-	if testfail(err, "List files with prefix failed", nil, nil, t) {
+	if err != nil {
+		t.Errorf("List files with prefix failed, err = %v", err)
 		return
 	}
 
@@ -139,7 +140,8 @@ func prefixLookupDefault(t *testing.T) {
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &dfc.GetMsg{GetPrefix: lookFor}
 		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
-		if testfail(err, "List files with prefix failed", nil, nil, t) {
+		if err != nil {
+			t.Errorf("List files with prefix failed, err = %v", err)
 			return
 		}
 
@@ -180,7 +182,8 @@ func prefixLookupCornerCases(t *testing.T) {
 		tlogf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &dfc.GetMsg{GetPrefix: p}
 		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
-		if testfail(err, "List files with prefix failed", nil, nil, t) {
+		if err != nil {
+			t.Errorf("List files with prefix failed, err = %v", err)
 			return
 		}
 

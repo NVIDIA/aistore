@@ -154,14 +154,15 @@ func Test_matchdelete(t *testing.T) {
 	reslist, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
-		t.Fail()
 		return
 	}
-	re, rerr := regexp.Compile(match)
-	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
+
+	re, err := regexp.Compile(match)
+	if err != nil {
+		t.Errorf("Invalid match expression %s, err = %v", match, err)
 		return
 	}
-	// match
+
 	var num int
 	for _, entry := range reslist.Entries {
 		name := entry.Name
@@ -651,15 +652,31 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url string) (written int64, failed bool) {
 	var errstr string
 	t.Logf("Worker %2d: GET %q", id, url)
-	r, err := http.Get(url)
-	hdhash := r.Header.Get(dfc.HeaderDfcChecksumVal)
-	hdhashtype := r.Header.Get(dfc.HeaderDfcChecksumType)
-	if testfail(err, fmt.Sprintf("Worker %2d: get key %s from bucket %s", id, keyname, bucket), r, errch, t) {
-		t.Errorf("Failing test")
+	resp, err := http.Get(url)
+	if err == nil && resp == nil {
+		err = fmt.Errorf("HTTP returned empty response")
+	}
+
+	if err != nil {
+		errch <- err
+		t.Error(err)
 		failed = true
 		return
 	}
-	defer r.Body.Close()
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		err = fmt.Errorf("Worker %2d: get key %s from bucket %s http error %d",
+			id, keyname, bucket, resp.StatusCode)
+		errch <- err
+		t.Error(err)
+		failed = true
+		return
+	}
+
+	hdhash := resp.Header.Get(dfc.HeaderDfcChecksumVal)
+	hdhashtype := resp.Header.Get(dfc.HeaderDfcChecksumType)
 
 	// Create a local copy
 	fname := LocalDestDir + "/" + keyname
@@ -677,7 +694,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 	}()
 	if hdhashtype == dfc.ChecksumXXHash {
 		xx := xxhash.New64()
-		written, errstr = dfc.ReceiveAndChecksum(file, r.Body, nil, xx)
+		written, errstr = dfc.ReceiveAndChecksum(file, resp.Body, nil, xx)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			failed = true
@@ -695,7 +712,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 		tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumXXHash, hdhash, hash)
 	} else if hdhashtype == dfc.ChecksumMD5 {
 		md5 := md5.New()
-		written, errstr = dfc.ReceiveAndChecksum(file, r.Body, nil, md5)
+		written, errstr = dfc.ReceiveAndChecksum(file, resp.Body, nil, md5)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			return
@@ -714,7 +731,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 		}
 		tlogf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, dfc.ChecksumMD5, hdhash, md5hash)
 	} else {
-		written, errstr = dfc.ReceiveAndChecksum(file, r.Body, nil)
+		written, errstr = dfc.ReceiveAndChecksum(file, resp.Body, nil)
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to write file, err: %s", id, errstr)
 			failed = true
@@ -735,17 +752,18 @@ func deleteFiles(keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch
 }
 
 func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
-	// list the bucket
 	var msg = &dfc.GetMsg{GetPageSize: int(pagesize)}
 	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
 		return 0
 	}
-	re, rerr := regexp.Compile(regexmatch)
-	if testfail(rerr, fmt.Sprintf("Invalid match expression %s", match), nil, nil, t) {
+
+	re, err := regexp.Compile(regexmatch)
+	if err != nil {
+		t.Errorf("Invalid match expression %s, err = %v", match, err)
 		return 0
 	}
-	// match
+
 	num := 0
 	numchans := len(keynameChans)
 	for _, entry := range reslist.Entries {
@@ -765,37 +783,12 @@ func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outp
 	return num
 }
 
-func testfail(err error, str string, r *http.Response, errch chan error, t *testing.T) bool {
-	if err != nil {
-		if dfc.IsErrConnectionRefused(err) {
-			t.Fatalf("%s, http connection refused - terminating", str)
-		}
-		s := fmt.Sprintf("%s, err: %v", str, err)
-		t.Error(s)
-		if errch != nil {
-			errch <- errors.New(s)
-		}
-		t.Fail()
-		return true
-	}
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		s := fmt.Sprintf("%s, http status %d", str, r.StatusCode)
-		t.Error(s)
-		if errch != nil {
-			errch <- errors.New(s)
-		}
-		return true
-	}
-	return false
-}
-
 func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg, limit int) *dfc.BucketList {
-	var (
-		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
-	)
+	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
 	tlogf("LIST %q (Number of objects: %d)\n", url, limit)
 	reslist, err := client.ListBucket(proxyurl, bucket, msg, limit)
-	if testfail(err, fmt.Sprintf("List bucket %s failed", bucket), nil, nil, t) {
+	if err != nil {
+		t.Errorf("List bucket %s failed, err = %v", bucket, err)
 		return nil
 	}
 
@@ -960,11 +953,8 @@ func getfromfilelist(t *testing.T, bucket string, errch chan error, fileslist []
 }
 
 func evictobjects(t *testing.T, fileslist []string) {
-	var (
-		bucket = clibucket
-	)
-	err := client.EvictList(proxyurl, bucket, fileslist, true, 0)
-	if testfail(err, bucket, nil, nil, t) {
-		return
+	err := client.EvictList(proxyurl, clibucket, fileslist, true, 0)
+	if err != nil {
+		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}
 }

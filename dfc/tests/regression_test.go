@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"errors"
-
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -134,7 +132,10 @@ func regressionCloudBuckets(t *testing.T) {
 func regressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	err := client.CreateLocalBucket(proxyurl, bucket)
-	testfail(err, "client.CreateLocalBucket", nil, nil, t)
+	if err != nil {
+		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
+	}
+
 	doBucketRegressionTest(t, regressionTestData{bucket: bucket})
 	destroyLocalBucket(httpclient, t, bucket)
 }
@@ -143,9 +144,17 @@ func regressionRenameLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	renamedBucket := bucket + "_renamed"
 	err := client.CreateLocalBucket(proxyurl, bucket)
-	testfail(err, "client.CreateLocalBucket", nil, nil, t)
+	if err != nil {
+		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
+	}
+
 	b, err := client.ListBuckets(proxyurl, true)
-	testfail(err, "client.ListBuckets", nil, nil, t)
+	if err != nil {
+		t.Errorf("client.ListBuckets failed, err = %v", err)
+		destroyLocalBucket(httpclient, t, renamedBucket)
+		return
+	}
+
 	doBucketRegressionTest(t, regressionTestData{
 		bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true,
 	})
@@ -204,16 +213,17 @@ func Test_rmlb(t *testing.T) {
 
 func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	err := client.RenameLocalBucket(proxyurl, rtd.bucket, rtd.renamedBucket)
-	testfail(err, "client.RenameLocalBucket", nil, nil, t)
+	if err != nil {
+		t.Fatalf("client.RenameLocalBucket failed, err = %v", err)
+	}
 
 	buckets, err := client.ListBuckets(proxyurl, true)
-	testfail(err, "client.ListBuckets", nil, nil, t)
+	if err != nil {
+		t.Fatalf("client.ListBuckets failed, err = %v", err)
+	}
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
-		testfail(
-			errors.New("wrong number of local buckets"),
-			fmt.Sprintf("Expected: %d. Actual: %d", rtd.numLocalBuckets, len(buckets.Local)),
-			nil, nil, t)
+		t.Fatalf("wrong number of local buckets, expected: %d. actual: %d", rtd.numLocalBuckets, len(buckets.Local))
 	}
 
 	renamedBucketExists := false
@@ -221,23 +231,21 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 		if b == rtd.renamedBucket {
 			renamedBucketExists = true
 		} else if b == rtd.bucket {
-			testfail(
-				errors.New("original local bucket still exists"),
-				fmt.Sprintf("Original bucket name: %s", rtd.bucket), nil, nil, t)
+			t.Fatalf("original local bucket %s still exists after rename", rtd.bucket)
 		}
 	}
 	if !renamedBucketExists {
-		testfail(
-			errors.New("renamed local bucket does not exist"),
-			fmt.Sprintf("Renamed bucket: %s", rtd.renamedBucket), nil, nil, t)
+		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
 	}
 
 	objs, err := client.ListObjects(proxyurl, rtd.renamedBucket, "", numPuts+1)
-	testfail(err, "client.ListObjects", nil, nil, t)
+	if err != nil {
+		t.Fatalf("client.ListObjects failed, err = %v", err)
+	}
+
 	if len(objs) != numPuts {
-		testfail(
-			errors.New("unexpected number of objects in renamed local bucket"),
-			fmt.Sprintf("Expected: %d. Actual: %d", numPuts, len(objs)), nil, nil, t)
+		t.Errorf("unexpected number of objects in renamed local bucket, expected: %d, actual: %d",
+			numPuts, len(objs))
 	}
 }
 
@@ -642,8 +650,6 @@ func regressionRebalance(t *testing.T) {
 
 func regressionRename(t *testing.T) {
 	var (
-		req       *http.Request
-		r         *http.Response
 		injson    []byte
 		err       error
 		numPuts   = 10
@@ -709,20 +715,15 @@ func regressionRename(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to marshal RenameMsg: %v", err)
 		}
-		req, err = http.NewRequest("POST", proxyurl+"/"+dfc.Rversion+"/"+dfc.Robjects+"/"+RenameLocalBucketName+"/"+RenameStr+"/"+fname, bytes.NewBuffer(injson))
+
+		err := client.HTTPRequest("POST",
+			proxyurl+"/"+dfc.Rversion+"/"+dfc.Robjects+"/"+RenameLocalBucketName+"/"+RenameStr+"/"+fname,
+			bytes.NewBuffer(injson))
 		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+			t.Fatalf("Failed to send request, err = %v", err)
 		}
-		r, err = httpclient.Do(req)
-		if r != nil {
-			r.Body.Close()
-		}
-		s := fmt.Sprintf("Rename %s/%s => %s", RenameStr, fname, RenameMsg.Name)
-		if testfail(err, s, r, nil, t) {
-			destroyLocalBucket(httpclient, t, RenameLocalBucketName)
-			return
-		}
-		tlogln(s)
+
+		tlogln(fmt.Sprintf("Rename %s/%s => %s", RenameStr, fname, RenameMsg.Name))
 	}
 
 	// get renamed objects
@@ -1141,134 +1142,98 @@ waitloop:
 }
 
 func unregisterTarget(sid string, t *testing.T) {
-	var (
-		req *http.Request
-		r   *http.Response
-		err error
-	)
-	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster+"/"+"daemon"+"/"+sid, nil)
+	err := client.HTTPRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster+"/"+"daemon"+"/"+sid, nil)
 	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		t.Fatal(err)
 	}
-	r, err = httpclient.Do(req)
-	if r != nil {
-		r.Body.Close()
-	}
-	if testfail(err, fmt.Sprintf("Unregister target %s", sid), r, nil, t) {
-		return
-	}
+
+	// FIXME: do something better than sleep
 	time.Sleep(time.Second * 3)
 }
 
 func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
-	var (
-		req *http.Request
-		r   *http.Response
-		err error
-	)
 	si := smap.Tmap[sid]
-	req, err = http.NewRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon, nil)
+	err := client.HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon, nil)
 	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-	r, err = httpclient.Do(req)
-	if r != nil {
-		r.Body.Close()
-	}
-	if t.Failed() || testfail(err, fmt.Sprintf("Register target %s", sid), r, nil, t) {
-		return
+		t.Fatal(err)
 	}
 }
 
 func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
-	)
-	injson, err = json.Marshal(DeleteLocalBucketMsg)
+	injson, err := json.Marshal(DeleteLocalBucketMsg)
 	if err != nil {
 		t.Fatalf("Failed to marshal DeleteLocalBucketMsg: %v", err)
 	}
-	req, err = http.NewRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(injson))
+
+	err = client.HTTPRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket,
+		bytes.NewBuffer(injson))
 	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		t.Fatal(err)
 	}
-	r, err = httpclient.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-	testfail(err, "Delete Local Bucket", r, nil, t)
 }
 
 func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterStats) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
-	)
-	injson, err = json.Marshal(GetStatsMsg)
+	injson, err := json.Marshal(GetStatsMsg)
 	if err != nil {
 		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, bytes.NewBuffer(injson))
+
+	req, err := http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
-	r, err = httpclient.Do(req)
+
+	resp, err := httpclient.Do(req)
 	defer func() {
-		if r != nil {
-			r.Body.Close()
+		if resp != nil {
+			resp.Body.Close()
 		}
 	}()
-	if testfail(err, "Get configuration", r, nil, t) {
-		return
-	}
-	var b []byte
-	b, err = ioutil.ReadAll(r.Body)
+
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("Failed to read response body")
+		t.Fatalf("Failed to read response body, err = %v", err)
 	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		t.Fatalf("HTTP error = %d, message = %v", resp.StatusCode, string(b))
+	}
+
 	err = json.Unmarshal(b, &stats)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal Dfconfig: %v", err)
+		t.Fatalf("Failed to unmarshal, err = %v", err)
 	}
+
 	return
 }
 
 func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats map[string]interface{}) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
-	)
-	injson, err = json.Marshal(GetStatsMsg)
+	injson, err := json.Marshal(GetStatsMsg)
 	if err != nil {
 		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", URL+RestAPIDaemonSuffix, bytes.NewBuffer(injson))
+
+	req, err := http.NewRequest("GET", URL+RestAPIDaemonSuffix, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
-	r, err = httpclient.Do(req)
+
+	resp, err := httpclient.Do(req)
 	defer func() {
-		if r != nil {
-			r.Body.Close()
+		if resp != nil {
+			resp.Body.Close()
 		}
 	}()
-	if testfail(err, "Get configuration", r, nil, t) {
-		return
-	}
-	var b []byte
-	b, err = ioutil.ReadAll(r.Body)
+
+	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("Failed to read response body")
+		t.Fatalf("Failed to read response body, err = %v", err)
 	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		t.Fatalf("HTTP error = %d, message = %s", err, string(b))
+	}
+
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
 	// If this isn't used, json.Unmarshal converts uint32s to floats, losing precision
@@ -1276,6 +1241,7 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats ma
 	if err != nil {
 		t.Fatalf("Failed to unmarshal Dfconfig: %v", err)
 	}
+
 	return
 }
 
@@ -1289,43 +1255,49 @@ func getClusterMap(httpclient *http.Client, t *testing.T) dfc.Smap {
 }
 
 func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[string]interface{}) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
-	)
-	injson, err = json.Marshal(GetConfigMsg)
+	injson, err := json.Marshal(GetConfigMsg)
 	if err != nil {
 		t.Fatalf("Failed to marshal GetConfigMsg: %v", err)
 	}
-	req, err = http.NewRequest("GET", URL, bytes.NewBuffer(injson))
+
+	req, err := http.NewRequest("GET", URL, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Errorf("Failed to create request: %v", err)
 	}
-	r, err = httpclient.Do(req)
+
+	resp, err := httpclient.Do(req)
 	defer func() {
-		if r != nil {
-			r.Body.Close()
+		if resp != nil {
+			resp.Body.Close()
 		}
 	}()
-	if testfail(err, "Get configuration", r, nil, t) {
+
+	if err != nil {
+		t.Errorf("Get configuration, err = %v", err)
 		return
 	}
 
 	var b []byte
-	b, err = ioutil.ReadAll(r.Body)
+	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		t.Errorf("Failed to read response body")
+		t.Errorf("Failed to read response body, err = %v", err)
 		return
 	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		t.Errorf("HTTP request get configuration failed, status = %d, %s",
+			resp.StatusCode, string(b))
+		return
+	}
+
 	err = json.Unmarshal(b, &dfcfg)
 	if err != nil {
 		t.Errorf("Failed to unmarshal config: %v", err)
-		return
 	}
+
 	return
 }
+
 func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 	SetConfigMsg := dfc.ActionMsg{Action: dfc.ActSetConfig,
 		Name:  name,

@@ -368,7 +368,7 @@ func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) 
 	// than pageSize, the loop does the final request with reduced pageSize
 	toRead := objectCountLimit
 	for {
-		var r *http.Response
+		var resp *http.Response
 
 		if toRead != 0 {
 			if (msg.GetPageSize == 0 && toRead < dfc.DefaultPageSize) ||
@@ -382,35 +382,39 @@ func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) 
 			return nil, err
 		}
 		if len(injson) == 0 {
-			r, err = client.Get(url)
+			resp, err = client.Get(url)
 		} else {
 			request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
 			if err == nil {
 				request.Header.Set("Content-Type", "application/json")
-				r, err = client.Do(request)
+				resp, err = client.Do(request)
 			}
 		}
+
 		if err != nil {
 			return nil, err
 		}
-		if r != nil && r.StatusCode >= http.StatusBadRequest {
-			return nil, fmt.Errorf("List bucket %s failed, HTTP status %d", bucket, r.StatusCode)
-		}
 
 		defer func() {
-			r.Body.Close()
-		}()
-		var page = &dfc.BucketList{}
-		page.Entries = make([]*dfc.BucketEntry, 0, 1000)
-		b, err := ioutil.ReadAll(r.Body)
-
-		if err == nil {
-			err = json.Unmarshal(b, page)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+			if resp != nil {
+				resp.Body.Close()
 			}
-		} else {
-			return nil, fmt.Errorf("Failed to read json, err: %v", err)
+		}()
+
+		page := &dfc.BucketList{}
+		page.Entries = make([]*dfc.BucketEntry, 0, 1000)
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to read http response body, err = %v", err)
+		}
+
+		if resp.StatusCode >= http.StatusBadRequest {
+			return nil, fmt.Errorf("HTTP error %d, message = %v", resp.StatusCode, string(b))
+		}
+
+		err = json.Unmarshal(b, page)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
 		}
 
 		reslist.Entries = append(reslist.Entries, page.Entries...)
@@ -834,24 +838,17 @@ func ListBuckets(proxyURL string, local bool) (*dfc.BucketNames, error) {
 // GetClusterMap retrives a DFC's server map
 // Note: this may not be a good idea to expose the map to clients, but this how it is for now.
 func GetClusterMap(url string) (dfc.Smap, error) {
-	var (
-		req    *http.Request
-		r      *http.Response
-		injson []byte
-		err    error
-	)
-
-	injson, err = json.Marshal(dfc.GetMsg{GetWhat: dfc.GetWhatSmap})
+	injson, err := json.Marshal(dfc.GetMsg{GetWhat: dfc.GetWhatSmap})
 	if err != nil {
 		return dfc.Smap{}, fmt.Errorf("Failed to marshal GetStatsMsg: %v", err)
 	}
 
-	req, err = http.NewRequest("GET", url+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
+	req, err := http.NewRequest("GET", url+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
 	if err != nil {
 		return dfc.Smap{}, fmt.Errorf("Failed to create request: %v", err)
 	}
 
-	r, err = client.Do(req)
+	r, err := client.Do(req)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
@@ -893,4 +890,34 @@ func GetPrimaryProxy(url string) (string, error) {
 	}
 
 	return smap.ProxySI.DirectURL, nil
+}
+
+// HTTPRequest sends one HTTP request and checks result
+func HTTPRequest(method string, url string, msg io.Reader) error {
+	req, err := http.NewRequest(method, url, msg)
+	if err != nil {
+		return fmt.Errorf("Failed to create request, err = %v", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("Failed to do request, err = %v", err)
+	}
+
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("Failed to read response body, err = %v", err)
+		}
+
+		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	}
+
+	return nil
 }
