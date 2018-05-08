@@ -113,12 +113,16 @@ CONFFILE_STATSD=$CONFDIR/statsd.conf
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 for (( c=$START; c<=$END; c++ ))
 do
+	CONFDIR="$HOME/.dfc$c"
+	mkdir -p $CONFDIR
 	PORT=$(expr $PORT + 1)
-	CONFFILE="$CONFDIR/dfc$c.json"
+	CONFFILE="$CONFDIR/dfc.json"
 	LOGDIR="$LOGROOT/$c/log"
 	source $DIR/config.sh
 done
+
 # conf file for authn
+CONFDIR="$HOME/.dfc"
 CONFFILE="$CONFDIR/authn.json"
 LOGDIR="$LOGROOT/authn/log"
 source $DIR/authn.sh
@@ -150,7 +154,8 @@ fi
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
-	CONFFILE="$CONFDIR/dfc$c.json"
+	CONFDIR="$HOME/.dfc$c"
+	CONFFILE="$CONFDIR/dfc.json"
 
 	PROXY_PARAM="-config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2"
 	TARGET_PARAM="-config=$CONFFILE -role=target $1 $2"
@@ -183,6 +188,7 @@ do
 done
 
 if [[ $AUTHENABLED = "true" ]]; then
+	CONFDIR="$HOME/.dfc"
 	CONFFILE="$CONFDIR/authn.json"
 	set -x
 	$GOPATH/bin/authn -config=$CONFFILE &

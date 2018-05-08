@@ -9,8 +9,3 @@ for i in $(find /tmp/dfc -name cloud 2>/dev/null); do
 		fi
 	done
 done
-count=$(cat ~/.dfc/dfc1.json | grep count | awk -F'[: ,]' '{print $3}')
-if [ $count -eq 0 ]; then
-	echo "Cleaned up /tmp/dfc"
-	echo "Warning: some or all of the configured fspaths may have retained cached files"
-fi

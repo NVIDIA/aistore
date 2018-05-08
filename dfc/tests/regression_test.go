@@ -137,7 +137,10 @@ func regressionLocalBuckets(t *testing.T) {
 	}
 
 	doBucketRegressionTest(t, regressionTestData{bucket: bucket})
-	destroyLocalBucket(httpclient, t, bucket)
+	err = client.DestroyLocalBucket(proxyurl, bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func regressionRenameLocalBuckets(t *testing.T) {
@@ -148,17 +151,22 @@ func regressionRenameLocalBuckets(t *testing.T) {
 		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
 	}
 
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, renamedBucket)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
 	b, err := client.ListBuckets(proxyurl, true)
 	if err != nil {
 		t.Errorf("client.ListBuckets failed, err = %v", err)
-		destroyLocalBucket(httpclient, t, renamedBucket)
 		return
 	}
 
 	doBucketRegressionTest(t, regressionTestData{
 		bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true,
 	})
-	destroyLocalBucket(httpclient, t, renamedBucket)
 }
 
 /* uncomment when/if needed
@@ -245,7 +253,7 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	}
 
 	if len(objs) != numPuts {
-		t.Errorf("unexpected number of objects in renamed local bucket, expected: %d, actual: %d",
+		t.Fatalf("unexpected number of objects in renamed local bucket, expected: %d, actual: %d",
 			numPuts, len(objs))
 	}
 }
@@ -269,7 +277,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
 		SmokeStr, "", !testing.Verbose(), sgl)
 	close(filesput)
-	selectErr(errch, "put", t, false)
+	selectErr(errch, "put", t, true)
 
 	if rtd.rename {
 		doRenameRegressionTest(t, rtd, numPuts)
@@ -686,7 +694,10 @@ func regressionRename(t *testing.T) {
 		wg.Wait()
 		selectErr(errch, "delete", t, false)
 		close(errch)
-		destroyLocalBucket(httpclient, t, RenameLocalBucketName)
+		err = client.DestroyLocalBucket(proxyurl, RenameLocalBucketName)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -1155,19 +1166,6 @@ func unregisterTarget(sid string, t *testing.T) {
 func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
 	si := smap.Tmap[sid]
 	err := client.HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func destroyLocalBucket(httpclient *http.Client, t *testing.T, bucket string) {
-	injson, err := json.Marshal(DeleteLocalBucketMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal DeleteLocalBucketMsg: %v", err)
-	}
-
-	err = client.HTTPRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket,
-		bytes.NewBuffer(injson))
 	if err != nil {
 		t.Fatal(err)
 	}

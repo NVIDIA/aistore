@@ -611,14 +611,17 @@ func TestHeadBucket(t *testing.T) {
 		t.Errorf("Received incorrect Server from HeadBucket: \"%v\", expecting \"DFC\"", props.CloudProvider)
 	}
 
-	destroyLocalBucket(httpclient, t, TestLocalBucketName)
+	err = client.DestroyLocalBucket(proxyurl, TestLocalBucketName)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestHeadObject(t *testing.T) {
 	if err := client.CreateLocalBucket(proxyurl, TestLocalBucketName); err != nil {
 		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
 	}
-	defer destroyLocalBucket(httpclient, t, TestLocalBucketName)
+	defer client.DestroyLocalBucket(proxyurl, TestLocalBucketName)
 
 	fileName := "headobject_test_file"
 	fileSize := 1024

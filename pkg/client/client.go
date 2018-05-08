@@ -671,13 +671,25 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to send put request, err = %v", err)
 	}
-	defer resp.Body.Close()
 
-	err = checkHTTPStatus(resp, "PUT")
-	discardHTTPResp(resp)
-	return err
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("Failed to read response body, err = %v", err)
+		}
+
+		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	}
+
+	return nil
 }
 
 // PutAsync sends a PUT request to the given URL
@@ -706,8 +718,78 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	// FIXME: A few places are doing this already, need to address them
-	time.Sleep(time.Second * 3)
+	return waitForLocalBucket(proxyURL, bucket)
+}
+
+// waitForLocalBucket wait until all targets have local bucket created or timeout
+func waitForLocalBucket(url, name string) error {
+	smap, err := GetClusterMap(url)
+	if err != nil {
+		return err
+	}
+
+	to := time.Now().Add(time.Minute)
+	for _, s := range smap.Tmap {
+	loop_bucket:
+		for {
+			buckets, err := GetBucketNames(s.DirectURL)
+			if err != nil {
+				return err
+			}
+
+			for _, b := range buckets.Local {
+				if b == name {
+					break loop_bucket
+				}
+			}
+
+			if time.Now().After(to) {
+				return fmt.Errorf("wait for local bucket timed out, target = %s", s.DirectURL)
+			}
+
+			time.Sleep(time.Second)
+		}
+	}
+
+	return nil
+}
+
+// waitForNoLocalBucket wait until all targets do not have local bucket anymore or timeout
+func waitForNoLocalBucket(url, name string) error {
+	smap, err := GetClusterMap(url)
+	if err != nil {
+		return err
+	}
+
+	to := time.Now().Add(time.Minute)
+	for _, s := range smap.Tmap {
+	loop_bucket:
+		for {
+			buckets, err := GetBucketNames(s.DirectURL)
+			if err != nil {
+				return err
+			}
+
+			var exists bool
+			for _, b := range buckets.Local {
+				if b == name {
+					exists = true
+					break
+				}
+			}
+
+			if !exists {
+				break loop_bucket
+			}
+
+			if time.Now().After(to) {
+				return fmt.Errorf("wait for no local bucket timed out, target = %s", s.DirectURL)
+			}
+
+			time.Sleep(time.Second)
+		}
+	}
+
 	return nil
 }
 
@@ -718,7 +800,17 @@ func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
 		return err
 	}
 
-	return HTTPRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
+	err = HTTPRequest("POST", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
+	if err != nil {
+		return err
+	}
+
+	err = waitForNoLocalBucket(proxyURL, bucket)
+	if err != nil {
+		return err
+	}
+
+	return waitForLocalBucket(proxyURL, newBucketName)
 }
 
 // DestroyLocalBucket deletes a local bucket
@@ -728,7 +820,12 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 		return err
 	}
 
-	return HTTPRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
+	err = HTTPRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rbuckets+"/"+bucket, bytes.NewBuffer(msg))
+	if err != nil {
+		return err
+	}
+
+	return waitForNoLocalBucket(proxyURL, bucket)
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
@@ -932,4 +1029,41 @@ func HTTPRequest(method string, url string, msg io.Reader) error {
 	}
 
 	return nil
+}
+
+// GetBucketNames returns list of all buckets (cloud and local).
+func GetBucketNames(proxyurl string) (*dfc.BucketNames, error) {
+	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*?local=true"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create request, err = %v", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to do request, err = %v", err)
+	}
+
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read response body, err = %v", err)
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	}
+
+	var buckets dfc.BucketNames
+	err = json.Unmarshal(b, &buckets)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v", err)
+	}
+
+	return &buckets, nil
 }

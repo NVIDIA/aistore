@@ -2682,16 +2682,10 @@ func (t *targetrunner) startupMpaths() {
 			glog.Fatalf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
 		}
 	}
+
 	// mpath config dir
 	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
-	if ctx.config.TestFSP.Instance > 0 {
-		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
-		if err := CreateDir(instancedir); err != nil {
-			glog.Errorf("Failed to create instance confdir %q, err: %v", instancedir, err)
-			return
-		}
-		mpathconfigfqn = filepath.Join(instancedir, mpname)
-	}
+
 	// load old/prev and compare
 	var (
 		changed bool
