@@ -103,13 +103,6 @@ func (p *proxyrunner) run() error {
 		}
 	}
 	p.lbmap.unlock()
-	if ctx.config.TestFSP.Instance > 0 {
-		// Create instance-specific smap directory when testing locally.
-		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
-		if err := CreateDir(instancedir); err != nil {
-			return fmt.Errorf("Failed to create instance confdir %q, err: %v", instancedir, err)
-		}
-	}
 
 	isproxy := os.Getenv("DFCPRIMARYPROXY")
 
@@ -150,10 +143,6 @@ func (p *proxyrunner) run() error {
 		}
 	} else {
 		smappathname := filepath.Join(p.confdir, smapname)
-		if ctx.config.TestFSP.Instance > 0 {
-			instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
-			smappathname = filepath.Join(instancedir, smapname)
-		}
 		p.hintsmap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
 		if err := LocalLoad(smappathname, p.hintsmap); err != nil && !os.IsNotExist(err) {
 			glog.Warningf("Failed to load existing hint smap: %v", err)
@@ -1255,10 +1244,6 @@ func (p *proxyrunner) synclbmap(w http.ResponseWriter, r *http.Request) {
 // syncsmap requires the caller to lock p.smap
 func (p *proxyrunner) syncsmap(w http.ResponseWriter, r *http.Request, newtarget *daemonInfo) {
 	smappathname := filepath.Join(p.confdir, smapname)
-	if ctx.config.TestFSP.Instance > 0 {
-		instancedir := filepath.Join(ctx.config.Confdir, strconv.Itoa(ctx.config.TestFSP.Instance))
-		smappathname = filepath.Join(instancedir, smapname)
-	}
 	if err := LocalSave(smappathname, p.smap); err != nil {
 		s := fmt.Sprintf("Failed to store smap %s, err : %v", smappathname, err)
 		p.invalmsghdlr(w, r, s)
@@ -1536,13 +1521,6 @@ func (p *proxyrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, ap
 	}
 	glog.Infof("%s: new lbmap version %d (old %d)", apitems[0], newlbmap.Version, curversion)
 	p.lbmap = newlbmap
-
-	if ctx.config.TestFSP.Instance > 0 {
-		glog.Infof("Warning!")
-		glog.Infof("Warning: proxy instance %d cannot store lbmap when the confdir %s is shared", ctx.config.TestFSP.Instance, p.confdir)
-		glog.Infof("Warning!")
-		return
-	}
 	lbpathname := filepath.Join(p.confdir, lbname)
 	if err := LocalSave(lbpathname, p.lbmap); err != nil {
 		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
