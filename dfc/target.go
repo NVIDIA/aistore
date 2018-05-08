@@ -212,6 +212,7 @@ func (t *targetrunner) unregister() (status int, err error) {
 	}
 	url += "/" + Rversion + "/" + Rcluster + "/" + Rdaemon + "/" + t.si.DaemonID
 	_, err, _, status = t.call(&t.proxysi.daemonInfo, url, http.MethodDelete, nil)
+
 	return
 }
 
@@ -2093,6 +2094,8 @@ func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 		t.httpdaeput(w, r)
 	case http.MethodPost:
 		t.httpdaepost(w, r)
+	case http.MethodDelete:
+		t.httpdaedelete(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -2237,6 +2240,13 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
+	if len(apitems) > 0 && apitems[0] == Rregister {
+		if glog.V(3) {
+			glog.Infoln("Sending register signal to target keepalive control channel")
+		}
+		gettargetkalive().kalive.controlCh <- controlSignal{msg: register}
+		return
+	}
 	if status, err := t.register(0); err != nil {
 		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
 		t.invalmsghdlr(w, r, s)
@@ -2245,6 +2255,13 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("Registered self %s", t.si.DaemonID)
 	}
+}
+
+func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
+	if glog.V(3) {
+		glog.Infoln("Sending unregister signal to target keepalive control channel")
+	}
+	gettargetkalive().kalive.controlCh <- controlSignal{msg: unregister}
 }
 
 //====================== common for both cold GET and PUT ======================================

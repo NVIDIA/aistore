@@ -1661,6 +1661,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		nsi       daemonInfo
 		keepalive bool
+		register  bool
 		proxy     bool
 		msg       *ActionMsg
 		pi        *proxyInfo
@@ -1673,10 +1674,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(apitems) > 0 {
-		keepalive = (apitems[0] == Rkeepalive)
-		proxy = (apitems[0] == Rproxy)
+		keepalive = apitems[0] == Rkeepalive
+		register = apitems[0] == Rregister
+		proxy = apitems[0] == Rproxy
 		if proxy && len(apitems) > 1 {
-			keepalive = (apitems[1] == Rkeepalive)
+			keepalive = apitems[1] == Rkeepalive
 		}
 	}
 	if p.readJSON(w, r, &nsi) != nil {
@@ -1723,6 +1725,14 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.smap.add(&nsi)
 		if glog.V(3) {
 			glog.Infof("register target %s (count %d)", nsi.DaemonID, p.smap.count())
+		}
+
+		if register {
+			url := nsi.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rregister
+			if _, err, errStr, status := p.call(&nsi, url, http.MethodPost, nil, ProxyPingTimeout); err != nil {
+				p.invalmsghdlr(w, r, fmt.Sprintf("%v, %s", err, errStr), status)
+				p.kalive.onerr(err, status)
+			}
 		}
 		msg = &ActionMsg{Action: ActRegTarget}
 	}
@@ -1814,6 +1824,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infof("Unregistered target {%s} (count %d)", sid, p.smap.count())
 		}
+		url := osi.DirectURL + "/" + Rversion + "/" + Rdaemon
+		p.call(osi, url, http.MethodDelete, nil, ProxyPingTimeout)
 		msg = &ActionMsg{Action: ActUnregTarget}
 	}
 	if !p.startedup { // see clusterStartup()

@@ -18,6 +18,11 @@ const (
 	proxypollival = time.Second * 5
 	targetpollivl = time.Second * 5
 	kalivetimeout = time.Second * 2
+
+	someError  = "error"
+	stop       = "stop"
+	register   = "register"
+	unregister = "unregister"
 )
 
 type kaliveif interface {
@@ -34,11 +39,10 @@ type okmap struct {
 
 type kalive struct {
 	namedrunner
-	k        kaliveif
-	checknow chan error
-	chstop   chan struct{}
-	atomic   int64
-	okmap    *okmap
+	k         kaliveif
+	controlCh chan controlSignal
+	atomic    int64
+	okmap     *okmap
 }
 
 type proxykalive struct {
@@ -49,6 +53,11 @@ type proxykalive struct {
 type targetkalive struct {
 	kalive
 	t *targetrunner
+}
+
+type controlSignal struct {
+	msg string
+	err error
 }
 
 // construction
@@ -71,7 +80,7 @@ func newtargetkalive(t *targetrunner) *targetkalive {
 //=========================================================
 func (r *kalive) onerr(err error, status int) {
 	if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-		r.checknow <- err
+		r.controlCh <- controlSignal{msg: someError, err: err}
 	}
 }
 
@@ -99,36 +108,42 @@ func (r *kalive) skipCheck(sid string) bool {
 
 func (r *kalive) run() error {
 	glog.Infof("Starting %s", r.name)
-	r.chstop = make(chan struct{}, 4)
-	r.checknow = make(chan error, 16)
+	r.controlCh = make(chan controlSignal, 1)
 	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(ctx.config.Periodic.KeepAliveTime)
-	lastcheck := time.Time{}
+	lastCheck := time.Time{}
 	for {
 		select {
 		case <-ticker.C:
-			lastcheck = time.Now()
+			lastCheck = time.Now()
 			r.k.keepalive(nil)
-		case err := <-r.checknow:
-			if time.Since(lastcheck) >= proxypollival {
-				lastcheck = time.Now()
-				if stopped := r.k.keepalive(err); stopped {
-					ticker.Stop()
-					return nil
+		case sig := <-r.controlCh:
+			switch sig.msg {
+			case register:
+				ticker.Stop()
+				ticker = time.NewTicker(ctx.config.Periodic.KeepAliveTime)
+			case unregister:
+				ticker.Stop()
+			case stop:
+				ticker.Stop()
+				return nil
+			case someError:
+				if time.Since(lastCheck) >= proxypollival {
+					lastCheck = time.Now()
+					if stopped := r.k.keepalive(sig.err); stopped {
+						ticker.Stop()
+						return nil
+					}
 				}
 			}
-		case <-r.chstop:
-			ticker.Stop()
-			return nil
 		}
 	}
 }
 
 func (r *kalive) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
-	var v struct{}
-	r.chstop <- v
-	close(r.chstop)
+	r.controlCh <- controlSignal{msg: stop}
+	close(r.controlCh)
 }
 
 //===============================================
@@ -140,7 +155,7 @@ type Registerer interface {
 	register(timeout time.Duration) (int, error)
 }
 
-func keepalive(r Registerer, chstop chan struct{}, err error) (stopped bool) {
+func keepalive(r Registerer, controlCh chan controlSignal, err error) (stopped bool) {
 	timeout := kalivetimeout
 	status, err := r.register(timeout)
 	if err == nil {
@@ -176,9 +191,11 @@ func keepalive(r Registerer, chstop chan struct{}, err error) (stopped bool) {
 				continue
 			}
 			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
-		case <-chstop:
-			stopped = true
-			return
+		case sig := <-controlCh:
+			if sig.msg == stop {
+				stopped = true
+				return
+			}
 		}
 	}
 }
@@ -196,7 +213,7 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	if r.p.proxysi == nil || r.skipCheck(r.p.proxysi.DaemonID) {
 		return
 	}
-	stopped = keepalive(r.p, r.chstop, err)
+	stopped = keepalive(r.p, r.controlCh, err)
 	if stopped {
 		r.p.onPrimaryProxyFailure()
 	}
@@ -276,8 +293,10 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 				continue
 			}
 			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
-		case <-r.chstop:
-			return false, true
+		case sig := <-r.controlCh:
+			if sig.msg == stop {
+				return false, true
+			}
 		}
 	}
 	return false, false
@@ -292,7 +311,7 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
 		return
 	}
-	stopped = keepalive(r.t, r.chstop, err)
+	stopped = keepalive(r.t, r.controlCh, err)
 	if stopped {
 		r.t.onPrimaryProxyFailure()
 	}
