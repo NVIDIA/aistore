@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"sync/atomic"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -28,6 +30,11 @@ import (
 type Test struct {
 	name   string
 	method func(*testing.T)
+}
+
+type repFile struct {
+	repetitions int
+	filename    string
 }
 
 type regressionTestData struct {
@@ -88,7 +95,135 @@ var (
 	failLRU = ""
 )
 
-func Test_regression(t *testing.T) {
+// Intended for a deployment with multiple targets
+// 1. Unregister target T
+// 2. Create local bucket
+// 3. PUT large amount of objects into the local bucket
+// 4. GET the objects while simultaneously re-registering the target T
+func TestGetAndReRegisterInParallel(t *testing.T) {
+	var (
+		sid                string
+		num                = 20000
+		numGetsForEachFile = 5
+		numGetErrs         uint64
+
+		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
+		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
+		// all nodes in the cluster during re-registering. During this period, errors can occur.
+		maxNumGetErrs = uint64(num * numGetsForEachFile / 4000) // 0.025 % of GET requests
+		getsCompleted uint64
+		filenameCh    = make(chan string, num)
+		repFilenameCh = make(chan repFile, num)
+		errch         = make(chan error, 100)
+		sgl           *dfc.SGLIO
+		filesize      = uint64(1024)
+		seed          = int64(111)
+		wg            sync.WaitGroup
+		semaphore     = make(chan struct{}, 10) // Make 10 concurrent GET requests at a time
+	)
+	// Step 1.
+	smap := getClusterMap(httpclient, t)
+	l := len(smap.Tmap)
+	if l < 2 {
+		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
+	}
+	for sid = range smap.Tmap {
+		break
+	}
+	unregisterTarget(sid, t)
+	n := len(getClusterMap(httpclient, t).Tmap)
+	tlogf("Unregistered target %s: the cluster now has %d targets\n", sid, n)
+
+	// Step 2.
+	bucket := TestLocalBucketName
+	err := client.CreateLocalBucket(proxyurl, bucket)
+	if err != nil {
+		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
+	}
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, bucket)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	// Step 3.
+	tlogf("Putting %d files into bucket %s...\n", num, bucket)
+	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		repFilenameCh <- repFile{repetitions: numGetsForEachFile, filename: f}
+	}
+
+	// Step 4.
+	for i := 0; i < 10; i++ {
+		semaphore <- struct{}{}
+	}
+	tlogf("Getting each of the %d files %d times from bucket %s...\n", num, numGetsForEachFile, bucket)
+	wg.Add(num * numGetsForEachFile)
+	go func() {
+		// GET is timed such that a large portion of requests will happen both before and after target T is re-registered
+		time.Sleep(15 * time.Second)
+		for i := 0; i < num*numGetsForEachFile; i++ {
+
+			go func() {
+				<-semaphore
+				defer func() {
+					semaphore <- struct{}{}
+					wg.Done()
+				}()
+
+				repFile := <-repFilenameCh
+				if repFile.repetitions > 0 {
+					repFile.repetitions -= 1
+					repFilenameCh <- repFile
+				}
+				_, _, err := client.Get(proxyurl, bucket, SmokeStr+"/"+repFile.filename, nil, nil, false, false)
+				if err != nil {
+					atomic.AddUint64(&numGetErrs, 1)
+				}
+				atomic.AddUint64(&getsCompleted, 1)
+				if (getsCompleted)%5000 == 0 {
+					tlogf(" %d/%d GET requests completed...\n", getsCompleted, num*numGetsForEachFile)
+				}
+			}()
+		}
+	}()
+
+	registerTarget(sid, &smap, t)
+	for i := 0; i < 25; i++ {
+		time.Sleep(time.Second)
+		smap = getClusterMap(httpclient, t)
+		if len(smap.Tmap) == l {
+			break
+		}
+	}
+	if len(smap.Tmap) != l {
+		t.Errorf("Re-registration timed out: target %s, num targets now: %d, orig num targets: %d\n",
+			sid, len(smap.Tmap), l)
+		return
+	}
+	tlogf("Re-registered target %s: the cluster is now back to %d targets\n", sid, l)
+
+	wg.Wait()
+	if numGetErrs > maxNumGetErrs {
+		t.Fatalf("At most %d/%d GET errors expected, found %d/%d failures",
+			maxNumGetErrs, num*numGetsForEachFile, numGetErrs, num*numGetsForEachFile)
+	} else {
+		tlogf("At most %d/%d GET errors expected, found %d/%d failures",
+			maxNumGetErrs, num*numGetsForEachFile, numGetErrs, num*numGetsForEachFile)
+	}
+}
+
+func TestRegression(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
@@ -578,12 +713,8 @@ func regressionRebalance(t *testing.T) {
 	//
 	smap := getClusterMap(httpclient, t)
 	l := len(smap.Tmap)
-	if l < 3 { // NOTE: proxy is counted; FIXME: will have to be fixed for "multi-proxies"...
-		if l == 0 {
-			t.Fatal("DFC cluster is empty - zero targets")
-		} else {
-			t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
-		}
+	if l < 2 {
+		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 	}
 	for sid = range smap.Tmap {
 		break
@@ -1165,7 +1296,7 @@ func unregisterTarget(sid string, t *testing.T) {
 
 func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
 	si := smap.Tmap[sid]
-	err := client.HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon, nil)
+	err := client.HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon+"/"+dfc.Rregister, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
