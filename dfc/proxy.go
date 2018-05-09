@@ -343,8 +343,10 @@ maxloop:
 			if maxVersionSmap == nil || svm.Smap.version() > maxVersionSmap.version() {
 				maxVersionSmap = svm.Smap
 			}
-			if maxVersionlbmap == nil || svm.Lbmap.version() > maxVersionlbmap.version() {
-				maxVersionlbmap = svm.Lbmap
+			if svm.Lbmap != nil {
+				if maxVersionlbmap == nil || svm.Lbmap.version() > maxVersionlbmap.version() {
+					maxVersionlbmap = svm.Lbmap
+				}
 			}
 		default:
 			break maxloop
