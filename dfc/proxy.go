@@ -343,8 +343,8 @@ maxloop:
 			if maxVersionSmap == nil || svm.Smap.version() > maxVersionSmap.version() {
 				maxVersionSmap = svm.Smap
 			}
-			if maxVersionlbmap == nil || svm.lbmap.version() > maxVersionlbmap.version() {
-				maxVersionlbmap = svm.lbmap
+			if maxVersionlbmap == nil || svm.Lbmap.version() > maxVersionlbmap.version() {
+				maxVersionlbmap = svm.Lbmap
 			}
 		default:
 			break maxloop
@@ -1396,7 +1396,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := SmapVoteMsg{
 			VoteInProgress: vote,
 			Smap:           p.smap.cloneL().(*Smap),
-			lbmap:          p.lbmap.cloneL().(*lbmap),
+			Lbmap:          p.lbmap.cloneL().(*lbmap),
 		}
 		jsbytes, err := json.Marshal(msg)
 		assert(err == nil, err)

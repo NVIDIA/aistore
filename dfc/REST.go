@@ -105,7 +105,7 @@ type RangeMsg struct {
 type SmapVoteMsg struct {
 	VoteInProgress bool   `json:"vote_in_progress"`
 	Smap           *Smap  `json:"smap"`
-	lbmap          *lbmap `json:"lbmap"`
+	Lbmap          *lbmap `json:"lbmap"`
 }
 
 //===================

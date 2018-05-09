@@ -172,7 +172,7 @@ func regressionRenameLocalBuckets(t *testing.T) {
 /* uncomment when/if needed
 func Test_putlb(t *testing.T) {
 	bucket := TestLocalBucketName
-	createLocalBucketNoFail(httpclient, t, bucket)
+	client.CreateLocalBucket(proxyurl, bucket)
 	time.Sleep(time.Second)
 	var (
 		num      = 10000
@@ -215,7 +215,7 @@ func Test_getlb(t *testing.T) {
 
 func Test_rmlb(t *testing.T) {
 	bucket := TestLocalBucketName
-	destroyLocalBucket(httpclient, t, bucket)
+	client.DestroyLocalBucket(proxyurl, bucket)
 }
 */
 
