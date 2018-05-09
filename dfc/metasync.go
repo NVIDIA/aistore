@@ -25,9 +25,55 @@ const (
 	actiontag = "-action" // to make a pair (revs, action)
 )
 
-// REVS stands for REplicated, Versioned & Shared/Synchronized
-// objects that want to have their replicas in all/some nodes of the cluster
-// must implement the REVS below:
+// =================== A Brief Theory of Operation =================================
+//
+// REVS (interface below) stands for REplicated, Versioned and Shared/Synchronized.
+//
+// A REVS is, typically, an object that represents some sort of cluster-wide metadata
+// and, therefore, must be consistently replicated across the entire cluster.
+// To that end, the "metasyncer" (metasync.go) provides a generic transport to send
+// an arbitrary payload that combines any number of data units that look as follows:
+//
+//         (shared-object, associated action-message)
+//
+// The action message (ActionMsg), if present, provides receivers with a context as
+// to what exactly to do with the newly received versioned replica.
+//
+// In addition, storage target in particular make use of the previously synchronized
+// version of the cluster map delivered to them by the metasyncer itself (as part of
+// the aforementioned action message). Having both the current and the previous
+// cluster maps allows targets to figure out whether to rebalance the cluster, and
+// how to execute the rebalancing.
+//
+// In addition, the metasyncer:
+//
+// 1) tracks already synchronized REVS objects
+// 2) validates REVS versions - in particular, prevents attempts to downgrade a
+//    newer version
+// 3) makes sure that nodes that join the cluster get updated with the current set
+//    of REVS replicas
+// 4) handles failures to reach existing cluster members - by periodically retrying
+//    to update them with the current REVS versions (as long and if those members
+//    remain listed in the most current/recent cluster map).
+//
+// The usage is easy - there is a single sync() method that accepts variable
+// number of parameters. Example sync-ing asynchronously without action messages:
+//
+// 	sync(false, newsmap, p.lbmap.cloneL())
+//
+// To sync with action message(s) and to block until all the replicas are delivered,
+// do:
+//
+//  	pair := &revspair{ p.smap.cloneU(), &ActionMsg{...} }
+//  	sync(true, pair)
+//
+// On the receiving side, the metasyncer-generated payload gets extracted,
+// validated, version-compared, and the corresponding Rx handler gets then called
+// with the corresponding REVS replica and additional information that includes
+// the action message (and the previous version of the cluster map, if applicable).
+//
+// =================== end of A Brief Theory of Operation ==========================
+
 type revs interface {
 	tag() string                    // known tags enumerated above
 	cloneL() interface{}            // clone self - the impl. must take lock if need be
@@ -78,14 +124,6 @@ func newmetasyncer(p *proxyrunner, t *targetrunner) (y *metasyncer) {
 	return
 }
 
-//
-// the main and the only method to be used by external callers
-// example sync-ing without action messages:
-// 	sync(newsmap, p.lbmap.cloneL())
-// example sync-ing with action message(s):
-//  	pair := &revspair{ p.smap.cloneL(), &ActionMsg{...} }
-//  	sync(pair)
-//
 func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
 	assert(y.p != nil)
 	if !y.p.primary {
@@ -228,7 +266,7 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 	} else if smapSynced == nil {
 		smap4bcast = y.p.smap.cloneL().(*Smap)
 	} else if smapSynced.version() != y.p.smap.versionL() {
-		assert(smap4bcast.version() < y.p.smap.versionL())
+		assert(smapSynced.version() < y.p.smap.versionL())
 		smap4bcast = y.p.smap.cloneL().(*Smap)
 		check4newmembers = true
 	} else {
