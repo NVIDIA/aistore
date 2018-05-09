@@ -87,32 +87,34 @@ type logconfig struct {
 type periodic struct {
 	StatsTimeStr     string `json:"stats_time"`
 	KeepAliveTimeStr string `json:"keep_alive_time"`
+	RetrySyncTimeStr string `json:"retry_sync_time"`
 	// omitempty
 	StatsTime     time.Duration `json:"-"`
 	KeepAliveTime time.Duration `json:"-"`
+	RetrySyncTime time.Duration `json:"-"`
 }
 
 // timeoutconfig contains timeouts used for intra-cluster communication
 type timeoutconfig struct {
-	DefaultStr      string        `json:"default_timeout"`
-	Default         time.Duration `json:"-"` // omitempty
-	DefaultLongStr  string        `json:"default_long_timeout"`
-	DefaultLong     time.Duration `json:"-"` //
-	MaxKeepaliveStr string        `json:"max_keepalive"`
-	MaxKeepalive    time.Duration `json:"-"` //
-	ProxyPingStr    string        `json:"proxy_ping"`
-	ProxyPing       time.Duration `json:"-"` //
-	VoteRequestStr  string        `json:"vote_request"`
-	VoteRequest     time.Duration `json:"-"` //
-	SendFileStr     string        `json:"send_file_time"`
-	SendFile        time.Duration `json:"-"` //
+	DefaultStr         string        `json:"default_timeout"`
+	Default            time.Duration `json:"-"` // omitempty
+	DefaultLongStr     string        `json:"default_long_timeout"`
+	DefaultLong        time.Duration `json:"-"` //
+	MaxKeepaliveStr    string        `json:"max_keepalive"`
+	MaxKeepalive       time.Duration `json:"-"` //
+	ProxyPingStr       string        `json:"proxy_ping"`
+	ProxyPing          time.Duration `json:"-"` //
+	CplaneOperationStr string        `json:"cplane_operation"`
+	CplaneOperation    time.Duration `json:"-"` //
+	SendFileStr        string        `json:"send_file_time"`
+	SendFile           time.Duration `json:"-"` //
+	StartupStr         string        `json:"startup_time"`
+	Startup            time.Duration `json:"-"` //
 }
 
 type proxyconfig struct {
-	Primary                  proxycnf      `json:"primary"`
-	Original                 proxycnf      `json:"original"`
-	StartupGetSmapMaximumStr string        `json:"startup_get_smap_maximum"`
-	StartupGetSmapMaximum    time.Duration `json:"-"` //
+	Primary  proxycnf `json:"primary"`
+	Original proxycnf `json:"original"`
 }
 
 type proxycnf struct {
@@ -271,6 +273,9 @@ func validateconf() (err error) {
 	if ctx.config.Periodic.StatsTime, err = time.ParseDuration(ctx.config.Periodic.StatsTimeStr); err != nil {
 		return fmt.Errorf("Bad stats-time format %s, err: %v", ctx.config.Periodic.StatsTimeStr, err)
 	}
+	if ctx.config.Periodic.RetrySyncTime, err = time.ParseDuration(ctx.config.Periodic.RetrySyncTimeStr); err != nil {
+		return fmt.Errorf("Bad retry_sync_time format %s, err: %v", ctx.config.Periodic.RetrySyncTimeStr, err)
+	}
 	if ctx.config.Timeout.Default, err = time.ParseDuration(ctx.config.Timeout.DefaultStr); err != nil {
 		return fmt.Errorf("Bad Timeout default format %s, err: %v", ctx.config.Timeout.DefaultStr, err)
 	}
@@ -315,14 +320,14 @@ func validateconf() (err error) {
 	if ctx.config.Timeout.ProxyPing, err = time.ParseDuration(ctx.config.Timeout.ProxyPingStr); err != nil {
 		return fmt.Errorf("Bad Timeout proxy_ping format %s, err %v", ctx.config.Timeout.ProxyPingStr, err)
 	}
-	if ctx.config.Timeout.VoteRequest, err = time.ParseDuration(ctx.config.Timeout.VoteRequestStr); err != nil {
-		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", ctx.config.Timeout.VoteRequestStr, err)
+	if ctx.config.Timeout.CplaneOperation, err = time.ParseDuration(ctx.config.Timeout.CplaneOperationStr); err != nil {
+		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", ctx.config.Timeout.CplaneOperationStr, err)
 	}
 	if ctx.config.Timeout.SendFile, err = time.ParseDuration(ctx.config.Timeout.SendFileStr); err != nil {
 		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", ctx.config.Timeout.SendFileStr, err)
 	}
-	if ctx.config.Proxy.StartupGetSmapMaximum, err = time.ParseDuration(ctx.config.Proxy.StartupGetSmapMaximumStr); err != nil {
-		return fmt.Errorf("Bad Proxy startup_get_smap_maximum format %s, err %v", ctx.config.Proxy.StartupGetSmapMaximumStr, err)
+	if ctx.config.Timeout.Startup, err = time.ParseDuration(ctx.config.Timeout.StartupStr); err != nil {
+		return fmt.Errorf("Bad Proxy startup_time format %s, err %v", ctx.config.Timeout.StartupStr, err)
 	}
 	return nil
 }
@@ -337,8 +342,4 @@ func setloglevel(loglevel string) (err error) {
 		ctx.config.Log.Level = loglevel
 	}
 	return
-}
-
-func writeConfigFile() error {
-	return LocalSave(clivars.conffile, ctx.config)
 }

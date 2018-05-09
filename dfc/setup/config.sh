@@ -12,18 +12,19 @@
 	},
 	"periodic": {
 		"stats_time":		"10s",
-		"keep_alive_time":	"20s"
+		"keep_alive_time":	"20s",
+		"retry_sync_time":	"2s"
 	},
 	"timeout": {
 		"default_timeout":	"30s",
 		"default_long_timeout":	"30m",
 		"max_keepalive":	"4s",
 		"proxy_ping":		"100ms",
-		"vote_request":		"2s",
-		"send_file_time":	"5m"
+		"cplane_operation":	"1s",
+		"send_file_time":	"5m",
+		"startup_time":		"1m"
 	},
 	"proxyconfig": {
-		"startup_get_smap_maximum":	"1m",
 		"primary": {
 			"id":		"${PROXYID}",
 			"url": 		"${PROXYURL}",

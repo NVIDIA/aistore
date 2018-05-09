@@ -102,6 +102,8 @@ type httprunner struct {
 	kalive                kaliveif
 	proxysi               *proxyInfo
 	smap                  *Smap
+	lbmap                 *lbmap
+	metasyncer            *metasyncer
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -142,6 +144,8 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
 	}
 	h.smap = &Smap{}
+	h.lbmap = &lbmap{LBmap: make(map[string]string)} // local (aka cache-only) buckets
+
 	h.proxysi = &proxyInfo{}
 	// init daemonInfo here
 	h.si = &daemonInfo{}

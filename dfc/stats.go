@@ -216,7 +216,7 @@ func (r *proxystatsrunner) log() (runlru bool) {
 
 func (r *proxystatsrunner) add(name string, val int64) {
 	r.Lock()
-	r.addLocked(name, val)
+	r.addL(name, val)
 	r.Unlock()
 }
 
@@ -231,11 +231,11 @@ func (r *proxystatsrunner) addMany(nameval ...interface{}) {
 		statsval, ok := nameval[i].(int64)
 		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
 		i++
-		r.addLocked(statsname, statsval)
+		r.addL(statsname, statsval)
 	}
 }
 
-func (r *proxystatsrunner) addLocked(name string, val int64) {
+func (r *proxystatsrunner) addL(name string, val int64) {
 	var v *int64
 	s := &r.Core
 	switch name {
@@ -487,7 +487,7 @@ func (r *storstatsrunner) init() {
 
 func (r *storstatsrunner) add(name string, val int64) {
 	r.Lock()
-	r.addLocked(name, val)
+	r.addL(name, val)
 	r.Unlock()
 }
 
@@ -503,11 +503,11 @@ func (r *storstatsrunner) addMany(nameval ...interface{}) {
 		statsval, ok := nameval[i].(int64)
 		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
 		i++
-		r.addLocked(statsname, statsval)
+		r.addL(statsname, statsval)
 	}
 }
 
-func (r *storstatsrunner) addLocked(name string, val int64) {
+func (r *storstatsrunner) addL(name string, val int64) {
 	var v *int64
 	s := &r.Core
 	switch name {

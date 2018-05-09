@@ -88,7 +88,6 @@ type targetrunner struct {
 	cloudif       cloudif // multi-cloud vendor support
 	xactinp       *xactInProgress
 	uxprocess     *uxprocess
-	lbmap         *lbmap
 	rtnamemap     *rtnamemap
 	prefetchQueue chan filesWithDeadline
 	statsdC       statsd.Client
@@ -98,9 +97,8 @@ type targetrunner struct {
 func (t *targetrunner) run() error {
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.kalive = gettargetkalive()
-	t.xactinp = newxactinp()                         // extended actions
-	t.lbmap = &lbmap{LBmap: make(map[string]string)} // local (cache-only) buckets
-	t.rtnamemap = newrtnamemap(128)                  // lock/unlock name
+	t.xactinp = newxactinp()        // extended actions
+	t.rtnamemap = newrtnamemap(128) // lock/unlock name
 
 	if status, err := t.register(0); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
@@ -134,6 +132,8 @@ func (t *targetrunner) run() error {
 	rr.init()
 	// prefetch
 	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
+
+	t.metasyncer = newmetasyncer(nil, t) // construct a non-runnable object to serve Rx
 
 	//
 	// REST API: register storage target's handler(s) and start listening
@@ -625,7 +625,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, t.lbmap.versionLocked())
+		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, t.lbmap.versionL())
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -817,8 +817,8 @@ func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
 //
 //====================================================================================
 func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, version int64, lbmapif map[string]interface{}) (errstr string) {
-	t.lbmap.lock()
-	defer t.lbmap.unlock()
+	lbmapLock.Lock()
+	defer lbmapLock.Unlock()
 
 	if t.lbmap.version() != version {
 		glog.Warning("lbmap version %d != %d - proceeding to rename anyway", t.lbmap.version(), version)
@@ -2104,21 +2104,29 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-
 	if len(apitems) > 0 {
 		switch apitems[0] {
-		// PUT '{Smap}' /v1/daemon/(syncsmap|rebalance)
-		case Rsyncsmap, Rebalance:
-			newtargetid := r.URL.Query().Get(URLParamNewTargetID)
-			t.httpdaeputSmap(w, r, apitems, newtargetid)
-			return
-		// PUT '{lbmap}' /v1/daemon/localbuckets
-		case Rsynclb:
-			t.httpdaeputLBMap(w, r, apitems)
-			return
 		// PUT /v1/daemon/proxy/newprimaryproxyid
 		case Rproxy:
 			t.httpdaesetprimaryproxy(w, r, apitems)
+			return
+		case Rsyncsmap:
+			var newsmap = &Smap{}
+			if t.readJSON(w, r, newsmap) != nil {
+				return
+			}
+			smapLock.Lock()
+			orig := t.smap
+			t.smap = newsmap
+			err := t.setPrimaryProxy(newsmap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+			if err != nil {
+				t.smap = orig
+				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to put Smap, err: %v", err))
+			}
+			smapLock.Unlock()
+			return
+		case Rmetasync:
+			t.metasyncer.receive(w, r)
 			return
 		default:
 		}
@@ -2137,7 +2145,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		} else if errstr := t.setconfig(msg.Name, value); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		} else if msg.Name == "lru_enabled" && value == "false" {
-			_, lruxact := t.xactinp.findUnlocked(ActLRU)
+			_, lruxact := t.xactinp.findU(ActLRU)
 			if lruxact != nil {
 				if glog.V(3) {
 					glog.Infof("Aborting LRU due to lru_enabled config change")
@@ -2150,146 +2158,6 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
-	}
-}
-
-func (t *targetrunner) httpdaeputSmap(w http.ResponseWriter, r *http.Request, apitems []string, newtargetid string) {
-	var newsmap = &Smap{}
-	if t.readJSON(w, r, newsmap) != nil {
-		return
-	}
-
-	newlen := len(newsmap.Tmap)
-	glog.Infof("%s: new Smap version %d, num targets %d, newtargetid=%s", apitems[0], newsmap.Version, newlen, newtargetid)
-
-	smapLock.Lock()
-
-	curversion := t.smap.Version
-	if curversion == newsmap.Version {
-		smapLock.Unlock()
-		return
-	}
-	if curversion > newsmap.Version {
-		smapLock.Unlock()
-		err := fmt.Errorf("Warning: attempt to downgrade Smap verion %d to %d", curversion, newsmap.Version)
-		glog.Errorln(err)
-		t.kalive.onerr(err, 0)
-		return
-	}
-	oldlen := len(t.smap.Tmap)
-
-	// check whether this target is present in the new Smap
-	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
-	// assign proxysi
-	// log
-	existentialQ, isSubset := false, true
-	infoln := make([]string, 0, newlen)
-	for id, si := range newsmap.Tmap { // log
-		if id == t.si.DaemonID {
-			existentialQ = true
-			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si))
-		} else {
-			infoln = append(infoln, fmt.Sprintf("target: %s", si))
-		}
-		if _, ok := t.smap.Tmap[id]; !ok {
-			isSubset = false
-		}
-	}
-	assert(existentialQ)
-
-	// t.smap = newsmap & set primary
-	err := t.setPrimaryProxyAndSmapUnlocked(newsmap)
-
-	// rebalancing x-action to get its own copy
-	assert(t.smap == newsmap)
-	smap4xaction := &Smap{}
-	copyStruct(smap4xaction, t.smap)
-
-	smapLock.Unlock()
-
-	for _, ln := range infoln {
-		glog.Infoln(ln)
-	}
-	if err != nil {
-		s := fmt.Sprintf("Failed to set Primary Proxy to %s, err: %v", newsmap.ProxySI.DaemonID, err)
-		t.invalmsghdlr(w, r, s)
-		return
-	}
-	if apitems[0] == Rsyncsmap {
-		return
-	}
-	if isSubset {
-		if newlen != oldlen {
-			assert(newlen < oldlen)
-			glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
-		} else {
-			glog.Infof("nothing to rebalance: num (%d) and IDs of the targets did not change", newlen)
-		}
-		return
-	}
-	if newtargetid != "" {
-		if !ctx.config.Rebalance.Enabled { // config check
-			glog.Infoln("auto-rebalancing disabled")
-			return
-		}
-		uptime := time.Since(t.starttime())
-		if uptime < ctx.config.Rebalance.StartupDelayTime && t.si.DaemonID != newtargetid {
-			glog.Infof("not auto-rebalancing: uptime %v < %v", uptime, ctx.config.Rebalance.StartupDelayTime)
-			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
-			if aborted && !running {
-				f := func() {
-					time.Sleep(ctx.config.Rebalance.StartupDelayTime - uptime)
-					currsmap := &Smap{}
-					smapLock.Lock()
-					copyStruct(currsmap, t.smap)
-					smapLock.Unlock()
-					t.runRebalance(currsmap, "")
-				}
-				go runRebalanceOnce.Do(f) // only once at startup
-			}
-			return
-		}
-	}
-
-	// xaction
-	go t.runRebalance(smap4xaction, newtargetid)
-}
-
-func (t *targetrunner) httpdaeputLBMap(w http.ResponseWriter, r *http.Request, apitems []string) {
-	curversion := t.lbmap.Version
-	newlbmap := &lbmap{LBmap: make(map[string]string)}
-	if t.readJSON(w, r, newlbmap) != nil {
-		return
-	}
-	if curversion == newlbmap.Version {
-		return
-	}
-	if curversion > newlbmap.Version {
-		glog.Errorf("Warning: attempt to downgrade lbmap verion %d to %d", curversion, newlbmap.Version)
-		return
-	}
-	glog.Infof("%s: new lbmap version %d (old %d)", apitems[0], newlbmap.Version, curversion)
-	// destroylb
-	for bucket := range t.lbmap.LBmap {
-		_, ok := newlbmap.LBmap[bucket]
-		if !ok {
-			glog.Infof("Destroy local bucket %s", bucket)
-			for mpath := range ctx.mountpaths.Available {
-				localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
-				if err := os.RemoveAll(localbucketfqn); err != nil {
-					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
-				}
-			}
-		}
-	}
-	t.lbmap = newlbmap
-	for mpath := range ctx.mountpaths.Available {
-		for bucket := range t.lbmap.LBmap {
-			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
-			if err := CreateDir(localbucketfqn); err != nil {
-				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
-			}
-		}
 	}
 }
 
@@ -2312,7 +2180,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	err = t.setPrimaryProxyLocked(proxyid, "" /* primaryToRemove */, prepare)
+	err = t.setPrimaryProxyL(proxyid, "" /* primaryToRemove */, prepare)
 	if err != nil {
 		s := fmt.Sprintf("Failed to Set Primary Proxy to %v: %v", proxyid, err)
 		t.invalmsghdlr(w, r, s)

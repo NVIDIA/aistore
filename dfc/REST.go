@@ -16,19 +16,23 @@ type ActionMsg struct {
 
 // ActionMsg.Action enum
 const (
-	ActShutdown  = "shutdown"
-	ActSyncSmap  = "syncsmap"  // synchronize cluster map aka Smap across all targets
-	ActRebalance = "rebalance" // rebalance local caches upon target(s) joining and/or leaving the cluster
-	ActLRU       = "lru"
-	ActSyncLB    = "synclb"
-	ActCreateLB  = "createlb"
-	ActDestroyLB = "destroylb"
-	ActRenameLB  = "renamelb"
-	ActSetConfig = "setconfig"
-	ActRename    = "rename"
-	ActEvict     = "evict"
-	ActDelete    = "delete"
-	ActPrefetch  = "prefetch"
+	ActShutdown    = "shutdown"
+	ActRebalance   = "rebalance"
+	ActLRU         = "lru"
+	ActSyncLB      = "synclb"
+	ActCreateLB    = "createlb"
+	ActDestroyLB   = "destroylb"
+	ActRenameLB    = "renamelb"
+	ActSetConfig   = "setconfig"
+	ActRename      = "rename"
+	ActEvict       = "evict"
+	ActDelete      = "delete"
+	ActPrefetch    = "prefetch"
+	ActRegTarget   = "regtarget"
+	ActRegProxy    = "regproxy"
+	ActUnregTarget = "unregtarget"
+	ActUnregProxy  = "unregproxy"
+	ActNewPrimary  = "newprimary"
 )
 
 // Cloud Provider enum
@@ -53,17 +57,16 @@ const (
 
 // URL Query Parameter enum
 const (
-	URLParamLocal            = "local"       // true: bucket is expected to be local
-	URLParamFromID           = "from_id"     // from_id=string - ID to copy from
-	URLParamToID             = "to_id"       // to_id=string - ID to copy to
-	URLParamFromName         = "from_name"   // rename from
-	URLParamToName           = "to_name"     // rename to
-	URLParamCached           = "cachedonly"  // true: return cached objects (names, metadata) instead of requesting the list from the cloud
-	URLParamNewTargetID      = "newtargetid" // ID of the new target joining the cluster
-	URLParamSuspectedTarget  = "suspect"     // suspect=string - ID of the target suspected of failure
-	URLParamPrimaryCandidate = "candidate"   // candidate=string - ID of the candidate for primary proxy
-	URLParamForce            = "force"       // true: shutdown the primary proxy
-	URLParamPrepare          = "prepare"     // true: request is the prepare phase for primary proxy change
+	URLParamLocal            = "local"      // true: bucket is expected to be local
+	URLParamFromID           = "from_id"    // from_id=string - ID to copy from
+	URLParamToID             = "to_id"      // to_id=string - ID to copy to
+	URLParamFromName         = "from_name"  // rename from
+	URLParamToName           = "to_name"    // rename to
+	URLParamCached           = "cachedonly" // true: return cached objects (names, metadata) instead of requesting the list from the cloud
+	URLParamSuspectedTarget  = "suspect"    // suspect=string - ID of the target suspected of failure
+	URLParamPrimaryCandidate = "candidate"  // candidate=string - ID of the candidate for primary proxy
+	URLParamForce            = "force"      // true: shutdown the primary proxy
+	URLParamPrepare          = "prepare"    // true: request is the prepare phase for primary proxy change
 )
 
 // TODO: sort and some props are TBD
@@ -186,9 +189,7 @@ const (
 	Robjects   = "objects"
 	Rcluster   = "cluster"
 	Rdaemon    = "daemon"
-	Rsyncsmap  = ActSyncSmap
-	Rebalance  = ActRebalance
-	Rsynclb    = ActSyncLB
+	Rsyncsmap  = "syncsmap"
 	Rpush      = "push"
 	Rkeepalive = "keepalive"
 	Rhealth    = "health"
@@ -198,4 +199,5 @@ const (
 	Rvoteres   = "result"
 	Rvoteinit  = "init"
 	Rtokens    = "tokens"
+	Rmetasync  = "metasync"
 )

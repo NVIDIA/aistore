@@ -240,9 +240,9 @@ func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 		} else {
 			glog.Errorf("Target %s fails keepalive, err: %v - removing from the cluster map", sid, err)
 		}
-		r.p.smap.lock()
+		smapLock.Lock()
 		r.p.smap.del(sid)
-		r.p.smap.unlock()
+		smapLock.Unlock()
 	}
 	return false
 }

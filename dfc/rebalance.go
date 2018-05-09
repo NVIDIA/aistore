@@ -34,6 +34,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	//
 	// first, check whether all the Smap-ed targets are up and running
 	//
+	glog.Infof("rebalance: Smap ver %d, newtargetid=%s", newsmap.version(), newtargetid)
 	from := "?" + URLParamFromID + "=" + t.si.DaemonID
 	for sid, si := range newsmap.Tmap {
 		if sid == t.si.DaemonID {
@@ -52,7 +53,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 			if status > 0 {
 				glog.Infof("%s is offline with status %d, err: %v", sid, status, err)
 			} else {
-				glog.Infof("%s is offlline, err: %v", sid, err)
+				glog.Infof("%s is offline, err: %v", sid, err)
 			}
 			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
 			if timeout > ctx.config.Timeout.MaxKeepalive {
@@ -114,6 +115,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		}
 	}
 	if newtargetid == t.si.DaemonID {
+		glog.Infof("rebalance: %s <= self", newtargetid)
 		t.pollRebalancingDone(newsmap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
 	xreb.etime = time.Now()
@@ -123,13 +125,14 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 
 func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 	for {
+		time.Sleep(time.Minute) // FIXME: must be smarter
 		count := 0
 		for sid, si := range newsmap.Tmap {
 			if sid == t.si.DaemonID {
 				continue
 			}
 			url := si.DirectURL + "/" + Rversion + "/" + Rhealth
-			outjson, err, _, _ := t.call(si, url, http.MethodGet, nil, kalivetimeout)
+			outjson, err, _, _ := t.call(si, url, http.MethodGet, nil)
 			// retry once
 			if err == context.DeadlineExceeded {
 				outjson, err, _, _ = t.call(si, url, http.MethodGet, nil, kalivetimeout*2)

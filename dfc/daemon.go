@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ const (
 	xiostat       = "iostat"
 	xfskeeper     = "fskeeper"
 	xatime        = "atime"
+	xmetasyncer   = "metasyncer"
 )
 
 //======
@@ -46,11 +48,10 @@ type cliVars struct {
 // FIXME: consider sync.Map; NOTE: atomic version is used by readers
 // Smap contains id:daemonInfo pairs and related metadata
 type Smap struct {
-	Tmap        map[string]*daemonInfo `json:"smap"` // daemonID -> daemonInfo
-	Pmap        map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
-	ProxySI     *proxyInfo             `json:"proxy_si"`
-	Version     int64                  `json:"version"`
-	syncversion int64
+	Tmap    map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
+	Pmap    map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
+	ProxySI *proxyInfo             `json:"proxy_si"`
+	Version int64                  `json:"version"`
 }
 
 type mountedFS struct {
@@ -82,9 +83,8 @@ type proxyInfo struct {
 // local (cache-only) bucket names and their TBD props
 type lbmap struct {
 	sync.Mutex
-	LBmap       map[string]string `json:"l_bmap"`
-	Version     int64             `json:"version"`
-	syncversion int64
+	LBmap   map[string]string `json:"l_bmap"`
+	Version int64             `json:"version"`
 }
 
 // runner if
@@ -115,10 +115,11 @@ type rungroup struct {
 //
 //====================
 var (
-	build    string
-	ctx      = &daemon{}
-	clivars  = &cliVars{}
-	smapLock = sync.Mutex{}
+	build     string
+	ctx       = &daemon{}
+	clivars   = &cliVars{}
+	smapLock  = &sync.Mutex{}
+	lbmapLock = &sync.Mutex{}
 )
 
 //====================
@@ -146,13 +147,9 @@ func (m *Smap) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *Smap) version() int64 {
-	return m.Version
-}
-
-func (m *Smap) versionLocked() int64 {
-	m.lock()
-	defer m.unlock()
+func (m *Smap) versionL() int64 {
+	smapLock.Lock()
+	defer smapLock.Unlock()
 	return m.Version
 }
 
@@ -163,39 +160,68 @@ func (m *Smap) count() int {
 func (m *Smap) countProxies() int {
 	return len(m.Pmap)
 }
-func (m *Smap) countLocked() int {
-	m.lock()
-	defer m.unlock()
+
+func (m *Smap) countL() int {
+	smapLock.Lock()
+	defer smapLock.Unlock()
 	return m.count()
 }
 
 func (m *Smap) get(sid string) *daemonInfo {
-	si := m.Tmap[sid]
+	si, ok := m.Tmap[sid]
+	if !ok {
+		return nil
+	}
 	return si
 }
 
 func (m *Smap) getProxy(pid string) *proxyInfo {
-	pi := m.Pmap[pid]
+	pi, ok := m.Pmap[pid]
+	if !ok {
+		return nil
+	}
 	return pi
 }
 
-func (m *Smap) lock() {
+func (m *Smap) containsL(id string) bool {
 	smapLock.Lock()
+	defer smapLock.Unlock()
+	if _, ok := m.Tmap[id]; ok {
+		return true
+	} else if _, ok := m.Pmap[id]; ok {
+		return true
+	}
+	return false
 }
 
-func (m *Smap) unlock() {
-	smapLock.Unlock()
+func (m *Smap) copyL(dst *Smap) {
+	smapLock.Lock()
+	defer smapLock.Unlock()
+	m.deepcopy(dst)
 }
 
-func (m *Smap) copyLocked(dst *Smap) {
-	m.lock()
-	defer m.unlock()
+func (m *Smap) cloneU() *Smap {
+	dst := &Smap{}
+	m.deepcopy(dst)
+	return dst
+}
+
+func (m *Smap) deepcopy(dst *Smap) {
 	copyStruct(dst, m)
+	dst.Tmap = make(map[string]*daemonInfo, len(m.Tmap))
+	for id, v := range m.Tmap {
+		dst.Tmap[id] = v
+	}
+	dst.Pmap = make(map[string]*proxyInfo, len(m.Pmap))
+	for id, v := range m.Pmap {
+		dst.Pmap[id] = v
+	}
+	copyStruct(dst.ProxySI, m.ProxySI)
 }
 
 // Dump prints the smap
 func (m *Smap) Dump() {
-	fmt.Printf("Smap: version = %d, sync version = %d\n", m.Version, m.syncversion)
+	fmt.Printf("Smap: version = %d\n", m.Version)
 	fmt.Printf("Targets\n")
 	for _, v := range m.Tmap {
 		fmt.Printf("\tid = %-15s\turl = %s\n", v.DaemonID, v.DirectURL)
@@ -211,6 +237,23 @@ func (m *Smap) Dump() {
 		fmt.Printf("\tid = %-15s\turl = %-30s\tPrimary = %v\n",
 			m.ProxySI.DaemonID, m.ProxySI.DirectURL, m.ProxySI.Primary)
 	}
+}
+
+//
+// revs interface
+//
+func (m *Smap) tag() string    { return smaptag }
+func (m *Smap) version() int64 { return m.Version }
+
+func (m *Smap) cloneL() interface{} {
+	smapLock.Lock()
+	defer smapLock.Unlock()
+	return m.cloneU()
+}
+
+func (m *Smap) marshal() (b []byte, err error) {
+	b, err = json.Marshal(m)
+	return
 }
 
 //====================
@@ -243,22 +286,37 @@ func (m *lbmap) del(b string) bool {
 	return true
 }
 
-func (m *lbmap) version() int64 {
+func (m *lbmap) versionL() int64 {
+	lbmapLock.Lock()
+	defer lbmapLock.Unlock()
 	return m.Version
 }
 
-func (m *lbmap) versionLocked() int64 {
-	m.lock()
-	defer m.unlock()
-	return m.Version
+func (m *lbmap) cloneU() *lbmap {
+	dst := &lbmap{}
+	copyStruct(dst, m)
+	dst.LBmap = make(map[string]string, len(m.LBmap))
+	for name, v := range m.LBmap {
+		dst.LBmap[name] = v
+	}
+	return dst
 }
 
-func (m *lbmap) lock() {
-	m.Lock()
+//
+// revs interface
+//
+func (m *lbmap) tag() string    { return lbmaptag }
+func (m *lbmap) version() int64 { return m.Version }
+
+func (m *lbmap) cloneL() interface{} {
+	lbmapLock.Lock()
+	defer lbmapLock.Unlock()
+	return m.cloneU()
 }
 
-func (m *lbmap) unlock() {
-	m.Unlock()
+func (m *lbmap) marshal() (b []byte, err error) {
+	b, err = json.Marshal(m)
+	return
 }
 
 //====================
@@ -338,6 +396,7 @@ func dfcinit() {
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 		ctx.rg.add(newproxykalive(p), xproxykalive)
+		ctx.rg.add(newmetasyncer(p, nil), xmetasyncer)
 	} else {
 		t := &targetrunner{}
 		ctx.rg.add(t, xtarget)
@@ -457,9 +516,15 @@ func getfskeeper() *fskeeper {
 	if !ctx.config.FSKeeper.Enabled {
 		return nil
 	}
-
 	r := ctx.rg.runmap[xfskeeper]
 	rr, ok := r.(*fskeeper)
+	assert(ok)
+	return rr
+}
+
+func getmetasyncer() *metasyncer {
+	r := ctx.rg.runmap[xmetasyncer]
+	rr, ok := r.(*metasyncer)
 	assert(ok)
 	return rr
 }
