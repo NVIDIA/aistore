@@ -56,6 +56,10 @@ const (
 //    to update them with the current REVS versions (as long and if those members
 //    remain listed in the most current/recent cluster map).
 //
+// Last but not the least, metasyncer checks that only the currently elected
+// leader (aka "primary proxy") distributes the REVS objects, thus providing for
+// simple serialization of the versioned updates.
+//
 // The usage is easy - there is a single sync() method that accepts variable
 // number of parameters. Example sync-ing asynchronously without action messages:
 //
@@ -120,7 +124,7 @@ func newmetasyncer(p *proxyrunner, t *targetrunner) (y *metasyncer) {
 	y.pending.lock = &sync.Mutex{}
 	y.chstop = make(chan struct{}, 4)
 	y.chfeed = make(chan []interface{}, 16)
-	y.chfeedwait = make(chan []interface{}, 16)
+	y.chfeedwait = make(chan []interface{})
 	return
 }
 
@@ -213,6 +217,8 @@ func (y *metasyncer) stop(err error) {
 	var v struct{}
 	y.chstop <- v
 	close(y.chstop)
+	close(y.chfeed)
+	close(y.chfeedwait)
 }
 
 func (y *metasyncer) dosync(revsvec []interface{}) int {
@@ -224,8 +230,7 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 		newversions            = make(map[string]revs)
 		check4newmembers       bool
 	)
-	if _, ok := y.synced.copies[smaptag]; ok {
-		v := y.synced.copies[smaptag]
+	if v, ok := y.synced.copies[smaptag]; ok {
 		smapSynced = v.(*Smap)
 	}
 	for _, metaif := range revsvec {
@@ -260,8 +265,7 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 	jsbytes, err = json.Marshal(payload)
 	assert(err == nil, err)
 
-	if _, ok := newversions[smaptag]; ok {
-		v := newversions[smaptag]
+	if v, ok := newversions[smaptag]; ok {
 		smap4bcast = v.(*Smap)
 		check4newmembers = (smapSynced != nil)
 	} else if smapSynced == nil {
@@ -353,6 +357,7 @@ func (y *metasyncer) handlePending() int {
 			y.callbackPending(si, r, err, status)
 		}(si)
 	}
+	wg.Wait()
 	return len(y.pending.diamonds)
 }
 
@@ -377,6 +382,7 @@ func (y *metasyncer) handleRefused(urlfmt, method string, jsbytes []byte, smap4b
 			y.callbackRefused(si, r, err, status)
 		}(si)
 	}
+	wg.Wait()
 }
 
 func (y *metasyncer) callbackRefused(si *daemonInfo, _ []byte, err error, status int) {
@@ -481,16 +487,13 @@ func (y *metasyncer) extractsmap(payload map[string]string) (newsmap, oldsmap *S
 		errstr = fmt.Sprintf("Attempt to downgrade smap version %d to %d", myver, newsmap.version())
 		return
 	}
-	if msgvalue == "" {
+	if msgvalue == "" || msg.Value == nil {
 		// synchronize with no action message and no old smap
 		return
 	}
 	// old smap
 	oldsmap.Tmap = make(map[string]*daemonInfo)
 	oldsmap.Pmap = make(map[string]*proxyInfo)
-	if msg.Value == nil {
-		return
-	}
 	v1, ok1 := msg.Value.(map[string]interface{})
 	assert(ok1, fmt.Sprintf("msg (%+v, %T), msg.Value (%+v, %T)", msg, msg, msg.Value, msg.Value))
 	v2, ok2 := v1["tmap"]

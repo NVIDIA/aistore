@@ -619,6 +619,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		if errstr := p.savelbmapconf(); errstr != "" {
 			p.lbmap.add(bucket)
 			p.invalmsghdlr(w, r, errstr)
+			return
 		}
 		pair := &revspair{p.lbmap.cloneU(), &msg}
 		p.metasyncer.sync(true, pair)
@@ -1734,6 +1735,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.smap.del(nsi.DaemonID)
 		}
 		p.invalmsghdlr(w, r, errstr)
+		return
 	}
 	pair := &revspair{p.smap.cloneU(), msg}
 	p.metasyncer.sync(false, pair, p.lbmap.cloneU())
@@ -1823,6 +1825,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			p.smap.add(osi)
 		}
 		p.invalmsghdlr(w, r, errstr)
+		return
 	}
 	if p.stopped {
 		return
