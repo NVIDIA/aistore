@@ -2211,7 +2211,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatSmapVote:
 		msg := SmapVoteMsg{
 			VoteInProgress: false,
-			Smap:           t.smap,
+			Smap:           t.smap.cloneL().(*Smap),
+			lbmap:          t.lbmap.cloneL().(*lbmap),
 		}
 		jsbytes, err := json.Marshal(msg)
 		assert(err == nil, err)

@@ -53,7 +53,7 @@ var (
 //       but who knows how many such things exist.
 
 func TestProxy(t *testing.T) {
-	t.Skip("Multi proxy is not ready")
+	// t.Skip("Multi proxy is not ready")
 
 	if testing.Short() {
 		t.Skip("Long run only")
@@ -1051,7 +1051,7 @@ func waitForPrimaryProxy(reason string, beginingVersion int64, verbose bool) (df
 		}
 	}
 
-	return dfc.Smap{}, fmt.Errorf("Timed out while waiting for cluster to stablize")
+	return dfc.Smap{}, fmt.Errorf("Timed out while waiting for cluster to stabilize")
 }
 
 // waitForMapSync querys ever target/proxy's smap, wait until they all have the same version

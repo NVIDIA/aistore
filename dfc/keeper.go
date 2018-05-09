@@ -76,6 +76,9 @@ func (r *kalive) onerr(err error, status int) {
 }
 
 func (r *kalive) timestamp(sid string) {
+	if r.okmap == nil {
+		return
+	}
 	r.okmap.Lock()
 	defer r.okmap.Unlock()
 	r.okmap.okmap[sid] = time.Now()

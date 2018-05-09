@@ -330,6 +330,7 @@ func (p *proxyrunner) getSmapFromHintCluster() (retry bool) {
 	p.broadcast(urlfmt, method, jsbytes, unionsmap, callback, ctx.config.Timeout.CplaneOperation)
 	// Retrieve maximum version Smap
 	var maxVersionSmap *Smap
+	var maxVersionlbmap *lbmap
 maxloop:
 	for {
 		select {
@@ -339,9 +340,11 @@ maxloop:
 				retry = true
 				return
 			}
-
 			if maxVersionSmap == nil || svm.Smap.version() > maxVersionSmap.version() {
 				maxVersionSmap = svm.Smap
+			}
+			if maxVersionlbmap == nil || svm.lbmap.version() > maxVersionlbmap.version() {
+				maxVersionlbmap = svm.lbmap
 			}
 		default:
 			break maxloop
@@ -352,6 +355,10 @@ maxloop:
 		glog.Infoln("No other cluster maps found; remaining primary.")
 		return
 	}
+	if maxVersionlbmap != nil && p.lbmap.version() < maxVersionlbmap.version() {
+		p.lbmap = maxVersionlbmap
+	}
+
 	// If there is a non-zero version smap:
 	if maxVersionSmap.ProxySI.DaemonID == p.si.DaemonID {
 		glog.Infoln("This proxy is primary in found cluster map; remaining primary.")
@@ -1385,13 +1392,12 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatSmapVote:
 		_, xx := p.xactinp.findL(ActElection)
 		vote := (xx != nil)
-		smapLock.Lock()
 		msg := SmapVoteMsg{
 			VoteInProgress: vote,
-			Smap:           p.smap,
+			Smap:           p.smap.cloneL().(*Smap),
+			lbmap:          p.lbmap.cloneL().(*lbmap),
 		}
 		jsbytes, err := json.Marshal(msg)
-		smapLock.Unlock()
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
 	default:
@@ -1938,15 +1944,15 @@ func (p *proxyrunner) islocalBucket(bucket string) bool {
 }
 
 func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
+	smapLock.Lock()
+	defer smapLock.Unlock()
 	if p.primary {
 		return true
 	}
-
 	if p.proxysi != nil {
 		w.Header().Add(HeaderPrimaryProxyURL, p.proxysi.DirectURL)
 		w.Header().Add(HeaderPrimaryProxyID, p.proxysi.DaemonID)
 	}
-
 	s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
 	p.invalmsghdlr(w, r, s)
 	return false

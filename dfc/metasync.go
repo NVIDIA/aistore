@@ -131,7 +131,8 @@ func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
 		if y.p.proxysi != nil {
 			lead = y.p.proxysi.DaemonID
 		}
-		assert(false, fmt.Sprintf("%s (self) is not the primary proxy (%s) - cannot distribute REVS", y.p.si.DaemonID, lead))
+		glog.Errorf("%s (self) is not the primary proxy (%s) - cannot distribute REVS", y.p.si.DaemonID, lead)
+		return
 	}
 	// validate
 	for _, metaif := range revsvec {

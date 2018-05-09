@@ -31,6 +31,7 @@ type (
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`
 		Smap      Smap      `json:"smap"`
+		lbmap     lbmap     `json:"lbmap"`
 		StartTime time.Time `json:"starttime"`
 		Initiator string    `json:"initiator"`
 	}
@@ -122,12 +123,19 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.invalmsghdlr(w, r, s)
 		return
 	}
+	candidate := msg.Record.Candidate
+	if candidate == "" {
+		h.invalmsghdlr(w, r, fmt.Sprintln("Cannot request vote without Candidate field"))
+		return
+	}
 
-	v := h.smap.versionL()
+	smapLock.Lock() // ==================
+	v := h.smap.version()
 	if v < msg.Record.Smap.version() {
-		glog.Errorf("VoteRecord Smap Version (%v) is newer than local Smap (%v), updating Smap\n", msg.Record.Smap.version(), v)
+		glog.Warningf("VoteRecord Smap Version (%v) is newer than local Smap (%v), updating Smap\n", msg.Record.Smap.version(), v)
 		h.smap = &msg.Record.Smap
 	} else if v > h.smap.version() {
+		smapLock.Unlock()
 		glog.Errorf("VoteRecord smap Version (%v) is older than local Smap (%v), voting No\n", msg.Record.Smap.version(), v)
 		_, err = w.Write([]byte(VoteNo))
 		if err != nil {
@@ -135,20 +143,21 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	candidate := msg.Record.Candidate
-	if candidate == "" {
-		h.invalmsghdlr(w, r, fmt.Sprintln("Cannot request vote without Candidate field"))
-		return
-	}
-
-	smapLock.Lock()
 	pi := h.smap.getProxy(candidate)
-	smapLock.Unlock()
+	smapLock.Unlock() // ==================
+
 	if pi == nil {
 		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate not present in proxy smap: %s (%v)", candidate, h.smap.Pmap))
 		return
 	}
+
+	lbmapLock.Lock()
+	vlb := h.lbmap.version()
+	if vlb < msg.Record.lbmap.version() {
+		glog.Warningf("VoteRecord lbmap Version (%v) is newer than local lbmap (%v), updating Smap\n", msg.Record.lbmap.version(), vlb)
+		h.lbmap = &msg.Record.lbmap
+	}
+	lbmapLock.Unlock()
 
 	vote, err := h.voteOnProxy(pi.DaemonID)
 	if err != nil {
@@ -236,6 +245,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		Initiator: p.si.DaemonID,
 	}
 	p.smap.copyL(&vr.Smap)
+	p.lbmap.copyL(&vr.lbmap)
 
 	// The election should be started in a goroutine, as it must not hang the http handler
 	go p.proxyElection(vr)
@@ -304,7 +314,7 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 
 	for res := range resch {
 		if res.err != nil {
-			glog.Warningf("Error response from target: %v", res.err)
+			glog.Warningf("Error response from %s, err: %v", res.daemonID, res.err)
 			errors[res.daemonID] = true
 			n++
 		} else {
@@ -350,6 +360,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 		Candidate: vr.Candidate,
 		Primary:   vr.Primary,
 		Smap:      vr.Smap,
+		lbmap:     vr.lbmap,
 		StartTime: time.Now(),
 		Initiator: p.si.DaemonID,
 	}
@@ -446,6 +457,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
+		p.lbmap.copyL(&vr.lbmap)
 		p.proxyElection(vr)
 	} else {
 		glog.Infof("%v: Requesting Election from %v", p.si.DaemonID, nextPrimaryProxy.DaemonID)
@@ -456,6 +468,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
+		p.lbmap.copyL(&vr.lbmap)
 		p.sendElectionRequest(vr, nextPrimaryProxy)
 	}
 }
@@ -481,6 +494,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		Initiator: t.si.DaemonID,
 	}
 	t.smap.copyL(&vr.Smap)
+	t.lbmap.copyL(&vr.lbmap)
 	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 
@@ -492,6 +506,15 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *p
 
 	_, err, _, _ = h.call(&nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
 	if err != nil {
+		if IsErrConnectionRefused(err) {
+			for i := 0; i < 2; i++ {
+				time.Sleep(time.Second)
+				_, err, _, _ = h.call(&nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+				if err == nil {
+					break
+				}
+			}
+		}
 		glog.Errorf("Failed to request election from next primary proxy: %v", err)
 		return
 	}

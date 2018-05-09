@@ -294,12 +294,22 @@ func (m *lbmap) versionL() int64 {
 
 func (m *lbmap) cloneU() *lbmap {
 	dst := &lbmap{}
+	m.deepcopy(dst)
+	return dst
+}
+
+func (m *lbmap) copyL(dst *lbmap) {
+	lbmapLock.Lock()
+	defer lbmapLock.Unlock()
+	m.deepcopy(dst)
+}
+
+func (m *lbmap) deepcopy(dst *lbmap) {
 	copyStruct(dst, m)
 	dst.LBmap = make(map[string]string, len(m.LBmap))
 	for name, v := range m.LBmap {
 		dst.LBmap[name] = v
 	}
-	return dst
 }
 
 //
