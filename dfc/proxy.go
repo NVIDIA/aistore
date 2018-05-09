@@ -689,6 +689,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if errstr := p.savelbmapconf(); errstr != "" {
 			p.lbmap.del(lbucket)
 			p.invalmsghdlr(w, r, errstr)
+			return
 		}
 		pair := &revspair{p.lbmap.cloneU(), &msg}
 		p.metasyncer.sync(true, pair)

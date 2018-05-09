@@ -322,7 +322,7 @@ func (y *metasyncer) handlePending() int {
 		jsbytes []byte
 		err     error
 	)
-	for id, _ := range y.pending.diamonds {
+	for id := range y.pending.diamonds {
 		if !y.p.smap.containsL(id) {
 			delete(y.pending.diamonds, id)
 		}
@@ -406,7 +406,7 @@ func (y *metasyncer) receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// validate
-	for tag, _ := range payload {
+	for tag := range payload {
 		switch tag {
 		case smaptag:
 		case smaptag + actiontag:
@@ -503,10 +503,10 @@ func (y *metasyncer) extractsmap(payload map[string]string) (newsmap, oldsmap *S
 	versionf := v1["version"].(float64)
 
 	// partial restore of the old smap - keeping only the respective DaemonIDs and version
-	for sid, _ := range tmapif {
+	for sid := range tmapif {
 		oldsmap.Tmap[sid] = &daemonInfo{}
 	}
-	for pid, _ := range pmapif {
+	for pid := range pmapif {
 		oldsmap.Pmap[pid] = &proxyInfo{}
 	}
 	oldsmap.Version = int64(versionf)
@@ -680,10 +680,6 @@ func (p *proxyrunner) receivelbmap(newlbmap *lbmap, msg *ActionMsg) {
 	lbmapLock.Lock()
 	defer lbmapLock.Unlock()
 	p.lbmap = newlbmap
-	if ctx.config.TestFSP.Instance > 0 {
-		glog.Warningf("Warning: proxy (local) instance %d won't be storing lbmap in the shared confdir", ctx.config.TestFSP.Instance)
-		return
-	}
 	lbpathname := filepath.Join(p.confdir, lbname)
 	if err := LocalSave(lbpathname, p.lbmap); err != nil {
 		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)

@@ -53,6 +53,8 @@ var (
 //       but who knows how many such things exist.
 
 func TestProxy(t *testing.T) {
+	t.Skip("Multi proxy is not ready")
+
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
