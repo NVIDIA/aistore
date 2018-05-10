@@ -141,7 +141,6 @@ type httprunner struct {
 	proxysi               *proxyInfo
 	smap                  *Smap
 	lbmap                 *lbmap
-	metasyncer            *metasyncer
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -639,4 +638,104 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specif
 	glog.Flush()
 	http.Error(w, s, status)
 	h.statsif.add("numerr", 1)
+}
+
+func (h *httprunner) extractsmap(payload map[string]string) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
+	if _, ok := payload[smaptag]; !ok {
+		return
+	}
+	newsmap, oldsmap, msg = &Smap{}, &Smap{}, &ActionMsg{}
+	smapvalue := payload[smaptag]
+	msgvalue := ""
+	if err := json.Unmarshal([]byte(smapvalue), newsmap); err != nil {
+		errstr = fmt.Sprintf("Failed to unmarshal new smap, value (%+v, %T), err: %v", smapvalue, smapvalue, err)
+		return
+	}
+	if _, ok := payload[smaptag+actiontag]; ok {
+		msgvalue = payload[smaptag+actiontag]
+		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
+			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
+			return
+		}
+	}
+	if glog.V(3) {
+		if msg.Action == "" {
+			glog.Infof("extract Smap ver=%d, msg=<nil>", newsmap.version())
+		} else {
+			glog.Infof("extract Smap ver=%d, action=%s", newsmap.version(), msg.Action)
+		}
+	}
+	myver := h.smap.versionL()
+	if newsmap.version() == myver {
+		newsmap = nil
+		return
+	}
+	if newsmap.version() < myver {
+		errstr = fmt.Sprintf("Attempt to downgrade smap version %d to %d", myver, newsmap.version())
+		return
+	}
+	if msgvalue == "" || msg.Value == nil {
+		// synchronize with no action message and no old smap
+		return
+	}
+	// old smap
+	oldsmap.Tmap = make(map[string]*daemonInfo)
+	oldsmap.Pmap = make(map[string]*proxyInfo)
+	v1, ok1 := msg.Value.(map[string]interface{})
+	assert(ok1, fmt.Sprintf("msg (%+v, %T), msg.Value (%+v, %T)", msg, msg, msg.Value, msg.Value))
+	v2, ok2 := v1["tmap"]
+	assert(ok2)
+	tmapif, ok3 := v2.(map[string]interface{})
+	assert(ok3)
+	v4, ok4 := v1["pmap"]
+	assert(ok4)
+	pmapif, ok5 := v4.(map[string]interface{})
+	assert(ok5)
+	versionf := v1["version"].(float64)
+
+	// partial restore of the old smap - keeping only the respective DaemonIDs and version
+	for sid := range tmapif {
+		oldsmap.Tmap[sid] = &daemonInfo{}
+	}
+	for pid := range pmapif {
+		oldsmap.Pmap[pid] = &proxyInfo{}
+	}
+	oldsmap.Version = int64(versionf)
+	return
+}
+
+func (h *httprunner) extractlbmap(payload map[string]string) (newlbmap *lbmap, msg *ActionMsg, errstr string) {
+	if _, ok := payload[lbmaptag]; !ok {
+		return
+	}
+	newlbmap, msg = &lbmap{}, &ActionMsg{}
+	lbmapvalue := payload[lbmaptag]
+	msgvalue := ""
+	if err := json.Unmarshal([]byte(lbmapvalue), newlbmap); err != nil {
+		errstr = fmt.Sprintf("Failed to unmarshal new lbmap, value (%+v, %T), err: %v", lbmapvalue, lbmapvalue, err)
+		return
+	}
+	if _, ok := payload[lbmaptag+actiontag]; ok {
+		msgvalue = payload[lbmaptag+actiontag]
+		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
+			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
+			return
+		}
+	}
+	if glog.V(3) {
+		if msg.Action == "" {
+			glog.Infof("extract lbmap ver=%d, msg=<nil>", newlbmap.version())
+		} else {
+			glog.Infof("extract lbmap ver=%d, msg=%+v", newlbmap.version(), msg)
+		}
+	}
+	myver := h.lbmap.versionL()
+	if newlbmap.version() == myver {
+		newlbmap = nil
+		return
+	}
+	if newlbmap.version() < myver {
+		errstr = fmt.Sprintf("Attempt to downgrade lbmap version %d to %d", myver, newlbmap.version())
+	}
+	return
 }

@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -19,10 +17,9 @@ import (
 
 // enumerated REVS types (opaque TBD)
 const (
-	smaptag  = "smaptag"
-	lbmaptag = "lbmaptag"
-	//
-	actiontag = "-action" // to make a pair (revs, action)
+	smaptag   = "smaptag"
+	lbmaptag  = "lbmaptag" //
+	actiontag = "-action"  // to make a pair (revs, action)
 )
 
 // =================== A Brief Theory of Operation =================================
@@ -94,8 +91,6 @@ type revspair struct {
 type metasyncer struct {
 	namedrunner
 	p      *proxyrunner
-	t      *targetrunner
-	h      *httprunner
 	synced struct {
 		copies map[string]revs // by tag
 	}
@@ -111,14 +106,8 @@ type metasyncer struct {
 }
 
 // c-tor
-func newmetasyncer(p *proxyrunner, t *targetrunner) (y *metasyncer) {
-	y = &metasyncer{p: p, t: t}
-	if p == nil {
-		y.h = &t.httprunner
-		return
-	}
-	assert(t == nil)
-	y.h = &p.httprunner
+func newmetasyncer(p *proxyrunner) (y *metasyncer) {
+	y = &metasyncer{p: p}
 	y.synced.copies = make(map[string]revs)
 	y.pending.diamonds = make(map[string]*daemonInfo)
 	y.pending.lock = &sync.Mutex{}
@@ -369,329 +358,4 @@ func (y *metasyncer) callbackRefused(si *daemonInfo, _ []byte, err error, status
 	delete(y.pending.refused, si.DaemonID)
 	y.pending.lock.Unlock()
 	glog.Infoln("retried & sync-ed", si.DaemonID)
-}
-
-//=====================================================================
-//
-// Rx
-//
-//=====================================================================
-func (y *metasyncer) receive(w http.ResponseWriter, r *http.Request) {
-	if y.p != nil && y.p.primary {
-		y.p.invalmsghdlr(w, r,
-			fmt.Sprintf("Primary proxy (self=%s) cannot receive REVS objects - election in progress?", y.p.si.DaemonID))
-		return
-	}
-	var payload = make(map[string]string)
-	if y.h.readJSON(w, r, &payload) != nil {
-		return
-	}
-	// validate
-	for tag := range payload {
-		switch tag {
-		case smaptag:
-		case smaptag + actiontag:
-		case lbmaptag:
-		case lbmaptag + actiontag:
-		default:
-			assert(false, "Unknown or not yet implemented metatag '"+tag+"'")
-		}
-	}
-	// extract
-	newsmap, oldsmap, actionsmap, errstr := y.extractsmap(payload)
-	if errstr != "" {
-		y.h.invalmsghdlr(w, r, errstr)
-		return
-	}
-	newlbmap, actionlb, errstr := y.extractlbmap(payload)
-	if errstr != "" {
-		y.h.invalmsghdlr(w, r, errstr)
-		return
-	}
-	if newsmap != nil {
-		if y.p != nil {
-			errstr = y.p.receivesmap(newsmap, oldsmap, actionsmap)
-		} else {
-			errstr = y.t.receivesmap(newsmap, oldsmap, actionsmap)
-		}
-		if errstr != "" {
-			y.h.invalmsghdlr(w, r, errstr)
-		}
-	}
-	if newlbmap != nil {
-		if y.p != nil {
-			y.p.receivelbmap(newlbmap, actionlb)
-		} else {
-			y.t.receivelbmap(newlbmap, actionlb)
-		}
-	}
-}
-
-func (y *metasyncer) extractsmap(payload map[string]string) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
-	if _, ok := payload[smaptag]; !ok {
-		return
-	}
-	newsmap, oldsmap, msg = &Smap{}, &Smap{}, &ActionMsg{}
-	smapvalue := payload[smaptag]
-	msgvalue := ""
-	if err := json.Unmarshal([]byte(smapvalue), newsmap); err != nil {
-		errstr = fmt.Sprintf("Failed to unmarshal new smap, value (%+v, %T), err: %v", smapvalue, smapvalue, err)
-		return
-	}
-	if _, ok := payload[smaptag+actiontag]; ok {
-		msgvalue = payload[smaptag+actiontag]
-		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
-			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
-			return
-		}
-	}
-	if glog.V(3) {
-		if msg.Action == "" {
-			glog.Infof("extract Smap ver=%d, msg=<nil>", newsmap.version())
-		} else {
-			glog.Infof("extract Smap ver=%d, action=%s", newsmap.version(), msg.Action)
-		}
-	}
-	myver := y.h.smap.versionL()
-	if newsmap.version() == myver {
-		newsmap = nil
-		return
-	}
-	if newsmap.version() < myver {
-		errstr = fmt.Sprintf("Attempt to downgrade smap version %d to %d", myver, newsmap.version())
-		return
-	}
-	if msgvalue == "" || msg.Value == nil {
-		// synchronize with no action message and no old smap
-		return
-	}
-	// old smap
-	oldsmap.Tmap = make(map[string]*daemonInfo)
-	oldsmap.Pmap = make(map[string]*proxyInfo)
-	v1, ok1 := msg.Value.(map[string]interface{})
-	assert(ok1, fmt.Sprintf("msg (%+v, %T), msg.Value (%+v, %T)", msg, msg, msg.Value, msg.Value))
-	v2, ok2 := v1["tmap"]
-	assert(ok2)
-	tmapif, ok3 := v2.(map[string]interface{})
-	assert(ok3)
-	v4, ok4 := v1["pmap"]
-	assert(ok4)
-	pmapif, ok5 := v4.(map[string]interface{})
-	assert(ok5)
-	versionf := v1["version"].(float64)
-
-	// partial restore of the old smap - keeping only the respective DaemonIDs and version
-	for sid := range tmapif {
-		oldsmap.Tmap[sid] = &daemonInfo{}
-	}
-	for pid := range pmapif {
-		oldsmap.Pmap[pid] = &proxyInfo{}
-	}
-	oldsmap.Version = int64(versionf)
-	return
-}
-
-func (y *metasyncer) extractlbmap(payload map[string]string) (newlbmap *lbmap, msg *ActionMsg, errstr string) {
-	if _, ok := payload[lbmaptag]; !ok {
-		return
-	}
-	newlbmap, msg = &lbmap{}, &ActionMsg{}
-	lbmapvalue := payload[lbmaptag]
-	msgvalue := ""
-	if err := json.Unmarshal([]byte(lbmapvalue), newlbmap); err != nil {
-		errstr = fmt.Sprintf("Failed to unmarshal new lbmap, value (%+v, %T), err: %v", lbmapvalue, lbmapvalue, err)
-		return
-	}
-	if _, ok := payload[lbmaptag+actiontag]; ok {
-		msgvalue = payload[lbmaptag+actiontag]
-		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
-			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
-			return
-		}
-	}
-	if glog.V(3) {
-		if msg.Action == "" {
-			glog.Infof("extract lbmap ver=%d, msg=<nil>", newlbmap.version())
-		} else {
-			glog.Infof("extract lbmap ver=%d, msg=%+v", newlbmap.version(), msg)
-		}
-	}
-	myver := y.h.lbmap.versionL()
-	if newlbmap.version() == myver {
-		newlbmap = nil
-		return
-	}
-	if newlbmap.version() < myver {
-		errstr = fmt.Sprintf("Attempt to downgrade lbmap version %d to %d", myver, newlbmap.version())
-	}
-	return
-}
-
-//======================================================================================
-//
-// concrete proxy and target Rx handlers - FIXME: make use of the received ActiveMsg
-//
-//======================================================================================
-func (p *proxyrunner) receivesmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
-	if msg.Action == "" {
-		glog.Infof("receive Smap: version %d (old %d), ntargets %d", newsmap.version(), oldsmap.version(), len(newsmap.Tmap))
-	} else {
-		glog.Infof("receive Smap: version %d (old %d), ntargets %d, action %s",
-			newsmap.version(), oldsmap.version(), len(newsmap.Tmap), msg.Action)
-	}
-	existentialQ := (newsmap.getProxy(p.si.DaemonID) != nil)
-	if !existentialQ {
-		errstr = fmt.Sprintf("FATAL: new Smap does not contain the proxy %s = self", p.si.DaemonID)
-		return
-	}
-	err := p.setPrimaryProxyAndSmapL(newsmap)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to update primary proxy and Smap, err: %v", err)
-	}
-	return
-}
-
-func (t *targetrunner) receivesmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
-	var (
-		newtargetid  string
-		existentialQ bool
-	)
-	if msg.Action == "" {
-		glog.Infof("receive Smap: version %d (old %d), ntargets %d", newsmap.version(), oldsmap.version(), len(newsmap.Tmap))
-	} else {
-		glog.Infof("receive Smap: version %d (old %d), ntargets %d, message %+v", newsmap.version(), oldsmap.version(), len(newsmap.Tmap), msg)
-	}
-	newlen := len(newsmap.Tmap)
-	oldlen := len(oldsmap.Tmap)
-
-	// check whether this target is present in the new Smap
-	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
-	// assign proxysi
-	// log
-	infoln := make([]string, 0, newlen)
-	for id, si := range newsmap.Tmap { // log
-		if id == t.si.DaemonID {
-			existentialQ = true
-			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si))
-		} else {
-			infoln = append(infoln, fmt.Sprintf("target: %s", si))
-		}
-		if oldlen == 0 {
-			continue
-		}
-		if _, ok := oldsmap.Tmap[id]; !ok {
-			if newtargetid != "" {
-				glog.Warningf("More than one new target (%s, %s) in the new Smap?", newtargetid, id)
-			}
-			newtargetid = id
-		}
-	}
-	if !existentialQ {
-		errstr = fmt.Sprintf("FATAL: new Smap does not contain the target %s = self", t.si.DaemonID)
-		return
-	}
-
-	smapLock.Lock()
-	orig := t.smap
-	t.smap = newsmap
-	err := t.setPrimaryProxy(newsmap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
-	smap4xaction := newsmap.cloneU()
-	if err != nil {
-		t.smap = orig
-		smapLock.Unlock()
-		for _, ln := range infoln {
-			glog.Infoln(ln)
-		}
-		errstr = fmt.Sprintf("Failed to receive Smap, err: %v", err)
-		return
-	}
-	smapLock.Unlock()
-
-	for _, ln := range infoln {
-		glog.Infoln(ln)
-	}
-	if msg.Action == ActRebalance {
-		go t.runRebalance(smap4xaction, newtargetid)
-		return
-	}
-	if oldlen == 0 {
-		return
-	}
-	if newtargetid == "" {
-		if newlen != oldlen {
-			assert(newlen < oldlen)
-			glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
-		} else {
-			glog.Infof("nothing to rebalance: num (%d) and IDs of the targets did not change", newlen)
-		}
-		return
-	}
-	if !ctx.config.Rebalance.Enabled {
-		glog.Infoln("auto-rebalancing disabled")
-		return
-	}
-	uptime := time.Since(t.starttime())
-	if uptime < ctx.config.Rebalance.StartupDelayTime && t.si.DaemonID != newtargetid {
-		glog.Infof("not auto-rebalancing: uptime %v < %v", uptime, ctx.config.Rebalance.StartupDelayTime)
-		aborted, running := t.xactinp.isAbortedOrRunningRebalance()
-		if aborted && !running {
-			f := func() {
-				time.Sleep(ctx.config.Rebalance.StartupDelayTime - uptime)
-				currsmap := t.smap.cloneL().(*Smap)
-				t.runRebalance(currsmap, "")
-			}
-			go runRebalanceOnce.Do(f) // only once at startup
-		}
-		return
-	}
-	// xaction
-	go t.runRebalance(smap4xaction, newtargetid)
-	return
-}
-
-func (p *proxyrunner) receivelbmap(newlbmap *lbmap, msg *ActionMsg) {
-	if msg.Action == "" {
-		glog.Infof("receive lbmap: version %d", newlbmap.version())
-	} else {
-		glog.Infof("receive lbmap: version %d, message %+v", newlbmap.version(), msg)
-	}
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	p.lbmap = newlbmap
-	lbpathname := filepath.Join(p.confdir, lbname)
-	if err := LocalSave(lbpathname, p.lbmap); err != nil {
-		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
-	}
-}
-
-// FIXME: use the message
-func (t *targetrunner) receivelbmap(newlbmap *lbmap, msg *ActionMsg) {
-	if msg.Action == "" {
-		glog.Infof("receive lbmap: version %d", newlbmap.version())
-	} else {
-		glog.Infof("receive lbmap: version %d, message %+v", newlbmap.version(), msg)
-	}
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	for bucket := range t.lbmap.LBmap {
-		_, ok := newlbmap.LBmap[bucket]
-		if !ok {
-			glog.Infof("Destroy local bucket %s", bucket)
-			for mpath := range ctx.mountpaths.Available {
-				localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
-				if err := os.RemoveAll(localbucketfqn); err != nil {
-					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
-				}
-			}
-		}
-	}
-	t.lbmap = newlbmap
-	for mpath := range ctx.mountpaths.Available {
-		for bucket := range t.lbmap.LBmap {
-			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
-			if err := CreateDir(localbucketfqn); err != nil {
-				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
-			}
-		}
-	}
 }

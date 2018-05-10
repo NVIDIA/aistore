@@ -133,8 +133,6 @@ func (t *targetrunner) run() error {
 	// prefetch
 	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
 
-	t.metasyncer = newmetasyncer(nil, t) // construct a non-runnable object to serve Rx
-
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
@@ -2137,7 +2135,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			smapLock.Unlock()
 			return
 		case Rmetasync:
-			t.metasyncer.receive(w, r)
+			t.receiveMeta(w, r)
 			return
 		default:
 		}
@@ -2708,4 +2706,168 @@ func makePathLocal(basePath string) string {
 // builds fqn of directory for cloud buckets from mountpath
 func makePathCloud(basePath string) string {
 	return filepath.Join(basePath, ctx.config.CloudBuckets)
+}
+
+func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
+	var (
+		h       = &t.httprunner
+		payload = make(map[string]string)
+	)
+
+	if h.readJSON(w, r, &payload) != nil {
+		return
+	}
+
+	newsmap, oldsmap, actionsmap, errstr := h.extractsmap(payload)
+	if errstr != "" {
+		h.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newsmap != nil {
+		errstr = t.receiveSMap(newsmap, oldsmap, actionsmap)
+		if errstr != "" {
+			h.invalmsghdlr(w, r, errstr)
+		}
+	}
+
+	newlbmap, actionlb, errstr := h.extractlbmap(payload)
+	if errstr != "" {
+		h.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newlbmap != nil {
+		t.receiveLBMap(newlbmap, actionlb)
+	}
+}
+
+// FIXME: use the message
+func (t *targetrunner) receiveLBMap(newlbmap *lbmap, msg *ActionMsg) {
+	if msg.Action == "" {
+		glog.Infof("receive lbmap: version %d", newlbmap.version())
+	} else {
+		glog.Infof("receive lbmap: version %d, message %+v", newlbmap.version(), msg)
+	}
+	lbmapLock.Lock()
+	defer lbmapLock.Unlock()
+	for bucket := range t.lbmap.LBmap {
+		_, ok := newlbmap.LBmap[bucket]
+		if !ok {
+			glog.Infof("Destroy local bucket %s", bucket)
+			for mpath := range ctx.mountpaths.Available {
+				localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
+				if err := os.RemoveAll(localbucketfqn); err != nil {
+					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
+				}
+			}
+		}
+	}
+	t.lbmap = newlbmap
+	for mpath := range ctx.mountpaths.Available {
+		for bucket := range t.lbmap.LBmap {
+			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
+			if err := CreateDir(localbucketfqn); err != nil {
+				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
+			}
+		}
+	}
+}
+
+func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
+	var (
+		newtargetid  string
+		existentialQ bool
+	)
+	if msg.Action == "" {
+		glog.Infof("receive Smap: version %d (old %d), ntargets %d", newsmap.version(), oldsmap.version(), len(newsmap.Tmap))
+	} else {
+		glog.Infof("receive Smap: version %d (old %d), ntargets %d, message %+v", newsmap.version(), oldsmap.version(), len(newsmap.Tmap), msg)
+	}
+	newlen := len(newsmap.Tmap)
+	oldlen := len(oldsmap.Tmap)
+
+	// check whether this target is present in the new Smap
+	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
+	// assign proxysi
+	// log
+	infoln := make([]string, 0, newlen)
+	for id, si := range newsmap.Tmap { // log
+		if id == t.si.DaemonID {
+			existentialQ = true
+			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si))
+		} else {
+			infoln = append(infoln, fmt.Sprintf("target: %s", si))
+		}
+		if oldlen == 0 {
+			continue
+		}
+		if _, ok := oldsmap.Tmap[id]; !ok {
+			if newtargetid != "" {
+				glog.Warningf("More than one new target (%s, %s) in the new Smap?", newtargetid, id)
+			}
+			newtargetid = id
+		}
+	}
+	if !existentialQ {
+		errstr = fmt.Sprintf("FATAL: new Smap does not contain the target %s = self", t.si.DaemonID)
+		return
+	}
+
+	smapLock.Lock()
+	orig := t.smap
+	t.smap = newsmap
+	err := t.setPrimaryProxy(newsmap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+	smap4xaction := newsmap.cloneU()
+	if err != nil {
+		t.smap = orig
+		smapLock.Unlock()
+		for _, ln := range infoln {
+			glog.Infoln(ln)
+		}
+		errstr = fmt.Sprintf("Failed to receive Smap, err: %v", err)
+		return
+	}
+	smapLock.Unlock()
+
+	for _, ln := range infoln {
+		glog.Infoln(ln)
+	}
+	if msg.Action == ActRebalance {
+		go t.runRebalance(smap4xaction, newtargetid)
+		return
+	}
+	if oldlen == 0 {
+		return
+	}
+	if newtargetid == "" {
+		if newlen != oldlen {
+			assert(newlen < oldlen)
+			glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
+		} else {
+			glog.Infof("nothing to rebalance: num (%d) and IDs of the targets did not change", newlen)
+		}
+		return
+	}
+	if !ctx.config.Rebalance.Enabled {
+		glog.Infoln("auto-rebalancing disabled")
+		return
+	}
+	uptime := time.Since(t.starttime())
+	if uptime < ctx.config.Rebalance.StartupDelayTime && t.si.DaemonID != newtargetid {
+		glog.Infof("not auto-rebalancing: uptime %v < %v", uptime, ctx.config.Rebalance.StartupDelayTime)
+		aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+		if aborted && !running {
+			f := func() {
+				time.Sleep(ctx.config.Rebalance.StartupDelayTime - uptime)
+				currsmap := t.smap.cloneL().(*Smap)
+				t.runRebalance(currsmap, "")
+			}
+			go runRebalanceOnce.Do(f) // only once at startup
+		}
+		return
+	}
+	// xaction
+	go t.runRebalance(smap4xaction, newtargetid)
+	return
 }

@@ -72,6 +72,7 @@ type proxyrunner struct {
 	startedup   bool
 	stopped     bool
 	primary     bool
+	metasyncer  *metasyncer
 }
 
 // start proxy runner
@@ -1431,7 +1432,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		case Rmetasync:
-			p.metasyncer.receive(w, r)
+			p.receiveMeta(w, r)
 			return
 		default:
 		}
@@ -2087,4 +2088,80 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 	}
 
 	return wrappedFunc
+}
+
+func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
+	if p.primary {
+		p.invalmsghdlr(w, r,
+			fmt.Sprintf("Primary proxy (self=%s) cannot receive REVS objects - election in progress?",
+				p.si.DaemonID))
+		return
+	}
+
+	var (
+		h       = &p.httprunner
+		payload = make(map[string]string)
+	)
+
+	if h.readJSON(w, r, &payload) != nil {
+		return
+	}
+
+	newsmap, oldsmap, actionsmap, errstr := h.extractsmap(payload)
+	if errstr != "" {
+		h.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newsmap != nil {
+		errstr = p.receiveSMap(newsmap, oldsmap, actionsmap)
+
+		if errstr != "" {
+			h.invalmsghdlr(w, r, errstr)
+		}
+	}
+
+	newlbmap, actionlb, errstr := h.extractlbmap(payload)
+	if errstr != "" {
+		h.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newlbmap != nil {
+		p.receiveLBMap(newlbmap, actionlb)
+	}
+}
+
+func (p *proxyrunner) receiveLBMap(newlbmap *lbmap, msg *ActionMsg) {
+	if msg.Action == "" {
+		glog.Infof("receive lbmap: version %d", newlbmap.version())
+	} else {
+		glog.Infof("receive lbmap: version %d, message %+v", newlbmap.version(), msg)
+	}
+	lbmapLock.Lock()
+	defer lbmapLock.Unlock()
+	p.lbmap = newlbmap
+	lbpathname := filepath.Join(p.confdir, lbname)
+	if err := LocalSave(lbpathname, p.lbmap); err != nil {
+		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
+	}
+}
+
+func (p *proxyrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
+	if msg.Action == "" {
+		glog.Infof("receive Smap: version %d (old %d), ntargets %d", newsmap.version(), oldsmap.version(), len(newsmap.Tmap))
+	} else {
+		glog.Infof("receive Smap: version %d (old %d), ntargets %d, action %s",
+			newsmap.version(), oldsmap.version(), len(newsmap.Tmap), msg.Action)
+	}
+	existentialQ := (newsmap.getProxy(p.si.DaemonID) != nil)
+	if !existentialQ {
+		errstr = fmt.Sprintf("FATAL: new Smap does not contain the proxy %s = self", p.si.DaemonID)
+		return
+	}
+	err := p.setPrimaryProxyAndSmapL(newsmap)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to update primary proxy and Smap, err: %v", err)
+	}
+	return
 }

@@ -406,7 +406,7 @@ func dfcinit() {
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 		ctx.rg.add(newproxykalive(p), xproxykalive)
-		ctx.rg.add(newmetasyncer(p, nil), xmetasyncer)
+		ctx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
 		ctx.rg.add(t, xtarget)
