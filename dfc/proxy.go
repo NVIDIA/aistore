@@ -829,6 +829,9 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rbuckets, bucketFrom)
 	smap4bcast := &Smap{}
 	p.smap.copyL(smap4bcast)
+	// only needs to tell target of the rename, proxies will get the sync call later
+	smap4bcast.Pmap = nil
+
 	f := func(si *daemonInfo, _ []byte, err error, status int) {
 		if err != nil {
 			glog.Errorf("Target %s failed to rename local bucket %s => %s, err: %v (%d)",
@@ -848,8 +851,11 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *
 	lbpathname := filepath.Join(p.confdir, lbname)
 	if err := LocalSave(lbpathname, p.lbmap); err != nil {
 		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
+		// FIXME: rollback?
 		return false
 	}
+
+	p.metasyncer.sync(true, p.lbmap.cloneU())
 	return true
 }
 
