@@ -125,6 +125,10 @@ func newmetasyncer(p *proxyrunner, t *targetrunner) (y *metasyncer) {
 	y.chstop = make(chan struct{}, 4)
 	y.chfeed = make(chan []interface{}, 16)
 	y.chfeedwait = make(chan []interface{})
+
+	// create the ticker, do not need to start at start up
+	y.ticker = time.NewTicker(time.Duration(time.Hour))
+	y.ticker.Stop()
 	return
 }
 
@@ -146,76 +150,45 @@ func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
 			}
 		}
 	}
-	// feed
+
 	if wait {
 		y.chfeedwait <- revsvec
 		<-y.chfeedwait
 	} else {
 		y.chfeed <- revsvec
 	}
-	return
 }
 
 func (y *metasyncer) run() error {
 	glog.Infof("Starting %s", y.name)
-	var (
-		ticking, stopped bool
-	)
-	for !stopped {
-		if ticking {
-			ticking, stopped = y.selectWithTicker()
-		} else {
-			ticking, stopped = y.selectWithoutTicker()
+
+	for {
+		var npending int
+		select {
+		case revsvec := <-y.chfeedwait:
+			npending = y.dosync(revsvec)
+			var s []interface{}
+			y.chfeedwait <- s
+		case revsvec := <-y.chfeed:
+			npending = y.dosync(revsvec)
+		case <-y.ticker.C:
+			npending = y.handlePending()
+		case <-y.chstop:
+			y.ticker.Stop()
+			return nil
+		}
+
+		y.ticker.Stop()
+		if npending > 0 {
+			y.ticker = time.NewTicker(ctx.config.Periodic.RetrySyncTime)
 		}
 	}
-	return nil
-}
-
-func (y *metasyncer) selectWithTicker() (ticking, stopped bool) {
-	var npending int
-	ticking = true
-	select {
-	case revsvec := <-y.chfeedwait:
-		npending = y.dosync(revsvec)
-		var s []interface{}
-		y.chfeedwait <- s
-	case revsvec := <-y.chfeed:
-		npending = y.dosync(revsvec)
-	case <-y.ticker.C:
-		npending = y.handlePending()
-	case <-y.chstop:
-		stopped = true
-	}
-	if npending == 0 {
-		y.ticker.Stop()
-		ticking = false
-	}
-	return
-}
-
-func (y *metasyncer) selectWithoutTicker() (ticking, stopped bool) {
-	var npending int
-	select {
-	case revsvec := <-y.chfeedwait:
-		npending = y.dosync(revsvec)
-		var s []interface{}
-		y.chfeedwait <- s
-	case revsvec := <-y.chfeed:
-		npending = y.dosync(revsvec)
-	case <-y.chstop:
-		stopped = true
-	}
-	if npending > 0 && !stopped {
-		y.ticker = time.NewTicker(ctx.config.Periodic.RetrySyncTime)
-		ticking = true
-	}
-	return
 }
 
 func (y *metasyncer) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", y.name, err)
-	var v struct{}
-	y.chstop <- v
+
+	y.chstop <- struct{}{}
 	close(y.chstop)
 	close(y.chfeed)
 	close(y.chfeedwait)
@@ -314,6 +287,7 @@ func (y *metasyncer) callbackSync(si *daemonInfo, _ []byte, err error, status in
 		return
 	}
 	glog.Warningf("Failed to sync %s, err: %v (%d)", si.DaemonID, err, status)
+
 	y.pending.lock.Lock()
 	y.pending.diamonds[si.DaemonID] = si
 	if IsErrConnectionRefused(err) {
