@@ -1259,19 +1259,26 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 }
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
-	buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
-	if errstr != "" {
-		if errcode == 0 {
-			t.invalmsghdlr(w, r, errstr)
-		} else {
-			t.invalmsghdlr(w, r, errstr, errcode)
-		}
-		return
-	}
-	bucketnames := &BucketNames{Cloud: buckets, Local: make([]string, 0, 64)}
+	bucketnames := &BucketNames{Cloud: make([]string, 0), Local: make([]string, 0, 64)}
 	for bucket := range t.lbmap.LBmap {
 		bucketnames.Local = append(bucketnames.Local, bucket)
 	}
+
+	q := r.URL.Query()
+	localonly, _ := parsebool(q.Get(URLParamLocal))
+	if !localonly {
+		buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
+		if errstr != "" {
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
+			return
+		}
+		bucketnames.Cloud = buckets
+	}
+
 	jsbytes, err := json.Marshal(bucketnames)
 	assert(err == nil, err)
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
