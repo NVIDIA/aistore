@@ -235,7 +235,7 @@ func (t *targetrunner) lruEvict(fqn string) error {
 		glog.Infof("LRU: removed %q", fqn)
 		return nil
 	}
-	uname := t.uname(bucket, objname)
+	uname := uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 

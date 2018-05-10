@@ -13,14 +13,18 @@ const mLCG32 = 1103515245
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
+func uniquename(bucket, objname string) string {
+	return bucket + "/" + objname
+}
 
-func HrwTarget(name string, smap *Smap) (si *daemonInfo, errstr string) {
+func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr string) {
 	// NOTE: commented out on purpose - trading off read access to unlocked map
 	//       smap.Lock(); defer smap.Unlock()
 	if smap.count() == 0 {
 		errstr = "DFC cluster map is empty: no targets"
 		return
 	}
+	name := uniquename(bucket, objname)
 	var max uint64
 	for id, sinfo := range smap.Tmap {
 		cs := xxhash.ChecksumString64S(id+":"+name, mLCG32)
@@ -53,8 +57,9 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *proxyInfo, errstr string) {
 	return
 }
 
-func hrwMpath(name string) (mpath string) {
+func hrwMpath(bucket, objname string) (mpath string) {
 	var max uint64
+	name := uniquename(bucket, objname)
 	for path := range ctx.mountpaths.Available {
 		cs := xxhash.ChecksumString64S(path+":"+name, mLCG32)
 		if cs > max {

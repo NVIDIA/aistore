@@ -332,7 +332,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	//
 	// lockname(ro)
 	//
-	fqn, uname = t.fqn(bucket, objname), t.uname(bucket, objname)
+	fqn, uname = t.fqn(bucket, objname), uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
@@ -991,7 +991,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
 		fqn        = t.fqn(bucket, objname)
-		uname      = t.uname(bucket, objname)
+		uname      = uniquename(bucket, objname)
 		getfqn     = t.fqn2workfile(fqn)
 		versioncfg = &ctx.config.Ver
 		errv       = ""
@@ -1662,7 +1662,7 @@ func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fq
 	}
 
 	// when all set and done:
-	uname := t.uname(bucket, objname)
+	uname := uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 	if err = os.Rename(putfqn, fqn); err != nil {
@@ -1689,7 +1689,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		//
 		// the source
 		//
-		uname := t.uname(bucket, objname)
+		uname := uniquename(bucket, objname)
 		t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 		defer t.rtnamemap.unlockname(uname, false)
 
@@ -1771,7 +1771,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		errcode int
 	)
 	fqn := t.fqn(bucket, objname)
-	uname := t.uname(bucket, objname)
+	uname := uniquename(bucket, objname)
 	localbucket := t.islocalBucket(bucket)
 
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
@@ -1844,7 +1844,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 		return
 	}
 	newobjname := msg.Name
-	fqn, uname := t.fqn(bucket, objname), t.uname(bucket, objname)
+	fqn, uname := t.fqn(bucket, objname), uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
@@ -1855,7 +1855,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 
 func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
 	var si *daemonInfo
-	if si, errstr = HrwTarget(bucketTo+"/"+objnameTo, t.smap); errstr != "" {
+	if si, errstr = HrwTarget(bucketTo, objnameTo, t.smap); errstr != "" {
 		return
 	}
 	fqn := t.fqn(bucketFrom, objnameFrom)
@@ -2404,13 +2404,9 @@ func (t *targetrunner) testingFSPpaths() bool {
 	return ctx.config.TestFSP.Count > 0
 }
 
-func (t *targetrunner) uname(bucket, objname string) string {
-	return bucket + objname
-}
-
 // (bucket, object) => (local hashed path, fully qualified name aka fqn)
 func (t *targetrunner) fqn(bucket, objname string) string {
-	mpath := hrwMpath(bucket + "/" + objname)
+	mpath := hrwMpath(bucket, objname)
 	if t.islocalBucket(bucket) {
 		return filepath.Join(makePathLocal(mpath), bucket, objname)
 	}

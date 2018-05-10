@@ -519,7 +519,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	si, errstr := HrwTarget(bucket+"/"+objname, p.smap)
+	si, errstr := HrwTarget(bucket, objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -566,7 +566,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	// FIXME: add protection against putting into non-existing local bucket
 	//
 	objname := strings.Join(apitems[1:], "/")
-	si, errstr := HrwTarget(bucket+"/"+objname, p.smap)
+	si, errstr := HrwTarget(bucket, objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -640,7 +640,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	objname := strings.Join(apitems[1:], "/")
-	si, errstr := HrwTarget(bucket+"/"+objname, p.smap)
+	si, errstr := HrwTarget(bucket, objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -808,7 +808,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var si *daemonInfo
-	si, errstr := HrwTarget(bucket+"/"+objname, p.smap)
+	si, errstr := HrwTarget(bucket, objname, p.smap)
 	if errstr != "" {
 		return
 	}
@@ -1261,7 +1261,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	}
 	lbmapLock.Unlock()
 
-	si, errstr := HrwTarget(lbucket+"/"+objname, p.smap)
+	si, errstr := HrwTarget(lbucket, objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
