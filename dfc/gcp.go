@@ -5,6 +5,7 @@
 package dfc
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,7 +18,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
