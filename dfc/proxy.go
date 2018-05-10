@@ -841,6 +841,8 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *
 	msg.Value = lbmap4ren
 	jsbytes, err := json.Marshal(msg)
 	assert(err == nil, err)
+	// only needs to tell target of the rename, proxies will get the sync call later
+	smap4bcast.Pmap = nil
 	p.broadcast(urlfmt, method, jsbytes, smap4bcast, f, ctx.config.Timeout.Default)
 
 	lbmapLock.Lock()
