@@ -16,7 +16,7 @@ AuthN supports both HTTP and HTTPS protocols. By default, the server starts as H
 
 ## Getting started
 
-AuthN server is installed as a part of DFC cluster but it is disabled by default. It requires to set a few environment variables before depoying a cluster. Environment variables used by the deployment script to set up the AuthN server:
+Environment variables used by the deployment script to setup AuthN server:
 
 | Variable | Default value | Description |
 |---|---|---|
@@ -25,19 +25,17 @@ AuthN server is installed as a part of DFC cluster but it is disabled by default
 | AUTH_SU_PASS | admin | Super user password (see `A super user` section for details) |
 | SECRETKEY| aBitLongSecretKey | A secret key to encrypt and decrypt tokens |
 
-Note: before starting deployment process don't forget to change the default secret key used to crypt and decrypt tokens.
+Note: before starting deployment process don't forget to change the default secret key used to encrypt and decrypt tokens.
 
-To change AuthN settings after deployment, modify its configuration file and restart the server. If you change the server's secret key make sure to modify DFC proxy configuration as well.
+To change AuthN settings after deployment, modify the server's configuration file and restart the server. If you change the server's secret key make sure to modify DFC proxy configuration as well.
 
-### AuthN configuration files
+### AuthN configuration and log
 
 | File | Location |
 |---|---|
 | Server configuration | $CONFDIR/authn.json |
 | User list | $CONFDIR/users.json |
 | Log directory | $LOGDIR/authn/log/ |
-
-The configuration file is located at $CONFDIR/authn.json.
 
 ### How to enable AuthN server after deployment
 
