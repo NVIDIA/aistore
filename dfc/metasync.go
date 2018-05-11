@@ -271,16 +271,16 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 	return len(y.pending.diamonds)
 }
 
-func (y *metasyncer) callbackSync(si *daemonInfo, _ []byte, err error, status int) {
-	if err == nil {
+func (y *metasyncer) callbackSync(res callResult) {
+	if res.err == nil {
 		return
 	}
-	glog.Warningf("Failed to sync %s, err: %v (%d)", si.DaemonID, err, status)
+	glog.Warningf("Failed to sync %s, err: %v (%d)", res.si.DaemonID, res.err, res.status)
 
 	y.pending.lock.Lock()
-	y.pending.diamonds[si.DaemonID] = si
-	if IsErrConnectionRefused(err) {
-		y.pending.refused[si.DaemonID] = si
+	y.pending.diamonds[res.si.DaemonID] = res.si
+	if IsErrConnectionRefused(res.err) {
+		y.pending.refused[res.si.DaemonID] = res.si
 	}
 	y.pending.lock.Unlock()
 }

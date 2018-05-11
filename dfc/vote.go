@@ -341,16 +341,16 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s?%s=%s", Rversion, Rvote, Rproxy, URLParamPrimaryCandidate, p.si.DaemonID)
-	callback := func(si *daemonInfo, r []byte, err error, _ int) {
-		if err != nil {
-			e := fmt.Errorf("Error reading response from %s(%s): %v", si.DaemonID, si.DirectURL, err)
-			resch <- voteResult{yes: false, daemonID: si.DaemonID, err: e}
+	cb := func(res callResult) {
+		if res.err != nil {
+			e := fmt.Errorf("Error reading response from %s(%s): %v", res.si.DaemonID, res.si.DirectURL, res.err)
+			resch <- voteResult{yes: false, daemonID: res.si.DaemonID, err: e}
 		} else {
-			resch <- voteResult{yes: (VoteYes == Vote(r)), daemonID: si.DaemonID, err: nil}
+			resch <- voteResult{yes: (VoteYes == Vote(res.outjson)), daemonID: res.si.DaemonID, err: nil}
 		}
 	}
 
-	p.broadcast(urlfmt, http.MethodGet, jsbytes, p.smap, callback, ctx.config.Timeout.CplaneOperation)
+	p.broadcast(urlfmt, http.MethodGet, jsbytes, p.smap, cb, ctx.config.Timeout.CplaneOperation)
 	close(resch)
 	return resch
 }
@@ -373,14 +373,14 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rvote, Rvoteres)
-	callback := func(si *daemonInfo, _ []byte, err error, _ int) {
-		if err != nil {
-			e := fmt.Errorf("Error committing result for %s(%s): %v", si.DaemonID, si.DirectURL, err)
-			errch <- ErrPair{err: e, daemonID: si.DaemonID}
+	cb := func(res callResult) {
+		if res.err != nil {
+			e := fmt.Errorf("Error committing result for %s(%s): %v", res.si.DaemonID, res.si.DirectURL, res.err)
+			errch <- ErrPair{err: e, daemonID: res.si.DaemonID}
 		}
 	}
 
-	p.broadcast(urlfmt, http.MethodPut, jsbytes, p.smap, callback, ctx.config.Timeout.CplaneOperation)
+	p.broadcast(urlfmt, http.MethodPut, jsbytes, p.smap, cb, ctx.config.Timeout.CplaneOperation)
 	close(errch)
 
 	errors := make(map[string]bool)

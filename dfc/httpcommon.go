@@ -309,7 +309,7 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 
 	if err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
-		return callResult{outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, status}
 	}
 
 	copyHeaders(rOrig, request)
@@ -330,11 +330,11 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		if response != nil && response.StatusCode > 0 {
 			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, method, url, response.Status, err)
 			status = response.StatusCode
-			return callResult{outjson, err, errstr, status}
+			return callResult{si, outjson, err, errstr, status}
 		}
 
 		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, method, url, err)
-		return callResult{outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, status}
 	}
 
 	assert(response != nil, "Unexpected: nil response with no error")
@@ -349,7 +349,7 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 			}
 		}
 
-		return callResult{outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, status}
 	}
 
 	// err == nil && bad status: response.Body contains the error message
@@ -357,14 +357,14 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
 		errstr = err.Error()
 		status = response.StatusCode
-		return callResult{outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, status}
 	}
 
 	if sid != "unknown" {
 		h.kalive.timestamp(sid)
 	}
 
-	return callResult{outjson, err, errstr, status}
+	return callResult{si, outjson, err, errstr, status}
 }
 
 //=============================

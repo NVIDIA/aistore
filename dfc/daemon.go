@@ -103,6 +103,7 @@ type (
 
 	// callResult contains data returned by a server to server call
 	callResult struct {
+		si      *daemonInfo
 		outjson []byte
 		err     error
 		errstr  string
