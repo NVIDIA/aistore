@@ -313,15 +313,15 @@ func (p *proxyrunner) getSmapFromHintCluster() (retry bool) {
 	unionsmap := p.unionSmapAndHintsmap()
 	svms := make(chan SmapVoteMsg, unionsmap.count()+unionsmap.countProxies())
 
-	callback := func(si *daemonInfo, r []byte, err error, status int) {
+	callback := func(res callResult) {
 		// Get all non-zero version smaps retrieved.
-		if err != nil {
-			glog.Warningf("Error retrieving cluster map from %v: %v", si.DaemonID, err)
+		if res.err != nil {
+			glog.Warningf("Error retrieving cluster map from %v: %v", res.si.DaemonID, res.err)
 			return
 		}
 		svm := SmapVoteMsg{}
-		if err = json.Unmarshal(r, &svm); err != nil {
-			glog.Warningf("Error unmarshalling cluster map from %v: %v", si.DaemonID, err)
+		if err = json.Unmarshal(res.outjson, &svm); err != nil {
+			glog.Warningf("Error unmarshalling cluster map from %v: %v", res.si.DaemonID, err)
 			return
 		}
 		if svm.Smap == nil || svm.Smap.version() == 0 {
@@ -834,10 +834,10 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *
 	// only needs to tell target of the rename, proxies will get the sync call later
 	smap4bcast.Pmap = nil
 
-	f := func(si *daemonInfo, _ []byte, err error, status int) {
-		if err != nil {
+	f := func(res callResult) {
+		if res.err != nil {
 			glog.Errorf("Target %s failed to rename local bucket %s => %s, err: %v (%d)",
-				si.DaemonID, bucketFrom, bucketTo, err, status)
+				res.si.DaemonID, bucketFrom, bucketTo, res.err, res.status)
 		}
 	}
 	msg.Value = lbmap4ren
@@ -1558,9 +1558,10 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, true)
 	method := http.MethodPut
 	errch := make(chan error, smap4bcast.count()+smap4bcast.countProxies())
-	f := func(si *daemonInfo, _ []byte, err error, status int) {
-		if err != nil {
-			errch <- fmt.Errorf("Error from %v in prepare phase of Set primary proxy: %v", si.DaemonID, err)
+	f := func(res callResult) {
+		if res.err != nil {
+			errch <- fmt.Errorf("Error from %v in prepare phase of Set primary proxy: %v",
+				res.si.DaemonID, res.err)
 		}
 	}
 	p.broadcast(urlfmt, method, nil, smap4bcast, f, ctx.config.Timeout.CplaneOperation)
@@ -1576,9 +1577,9 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	// If phase 1 passed without error, broadcast phase 2:
 	// After this point, errors will not result in any rollback.
 	urlfmt = fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, false)
-	f = func(si *daemonInfo, _ []byte, err error, status int) {
-		if err != nil {
-			glog.Errorf("Error from %v in commit phase of Set primary proxy: %v", si.DaemonID, err)
+	f = func(res callResult) {
+		if res.err != nil {
+			glog.Errorf("Error from %v in commit phase of Set primary proxy: %v", res.si.DaemonID, res.err)
 		}
 	}
 	p.broadcast(urlfmt, method, nil, smap4bcast, f, ctx.config.Timeout.CplaneOperation)
@@ -1904,7 +1905,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 
 		urlfmt := fmt.Sprintf("%%s/%s/%s", Rversion, Rdaemon)
-		callback := func(_ *daemonInfo, _ []byte, _ error, _ int) {}
+		callback := func(_ callResult) {}
 		smapLock.Lock()
 		smap4bcast := &Smap{}
 		copyStruct(smap4bcast, p.smap)
@@ -1997,7 +1998,7 @@ Sending to each node happens in parallel, and callback will be called with the r
 The caller must lock p.smap.
 */
 func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Smap,
-	callback func(*daemonInfo, []byte, error, int), timeout ...time.Duration) {
+	callback func(callResult), timeout ...time.Duration) {
 	wg := &sync.WaitGroup{}
 	for _, si := range smap.Tmap {
 		wg.Add(1)
@@ -2005,7 +2006,7 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
 			res := p.call(nil, si, url, method, jsbytes, timeout...)
-			callback(si, res.outjson, res.err, res.status)
+			callback(callResult{si, res.outjson, res.err, "", res.status})
 		}(si)
 	}
 	for _, si := range smap.Pmap {
@@ -2016,7 +2017,7 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 				defer wg.Done()
 				url := fmt.Sprintf(urlfmt, si.DirectURL)
 				res := p.call(nil, &si.daemonInfo, url, method, jsbytes, timeout...)
-				callback(&si.daemonInfo, res.outjson, res.err, res.status)
+				callback(callResult{&si.daemonInfo, res.outjson, res.err, "", res.status})
 			}(si)
 		}
 	}
