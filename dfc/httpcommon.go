@@ -274,12 +274,17 @@ func (h *httprunner) stop(err error) {
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
 // optionally, sends a json-encoded body to the callee
 func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method string, injson []byte,
-	timeout ...time.Duration) (outjson []byte, err error, errstr string, status int) {
+	timeout ...time.Duration) callResult {
 	var (
 		request  *http.Request
 		response *http.Response
 		sid      = "unknown"
+		outjson  []byte
+		err      error
+		errstr   string
+		status   int
 	)
+
 	if si != nil {
 		sid = si.DaemonID
 	}
@@ -301,10 +306,12 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 			glog.Infof("%s %s %s...}", method, url, string(injson[:l]))
 		}
 	}
+
 	if err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
-		return
+		return callResult{outjson, err, errstr, status}
 	}
+
 	copyHeaders(rOrig, request)
 	if len(timeout) > 0 {
 		if timeout[0] != 0 {
@@ -323,11 +330,13 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		if response != nil && response.StatusCode > 0 {
 			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, method, url, response.Status, err)
 			status = response.StatusCode
-			return
+			return callResult{outjson, err, errstr, status}
 		}
+
 		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, method, url, err)
-		return
+		return callResult{outjson, err, errstr, status}
 	}
+
 	assert(response != nil, "Unexpected: nil response with no error")
 	defer response.Body.Close()
 
@@ -339,19 +348,23 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, method, url, err, trailer)
 			}
 		}
-		return
+
+		return callResult{outjson, err, errstr, status}
 	}
+
 	// err == nil && bad status: response.Body contains the error message
 	if response.StatusCode >= http.StatusBadRequest {
 		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
 		errstr = err.Error()
 		status = response.StatusCode
-		return
+		return callResult{outjson, err, errstr, status}
 	}
+
 	if sid != "unknown" {
 		h.kalive.timestamp(sid)
 	}
-	return
+
+	return callResult{outjson, err, errstr, status}
 }
 
 //=============================

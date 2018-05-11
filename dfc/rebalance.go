@@ -45,15 +45,16 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		pollstarted, ok := time.Now(), false
 		timeout := kalivetimeout
 		for {
-			_, err, _, status := t.call(nil, si, url, http.MethodGet, nil, timeout)
-			if err == nil {
+			res := t.call(nil, si, url, http.MethodGet, nil, timeout)
+			if res.err == nil {
 				ok = true
 				break
 			}
-			if status > 0 {
-				glog.Infof("%s is offline with status %d, err: %v", sid, status, err)
+
+			if res.status > 0 {
+				glog.Infof("%s is offline with status %d, err: %v", sid, res.status, res.err)
 			} else {
-				glog.Infof("%s is offline, err: %v", sid, err)
+				glog.Infof("%s is offline, err: %v", sid, res.err)
 			}
 			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
 			if timeout > ctx.config.Timeout.MaxKeepalive {
@@ -132,24 +133,27 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 				continue
 			}
 			url := si.DirectURL + "/" + Rversion + "/" + Rhealth
-			outjson, err, _, _ := t.call(nil, si, url, http.MethodGet, nil)
+			res := t.call(nil, si, url, http.MethodGet, nil)
 			// retry once
-			if err == context.DeadlineExceeded {
-				outjson, err, _, _ = t.call(nil, si, url, http.MethodGet, nil, kalivetimeout*2)
+			if res.err == context.DeadlineExceeded {
+				res = t.call(nil, si, url, http.MethodGet, nil, kalivetimeout*2)
 			}
-			if err != nil {
-				glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", sid, err)
+
+			if res.err != nil {
+				glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", sid, res.err)
 				continue
 			}
+
 			status := &thealthstatus{}
-			err = json.Unmarshal(outjson, status)
+			err := json.Unmarshal(res.outjson, status)
 			if err == nil {
 				if status.IsRebalancing {
 					time.Sleep(proxypollival * 2)
 					count++
 				}
 			} else {
-				glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", url, err, string(outjson))
+				glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
+					url, err, string(res.outjson))
 			}
 		}
 		if glog.V(4) {

@@ -316,8 +316,8 @@ func (y *metasyncer) handlePending() int {
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			r, err, _, status := y.p.call(nil, si, url, http.MethodPut, jsbytes, ctx.config.Timeout.CplaneOperation)
-			y.callbackPending(si, r, err, status)
+			res := y.p.call(nil, si, url, http.MethodPut, jsbytes, ctx.config.Timeout.CplaneOperation)
+			y.callbackPending(si, res.outjson, res.err, res.status)
 		}(si)
 	}
 	wg.Wait()
@@ -341,8 +341,8 @@ func (y *metasyncer) handleRefused(urlfmt, method string, jsbytes []byte, smap4b
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			r, err, _, status := y.p.call(nil, si, url, method, jsbytes, ctx.config.Timeout.CplaneOperation)
-			y.callbackRefused(si, r, err, status)
+			res := y.p.call(nil, si, url, method, jsbytes, ctx.config.Timeout.CplaneOperation)
+			y.callbackRefused(si, res.outjson, res.err, res.status)
 		}(si)
 	}
 	wg.Wait()

@@ -31,83 +31,86 @@ const (
 	xmetasyncer   = "metasyncer"
 )
 
-//======
-//
-// types
-//
-//======
-type cliVars struct {
-	role      string
-	conffile  string
-	loglevel  string
-	statstime time.Duration
-	ntargets  int
-	proxyurl  string
-}
+type (
+	cliVars struct {
+		role      string
+		conffile  string
+		loglevel  string
+		statstime time.Duration
+		ntargets  int
+		proxyurl  string
+	}
 
-// FIXME: consider sync.Map; NOTE: atomic version is used by readers
-// Smap contains id:daemonInfo pairs and related metadata
-type Smap struct {
-	Tmap    map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
-	Pmap    map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
-	ProxySI *proxyInfo             `json:"proxy_si"`
-	Version int64                  `json:"version"`
-}
+	// FIXME: consider sync.Map; NOTE: atomic version is used by readers
+	// Smap contains id:daemonInfo pairs and related metadata
+	Smap struct {
+		Tmap    map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
+		Pmap    map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
+		ProxySI *proxyInfo             `json:"proxy_si"`
+		Version int64                  `json:"version"`
+	}
 
-type mountedFS struct {
-	sync.Mutex `json:"-"`
-	Available  map[string]*mountPath `json:"available"`
-	Offline    map[string]*mountPath `json:"offline"`
-}
+	mountedFS struct {
+		sync.Mutex `json:"-"`
+		Available  map[string]*mountPath `json:"available"`
+		Offline    map[string]*mountPath `json:"offline"`
+	}
 
-// daemon instance: proxy or storage target
-type daemon struct {
-	config     dfconfig
-	mountpaths mountedFS
-	rg         *rungroup
-}
+	// daemon instance: proxy or storage target
+	daemon struct {
+		config     dfconfig
+		mountpaths mountedFS
+		rg         *rungroup
+	}
 
-// each daemon is represented by:
-type daemonInfo struct {
-	NodeIPAddr string `json:"node_ip_addr"`
-	DaemonPort string `json:"daemon_port"`
-	DaemonID   string `json:"daemon_id"`
-	DirectURL  string `json:"direct_url"`
-}
+	// each daemon is represented by:
+	daemonInfo struct {
+		NodeIPAddr string `json:"node_ip_addr"`
+		DaemonPort string `json:"daemon_port"`
+		DaemonID   string `json:"daemon_id"`
+		DirectURL  string `json:"direct_url"`
+	}
 
-type proxyInfo struct {
-	daemonInfo
-	Primary bool
-}
+	proxyInfo struct {
+		daemonInfo
+		Primary bool
+	}
 
-// local (cache-only) bucket names and their TBD props
-type lbmap struct {
-	sync.Mutex
-	LBmap   map[string]string `json:"l_bmap"`
-	Version int64             `json:"version"`
-}
+	// local (cache-only) bucket names and their TBD props
+	lbmap struct {
+		sync.Mutex
+		LBmap   map[string]string `json:"l_bmap"`
+		Version int64             `json:"version"`
+	}
 
-// runner if
-type runner interface {
-	run() error
-	stop(error)
-	setname(string)
-}
+	namedrunner struct {
+		name string
+	}
 
-type namedrunner struct {
-	name string
-}
+	rungroup struct {
+		runarr []runner
+		runmap map[string]runner // redundant, named
+		errch  chan error
+		idxch  chan int
+		stpch  chan error
+	}
+
+	runner interface {
+		run() error
+		stop(error)
+		setname(string)
+	}
+
+	// callResult contains data returned by a server to server call
+	callResult struct {
+		outjson []byte
+		err     error
+		errstr  string
+		status  int
+	}
+)
 
 func (r *namedrunner) setname(n string) { r.name = n }
-
-// rungroup
-type rungroup struct {
-	runarr []runner
-	runmap map[string]runner // redundant, named
-	errch  chan error
-	idxch  chan int
-	stpch  chan error
-}
 
 //====================
 //

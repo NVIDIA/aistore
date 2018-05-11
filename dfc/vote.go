@@ -504,18 +504,18 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *p
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
 
-	_, err, _, _ = h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
-	if err != nil {
+	res := h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+	if res.err != nil {
 		if IsErrConnectionRefused(err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(time.Second)
-				_, err, _, _ = h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
-				if err == nil {
+				res = h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+				if res.err == nil {
 					break
 				}
 			}
 		}
-		glog.Errorf("Failed to request election from next primary proxy: %v", err)
+		glog.Errorf("Failed to request election from next primary proxy: %v", res.err)
 		return
 	}
 }
@@ -588,15 +588,17 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 	return nil
 }
 
+// pingWithTimeout sends a http get to the server, returns true if the call returns in time;
+// otherwise return false to indicate the server is not reachable.
 func (p *proxyrunner) pingWithTimeout(url string, timeout time.Duration) (bool, error) {
-	_, err, _, _ := p.call(nil, nil, url, http.MethodGet, nil, timeout)
-	if err == nil {
-		// There is no issue with the current primary proxy
+	res := p.call(nil, nil, url, http.MethodGet, nil, timeout)
+	if res.err == nil {
 		return true, nil
 	}
-	if err == context.DeadlineExceeded || IsErrConnectionRefused(err) {
-		// Then the proxy is unreachable
+
+	if res.err == context.DeadlineExceeded || IsErrConnectionRefused(res.err) {
 		return false, nil
 	}
-	return false, err
+
+	return false, res.err
 }

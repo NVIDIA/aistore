@@ -237,29 +237,35 @@ func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 		}
 		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
 		url += from
-		_, err, _, status := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
-		if err == nil {
+		res := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
+		if res.err == nil {
 			continue
 		}
-		if status > 0 {
-			glog.Infof("Warning: target %s fails keepalive with status %d, err: %v", sid, status, err)
+
+		if res.status > 0 {
+			glog.Infof("Warning: target %s fails keepalive with status %d, err: %v", sid, res.status, res.err)
 		} else {
 			glog.Infof("Warning: target %s fails keepalive, err: %v", sid, err)
 		}
+
 		responded, stopped := r.poll(si, url)
 		if stopped {
 			return true
 		}
+
 		if responded {
 			continue
 		}
+
 		// FIXME: Seek confirmation when keepalive fails
 		// the verdict
-		if status > 0 {
-			glog.Errorf("Target %s fails keepalive with status %d, err: %v - removing from the cluster map", sid, status, err)
+		if res.status > 0 {
+			glog.Errorf("Target %s fails keepalive with status %d, err: %v - removing from the cluster map",
+				sid, res.status, res.err)
 		} else {
-			glog.Errorf("Target %s fails keepalive, err: %v - removing from the cluster map", sid, err)
+			glog.Errorf("Target %s fails keepalive, err: %v - removing from the cluster map", sid, res.err)
 		}
+
 		smapLock.Lock()
 		r.p.smap.del(sid)
 		smapLock.Unlock()
@@ -280,19 +286,22 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 		}
 		select {
 		case <-poller.C:
-			_, err, _, status := r.p.call(nil, si, url, http.MethodGet, nil, timeout)
-			if err == nil {
+			res := r.p.call(nil, si, url, http.MethodGet, nil, timeout)
+			if res.err == nil {
 				return true, false
 			}
+
 			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
 			if timeout > ctx.config.Timeout.MaxKeepalive {
 				timeout = ctx.config.Timeout.Default
 				maxedout++
 			}
-			if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+
+			if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 				continue
 			}
-			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
+
+			glog.Warningf("keepalive: Unexpected status %d, err: %v", res.status, res.err)
 		case sig := <-r.controlCh:
 			if sig.msg == stop {
 				return false, true

@@ -174,11 +174,12 @@ func (t *targetrunner) stop(err error) {
 }
 
 // target registration with proxy
-func (t *targetrunner) register(timeout time.Duration) (status int, err error) {
+func (t *targetrunner) register(timeout time.Duration) (int, error) {
 	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
 		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
 	}
+
 	var url string
 	if t.proxysi.DaemonID != "" {
 		url = t.proxysi.DirectURL
@@ -186,21 +187,25 @@ func (t *targetrunner) register(timeout time.Duration) (status int, err error) {
 		// Smap has not yet been synced:
 		url = ctx.config.Proxy.Primary.URL
 	}
+
 	url += "/" + Rversion + "/" + Rcluster
 	var si *daemonInfo
 	if t.proxysi != nil {
 		si = &t.proxysi.daemonInfo
 	}
+
+	var res callResult
 	if timeout > 0 { // keepalive
 		url += "/" + Rkeepalive
-		_, err, _, status = t.call(nil, si, url, http.MethodPost, jsbytes, timeout)
+		res = t.call(nil, si, url, http.MethodPost, jsbytes, timeout)
 	} else {
-		_, err, _, status = t.call(nil, si, url, http.MethodPost, jsbytes)
+		res = t.call(nil, si, url, http.MethodPost, jsbytes)
 	}
-	return
+
+	return res.status, res.err
 }
 
-func (t *targetrunner) unregister() (status int, err error) {
+func (t *targetrunner) unregister() (int, error) {
 	var url string
 	if t.proxysi.DaemonID != "" {
 		url = t.proxysi.DirectURL
@@ -209,9 +214,8 @@ func (t *targetrunner) unregister() (status int, err error) {
 		url = ctx.config.Proxy.Primary.URL
 	}
 	url += "/" + Rversion + "/" + Rcluster + "/" + Rdaemon + "/" + t.si.DaemonID
-	_, err, _, status = t.call(nil, &t.proxysi.daemonInfo, url, http.MethodDelete, nil)
-
-	return
+	res := t.call(nil, &t.proxysi.daemonInfo, url, http.MethodDelete, nil)
+	return res.status, res.err
 }
 
 //===========================================================================================
@@ -1137,8 +1141,8 @@ func (t *targetrunner) lookupRemotely(bucket, objname string) (tsi *daemonInfo) 
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := si.DirectURL + "/" + Rversion + "/" + Robjects + "/" + bucket + "/" + objname
-			_, err, _, _ := t.call(nil, si, url, http.MethodHead, nil, ctx.config.Timeout.MaxKeepalive)
-			if err == nil {
+			res := t.call(nil, si, url, http.MethodHead, nil, ctx.config.Timeout.MaxKeepalive)
+			if res.err == nil {
 				resch <- si
 			} else {
 				resch <- nil

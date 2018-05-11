@@ -114,13 +114,13 @@ func (p *proxyrunner) run() error {
 			return fmt.Errorf("Failed to create json message: %v", err)
 		}
 
-		reply, err, _, _ := p.call(nil, &p.proxysi.daemonInfo, url, http.MethodGet, jsbytes)
-		if err != nil {
-			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", err)
+		res := p.call(nil, &p.proxysi.daemonInfo, url, http.MethodGet, jsbytes)
+		if res.err != nil {
+			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", res.err)
 		}
 
 		var smap Smap
-		err = json.Unmarshal(reply, &smap)
+		err = json.Unmarshal(res.outjson, &smap)
 		if err != nil {
 			return fmt.Errorf("Error unmarshalling cluster map from Primary Proxy: %v", err)
 		}
@@ -213,24 +213,26 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 	return p.registerWithURL(url, timeout)
 }
 
-func (p *proxyrunner) registerWithURL(proxyurl string, timeout time.Duration) (status int, err error) {
+func (p *proxyrunner) registerWithURL(proxyurl string, timeout time.Duration) (int, error) {
 	jsbytes, err := json.Marshal(p.si)
 	assert(err == nil)
 
 	url := proxyurl + "/" + Rversion + "/" + Rcluster + "/" + Rproxy
+	var res callResult
 	if timeout > 0 {
 		url += "/" + Rkeepalive
-		_, err, _, status = p.call(nil, nil, url, http.MethodPost, jsbytes, timeout)
+		res = p.call(nil, nil, url, http.MethodPost, jsbytes, timeout)
 	} else {
-		_, err, _, status = p.call(nil, nil, url, http.MethodPost, jsbytes)
+		res = p.call(nil, nil, url, http.MethodPost, jsbytes)
 	}
-	return
+
+	return res.status, res.err
 }
 
-func (p *proxyrunner) unregister() (status int, err error) {
+func (p *proxyrunner) unregister() (int, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.Proxy.Primary.URL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
-	_, err, _, status = p.call(nil, nil, url, http.MethodDelete, nil)
-	return
+	res := p.call(nil, nil, url, http.MethodDelete, nil)
+	return res.status, res.err
 }
 
 // stop gracefully
@@ -877,33 +879,32 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	for _, si = range p.smap.Tmap {
 		break
 	}
+
 	url := si.DirectURL + "/" + Rversion + "/" + Rbuckets + "/" + bucketspec
-	outjson, err, errstr, status := p.call(r, si, url, r.Method, nil)
-	if err != nil {
-		p.invalmsghdlr(w, r, errstr)
-		p.kalive.onerr(err, status)
+	res := p.call(r, si, url, r.Method, nil)
+	if res.err != nil {
+		p.invalmsghdlr(w, r, res.errstr)
+		p.kalive.onerr(res.err, res.status)
 	} else {
-		p.writeJSON(w, r, outjson, "getbucketnames")
+		p.writeJSON(w, r, res.outjson, "getbucketnames")
 	}
-	return
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
-	reqBody []byte, islocal bool, cached bool) (response *bucketResp, err error) {
+	reqBody []byte, islocal bool, cached bool) (*bucketResp, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
 		Rbuckets, bucket, URLParamLocal, islocal, URLParamCached, cached)
-	outjson, err, _, status := p.call(r, dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
-	if err != nil {
-		p.kalive.onerr(err, status)
+	res := p.call(r, dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
+	if res.err != nil {
+		p.kalive.onerr(res.err, res.status)
 	}
 
-	response = &bucketResp{
-		outjson: outjson,
-		err:     err,
+	return &bucketResp{
+		outjson: res.outjson,
+		err:     res.err,
 		id:      dinfo.DaemonID,
-	}
-	return response, err
+	}, res.err
 }
 
 // Receives info about locally cached files from targets in batches
@@ -1339,18 +1340,19 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			var (
-				err     error
-				errstr  string
-				errcode int
-				url     = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rbuckets, bucket, URLParamLocal, islocal)
+				res callResult
+				url = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rbuckets, bucket, URLParamLocal, islocal)
 			)
+
 			if wait {
-				_, err, errstr, errcode = p.call(r, si, url, method, jsonbytes, 0)
+				res = p.call(r, si, url, method, jsonbytes, 0)
 			} else {
-				_, err, errstr, errcode = p.call(r, si, url, method, jsonbytes)
+				res = p.call(r, si, url, method, jsonbytes)
 			}
-			if err != nil {
-				s := fmt.Sprintf("Failed to execute List/Range request: %v (%d: %s)", err, errcode, errstr)
+
+			if res.err != nil {
+				s := fmt.Sprintf("Failed to execute List/Range request: %v (%d: %s)",
+					res.err, res.status, res.errstr)
 				p.invalmsghdlr(w, r, s)
 				return
 			}
@@ -1643,17 +1645,19 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 		out.Target[si.DaemonID] = stats
 		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		outjson, err, errstr, status := p.call(r, si, url, r.Method, getstatsmsg)
-		if err != nil {
-			p.invalmsghdlr(w, r, errstr)
-			p.kalive.onerr(err, status)
+		res := p.call(r, si, url, r.Method, getstatsmsg)
+		if res.err != nil {
+			p.invalmsghdlr(w, r, res.errstr)
+			p.kalive.onerr(res.err, res.status)
 			return
 		}
-		if err = json.Unmarshal(outjson, stats); err != nil {
-			p.invalmsghdlr(w, r, string(outjson))
+
+		if err := json.Unmarshal(res.outjson, stats); err != nil {
+			p.invalmsghdlr(w, r, string(res.outjson))
 			return
 		}
 	}
+
 	rr := getproxystatsrunner()
 	rr.Lock()
 	out.Proxy = &rr.Core
@@ -1736,9 +1740,10 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 		if register {
 			url := nsi.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rregister
-			if _, err, errStr, status := p.call(nil, &nsi, url, http.MethodPost, nil, ProxyPingTimeout); err != nil {
-				p.invalmsghdlr(w, r, fmt.Sprintf("%v, %s", err, errStr), status)
-				p.kalive.onerr(err, status)
+			res := p.call(nil, &nsi, url, http.MethodPost, nil, ProxyPingTimeout)
+			if res.err != nil {
+				p.invalmsghdlr(w, r, fmt.Sprintf("%v, %s", res.err, res.errstr), res.status)
+				p.kalive.onerr(res.err, res.status)
 			}
 		}
 		msg = &ActionMsg{Action: ActRegTarget}
@@ -1884,9 +1889,10 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			// FIXME: broadcast is not used here (yet) because these changes should only be propagated to targets
 			for _, si := range p.smap.Tmap {
 				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-				if _, err, errstr, status := p.call(r, si, url, http.MethodPut, msgbytes); err != nil {
+				res := p.call(r, si, url, http.MethodPut, msgbytes)
+				if res.err != nil {
 					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, errstr))
-					p.kalive.onerr(err, status)
+					p.kalive.onerr(err, res.status)
 					break
 				}
 
@@ -1998,8 +2004,8 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			r, err, _, status := p.call(nil, si, url, method, jsbytes, timeout...)
-			callback(si, r, err, status)
+			res := p.call(nil, si, url, method, jsbytes, timeout...)
+			callback(si, res.outjson, res.err, res.status)
 		}(si)
 	}
 	for _, si := range smap.Pmap {
@@ -2009,8 +2015,8 @@ func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Sma
 			go func(si *proxyInfo) {
 				defer wg.Done()
 				url := fmt.Sprintf(urlfmt, si.DirectURL)
-				r, err, _, status := p.call(nil, &si.daemonInfo, url, method, jsbytes, timeout...)
-				callback(&si.daemonInfo, r, err, status)
+				res := p.call(nil, &si.daemonInfo, url, method, jsbytes, timeout...)
+				callback(&si.daemonInfo, res.outjson, res.err, res.status)
 			}(si)
 		}
 	}
