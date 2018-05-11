@@ -199,10 +199,18 @@ func main() {
 	}
 
 	if runParams.isLocal {
-		err := client.CreateLocalBucket(runParams.proxyURL, runParams.bucket)
+		exists, err := client.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
 		if err != nil {
-			fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
+			fmt.Println("Failed to get local bucket lists", runParams.bucket, "err = ", err)
 			return
+		}
+
+		if !exists {
+			err := client.CreateLocalBucket(runParams.proxyURL, runParams.bucket)
+			if err != nil {
+				fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
+				return
+			}
 		}
 	}
 
