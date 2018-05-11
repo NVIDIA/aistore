@@ -148,6 +148,9 @@ func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter,
 		h.mux = http.NewServeMux()
 	}
 	h.mux.HandleFunc(path, handler)
+	if !strings.HasSuffix(path, "/") {
+		h.mux.HandleFunc(path+"/", handler)
+	}
 }
 
 func (h *httprunner) init(s statsif, isproxy bool) {

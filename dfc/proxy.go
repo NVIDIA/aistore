@@ -177,9 +177,7 @@ func (p *proxyrunner) run() error {
 	}
 
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon+"/", p.daemonhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster+"/", p.clusterhdlr) // FIXME
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", p.votehdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rtokens, p.tokenhdlr)
@@ -1380,10 +1378,6 @@ func (p *proxyrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
-		return
-	}
 	var msg GetMsg
 	if p.readJSON(w, r, &msg) != nil {
 		return
@@ -1403,7 +1397,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 	case GetWhatSmapVote:
 		_, xx := p.xactinp.findL(ActElection)
-		vote := (xx != nil)
+		vote := xx != nil
 		msg := SmapVoteMsg{
 			VoteInProgress: vote,
 			Smap:           p.smap.cloneL().(*Smap),
@@ -1620,19 +1614,15 @@ func (p *proxyrunner) tokenhdlr(w http.ResponseWriter, r *http.Request) {
 
 // gets target info
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
-		return
-	}
 	var msg GetMsg
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.GetWhat {
 	case GetWhatStats:
-		getstatsmsg, err := json.Marshal(msg) // same message to all targets
+		getStatsMsg, err := json.Marshal(msg) // same message to all targets
 		assert(err == nil, err)
-		p.httpclugetstats(w, r, getstatsmsg)
+		p.httpclugetstats(w, r, getStatsMsg)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
