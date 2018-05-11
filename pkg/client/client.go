@@ -732,15 +732,13 @@ func waitForLocalBucket(url, name string) error {
 	for _, s := range smap.Tmap {
 	loop_bucket:
 		for {
-			buckets, err := GetBucketNames(s.DirectURL)
+			exists, err := DoesLocalBucketExist(s.DirectURL, name)
 			if err != nil {
 				return err
 			}
 
-			for _, b := range buckets.Local {
-				if b == name {
-					break loop_bucket
-				}
+			if exists {
+				break loop_bucket
 			}
 
 			if time.Now().After(to) {
@@ -765,17 +763,9 @@ func waitForNoLocalBucket(url, name string) error {
 	for _, s := range smap.Tmap {
 	loop_bucket:
 		for {
-			buckets, err := GetBucketNames(s.DirectURL)
+			exists, err := DoesLocalBucketExist(s.DirectURL, name)
 			if err != nil {
 				return err
-			}
-
-			var exists bool
-			for _, b := range buckets.Local {
-				if b == name {
-					exists = true
-					break
-				}
 			}
 
 			if !exists {
@@ -1031,8 +1021,8 @@ func HTTPRequest(method string, url string, msg io.Reader) error {
 	return nil
 }
 
-// GetBucketNames returns list of all buckets (cloud and local).
-func GetBucketNames(proxyurl string) (*dfc.BucketNames, error) {
+// GetLocalBucketNames returns list of all local buckets.
+func GetLocalBucketNames(proxyurl string) (*dfc.BucketNames, error) {
 	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*?local=true"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -1066,4 +1056,21 @@ func GetBucketNames(proxyurl string) (*dfc.BucketNames, error) {
 	}
 
 	return &buckets, nil
+}
+
+// DoesLocalBucketExist queries a proxy or target to get a list of all local buckets, returns true if
+// the bucket exists.
+func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
+	buckets, err := GetLocalBucketNames(serverURL)
+	if err != nil {
+		return false, err
+	}
+
+	for _, b := range buckets.Local {
+		if b == bucket {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
