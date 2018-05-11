@@ -75,22 +75,22 @@ var (
 	}
 	httpclient = &http.Client{}
 	tests      = []Test{
-		Test{"Local Bucket", regressionLocalBuckets},
-		Test{"Rename Local Bucket", regressionRenameLocalBuckets},
-		Test{"Cloud Bucket", regressionCloudBuckets},
-		Test{"Stats", regressionStats},
-		Test{"Config", regressionConfig},
-		Test{"Rebalance", regressionRebalance},
-		Test{"LRU", regressionLRU},
-		Test{"Rename", regressionRename},
-		Test{"RW stress", regressionRWStress},
-		Test{"PrefetchList", regressionPrefetchList},
-		Test{"PrefetchRange", regressionPrefetchRange},
-		Test{"DeleteList", regressionDeleteList},
-		Test{"DeleteRange", regressionDeleteRange},
-		Test{"HeadBucket", regressionHeadBucket},
-		Test{"ListObjects", regressionListObjects},
-		Test{"ObjectPrefix", regressionObjectPrefix},
+		{"Local Bucket", regressionLocalBuckets},
+		{"Rename Local Bucket", regressionRenameLocalBuckets},
+		{"Cloud Bucket", regressionCloudBuckets},
+		{"Stats", regressionStats},
+		{"Config", regressionConfig},
+		{"Rebalance", regressionRebalance},
+		{"LRU", regressionLRU},
+		{"Rename", regressionRename},
+		{"RW stress", regressionRWStress},
+		{"PrefetchList", regressionPrefetchList},
+		{"PrefetchRange", regressionPrefetchRange},
+		{"DeleteList", regressionDeleteList},
+		{"DeleteRange", regressionDeleteRange},
+		{"HeadBucket", regressionHeadBucket},
+		{"ListObjects", regressionListObjects},
+		{"ObjectPrefix", regressionObjectPrefix},
 	}
 	failLRU = ""
 )
@@ -110,7 +110,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
-		maxNumGetErrs = uint64(num * numGetsForEachFile / 4000) // 0.025 % of GET requests
+		maxNumGetErrs = uint64(num * numGetsForEachFile / 1000) // 0.1 % of GET requests
 		getsCompleted uint64
 		filenameCh    = make(chan string, num)
 		repFilenameCh = make(chan repFile, num)
@@ -736,7 +736,7 @@ func regressionRebalance(t *testing.T) {
 	// step 4. register back
 	//
 	registerTarget(sid, &smap, t)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)
 		if len(smap.Tmap) == l {

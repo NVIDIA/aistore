@@ -233,7 +233,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 
 	tlogf("Reregistering target...\n")
 	registerTarget(removedSid, &smap, t)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)
 		if len(smap.Tmap) == l {
@@ -444,7 +444,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	propsTestCore(t, versionEnabled, isLocalBucket)
 }
 
-func Test_objpropsVersionEnabled(t *testing.T) {
+func TestObjPropsVersionEnabled(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
@@ -452,7 +452,7 @@ func Test_objpropsVersionEnabled(t *testing.T) {
 	propsMainTest(t, dfc.VersionAll)
 }
 
-func Test_objpropsVersionDisabled(t *testing.T) {
+func TestObjPropsVersionDisabled(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
