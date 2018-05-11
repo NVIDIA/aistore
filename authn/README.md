@@ -93,6 +93,6 @@ At this moment, only requests to buckets and objects API require "tokenization".
 
 ## Known limitations
 
-- **Per-bucket authentication***. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users login, they have full access to all the data;
-- **In memory only**. All issued tokens are kept in memory. Restarting AuthN will have and effect of logging out all active users;
+- **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users login, they have full access to all the data;
+- **In memory only**. All issued tokens are kept in memory. Restarting AuthN will have an effect of logging out all active users;
 - **Adding and removing AWS and GCP credentials**. Not supported yet.
