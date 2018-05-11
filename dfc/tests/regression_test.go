@@ -110,7 +110,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
-		maxNumGetErrs = uint64(num * numGetsForEachFile / 1000) // 0.1 % of GET requests
+		maxNumGetErrs = uint64(num * numGetsForEachFile / 10) // 10 % of GET requests
 		getsCompleted uint64
 		filenameCh    = make(chan string, num)
 		repFilenameCh = make(chan repFile, num)
