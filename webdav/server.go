@@ -43,14 +43,14 @@ func main() {
 	)
 
 	flag.IntVar(&port, "port", 8079, "this server's port")
-	flag.StringVar(&proxy, "proxyurl", "127.0.0.1:8080", "dfc proxy's url (ip:port)")
+	flag.StringVar(&proxy, "dfc-proxyurl", "127.0.0.1:8080", "dfc proxy's url (ip:port)")
 	flag.StringVar(&tmpDir, "tmpdir", "/tmp/dfc", "temporary directory to store files used by webdav")
-	flag.IntVar(&logLevel, "loglevel", logLevelNone, "verbose level(0 = none, 1 = webdav, 2 = dfc)")
+	flag.IntVar(&logLevel, "webdav-loglevel", logLevelNone, "verbose level(0 = none, 1 = webdav, 2 = dfc)")
 	flag.Parse()
-	url := url.URL{Scheme: "http", Host: proxy}
+	u := url.URL{Scheme: "http", Host: proxy}
 
 	h := &webdav.Handler{
-		FileSystem: NewFS(url, tmpDir),
+		FileSystem: NewFS(u, tmpDir),
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
 			litmus := r.Header.Get("X-Litmus")
@@ -78,7 +78,7 @@ func main() {
 		h.ServeHTTP(w, r)
 	}))
 
-	webdavLog(logLevelNone, "DFC WebDAV server started, listening on %d, DFC = %s\n", port, url.String())
+	webdavLog(logLevelNone, "DFC WebDAV server started, listening on %d, DFC = %s\n", port, u.String())
 	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
