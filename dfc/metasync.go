@@ -131,6 +131,7 @@ func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
 		glog.Errorf("%s (self) is not the primary proxy (%s) - cannot distribute REVS", y.p.si.DaemonID, lead)
 		return
 	}
+
 	// validate
 	for _, metaif := range revsvec {
 		if _, ok := metaif.(revs); !ok {
@@ -154,12 +155,16 @@ func (y *metasyncer) run() error {
 	for {
 		var npending int
 		select {
-		case revsvec := <-y.chfeedwait:
-			npending = y.dosync(revsvec)
-			var s []interface{}
-			y.chfeedwait <- s
-		case revsvec := <-y.chfeed:
-			npending = y.dosync(revsvec)
+		case revsvec, ok := <-y.chfeedwait:
+			if ok {
+				npending = y.dosync(revsvec)
+				var s []interface{}
+				y.chfeedwait <- s
+			}
+		case revsvec, ok := <-y.chfeed:
+			if ok {
+				npending = y.dosync(revsvec)
+			}
 		case <-y.ticker.C:
 			npending = y.handlePending()
 		case <-y.chstop:
@@ -192,9 +197,11 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 		newversions            = make(map[string]revs)
 		check4newmembers       bool
 	)
+
 	if v, ok := y.synced.copies[smaptag]; ok {
 		smapSynced = v.(*Smap)
 	}
+
 	for _, metaif := range revsvec {
 		var msg = &ActionMsg{}
 		// either (revs) or (revs, msg) pair
