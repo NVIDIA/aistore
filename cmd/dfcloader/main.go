@@ -97,6 +97,8 @@ var (
 	allObjects           []string // All objects created under virtual directory myName
 	statsPrintHeader     = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC              statsd.Client
+	getPending           int64
+	putPending           int64
 )
 
 func parseCmdLine() (params, error) {
@@ -451,7 +453,7 @@ func writeStats(to *os.File, final bool, s, t sts) {
 		// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
 		if s.put.Total() != 0 {
 			p(to, statsPrintHeader, pt(), "Put",
-				pn(s.put.Total())+"("+pn(t.put.Total())+")",
+				pn(s.put.Total())+"("+pn(t.put.Total())+","+pn(putPending)+")",
 				pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
 				pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
 				pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
@@ -459,7 +461,7 @@ func writeStats(to *os.File, final bool, s, t sts) {
 		}
 		if s.get.Total() != 0 {
 			p(to, statsPrintHeader, pt(), "Get",
-				pn(s.get.Total())+"("+pn(t.get.Total())+")",
+				pn(s.get.Total())+"("+pn(t.get.Total())+","+pn(getPending)+")",
 				pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
 				pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
 				pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
@@ -485,6 +487,7 @@ func newPutWorkOrder() *workOrder {
 		size = nonDeterministicRand.Intn(runParams.maxSize-runParams.minSize) + runParams.minSize
 	}
 
+	putPending++
 	return &workOrder{
 		proxyURL: runParams.proxyURL,
 		bucket:   runParams.bucket,
@@ -501,6 +504,7 @@ func newGetWorkOrder() *workOrder {
 		return nil
 	}
 
+	getPending++
 	return &workOrder{
 		proxyURL: runParams.proxyURL,
 		bucket:   runParams.bucket,
@@ -540,6 +544,14 @@ func completeWorkOrder(wo *workOrder) {
 
 	switch wo.op {
 	case opGet:
+		getPending--
+		statsdC.Send("get",
+			statsd.Metric{
+				Type:  statsd.Gauge,
+				Name:  "pending",
+				Value: getPending,
+			},
+		)
 		if wo.err == nil {
 			intervalStats.get.Add(wo.size, delta)
 			statsdC.Send("get",
@@ -617,8 +629,23 @@ func completeWorkOrder(wo *workOrder) {
 		} else {
 			fmt.Println("Get failed: ", wo.err)
 			intervalStats.get.AddErr()
+			statsdC.Send("get",
+				statsd.Metric{
+					Type:  statsd.Counter,
+					Name:  "error",
+					Value: 1,
+				},
+			)
 		}
 	case opPut:
+		putPending--
+		statsdC.Send("put",
+			statsd.Metric{
+				Type:  statsd.Gauge,
+				Name:  "pending",
+				Value: putPending,
+			},
+		)
 		if wo.err == nil {
 			allObjects = append(allObjects, wo.objName)
 			intervalStats.put.Add(wo.size, delta)
@@ -642,6 +669,13 @@ func completeWorkOrder(wo *workOrder) {
 		} else {
 			fmt.Println("Put failed: ", wo.err)
 			intervalStats.put.AddErr()
+			statsdC.Send("put",
+				statsd.Metric{
+					Type:  statsd.Counter,
+					Name:  "error",
+					Value: 1,
+				},
+			)
 		}
 	case opConfig:
 		if wo.err == nil {
