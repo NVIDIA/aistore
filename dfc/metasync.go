@@ -221,6 +221,7 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 		if tag == smaptag {
 			assert(msg.Value == nil, "reserved for the previously sync-ed copy")
 			if smapSynced != nil {
+				// note: this assignment modifies the original msg's value field
 				msg.Value = smapSynced
 			}
 		}

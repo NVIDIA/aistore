@@ -5,12 +5,14 @@
 package dfc
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +28,7 @@ type (
 		id      string
 		isProxy bool
 		sf      syncf
+		failCnt []int
 	}
 
 	// transportData records information about meta sync calls including called for which server, how many
@@ -34,6 +37,12 @@ type (
 		isProxy bool
 		id      string
 		cnt     int
+	}
+
+	// syncData stores the data comes from the http sync call and an error
+	syncData struct {
+		data map[string]string
+		err  error
 	}
 )
 
@@ -71,7 +80,9 @@ func newPrimary() *proxyrunner {
 	p.httpclientLongTimeout = &http.Client{}
 	p.kalive = &proxykalive{}
 	ctx.config.Periodic.RetrySyncTime = time.Millisecond * 100
-
+	pi := &proxyInfo{daemonInfo{DaemonID: p.si.DaemonID, DirectURL: "do not care"}, true /* primary */}
+	p.smap.addProxy(pi)
+	p.smap.ProxySI = pi
 	return &p
 }
 
@@ -186,10 +197,10 @@ func failFirst(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
 func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []server{
-			{"p1", true, alwaysOk},
-			{"p2", true, alwaysOk},
-			{"t1", false, alwaysOk},
-			{"t2", false, alwaysOk},
+			{"p1", true, alwaysOk, nil},
+			{"p2", true, alwaysOk, nil},
+			{"t1", false, alwaysOk, nil},
+			{"t2", false, alwaysOk, nil},
 		}
 		ch = make(chan transportData, len(servers))
 	)
@@ -212,8 +223,8 @@ func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpo
 func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []server{
-			{"p1", true, delayedOk},
-			{"t1", false, alwaysOk},
+			{"p1", true, delayedOk, nil},
+			{"t1", false, alwaysOk, nil},
 		}
 		ch = make(chan transportData, len(servers))
 	)
@@ -238,8 +249,8 @@ func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []server{
-			{"p1", true, delayedOk},
-			{"t1", false, alwaysOk},
+			{"p1", true, delayedOk, nil},
+			{"t1", false, alwaysOk, nil},
 		}
 		ch = make(chan transportData, len(servers))
 	)
@@ -264,9 +275,9 @@ func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]t
 func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []server{
-			{"p1", true, failFirst},
-			{"p2", true, alwaysOk},
-			{"t1", false, failFirst},
+			{"p1", true, failFirst, nil},
+			{"p2", true, alwaysOk, nil},
+			{"t1", false, failFirst, nil},
 		}
 		ch = make(chan transportData, len(servers)+2)
 	)
@@ -290,10 +301,10 @@ func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportD
 func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		servers = []server{
-			{"p1", true, alwaysOk},
-			{"p2", true, alwaysOk},
-			{"t1", false, alwaysOk},
-			{"t2", false, alwaysOk},
+			{"p1", true, alwaysOk, nil},
+			{"p2", true, alwaysOk, nil},
+			{"t1", false, alwaysOk, nil},
+			{"t2", false, alwaysOk, nil},
 		}
 		ch = make(chan transportData, len(servers)*3)
 	)
@@ -362,15 +373,212 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	// sync will return even though the sync actually failed, and there is no error return
 	f()
 
-	// testcase #2: with delay, metasync tries and falls through to pending handling (retry)
+	// testcase #2: with delay, metasync tries and falls through pending handling (retry)
 	syncer.sync(false, primary.smap)
 	time.Sleep(time.Second * 2)
 	f()
 
 	// only cares if the sync call comes, no need to verify the id and cnt as we are the one
 	// filling those in above
-	exp := []transportData{
-		{true, id, 1},
-	}
+	exp := []transportData{{true, id, 1}}
 	return exp, exp
+}
+
+// newDataServer simulates a proxt or a target for meta sync's data tests
+func newDataServer(primary *proxyrunner, s *server, ch chan<- syncData) *httptest.Server {
+	cnt := 0
+	id := s.id
+	failCnt := s.failCnt
+
+	// entry point for metasyncer's sync call
+	f := func(w http.ResponseWriter, r *http.Request) {
+		cnt++
+
+		for _, v := range failCnt {
+			if v == cnt {
+				http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
+				return
+			}
+		}
+
+		d := make(map[string]string)
+		err := primary.readJSON(w, r, &d)
+		ch <- syncData{d, err}
+	}
+
+	// creates the test proxy/target server and add to primary proxy's smap
+	ts := httptest.NewServer(http.HandlerFunc(f))
+	if s.isProxy {
+		primary.smap.addProxy(&proxyInfo{daemonInfo{DaemonID: id, DirectURL: ts.URL}, false /* primary */})
+	} else {
+		primary.smap.add(&daemonInfo{DaemonID: id, DirectURL: ts.URL})
+	}
+
+	return ts
+}
+
+func match(t *testing.T, exp map[string]string, ch <-chan syncData, cnt int) {
+	fail := func(t *testing.T, exp, act map[string]string) {
+		t.Fatalf("Mismatch: exp = %+v, act = %+v", exp, act)
+	}
+
+	for i := 0; i < cnt; i++ {
+		act := (<-ch).data
+		for k, e := range act {
+			a, ok := exp[k]
+			if !ok {
+				fail(t, exp, act)
+			}
+
+			if strings.Compare(e, a) != 0 {
+				fail(t, exp, act)
+			}
+		}
+	}
+}
+
+// TestMetaSyncData is the driver for meta sync data tests.
+func TestMetaSyncData(t *testing.T) {
+	var (
+		exp            = make(map[string]string)
+		expRetry       = make(map[string]string)
+		primary        = newPrimary()
+		syncer         = newmetasyncer(primary)
+		ch             = make(chan syncData, 5)
+		lbMap          = newLBMap()
+		emptyActionMsg string
+	)
+
+	b, err := json.Marshal(ActionMsg{})
+	if err != nil {
+		t.Fatal("Failed to marshal empty ActionMsg, err =", err)
+	}
+
+	emptyActionMsg = string(b)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		syncer.run()
+	}(&wg)
+
+	proxy := newDataServer(primary, &server{"proxy", true, nil, []int{3, 4, 5}}, ch)
+	defer proxy.Close()
+
+	target := newDataServer(primary, &server{"target", false, nil, []int{2}}, ch)
+	defer target.Close()
+
+	// sync smap
+	b, err = primary.smap.marshal()
+	if err != nil {
+		t.Fatal("Failed to marshal smap, err =", err)
+	}
+
+	exp[smaptag] = string(b)
+	expRetry[smaptag] = string(b)
+	exp[smaptag+actiontag] = string(emptyActionMsg)
+	expRetry[smaptag+actiontag] = string(emptyActionMsg)
+
+	syncer.sync(false, primary.smap.cloneU())
+	match(t, expRetry, ch, 1)
+
+	// sync lbmap, target fail and retry
+	lbMap.add("bucket1")
+	lbMap.add("bucket2")
+	b, err = lbMap.marshal()
+	if err != nil {
+		t.Fatal("Failed to marshal lbMap, err =", err)
+	}
+
+	exp[lbmaptag] = string(b)
+	expRetry[lbmaptag] = string(b)
+	exp[lbmaptag+actiontag] = string(emptyActionMsg)
+	expRetry[lbmaptag+actiontag] = string(emptyActionMsg)
+
+	syncer.sync(false, &lbMap)
+	match(t, exp, ch, 1)
+	match(t, expRetry, ch, 1)
+
+	// sync lbmap, proxy fail, new lbmap synced, expect proxy to receive the new lbmap after rejecting a few
+	// sync request
+	lbMap.add("bucket3")
+	b, err = lbMap.marshal()
+	if err != nil {
+		t.Fatal("Failed to marshal lbMap, err =", err)
+	}
+
+	exp[lbmaptag] = string(b)
+	syncer.sync(false, &lbMap)
+	match(t, exp, ch, 1)
+
+	lbMap.add("bucket4")
+	b, err = lbMap.marshal()
+	if err != nil {
+		t.Fatal("Failed to marshal lbMap, err =", err)
+	}
+
+	lbMapStr := string(b)
+	exp[lbmaptag] = lbMapStr
+	syncer.sync(false, &lbMap)
+	match(t, exp, ch, 2)
+
+	// sync smap
+	delete(exp, lbmaptag)
+	delete(exp, lbmaptag+actiontag)
+
+	b, err = json.Marshal(&ActionMsg{"", "", primary.smap})
+	if err != nil {
+		t.Fatal("Failed to marshal smap, err =", err)
+	}
+
+	exp[smaptag+actiontag] = string(b)
+
+	proxy = newDataServer(primary, &server{"another proxy", true, nil, nil}, ch)
+	defer proxy.Close()
+
+	b, err = primary.smap.marshal()
+	if err != nil {
+		t.Fatal("Failed to marshal smap, err =", err)
+	}
+
+	exp[smaptag] = string(b)
+
+	syncer.sync(false, primary.smap)
+	match(t, exp, ch, 3)
+
+	// sync smap pair
+	msgSMap := &ActionMsg{"who cares", "whatever", primary.smap}
+	b, err = json.Marshal(msgSMap)
+	if err != nil {
+		t.Fatal("Failed to marshal action message, err =", err)
+	}
+
+	exp[smaptag+actiontag] = string(b)
+	// note: action message's value has to be nil for smap
+	msgSMap.Value = nil
+	syncer.sync(false, &revspair{primary.smap, msgSMap})
+	match(t, exp, ch, 3)
+
+	// sync smap pair and lbmap pair
+	msgLBMap := &ActionMsg{"who cares", "whatever", "send me back"}
+	b, err = json.Marshal(msgLBMap)
+	if err != nil {
+		t.Fatal("Failed to marshal action message, err =", err)
+	}
+
+	exp[lbmaptag] = lbMapStr
+	exp[lbmaptag+actiontag] = string(b)
+	// note: 'Value' field was modified by the last call to sync()
+	msgSMap.Value = nil
+	syncer.sync(true, &revspair{primary.smap, msgSMap}, &revspair{&lbMap, msgLBMap})
+	match(t, exp, ch, 3)
+
+	// lbmap pair
+	delete(exp, smaptag)
+	syncer.sync(true, &revspair{&lbMap, msgLBMap})
+	match(t, exp, ch, 3)
+
+	syncer.stop(nil)
+	wg.Wait()
 }

@@ -260,11 +260,10 @@ func (m *Smap) marshal() (b []byte, err error) {
 	return
 }
 
-//====================
-//
-// lbmap wrapper - NOTE - caller must take the lock
-//
-//====================
+func newLBMap() lbmap {
+	return lbmap{LBmap: make(map[string]string)}
+}
+
 func (m *lbmap) add(b string) bool {
 	_, ok := m.LBmap[b]
 	if ok {
