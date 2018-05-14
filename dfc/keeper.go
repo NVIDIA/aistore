@@ -210,7 +210,7 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 		return r.primarykeepalive(err)
 	}
 
-	if r.p.proxysi == nil || r.skipCheck(r.p.proxysi.DaemonID) {
+	if r.p.smap.ProxySI == nil || r.skipCheck(r.p.smap.ProxySI.DaemonID) {
 		return
 	}
 	stopped = keepalive(r.p, r.controlCh, err)
@@ -317,7 +317,7 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 //
 //===========================================
 func (r *targetkalive) keepalive(err error) (stopped bool) {
-	if r.t.proxysi == nil || r.skipCheck(r.t.proxysi.DaemonID) {
+	if r.t.smap.ProxySI == nil || r.skipCheck(r.t.smap.ProxySI.DaemonID) {
 		return
 	}
 	stopped = keepalive(r.t, r.controlCh, err)

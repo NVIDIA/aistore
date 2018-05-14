@@ -573,6 +573,17 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 func concurrentPutGetDel(t *testing.T) {
 	smap := getClusterMap(httpclient, t)
 
+	exists, err := client.DoesLocalBucketExist(proxyurl, localBucketName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		err := client.CreateLocalBucket(proxyurl, localBucketName)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	var (
 		errch = make(chan error, len(smap.Pmap))
 		wg    sync.WaitGroup
@@ -594,6 +605,7 @@ func concurrentPutGetDel(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	client.DestroyLocalBucket(proxyurl, localBucketName)
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
@@ -765,9 +777,15 @@ func proxyStress(t *testing.T) {
 		wg          sync.WaitGroup
 	)
 
-	err := client.CreateLocalBucket(proxyurl, localBucketName)
+	exists, err := client.DoesLocalBucketExist(proxyurl, localBucketName)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !exists {
+		err := client.CreateLocalBucket(proxyurl, localBucketName)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	// start all workers

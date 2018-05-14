@@ -114,7 +114,11 @@ func (p *proxyrunner) run() error {
 			return fmt.Errorf("Failed to create json message: %v", err)
 		}
 
-		res := p.call(nil, &p.proxysi.daemonInfo, url, http.MethodGet, jsbytes)
+		daemonInfo := &daemonInfo{}
+		if p.smap.ProxySI != nil {
+			daemonInfo = &p.smap.ProxySI.daemonInfo
+		}
+		res := p.call(nil, daemonInfo, url, http.MethodGet, jsbytes)
 		if res.err != nil {
 			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", res.err)
 		}
@@ -155,7 +159,9 @@ func (p *proxyrunner) run() error {
 		}()
 	}
 
-	p.smap.ProxySI = &proxyInfo{daemonInfo: *p.si, Primary: p.primary}
+	if p.smap.ProxySI == nil {
+		p.smap.ProxySI = &proxyInfo{daemonInfo: *p.si, Primary: p.primary}
+	}
 
 	p.metasyncer = getmetasyncer() // utilize the runner
 
@@ -202,8 +208,8 @@ func (p *proxyrunner) run() error {
 
 func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 	var url string
-	if p.proxysi.DaemonID != "" {
-		url = p.proxysi.DirectURL
+	if p.smap.ProxySI.DaemonID != "" {
+		url = p.smap.ProxySI.DirectURL
 	} else {
 		// Smap has not yet been synced
 		url = ctx.config.Proxy.Primary.URL
@@ -1970,9 +1976,9 @@ func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r 
 	if p.primary {
 		return true
 	}
-	if p.proxysi != nil {
-		w.Header().Add(HeaderPrimaryProxyURL, p.proxysi.DirectURL)
-		w.Header().Add(HeaderPrimaryProxyID, p.proxysi.DaemonID)
+	if p.smap.ProxySI != nil {
+		w.Header().Add(HeaderPrimaryProxyURL, p.smap.ProxySI.DirectURL)
+		w.Header().Add(HeaderPrimaryProxyID, p.smap.ProxySI.DaemonID)
 	}
 	s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
 	p.invalmsghdlr(w, r, s)

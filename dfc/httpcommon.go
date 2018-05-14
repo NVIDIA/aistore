@@ -138,7 +138,6 @@ type httprunner struct {
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	statsif               statsif
 	kalive                kaliveif
-	proxysi               *proxyInfo
 	smap                  *Smap
 	lbmap                 *lbmap
 }
@@ -186,7 +185,6 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	h.smap = &Smap{}
 	h.lbmap = &lbmap{LBmap: make(map[string]string)} // local (aka cache-only) buckets
 
-	h.proxysi = &proxyInfo{}
 	// init daemonInfo here
 	h.si = &daemonInfo{}
 	h.si.NodeIPAddr = ipaddr

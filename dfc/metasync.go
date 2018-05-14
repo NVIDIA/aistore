@@ -125,8 +125,8 @@ func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
 	assert(y.p != nil)
 	if !y.p.primary {
 		lead := "?"
-		if y.p.proxysi != nil {
-			lead = y.p.proxysi.DaemonID
+		if y.p.smap.ProxySI != nil {
+			lead = y.p.smap.ProxySI.DaemonID
 		}
 		glog.Errorf("%s (self) is not the primary proxy (%s) - cannot distribute REVS", y.p.si.DaemonID, lead)
 		return

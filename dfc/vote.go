@@ -131,6 +131,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 	smapLock.Lock() // ==================
 	v := h.smap.version()
+	currPrimaryID := h.smap.ProxySI.DaemonID
 	if v < msg.Record.Smap.version() {
 		glog.Warningf("VoteRecord Smap Version (%v) is newer than local Smap (%v), updating Smap\n", msg.Record.Smap.version(), v)
 		h.smap = &msg.Record.Smap
@@ -159,7 +160,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 	lbmapLock.Unlock()
 
-	vote, err := h.voteOnProxy(pi.DaemonID)
+	vote, err := h.voteOnProxy(pi.DaemonID, currPrimaryID)
 	if err != nil {
 		h.invalmsghdlr(w, r, err.Error())
 		return
@@ -222,11 +223,13 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	}
 
 	// If the passed Smap is newer, update our Smap. If it is older, update it.
+	currPrimary := p.smap.ProxySI.DaemonID
+	currPrimaryURL := p.smap.ProxySI.DirectURL
 	if msg.Request.Smap.version() > p.smap.version() {
 		p.smap = &msg.Request.Smap
 	}
 
-	psi, errstr := HrwProxy(p.smap, p.proxysi.DaemonID)
+	psi, errstr := HrwProxy(p.smap, currPrimary)
 	if errstr != "" {
 		s := fmt.Sprintf("Error preforming HRW: %s", errstr)
 		p.invalmsghdlr(w, r, s)
@@ -248,7 +251,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	p.lbmap.copyL(&vr.lbmap)
 
 	// The election should be started in a goroutine, as it must not hang the http handler
-	go p.proxyElection(vr)
+	go p.proxyElection(vr, currPrimaryURL)
 }
 
 //===================
@@ -257,7 +260,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 //
 //===================
 
-func (p *proxyrunner) proxyElection(vr *VoteRecord) {
+func (p *proxyrunner) proxyElection(vr *VoteRecord, currPrimaryURL string) {
 	xele := p.xactinp.renewElection(p, vr)
 	if xele == nil {
 		glog.Infoln("An election is already in progress, returning.")
@@ -273,14 +276,14 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord) {
 		return
 	}
 	// First, ping current proxy with a short timeout: (Primary? State)
-	url := p.proxysi.DirectURL + "/" + Rversion + "/" + Rhealth
+	url := currPrimaryURL + "/" + Rversion + "/" + Rhealth
 	proxyup, err := p.pingWithTimeout(url, ctx.config.Timeout.ProxyPing)
 	if proxyup {
 		// Move back to Idle state
 		glog.Infoln("Moving back to Idle state")
 		return
 	}
-	glog.Infof("%v: primary proxy %v is confirmed down\n", p.si.DaemonID, p.proxysi.DaemonID)
+	glog.Infof("%v: primary proxy %v is confirmed down\n", p.si.DaemonID, currPrimaryURL)
 	glog.Infoln("Moving to Election state")
 	// Begin Election State
 	elected, votingErrors := p.electAmongProxies(vr)
@@ -411,7 +414,6 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	// Version is increased by 100 to make a clear distinction between smap versions before and after the primary proxy is updated.
 	p.smap.Version += 100
 
-	p.proxysi = psi
 	ctx.config.Proxy.Primary.ID = psi.DaemonID
 	ctx.config.Proxy.Primary.URL = psi.DirectURL
 	err := LocalSave(clivars.conffile, ctx.config)
@@ -437,33 +439,34 @@ func (p *proxyrunner) becomeNonPrimaryProxy() {
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
-	glog.Infof("%v: primary proxy (%v @ %v) Failed\n", p.si.DaemonID, p.proxysi.DaemonID, p.proxysi.DirectURL)
+	glog.Infof("%v: primary proxy (%v @ %v) Failed\n", p.si.DaemonID, p.smap.ProxySI.DaemonID, p.smap.ProxySI.DirectURL)
 	if p.smap.countProxies() <= 1 {
 		glog.Warningf("No additional proxies to request vote from")
 		return
 	}
-	nextPrimaryProxy, errstr := HrwProxy(p.smap, p.proxysi.DaemonID)
+	nextPrimaryProxy, errstr := HrwProxy(p.smap, p.smap.ProxySI.DaemonID)
 	if errstr != "" {
 		glog.Errorf("Failed to execute hrwProxy after primary proxy Failure: %v", errstr)
 		return
 	}
 
+	currPrimaryURL := p.smap.ProxySI.DirectURL
 	if nextPrimaryProxy.DaemonID == p.si.DaemonID {
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
 		vr := &VoteRecord{
 			Candidate: nextPrimaryProxy.DaemonID,
-			Primary:   p.proxysi.DaemonID,
+			Primary:   p.smap.ProxySI.DaemonID,
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
 		p.lbmap.copyL(&vr.lbmap)
-		p.proxyElection(vr)
+		p.proxyElection(vr, currPrimaryURL)
 	} else {
 		glog.Infof("%v: Requesting Election from %v", p.si.DaemonID, nextPrimaryProxy.DaemonID)
 		vr := &VoteInitiation{
 			Candidate: nextPrimaryProxy.DaemonID,
-			Primary:   p.proxysi.DaemonID,
+			Primary:   p.smap.ProxySI.DaemonID,
 			StartTime: time.Now(),
 			Initiator: p.si.DaemonID,
 		}
@@ -474,9 +477,9 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 }
 
 func (t *targetrunner) onPrimaryProxyFailure() {
-	glog.Infof("%v: primary proxy (%v @ %v) Failed\n", t.si.DaemonID, t.proxysi.DaemonID, t.proxysi.DirectURL)
+	glog.Infof("%v: primary proxy (%v @ %v) Failed\n", t.si.DaemonID, t.smap.ProxySI.DaemonID, t.smap.ProxySI.DirectURL)
 
-	nextPrimaryProxy, errstr := HrwProxy(t.smap, t.proxysi.DaemonID)
+	nextPrimaryProxy, errstr := HrwProxy(t.smap, t.smap.ProxySI.DaemonID)
 	if errstr != "" {
 		glog.Errorf("Failed to execute hrwProxy after primary proxy Failure: %v", errstr)
 	}
@@ -489,7 +492,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 
 	vr := &VoteInitiation{
 		Candidate: nextPrimaryProxy.DaemonID,
-		Primary:   t.proxysi.DaemonID,
+		Primary:   t.smap.ProxySI.DaemonID,
 		StartTime: time.Now(),
 		Initiator: t.si.DaemonID,
 	}
@@ -520,10 +523,10 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *p
 	}
 }
 
-func (h *httprunner) voteOnProxy(daemonID string) (bool, error) {
+func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
-	lastKeepaliveTime := h.kalive.getTimestamp(h.proxysi.DaemonID)
+	lastKeepaliveTime := h.kalive.getTimestamp(currPrimaryID)
 	timeSinceLastKalive := time.Since(lastKeepaliveTime)
 	if timeSinceLastKalive < ctx.config.Periodic.KeepAliveTime/2 {
 		// KeepAliveTime/2 is the expected amount time since the last keepalive was sent
@@ -532,7 +535,7 @@ func (h *httprunner) voteOnProxy(daemonID string) (bool, error) {
 
 	// Second: Vote according to whether or not the candidate is the Highest Random Weight remaining
 	// in the Smap
-	hrwmax, errstr := HrwProxy(h.smap, h.proxysi.DaemonID)
+	hrwmax, errstr := HrwProxy(h.smap, currPrimaryID)
 	if errstr != "" {
 		return false, fmt.Errorf("Error executing HRW: %v", errstr)
 	}
@@ -568,7 +571,6 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 	}
 
 	proxyinfo.Primary = true
-	h.proxysi = proxyinfo
 	if primaryToRemove != "" {
 		h.smap.delProxy(primaryToRemove)
 	}
