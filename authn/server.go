@@ -195,7 +195,6 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	err := a.checkAuthorization(w, r)
 	if err != nil {
 		glog.Errorf("Not authorized: %v\n", err)
-		invalhdlr(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -218,15 +217,13 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 	err := a.checkAuthorization(w, r)
 	if err != nil {
-		glog.Errorf("Failed to read credentials: %v\n", err)
-		invalhdlr(w, r, "Failed to add user")
+		glog.Errorf("Not authorized: %v\n", err)
 		return
 	}
 
 	info := &userInfo{}
 	if err = a.readJSON(w, r, info); err != nil {
 		glog.Errorf("Failed to read credentials: %v\n", err)
-		invalhdlr(w, r, "Failed to add user")
 		return
 	}
 
@@ -287,7 +284,6 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	msg := &loginMsg{}
 	if err = a.readJSON(w, r, msg); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
-		invalhdlr(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 
