@@ -582,3 +582,90 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.stop(nil)
 	wg.Wait()
 }
+
+// TestMetaSyncMembership tests meta sync's logic when accessing proxy's smap directly
+func TestMetaSyncMembership(t *testing.T) {
+	{
+		// pending server dropped without sync
+		primary := newPrimary()
+		syncer := newmetasyncer(primary)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			syncer.run()
+		}(&wg)
+
+		cnt := 0
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cnt++
+			http.Error(w, "i don't know how to deal with you", http.StatusNotAcceptable)
+		}))
+
+		defer s.Close()
+
+		id := "t"
+		primary.smap.add(&daemonInfo{DaemonID: id, DirectURL: s.URL})
+		syncer.sync(true, primary.smap)
+		time.Sleep(time.Millisecond * 300)
+		primary.smap.del(id)
+		time.Sleep(time.Millisecond * 300)
+		cnt1 := cnt
+		time.Sleep(time.Millisecond * 300)
+		if cnt != cnt1 {
+			t.Fatal("Sync call didn't stop after traget is deleted")
+		}
+
+		syncer.stop(nil)
+		wg.Wait()
+	}
+
+	{
+		// sync before smap sync (no previous sync saved in meta syncer)
+		primary := newPrimary()
+		syncer := newmetasyncer(primary)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			syncer.run()
+		}(&wg)
+
+		ch := make(chan struct{}, 10)
+		f := func(w http.ResponseWriter, r *http.Request) {
+			ch <- struct{}{}
+		}
+
+		s1 := httptest.NewServer(http.HandlerFunc(f))
+		defer s1.Close()
+
+		primary.smap.add(&daemonInfo{DaemonID: "t1", DirectURL: s1.URL})
+		syncer.sync(true, primary.lbmap)
+		<-ch
+
+		// sync smap so meta syncer has a smap
+		syncer.sync(true, primary.smap.cloneU())
+		<-ch
+
+		// add a new target but new smap is not synced
+		// meta syncer picks up the new target directly from primary's smap
+		// and meta syncer will also add the new target to pending to sync all previously synced data
+		// that's why the extra channel read
+		s2 := httptest.NewServer(http.HandlerFunc(f))
+		defer s2.Close()
+
+		primary.smap.add(&daemonInfo{DaemonID: "t2", DirectURL: s2.URL})
+		syncer.sync(true, primary.lbmap)
+		<-ch // target 1
+		<-ch // target 2
+		<-ch // all previously synced data to target 2
+		if len(ch) != 0 {
+			t.Fatal("Too many sync calls received")
+		}
+
+		syncer.stop(nil)
+		wg.Wait()
+	}
+}
