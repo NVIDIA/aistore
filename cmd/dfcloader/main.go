@@ -453,7 +453,7 @@ func writeStats(to *os.File, final bool, s, t sts) {
 		// show interval stats; some fields are shown of both interval and total, for example, gets, puts, etc
 		if s.put.Total() != 0 {
 			p(to, statsPrintHeader, pt(), "Put",
-				pn(s.put.Total())+"("+pn(t.put.Total())+","+pn(putPending)+")",
+				pn(s.put.Total())+"("+pn(t.put.Total())+","+pn(putPending)+","+pn(int64(len(workOrderResults)))+")",
 				pb(s.put.TotalBytes())+"("+pb(t.put.TotalBytes())+")",
 				pl(s.put.MinLatency(), s.put.AvgLatency(), s.put.MaxLatency()),
 				pb(s.put.Throughput(s.put.Start(), time.Now()))+"("+pb(t.put.Throughput(t.put.Start(), time.Now()))+")",
@@ -461,7 +461,7 @@ func writeStats(to *os.File, final bool, s, t sts) {
 		}
 		if s.get.Total() != 0 {
 			p(to, statsPrintHeader, pt(), "Get",
-				pn(s.get.Total())+"("+pn(t.get.Total())+","+pn(getPending)+")",
+				pn(s.get.Total())+"("+pn(t.get.Total())+","+pn(getPending)+","+pn(int64(len(workOrderResults)))+")",
 				pb(s.get.TotalBytes())+"("+pb(t.get.TotalBytes())+")",
 				pl(s.get.MinLatency(), s.get.AvgLatency(), s.get.MaxLatency()),
 				pb(s.get.Throughput(s.get.Start(), time.Now()))+"("+pb(t.get.Throughput(t.get.Start(), time.Now()))+")",
