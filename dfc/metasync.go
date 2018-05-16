@@ -102,7 +102,7 @@ type metasyncer struct {
 	chfeed     chan []interface{}
 	chfeedwait chan []interface{}
 	chstop     chan struct{}
-	ticker     *time.Ticker
+	retryTimer *time.Timer
 }
 
 // c-tor
@@ -115,9 +115,9 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 	y.chfeed = make(chan []interface{}, 16)
 	y.chfeedwait = make(chan []interface{})
 
-	// create the ticker, do not need to start at start up
-	y.ticker = time.NewTicker(time.Duration(time.Hour))
-	y.ticker.Stop()
+	y.retryTimer = time.NewTimer(time.Duration(time.Hour))
+	// no retry to run yet
+	y.retryTimer.Stop()
 	return
 }
 
@@ -165,16 +165,17 @@ func (y *metasyncer) run() error {
 			if ok {
 				npending = y.dosync(revsvec)
 			}
-		case <-y.ticker.C:
+		case <-y.retryTimer.C:
 			npending = y.handlePending()
 		case <-y.chstop:
-			y.ticker.Stop()
+			y.retryTimer.Stop()
 			return nil
 		}
 
-		y.ticker.Stop()
 		if npending > 0 {
-			y.ticker = time.NewTicker(ctx.config.Periodic.RetrySyncTime)
+			y.retryTimer.Reset(ctx.config.Periodic.RetrySyncTime)
+		} else {
+			y.retryTimer.Stop()
 		}
 	}
 }
