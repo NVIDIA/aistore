@@ -496,7 +496,7 @@ func TestMetaSyncData(t *testing.T) {
 	exp[lbmaptag+actiontag] = string(emptyActionMsg)
 	expRetry[lbmaptag+actiontag] = string(emptyActionMsg)
 
-	syncer.sync(false, &lbMap)
+	syncer.sync(false, lbMap)
 	match(t, exp, ch, 1)
 	match(t, expRetry, ch, 1)
 
@@ -509,7 +509,7 @@ func TestMetaSyncData(t *testing.T) {
 	}
 
 	exp[lbmaptag] = string(b)
-	syncer.sync(false, &lbMap)
+	syncer.sync(false, lbMap)
 	match(t, exp, ch, 1)
 
 	lbMap.add("bucket4")
@@ -520,7 +520,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	lbMapStr := string(b)
 	exp[lbmaptag] = lbMapStr
-	syncer.sync(false, &lbMap)
+	syncer.sync(false, lbMap)
 	match(t, exp, ch, 2)
 
 	// sync smap
@@ -544,7 +544,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	exp[smaptag] = string(b)
 
-	syncer.sync(false, primary.smap)
+	syncer.sync(false, primary.smap.cloneU())
 	match(t, exp, ch, 3)
 
 	// sync smap pair
@@ -557,7 +557,7 @@ func TestMetaSyncData(t *testing.T) {
 	exp[smaptag+actiontag] = string(b)
 	// note: action message's value has to be nil for smap
 	msgSMap.Value = nil
-	syncer.sync(false, &revspair{primary.smap, msgSMap})
+	syncer.sync(false, &revspair{primary.smap.cloneU(), msgSMap})
 	match(t, exp, ch, 3)
 
 	// sync smap pair and lbmap pair
@@ -571,12 +571,12 @@ func TestMetaSyncData(t *testing.T) {
 	exp[lbmaptag+actiontag] = string(b)
 	// note: 'Value' field was modified by the last call to sync()
 	msgSMap.Value = nil
-	syncer.sync(true, &revspair{primary.smap, msgSMap}, &revspair{&lbMap, msgLBMap})
+	syncer.sync(true, &revspair{primary.smap.cloneU(), msgSMap}, &revspair{lbMap, msgLBMap})
 	match(t, exp, ch, 3)
 
 	// lbmap pair
 	delete(exp, smaptag)
-	syncer.sync(true, &revspair{&lbMap, msgLBMap})
+	syncer.sync(true, &revspair{lbMap, msgLBMap})
 	match(t, exp, ch, 3)
 
 	syncer.stop(nil)
@@ -607,7 +607,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t"
 		primary.smap.add(&daemonInfo{DaemonID: id, DirectURL: s.URL})
-		syncer.sync(true, primary.smap)
+		syncer.sync(true, primary.smap.cloneU())
 		time.Sleep(time.Millisecond * 300)
 		primary.smap.del(id)
 		time.Sleep(time.Millisecond * 300)
@@ -668,4 +668,251 @@ func TestMetaSyncMembership(t *testing.T) {
 		syncer.stop(nil)
 		wg.Wait()
 	}
+}
+
+// TestMetaSyncReceive tests extracting received sync data.
+func TestMetaSyncReceive(t *testing.T) {
+	noErr := func(s string) {
+		if s != "" {
+			t.Fatal("Unexpected error", s)
+		}
+	}
+
+	hasErr := func(s string) {
+		if s == "" {
+			t.Fatal("Expecting error")
+		}
+	}
+
+	emptyActionMsg := func(a *ActionMsg) {
+		if a.Action != "" || a.Name != "" || a.Value != nil {
+			t.Fatal("Expecting empty action message", a)
+		}
+	}
+
+	matchActionMsg := func(a, b *ActionMsg) {
+		if !reflect.DeepEqual(a, b) {
+			t.Fatal("ActionMsg mismatch ", a, b)
+		}
+	}
+
+	nilSMap := func(m *Smap) {
+		if m != nil {
+			t.Fatal("Expecting nil smap", m)
+		}
+	}
+
+	emptySMap := func(m *Smap) {
+		if m.Tmap != nil || m.Pmap != nil || m.ProxySI != nil || m.Version != 0 {
+			t.Fatal("Expecting empty smap", m)
+		}
+	}
+
+	matchSMap := func(a, b *Smap) {
+		if !reflect.DeepEqual(a, b) {
+			t.Fatal("SMap mismatch", a, b)
+		}
+	}
+
+	// matchPrevSMap matches two smap partially
+	// previous version of the smap is only partially extracted from a sync call
+	matchPrevSMap := func(a, b *Smap) {
+		if a.Version != b.Version {
+			t.Fatal("Previous smap's version mismatch", a.Version, b.Version)
+		}
+
+		for _, v := range a.Pmap {
+			_, ok := b.Pmap[v.DaemonID]
+			if !ok {
+				t.Fatal("Missing proxy", v.DaemonID)
+			}
+		}
+
+		for _, v := range a.Tmap {
+			_, ok := b.Tmap[v.DaemonID]
+			if !ok {
+				t.Fatal("Missing target", v.DaemonID)
+			}
+		}
+	}
+
+	nilLBMap := func(l *lbmap) {
+		if l != nil {
+			t.Fatal("Expecting nil lbmap", l)
+		}
+	}
+
+	matchLBMap := func(a, b *lbmap) {
+		if !reflect.DeepEqual(a, b) {
+			t.Fatal("LBMap mismatch", a, b)
+		}
+	}
+
+	primary := newPrimary()
+	syncer := newmetasyncer(primary)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		syncer.run()
+	}(&wg)
+
+	chProxy := make(chan map[string]string, 10)
+	fProxy := func(w http.ResponseWriter, r *http.Request) {
+		d := make(map[string]string)
+		primary.readJSON(w, r, &d) // ignore json error
+		chProxy <- d
+	}
+
+	// note: only difference is the channel, hard to share the code, but only a few lines
+	chTarget := make(chan map[string]string, 10)
+	fTarget := func(w http.ResponseWriter, r *http.Request) {
+		d := make(map[string]string)
+		primary.readJSON(w, r, &d) // ignore json error
+		chTarget <- d
+	}
+
+	s := httptest.NewServer(http.HandlerFunc(fProxy))
+	defer s.Close()
+	primary.smap.addProxy(&proxyInfo{daemonInfo{DaemonID: "proxy", DirectURL: s.URL}, false /* primary */})
+	proxy := proxyrunner{}
+	proxy.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	proxy.lbmap = newLBMap()
+
+	// empty payload
+	newSMap, ooldSMap, actMsg, errStr := proxy.extractsmap(make(map[string]string))
+	if newSMap != nil || ooldSMap != nil || actMsg != nil || errStr != "" {
+		t.Fatal("Extract smap from empty payload returned data")
+	}
+
+	syncer.sync(true, primary.smap.cloneU())
+	payload := <-chProxy
+
+	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
+	noErr(errStr)
+	emptyActionMsg(actMsg)
+	emptySMap(ooldSMap)
+	matchSMap(primary.smap, newSMap)
+	proxy.smap = newSMap
+
+	// same version of smap received
+	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
+	noErr(errStr)
+	emptyActionMsg(actMsg)
+	emptySMap(ooldSMap)
+	nilSMap(newSMap)
+
+	// older version of smap received
+	proxy.smap.Version++
+	_, _, _, errStr = proxy.extractsmap(payload)
+	hasErr(errStr)
+	proxy.smap.Version--
+
+	var am ActionMsg
+	y := &ActionMsg{"", "", primary.smap}
+	b, _ := json.Marshal(y)
+	json.Unmarshal(b, &am)
+	prevSMap := primary.smap.cloneU()
+
+	s = httptest.NewServer(http.HandlerFunc(fTarget))
+	defer s.Close()
+	primary.smap.add(&daemonInfo{DaemonID: "target", DirectURL: s.URL})
+	target1 := proxyrunner{}
+	target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	target1.lbmap = newLBMap()
+
+	c := func(n, o *Smap, m *ActionMsg, e string) {
+		noErr(e)
+		matchActionMsg(&am, m)
+		matchPrevSMap(prevSMap, o)
+		matchSMap(primary.smap, n)
+	}
+
+	syncer.sync(true, primary.smap.cloneU())
+	payload = <-chProxy
+	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
+	c(newSMap, ooldSMap, actMsg, errStr)
+
+	payload = <-chTarget
+	newSMap, ooldSMap, actMsg, errStr = target1.extractsmap(payload)
+	c(newSMap, ooldSMap, actMsg, errStr)
+
+	// note: this extra call is not necessary by meta syncer
+	// it picked up the target as it is new added target, but there is no other meta needs to be synced
+	// (smap is the only one and it is already synced)
+	payload = <-chTarget
+
+	y = &ActionMsg{"", "", primary.smap}
+	b, _ = json.Marshal(y)
+	json.Unmarshal(b, &am)
+	prevSMap = primary.smap.cloneU()
+
+	s = httptest.NewServer(http.HandlerFunc(fTarget))
+	defer s.Close()
+	primary.smap.add(&daemonInfo{DaemonID: "target2", DirectURL: s.URL})
+	target2 := proxyrunner{}
+	target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	target1.lbmap = newLBMap()
+
+	syncer.sync(true, primary.smap.cloneU())
+	payload = <-chProxy
+	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
+	c(newSMap, ooldSMap, actMsg, errStr)
+
+	payload = <-chTarget
+	newSMap, ooldSMap, actMsg, errStr = target1.extractsmap(payload)
+	c(newSMap, ooldSMap, actMsg, errStr)
+
+	payload = <-chTarget
+	newSMap, ooldSMap, actMsg, errStr = target2.extractsmap(payload)
+	c(newSMap, ooldSMap, actMsg, errStr)
+
+	// same as above, extra sync caused by newly added target
+	payload = <-chTarget
+
+	// extract lbmap
+	// empty payload
+	lb, actMsg, errStr := proxy.extractlbmap(make(map[string]string))
+	if lb != nil || actMsg != nil || errStr != "" {
+		t.Fatal("Extract lbmap from empty payload returned data")
+	}
+
+	lbMap := newLBMap()
+	syncer.sync(true, lbMap)
+	payload = <-chProxy
+	lb, actMsg, errStr = proxy.extractlbmap(make(map[string]string))
+	if lb != nil || actMsg != nil || errStr != "" {
+		t.Fatal("Extract lbmap from empty payload returned data")
+	}
+
+	payload = <-chTarget
+	payload = <-chTarget
+
+	lbMap.add("lb1")
+	lbMap.add("lb2")
+	syncer.sync(true, lbMap)
+	payload = <-chProxy
+	lb, actMsg, errStr = proxy.extractlbmap(payload)
+	noErr(errStr)
+	emptyActionMsg(actMsg)
+	matchLBMap(lbMap, lb)
+	proxy.lbmap = lb
+
+	payload = <-chTarget
+	payload = <-chTarget
+
+	// same version
+	lb, actMsg, errStr = proxy.extractlbmap(payload)
+	noErr(errStr)
+	nilLBMap(lb)
+	emptyActionMsg(actMsg)
+
+	// older version
+	proxy.lbmap.Version++
+	_, _, errStr = proxy.extractlbmap(payload)
+	hasErr(errStr)
+
+	syncer.stop(nil)
+	wg.Wait()
 }

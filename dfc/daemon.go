@@ -260,8 +260,8 @@ func (m *Smap) marshal() (b []byte, err error) {
 	return
 }
 
-func newLBMap() lbmap {
-	return lbmap{LBmap: make(map[string]string)}
+func newLBMap() *lbmap {
+	return &lbmap{LBmap: make(map[string]string)}
 }
 
 func (m *lbmap) add(b string) bool {
