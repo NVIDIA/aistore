@@ -168,6 +168,11 @@ func (p *proxyrunner) run() error {
 	// startup: register and sync across
 	if p.primary {
 		go p.clusterStartup(clivars.ntargets)
+	} else {
+		// Since it is secondary proxy and it has registered successfully at
+		// primary proxy then it is safe to think that the cluster had already
+		// started up.
+		p.startedup = true
 	}
 
 	//

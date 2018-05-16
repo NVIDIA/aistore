@@ -33,15 +33,16 @@ const (
 var (
 	voteTests = []Test{
 		Test{"PrimaryCrash", primaryCrash},
-		Test{"PrimaryAndTargetCrash", primaryAndTargetCrash},
-		Test{"PrimaryAndProxyCrash", primaryAndProxyCrash},
-		Test{"CrashAndFastRestore", crashAndFastRestore},
-		Test{"TargetRejoin", targetRejoin},
-		Test{"JoinWhileVoteInProgress", joinWhileVoteInProgress},
-		Test{"MinorityTargetMapVersionMismatch", minorityTargetMapVersionMismatch},
-		Test{"MajorityTargetMapVersionMismatch", majorityTargetMapVersionMismatch},
-		Test{"ConcurrentPutGetDel", concurrentPutGetDel},
-		Test{"ProxyStress", proxyStress},
+		Test{"SetPrimaryBackToOriginal", primarySetToOriginal},
+		// Test{"PrimaryAndTargetCrash", primaryAndTargetCrash},
+		// Test{"PrimaryAndProxyCrash", primaryAndProxyCrash},
+		// Test{"CrashAndFastRestore", crashAndFastRestore},
+		// Test{"TargetRejoin", targetRejoin},
+		// Test{"JoinWhileVoteInProgress", joinWhileVoteInProgress},
+		// Test{"MinorityTargetMapVersionMismatch", minorityTargetMapVersionMismatch},
+		// Test{"MajorityTargetMapVersionMismatch", majorityTargetMapVersionMismatch},
+		// Test{"ConcurrentPutGetDel", concurrentPutGetDel},
+		// Test{"ProxyStress", proxyStress},
 	}
 )
 
@@ -53,8 +54,6 @@ var (
 //       but who knows how many such things exist.
 
 func TestProxy(t *testing.T) {
-	t.Skip("Multi proxy is not ready")
-
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
@@ -139,7 +138,7 @@ func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 }
 
 // primaryCrash kills the current primary proxy, wait for the new primary prioxy is up and verifies it,
-// restoresa the original primary proxy as non primary, and then restore original primary proxy.
+// restores the original primary proxy as non primary
 func primaryCrash(t *testing.T) {
 	smap := getClusterMap(httpclient, t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
@@ -147,8 +146,14 @@ func primaryCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err = checkPmapVersions(); err != nil {
+		t.Errorf("Cluster is inconsistent state: %v", err)
+	}
+
 	oldPrimaryURL := smap.ProxySI.DirectURL
 	oldPrimaryID := smap.ProxySI.DaemonID
+	tlogf("New primary: %s --> %s\nKilling primary: %s --> %s\n",
+		newPrimaryID, newPrimaryURL, oldPrimaryURL, smap.ProxySI.DaemonPort)
 	cmd, args, err := kill(httpclient, oldPrimaryURL, smap.ProxySI.DaemonPort)
 	// cmd and args are the original command line of how the proxy is started
 	// example: cmd = /Users/lid/go/bin/dfc, args = -config=/Users/lid/.dfc/dfc0.json -role=proxy -ntargets=3
@@ -182,6 +187,9 @@ func primaryCrash(t *testing.T) {
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
 		t.Fatalf("Previous Primary Proxy did not rejoin the cluster.")
+	}
+	if err = checkPmapVersions(); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -1030,6 +1038,31 @@ func setProxyURLArg(args []string, proxyurl string) []string {
 	return args
 }
 
+// Read Pmap from all proxies and checks versions. If any proxy's smap version
+// differs from primary's one then an error returned
+func checkPmapVersions() error {
+	smapPrimary, err := client.GetClusterMap(proxyurl)
+	if err != nil {
+		return err
+	}
+
+	for proxyID, proxyInfo := range smapPrimary.Pmap {
+		if proxyurl == proxyInfo.DirectURL {
+			continue
+		}
+		smap, err := client.GetClusterMap(proxyInfo.DirectURL)
+		if err != nil {
+			return err
+		}
+		if smap.Version != smapPrimary.Version {
+			return fmt.Errorf("Proxy %s has version %d, but primary proxy has version %d of Pmap",
+				proxyID, smap.Version, smapPrimary.Version)
+		}
+	}
+
+	return nil
+}
+
 // waitForPrimaryProxy reads the current primary proxy(which is proxyurl)'s smap until its
 // version changed at least once from the beginning version and then settles down(doesn't change anymore)
 // if primary proxy is successfully updated, wait until the map is populated to all members of the cluster
@@ -1267,4 +1300,74 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 	// Always vote yes.
 	w.Write([]byte(dfc.VoteYes))
+}
+
+// primarySetToOriginal reads original primary proxy from configuration and
+// makes it a primary proxy again
+func primarySetToOriginal(t *testing.T) {
+	smap := getClusterMap(httpclient, t)
+	tlogf("SMAP version at start: %d\n", smap.Version)
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	proxyconf := config["proxyconfig"].(map[string]interface{})
+	origconf := proxyconf["original"].(map[string]interface{})
+
+	origURL := origconf["url"].(string)
+	origID := origconf["id"].(string)
+
+	var byURL, byPort string
+	if origID == "" && origURL == "" {
+		t.Fatal("Original primary proxy is not defined in configuration")
+	}
+	if origID == "" {
+		// sometimes ID is empty in configuration. In this case, we try to
+		// detect original primary proxy by its URL or Port. URL has higher
+		// priority, that is why the loop does not break when the Port found.
+		urlparts := strings.Split(origURL, ":")
+		proxyPort := urlparts[len(urlparts)-1]
+
+		smap := getClusterMap(httpclient, t)
+		for key, val := range smap.Pmap {
+			keyparts := strings.Split(val.DirectURL, ":")
+			port := keyparts[len(keyparts)-1]
+
+			if val.DirectURL == origURL {
+				byURL = key
+				break
+			}
+			if port == proxyPort {
+				byPort = key
+			}
+		}
+	}
+	if byPort == "" && byURL == "" {
+		t.Fatalf("No original primary proxy: %v -> %v", proxyconf, origconf)
+	}
+	origID = byURL
+	if origID == "" {
+		origID = byPort
+	}
+	tlogf("Found original primary ID: %s\n", origID)
+
+	url := fmt.Sprintf("%s/%s/%s/%s/%s", proxyurl, dfc.Rversion, dfc.Rcluster, dfc.Rproxy, origID)
+	tlogf("Setting primary proxy back: %s\n", url)
+	req, err := http.NewRequest(http.MethodPut, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := httpclient.Do(req)
+	if err != nil {
+		t.Error(err)
+	}
+	defer r.Body.Close()
+	proxyurl = origURL
+	smap, err = waitForPrimaryProxy("new primary proxy", smap.Version, testing.Verbose())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if smap.ProxySI.DaemonID != origID {
+		t.Errorf("Expected primary %s, received: %s", origID, smap.ProxySI.DaemonID)
+	}
+	if err = checkPmapVersions(); err != nil {
+		t.Error(err)
+	}
 }
