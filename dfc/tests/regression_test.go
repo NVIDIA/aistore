@@ -147,7 +147,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	}
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
 	if err == nil {
-		t.Error("Nil error received on a GET for a corrupted object")
+		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
 
 	// Test corrupting the file xattr
@@ -163,7 +163,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	}
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
 	if err == nil {
-		t.Error("Err is nil, expected non-nil error on a GET for an object with corrupted xattr")
+		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
 }
 
@@ -174,15 +174,17 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 // 4. GET the objects while simultaneously re-registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	var (
-		sid                string
-		num                = 20000
-		numGetsForEachFile = 5
-		numGetErrs         uint64
-
+		targetDirectURL  string
+		sid              string
+		num              = 20000
+		numGetsEachFile  = 5
+		numGetErrsBefore uint64
+		numGetErrsAfter  uint64
+		reregistered     uint64
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
-		maxNumGetErrs = uint64(num * numGetsForEachFile / 10) // 10 % of GET requests
+		maxNumGetErrs = uint64(num * numGetsEachFile / 10) // 10 % of GET requests
 		getsCompleted uint64
 		filenameCh    = make(chan string, num)
 		repFilenameCh = make(chan repFile, num)
@@ -202,6 +204,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	for sid = range smap.Tmap {
 		break
 	}
+	targetDirectURL = smap.Tmap[sid].DirectURL
 	unregisterTarget(sid, t)
 	n := len(getClusterMap(httpclient, t).Tmap)
 	tlogf("Unregistered target %s: the cluster now has %d targets\n", sid, n)
@@ -232,19 +235,19 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	close(filenameCh)
 
 	for f := range filenameCh {
-		repFilenameCh <- repFile{repetitions: numGetsForEachFile, filename: f}
+		repFilenameCh <- repFile{repetitions: numGetsEachFile, filename: f}
 	}
 
 	// Step 4.
 	for i := 0; i < 10; i++ {
 		semaphore <- struct{}{}
 	}
-	tlogf("Getting each of the %d files %d times from bucket %s...\n", num, numGetsForEachFile, bucket)
-	wg.Add(num * numGetsForEachFile)
+	tlogf("Getting each of the %d files %d times from bucket %s...\n", num, numGetsEachFile, bucket)
+	wg.Add(num * numGetsEachFile)
 	go func() {
-		// GET is timed such that a large portion of requests will happen both before and after target T is re-registered
+		// GET is timed so a large portion of requests will happen both before and after the target is re-registered
 		time.Sleep(15 * time.Second)
-		for i := 0; i < num*numGetsForEachFile; i++ {
+		for i := 0; i < num*numGetsEachFile; i++ {
 
 			go func() {
 				<-semaphore
@@ -260,38 +263,57 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 				}
 				_, _, err := client.Get(proxyurl, bucket, SmokeStr+"/"+repFile.filename, nil, nil, false, false)
 				if err != nil {
-					atomic.AddUint64(&numGetErrs, 1)
+					r := atomic.LoadUint64(&reregistered)
+					if r == 1 {
+						atomic.AddUint64(&numGetErrsAfter, 1)
+					} else {
+						atomic.AddUint64(&numGetErrsBefore, 1)
+					}
 				}
-				atomic.AddUint64(&getsCompleted, 1)
-				if (getsCompleted)%5000 == 0 {
-					tlogf(" %d/%d GET requests completed...\n", getsCompleted, num*numGetsForEachFile)
+				g := atomic.AddUint64(&getsCompleted, 1)
+				if g%5000 == 0 {
+					tlogf(" %d/%d GET requests completed...\n", g, num*numGetsEachFile)
 				}
 			}()
 		}
 	}()
 
 	registerTarget(sid, &smap, t)
+PollLoop:
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)
+		lbNames, err := client.GetLocalBucketNames(targetDirectURL)
+		if err != nil {
+			t.Fatalf("client.GetLocalBucketNames() failed, err = %v", err)
+		}
 		if len(smap.Tmap) == l {
-			break
+			for _, b := range lbNames.Local {
+				if b == bucket {
+					break PollLoop
+				}
+			}
 		}
 	}
+
 	if len(smap.Tmap) != l {
-		t.Errorf("Re-registration timed out: target %s, num targets now: %d, orig num targets: %d\n",
+		t.Fatalf("Re-registration timed out: target %s, num targets now: %d, orig num targets: %d\n",
 			sid, len(smap.Tmap), l)
-		return
 	}
 	tlogf("Re-registered target %s: the cluster is now back to %d targets\n", sid, l)
+	s := atomic.CompareAndSwapUint64(&reregistered, 0, 1)
+	if !s {
+		t.Errorf("reregistered should have been swapped from 0 to 1. Actual reregistered = %d\n", reregistered)
+	}
 
 	wg.Wait()
-	if numGetErrs > maxNumGetErrs {
-		t.Fatalf("At most %d/%d GET errors expected, found %d/%d failures",
-			maxNumGetErrs, num*numGetsForEachFile, numGetErrs, num*numGetsForEachFile)
+	tlogf("%d GET errors before target's local bucket map was updated (expected)\n", numGetErrsBefore)
+	if numGetErrsAfter > maxNumGetErrs {
+		t.Fatalf("Found %d GET errors (should be no more than %d) after target's local bucket map was updated",
+			numGetErrsAfter, maxNumGetErrs)
 	} else {
-		tlogf("At most %d/%d GET errors expected, found %d/%d failures",
-			maxNumGetErrs, num*numGetsForEachFile, numGetErrs, num*numGetsForEachFile)
+		tlogf("Found %d GET errors (should be no more than %d) after target's local bucket map was updated",
+			numGetErrsAfter, maxNumGetErrs)
 	}
 }
 
