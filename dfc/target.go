@@ -387,7 +387,7 @@ existslocally:
 		glog.Warningf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
 	}
 	if !coldget && cksumcfg.Checksum != ChecksumNone {
-		hashbinary, errstr := Getxattr(fqn, xattrXXHashVal)
+		hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" && hashbinary != nil {
 			nhobj = newcksumvalue(cksumcfg.Checksum, string(hashbinary))
 		}
@@ -1017,7 +1017,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	if !coldget && eexists == "" {
 		props = &objectProps{version: version, size: size}
-		xxhashval, _ := Getxattr(fqn, xattrXXHashVal)
+		xxhashval, _ := Getxattr(fqn, XattrXXHashVal)
 		if xxhashval != nil {
 			cksumcfg := &ctx.config.Cksum
 			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxhashval))
@@ -1118,7 +1118,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 		return
 	}
 	size = finfo.Size()
-	if bytes, errs := Getxattr(fqn, xattrObjVersion); errs == "" {
+	if bytes, errs := Getxattr(fqn, XattrObjVersion); errs == "" {
 		version = string(bytes)
 	} else {
 		t.runFSKeeper(fmt.Errorf("%s", fqn))
@@ -1445,14 +1445,14 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 	}
 	if ci.needChkSum {
 		fqn := ci.t.fqn(ci.bucket, relname)
-		xxhex, errstr := Getxattr(fqn, xattrXXHashVal)
+		xxhex, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" {
 			fileInfo.Checksum = hex.EncodeToString(xxhex)
 		}
 	}
 	if ci.needVersion {
 		fqn := ci.t.fqn(ci.bucket, relname)
-		version, errstr := Getxattr(fqn, xattrObjVersion)
+		version, errstr := Getxattr(fqn, XattrObjVersion)
 		if errstr == "" {
 			fileInfo.Version = string(version)
 		}
@@ -1541,7 +1541,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			}
 		}
 	}
-	inmem := (ctx.config.Experimental.AckPut == AckWhenInMem)
+	inmem := ctx.config.Experimental.AckPut == AckWhenInMem
 	if sgl, nhobj, _, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
@@ -1986,8 +1986,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	defer file.Close()
 
-	if version, errstr = Getxattr(fqn, xattrObjVersion); errstr != "" {
-		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, xattrObjVersion, errstr)
+	if version, errstr = Getxattr(fqn, XattrObjVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, XattrObjVersion, errstr)
 	}
 
 	slab := selectslab(size)
@@ -2275,7 +2275,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 
 //====================== common for both cold GET and PUT ======================================
 //
-// on err: closes and removes the file; othwerise closes and returns the size;
+// on err: closes and removes the file; otherwise closes and returns the size;
 // empty omd5 or oxxhash: not considered an exception even when the configuration says otherwise;
 // xxhash is always preferred over md5
 //
@@ -2632,12 +2632,12 @@ func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr st
 	if objprops.nhobj != nil {
 		htype, hval := objprops.nhobj.get()
 		assert(htype == ChecksumXXHash)
-		if errstr = Setxattr(fqn, xattrXXHashVal, []byte(hval)); errstr != "" {
+		if errstr = Setxattr(fqn, XattrXXHashVal, []byte(hval)); errstr != "" {
 			return errstr
 		}
 	}
 	if objprops.version != "" {
-		errstr = Setxattr(fqn, xattrObjVersion, []byte(objprops.version))
+		errstr = Setxattr(fqn, XattrObjVersion, []byte(objprops.version))
 	}
 	return
 }
@@ -2661,7 +2661,7 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 		return
 	}
 
-	if vbytes, errstr = Getxattr(fqn, xattrObjVersion); errstr != "" {
+	if vbytes, errstr = Getxattr(fqn, XattrObjVersion); errstr != "" {
 		return
 	}
 	if currValue, err := strconv.Atoi(string(vbytes)); err != nil {

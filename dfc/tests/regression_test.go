@@ -22,6 +22,8 @@ import (
 
 	"sync/atomic"
 
+	"path/filepath"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -45,10 +47,12 @@ type regressionTestData struct {
 }
 
 const (
+	rootDir = "/tmp/dfc"
+
 	RestAPIDaemonSuffix   = "/" + dfc.Rversion + "/" + dfc.Rdaemon
 	TestLocalBucketName   = "TESTLOCALBUCKET"
 	RenameLocalBucketName = "renamebucket"
-	RenameDir             = "/tmp/dfc/rename"
+	RenameDir             = rootDir + "/rename"
 	RenameStr             = "rename"
 	ListRangeStr          = "__listrange"
 )
@@ -94,6 +98,74 @@ var (
 	}
 	failLRU = ""
 )
+
+// 1. PUT file
+// 2. Corrupt the file
+// 3. GET file
+func TestGetCorruptFileAfterPut(t *testing.T) {
+	var (
+		num        = 2
+		filenameCh = make(chan string, num)
+		errch      = make(chan error, 100)
+		sgl        *dfc.SGLIO
+		filesize   = uint64(1024)
+		seed       = int64(111)
+		fqn        string
+	)
+	bucket := TestLocalBucketName
+	err := client.CreateLocalBucket(proxyurl, bucket)
+	if err != nil {
+		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
+	}
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, bucket)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
+	selectErr(errch, "put", t, false)
+
+	// Test corrupting the file contents
+	f := <-filenameCh
+	filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if filepath.Base(path) == f {
+			fqn = path
+		}
+		return nil
+	})
+	err = ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
+	if err != nil {
+		t.Fatalf("Writing corrupt data to the file failed, err = %v", err)
+	}
+	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
+	if err == nil {
+		t.Error("Nil error received on a GET for a corrupted object")
+	}
+
+	// Test corrupting the file xattr
+	f = <-filenameCh
+	filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if filepath.Base(path) == f {
+			fqn = path
+		}
+		return nil
+	})
+	if errstr := dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("corrupted xattr")); errstr != "" {
+		t.Error(errstr)
+	}
+	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
+	if err == nil {
+		t.Error("Err is nil, expected non-nil error on a GET for an object with corrupted xattr")
+	}
+}
 
 // Intended for a deployment with multiple targets
 // 1. Unregister target T

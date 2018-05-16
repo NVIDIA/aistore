@@ -285,11 +285,12 @@ func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 
 	v := hdhashtype == dfc.ChecksumXXHash
 	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
-	if err != nil && v {
+	if v {
 		if hdhash != hash {
 			s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
+			err = errors.New(s)
 			if errch != nil {
-				errch <- errors.New(s)
+				errch <- err
 			}
 		} else {
 			if !silent {

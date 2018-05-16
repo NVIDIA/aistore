@@ -23,8 +23,8 @@ const (
 
 // checksums: xattr, http header, and config
 const (
-	xattrXXHashVal  = "user.obj.dfchash"
-	xattrObjVersion = "user.obj.version"
+	XattrXXHashVal  = "user.obj.dfchash"
+	XattrObjVersion = "user.obj.version"
 
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
