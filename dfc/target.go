@@ -27,7 +27,6 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -86,18 +85,16 @@ type renamectx struct {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif          cloudif // multi-cloud vendor support
-	xactinp          *xactInProgress
-	uxprocess        *uxprocess
-	rtnamemap        *rtnamemap
-	prefetchQueue    chan filesWithDeadline
-	statsdC          statsd.Client
-	rebalanceLimiter *semaphore.Weighted
+	cloudif       cloudif // multi-cloud vendor support
+	xactinp       *xactInProgress
+	uxprocess     *uxprocess
+	rtnamemap     *rtnamemap
+	prefetchQueue chan filesWithDeadline
+	statsdC       statsd.Client
 }
 
 // start target runner
 func (t *targetrunner) run() error {
-	t.rebalanceLimiter = semaphore.NewWeighted(10)
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.kalive = gettargetkalive()
 	t.xactinp = newxactinp()        // extended actions
@@ -1725,14 +1722,6 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("Rebalance %s/%s done, %.2f MB", bucket, objname, float64(size)/MiB)
 		}
 	} else {
-		err := t.rebalanceLimiter.Acquire(r.Context(), 1)
-		if err != nil {
-			errstr = fmt.Sprintf("dorebalance receive failed to acquire semaphore %s", err)
-			return
-		}
-
-		defer t.rebalanceLimiter.Release(1)
-
 		//
 		// the destination
 		//
@@ -1740,7 +1729,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("Rebalance %s/%s from %s to %s (self)", bucket, objname, from, to)
 		}
 		putfqn := t.fqn2workfile(fqn)
-		_, err = os.Stat(fqn)
+		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
