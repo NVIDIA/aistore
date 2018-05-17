@@ -223,6 +223,12 @@ func (m *Smap) deepcopy(dst *Smap) {
 	copyStruct(dst.ProxySI, m.ProxySI)
 }
 
+// totalServers returns total number of proxies plus targets.
+// no lock held.
+func (m *Smap) totalServers() int {
+	return len(m.Pmap) + len(m.Tmap)
+}
+
 // Dump prints the smap
 func (m *Smap) Dump() {
 	fmt.Printf("Smap: version = %d\n", m.Version)

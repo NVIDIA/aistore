@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -329,8 +330,8 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 
 // refused tests the connection refused handling by meta syncer.
 // it tells metasyncer to sync before starting the server to cause a connection refused error
-// it has two test cases: one wihout delay to let metasyncer handles it immediately,
-// the other one has a delay before starting the server, metasyncer fail the direct handling of
+// it has two test cases: one wih a short delay to let metasyncer handles it immediately,
+// the other one has a longer delay before starting the server, metasyncer fail the direct handling of
 // connection refused error and falls back to the retry route
 func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
@@ -346,7 +347,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 
 	primary.smap.Pmap[id] = &proxyInfo{daemonInfo{DaemonID: id, DirectURL: "http://" + s.Addr}, false /* primary */}
 
-	// function shared by the two cases: no delay and delay
+	// function shared by the two cases: short delay and long delay
 	// starts the proxy server, wait for a sync call
 	f := func() {
 		var wg sync.WaitGroup
@@ -362,8 +363,9 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 		wg.Wait()
 	}
 
-	// testcase #1: no delay, metasync handles this directly
+	// testcase #1: short delay, metasync handles this directly
 	syncer.sync(false, primary.smap)
+	time.Sleep(time.Millisecond)
 	// sync will return even though the sync actually failed, and there is no error return
 	f()
 
@@ -571,7 +573,7 @@ func TestMetaSyncData(t *testing.T) {
 	exp[lbmaptag+actiontag] = string(b)
 	// note: 'Value' field was modified by the last call to sync()
 	msgSMap.Value = nil
-	syncer.sync(true, &revspair{primary.smap.cloneU(), msgSMap}, &revspair{lbMap, msgLBMap})
+	syncer.sync(true, &revspair{primary.smap.cloneL().(*Smap), msgSMap}, &revspair{lbMap, msgLBMap})
 	match(t, exp, ch, 3)
 
 	// lbmap pair
@@ -597,9 +599,9 @@ func TestMetaSyncMembership(t *testing.T) {
 			syncer.run()
 		}(&wg)
 
-		cnt := 0
+		var cnt int32
 		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cnt++
+			atomic.AddInt32(&cnt, 1)
 			http.Error(w, "i don't know how to deal with you", http.StatusNotAcceptable)
 		}))
 
@@ -609,11 +611,13 @@ func TestMetaSyncMembership(t *testing.T) {
 		primary.smap.add(&daemonInfo{DaemonID: id, DirectURL: s.URL})
 		syncer.sync(true, primary.smap.cloneU())
 		time.Sleep(time.Millisecond * 300)
+		smapLock.Lock()
 		primary.smap.del(id)
+		smapLock.Unlock()
 		time.Sleep(time.Millisecond * 300)
-		cnt1 := cnt
+		cnt1 := atomic.LoadInt32(&cnt)
 		time.Sleep(time.Millisecond * 300)
-		if cnt != cnt1 {
+		if atomic.LoadInt32(&cnt) != cnt1 {
 			t.Fatal("Sync call didn't stop after traget is deleted")
 		}
 
@@ -672,247 +676,401 @@ func TestMetaSyncMembership(t *testing.T) {
 
 // TestMetaSyncReceive tests extracting received sync data.
 func TestMetaSyncReceive(t *testing.T) {
-	noErr := func(s string) {
-		if s != "" {
-			t.Fatal("Unexpected error", s)
-		}
-	}
-
-	hasErr := func(s string) {
-		if s == "" {
-			t.Fatal("Expecting error")
-		}
-	}
-
-	emptyActionMsg := func(a *ActionMsg) {
-		if a.Action != "" || a.Name != "" || a.Value != nil {
-			t.Fatal("Expecting empty action message", a)
-		}
-	}
-
-	matchActionMsg := func(a, b *ActionMsg) {
-		if !reflect.DeepEqual(a, b) {
-			t.Fatal("ActionMsg mismatch ", a, b)
-		}
-	}
-
-	nilSMap := func(m *Smap) {
-		if m != nil {
-			t.Fatal("Expecting nil smap", m)
-		}
-	}
-
-	emptySMap := func(m *Smap) {
-		if m.Tmap != nil || m.Pmap != nil || m.ProxySI != nil || m.Version != 0 {
-			t.Fatal("Expecting empty smap", m)
-		}
-	}
-
-	matchSMap := func(a, b *Smap) {
-		if !reflect.DeepEqual(a, b) {
-			t.Fatal("SMap mismatch", a, b)
-		}
-	}
-
-	// matchPrevSMap matches two smap partially
-	// previous version of the smap is only partially extracted from a sync call
-	matchPrevSMap := func(a, b *Smap) {
-		if a.Version != b.Version {
-			t.Fatal("Previous smap's version mismatch", a.Version, b.Version)
-		}
-
-		for _, v := range a.Pmap {
-			_, ok := b.Pmap[v.DaemonID]
-			if !ok {
-				t.Fatal("Missing proxy", v.DaemonID)
+	{
+		noErr := func(s string) {
+			if s != "" {
+				t.Fatal("Unexpected error", s)
 			}
 		}
 
-		for _, v := range a.Tmap {
-			_, ok := b.Tmap[v.DaemonID]
-			if !ok {
-				t.Fatal("Missing target", v.DaemonID)
+		hasErr := func(s string) {
+			if s == "" {
+				t.Fatal("Expecting error")
 			}
 		}
-	}
 
-	nilLBMap := func(l *lbmap) {
-		if l != nil {
-			t.Fatal("Expecting nil lbmap", l)
+		emptyActionMsg := func(a *ActionMsg) {
+			if a.Action != "" || a.Name != "" || a.Value != nil {
+				t.Fatal("Expecting empty action message", a)
+			}
 		}
-	}
 
-	matchLBMap := func(a, b *lbmap) {
-		if !reflect.DeepEqual(a, b) {
-			t.Fatal("LBMap mismatch", a, b)
+		matchActionMsg := func(a, b *ActionMsg) {
+			if !reflect.DeepEqual(a, b) {
+				t.Fatal("ActionMsg mismatch ", a, b)
+			}
 		}
+
+		nilSMap := func(m *Smap) {
+			if m != nil {
+				t.Fatal("Expecting nil smap", m)
+			}
+		}
+
+		emptySMap := func(m *Smap) {
+			if m.Tmap != nil || m.Pmap != nil || m.ProxySI != nil || m.Version != 0 {
+				t.Fatal("Expecting empty smap", m)
+			}
+		}
+
+		matchSMap := func(a, b *Smap) {
+			if !reflect.DeepEqual(a, b) {
+				t.Fatal("SMap mismatch", a, b)
+			}
+		}
+
+		// matchPrevSMap matches two smap partially
+		// previous version of the smap is only partially extracted from a sync call
+		matchPrevSMap := func(a, b *Smap) {
+			if a.Version != b.Version {
+				t.Fatal("Previous smap's version mismatch", a.Version, b.Version)
+			}
+
+			for _, v := range a.Pmap {
+				_, ok := b.Pmap[v.DaemonID]
+				if !ok {
+					t.Fatal("Missing proxy", v.DaemonID)
+				}
+			}
+
+			for _, v := range a.Tmap {
+				_, ok := b.Tmap[v.DaemonID]
+				if !ok {
+					t.Fatal("Missing target", v.DaemonID)
+				}
+			}
+		}
+
+		nilLBMap := func(l *lbmap) {
+			if l != nil {
+				t.Fatal("Expecting nil lbmap", l)
+			}
+		}
+
+		matchLBMap := func(a, b *lbmap) {
+			if !reflect.DeepEqual(a, b) {
+				t.Fatal("LBMap mismatch", a, b)
+			}
+		}
+
+		primary := newPrimary()
+		syncer := newmetasyncer(primary)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			syncer.run()
+		}(&wg)
+
+		chProxy := make(chan map[string]string, 10)
+		fProxy := func(w http.ResponseWriter, r *http.Request) {
+			d := make(map[string]string)
+			primary.readJSON(w, r, &d) // ignore json error
+			chProxy <- d
+		}
+
+		// note: only difference is the channel, hard to share the code, but only a few lines
+		chTarget := make(chan map[string]string, 10)
+		fTarget := func(w http.ResponseWriter, r *http.Request) {
+			d := make(map[string]string)
+			primary.readJSON(w, r, &d) // ignore json error
+			chTarget <- d
+		}
+
+		s := httptest.NewServer(http.HandlerFunc(fProxy))
+		defer s.Close()
+		primary.smap.addProxy(&proxyInfo{daemonInfo{DaemonID: "proxy1", DirectURL: s.URL}, false /* primary */})
+		proxy1 := proxyrunner{}
+		proxy1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		proxy1.lbmap = newLBMap()
+
+		// empty payload
+		newSMap, oldSMap, actMsg, errStr := proxy1.extractsmap(make(map[string]string))
+		if newSMap != nil || oldSMap != nil || actMsg != nil || errStr != "" {
+			t.Fatal("Extract smap from empty payload returned data")
+		}
+
+		syncer.sync(true, primary.smap.cloneU())
+		payload := <-chProxy
+
+		newSMap, oldSMap, actMsg, errStr = proxy1.extractsmap(payload)
+		noErr(errStr)
+		emptyActionMsg(actMsg)
+		emptySMap(oldSMap)
+		matchSMap(primary.smap, newSMap)
+		proxy1.smap = newSMap
+
+		// same version of smap received
+		newSMap, oldSMap, actMsg, errStr = proxy1.extractsmap(payload)
+		noErr(errStr)
+		emptyActionMsg(actMsg)
+		emptySMap(oldSMap)
+		nilSMap(newSMap)
+
+		// older version of smap received
+		proxy1.smap.Version++
+		_, _, _, errStr = proxy1.extractsmap(payload)
+		hasErr(errStr)
+		proxy1.smap.Version--
+
+		var am ActionMsg
+		y := &ActionMsg{"", "", primary.smap}
+		b, _ := json.Marshal(y)
+		json.Unmarshal(b, &am)
+		prevSMap := primary.smap.cloneU()
+
+		s = httptest.NewServer(http.HandlerFunc(fTarget))
+		defer s.Close()
+		primary.smap.add(&daemonInfo{DaemonID: "target", DirectURL: s.URL})
+		target1 := proxyrunner{}
+		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target1.lbmap = newLBMap()
+
+		c := func(n, o *Smap, m *ActionMsg, e string) {
+			noErr(e)
+			matchActionMsg(&am, m)
+			matchPrevSMap(prevSMap, o)
+			matchSMap(primary.smap, n)
+		}
+
+		syncer.sync(true, primary.smap.cloneU())
+		payload = <-chProxy
+		newSMap, oldSMap, actMsg, errStr = proxy1.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		payload = <-chTarget
+		newSMap, oldSMap, actMsg, errStr = target1.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		// note: this extra call is not necessary by meta syncer
+		// it picked up the target as it is new added target, but there is no other meta needs to be synced
+		// (smap is the only one and it is already synced)
+		payload = <-chTarget
+
+		y = &ActionMsg{"", "", primary.smap}
+		b, _ = json.Marshal(y)
+		json.Unmarshal(b, &am)
+		prevSMap = primary.smap.cloneU()
+
+		s = httptest.NewServer(http.HandlerFunc(fTarget))
+		defer s.Close()
+		primary.smap.add(&daemonInfo{DaemonID: "target2", DirectURL: s.URL})
+		target2 := proxyrunner{}
+		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target2.lbmap = newLBMap()
+
+		syncer.sync(true, primary.smap.cloneU())
+		payload = <-chProxy
+		newSMap, oldSMap, actMsg, errStr = proxy1.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		payload = <-chTarget
+		newSMap, oldSMap, actMsg, errStr = target1.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		payload = <-chTarget
+		newSMap, oldSMap, actMsg, errStr = target2.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		// same as above, extra sync caused by newly added target
+		payload = <-chTarget
+
+		// extract lbmap
+		// empty payload
+		lb, actMsg, errStr := proxy1.extractlbmap(make(map[string]string))
+		if lb != nil || actMsg != nil || errStr != "" {
+			t.Fatal("Extract lbmap from empty payload returned data")
+		}
+
+		lbMap := newLBMap()
+		syncer.sync(true, lbMap)
+		payload = <-chProxy
+		lb, actMsg, errStr = proxy1.extractlbmap(make(map[string]string))
+		if lb != nil || actMsg != nil || errStr != "" {
+			t.Fatal("Extract lbmap from empty payload returned data")
+		}
+
+		payload = <-chTarget
+		payload = <-chTarget
+
+		lbMap.add("lb1")
+		lbMap.add("lb2")
+		syncer.sync(true, lbMap)
+		payload = <-chProxy
+		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		noErr(errStr)
+		emptyActionMsg(actMsg)
+		matchLBMap(lbMap, lb)
+		proxy1.lbmap = lb
+
+		payload = <-chTarget
+		payload = <-chTarget
+
+		// same version
+		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		noErr(errStr)
+		nilLBMap(lb)
+		emptyActionMsg(actMsg)
+
+		// older version
+		proxy1.lbmap.Version++
+		_, _, errStr = proxy1.extractlbmap(payload)
+		hasErr(errStr)
+		proxy1.lbmap.Version--
+
+		am1 := ActionMsg{"Action", "Name", "Expecting this back"}
+		syncer.sync(true, &revspair{lbMap, &am1})
+		payload = <-chTarget
+		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		matchActionMsg(&am1, actMsg)
+
+		payload = <-chProxy
+		payload = <-chTarget
+
+		y = &ActionMsg{"New proxy", "", primary.smap}
+		b, _ = json.Marshal(y)
+		json.Unmarshal(b, &am)
+		prevSMap = primary.smap.cloneU()
+
+		// new smap and new lbmap pairs
+		s = httptest.NewServer(http.HandlerFunc(fProxy))
+		defer s.Close()
+		primary.smap.addProxy(&proxyInfo{daemonInfo{DaemonID: "proxy2", DirectURL: s.URL}, false /* primary */})
+		proxy2 := proxyrunner{}
+		proxy2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		proxy2.lbmap = newLBMap()
+
+		lbMap.add("lb3")
+
+		c = func(n, o *Smap, m *ActionMsg, e string) {
+			noErr(e)
+			matchActionMsg(&am, m)
+			matchPrevSMap(prevSMap, o)
+			matchSMap(primary.smap, n)
+		}
+
+		clb := func(lb *lbmap, m *ActionMsg, e string) {
+			noErr(e)
+			matchActionMsg(&am1, m)
+			matchLBMap(lbMap, lb)
+		}
+
+		syncer.sync(true, &revspair{lbMap, &am1}, &revspair{primary.smap.cloneU(), &ActionMsg{"New proxy", "", nil}})
+		payload = <-chProxy
+		lb, actMsg, errStr = proxy2.extractlbmap(payload)
+		clb(lb, actMsg, errStr)
+		newSMap, oldSMap, actMsg, errStr = proxy2.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		payload = <-chTarget
+		lb, actMsg, errStr = target2.extractlbmap(payload)
+		clb(lb, actMsg, errStr)
+		newSMap, oldSMap, actMsg, errStr = target2.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		payload = <-chProxy
+		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		clb(lb, actMsg, errStr)
+		newSMap, oldSMap, actMsg, errStr = proxy1.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		payload = <-chTarget
+		lb, actMsg, errStr = target1.extractlbmap(payload)
+		clb(lb, actMsg, errStr)
+		newSMap, oldSMap, actMsg, errStr = target1.extractsmap(payload)
+		c(newSMap, oldSMap, actMsg, errStr)
+
+		// this is the extra send to the newly added proxy.
+		// FIXME: meta sync has a bug here i believe unless it is by design.
+		//        the previous sync has lbmap and an action message, meta sync only saves the lbmap but not
+		//        the action message, so on this extra send, it picks up only the lbmap.
+		//        not a big deal for this case, but for retry case, retry proxy/target will not receive the
+		//        action message but only receives the lbmap.
+		//        same for smap, no old smap is picked up during retry or for newly added servers
+		payload = <-chProxy
+		lb, actMsg, errStr = proxy2.extractlbmap(payload)
+		noErr(errStr)
+		emptyActionMsg(actMsg)
+		matchLBMap(lbMap, lb)
+		newSMap, oldSMap, actMsg, errStr = proxy2.extractsmap(payload)
+		noErr(errStr)
+		emptyActionMsg(actMsg)
+		emptySMap(oldSMap)
+		matchSMap(primary.smap, newSMap)
+
+		syncer.stop(nil)
+		wg.Wait()
 	}
 
-	primary := newPrimary()
-	syncer := newmetasyncer(primary)
+	{
+		// this is to prove that meta sync doesn't store action message
+		// in this case, two targets, after a sync call of lb with action message,
+		// if one of them fails for once and receives the sync successfully on retry,
+		// one of them will receive the sync data with the original action message,
+		// the failed one will not, it will only receives the lb but without the action message.
+		primary := newPrimary()
+		syncer := newmetasyncer(primary)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(wg *sync.WaitGroup) {
-		defer wg.Done()
-		syncer.run()
-	}(&wg)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			syncer.run()
+		}(&wg)
 
-	chProxy := make(chan map[string]string, 10)
-	fProxy := func(w http.ResponseWriter, r *http.Request) {
-		d := make(map[string]string)
-		primary.readJSON(w, r, &d) // ignore json error
-		chProxy <- d
+		chTarget := make(chan map[string]string, 10)
+		cnt := 0
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cnt++
+			if cnt == 2 {
+				http.Error(w, "call again", http.StatusNotAcceptable)
+				return
+			}
+
+			d := make(map[string]string)
+			primary.readJSON(w, r, &d) // ignore json error
+			chTarget <- d
+		}))
+		defer s.Close()
+		primary.smap.add(&daemonInfo{DaemonID: "target1", DirectURL: s.URL})
+		target1 := proxyrunner{}
+		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target1.lbmap = newLBMap()
+
+		s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			d := make(map[string]string)
+			primary.readJSON(w, r, &d) // ignore json error
+			chTarget <- d
+		}))
+		defer s.Close()
+		primary.smap.add(&daemonInfo{DaemonID: "target2", DirectURL: s.URL})
+		target2 := proxyrunner{}
+		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target2.lbmap = newLBMap()
+
+		lbMap := newLBMap()
+		lbMap.add("lb1")
+
+		syncer.sync(true, primary.smap.cloneU(), lbMap)
+		<-chTarget
+		<-chTarget
+
+		lbMap.add("lb2")
+		syncer.sync(false, &revspair{lbMap, &ActionMsg{Action: "NB"}})
+		payload := <-chTarget
+		_, actMsg, _ := target2.extractlbmap(payload)
+		if actMsg.Action == "" {
+			t.Fatal("Expecting action message")
+		}
+
+		payload = <-chTarget
+		_, actMsg, _ = target1.extractlbmap(payload)
+		if actMsg.Action != "" {
+			t.Fatal("Not expecting action message")
+		}
+
+		syncer.stop(nil)
+		wg.Wait()
 	}
-
-	// note: only difference is the channel, hard to share the code, but only a few lines
-	chTarget := make(chan map[string]string, 10)
-	fTarget := func(w http.ResponseWriter, r *http.Request) {
-		d := make(map[string]string)
-		primary.readJSON(w, r, &d) // ignore json error
-		chTarget <- d
-	}
-
-	s := httptest.NewServer(http.HandlerFunc(fProxy))
-	defer s.Close()
-	primary.smap.addProxy(&proxyInfo{daemonInfo{DaemonID: "proxy", DirectURL: s.URL}, false /* primary */})
-	proxy := proxyrunner{}
-	proxy.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
-	proxy.lbmap = newLBMap()
-
-	// empty payload
-	newSMap, ooldSMap, actMsg, errStr := proxy.extractsmap(make(map[string]string))
-	if newSMap != nil || ooldSMap != nil || actMsg != nil || errStr != "" {
-		t.Fatal("Extract smap from empty payload returned data")
-	}
-
-	syncer.sync(true, primary.smap.cloneU())
-	payload := <-chProxy
-
-	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
-	noErr(errStr)
-	emptyActionMsg(actMsg)
-	emptySMap(ooldSMap)
-	matchSMap(primary.smap, newSMap)
-	proxy.smap = newSMap
-
-	// same version of smap received
-	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
-	noErr(errStr)
-	emptyActionMsg(actMsg)
-	emptySMap(ooldSMap)
-	nilSMap(newSMap)
-
-	// older version of smap received
-	proxy.smap.Version++
-	_, _, _, errStr = proxy.extractsmap(payload)
-	hasErr(errStr)
-	proxy.smap.Version--
-
-	var am ActionMsg
-	y := &ActionMsg{"", "", primary.smap}
-	b, _ := json.Marshal(y)
-	json.Unmarshal(b, &am)
-	prevSMap := primary.smap.cloneU()
-
-	s = httptest.NewServer(http.HandlerFunc(fTarget))
-	defer s.Close()
-	primary.smap.add(&daemonInfo{DaemonID: "target", DirectURL: s.URL})
-	target1 := proxyrunner{}
-	target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
-	target1.lbmap = newLBMap()
-
-	c := func(n, o *Smap, m *ActionMsg, e string) {
-		noErr(e)
-		matchActionMsg(&am, m)
-		matchPrevSMap(prevSMap, o)
-		matchSMap(primary.smap, n)
-	}
-
-	syncer.sync(true, primary.smap.cloneU())
-	payload = <-chProxy
-	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
-	c(newSMap, ooldSMap, actMsg, errStr)
-
-	payload = <-chTarget
-	newSMap, ooldSMap, actMsg, errStr = target1.extractsmap(payload)
-	c(newSMap, ooldSMap, actMsg, errStr)
-
-	// note: this extra call is not necessary by meta syncer
-	// it picked up the target as it is new added target, but there is no other meta needs to be synced
-	// (smap is the only one and it is already synced)
-	payload = <-chTarget
-
-	y = &ActionMsg{"", "", primary.smap}
-	b, _ = json.Marshal(y)
-	json.Unmarshal(b, &am)
-	prevSMap = primary.smap.cloneU()
-
-	s = httptest.NewServer(http.HandlerFunc(fTarget))
-	defer s.Close()
-	primary.smap.add(&daemonInfo{DaemonID: "target2", DirectURL: s.URL})
-	target2 := proxyrunner{}
-	target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
-	target1.lbmap = newLBMap()
-
-	syncer.sync(true, primary.smap.cloneU())
-	payload = <-chProxy
-	newSMap, ooldSMap, actMsg, errStr = proxy.extractsmap(payload)
-	c(newSMap, ooldSMap, actMsg, errStr)
-
-	payload = <-chTarget
-	newSMap, ooldSMap, actMsg, errStr = target1.extractsmap(payload)
-	c(newSMap, ooldSMap, actMsg, errStr)
-
-	payload = <-chTarget
-	newSMap, ooldSMap, actMsg, errStr = target2.extractsmap(payload)
-	c(newSMap, ooldSMap, actMsg, errStr)
-
-	// same as above, extra sync caused by newly added target
-	payload = <-chTarget
-
-	// extract lbmap
-	// empty payload
-	lb, actMsg, errStr := proxy.extractlbmap(make(map[string]string))
-	if lb != nil || actMsg != nil || errStr != "" {
-		t.Fatal("Extract lbmap from empty payload returned data")
-	}
-
-	lbMap := newLBMap()
-	syncer.sync(true, lbMap)
-	payload = <-chProxy
-	lb, actMsg, errStr = proxy.extractlbmap(make(map[string]string))
-	if lb != nil || actMsg != nil || errStr != "" {
-		t.Fatal("Extract lbmap from empty payload returned data")
-	}
-
-	payload = <-chTarget
-	payload = <-chTarget
-
-	lbMap.add("lb1")
-	lbMap.add("lb2")
-	syncer.sync(true, lbMap)
-	payload = <-chProxy
-	lb, actMsg, errStr = proxy.extractlbmap(payload)
-	noErr(errStr)
-	emptyActionMsg(actMsg)
-	matchLBMap(lbMap, lb)
-	proxy.lbmap = lb
-
-	payload = <-chTarget
-	payload = <-chTarget
-
-	// same version
-	lb, actMsg, errStr = proxy.extractlbmap(payload)
-	noErr(errStr)
-	nilLBMap(lb)
-	emptyActionMsg(actMsg)
-
-	// older version
-	proxy.lbmap.Version++
-	_, _, errStr = proxy.extractlbmap(payload)
-	hasErr(errStr)
-
-	syncer.stop(nil)
-	wg.Wait()
 }

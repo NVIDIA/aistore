@@ -95,7 +95,6 @@ type metasyncer struct {
 		copies map[string]revs // by tag
 	}
 	pending struct {
-		lock     *sync.Mutex
 		diamonds map[string]*daemonInfo
 		refused  map[string]*daemonInfo
 	}
@@ -110,7 +109,6 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 	y = &metasyncer{p: p}
 	y.synced.copies = make(map[string]revs)
 	y.pending.diamonds = make(map[string]*daemonInfo)
-	y.pending.lock = &sync.Mutex{}
 	y.chstop = make(chan struct{}, 4)
 	y.chfeed = make(chan []interface{}, 16)
 	y.chfeedwait = make(chan []interface{})
@@ -153,26 +151,25 @@ func (y *metasyncer) run() error {
 	glog.Infof("Starting %s", y.name)
 
 	for {
-		var npending int
 		select {
 		case revsvec, ok := <-y.chfeedwait:
 			if ok {
-				npending = y.dosync(revsvec)
+				y.doSync(revsvec)
 				var s []interface{}
 				y.chfeedwait <- s
 			}
 		case revsvec, ok := <-y.chfeed:
 			if ok {
-				npending = y.dosync(revsvec)
+				y.doSync(revsvec)
 			}
 		case <-y.retryTimer.C:
-			npending = y.handlePending()
+			y.handlePending()
 		case <-y.chstop:
 			y.retryTimer.Stop()
 			return nil
 		}
 
-		if npending > 0 {
+		if len(y.pending.diamonds) > 0 {
 			y.retryTimer.Reset(ctx.config.Periodic.RetrySyncTime)
 		} else {
 			y.retryTimer.Stop()
@@ -189,7 +186,7 @@ func (y *metasyncer) stop(err error) {
 	close(y.chfeedwait)
 }
 
-func (y *metasyncer) dosync(revsvec []interface{}) int {
+func (y *metasyncer) doSync(revsvec []interface{}) {
 	var (
 		smap4bcast, smapSynced *Smap
 		jsbytes, jsmsg         []byte
@@ -248,18 +245,45 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 	} else {
 		smap4bcast = smapSynced
 	}
+
 	y.pending.refused = make(map[string]*daemonInfo)
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rdaemon, Rmetasync)
-	y.p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, y.callbackSync, ctx.config.Timeout.CplaneOperation)
+
+	chPending := make(chan *daemonInfo, smap4bcast.totalServers())
+	chRefused := make(chan *daemonInfo, smap4bcast.totalServers())
+	cb := func(res callResult) {
+		if res.err == nil {
+			return
+		}
+		glog.Warningf("Failed to sync %s, err: %v (%d)", res.si.DaemonID, res.err, res.status)
+
+		chPending <- res.si
+		if IsErrConnectionRefused(res.err) {
+			chRefused <- res.si
+		}
+	}
+	y.p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, cb, ctx.config.Timeout.CplaneOperation)
+
+	close(chPending)
+	for di := range chPending {
+		y.pending.diamonds[di.DaemonID] = di
+	}
+
+	close(chRefused)
+	for di := range chRefused {
+		y.pending.refused[di.DaemonID] = di
+	}
 
 	// handle connection-refused right away
 	for i := 0; i < 2; i++ {
 		if len(y.pending.refused) == 0 {
 			break
 		}
+
 		time.Sleep(time.Second)
 		y.handleRefused(urlfmt, http.MethodPut, jsbytes, smap4bcast)
 	}
+
 	// find out smap delta and, if exists, piggy-back on the handle-pending "venue"
 	// (which may not be optimal)
 	if check4newmembers {
@@ -274,40 +298,29 @@ func (y *metasyncer) dosync(revsvec []interface{}) int {
 			}
 		}
 	}
+
 	for tag, meta := range newversions {
 		y.synced.copies[tag] = meta
 	}
-	return len(y.pending.diamonds)
 }
 
-func (y *metasyncer) callbackSync(res callResult) {
-	if res.err == nil {
-		return
-	}
-	glog.Warningf("Failed to sync %s, err: %v (%d)", res.si.DaemonID, res.err, res.status)
-
-	y.pending.lock.Lock()
-	y.pending.diamonds[res.si.DaemonID] = res.si
-	if IsErrConnectionRefused(res.err) {
-		y.pending.refused[res.si.DaemonID] = res.si
-	}
-	y.pending.lock.Unlock()
-}
-
-func (y *metasyncer) handlePending() int {
+func (y *metasyncer) handlePending() {
 	var (
 		jsbytes []byte
 		err     error
 	)
+
 	for id := range y.pending.diamonds {
 		if !y.p.smap.containsL(id) {
 			delete(y.pending.diamonds, id)
 		}
 	}
+
 	if len(y.pending.diamonds) == 0 {
 		glog.Infoln("no pending REVS - cluster synchronized")
-		return 0
+		return
 	}
+
 	payload := make(map[string]string)
 	for _, revs := range y.synced.copies {
 		jsbytes, err = revs.marshal()
@@ -315,56 +328,60 @@ func (y *metasyncer) handlePending() int {
 		tag := revs.tag()
 		payload[tag] = string(jsbytes)
 	}
+
 	jsbytes, err = json.Marshal(payload)
 	assert(err == nil, err)
 
 	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rdaemon, Rmetasync)
 	wg := &sync.WaitGroup{}
+
+	ch := make(chan string, len(y.pending.diamonds))
 	for _, si := range y.pending.diamonds {
 		wg.Add(1)
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
 			res := y.p.call(nil, si, url, http.MethodPut, jsbytes, ctx.config.Timeout.CplaneOperation)
-			y.callbackPending(si, res.outjson, res.err, res.status)
+			if res.err != nil {
+				glog.Warningf("... failing to sync %s, err: %v (%d)", si.DaemonID, res.err, res.status)
+			} else {
+				ch <- si.DaemonID
+			}
 		}(si)
 	}
-	wg.Wait()
-	return len(y.pending.diamonds)
-}
 
-func (y *metasyncer) callbackPending(si *daemonInfo, _ []byte, err error, status int) {
-	if err != nil {
-		glog.Warningf("... failing to sync %s, err: %v (%d)", si.DaemonID, err, status)
-		return
+	wg.Wait()
+	close(ch)
+
+	for id := range ch {
+		delete(y.pending.diamonds, id)
 	}
-	y.pending.lock.Lock()
-	delete(y.pending.diamonds, si.DaemonID)
-	y.pending.lock.Unlock()
 }
 
 func (y *metasyncer) handleRefused(urlfmt, method string, jsbytes []byte, smap4bcast *Smap) {
 	wg := &sync.WaitGroup{}
+	ch := make(chan string, len(y.pending.refused))
+
 	for _, si := range y.pending.refused {
 		wg.Add(1)
 		go func(si *daemonInfo) {
 			defer wg.Done()
 			url := fmt.Sprintf(urlfmt, si.DirectURL)
 			res := y.p.call(nil, si, url, method, jsbytes, ctx.config.Timeout.CplaneOperation)
-			y.callbackRefused(si, res.outjson, res.err, res.status)
+			if res.err != nil {
+				glog.Warningf("... failing to sync %s, err: %v (%d)", si.DaemonID, res.err, res.status)
+			} else {
+				ch <- si.DaemonID
+				glog.Infoln("retried & sync-ed", si.DaemonID)
+			}
 		}(si)
 	}
-	wg.Wait()
-}
 
-func (y *metasyncer) callbackRefused(si *daemonInfo, _ []byte, err error, status int) {
-	if err != nil {
-		glog.Warningf("... failing to sync %s, err: %v (%d)", si.DaemonID, err, status)
-		return
+	wg.Wait()
+	close(ch)
+
+	for id := range ch {
+		delete(y.pending.diamonds, id)
+		delete(y.pending.refused, id)
 	}
-	y.pending.lock.Lock()
-	delete(y.pending.diamonds, si.DaemonID)
-	delete(y.pending.refused, si.DaemonID)
-	y.pending.lock.Unlock()
-	glog.Infoln("retried & sync-ed", si.DaemonID)
 }
