@@ -512,6 +512,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		return uint32(v), err
 	}
 	switch name {
+	case "vmodule":
+		if err := setGLogVModule(value); err != nil {
+			errstr = fmt.Sprintf("Failed to set vmodule = %s, err: %v", value, err)
+		}
 	case "loglevel":
 		if err := setloglevel(value); err != nil {
 			errstr = fmt.Sprintf("Failed to set log level = %s, err: %v", value, err)

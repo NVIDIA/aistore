@@ -344,3 +344,20 @@ func setloglevel(loglevel string) (err error) {
 	}
 	return
 }
+
+// setGLogVModule sets glog's vmodule flag
+// sets 'v' as is, no verificaton is done here
+// syntax for v: target=5,proxy=1, p*=3, etc
+func setGLogVModule(v string) error {
+	f := flag.Lookup("vmodule")
+	if f == nil {
+		return nil
+	}
+
+	err := f.Value.Set(v)
+	if err == nil {
+		glog.Info("log level vmodule changed to ", v)
+	}
+
+	return err
+}

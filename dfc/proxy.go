@@ -1469,7 +1469,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch msg.Name {
-		case "loglevel", "stats_time", "passthru":
+		case "loglevel", "stats_time", "passthru", "vmodule":
 			if errstr := p.setconfig(msg.Name, value); errstr != "" {
 				p.invalmsghdlr(w, r, errstr)
 			}
