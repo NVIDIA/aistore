@@ -223,7 +223,8 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	}
 
 	tlogf("Removing a target: %s\n", removedSid)
-	unregisterTarget(removedSid, t)
+	err := client.UnregisterTarget(proxyurl, removedSid)
+	checkFatal(err, t)
 	waitProgressBar("Removing: ", time.Second*10)
 
 	tlogf("Target %s is removed\n", removedSid)
@@ -232,7 +233,8 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	newobjs := propsUpdateObjects(t, bucket, objects, msg, versionEnabled, isLocalBucket)
 
 	tlogf("Reregistering target...\n")
-	registerTarget(removedSid, &smap, t)
+	err = client.RegisterTarget(removedSid, smap)
+	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)

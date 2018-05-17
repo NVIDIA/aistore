@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"sync/atomic"
-
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/dfc"
@@ -32,11 +30,6 @@ import (
 type Test struct {
 	name   string
 	method func(*testing.T)
-}
-
-type repFile struct {
-	repetitions int
-	filename    string
 }
 
 type regressionTestData struct {
@@ -114,15 +107,11 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	)
 	bucket := TestLocalBucketName
 	err := client.CreateLocalBucket(proxyurl, bucket)
-	if err != nil {
-		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
-	}
+	checkFatal(err, t)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, bucket)
-		if err != nil {
-			t.Fatal(err)
-		}
+		checkFatal(err, t)
 	}()
 
 	if usingSG {
@@ -142,9 +131,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		return nil
 	})
 	err = ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
-	if err != nil {
-		t.Fatalf("Writing corrupt data to the file failed, err = %v", err)
-	}
+	checkFatal(err, t)
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
@@ -164,156 +151,6 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
-	}
-}
-
-// Intended for a deployment with multiple targets
-// 1. Unregister target T
-// 2. Create local bucket
-// 3. PUT large amount of objects into the local bucket
-// 4. GET the objects while simultaneously re-registering the target T
-func TestGetAndReRegisterInParallel(t *testing.T) {
-	var (
-		targetDirectURL  string
-		sid              string
-		num              = 20000
-		numGetsEachFile  = 5
-		numGetErrsBefore uint64
-		numGetErrsAfter  uint64
-		reregistered     uint64
-		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
-		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
-		// all nodes in the cluster during re-registering. During this period, errors can occur.
-		maxNumGetErrs = uint64(num * numGetsEachFile / 10) // 10 % of GET requests
-		getsCompleted uint64
-		filenameCh    = make(chan string, num)
-		repFilenameCh = make(chan repFile, num)
-		errch         = make(chan error, 100)
-		sgl           *dfc.SGLIO
-		filesize      = uint64(1024)
-		seed          = int64(111)
-		wg            sync.WaitGroup
-		semaphore     = make(chan struct{}, 10) // Make 10 concurrent GET requests at a time
-	)
-	// Step 1.
-	smap := getClusterMap(httpclient, t)
-	l := len(smap.Tmap)
-	if l < 2 {
-		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
-	}
-	for sid = range smap.Tmap {
-		break
-	}
-	targetDirectURL = smap.Tmap[sid].DirectURL
-	unregisterTarget(sid, t)
-	n := len(getClusterMap(httpclient, t).Tmap)
-	tlogf("Unregistered target %s: the cluster now has %d targets\n", sid, n)
-
-	// Step 2.
-	bucket := TestLocalBucketName
-	err := client.CreateLocalBucket(proxyurl, bucket)
-	if err != nil {
-		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
-	}
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, bucket)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
-		defer sgl.Free()
-	}
-
-	// Step 3.
-	tlogf("Putting %d files into bucket %s...\n", num, bucket)
-	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
-	selectErr(errch, "put", t, false)
-	close(filenameCh)
-
-	for f := range filenameCh {
-		repFilenameCh <- repFile{repetitions: numGetsEachFile, filename: f}
-	}
-
-	// Step 4.
-	for i := 0; i < 10; i++ {
-		semaphore <- struct{}{}
-	}
-	tlogf("Getting each of the %d files %d times from bucket %s...\n", num, numGetsEachFile, bucket)
-	wg.Add(num * numGetsEachFile)
-	go func() {
-		// GET is timed so a large portion of requests will happen both before and after the target is re-registered
-		time.Sleep(15 * time.Second)
-		for i := 0; i < num*numGetsEachFile; i++ {
-
-			go func() {
-				<-semaphore
-				defer func() {
-					semaphore <- struct{}{}
-					wg.Done()
-				}()
-
-				repFile := <-repFilenameCh
-				if repFile.repetitions > 0 {
-					repFile.repetitions -= 1
-					repFilenameCh <- repFile
-				}
-				_, _, err := client.Get(proxyurl, bucket, SmokeStr+"/"+repFile.filename, nil, nil, false, false)
-				if err != nil {
-					r := atomic.LoadUint64(&reregistered)
-					if r == 1 {
-						atomic.AddUint64(&numGetErrsAfter, 1)
-					} else {
-						atomic.AddUint64(&numGetErrsBefore, 1)
-					}
-				}
-				g := atomic.AddUint64(&getsCompleted, 1)
-				if g%5000 == 0 {
-					tlogf(" %d/%d GET requests completed...\n", g, num*numGetsEachFile)
-				}
-			}()
-		}
-	}()
-
-	registerTarget(sid, &smap, t)
-PollLoop:
-	for i := 0; i < 25; i++ {
-		time.Sleep(time.Second)
-		smap = getClusterMap(httpclient, t)
-		lbNames, err := client.GetLocalBucketNames(targetDirectURL)
-		if err != nil {
-			t.Fatalf("client.GetLocalBucketNames() failed, err = %v", err)
-		}
-		if len(smap.Tmap) == l {
-			for _, b := range lbNames.Local {
-				if b == bucket {
-					break PollLoop
-				}
-			}
-		}
-	}
-
-	if len(smap.Tmap) != l {
-		t.Fatalf("Re-registration timed out: target %s, num targets now: %d, orig num targets: %d\n",
-			sid, len(smap.Tmap), l)
-	}
-	tlogf("Re-registered target %s: the cluster is now back to %d targets\n", sid, l)
-	s := atomic.CompareAndSwapUint64(&reregistered, 0, 1)
-	if !s {
-		t.Errorf("reregistered should have been swapped from 0 to 1. Actual reregistered = %d\n", reregistered)
-	}
-
-	wg.Wait()
-	tlogf("%d GET errors before target's local bucket map was updated (expected)\n", numGetErrsBefore)
-	if numGetErrsAfter > maxNumGetErrs {
-		t.Fatalf("Found %d GET errors (should be no more than %d) after target's local bucket map was updated",
-			numGetErrsAfter, maxNumGetErrs)
-	} else {
-		tlogf("Found %d GET errors (should be no more than %d) after target's local bucket map was updated",
-			numGetErrsAfter, maxNumGetErrs)
 	}
 }
 
@@ -813,7 +650,8 @@ func regressionRebalance(t *testing.T) {
 	for sid = range smap.Tmap {
 		break
 	}
-	unregisterTarget(sid, t)
+	err := client.UnregisterTarget(proxyurl, sid)
+	checkFatal(err, t)
 	tlogf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
 	//
 	// step 3. put random files => (cluster - 1)
@@ -829,7 +667,8 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 4. register back
 	//
-	registerTarget(sid, &smap, t)
+	err = client.RegisterTarget(sid, smap)
+	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
 		smap = getClusterMap(httpclient, t)
@@ -1376,24 +1215,6 @@ waitloop:
 		idx++
 	}
 	ticker.Stop()
-}
-
-func unregisterTarget(sid string, t *testing.T) {
-	err := client.HTTPRequest("DELETE", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster+"/"+"daemon"+"/"+sid, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// FIXME: do something better than sleep
-	time.Sleep(time.Second * 3)
-}
-
-func registerTarget(sid string, smap *dfc.Smap, t *testing.T) {
-	si := smap.Tmap[sid]
-	err := client.HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon+"/"+dfc.Rregister, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterStats) {

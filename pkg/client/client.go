@@ -992,6 +992,27 @@ func GetPrimaryProxy(url string) (string, error) {
 	return smap.ProxySI.DirectURL, nil
 }
 
+func UnregisterTarget(proxyURL, sid string) error {
+	smap, err := GetClusterMap(proxyURL)
+	if err != nil {
+		return fmt.Errorf("GetClusterMap() failed, err = %v", err)
+	}
+	err = HTTPRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rcluster+"/"+"daemon"+"/"+sid, nil)
+	if err != nil {
+		return err
+	}
+	return WaitMapVersionSync(time.Now().Add(10*time.Second), smap, smap.Version, []string{smap.Tmap[sid].DaemonID})
+}
+
+func RegisterTarget(sid string, smap dfc.Smap) error {
+	si := smap.Tmap[sid]
+	err := HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon+"/"+dfc.Rregister, nil)
+	if err != nil {
+		return err
+	}
+	return WaitMapVersionSync(time.Now().Add(10*time.Second), smap, smap.Version, []string{})
+}
+
 // HTTPRequest sends one HTTP request and checks result
 func HTTPRequest(method string, url string, msg io.Reader) error {
 	req, err := http.NewRequest(method, url, msg)
@@ -1074,4 +1095,44 @@ func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, idsToIgnore []string) error {
+	urls := make(map[string]struct{})
+	for _, d := range smap.Tmap {
+		for _, ignore := range idsToIgnore {
+			if d.DaemonID != ignore {
+				urls[d.DirectURL] = struct{}{}
+			}
+		}
+	}
+	for _, d := range smap.Pmap {
+		for _, ignore := range idsToIgnore {
+			if d.DaemonID != ignore {
+				urls[d.DirectURL] = struct{}{}
+			}
+		}
+	}
+
+	for len(urls) > 0 {
+		var u string
+		for u = range urls {
+			break
+		}
+		smap, err := GetClusterMap(u)
+		if err != nil && !dfc.IsErrConnectionRefused(err) {
+			return err
+		}
+
+		if err == nil && smap.Version > prevVersion {
+			delete(urls, u)
+			continue
+		}
+
+		if time.Now().After(timeout) {
+			return fmt.Errorf("get server (%s) smap timedout", u)
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return nil
 }

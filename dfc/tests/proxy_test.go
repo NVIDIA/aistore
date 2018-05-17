@@ -32,17 +32,17 @@ const (
 
 var (
 	voteTests = []Test{
-		Test{"PrimaryCrash", primaryCrash},
-		Test{"SetPrimaryBackToOriginal", primarySetToOriginal},
-		// Test{"PrimaryAndTargetCrash", primaryAndTargetCrash},
-		// Test{"PrimaryAndProxyCrash", primaryAndProxyCrash},
-		// Test{"CrashAndFastRestore", crashAndFastRestore},
-		// Test{"TargetRejoin", targetRejoin},
-		// Test{"JoinWhileVoteInProgress", joinWhileVoteInProgress},
-		// Test{"MinorityTargetMapVersionMismatch", minorityTargetMapVersionMismatch},
-		// Test{"MajorityTargetMapVersionMismatch", majorityTargetMapVersionMismatch},
-		// Test{"ConcurrentPutGetDel", concurrentPutGetDel},
-		// Test{"ProxyStress", proxyStress},
+		{"PrimaryCrash", primaryCrash},
+		{"SetPrimaryBackToOriginal", primarySetToOriginal},
+		// {"PrimaryAndTargetCrash", primaryAndTargetCrash},
+		// {"PrimaryAndProxyCrash", primaryAndProxyCrash},
+		// {"CrashAndFastRestore", crashAndFastRestore},
+		// {"TargetRejoin", targetRejoin},
+		// {"JoinWhileVoteInProgress", joinWhileVoteInProgress},
+		// {"MinorityTargetMapVersionMismatch", minorityTargetMapVersionMismatch},
+		// {"MajorityTargetMapVersionMismatch", majorityTargetMapVersionMismatch},
+		// {"ConcurrentPutGetDel", concurrentPutGetDel},
+		// {"ProxyStress", proxyStress},
 	}
 )
 
@@ -1064,10 +1064,10 @@ func checkPmapVersions() error {
 }
 
 // waitForPrimaryProxy reads the current primary proxy(which is proxyurl)'s smap until its
-// version changed at least once from the beginning version and then settles down(doesn't change anymore)
+// version changed at least once from the original version and then settles down(doesn't change anymore)
 // if primary proxy is successfully updated, wait until the map is populated to all members of the cluster
 // returns the latset smap of the cluster
-func waitForPrimaryProxy(reason string, beginingVersion int64, verbose bool) (dfc.Smap, error) {
+func waitForPrimaryProxy(reason string, origVersion int64, verbose bool) (dfc.Smap, error) {
 	var (
 		lastVersion int64
 		to          = time.Now().Add(proxyChangeLatency)
@@ -1084,9 +1084,32 @@ func waitForPrimaryProxy(reason string, beginingVersion int64, verbose bool) (df
 			return dfc.Smap{}, err
 		}
 
-		// if dthe primary's map changed to the state we want, wait for the map get populated
-		if err == nil && smap.Version == lastVersion && smap.Version > beginingVersion {
-			err = waitForMapSync()
+		// if the primary's map changed to the state we want, wait for the map get populated
+		if err == nil && smap.Version == lastVersion && smap.Version > origVersion {
+			for {
+				smap, err = client.GetClusterMap(proxyurl)
+				if err == nil {
+					break
+				}
+
+				if !dfc.IsErrConnectionRefused(err) {
+					return smap, err
+				}
+
+				if time.Now().After(to) {
+					return smap, fmt.Errorf("get primary proxy's smap timedout")
+				}
+				time.Sleep(time.Second)
+			}
+
+			// skip primary proxy and mock targets
+			var proxyID string
+			for _, p := range smap.Pmap {
+				if p.DirectURL == proxyurl {
+					proxyID = p.DaemonID
+				}
+			}
+			err = client.WaitMapVersionSync(to, smap, origVersion, []string{mockDaemonID, proxyID})
 			return smap, err
 		}
 
@@ -1103,70 +1126,6 @@ func waitForPrimaryProxy(reason string, beginingVersion int64, verbose bool) (df
 	}
 
 	return dfc.Smap{}, fmt.Errorf("Timed out while waiting for cluster to stabilize")
-}
-
-// waitForMapSync querys ever target/proxy's smap, wait until they all have the same version
-// (basically wait for smap get populated to all deamons)
-func waitForMapSync() error {
-	var (
-		smap dfc.Smap
-		err  error
-	)
-
-	to := time.Now().Add(proxyChangeLatency)
-	// get primary proxy's map
-	for {
-		smap, err = client.GetClusterMap(proxyurl)
-		if err == nil {
-			break
-		}
-
-		if !dfc.IsErrConnectionRefused(err) {
-			return err
-		}
-
-		if time.Now().After(to) {
-			return fmt.Errorf("get primary proxy's smap timedout")
-		}
-
-		time.Sleep(time.Second)
-	}
-
-	urls := make(map[string]struct{})
-	for _, v := range smap.Tmap {
-		// mock targets do not handle all requests, ignore them
-		if v.DaemonID != mockDaemonID {
-			urls[v.DirectURL] = struct{}{}
-		}
-	}
-
-	for _, v := range smap.Pmap {
-		// skip primary proxy
-		if v.DirectURL != proxyurl {
-			urls[v.DirectURL] = struct{}{}
-		}
-	}
-
-	verExpected := smap.Version
-	for k, _ := range urls {
-		smap, err = client.GetClusterMap(k)
-		if err != nil && !dfc.IsErrConnectionRefused(err) {
-			return err
-		}
-
-		if err == nil && smap.Version == verExpected {
-			delete(urls, k)
-			continue
-		}
-
-		if time.Now().After(to) {
-			return fmt.Errorf("get server (%s) smap timedout", k)
-		}
-
-		time.Sleep(time.Second)
-	}
-
-	return nil
 }
 
 const (
