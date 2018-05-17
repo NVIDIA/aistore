@@ -113,6 +113,9 @@ func Test_download(t *testing.T) {
 	var sumtotbytes int64
 	for i := 0; i < numworkers; i++ {
 		res := <-resultChans[i]
+		if res.totfiles == 0 {
+			continue
+		}
 		sumtotbytes += res.totbytes
 		sumtotfiles += res.totfiles
 		t.Logf("Worker #%d: %d files, size %.2f MB (%d B)",
@@ -674,7 +677,10 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 	errch chan error, resch chan workres, bucket string) {
 	geturl := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects
 	res := workres{0, 0}
-	defer wg.Done()
+	defer func() {
+		close(resch)
+		wg.Done()
+	}()
 
 	for keyname := range keynames {
 		url := geturl + "/" + bucket + "/" + keyname
@@ -687,7 +693,6 @@ func getAndCopyTmp(id int, keynames <-chan string, t *testing.T, wg *sync.WaitGr
 		res.totbytes += written
 	}
 	resch <- res
-	close(resch)
 }
 
 func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url string) (written int64, failed bool) {
