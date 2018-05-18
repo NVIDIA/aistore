@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/golang/glog"
@@ -356,56 +357,76 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	msg := VoteMessage{Record: *vr}
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
-	urlfmt := fmt.Sprintf("%%s/%s/%s/%s?%s=%s", Rversion, Rvote, Rproxy, URLParamPrimaryCandidate, p.si.DaemonID)
-	cb := func(res callResult) {
-		if res.err != nil {
-			e := fmt.Errorf("Error reading response from %s(%s): %v", res.si.DaemonID, res.si.DirectURL, res.err)
-			resch <- voteResult{yes: false, daemonID: res.si.DaemonID, err: e}
+
+	q := url.Values{}
+	q.Set(URLParamPrimaryCandidate, p.si.DaemonID)
+	res := p.broadcastCluster(
+		URLPath(Rversion, Rvote, Rproxy),
+		q,
+		http.MethodGet,
+		jsbytes,
+		p.smap,
+		ctx.config.Timeout.CplaneOperation,
+	)
+
+	for r := range res {
+		if r.err != nil {
+			resch <- voteResult{
+				yes:      false,
+				daemonID: r.si.DaemonID,
+				err:      fmt.Errorf("Error reading response from %s(%s): %v", r.si.DaemonID, r.si.DirectURL, r.err),
+			}
 		} else {
-			resch <- voteResult{yes: (VoteYes == Vote(res.outjson)), daemonID: res.si.DaemonID, err: nil}
+			resch <- voteResult{
+				yes:      (VoteYes == Vote(r.outjson)),
+				daemonID: r.si.DaemonID,
+				err:      nil,
+			}
 		}
 	}
 
-	p.broadcast(urlfmt, http.MethodGet, jsbytes, p.smap, cb, ctx.config.Timeout.CplaneOperation)
 	close(resch)
 	return resch
 }
 
 func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
-	result := &VoteResult{
-		Candidate: vr.Candidate,
-		Primary:   vr.Primary,
-		Smap:      vr.Smap,
-		lbmap:     vr.lbmap,
-		StartTime: time.Now(),
-		Initiator: p.si.DaemonID,
-	}
-
 	smapLock.Lock()
 	defer smapLock.Unlock()
 
-	errch := make(chan ErrPair, p.smap.count()+p.smap.countProxies()-1)
-	msg := VoteResultMessage{Result: *result}
-	jsbytes, err := json.Marshal(&msg)
+	jsbytes, err := json.Marshal(
+		&VoteResultMessage{
+			VoteResult{
+				Candidate: vr.Candidate,
+				Primary:   vr.Primary,
+				Smap:      vr.Smap,
+				lbmap:     vr.lbmap,
+				StartTime: time.Now(),
+				Initiator: p.si.DaemonID,
+			}})
 	assert(err == nil, err)
-	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rvote, Rvoteres)
-	cb := func(res callResult) {
-		if res.err != nil {
-			e := fmt.Errorf("Error committing result for %s(%s): %v", res.si.DaemonID, res.si.DirectURL, res.err)
-			errch <- ErrPair{err: e, daemonID: res.si.DaemonID}
-		}
-	}
 
-	p.broadcast(urlfmt, http.MethodPut, jsbytes, p.smap, cb, ctx.config.Timeout.CplaneOperation)
-	close(errch)
+	res := p.broadcastCluster(
+		URLPath(Rversion, Rvote, Rvoteres),
+		nil, // query
+		http.MethodPut,
+		jsbytes,
+		p.smap,
+		ctx.config.Timeout.CplaneOperation,
+	)
 
 	errors := make(map[string]bool)
-	for errpair := range errch {
-		if errpair.err != nil {
-			glog.Warningf("Error broadcasting election victory: %v", errpair)
-			errors[errpair.daemonID] = true
+	for r := range res {
+		if r.err != nil {
+			glog.Warning(
+				"Broadcast committing result for %s(%s) failed: %v",
+				r.si.DaemonID,
+				r.si.DirectURL,
+				r.err,
+			)
+			errors[r.si.DaemonID] = true
 		}
 	}
+
 	return errors
 }
 

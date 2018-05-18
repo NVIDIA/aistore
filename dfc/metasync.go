@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -247,31 +246,28 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 	}
 
 	y.pending.refused = make(map[string]*daemonInfo)
-	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rdaemon, Rmetasync)
+	urlPath := URLPath(Rversion, Rdaemon, Rmetasync)
 
-	chPending := make(chan *daemonInfo, smap4bcast.totalServers())
-	chRefused := make(chan *daemonInfo, smap4bcast.totalServers())
-	cb := func(res callResult) {
-		if res.err == nil {
-			return
+	res := y.p.broadcastCluster(
+		urlPath,
+		nil, // query
+		http.MethodPut,
+		jsbytes,
+		smap4bcast,
+		ctx.config.Timeout.CplaneOperation,
+	)
+
+	for r := range res {
+		if r.err == nil {
+			continue
 		}
-		glog.Warningf("Failed to sync %s, err: %v (%d)", res.si.DaemonID, res.err, res.status)
 
-		chPending <- res.si
-		if IsErrConnectionRefused(res.err) {
-			chRefused <- res.si
+		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
+
+		y.pending.diamonds[r.si.DaemonID] = r.si
+		if IsErrConnectionRefused(r.err) {
+			y.pending.refused[r.si.DaemonID] = r.si
 		}
-	}
-	y.p.broadcast(urlfmt, http.MethodPut, jsbytes, smap4bcast, cb, ctx.config.Timeout.CplaneOperation)
-
-	close(chPending)
-	for di := range chPending {
-		y.pending.diamonds[di.DaemonID] = di
-	}
-
-	close(chRefused)
-	for di := range chRefused {
-		y.pending.refused[di.DaemonID] = di
 	}
 
 	// handle connection-refused right away
@@ -281,7 +277,7 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 		}
 
 		time.Sleep(time.Second)
-		y.handleRefused(urlfmt, http.MethodPut, jsbytes, smap4bcast)
+		y.handleRefused(urlPath, jsbytes)
 	}
 
 	// find out smap delta and, if exists, piggy-back on the handle-pending "venue"
@@ -332,56 +328,45 @@ func (y *metasyncer) handlePending() {
 	jsbytes, err = json.Marshal(payload)
 	assert(err == nil, err)
 
-	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rdaemon, Rmetasync)
-	wg := &sync.WaitGroup{}
-
-	ch := make(chan string, len(y.pending.diamonds))
-	for _, si := range y.pending.diamonds {
-		wg.Add(1)
-		go func(si *daemonInfo) {
-			defer wg.Done()
-			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			res := y.p.call(nil, si, url, http.MethodPut, jsbytes, ctx.config.Timeout.CplaneOperation)
-			if res.err != nil {
-				glog.Warningf("... failing to sync %s, err: %v (%d)", si.DaemonID, res.err, res.status)
-			} else {
-				ch <- si.DaemonID
-			}
-		}(si)
+	var servers []*daemonInfo
+	for _, s := range y.pending.diamonds {
+		servers = append(servers, s)
 	}
 
-	wg.Wait()
-	close(ch)
+	res := y.p.broadcast(
+		URLPath(Rversion, Rdaemon, Rmetasync),
+		nil, // query
+		http.MethodPut,
+		jsbytes,
+		servers,
+		ctx.config.Timeout.CplaneOperation,
+	)
 
-	for id := range ch {
-		delete(y.pending.diamonds, id)
+	for r := range res {
+		if r.err != nil {
+			glog.Warningf("... failing to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
+		} else {
+			delete(y.pending.diamonds, r.si.DaemonID)
+		}
 	}
 }
 
-func (y *metasyncer) handleRefused(urlfmt, method string, jsbytes []byte, smap4bcast *Smap) {
-	wg := &sync.WaitGroup{}
-	ch := make(chan string, len(y.pending.refused))
-
-	for _, si := range y.pending.refused {
-		wg.Add(1)
-		go func(si *daemonInfo) {
-			defer wg.Done()
-			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			res := y.p.call(nil, si, url, method, jsbytes, ctx.config.Timeout.CplaneOperation)
-			if res.err != nil {
-				glog.Warningf("... failing to sync %s, err: %v (%d)", si.DaemonID, res.err, res.status)
-			} else {
-				ch <- si.DaemonID
-				glog.Infoln("retried & sync-ed", si.DaemonID)
-			}
-		}(si)
+func (y *metasyncer) handleRefused(urlPath string, body []byte) {
+	var servers []*daemonInfo
+	for _, s := range y.pending.refused {
+		servers = append(servers, s)
 	}
 
-	wg.Wait()
-	close(ch)
+	res := y.p.broadcast(urlPath, nil, http.MethodPut, body,
+		servers, ctx.config.Timeout.CplaneOperation)
 
-	for id := range ch {
-		delete(y.pending.diamonds, id)
-		delete(y.pending.refused, id)
+	for r := range res {
+		if r.err != nil {
+			glog.Warningf("... failing to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
+		} else {
+			delete(y.pending.diamonds, r.si.DaemonID)
+			delete(y.pending.refused, r.si.DaemonID)
+			glog.Infoln("retried & sync-ed", r.si.DaemonID)
+		}
 	}
 }

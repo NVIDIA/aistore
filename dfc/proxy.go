@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -315,31 +316,40 @@ func (p *proxyrunner) getSmapFromHintCluster() (retry bool) {
 	msg := GetMsg{GetWhat: GetWhatSmapVote}
 	jsbytes, err := json.Marshal(msg)
 	assert(err == nil)
-	method := http.MethodGet
-	urlfmt := fmt.Sprintf("%%s/%s/%s", Rversion, Rdaemon)
 
 	// Broadcast to all nodes in the current Smap and the hint Smap
 	unionsmap := p.unionSmapAndHintsmap()
 	svms := make(chan SmapVoteMsg, unionsmap.count()+unionsmap.countProxies())
 
-	callback := func(res callResult) {
+	res := p.broadcastCluster(
+		URLPath(Rversion, Rdaemon),
+		nil, // query
+		http.MethodGet,
+		jsbytes,
+		unionsmap,
+		ctx.config.Timeout.CplaneOperation,
+	)
+
+	for r := range res {
 		// Get all non-zero version smaps retrieved.
-		if res.err != nil {
-			glog.Warningf("Error retrieving cluster map from %v: %v", res.si.DaemonID, res.err)
+		if r.err != nil {
+			glog.Warningf("Error retrieving cluster map from %v: %v", r.si.DaemonID, r.err)
 			return
 		}
+
 		svm := SmapVoteMsg{}
-		if err = json.Unmarshal(res.outjson, &svm); err != nil {
-			glog.Warningf("Error unmarshalling cluster map from %v: %v", res.si.DaemonID, err)
+		if err = json.Unmarshal(r.outjson, &svm); err != nil {
+			glog.Warningf("Error unmarshalling cluster map from %v: %v", r.si.DaemonID, err)
 			return
 		}
+
 		if svm.Smap == nil || svm.Smap.version() == 0 {
 			return
 		}
+
 		svms <- svm
 	}
 
-	p.broadcast(urlfmt, method, jsbytes, unionsmap, callback, ctx.config.Timeout.CplaneOperation)
 	// Retrieve maximum version Smap
 	var maxVersionSmap *Smap
 	var maxVersionlbmap *lbmap
@@ -837,22 +847,28 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 //
 //====================================================================================
 func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *lbmap, msg *ActionMsg, method string) bool {
-	urlfmt := fmt.Sprintf("%%s/%s/%s/%s", Rversion, Rbuckets, bucketFrom)
 	smap4bcast := &Smap{}
 	p.smap.copyL(smap4bcast)
-	// only needs to tell target of the rename, proxies will get the sync call later
-	smap4bcast.Pmap = nil
 
-	f := func(res callResult) {
-		if res.err != nil {
-			glog.Errorf("Target %s failed to rename local bucket %s => %s, err: %v (%d)",
-				res.si.DaemonID, bucketFrom, bucketTo, res.err, res.status)
-		}
-	}
 	msg.Value = lbmap4ren
 	jsbytes, err := json.Marshal(msg)
 	assert(err == nil, err)
-	p.broadcast(urlfmt, method, jsbytes, smap4bcast, f, ctx.config.Timeout.Default)
+
+	res := p.broadcastTargets(
+		URLPath(Rversion, Rbuckets, bucketFrom),
+		nil, // query
+		method,
+		jsbytes,
+		smap4bcast,
+		ctx.config.Timeout.Default,
+	)
+
+	for r := range res {
+		if r.err != nil {
+			glog.Errorf("Target %s failed to rename local bucket %s => %s, err: %v (%d)",
+				r.si.DaemonID, bucketFrom, bucketTo, r.err, r.status)
+		}
+	}
 
 	lbmapLock.Lock()
 	defer lbmapLock.Unlock()
@@ -1343,31 +1359,47 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 
-	wg := &sync.WaitGroup{}
-	for _, si := range p.smap.Tmap {
-		wg.Add(1)
-		go func(si *daemonInfo) {
-			defer wg.Done()
-			var (
-				res callResult
-				url = fmt.Sprintf("%s/%s/%s/%s?%s=%t", si.DirectURL, Rversion, Rbuckets, bucket, URLParamLocal, islocal)
+	var (
+		q       = url.Values{}
+		results chan callResult
+		timeOut []time.Duration
+	)
+
+	if islocal {
+		q.Set(URLParamLocal, "true")
+	} else {
+		q.Set(URLParamLocal, "false")
+	}
+
+	if wait {
+		timeOut = append(timeOut, 0)
+	}
+
+	results = p.broadcastTargets(
+		URLPath(Rversion, Rbuckets, bucket),
+		q,
+		method,
+		jsonbytes,
+		p.smap,
+		timeOut...,
+	)
+
+	for result := range results {
+		if result.err != nil {
+			p.invalmsghdlr(
+				w,
+				r,
+				fmt.Sprintf(
+					"Failed to execute List/Range request: %v (%d: %s)",
+					result.err,
+					result.status,
+					result.errstr,
+				),
 			)
 
-			if wait {
-				res = p.call(r, si, url, method, jsonbytes, 0)
-			} else {
-				res = p.call(r, si, url, method, jsonbytes)
-			}
-
-			if res.err != nil {
-				s := fmt.Sprintf("Failed to execute List/Range request: %v (%d: %s)",
-					res.err, res.status, res.errstr)
-				p.invalmsghdlr(w, r, s)
-				return
-			}
-		}(si)
+			return
+		}
 	}
-	wg.Wait()
 }
 
 //===========================
@@ -1560,34 +1592,52 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	smapLock.Unlock()
 
-	urlfmt := fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, true)
+	urlPath := URLPath(Rversion, Rdaemon, Rproxy, proxyid)
+	q := url.Values{}
+	q.Set(URLParamPrepare, "true")
 	method := http.MethodPut
-	errch := make(chan error, smap4bcast.count()+smap4bcast.countProxies())
-	f := func(res callResult) {
-		if res.err != nil {
-			errch <- fmt.Errorf("Error from %v in prepare phase of Set primary proxy: %v",
-				res.si.DaemonID, res.err)
+	results := p.broadcastCluster(
+		urlPath,
+		q,
+		method,
+		nil, // body
+		smap4bcast,
+		ctx.config.Timeout.CplaneOperation,
+	)
+
+	for result := range results {
+		if result.err != nil {
+			s := fmt.Sprintf(
+				"Could not set primary proxy; error from %v in prepare phase of set primary proxy: %v",
+				result.si.DaemonID,
+				result.err,
+			)
+			p.invalmsghdlr(w, r, s)
+			return
 		}
-	}
-	p.broadcast(urlfmt, method, nil, smap4bcast, f, ctx.config.Timeout.CplaneOperation)
-	select {
-	case err := <-errch:
-		// If there are any proxies/targets that error during this phase, the change is not enacted.
-		s := fmt.Sprintf("Could not set primary proxy: %v", err)
-		p.invalmsghdlr(w, r, s)
-		return
-	default:
 	}
 
 	// If phase 1 passed without error, broadcast phase 2:
 	// After this point, errors will not result in any rollback.
-	urlfmt = fmt.Sprintf("%%s/%s/%s/%s/%s?%s=%t", Rversion, Rdaemon, Rproxy, proxyid, URLParamPrepare, false)
-	f = func(res callResult) {
-		if res.err != nil {
-			glog.Errorf("Error from %v in commit phase of Set primary proxy: %v", res.si.DaemonID, res.err)
+	q.Set(URLParamPrepare, "false")
+	results = p.broadcastCluster(
+		urlPath,
+		q,
+		method,
+		nil, // body
+		smap4bcast,
+		ctx.config.Timeout.CplaneOperation,
+	)
+
+	for result := range results {
+		if result.err != nil {
+			glog.Errorf(
+				"Error from %v in commit phase of Set primary proxy: %v",
+				result.si.DaemonID,
+				result.err,
+			)
 		}
 	}
-	p.broadcast(urlfmt, method, nil, smap4bcast, f, ctx.config.Timeout.CplaneOperation)
 
 	smapLock.Lock()
 	defer smapLock.Unlock()
@@ -1886,18 +1936,26 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
-			msgbytes, err := json.Marshal(msg) // same message -> all targets
+			msgbytes, err := json.Marshal(msg) // same message -> all targets and proxies
 			assert(err == nil, err)
-			// FIXME: broadcast is not used here (yet) because these changes should only be propagated to targets
-			for _, si := range p.smap.Tmap {
-				url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-				res := p.call(r, si, url, http.MethodPut, msgbytes)
-				if res.err != nil {
-					p.invalmsghdlr(w, r, fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, errstr))
-					p.kalive.onerr(err, res.status)
-					break
-				}
 
+			results := p.broadcastCluster(
+				URLPath(Rversion, Rdaemon),
+				nil, // query
+				http.MethodPut,
+				msgbytes,
+				p.smap, // FIXME: lock?
+			)
+
+			for result := range results {
+				if result.err != nil {
+					p.invalmsghdlr(
+						w,
+						r,
+						fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.errstr),
+					)
+					p.kalive.onerr(err, result.status)
+				}
 			}
 		}
 	case ActShutdown:
@@ -1905,14 +1963,19 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		msgbytes, err := json.Marshal(msg) // same message -> all targets
 		assert(err == nil, err)
 
-		urlfmt := fmt.Sprintf("%%s/%s/%s", Rversion, Rdaemon)
-		callback := func(_ callResult) {}
 		smapLock.Lock()
 		smap4bcast := &Smap{}
 		copyStruct(smap4bcast, p.smap)
 		smapLock.Unlock()
 
-		p.broadcast(urlfmt, http.MethodPut, msgbytes, smap4bcast, callback)
+		p.broadcastCluster(
+			URLPath(Rversion, Rdaemon),
+			nil, // query
+			http.MethodPut,
+			msgbytes,
+			smap4bcast,
+		)
+
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
@@ -1988,41 +2051,6 @@ func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r 
 	s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
 	p.invalmsghdlr(w, r, s)
 	return false
-}
-
-/* Broadcasts jsbytes using the given method to all targets and proxies in the cluster.
-The URL for each proxy is created with urlfmt, which should contain one %s representing
-the direct url of any given node.
-
-Sending to each node happens in parallel, and callback will be called with the result of each one.
-
-The caller must lock p.smap.
-*/
-func (p *proxyrunner) broadcast(urlfmt, method string, jsbytes []byte, smap *Smap,
-	callback func(callResult), timeout ...time.Duration) {
-	wg := &sync.WaitGroup{}
-	for _, si := range smap.Tmap {
-		wg.Add(1)
-		go func(si *daemonInfo) {
-			defer wg.Done()
-			url := fmt.Sprintf(urlfmt, si.DirectURL)
-			res := p.call(nil, si, url, method, jsbytes, timeout...)
-			callback(callResult{si, res.outjson, res.err, "", res.status})
-		}(si)
-	}
-	for _, si := range smap.Pmap {
-		// Don't broadcast to self
-		if si.DaemonID != p.si.DaemonID {
-			wg.Add(1)
-			go func(si *proxyInfo) {
-				defer wg.Done()
-				url := fmt.Sprintf(urlfmt, si.DirectURL)
-				res := p.call(nil, &si.daemonInfo, url, method, jsbytes, timeout...)
-				callback(callResult{&si.daemonInfo, res.outjson, res.err, "", res.status})
-			}(si)
-		}
-	}
-	wg.Wait()
 }
 
 // update list of valid tokens
@@ -2178,4 +2206,35 @@ func (p *proxyrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errst
 		errstr = fmt.Sprintf("Failed to update primary proxy and Smap, err: %v", err)
 	}
 	return
+}
+
+// broadcastCluster sends a message ([]byte) to all proxies and targets belongs to a smap
+func (p *proxyrunner) broadcastCluster(path string, query url.Values, method string, body []byte,
+	smap *Smap, timeout ...time.Duration) chan callResult {
+
+	var servers []*daemonInfo
+	for _, s := range smap.Tmap {
+		servers = append(servers, s)
+	}
+
+	for _, s := range smap.Pmap {
+		// Don't broadcast to self
+		if s.DaemonID != p.si.DaemonID {
+			servers = append(servers, &s.daemonInfo)
+		}
+	}
+
+	return p.broadcast(path, query, method, body, servers, timeout...)
+}
+
+// broadcastTargets sends a message ([]byte) to all targets belongs to a smap
+func (p *proxyrunner) broadcastTargets(path string, query url.Values, method string, body []byte,
+	smap *Smap, timeout ...time.Duration) chan callResult {
+
+	var servers []*daemonInfo
+	for _, s := range smap.Tmap {
+		servers = append(servers, s)
+	}
+
+	return p.broadcast(path, query, method, body, servers, timeout...)
 }

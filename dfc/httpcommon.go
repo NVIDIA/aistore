@@ -16,12 +16,15 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OneOfOne/xxhash"
@@ -756,4 +759,38 @@ func (h *httprunner) extractlbmap(payload map[string]string) (newlbmap *lbmap, m
 		errstr = fmt.Sprintf("Attempt to downgrade lbmap version %d to %d", myver, newlbmap.version())
 	}
 	return
+}
+
+// URLPath returns a HTTP URL path by joining all segments with "/"
+func URLPath(segments ...string) string {
+	return path.Join("/", path.Join(segments...))
+}
+
+// broadcast sends a http call to all servers in parallel, wait until all calls are returned
+// note: 'u' has only the path and query part, host portion will be set by this function.
+func (h *httprunner) broadcast(path string, query url.Values, method string, body []byte,
+	servers []*daemonInfo, timeout ...time.Duration) chan callResult {
+	var (
+		ch = make(chan callResult, len(servers))
+		wg sync.WaitGroup
+	)
+
+	for _, s := range servers {
+		wg.Add(1)
+		go func(di *daemonInfo, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			var u url.URL
+			u.Scheme = "http"
+			u.Host = di.NodeIPAddr + ":" + di.DaemonPort
+			u.Path = path
+			u.RawQuery = query.Encode() // golang handles query == nil
+			res := h.call(nil, di, u.String(), method, body, timeout...)
+			ch <- res
+		}(s, &wg)
+	}
+
+	wg.Wait()
+	close(ch)
+	return ch
 }
