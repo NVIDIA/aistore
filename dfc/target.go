@@ -1243,6 +1243,11 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		Entries:    allfinfos,
 		PageMarker: marker,
 	}
+	if strings.Contains(msg.GetProps, GetTargetURL) {
+		for _, e := range bucketList.Entries {
+			e.TargetURL = t.si.DirectURL
+		}
+	}
 	return bucketList, nil
 }
 

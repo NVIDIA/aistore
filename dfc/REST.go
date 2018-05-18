@@ -149,6 +149,7 @@ const (
 	GetPropsIsCached = "iscached"
 	GetPropsBucket   = "bucket"
 	GetPropsVersion  = "version"
+	GetTargetURL     = "targetUrl"
 )
 
 //===================
@@ -160,18 +161,19 @@ const (
 // BucketEntry corresponds to a single entry in the BucketList and
 // contains file and directory metadata as per the GetMsg
 type BucketEntry struct {
-	Name     string `json:"name"`     // name of the object - note: does not include the bucket name
-	Size     int64  `json:"size"`     // size in bytes
-	Ctime    string `json:"ctime"`    // formatted as per GetMsg.GetTimeFormat
-	Checksum string `json:"checksum"` // checksum
-	Type     string `json:"type"`     // "file" OR "directory"
-	Atime    string `json:"atime"`    // formatted as per GetMsg.GetTimeFormat
-	Bucket   string `json:"bucket"`   // parent bucket name
-	Version  string `json:"version"`  // version/generation ID. In GCP it is int64, in AWS it is a string
-	IsCached bool   `json:"iscached"` // if the file is cached on one of targets
+	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
+	Size      int64  `json:"size"`                // size in bytes
+	Ctime     string `json:"ctime"`               // formatted as per GetMsg.GetTimeFormat
+	Checksum  string `json:"checksum"`            // checksum
+	Type      string `json:"type"`                // "file" OR "directory"
+	Atime     string `json:"atime"`               // formatted as per GetMsg.GetTimeFormat
+	Bucket    string `json:"bucket"`              // parent bucket name
+	Version   string `json:"version"`             // version/generation ID. In GCP it is int64, in AWS it is a string
+	IsCached  bool   `json:"iscached"`            // if the file is cached on one of targets
+	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
 }
 
-// BucketList represents the contents of a given bucket - somewhat analagous to the 'ls <bucket-name>'
+// BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'
 type BucketList struct {
 	Entries    []*BucketEntry `json:"entries"`
 	PageMarker string         `json:"pagemarker"`

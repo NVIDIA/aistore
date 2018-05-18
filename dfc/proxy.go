@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"time"
 
+	"errors"
+
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/golang/glog"
 )
@@ -1190,7 +1192,16 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	if len(allentries.Entries) == 0 {
 		return
 	}
-
+	if strings.Contains(msg.GetProps, GetTargetURL) {
+		for _, e := range allentries.Entries {
+			si, errStr := HrwTarget(bucket, e.Name, p.smap)
+			if errStr != "" {
+				err = errors.New(errStr)
+				return
+			}
+			e.TargetURL = si.DirectURL
+		}
+	}
 	if strings.Contains(msg.GetProps, GetPropsAtime) ||
 		strings.Contains(msg.GetProps, GetPropsIsCached) {
 		// Now add local properties to the cloud objects

@@ -194,9 +194,11 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 
 		reslist.Entries = append(reslist.Entries, entry)
 	}
+
 	if glog.V(4) {
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
+
 	jsbytes, err = json.Marshal(reslist)
 	assert(err == nil, err)
 	return

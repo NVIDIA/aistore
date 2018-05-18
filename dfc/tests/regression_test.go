@@ -92,6 +92,155 @@ var (
 	failLRU = ""
 )
 
+func TestLocalListBucketGetTargetURL(t *testing.T) {
+	const (
+		num      = 1000
+		filesize = uint64(1024)
+		seed     = int64(111)
+		bucket   = TestLocalBucketName
+	)
+	var (
+		filenameCh = make(chan string, num)
+		errch      = make(chan error)
+		sgl        *dfc.SGLIO
+		targets    = make(map[string]struct{})
+	)
+
+	smap, err := client.GetClusterMap(proxyurl)
+	checkFatal(err, t)
+	if len(smap.Tmap) == 1 {
+		tlogln("Warning: more than 1 target should deployed for best utility of this test.")
+	}
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	err = client.CreateLocalBucket(proxyurl, bucket)
+	checkFatal(err, t)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, bucket)
+		checkFatal(err, t)
+	}()
+
+	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
+	selectErr(errch, "put", t, false)
+
+	msg := &dfc.GetMsg{GetPageSize: int(pagesize), GetProps: dfc.GetTargetURL}
+	bl, err := client.ListBucket(proxyurl, bucket, msg, num)
+	checkFatal(err, t)
+
+	if len(bl.Entries) != num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+	}
+
+	for _, e := range bl.Entries {
+		if e.TargetURL == "" {
+			t.Error("Target URL in response is empty")
+		}
+		if _, ok := targets[e.TargetURL]; !ok {
+			targets[e.TargetURL] = struct{}{}
+		}
+		l, _, err := client.Get(e.TargetURL, bucket, e.Name, nil, nil, false, false)
+		checkFatal(err, t)
+		if uint64(l) != filesize {
+			t.Errorf("Expected filesize: %d, actual filesize: %d\n", filesize, l)
+		}
+	}
+
+	if len(smap.Tmap) != len(targets) { // The objects should have been distributed to all targets
+		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", len(smap.Tmap), len(targets))
+	}
+
+	// Ensure no target URLs are returned when the property is not requested
+	msg.GetProps = ""
+	bl, err = client.ListBucket(proxyurl, bucket, msg, num)
+	checkFatal(err, t)
+
+	if len(bl.Entries) != num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+	}
+
+	for _, e := range bl.Entries {
+		if e.TargetURL != "" {
+			t.Fatalf("Target URL: %s returned when empty target URL expected\n", e.TargetURL)
+		}
+	}
+}
+
+func TestCloudListBucketGetTargetURL(t *testing.T) {
+	const (
+		num      = 100
+		filesize = uint64(1024)
+		seed     = int64(111)
+		prefix   = "smoke"
+	)
+	var (
+		filenameCh = make(chan string, num)
+		errch      = make(chan error)
+		sgl        *dfc.SGLIO
+		bucket     = clibucket
+		targets    = make(map[string]struct{})
+	)
+
+	smap, err := client.GetClusterMap(proxyurl)
+	checkFatal(err, t)
+	if len(smap.Tmap) == 1 {
+		tlogln("Warning: more than 1 target should deployed for best utility of this test.")
+	}
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
+	selectErr(errch, "put", t, false)
+
+	msg := &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: dfc.GetTargetURL}
+	bl, err := client.ListBucket(proxyurl, bucket, msg, num)
+	checkFatal(err, t)
+
+	if len(bl.Entries) != num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+	}
+
+	for _, e := range bl.Entries {
+		if e.TargetURL == "" {
+			t.Error("Target URL in response is empty")
+		}
+		if _, ok := targets[e.TargetURL]; !ok {
+			targets[e.TargetURL] = struct{}{}
+		}
+		l, _, err := client.Get(e.TargetURL, bucket, e.Name, nil, nil, false, false)
+		checkFatal(err, t)
+		if uint64(l) != filesize {
+			t.Errorf("Expected filesize: %d, actual filesize: %d\n", filesize, l)
+		}
+	}
+
+	if len(smap.Tmap) != len(targets) { // The objects should have been distributed to all targets
+		t.Errorf("Expected %d different target URLs, actual: %d different target URLs", len(smap.Tmap), len(targets))
+	}
+
+	// Ensure no target URLs are returned when the property is not requested
+	msg.GetProps = ""
+	bl, err = client.ListBucket(proxyurl, bucket, msg, num)
+	checkFatal(err, t)
+
+	if len(bl.Entries) != num {
+		t.Errorf("Expected %d bucket list entries, found %d\n", num, len(bl.Entries))
+	}
+
+	for _, e := range bl.Entries {
+		if e.TargetURL != "" {
+			t.Fatalf("Target URL: %s returned when empty target URL expected\n", e.TargetURL)
+		}
+	}
+}
+
 // 1. PUT file
 // 2. Corrupt the file
 // 3. GET file
