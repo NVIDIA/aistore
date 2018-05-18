@@ -15,6 +15,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -1126,37 +1127,23 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 	return
 }
 
-func (t *targetrunner) lookupRemotely(bucket, objname string) (tsi *daemonInfo) {
-	if len(t.smap.Tmap) < 2 {
-		return
-	}
-	wg := &sync.WaitGroup{}
-	resch := make(chan *daemonInfo, len(t.smap.Tmap)-1)
-	for sid, si := range t.smap.Tmap {
-		if sid == t.si.DaemonID {
-			continue
-		}
-		wg.Add(1)
-		go func(si *daemonInfo) {
-			defer wg.Done()
-			url := si.DirectURL + "/" + Rversion + "/" + Robjects + "/" + bucket + "/" + objname
-			res := t.call(nil, si, url, http.MethodHead, nil, ctx.config.Timeout.MaxKeepalive)
-			if res.err == nil {
-				resch <- si
-			} else {
-				resch <- nil
-			}
-		}(si)
-	}
-	wg.Wait()
-	close(resch)
-	for res := range resch {
-		if res != nil {
-			tsi = res
-			break
+func (t *targetrunner) lookupRemotely(bucket, objname string) *daemonInfo {
+	res := t.broadcastNeighbors(
+		URLPath(Rversion, Robjects, bucket, objname),
+		nil, // query
+		http.MethodHead,
+		nil,
+		t.smap, // FIXME: lock?
+		ctx.config.Timeout.MaxKeepalive,
+	)
+
+	for r := range res {
+		if r.err == nil {
+			return r.si
 		}
 	}
-	return
+
+	return nil
 }
 
 // should not be called for local buckets
@@ -2873,4 +2860,25 @@ func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 	// xaction
 	go t.runRebalance(smap4xaction, newtargetid)
 	return
+}
+
+// broadcastNeighbors sends a message ([]byte) to all neighboring targets belongs to a smap
+func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method string, body []byte,
+	smap *Smap, timeout ...time.Duration) chan callResult {
+
+	if len(smap.Tmap) < 2 {
+		// no neighbor, returns empty channel, so caller doesnt have to check channel is nil
+		ch := make(chan callResult)
+		close(ch)
+		return ch
+	}
+
+	var servers []*daemonInfo
+	for _, s := range smap.Tmap {
+		if s.DaemonID != t.si.DaemonID {
+			servers = append(servers, s)
+		}
+	}
+
+	return t.broadcast(path, query, method, body, servers, timeout...)
 }
