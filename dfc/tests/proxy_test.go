@@ -1304,6 +1304,9 @@ func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 
 // primarySetToOriginal reads original primary proxy from configuration and
 // makes it a primary proxy again
+// NOTE: This test cannot be run as separate test. It requires that original
+// primary proxy was down and retuned back. So, the test should be executed
+// after primaryCrash test
 func primarySetToOriginal(t *testing.T) {
 	smap := getClusterMap(httpclient, t)
 	tlogf("SMAP version at start: %d\n", smap.Version)

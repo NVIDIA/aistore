@@ -165,6 +165,9 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		h.invalmsghdlr(w, r, err.Error())
 		return
 	}
+	if glog.V(4) {
+		glog.Info("Proxy voted '%v' for %s", vote, pi.DaemonID)
+	}
 
 	if vote {
 		_, err = w.Write([]byte(VoteYes))
@@ -238,6 +241,10 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 
 	// Only continue the election if this proxy is actually the next in line
 	if psi.DaemonID != p.si.DaemonID {
+		if glog.V(4) {
+			glog.Warningf("This proxy is not next in line: %s. Received: %s",
+				p.si.DaemonID, psi.DaemonID)
+		}
 		return
 	}
 
@@ -280,8 +287,11 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, currPrimaryURL string) {
 	proxyup, err := p.pingWithTimeout(url, ctx.config.Timeout.ProxyPing)
 	if proxyup {
 		// Move back to Idle state
-		glog.Infoln("Moving back to Idle state")
+		glog.Infoln("Current primary is up: moving back to Idle state")
 		return
+	}
+	if err != nil {
+		glog.Warningf("Error occured while pinging primary %s: %v", url, err)
 	}
 	glog.Infof("%v: primary proxy %v is confirmed down\n", p.si.DaemonID, currPrimaryURL)
 	glog.Infoln("Moving to Election state")
@@ -289,7 +299,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, currPrimaryURL string) {
 	elected, votingErrors := p.electAmongProxies(vr)
 	if !elected {
 		// Move back to Idle state
-		glog.Infoln("Moving back to Idle state")
+		glog.Infoln("Election failed: moving back to Idle state")
 		return
 	}
 	glog.Infoln("Moving to Election2 State")
@@ -300,7 +310,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, currPrimaryURL string) {
 	for sid := range confirmationErrors {
 		if _, ok := votingErrors[sid]; !ok {
 			// A node errored while confirming that did not error while voting:
-			glog.Errorf("An error occurred confirming the election with a node that was healthy when voting: %v", err)
+			glog.Errorf("An error occurred confirming the election with a node %s that was healthy when voting", sid)
 		}
 	}
 
@@ -321,6 +331,9 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 			errors[res.daemonID] = true
 			n++
 		} else {
+			if glog.V(4) {
+				glog.Infof("Proxy %s responded with %v", res.daemonID, res.yes)
+			}
 			if res.yes {
 				y++
 			} else {
@@ -426,6 +439,9 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 
 	msg := &ActionMsg{Action: ActNewPrimary}
 	pair := &revspair{p.smap.cloneU(), msg}
+	if glog.V(4) {
+		glog.Infof("Syncing smap after a victory[%v]: %v", msg.Action, pair.revs.version())
+	}
 	p.metasyncer.sync(false, pair)
 }
 
@@ -433,9 +449,13 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 func (p *proxyrunner) becomeNonPrimaryProxy() {
 	p.primary = false
 	psi := p.smap.getProxy(p.si.DaemonID)
-	if psi != nil {
-		psi.Primary = false
+	if psi == nil {
+		if glog.V(4) {
+			glog.Warningf("becomeNonPrimaryProxy: failed to find itself %s in smap", p.si.DaemonID)
+		}
+		return
 	}
+	psi.Primary = false
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
@@ -451,8 +471,12 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	}
 
 	currPrimaryURL := p.smap.ProxySI.DirectURL
+	if glog.V(4) {
+		glog.Infof("Primary proxy %s failure detected {url: %s}", p.smap.ProxySI.DaemonID, currPrimaryURL)
+	}
 	if nextPrimaryProxy.DaemonID == p.si.DaemonID {
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
+		glog.Infof("%v: Starting Election", p.si.DaemonID)
 		vr := &VoteRecord{
 			Candidate: nextPrimaryProxy.DaemonID,
 			Primary:   p.smap.ProxySI.DaemonID,
@@ -530,6 +554,10 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	timeSinceLastKalive := time.Since(lastKeepaliveTime)
 	if timeSinceLastKalive < ctx.config.Periodic.KeepAliveTime/2 {
 		// KeepAliveTime/2 is the expected amount time since the last keepalive was sent
+		if glog.V(4) {
+			glog.Warningf("Primary was alive only %v ago (should be down for at least %v)",
+				timeSinceLastKalive, ctx.config.Periodic.KeepAliveTime/2)
+		}
 		return false, nil
 	}
 
@@ -538,6 +566,10 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	hrwmax, errstr := HrwProxy(h.smap, currPrimaryID)
 	if errstr != "" {
 		return false, fmt.Errorf("Error executing HRW: %v", errstr)
+	}
+	if glog.V(4) {
+		glog.Infof("Voting result for %s is %v. Expected primary: %s",
+			daemonID, hrwmax.DaemonID == daemonID, daemonID)
 	}
 	return hrwmax.DaemonID == daemonID, nil
 }
@@ -567,6 +599,9 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 
 	if prepare {
 		// If prepare=true, return before making any changes
+		if glog.V(4) {
+			glog.Info("Preparation step: do nothing")
+		}
 		return nil
 	}
 
