@@ -85,6 +85,7 @@ func newPrimary() *proxyrunner {
 	pi := &proxyInfo{daemonInfo{DaemonID: p.si.DaemonID, DirectURL: "do not care"}, true /* primary */}
 	p.smap.addProxy(pi)
 	p.smap.ProxySI = pi
+	p.kalive = newproxykalive(&p)
 	return &p
 }
 

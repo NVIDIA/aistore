@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +21,11 @@ const (
 	tmpDirnameTemplate  = "DFC-TEMP-DIR"
 	tmpFilenameTemplate = "DFC-TEMP-FILE"
 )
+
+type okmap struct {
+	sync.Mutex
+	okmap map[string]time.Time
+}
 
 type fskeeper struct {
 	namedrunner

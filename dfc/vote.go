@@ -571,14 +571,11 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *p
 func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
-	lastKeepaliveTime := h.kalive.getTimestamp(currPrimaryID)
-	timeSinceLastKalive := time.Since(lastKeepaliveTime)
-	if timeSinceLastKalive < ctx.config.Periodic.KeepAliveTime/2 {
-		// KeepAliveTime/2 is the expected amount time since the last keepalive was sent
+	if !h.kalive.timedOut(currPrimaryID) {
 		if glog.V(4) {
-			glog.Warningf("Primary was alive only %v ago (should be down for at least %v)",
-				timeSinceLastKalive, ctx.config.Periodic.KeepAliveTime/2)
+			glog.Warningf("Primary %s is still alive", currPrimaryID)
 		}
+
 		return false, nil
 	}
 

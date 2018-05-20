@@ -760,7 +760,7 @@ func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 	assert(err == nil, err)
 	ok := t.writeJSON(w, r, jsbytes, "thealthstatus")
 	if ok && from == t.smap.ProxySI.DaemonID {
-		t.kalive.timestamp(t.smap.ProxySI.DaemonID)
+		t.kalive.heardFrom(t.smap.ProxySI.DaemonID, false /* reset */)
 	}
 }
 

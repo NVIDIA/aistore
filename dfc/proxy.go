@@ -1822,11 +1822,13 @@ func (p *proxyrunner) shouldAddToSmap(nsi *daemonInfo, osi *daemonInfo, keepaliv
 			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", kind, nsi.DaemonID)
 			return true
 		}
+
 		if osi.NodeIPAddr != nsi.NodeIPAddr || osi.DaemonPort != nsi.DaemonPort {
 			glog.Warningf("register/keepalive %s %s: info changed - renewing", kind, nsi.DaemonID)
 			return true
 		}
-		p.kalive.timestamp(nsi.DaemonID)
+
+		p.kalive.heardFrom(nsi.DaemonID, !keepalive /* reset */)
 		return false
 	}
 	if osi != nil {

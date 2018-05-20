@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -27,22 +26,17 @@ const (
 
 type kaliveif interface {
 	onerr(err error, status int)
-	timestamp(sid string)
-	getTimestamp(sid string) time.Time
+	heardFrom(sid string, reset bool)
 	keepalive(err error) (stopped bool)
-}
-
-type okmap struct {
-	sync.Mutex
-	okmap map[string]time.Time
+	timedOut(sid string) bool
 }
 
 type kalive struct {
 	namedrunner
-	k         kaliveif
-	controlCh chan controlSignal
-	atomic    int64
-	okmap     *okmap
+	k                          kaliveif
+	controlCh                  chan controlSignal
+	primaryKeepaliveInProgress int64 // used by primary proxy only
+	tracker                    KeepaliveTracker
 }
 
 type proxykalive struct {
@@ -55,63 +49,64 @@ type targetkalive struct {
 	t *targetrunner
 }
 
+// KeepaliveTracker defines the interface for keep alive tracking.
+// It is safe for concurrent access.
+type KeepaliveTracker interface {
+	// HeardFrom notifies the tracker that a message is received from server identified by 'id'
+	// 'reset' is true indicates the heard from is not a result of a regular keepalive call.
+	// it could be a reconnect, re-register, normally this indicates to discard previous data and
+	// start fresh.
+	HeardFrom(id string, reset bool)
+	// TimedOut returns true if it is determined that a message has not been received from a server
+	// soon enough so it is consider that the server is down
+	TimedOut(id string) bool
+}
+
+var (
+	_ kaliveif = &targetkalive{}
+	_ kaliveif = &proxykalive{}
+)
+
 type controlSignal struct {
 	msg string
 	err error
 }
 
-// construction
 func newproxykalive(p *proxyrunner) *proxykalive {
 	k := &proxykalive{p: p}
 	k.kalive.k = k
+	k.controlCh = make(chan controlSignal, 1)
+	k.tracker = NewHeartBeatTracker(ctx.config.Periodic.KeepAliveTime)
 	return k
 }
 
 func newtargetkalive(t *targetrunner) *targetkalive {
 	k := &targetkalive{t: t}
 	k.kalive.k = k
+	k.controlCh = make(chan controlSignal, 1)
+	k.tracker = NewHeartBeatTracker(ctx.config.Periodic.KeepAliveTime)
 	return k
 }
 
-//=========================================================
-//
-// common methods
-//
-//=========================================================
 func (r *kalive) onerr(err error, status int) {
 	if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 		r.controlCh <- controlSignal{msg: someError, err: err}
 	}
 }
 
-func (r *kalive) timestamp(sid string) {
-	if r.okmap == nil {
-		return
-	}
-	r.okmap.Lock()
-	defer r.okmap.Unlock()
-	r.okmap.okmap[sid] = time.Now()
+func (r *kalive) heardFrom(sid string, reset bool) {
+	r.tracker.HeardFrom(sid, reset)
 }
 
-func (r *kalive) getTimestamp(sid string) time.Time {
-	r.okmap.Lock()
-	defer r.okmap.Unlock()
-	return r.okmap.okmap[sid]
-}
-
-func (r *kalive) skipCheck(sid string) bool {
-	r.okmap.Lock()
-	last, ok := r.okmap.okmap[sid]
-	r.okmap.Unlock()
-	return ok && time.Since(last) < ctx.config.Periodic.KeepAliveTime
+func (r *kalive) timedOut(sid string) bool {
+	return r.tracker.TimedOut(sid)
 }
 
 func (r *kalive) run() error {
 	glog.Infof("Starting %s", r.name)
-	r.controlCh = make(chan controlSignal, 1)
-	r.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(ctx.config.Periodic.KeepAliveTime)
 	lastCheck := time.Time{}
+
 	for {
 		select {
 		case <-ticker.C:
@@ -146,26 +141,21 @@ func (r *kalive) stop(err error) {
 	close(r.controlCh)
 }
 
-//===============================================
-//
-// Generic Keepalive (Non-Primary Proxy & Target)
-//
-//===============================================
 type Registerer interface {
 	register(timeout time.Duration) (int, error)
 }
 
-func keepalive(r Registerer, controlCh chan controlSignal, err error) (stopped bool) {
+// keepaliveCommon is shared by none primary proxies and targets
+// calls register right away, if it fails, continue to call until successfully registered or asked to stop
+func keepaliveCommon(r Registerer, controlCh chan controlSignal) (stopped bool) {
 	timeout := kalivetimeout
 	status, err := r.register(timeout)
 	if err == nil {
 		return
 	}
-	if status > 0 {
-		glog.Infof("Warning: keepalive failed with status %d, err: %v", status, err)
-	} else {
-		glog.Infof("Warning: keepalive failed, err: %v", err)
-	}
+
+	glog.Infof("Warning: keepalive failed with err: %v, status %d", err, status)
+
 	// until success or stop
 	poller := time.NewTicker(targetpollivl)
 	defer poller.Stop()
@@ -177,19 +167,23 @@ func keepalive(r Registerer, controlCh chan controlSignal, err error) (stopped b
 				glog.Infoln("keepalive: successfully re-registered")
 				return
 			}
+
 			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
 			if timeout > ctx.config.Timeout.MaxKeepalive || IsErrConnectionRefused(err) {
 				stopped = true
 				return
 			}
+
 			if status > 0 {
 				glog.Infof("Warning: keepalive failed with status %d, err: %v", status, err)
 			} else {
 				glog.Infof("Warning: keepalive failed, err: %v", err)
 			}
+
 			if status == http.StatusRequestTimeout {
 				continue
 			}
+
 			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
 		case sig := <-controlCh:
 			if sig.msg == stop {
@@ -200,41 +194,41 @@ func keepalive(r Registerer, controlCh chan controlSignal, err error) (stopped b
 	}
 }
 
-//==========================================
-//
-// proxykalive: implements kaliveif
-//
-//===========================================
 func (r *proxykalive) keepalive(err error) (stopped bool) {
-	if r.p.primary {
-		return r.primarykeepalive(err)
+	if err != nil {
+		glog.Infof("proxy %s keepalive triggered by err %v", r.p.si.DaemonID, err)
 	}
 
-	if r.p.smap.ProxySI == nil || r.skipCheck(r.p.smap.ProxySI.DaemonID) {
+	if r.p.primary {
+		return r.primarykeepalive()
+	}
+
+	if r.p.smap.ProxySI == nil || !r.timedOut(r.p.smap.ProxySI.DaemonID) {
 		return
 	}
-	stopped = keepalive(r.p, r.controlCh, err)
+
+	stopped = keepaliveCommon(r.p, r.controlCh)
 	if stopped {
 		r.p.onPrimaryProxyFailure()
 	}
+
 	return stopped
 }
 
-func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
+func (r *proxykalive) primarykeepalive() (stopped bool) {
 	aval := time.Now().Unix()
-	if !atomic.CompareAndSwapInt64(&r.atomic, 0, aval) {
-		glog.Infof("keepalive-alltargets is in progress...")
+	if !atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, 0, aval) {
+		glog.Infof("primary keepalive is already in progress...")
 		return
 	}
-	defer atomic.CompareAndSwapInt64(&r.atomic, aval, 0)
-	if err != nil {
-		glog.Infof("keepalive-alltargets: got err %v, checking now...", err)
-	}
+	defer atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, aval, 0)
+
 	from := "?" + URLParamFromID + "=" + r.p.si.DaemonID
 	for sid, si := range r.p.smap.Tmap {
-		if r.skipCheck(sid) {
+		if !r.timedOut(sid) {
 			continue
 		}
+
 		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
 		url += from
 		res := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
@@ -245,7 +239,7 @@ func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 		if res.status > 0 {
 			glog.Infof("Warning: target %s fails keepalive with status %d, err: %v", sid, res.status, res.err)
 		} else {
-			glog.Infof("Warning: target %s fails keepalive, err: %v", sid, err)
+			glog.Infof("Warning: target %s fails keepalive, err: %v", sid, res.err)
 		}
 
 		responded, stopped := r.poll(si, url)
@@ -267,6 +261,8 @@ func (r *proxykalive) primarykeepalive(err error) (stopped bool) {
 		}
 
 		smapLock.Lock()
+		// FIXME: (L. Ding) I think this is a bug, this should trigger a map sync to all proxies at least
+		//                  if not to cluster
 		r.p.smap.del(sid)
 		smapLock.Unlock()
 	}
@@ -281,7 +277,7 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 	)
 	defer poller.Stop()
 	for maxedout < 2 {
-		if r.skipCheck(si.DaemonID) {
+		if !r.timedOut(si.DaemonID) {
 			return true, false
 		}
 		select {
@@ -311,18 +307,15 @@ func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool)
 	return false, false
 }
 
-//==========================================
-//
-// targetkalive - implements kaliveif
-//
-//===========================================
 func (r *targetkalive) keepalive(err error) (stopped bool) {
-	if r.t.smap.ProxySI == nil || r.skipCheck(r.t.smap.ProxySI.DaemonID) {
-		return
+	if err != nil {
+		glog.Infof("target %s keepalive triggered by err %v", r.t.si.DaemonID, err)
 	}
-	stopped = keepalive(r.t, r.controlCh, err)
+
+	stopped = keepaliveCommon(r.t, r.controlCh)
 	if stopped {
 		r.t.onPrimaryProxyFailure()
 	}
+
 	return stopped
 }
