@@ -1506,8 +1506,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				p.invalmsghdlr(w, r, errstr)
 			}
 		default:
-			errstr := fmt.Sprintf("Invalid setconfig request: proxy does not support (updating) '%s'", msg.Name)
-			p.invalmsghdlr(w, r, errstr)
+			glog.Warningf("Invalid setconfig request: proxy does not support (updating) '%s'", msg.Name)
 		}
 	case ActShutdown:
 		q := r.URL.Query()
@@ -1936,6 +1935,17 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
+			// L.Ding: Originally this is broadcast to targets only, but I believe this should be to
+			//         all targets and proxies, for example, set vmodule, because there is no filter
+			//         here, so I am sending this to all servers. If a server receives messages that
+			//         is not needed, server can chose to ignore, down side is this causes some extra
+			//         network traffic.
+			//         Why does the above p.setconfig() doesn't block primary proxy from failing these
+			//         sets? I think it is bug, bacause it calls httprunner's setconfig which is
+			//         shared by target and proxy and it takes all config.
+			//         but below, when sending this primary approved message to all other proxies, the
+			//         message end up at to a proxy's http handler, it checks message type, so
+			//         basically, same message processed by a proxy in different code path.
 			msgbytes, err := json.Marshal(msg) // same message -> all targets and proxies
 			assert(err == nil, err)
 
