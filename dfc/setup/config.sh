@@ -12,7 +12,6 @@
 	},
 	"periodic": {
 		"stats_time":		"10s",
-		"keep_alive_time":	"20s",
 		"retry_sync_time":	"2s"
 	},
 	"timeout": {
@@ -92,7 +91,21 @@ $FSPATHS
 		"enabled": $AUTHENABLED,
 		"creddir": "$CREDDIR"
 	},
-	"h2c": 				false
+	"h2c": 				false,
+	"keepalivetracker": {
+		"proxy": {
+			"interval": "20s",
+			"name": "heartbeat",
+			"max": "20s",
+			"factor": 3
+		},
+		"target": {
+			"interval": "20s",
+			"name": "heartbeat",
+			"max": "20s",
+			"factor": 3
+		}
+	}
 }
 EOL
 

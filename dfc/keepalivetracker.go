@@ -19,8 +19,25 @@ type HeartBeatTracker struct {
 	interval time.Duration // expected to hear from the server within the interval
 }
 
-// NewHeartBeatTracker returns a HeartBeatTracker
-func NewHeartBeatTracker(interval time.Duration) *HeartBeatTracker {
+// IsKeepaliveTypeSupported returns true if the keepalive type is supported
+func IsKeepaliveTypeSupported(t string) bool {
+	return t == "heartbeat" || t == "average"
+}
+
+// NewKeepaliveTracker returns a keepalive tracker based on the parameters given
+func NewKeepaliveTracker(c *keepaliveTrackerConf) KeepaliveTracker {
+	switch c.Name {
+	case "heartbeat":
+		return newHeartBeatTracker(c.Max)
+	case "average":
+		return newAverageTracker(c.Factor)
+	default:
+		return nil
+	}
+}
+
+// newHeartBeatTracker returns a HeartBeatTracker
+func newHeartBeatTracker(interval time.Duration) *HeartBeatTracker {
 	hb := &HeartBeatTracker{last: make(map[string]time.Time), ch: make(chan struct{}, 1)}
 	hb.interval = interval
 	hb.unlock()
@@ -70,8 +87,8 @@ func (rec *averageTrackerRecord) avg() int64 {
 	return rec.totalMS / rec.cnt
 }
 
-// NewAverageTracker returns a AverageTracker
-func NewAverageTracker(factor int) *AverageTracker {
+// newAverageTracker returns a AverageTracker
+func newAverageTracker(factor int) *AverageTracker {
 	a := &AverageTracker{rec: make(map[string]averageTrackerRecord), ch: make(chan struct{}, 1)}
 	a.factor = factor
 	a.unlock()

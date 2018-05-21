@@ -326,21 +326,20 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
+
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	//
+
 	// lockname(ro)
-	//
 	fqn, uname = t.fqn(bucket, objname), uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
-		//
 		// given certain conditions (below) make an effort to locate the object cluster-wide
-		//
 		if islocal && strings.Contains(errstr, doesnotexist) {
 			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
 			if aborted || running {
@@ -685,7 +684,6 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketprops = make(map[string]string)
 		bucketprops[CloudProvider] = ProviderDfc
 		bucketprops[Versioning] = VersionLocal
-
 	}
 	// double check if we support versioning internally for the bucket
 	if !t.versioningConfigured(bucket) {
