@@ -37,6 +37,7 @@ type kalive struct {
 	controlCh                  chan controlSignal
 	primaryKeepaliveInProgress int64 // used by primary proxy only
 	tracker                    KeepaliveTracker
+	interval                   time.Duration
 }
 
 type proxykalive struct {
@@ -76,7 +77,8 @@ func newproxykalive(p *proxyrunner) *proxykalive {
 	k := &proxykalive{p: p}
 	k.kalive.k = k
 	k.controlCh = make(chan controlSignal, 1)
-	k.tracker = NewHeartBeatTracker(ctx.config.Periodic.KeepAliveTime)
+	k.tracker = NewKeepaliveTracker(&ctx.config.KeepaliveTracker.Proxy)
+	k.interval = ctx.config.KeepaliveTracker.Proxy.Interval
 	return k
 }
 
@@ -84,7 +86,8 @@ func newtargetkalive(t *targetrunner) *targetkalive {
 	k := &targetkalive{t: t}
 	k.kalive.k = k
 	k.controlCh = make(chan controlSignal, 1)
-	k.tracker = NewHeartBeatTracker(ctx.config.Periodic.KeepAliveTime)
+	k.tracker = NewKeepaliveTracker(&ctx.config.KeepaliveTracker.Target)
+	k.interval = ctx.config.KeepaliveTracker.Target.Interval
 	return k
 }
 
@@ -104,7 +107,7 @@ func (r *kalive) timedOut(sid string) bool {
 
 func (r *kalive) run() error {
 	glog.Infof("Starting %s", r.name)
-	ticker := time.NewTicker(ctx.config.Periodic.KeepAliveTime)
+	ticker := time.NewTicker(r.interval)
 	lastCheck := time.Time{}
 
 	for {
@@ -116,7 +119,7 @@ func (r *kalive) run() error {
 			switch sig.msg {
 			case register:
 				ticker.Stop()
-				ticker = time.NewTicker(ctx.config.Periodic.KeepAliveTime)
+				ticker = time.NewTicker(r.interval)
 			case unregister:
 				ticker.Stop()
 			case stop:

@@ -85,6 +85,9 @@ func newPrimary() *proxyrunner {
 	pi := &proxyInfo{daemonInfo{DaemonID: p.si.DaemonID, DirectURL: "do not care"}, true /* primary */}
 	p.smap.addProxy(pi)
 	p.smap.ProxySI = pi
+	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	ctx.config.KeepaliveTracker.Proxy.MaxStr = "20s"
+	ctx.config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	p.kalive = newproxykalive(&p)
 	return &p
 }

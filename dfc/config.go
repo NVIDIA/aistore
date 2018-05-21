@@ -60,21 +60,22 @@ type dfconfig struct {
 	CloudBuckets  string `json:"cloud_buckets"`
 	LocalBuckets  string `json:"local_buckets"`
 	// structs
-	Log          logconfig         `json:"log"`
-	Periodic     periodic          `json:"periodic"`
-	Timeout      timeoutconfig     `json:"timeout"`
-	Proxy        proxyconfig       `json:"proxyconfig"`
-	LRU          lruconfig         `json:"lru_config"`
-	Rebalance    rebalanceconf     `json:"rebalance_conf"`
-	Cksum        cksumconfig       `json:"cksum_config"`
-	Ver          versionconfig     `json:"version_config"`
-	FSpaths      map[string]string `json:"fspaths"`
-	TestFSP      testfspathconf    `json:"test_fspaths"`
-	Net          netconfig         `json:"netconfig"`
-	FSKeeper     fskeeperconf      `json:"fskeeper"`
-	Experimental experimental      `json:"experimental"`
-	Auth         authconf          `json:"auth"`
-	H2c          bool              `json:"h2c"`
+	Log              logconfig         `json:"log"`
+	Periodic         periodic          `json:"periodic"`
+	Timeout          timeoutconfig     `json:"timeout"`
+	Proxy            proxyconfig       `json:"proxyconfig"`
+	LRU              lruconfig         `json:"lru_config"`
+	Rebalance        rebalanceconf     `json:"rebalance_conf"`
+	Cksum            cksumconfig       `json:"cksum_config"`
+	Ver              versionconfig     `json:"version_config"`
+	FSpaths          map[string]string `json:"fspaths"`
+	TestFSP          testfspathconf    `json:"test_fspaths"`
+	Net              netconfig         `json:"netconfig"`
+	FSKeeper         fskeeperconf      `json:"fskeeper"`
+	Experimental     experimental      `json:"experimental"`
+	Auth             authconf          `json:"auth"`
+	H2c              bool              `json:"h2c"`
+	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
 }
 
 type logconfig struct {
@@ -86,11 +87,9 @@ type logconfig struct {
 
 type periodic struct {
 	StatsTimeStr     string `json:"stats_time"`
-	KeepAliveTimeStr string `json:"keep_alive_time"`
 	RetrySyncTimeStr string `json:"retry_sync_time"`
 	// omitempty
 	StatsTime     time.Duration `json:"-"`
-	KeepAliveTime time.Duration `json:"-"`
 	RetrySyncTime time.Duration `json:"-"`
 }
 
@@ -195,6 +194,22 @@ type authconf struct {
 	CredDir string `json:"creddir"`
 }
 
+// config for one keepalive tracker
+// all type of trackers share the same struct, not all fields are used by all trackers
+type keepaliveTrackerConf struct {
+	IntervalStr string        `json:"interval"` // keepalives are sent(target)/checked(promary proxy) every interval
+	Interval    time.Duration `json:"-"`
+	Name        string        `json:"name"` // "heartbeat", "average"
+	MaxStr      string        `json:"max"`  // "heartbeat" only
+	Max         time.Duration `json:"-"`
+	Factor      int           `json:"factor"` // "average" only
+}
+
+type keepaliveTrackers struct {
+	Proxy  keepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
+	Target keepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
+}
+
 //==============================
 //
 // config functions
@@ -283,9 +298,6 @@ func validateconf() (err error) {
 	if ctx.config.Timeout.DefaultLong, err = time.ParseDuration(ctx.config.Timeout.DefaultLongStr); err != nil {
 		return fmt.Errorf("Bad Timeout default_long format %s, err %v", ctx.config.Timeout.DefaultLongStr, err)
 	}
-	if ctx.config.Periodic.KeepAliveTime, err = time.ParseDuration(ctx.config.Periodic.KeepAliveTimeStr); err != nil {
-		return fmt.Errorf("Bad keep_alive_time format %s, err: %v", ctx.config.Periodic.KeepAliveTimeStr, err)
-	}
 	if ctx.config.LRU.DontEvictTime, err = time.ParseDuration(ctx.config.LRU.DontEvictTimeStr); err != nil {
 		return fmt.Errorf("Bad dont_evict_time format %s, err: %v", ctx.config.LRU.DontEvictTimeStr, err)
 	}
@@ -330,6 +342,35 @@ func validateconf() (err error) {
 	if ctx.config.Timeout.Startup, err = time.ParseDuration(ctx.config.Timeout.StartupStr); err != nil {
 		return fmt.Errorf("Bad Proxy startup_time format %s, err %v", ctx.config.Timeout.StartupStr, err)
 	}
+
+	ctx.config.KeepaliveTracker.Proxy.Interval, err = time.ParseDuration(ctx.config.KeepaliveTracker.Proxy.IntervalStr)
+	if err != nil {
+		return fmt.Errorf("bad proxy keep alive interval %s", ctx.config.KeepaliveTracker.Proxy.IntervalStr)
+	}
+
+	ctx.config.KeepaliveTracker.Proxy.Max, err = time.ParseDuration(ctx.config.KeepaliveTracker.Proxy.MaxStr)
+	if err != nil {
+		return fmt.Errorf("bad proxy keep alive max %s", ctx.config.KeepaliveTracker.Proxy.MaxStr)
+	}
+
+	ctx.config.KeepaliveTracker.Target.Interval, err = time.ParseDuration(ctx.config.KeepaliveTracker.Target.IntervalStr)
+	if err != nil {
+		return fmt.Errorf("bad target keep alive interval %s", ctx.config.KeepaliveTracker.Target.IntervalStr)
+	}
+
+	ctx.config.KeepaliveTracker.Target.Max, err = time.ParseDuration(ctx.config.KeepaliveTracker.Target.MaxStr)
+	if err != nil {
+		return fmt.Errorf("bad targetkeep alive max %s", ctx.config.KeepaliveTracker.Target.MaxStr)
+	}
+
+	if !IsKeepaliveTypeSupported(ctx.config.KeepaliveTracker.Proxy.Name) {
+		return fmt.Errorf("bad proxy keepalive tracker type %s", ctx.config.KeepaliveTracker.Proxy.Name)
+	}
+
+	if !IsKeepaliveTypeSupported(ctx.config.KeepaliveTracker.Target.Name) {
+		return fmt.Errorf("bad target keepalive tracker type %s", ctx.config.KeepaliveTracker.Target.Name)
+	}
+
 	return nil
 }
 
