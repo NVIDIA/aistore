@@ -96,6 +96,10 @@ type targetrunner struct {
 
 // start target runner
 func (t *targetrunner) run() error {
+	// note: call stats worker has to started before the first call()
+	t.callStatsServer = NewCallStatsServer(ctx.config.CallStats.RequestIncluded, ctx.config.CallStats.Factor)
+	t.callStatsServer.Start()
+
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.kalive = gettargetkalive()
 	t.xactinp = newxactinp()        // extended actions
@@ -168,6 +172,7 @@ func (t *targetrunner) stop(err error) {
 		t.unregister() // ignore errors
 	}
 	t.httprunner.stop(err)
+	t.callStatsServer.Stop()
 	if sleep {
 		time.Sleep(time.Second)
 	}

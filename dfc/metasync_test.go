@@ -89,6 +89,8 @@ func newPrimary() *proxyrunner {
 	ctx.config.KeepaliveTracker.Proxy.MaxStr = "20s"
 	ctx.config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	p.kalive = newproxykalive(&p)
+	p.callStatsServer = NewCallStatsServer(nil, 1)
+	p.callStatsServer.Start()
 	return &p
 }
 
@@ -146,6 +148,7 @@ func TestMetaSyncTransport(t *testing.T) {
 
 	for _, tc := range tcs {
 		primary := newPrimary()
+		defer primary.callStatsServer.Stop()
 		syncer := newmetasyncer(primary)
 
 		var wg sync.WaitGroup
@@ -476,6 +479,8 @@ func TestMetaSyncData(t *testing.T) {
 		emptyActionMsg string
 	)
 
+	defer primary.callStatsServer.Stop()
+
 	b, err := json.Marshal(ActionMsg{})
 	if err != nil {
 		t.Fatal("Failed to marshal empty ActionMsg, err =", err)
@@ -615,6 +620,7 @@ func TestMetaSyncMembership(t *testing.T) {
 	{
 		// pending server dropped without sync
 		primary := newPrimary()
+		defer primary.callStatsServer.Stop()
 		syncer := newmetasyncer(primary)
 
 		var wg sync.WaitGroup
@@ -660,6 +666,7 @@ func TestMetaSyncMembership(t *testing.T) {
 	{
 		// sync before smap sync (no previous sync saved in meta syncer)
 		primary := newPrimary()
+		defer primary.callStatsServer.Stop()
 		syncer := newmetasyncer(primary)
 
 		var wg sync.WaitGroup
@@ -792,6 +799,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		primary := newPrimary()
+		defer primary.callStatsServer.Stop()
 		syncer := newmetasyncer(primary)
 
 		var wg sync.WaitGroup
@@ -1082,6 +1090,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		// one of them will receive the sync data with the original action message,
 		// the failed one will not, it will only receives the lb but without the action message.
 		primary := newPrimary()
+		defer primary.callStatsServer.Stop()
 		syncer := newmetasyncer(primary)
 
 		var wg sync.WaitGroup

@@ -143,6 +143,7 @@ type httprunner struct {
 	kalive                kaliveif
 	smap                  *Smap
 	lbmap                 *lbmap
+	callStatsServer       *CallStatsServer
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -289,9 +290,13 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		status   int
 	)
 
+	startedAt := time.Now()
+	defer h.callStatsServer.Call(url, time.Now().Sub(startedAt), err != nil)
+
 	if si != nil {
 		sid = si.DaemonID
 	}
+
 	if len(injson) == 0 {
 		request, err = http.NewRequest(method, url, nil)
 		if glog.V(4) { // super-verbose

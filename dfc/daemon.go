@@ -519,11 +519,6 @@ func getatimerunner() *atimerunner {
 	return rr
 }
 
-func getstorstats() *targetCoreStats {
-	rr := getstorstatsrunner()
-	return &rr.Core
-}
-
 func getcloudif() cloudif {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)

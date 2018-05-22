@@ -80,6 +80,10 @@ type proxyrunner struct {
 
 // start proxy runner
 func (p *proxyrunner) run() error {
+	// note: call stats worker has to started before the first call()
+	p.callStatsServer = NewCallStatsServer(ctx.config.CallStats.RequestIncluded, ctx.config.CallStats.Factor)
+	p.callStatsServer.Start()
+
 	p.httprunner.init(getproxystatsrunner(), true)
 	p.httprunner.kalive = getproxykalive()
 
@@ -284,6 +288,7 @@ func (p *proxyrunner) stop(err error) {
 
 	p.statsdC.Close()
 	p.httprunner.stop(err)
+	p.callStatsServer.Stop()
 }
 
 func (p *proxyrunner) registerWithRetry(url string, timeout time.Duration) error {
