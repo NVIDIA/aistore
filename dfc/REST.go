@@ -67,6 +67,7 @@ const (
 	URLParamPrimaryCandidate = "candidate"  // candidate=string - ID of the candidate for primary proxy
 	URLParamForce            = "force"      // true: shutdown the primary proxy
 	URLParamPrepare          = "prepare"    // true: request is the prepare phase for primary proxy change
+	URLParamDaemonID         = "daemon_id"  // daemon ID
 )
 
 // TODO: sort and some props are TBD

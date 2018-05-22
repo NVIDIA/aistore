@@ -486,6 +486,18 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// PUT
+		d := query.Get(URLParamDaemonID)
+		b := false
+		for id := range t.smap.Pmap {
+			if id == d {
+				b = true
+				break
+			}
+		}
+		if !b {
+			t.invalmsghdlr(w, r, "Invalid request: PUT request must come from a proxy or target")
+			return
+		}
 		errstr, errcode := t.doput(w, r, bucket, objname)
 		if errstr != "" {
 			if errcode == 0 {

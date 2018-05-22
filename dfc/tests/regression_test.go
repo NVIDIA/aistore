@@ -1,6 +1,6 @@
 // Package dfc provides distributed file-based cache with Amazon and Google Cloud backends._test
 /*
- * Copyright (c) 2017, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 package dfc_test
@@ -101,7 +101,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	)
 	var (
 		filenameCh = make(chan string, num)
-		errch      = make(chan error)
+		errch      = make(chan error, num)
 		sgl        *dfc.SGLIO
 		targets    = make(map[string]struct{})
 	)
@@ -126,7 +126,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	}()
 
 	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
-	selectErr(errch, "put", t, false)
+	selectErr(errch, "put", t, true)
 
 	msg := &dfc.GetMsg{GetPageSize: int(pagesize), GetProps: dfc.GetTargetURL}
 	bl, err := client.ListBucket(proxyurl, bucket, msg, num)
@@ -179,7 +179,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	)
 	var (
 		filenameCh = make(chan string, num)
-		errch      = make(chan error)
+		errch      = make(chan error, num)
 		sgl        *dfc.SGLIO
 		bucket     = clibucket
 		targets    = make(map[string]struct{})
