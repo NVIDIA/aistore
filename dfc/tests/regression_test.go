@@ -274,6 +274,9 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	// Test corrupting the file contents
 	f := <-filenameCh
 	filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() && info.Name() == "cloud" {
+			return filepath.SkipDir
+		}
 		if filepath.Base(path) == f {
 			fqn = path
 		}
