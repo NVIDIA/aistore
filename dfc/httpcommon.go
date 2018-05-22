@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"net/http/httputil"
+
 	"github.com/OneOfOne/xxhash"
 	"github.com/golang/glog"
 	"github.com/hkwi/h2c"
@@ -144,6 +146,7 @@ type httprunner struct {
 	smap                  *Smap
 	lbmap                 *lbmap
 	callStatsServer       *CallStatsServer
+	revProxy              *httputil.ReverseProxy
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -181,6 +184,13 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
 		h.httpclientLongTimeout =
 			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
+	}
+
+	if isproxy && ctx.config.Net.HTTP.UseAsProxy {
+		h.revProxy = &httputil.ReverseProxy{
+			Director:  func(r *http.Request) {},
+			Transport: h.createTransport(proxyMaxIdleConnsPer, numDaemons),
+		}
 	}
 
 	h.smap = &Smap{}

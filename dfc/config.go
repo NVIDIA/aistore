@@ -162,6 +162,7 @@ type l4cnf struct {
 type httpcnf struct {
 	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
 	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
+	UseAsProxy    bool   `json:"use_as_proxy"`       // use DFC as an HTTP proxy
 	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
 	Key           string `json:"server_key"`         // HTTPS: openssl key
 }

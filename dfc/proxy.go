@@ -190,7 +190,12 @@ func (p *proxyrunner) run() error {
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", p.votehdlr)
 	p.httprunner.registerhdlr("/"+Rversion+"/"+Rtokens, p.tokenhdlr)
-	p.httprunner.registerhdlr("/", invalhdlr)
+
+	if ctx.config.Net.HTTP.UseAsProxy {
+		p.httprunner.registerhdlr("/", p.reverseProxyHandler)
+	} else {
+		p.httprunner.registerhdlr("/", invalhdlr)
+	}
 
 	glog.Infof("Proxy %s is ready, primary=%t", p.si.DaemonID, p.primary)
 	glog.Flush()
@@ -485,7 +490,16 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("passthru=false: proxy initiates the GET %s/%s", bucket, objname)
 		p.receiveDrop(w, r, redirecturl) // ignore error, proceed to http redirect
 	}
-	http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	if ctx.config.Net.HTTP.UseAsProxy {
+		req, err := http.NewRequest(http.MethodGet, redirecturl, r.Body)
+		if err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+			return
+		}
+		p.revProxy.ServeHTTP(w, req)
+	} else {
+		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+	}
 
 	// Note: ideally, would prefer to call statsd in statsif.add(), but it doesn't have type support,
 	//       the name schema is different(statd doesn't need dup 'numget', it is get.count), statsif's dependency
@@ -837,8 +851,8 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		break
 	}
 
-	url := si.DirectURL + "/" + Rversion + "/" + Rbuckets + "/" + bucketspec
-	res := p.call(r, si, url, r.Method, nil)
+	u := si.DirectURL + URLPath(Rversion, Rbuckets, bucketspec)
+	res := p.call(r, si, u, r.Method, nil)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.errstr)
 		p.kalive.onerr(res.err, res.status)
@@ -1613,6 +1627,23 @@ func (p *proxyrunner) tokenhdlr(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handler for DFC to be used as an HTTP proxy
+func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
+	baseURL := r.URL.Scheme + "://" + r.URL.Host
+	if baseURL == gcsURL && r.Method == http.MethodGet {
+		s := p.restAPIItems(r.URL.Path, -1)
+		if len(s) == 2 {
+			r.URL.Path = URLPath(Rversion, Robjects) + r.URL.Path
+			p.httpobjget(w, r)
+		} else if len(s) == 1 {
+			r.URL.Path = URLPath(Rversion, Rbuckets) + r.URL.Path
+			p.httpbckget(w, r)
+		}
+	} else {
+		p.httprunner.revProxy.ServeHTTP(w, r)
+	}
+}
+
 // gets target info
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	var msg GetMsg
@@ -1636,8 +1667,8 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 	for _, si := range p.smap.Tmap {
 		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 		out.Target[si.DaemonID] = stats
-		url := si.DirectURL + "/" + Rversion + "/" + Rdaemon
-		res := p.call(r, si, url, r.Method, getstatsmsg)
+		u := si.DirectURL + URLPath(Rversion, Rdaemon)
+		res := p.call(r, si, u, r.Method, getstatsmsg)
 		if res.err != nil {
 			p.invalmsghdlr(w, r, res.errstr)
 			p.kalive.onerr(res.err, res.status)
@@ -1731,8 +1762,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if register {
-			url := nsi.DirectURL + "/" + Rversion + "/" + Rdaemon + "/" + Rregister
-			res := p.call(nil, &nsi, url, http.MethodPost, nil, ProxyPingTimeout)
+			u := nsi.DirectURL + URLPath(Rversion, Rdaemon, Rregister)
+			res := p.call(nil, &nsi, u, http.MethodPost, nil, ProxyPingTimeout)
 			if res.err != nil {
 				p.invalmsghdlr(w, r, fmt.Sprintf("%v, %s", res.err, res.errstr), res.status)
 				p.kalive.onerr(res.err, res.status)
@@ -1830,8 +1861,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infof("Unregistered target {%s} (count %d)", sid, p.smap.count())
 		}
-		url := osi.DirectURL + "/" + Rversion + "/" + Rdaemon
-		p.call(nil, osi, url, http.MethodDelete, nil, ProxyPingTimeout)
+		u := osi.DirectURL + URLPath(Rversion, Rdaemon)
+		p.call(nil, osi, u, http.MethodDelete, nil, ProxyPingTimeout)
 		msg = &ActionMsg{Action: ActUnregTarget}
 	}
 	if !p.startedup { // see clusterStartup()

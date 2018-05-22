@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	gcsURL = "http://storage.googleapis.com"
+
 	gcpDfcHashType = "x-goog-meta-dfc-hash-type"
 	gcpDfcHashVal  = "x-goog-meta-dfc-hash-val"
 

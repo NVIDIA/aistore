@@ -73,6 +73,7 @@ $FSPATHS
 		"http": {
 			"max_num_targets":    16,
 			"use_https":          false,
+			"use_as_proxy":       false,
 			"server_certificate": "server.pem",
 			"server_key":         "server.key"
 		}
