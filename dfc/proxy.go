@@ -81,7 +81,11 @@ type proxyrunner struct {
 // start proxy runner
 func (p *proxyrunner) run() error {
 	// note: call stats worker has to started before the first call()
-	p.callStatsServer = NewCallStatsServer(ctx.config.CallStats.RequestIncluded, ctx.config.CallStats.Factor)
+	p.callStatsServer = NewCallStatsServer(
+		ctx.config.CallStats.RequestIncluded,
+		ctx.config.CallStats.Factor,
+		&p.statsdC,
+	)
 	p.callStatsServer.Start()
 
 	p.httprunner.init(getproxystatsrunner(), true)
@@ -208,6 +212,9 @@ func (p *proxyrunner) run() error {
 	// Note: hard coding statsd's ip and port for two reasons:
 	// 1. it is well known, conflicts are unlikely, less config is better
 	// 2. if do need configuable, will make a separate change, easier to manage
+	//
+	// Note: Potentially there is a race here, &p.statsdC is given to call stats tracker already
+	//       not a big issue, just a reminder, not sure what the behavior will be if it happens.
 	var err error
 	p.statsdC, err = statsd.New("localhost", 8125,
 		fmt.Sprintf("dfcproxy.%s", strings.Replace(p.si.DaemonID, ":", "_", -1)))

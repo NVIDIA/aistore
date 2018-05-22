@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
 )
 
 type (
@@ -89,7 +91,7 @@ func newPrimary() *proxyrunner {
 	ctx.config.KeepaliveTracker.Proxy.MaxStr = "20s"
 	ctx.config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	p.kalive = newproxykalive(&p)
-	p.callStatsServer = NewCallStatsServer(nil, 1)
+	p.callStatsServer = NewCallStatsServer(nil, 1, &statsd.Client{})
 	p.callStatsServer.Start()
 	return &p
 }

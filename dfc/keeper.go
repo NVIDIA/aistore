@@ -77,7 +77,10 @@ func newproxykalive(p *proxyrunner) *proxykalive {
 	k := &proxykalive{p: p}
 	k.kalive.k = k
 	k.controlCh = make(chan controlSignal, 1)
-	k.tracker = NewKeepaliveTracker(&ctx.config.KeepaliveTracker.Proxy)
+	k.tracker = NewKeepaliveTracker(
+		&ctx.config.KeepaliveTracker.Proxy,
+		&p.statsdC,
+	)
 	k.interval = ctx.config.KeepaliveTracker.Proxy.Interval
 	return k
 }
@@ -86,7 +89,10 @@ func newtargetkalive(t *targetrunner) *targetkalive {
 	k := &targetkalive{t: t}
 	k.kalive.k = k
 	k.controlCh = make(chan controlSignal, 1)
-	k.tracker = NewKeepaliveTracker(&ctx.config.KeepaliveTracker.Target)
+	k.tracker = NewKeepaliveTracker(
+		&ctx.config.KeepaliveTracker.Target,
+		&t.statsdC,
+	)
 	k.interval = ctx.config.KeepaliveTracker.Target.Interval
 	return k
 }

@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
+
 	"github.com/golang/glog"
 )
 
@@ -26,8 +28,9 @@ type (
 	}
 
 	latency struct {
-		cnt   int64
-		total time.Duration // accumulated latency
+		cnt          int64
+		totalLatency time.Duration // accumulated latency
+		errCnt       int64
 	}
 
 	// CallStatsServer stores parameters and call stats collected from each call
@@ -37,6 +40,7 @@ type (
 		stats           map[string]*latency
 		factor          float32
 		requestIncluded []string
+		statsdC         *statsd.Client
 	}
 )
 
@@ -45,18 +49,19 @@ func (l *latency) avg() int64 {
 		return 0
 	}
 
-	return int64(l.total) / l.cnt
+	return int64(l.totalLatency) / l.cnt
 }
 
 // NewCallStatsServer returns a CallStatsServer
 // Note: the channel size is picked as 100, just a number, even 1 works but Call() will become blocking.
 //       another place can be config file.
-func NewCallStatsServer(requestsIncluded []string, factor float32) *CallStatsServer {
+func NewCallStatsServer(requestsIncluded []string, factor float32, statsdC *statsd.Client) *CallStatsServer {
 	return &CallStatsServer{
 		ch:              make(chan callInfo, 100),
 		stats:           make(map[string]*latency),
 		requestIncluded: requestsIncluded,
 		factor:          factor,
+		statsdC:         statsdC,
 	}
 }
 
@@ -92,16 +97,49 @@ func (c *CallStatsServer) worker() {
 			continue
 		}
 
+		var errCnt int64
+		if ci.failed {
+			errCnt = 1
+		}
+
 		s, ok := c.stats[ci.url]
 		if ok {
 			s.cnt++
-			s.total += ci.latency
+			s.totalLatency += ci.latency
+			s.errCnt += errCnt
 
 			if float64(ci.latency) > float64(c.factor)*float64(s.avg()) {
 				glog.Warningf("call %v latency %v too high, avg = %v", ci.url, ci.latency, s.avg())
 			}
 		} else {
-			c.stats[ci.url] = &latency{1, ci.latency}
+			c.stats[ci.url] = &latency{1, ci.latency, errCnt}
+		}
+
+		// from http://10.112.76.11:8080/v1/cluster/keepalive to 10_112_76_11:8080/v1/cluster/keepalive
+		// ideally 'url' is passed in as url.URL, which is not the case right now because
+		// proxy/target.call() has url not url.URL.
+		tag := strings.Replace(strings.TrimPrefix(ci.url, "http://"), ".", "_", -1 /* replace all */)
+		c.statsdC.Send("call."+tag,
+			statsd.Metric{
+				Type:  statsd.Gauge,
+				Name:  "latency",
+				Value: ci.latency,
+			},
+			statsd.Metric{
+				Type:  statsd.Counter,
+				Name:  "count",
+				Value: 1,
+			},
+		)
+
+		if ci.failed {
+			c.statsdC.Send("call."+tag,
+				statsd.Metric{
+					Type:  statsd.Counter,
+					Name:  "error",
+					Value: 1,
+				},
+			)
 		}
 	}
 

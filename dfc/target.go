@@ -97,7 +97,11 @@ type targetrunner struct {
 // start target runner
 func (t *targetrunner) run() error {
 	// note: call stats worker has to started before the first call()
-	t.callStatsServer = NewCallStatsServer(ctx.config.CallStats.RequestIncluded, ctx.config.CallStats.Factor)
+	t.callStatsServer = NewCallStatsServer(
+		ctx.config.CallStats.RequestIncluded,
+		ctx.config.CallStats.Factor,
+		&t.statsdC,
+	)
 	t.callStatsServer.Start()
 
 	t.httprunner.init(getstorstatsrunner(), false)
