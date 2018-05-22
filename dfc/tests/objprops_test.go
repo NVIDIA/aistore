@@ -210,7 +210,7 @@ func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, ms
 func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg *dfc.GetMsg, versionEnabled bool, isLocalBucket bool) {
 	propsCleanupObjects(t, bucket, objects)
 
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	l := len(smap.Tmap)
 	if l < 2 {
 		t.Skipf("Only %d targets found, need at least 2", l)
@@ -237,13 +237,13 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
-		smap = getClusterMap(httpclient, t)
+		smap = getClusterMap(t)
 		if len(smap.Tmap) == l {
 			break
 		}
 	}
 
-	smap = getClusterMap(httpclient, t)
+	smap = getClusterMap(t)
 	if l != len(smap.Tmap) {
 		t.Errorf("Target failed to reregister. Current number of targets: %d (expected %d)", len(smap.Tmap), l)
 	}

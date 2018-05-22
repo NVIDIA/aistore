@@ -58,7 +58,7 @@ func TestProxy(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	if len(smap.Pmap) < 3 {
 		t.Fatal("Not enough proxies to run proxy tests, must be more than 2")
 	}
@@ -84,7 +84,7 @@ func TestProxy(t *testing.T) {
 // clusterHealthCheck verifies the cluster has the same servers after tests
 // note: add verify primary if primary is reset
 func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
-	smapAfter := getClusterMap(httpclient, t)
+	smapAfter := getClusterMap(t)
 	if len(smapAfter.Tmap) != len(smapBefore.Tmap) {
 		t.Fatalf("Number of targets mismatch, before = %d, after = %d",
 			len(smapBefore.Tmap), len(smapAfter.Tmap))
@@ -140,7 +140,7 @@ func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 // primaryCrash kills the current primary proxy, wait for the new primary prioxy is up and verifies it,
 // restores the original primary proxy as non primary
 func primaryCrash(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +196,7 @@ func primaryCrash(t *testing.T) {
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
 // line proxy becomes the new primary, restore the target and proxy, restore original primary.
 func primaryAndTargetCrash(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	if err != nil {
 		t.Fatal(err)
@@ -256,7 +256,7 @@ func primaryAndTargetCrash(t *testing.T) {
 // primaryAndProxyCrash kills primary proxy and one another proxy(not the next in line primary)
 // and restore them afterwards
 func primaryAndProxyCrash(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	if err != nil {
 		t.Fatal(err)
@@ -334,7 +334,7 @@ func targetRejoin(t *testing.T) {
 		port string
 	)
 
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	for _, v := range smap.Tmap {
 		url = v.DirectURL
 		id = v.DaemonID
@@ -370,7 +370,7 @@ func targetRejoin(t *testing.T) {
 
 // crashAndFastRestore kills the primary and restore before a new leader is elected
 func crashAndFastRestore(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 
 	url := smap.ProxySI.DirectURL
 	id := smap.ProxySI.DaemonID
@@ -400,7 +400,7 @@ func crashAndFastRestore(t *testing.T) {
 }
 
 func joinWhileVoteInProgress(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	if err != nil {
 		t.Fatal(err)
@@ -441,7 +441,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	// check if the previous primary proxy has not yet rejoined the cluster
 	// it should be waiting for the mock target to return vote=false
 	time.Sleep(5 * time.Second)
-	smap = getClusterMap(httpclient, t)
+	smap = getClusterMap(t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
 		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, newPrimaryID)
@@ -500,7 +500,7 @@ func majorityTargetMapVersionMismatch(t *testing.T) {
 // targetMapVersionMismatch updates map verison of a few targets, kill the primary proxy
 // wait for the new leader to come online
 func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	oldVer := smap.Version
 
 	smap.Version++
@@ -579,7 +579,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 
 	exists, err := client.DoesLocalBucketExist(proxyurl, localBucketName)
 	if err != nil {
@@ -734,7 +734,7 @@ loop:
 		default:
 		}
 
-		smap := getClusterMap(httpclient, t)
+		smap := getClusterMap(t)
 		_, nextProxyURL, err := chooseNextProxy(&smap)
 		if err != nil {
 			t.Fatal(err)
@@ -987,7 +987,7 @@ func getOutboundIP() net.IP {
 // resetPrimaryProxy sends a http request to the current primary proxy process to ask it set primary
 // proxy of the cluster to 'proxyid'.
 func resetPrimaryProxy(proxyid string, t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	url := smap.ProxySI.DirectURL + "/" + dfc.Rversion + "/" + dfc.Rcluster + "/" + dfc.Rproxy + "/" + proxyid
 	req, err := http.NewRequest(http.MethodPut, url, nil)
 	if err != nil {
@@ -1267,7 +1267,7 @@ func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 // primary proxy was down and retuned back. So, the test should be executed
 // after primaryCrash test
 func primarySetToOriginal(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	tlogf("SMAP version at start: %d\n", smap.Version)
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
@@ -1287,7 +1287,7 @@ func primarySetToOriginal(t *testing.T) {
 		urlparts := strings.Split(origURL, ":")
 		proxyPort := urlparts[len(urlparts)-1]
 
-		smap := getClusterMap(httpclient, t)
+		smap := getClusterMap(t)
 		for key, val := range smap.Pmap {
 			keyparts := strings.Split(val.DirectURL, ":")
 			port := keyparts[len(keyparts)-1]

@@ -294,7 +294,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		}
 		return nil
 	})
-	if errstr := dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("corrupted xattr")); errstr != "" {
+	if errstr := dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
@@ -347,37 +347,29 @@ func regressionCloudBuckets(t *testing.T) {
 func regressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	err := client.CreateLocalBucket(proxyurl, bucket)
-	if err != nil {
-		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
-	}
+	checkFatal(err, t)
 
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, bucket)
+		checkFatal(err, t)
+	}()
 	doBucketRegressionTest(t, regressionTestData{bucket: bucket})
-	err = client.DestroyLocalBucket(proxyurl, bucket)
-	if err != nil {
-		t.Fatal(err)
-	}
+
 }
 
 func regressionRenameLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	renamedBucket := bucket + "_renamed"
 	err := client.CreateLocalBucket(proxyurl, bucket)
-	if err != nil {
-		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
-	}
+	checkFatal(err, t)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, renamedBucket)
-		if err != nil {
-			t.Fatal(err)
-		}
+		checkFatal(err, t)
 	}()
 
 	b, err := client.ListBuckets(proxyurl, true)
-	if err != nil {
-		t.Errorf("client.ListBuckets failed, err = %v", err)
-		return
-	}
+	checkFatal(err, t)
 
 	doBucketRegressionTest(t, regressionTestData{
 		bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true,
@@ -436,14 +428,10 @@ func Test_rmlb(t *testing.T) {
 
 func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	err := client.RenameLocalBucket(proxyurl, rtd.bucket, rtd.renamedBucket)
-	if err != nil {
-		t.Fatalf("client.RenameLocalBucket failed, err = %v", err)
-	}
+	checkFatal(err, t)
 
 	buckets, err := client.ListBuckets(proxyurl, true)
-	if err != nil {
-		t.Fatalf("client.ListBuckets failed, err = %v", err)
-	}
+	checkFatal(err, t)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
 		t.Fatalf("wrong number of local buckets, expected: %d. actual: %d", rtd.numLocalBuckets, len(buckets.Local))
@@ -463,9 +451,7 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	}
 
 	objs, err := client.ListObjects(proxyurl, rtd.renamedBucket, "", numPuts+1)
-	if err != nil {
-		t.Fatalf("client.ListObjects failed, err = %v", err)
-	}
+	checkFatal(err, t)
 
 	if len(objs) != numPuts {
 		t.Fatalf("unexpected number of objects in renamed local bucket, expected: %d, actual: %d",
@@ -518,7 +504,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 }
 
 func regressionStats(t *testing.T) {
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	stats := getClusterStats(httpclient, t)
 
 	for k, v := range stats.Target {
@@ -649,7 +635,7 @@ func regressionLRU(t *testing.T) {
 	//
 	// remember targets' watermarks
 	//
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	lwms := make(map[string]interface{})
 	hwms := make(map[string]interface{})
 	bytesEvictedOrig := make(map[string]int64)
@@ -791,7 +777,7 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 2. unregister random target
 	//
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	l := len(smap.Tmap)
 	if l < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
@@ -820,7 +806,7 @@ func regressionRebalance(t *testing.T) {
 	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
-		smap = getClusterMap(httpclient, t)
+		smap = getClusterMap(t)
 		if len(smap.Tmap) == l {
 			break
 		}
@@ -908,9 +894,7 @@ func regressionRename(t *testing.T) {
 		selectErr(errch, "delete", t, false)
 		close(errch)
 		err = client.DestroyLocalBucket(proxyurl, RenameLocalBucketName)
-		if err != nil {
-			t.Fatal(err)
-		}
+		checkFatal(err, t)
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -977,7 +961,7 @@ func regressionPrefetchList(t *testing.T) {
 	}
 
 	// 1. Get initial number of prefetches
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
@@ -1041,7 +1025,7 @@ func regressionPrefetchRange(t *testing.T) {
 	}
 
 	// 1. Get initial number of prefetches
-	smap := getClusterMap(httpclient, t)
+	smap := getClusterMap(t)
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
@@ -1129,9 +1113,7 @@ func regressionDeleteRange(t *testing.T) {
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
 		r, err := readers.NewRandReader(fileSize, true /* withHash */)
-		if err != nil {
-			t.Fatal(err)
-		}
+		checkFatal(err, t)
 
 		wg.Add(1)
 		go client.PutAsync(wg, proxyurl, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch,
@@ -1190,9 +1172,7 @@ func regressionDeleteList(t *testing.T) {
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
 		r, err := readers.NewRandReader(fileSize, true /* withHash */)
-		if err != nil {
-			t.Fatal(err)
-		}
+		checkFatal(err, t)
 
 		keyname := fmt.Sprintf("%s%d", prefix, i)
 
@@ -1439,12 +1419,9 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats ma
 	return
 }
 
-func getClusterMap(httpclient *http.Client, t *testing.T) dfc.Smap {
+func getClusterMap(t *testing.T) dfc.Smap {
 	smap, err := client.GetClusterMap(proxyurl)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	checkFatal(err, t)
 	return smap
 }
 

@@ -85,7 +85,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	err = client.UnregisterTarget(proxyurl, m.sid)
 	checkFatal(err, t)
 
-	n := len(getClusterMap(httpclient, t).Tmap)
+	n := len(getClusterMap(t).Tmap)
 	if n != m.origNumTargets-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.origNumTargets-1, n)
 	}
@@ -180,7 +180,7 @@ func TestProxyFailbackAndGetAndReRegisterInParallel(t *testing.T) {
 
 	err = client.UnregisterTarget(proxyurl, m.sid)
 	checkFatal(err, t)
-	n := len(getClusterMap(httpclient, t).Tmap)
+	n := len(getClusterMap(t).Tmap)
 	if n != m.origNumTargets-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.origNumTargets-1, n)
 	}
@@ -294,7 +294,7 @@ func doReregisterTarget(m *metadata) {
 PollLoop:
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
-		m.smap = getClusterMap(httpclient, m.t)
+		m.smap = getClusterMap(m.t)
 
 		if len(m.smap.Tmap) == m.origNumTargets {
 			lbNames, err := client.GetLocalBucketNames(m.targetDirectURL)
