@@ -78,6 +78,10 @@ func (c *CallStatsServer) Stop() {
 }
 
 // Call sends a call's info to the channel
+// Note: L. Ding.
+// when httprunner is stopped, it doesn't mean there are no more intra-cluster calls anymore, those
+// calls will come to here and can trigger a write to closed channel error.
+// Unlikely but can happen.
 func (c *CallStatsServer) Call(url string, latency time.Duration, failed bool) {
 	c.ch <- callInfo{url, latency, failed}
 }

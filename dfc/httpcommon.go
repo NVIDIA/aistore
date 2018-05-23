@@ -370,7 +370,7 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 	}
 
 	if sid != "unknown" {
-		h.kalive.heardFrom(sid, true /* reset */)
+		h.kalive.heardFrom(sid, false /* reset */)
 	}
 
 	return callResult{si, outjson, err, errstr, status}

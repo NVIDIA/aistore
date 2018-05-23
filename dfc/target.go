@@ -175,6 +175,7 @@ func (t *targetrunner) stop(err error) {
 	if t.httprunner.h != nil {
 		t.unregister() // ignore errors
 	}
+
 	t.httprunner.stop(err)
 	t.callStatsServer.Stop()
 	if sleep {
@@ -189,19 +190,8 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
 	}
 
-	var url string
-	if t.smap.ProxySI != nil && t.smap.ProxySI.DaemonID != "" {
-		url = t.smap.ProxySI.DirectURL
-	} else {
-		// Smap has not yet been synced:
-		url = ctx.config.Proxy.Primary.URL
-	}
-
+	url, si := t.getPrimaryURLAndSI()
 	url += "/" + Rversion + "/" + Rcluster
-	var si *daemonInfo
-	if t.smap.ProxySI != nil {
-		si = &t.smap.ProxySI.daemonInfo
-	}
 
 	var res callResult
 	if timeout > 0 { // keepalive
@@ -215,16 +205,24 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 }
 
 func (t *targetrunner) unregister() (int, error) {
-	var url string
-	if t.smap.ProxySI.DaemonID != "" {
-		url = t.smap.ProxySI.DirectURL
-	} else {
-		// Smap has not yet been synched:
-		url = ctx.config.Proxy.Primary.URL
-	}
+	url, si := t.getPrimaryURLAndSI()
 	url += "/" + Rversion + "/" + Rcluster + "/" + Rdaemon + "/" + t.si.DaemonID
-	res := t.call(nil, &t.smap.ProxySI.daemonInfo, url, http.MethodDelete, nil)
+	res := t.call(nil, si, url, http.MethodDelete, nil)
 	return res.status, res.err
+}
+
+// getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
+// if smap is not synced, primary proxy is from config, otherwise from target's smap
+func (t *targetrunner) getPrimaryURLAndSI() (string, *daemonInfo) {
+	if t.smap.ProxySI == nil {
+		return ctx.config.Proxy.Primary.URL, nil
+	}
+
+	if t.smap.ProxySI.DaemonID != "" {
+		return t.smap.ProxySI.DirectURL, &t.smap.ProxySI.daemonInfo
+	}
+
+	return ctx.config.Proxy.Primary.URL, &t.smap.ProxySI.daemonInfo
 }
 
 //===========================================================================================
@@ -778,7 +776,7 @@ func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 	jsbytes, err := json.Marshal(status)
 	assert(err == nil, err)
 	ok := t.writeJSON(w, r, jsbytes, "thealthstatus")
-	if ok && from == t.smap.ProxySI.DaemonID {
+	if ok && t.smap.ProxySI != nil && from == t.smap.ProxySI.DaemonID {
 		t.kalive.heardFrom(t.smap.ProxySI.DaemonID, false /* reset */)
 	}
 }

@@ -1665,7 +1665,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	smapLock.Lock()
 	defer smapLock.Unlock()
 	p.becomeNonPrimaryProxy()
-	_ = p.setPrimaryProxy(proxyid, "" /* primaryToRemove */, false)
+	p.setPrimaryProxy(proxyid, "" /* primaryToRemove */, false)
 }
 
 // handler for: "/"+Rversion+"/"+Rcluster
