@@ -272,35 +272,35 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	selectErr(errch, "put", t, false)
 
 	// Test corrupting the file contents
-	f := <-filenameCh
-	filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+	// Note: The following tests can only work when running on a local setup(targets are co-located with
+	//       where this test is running from, because it searches a local file system)
+	var fName string
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() && info.Name() == "cloud" {
 			return filepath.SkipDir
 		}
-		if filepath.Base(path) == f {
+		if filepath.Base(path) == fName {
 			fqn = path
 		}
 		return nil
-	})
+	}
+
+	fName = <-filenameCh
+	filepath.Walk(rootDir, fsWalkFunc)
 	err = ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	checkFatal(err, t)
-	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
+	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
 
 	// Test corrupting the file xattr
-	f = <-filenameCh
-	filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == f {
-			fqn = path
-		}
-		return nil
-	})
+	fName = <-filenameCh
+	filepath.Walk(rootDir, fsWalkFunc)
 	if errstr := dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+f, nil, nil, false, true)
+	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
