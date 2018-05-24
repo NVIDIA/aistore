@@ -36,7 +36,7 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr strin
 	return
 }
 
-func HrwProxy(smap *Smap, idToSkip string) (pi *proxyInfo, errstr string) {
+func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 	smapLock.Lock()
 	defer smapLock.Unlock()
 	if smap.countProxies() == 0 {

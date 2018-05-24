@@ -219,10 +219,10 @@ func (t *targetrunner) getPrimaryURLAndSI() (string, *daemonInfo) {
 	}
 
 	if t.smap.ProxySI.DaemonID != "" {
-		return t.smap.ProxySI.DirectURL, &t.smap.ProxySI.daemonInfo
+		return t.smap.ProxySI.DirectURL, t.smap.ProxySI
 	}
 
-	return ctx.config.Proxy.Primary.URL, &t.smap.ProxySI.daemonInfo
+	return ctx.config.Proxy.Primary.URL, t.smap.ProxySI
 }
 
 //===========================================================================================

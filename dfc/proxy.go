@@ -127,7 +127,7 @@ func (p *proxyrunner) run() error {
 
 		daemonInfo := &daemonInfo{}
 		if p.smap.ProxySI != nil {
-			daemonInfo = &p.smap.ProxySI.daemonInfo
+			daemonInfo = p.smap.ProxySI
 		}
 		res := p.call(nil, daemonInfo, url, http.MethodGet, jsbytes)
 		if res.err != nil {
@@ -146,13 +146,13 @@ func (p *proxyrunner) run() error {
 		}
 	} else {
 		smappathname := filepath.Join(p.confdir, smapname)
-		p.hintsmap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		p.hintsmap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		if err := LocalLoad(smappathname, p.hintsmap); err != nil && !os.IsNotExist(err) {
 			glog.Warningf("Failed to load existing hint smap: %v", err)
 		}
 		p.smap.Tmap = make(map[string]*daemonInfo, 8)
-		p.smap.Pmap = make(map[string]*proxyInfo, 8)
-		p.smap.addProxy(&proxyInfo{daemonInfo: *p.si, Primary: true})
+		p.smap.Pmap = make(map[string]*daemonInfo, 8)
+		p.smap.addProxy(p.si)
 		p.primary = true
 
 		go func() {
@@ -171,7 +171,7 @@ func (p *proxyrunner) run() error {
 	}
 
 	if p.smap.ProxySI == nil {
-		p.smap.ProxySI = &proxyInfo{daemonInfo: *p.si, Primary: p.primary}
+		p.smap.ProxySI = p.si
 	}
 
 	p.metasyncer = getmetasyncer() // utilize the runner
@@ -430,7 +430,7 @@ func (p *proxyrunner) unionSmapAndHintsmap() *Smap {
 	smapLock.Lock()
 	defer smapLock.Unlock()
 
-	u := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	u := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 	for k, v := range p.hintsmap.Tmap {
 		u.Tmap[k] = v
 	}
@@ -1750,7 +1750,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		register  bool
 		proxy     bool
 		msg       *ActionMsg
-		pi        *proxyInfo
+		pi        *daemonInfo
 	)
 	if !p.checkPrimaryProxy("register target|proxy", w, r) {
 		return
@@ -1789,11 +1789,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	smapLock.Lock()
 	defer smapLock.Unlock()
 	if proxy {
-		pi = &proxyInfo{daemonInfo: nsi, Primary: false}
+		pi = &nsi
 		osi := p.smap.getProxy(nsi.DaemonID)
 		var osidi *daemonInfo
 		if osi != nil {
-			osidi = &osi.daemonInfo
+			osidi = osi
 		}
 		if !p.shouldAddToSmap(&nsi, osidi, keepalive, "proxy") {
 			return
@@ -1883,7 +1883,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		isproxy bool
 		msg     *ActionMsg
 		osi     *daemonInfo
-		psi     *proxyInfo
+		psi     *daemonInfo
 		sid     = apitems[1]
 	)
 	if sid == Rproxy {
@@ -2265,7 +2265,7 @@ func (p *proxyrunner) broadcastCluster(path string, query url.Values, method str
 	for _, s := range smap.Pmap {
 		// Don't broadcast to self
 		if s.DaemonID != p.si.DaemonID {
-			servers = append(servers, &s.daemonInfo)
+			servers = append(servers, s)
 		}
 	}
 

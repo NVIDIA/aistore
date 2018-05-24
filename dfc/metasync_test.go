@@ -76,7 +76,7 @@ func getServerIPAndPort(u string) (string, string) {
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newPrimary() *proxyrunner {
 	p := proxyrunner{}
-	smap := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+	smap := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 	p.smap = smap
 	p.si = &daemonInfo{DaemonID: "primary"}
 	p.primary = true
@@ -84,7 +84,7 @@ func newPrimary() *proxyrunner {
 	p.httpclientLongTimeout = &http.Client{}
 	p.kalive = &proxykalive{}
 	ctx.config.Periodic.RetrySyncTime = time.Millisecond * 100
-	pi := &proxyInfo{daemonInfo{DaemonID: p.si.DaemonID, DirectURL: "do not care"}, true /* primary */}
+	pi := &daemonInfo{DaemonID: p.si.DaemonID, DirectURL: "do not care"}
 	p.smap.addProxy(pi)
 	p.smap.ProxySI = pi
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
@@ -124,7 +124,7 @@ func newTransportServer(primary *proxyrunner, s *server, ch chan<- transportData
 	ip, port := getServerIPAndPort(ts.URL)
 	di := daemonInfo{DaemonID: id, DirectURL: ts.URL, NodeIPAddr: ip, DaemonPort: port}
 	if s.isProxy {
-		primary.smap.Pmap[id] = &proxyInfo{di, false /* primary */}
+		primary.smap.Pmap[id] = &di
 	} else {
 		primary.smap.Tmap[id] = &di
 	}
@@ -365,14 +365,11 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 		ch <- transportData{true, id, 1}
 	})
 
-	primary.smap.Pmap[id] = &proxyInfo{
-		daemonInfo{
-			DaemonID:   id,
-			DirectURL:  "http://" + s.Addr,
-			NodeIPAddr: ip,
-			DaemonPort: port,
-		},
-		false, /* primary */
+	primary.smap.Pmap[id] = &daemonInfo{
+		DaemonID:   id,
+		DirectURL:  "http://" + s.Addr,
+		NodeIPAddr: ip,
+		DaemonPort: port,
 	}
 
 	// function shared by the two cases: short delay and long delay
@@ -443,7 +440,7 @@ func TestMetaSyncData(t *testing.T) {
 		ip, port := getServerIPAndPort(ts.URL)
 		di := daemonInfo{DaemonID: id, DirectURL: ts.URL, NodeIPAddr: ip, DaemonPort: port}
 		if s.isProxy {
-			primary.smap.Pmap[id] = &proxyInfo{di, false /* primary */}
+			primary.smap.Pmap[id] = &di
 		} else {
 			primary.smap.Tmap[id] = &di
 		}
@@ -830,18 +827,15 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port := getServerIPAndPort(s.URL)
 		primary.smap.addProxy(
-			&proxyInfo{
-				daemonInfo{
-					DaemonID:   "proxy1",
-					DirectURL:  s.URL,
-					NodeIPAddr: ip,
-					DaemonPort: port,
-				},
-				false, /* primary */
+			&daemonInfo{
+				DaemonID:   "proxy1",
+				DirectURL:  s.URL,
+				NodeIPAddr: ip,
+				DaemonPort: port,
 			},
 		)
 		proxy1 := proxyrunner{}
-		proxy1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		proxy1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		proxy1.lbmap = newLBMap()
 
 		// empty payload
@@ -890,7 +884,7 @@ func TestMetaSyncReceive(t *testing.T) {
 				DaemonPort: port,
 			})
 		target1 := targetrunner{}
-		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		target1.lbmap = newLBMap()
 
 		c := func(n, o *Smap, m *ActionMsg, e string) {
@@ -930,7 +924,7 @@ func TestMetaSyncReceive(t *testing.T) {
 				DaemonPort: port,
 			})
 		target2 := targetrunner{}
-		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		target2.lbmap = newLBMap()
 
 		syncer.sync(true, primary.smap.cloneU())
@@ -1011,16 +1005,14 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port = getServerIPAndPort(s.URL)
 		primary.smap.addProxy(
-			&proxyInfo{
-				daemonInfo{
-					DaemonID:   "proxy2",
-					DirectURL:  s.URL,
-					NodeIPAddr: ip,
-					DaemonPort: port},
-				false,
+			&daemonInfo{
+				DaemonID:   "proxy2",
+				DirectURL:  s.URL,
+				NodeIPAddr: ip,
+				DaemonPort: port,
 			})
 		proxy2 := proxyrunner{}
-		proxy2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		proxy2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		proxy2.lbmap = newLBMap()
 
 		lbMap.add("lb3")
@@ -1125,7 +1117,7 @@ func TestMetaSyncReceive(t *testing.T) {
 				DaemonPort: port,
 			})
 		target1 := targetrunner{}
-		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		target1.lbmap = newLBMap()
 
 		s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1143,7 +1135,7 @@ func TestMetaSyncReceive(t *testing.T) {
 				DaemonPort: port,
 			})
 		target2 := targetrunner{}
-		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*proxyInfo)}
+		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		target2.lbmap = newLBMap()
 
 		lbMap := newLBMap()

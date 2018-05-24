@@ -290,7 +290,7 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 		}
 		for pid, pi := range smap4bcast.Pmap {
 			if _, ok := smapSynced.Pmap[pid]; !ok {
-				y.pending.diamonds[pid] = &pi.daemonInfo
+				y.pending.diamonds[pid] = pi
 			}
 		}
 	}

@@ -706,7 +706,7 @@ func (h *httprunner) extractsmap(payload map[string]string) (newsmap, oldsmap *S
 	}
 	// old smap
 	oldsmap.Tmap = make(map[string]*daemonInfo)
-	oldsmap.Pmap = make(map[string]*proxyInfo)
+	oldsmap.Pmap = make(map[string]*daemonInfo)
 	v1, ok1 := msg.Value.(map[string]interface{})
 	assert(ok1, fmt.Sprintf("msg (%+v, %T), msg.Value (%+v, %T)", msg, msg, msg.Value, msg.Value))
 	v2, ok2 := v1["tmap"]
@@ -724,7 +724,7 @@ func (h *httprunner) extractsmap(payload map[string]string) (newsmap, oldsmap *S
 		oldsmap.Tmap[sid] = &daemonInfo{}
 	}
 	for pid := range pmapif {
-		oldsmap.Pmap[pid] = &proxyInfo{}
+		oldsmap.Pmap[pid] = &daemonInfo{}
 	}
 	oldsmap.Version = int64(versionf)
 	return

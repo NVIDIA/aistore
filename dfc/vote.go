@@ -442,7 +442,6 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	psi := p.smap.getProxy(p.si.DaemonID)
 	// If psi == nil, then this proxy is not currently in the local cluster map. This should never happen.
 	assert(psi != nil, "This proxy should always exist in the local Smap")
-	psi.Primary = true
 	p.smap.ProxySI = psi
 
 	// Version is increased by 100 to make a clear distinction between smap versions before and after the primary proxy is updated.
@@ -476,7 +475,6 @@ func (p *proxyrunner) becomeNonPrimaryProxy() {
 		}
 		return
 	}
-	psi.Primary = false
 }
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
@@ -546,18 +544,18 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 
-func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *proxyInfo) {
+func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *daemonInfo) {
 	url := nextPrimaryProxy.DirectURL + "/" + Rversion + "/" + Rvote + "/" + Rvoteinit
 	msg := VoteInitiationMessage{Request: *vr}
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
 
-	res := h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+	res := h.call(nil, nextPrimaryProxy, url, http.MethodPut, jsbytes)
 	if res.err != nil {
 		if IsErrConnectionRefused(err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(time.Second)
-				res = h.call(nil, &nextPrimaryProxy.daemonInfo, url, http.MethodPut, jsbytes)
+				res = h.call(nil, nextPrimaryProxy, url, http.MethodPut, jsbytes)
 				if res.err == nil {
 					break
 				}
@@ -623,7 +621,6 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 		return nil
 	}
 
-	proxyinfo.Primary = true
 	if primaryToRemove != "" {
 		h.smap.delProxy(primaryToRemove)
 	}

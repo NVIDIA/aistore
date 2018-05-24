@@ -45,8 +45,8 @@ type (
 	// Smap contains id:daemonInfo pairs and related metadata
 	Smap struct {
 		Tmap    map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
-		Pmap    map[string]*proxyInfo  `json:"pmap"` // proxyID -> proxyInfo
-		ProxySI *proxyInfo             `json:"proxy_si"`
+		Pmap    map[string]*daemonInfo `json:"pmap"` // proxyID -> proxyInfo
+		ProxySI *daemonInfo            `json:"proxy_si"`
 		Version int64                  `json:"version"`
 	}
 
@@ -69,11 +69,6 @@ type (
 		DaemonPort string `json:"daemon_port"`
 		DaemonID   string `json:"daemon_id"`
 		DirectURL  string `json:"direct_url"`
-	}
-
-	proxyInfo struct {
-		daemonInfo
-		Primary bool
 	}
 
 	// local (cache-only) bucket names and their TBD props
@@ -136,7 +131,7 @@ func (m *Smap) add(si *daemonInfo) {
 	m.Version++
 }
 
-func (m *Smap) addProxy(pi *proxyInfo) {
+func (m *Smap) addProxy(pi *daemonInfo) {
 	m.Pmap[pi.DaemonID] = pi
 	m.Version++
 }
@@ -179,7 +174,7 @@ func (m *Smap) get(sid string) *daemonInfo {
 	return si
 }
 
-func (m *Smap) getProxy(pid string) *proxyInfo {
+func (m *Smap) getProxy(pid string) *daemonInfo {
 	pi, ok := m.Pmap[pid]
 	if !ok {
 		return nil
@@ -216,7 +211,7 @@ func (m *Smap) deepcopy(dst *Smap) {
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}
-	dst.Pmap = make(map[string]*proxyInfo, len(m.Pmap))
+	dst.Pmap = make(map[string]*daemonInfo, len(m.Pmap))
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
 	}
@@ -239,13 +234,13 @@ func (m *Smap) Dump() {
 
 	fmt.Printf("Proxies\n")
 	for _, v := range m.Pmap {
-		fmt.Printf("\tid = %-15s\turl = %-30s\tPrimary = %v\n", v.DaemonID, v.DirectURL, v.Primary)
+		fmt.Printf("\tid = %-15s\turl = %-30s\n", v.DaemonID, v.DirectURL)
 	}
 
 	fmt.Printf("Primary proxy\n")
 	if m.ProxySI != nil {
-		fmt.Printf("\tid = %-15s\turl = %-30s\tPrimary = %v\n",
-			m.ProxySI.DaemonID, m.ProxySI.DirectURL, m.ProxySI.Primary)
+		fmt.Printf("\tid = %-15s\turl = %-30s\n",
+			m.ProxySI.DaemonID, m.ProxySI.DirectURL)
 	}
 }
 
