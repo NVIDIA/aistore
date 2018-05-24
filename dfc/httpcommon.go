@@ -164,10 +164,6 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		ctx.config.Proxy.Primary.URL = clivars.proxyurl
 	}
 	h.statsif = s
-	ipaddr, errstr := getipv4addr()
-	if errstr != "" {
-		glog.Fatalf("FATAL: %s", errstr)
-	}
 	// http client
 	perhost := targetMaxIdleConnsPer
 	if isproxy {
@@ -188,8 +184,17 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	}
 	h.smap = &Smap{}
 	h.lbmap = &lbmap{LBmap: make(map[string]string)} // local (aka cache-only) buckets
+}
 
-	// init daemonInfo here
+// initSI initialize a daemon's identification (never changes once it is set)
+// L. Ding: Sadly httprunner has become the sharing point where common code for
+//          proxyrunner and targetrunner exist.
+func (h *httprunner) initSI() {
+	ipaddr, errstr := getipv4addr()
+	if errstr != "" {
+		glog.Fatalf("FATAL: %s", errstr)
+	}
+
 	h.si = &daemonInfo{}
 	h.si.NodeIPAddr = ipaddr
 	h.si.DaemonPort = ctx.config.Net.L4.Port
@@ -206,6 +211,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	if ctx.config.Net.HTTP.UseHTTPS {
 		proto = "https"
 	}
+
 	h.si.DirectURL = proto + "://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
 }
 

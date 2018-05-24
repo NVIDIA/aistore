@@ -407,12 +407,14 @@ func dfcinit() {
 	if clivars.role == xproxy {
 		confdir := ctx.config.Confdir
 		p := &proxyrunner{confdir: confdir}
+		p.initSI()
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
 		ctx.rg.add(newproxykalive(p), xproxykalive)
 		ctx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
+		t.initSI()
 		ctx.rg.add(t, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
 		ctx.rg.add(newtargetkalive(t), xtargetkalive)

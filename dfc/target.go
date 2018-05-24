@@ -136,9 +136,7 @@ func (t *targetrunner) run() error {
 		assert(ctx.config.CloudProvider == ProviderGoogle)
 		t.cloudif = &gcpimpl{t}
 	}
-	// init capacity
-	rr := getstorstatsrunner()
-	rr.init()
+
 	// prefetch
 	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
 

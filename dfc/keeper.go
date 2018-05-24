@@ -208,13 +208,19 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 		glog.Infof("proxy %s keepalive triggered by err %v", r.p.si.DaemonID, err)
 	}
 
+	smapLock.Lock()
+
 	if r.p.primary {
+		smapLock.Unlock()
 		return r.primarykeepalive()
 	}
 
 	if r.p.smap.ProxySI == nil || !r.timedOut(r.p.smap.ProxySI.DaemonID) {
+		smapLock.Unlock()
 		return
 	}
+
+	smapLock.Unlock()
 
 	stopped = keepaliveCommon(r.p, r.controlCh)
 	if stopped {

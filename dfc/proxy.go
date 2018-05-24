@@ -145,6 +145,7 @@ func (p *proxyrunner) run() error {
 			return fmt.Errorf("Failed to set primary proxy and Smap: %v", err)
 		}
 	} else {
+		smapLock.Lock()
 		smappathname := filepath.Join(p.confdir, smapname)
 		p.hintsmap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 		if err := LocalLoad(smappathname, p.hintsmap); err != nil && !os.IsNotExist(err) {
@@ -154,6 +155,7 @@ func (p *proxyrunner) run() error {
 		p.smap.Pmap = make(map[string]*daemonInfo, 8)
 		p.smap.addProxy(p.si)
 		p.primary = true
+		smapLock.Unlock()
 
 		go func() {
 			// query all nodes in the hint Smap to attempt to retrieve the current cluster map.
@@ -170,9 +172,11 @@ func (p *proxyrunner) run() error {
 		}()
 	}
 
+	smapLock.Lock()
 	if p.smap.ProxySI == nil {
 		p.smap.ProxySI = p.si
 	}
+	smapLock.Unlock()
 
 	p.metasyncer = getmetasyncer() // utilize the runner
 

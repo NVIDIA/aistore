@@ -275,14 +275,11 @@ func (r *proxystatsrunner) addL(name string, val int64) {
 //
 //================
 func (r *storstatsrunner) run() error {
+	r.init()
 	return r.runcommon(r)
 }
 
 func (r *storstatsrunner) log() (runlru bool) {
-	if r.Disk == nil {
-		glog.Errorf("not initialized yet - targetrunner is taking more than %v to start", ctx.config.Periodic.StatsTime)
-		return
-	}
 	r.Lock()
 	if r.Core.logged {
 		r.Unlock()
