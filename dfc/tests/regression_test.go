@@ -279,7 +279,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		if info.IsDir() && info.Name() == "cloud" {
 			return filepath.SkipDir
 		}
-		if filepath.Base(path) == fName {
+		if filepath.Base(path) == fName && strings.Contains(path, bucket) {
 			fqn = path
 		}
 		return nil
@@ -287,6 +287,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 	fName = <-filenameCh
 	filepath.Walk(rootDir, fsWalkFunc)
+	tlogf("Corrupting file data[%s]: %s\n", fName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	checkFatal(err, t)
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
@@ -297,6 +298,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	// Test corrupting the file xattr
 	fName = <-filenameCh
 	filepath.Walk(rootDir, fsWalkFunc)
+	tlogf("Corrupting file xattr[%s]: %s\n", fName, fqn)
 	if errstr := dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
