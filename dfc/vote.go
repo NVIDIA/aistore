@@ -632,13 +632,10 @@ func (h *httprunner) setPrimaryProxy(newPrimaryProxy, primaryToRemove string, pr
 	ctx.config.Proxy.Primary.ID = proxyinfo.DaemonID
 	ctx.config.Proxy.Primary.URL = proxyinfo.DirectURL
 
-	go func() {
-		glog.Infof("Set primary proxy: %v (prepare: %t)", newPrimaryProxy, prepare)
-		err := LocalSave(clivars.conffile, ctx.config)
-		if err != nil {
-			glog.Errorf("Error writing config file: %v", err)
-		}
-	}()
+	err := LocalSave(clivars.conffile, ctx.config)
+	if err != nil {
+		glog.Errorf("Error writing config file: %v", err)
+	}
 
 	return nil
 }
