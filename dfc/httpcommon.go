@@ -182,6 +182,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		h.httpclientLongTimeout =
 			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
 	}
+
 	h.smap = &Smap{}
 	h.lbmap = &lbmap{LBmap: make(map[string]string)} // local (aka cache-only) buckets
 }

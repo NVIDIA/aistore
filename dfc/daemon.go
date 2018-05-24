@@ -211,17 +211,49 @@ func (m *Smap) deepcopy(dst *Smap) {
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}
+
 	dst.Pmap = make(map[string]*daemonInfo, len(m.Pmap))
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
 	}
-	copyStruct(dst.ProxySI, m.ProxySI)
+
+	if m.ProxySI != nil {
+		copyStruct(dst.ProxySI, m.ProxySI)
+	}
 }
 
 // totalServers returns total number of proxies plus targets.
 // no lock held.
 func (m *Smap) totalServers() int {
 	return len(m.Pmap) + len(m.Tmap)
+}
+
+// Join return the union of two Smap
+func (m *Smap) Join(other *Smap) *Smap {
+	u := &Smap{
+		Tmap: make(map[string]*daemonInfo),
+		Pmap: make(map[string]*daemonInfo),
+	}
+
+	smapLock.Lock()
+	for k, v := range m.Tmap {
+		u.Tmap[k] = v
+	}
+
+	for k, v := range m.Pmap {
+		u.Pmap[k] = v
+	}
+	smapLock.Unlock()
+
+	for k, v := range other.Tmap {
+		u.Tmap[k] = v
+	}
+
+	for k, v := range other.Pmap {
+		u.Pmap[k] = v
+	}
+
+	return u
 }
 
 // Dump prints the smap
