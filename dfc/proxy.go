@@ -1635,13 +1635,14 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 		if len(s) == 2 {
 			r.URL.Path = URLPath(Rversion, Robjects) + r.URL.Path
 			p.httpobjget(w, r)
+			return
 		} else if len(s) == 1 {
 			r.URL.Path = URLPath(Rversion, Rbuckets) + r.URL.Path
 			p.httpbckget(w, r)
+			return
 		}
-	} else {
-		p.httprunner.revProxy.ServeHTTP(w, r)
 	}
+	p.httprunner.revProxy.ServeHTTP(w, r)
 }
 
 // gets target info
