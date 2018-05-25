@@ -426,7 +426,8 @@ existslocally:
 	written, err := io.CopyBuffer(w, file, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
-		t.invalmsghdlr(w, r, errstr)
+		glog.Errorln(t.richHTTPError(r, errstr, http.StatusInternalServerError, 1))
+		t.statsif.add("numerr", 1)
 		return
 	}
 	if !coldget {
