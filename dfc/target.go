@@ -426,7 +426,7 @@ existslocally:
 	written, err := io.CopyBuffer(w, file, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
-		t.invalmsghdlr(w, r, errstr)
+		t.invalmsghdlr(w, r, errstr, false)
 		return
 	}
 	if !coldget {
