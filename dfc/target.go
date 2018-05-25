@@ -2228,6 +2228,10 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = json.Marshal(t.smap)
 		assert(err == nil, err)
 	case GetWhatSmapVote:
+		// L. Ding: Seems like a bug to me.
+		//          Tragets participate in voting, why not return VoteInProgress's true state here?
+		//          Not that important in term of primary started up's use case because as long proxies
+		//          are reporting vote in progress, but may be for other use cases and for correctness.
 		msg := SmapVoteMsg{
 			VoteInProgress: false,
 			Smap:           t.smap.cloneL().(*Smap),

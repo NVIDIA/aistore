@@ -26,8 +26,8 @@ type (
 	// is received, for example, accepts or rejects the request.
 	syncf func(w http.ResponseWriter, r *http.Request, cnt int) (int, error)
 
-	// server represents one test server object, proxy or target
-	server struct {
+	// metaSyncServer represents one test metaSyncServer object, proxy or target
+	metaSyncServer struct {
 		id      string
 		isProxy bool
 		sf      syncf
@@ -66,7 +66,7 @@ func (m msgSortHelper) Less(i, j int) bool {
 	return m[i].cnt < m[j].cnt
 }
 
-// getServerURL takes a string in format of "http://ip:port" and returns its ip and port
+// getServerIPAndPort takes a string in format of "http://ip:port" and returns its ip and port
 func getServerIPAndPort(u string) (string, string) {
 	s := strings.TrimPrefix(u, "http://")
 	items := strings.Split(s, ":")
@@ -76,13 +76,10 @@ func getServerIPAndPort(u string) (string, string) {
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newPrimary() *proxyrunner {
 	p := proxyrunner{}
-	smap := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-	p.smap = smap
+	p.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 	p.si = &daemonInfo{DaemonID: "primary"}
 	p.primary = true
-	p.httpclient = &http.Client{}
 	p.httpclientLongTimeout = &http.Client{}
-	p.kalive = &proxykalive{}
 	ctx.config.Periodic.RetrySyncTime = time.Millisecond * 100
 	pi := &daemonInfo{DaemonID: p.si.DaemonID, DirectURL: "do not care"}
 	p.smap.addProxy(pi)
@@ -102,7 +99,7 @@ func newPrimary() *proxyrunner {
 // newTransportServer's http handler calls the sync funtion which decide how to respond to the sync call,
 // counts number of times sync call received, sends result to the result channel on each sync (error or
 // no error), completes the http request with the status returned by the sync function.
-func newTransportServer(primary *proxyrunner, s *server, ch chan<- transportData) *httptest.Server {
+func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- transportData) *httptest.Server {
 	cnt := 0
 	// notes: needs to assgin these from 's', otherwise 'f' captures what in 's' which changes from call to call
 	isProxy := s.isProxy
@@ -209,7 +206,7 @@ func failFirst(w http.ResponseWriter, r *http.Request, cnt int) (int, error) {
 // syncOnce checks a mixed number of proxy and targets accept one sync call
 func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		servers = []server{
+		servers = []metaSyncServer{
 			{"p1", true, alwaysOk, nil},
 			{"p2", true, alwaysOk, nil},
 			{"t1", false, alwaysOk, nil},
@@ -235,7 +232,7 @@ func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpo
 // syncOnceWait checks sync(wait = true) doesn't return before all servers receive the call
 func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		servers = []server{
+		servers = []metaSyncServer{
 			{"p1", true, delayedOk, nil},
 			{"t1", false, alwaysOk, nil},
 		}
@@ -261,7 +258,7 @@ func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 // syncOnceNoWait checks sync(wait = false) returns before all servers receive the call
 func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		servers = []server{
+		servers = []metaSyncServer{
 			{"p1", true, delayedOk, nil},
 			{"t1", false, alwaysOk, nil},
 		}
@@ -287,7 +284,7 @@ func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]t
 // retry checks a failed sync call is retryed
 func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		servers = []server{
+		servers = []metaSyncServer{
 			{"p1", true, failFirst, nil},
 			{"p2", true, alwaysOk, nil},
 			{"t1", false, failFirst, nil},
@@ -313,7 +310,7 @@ func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportD
 // multipleSync checks a mixed number of proxy and targets accept multiple sync calls
 func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		servers = []server{
+		servers = []metaSyncServer{
 			{"p1", true, alwaysOk, nil},
 			{"p2", true, alwaysOk, nil},
 			{"t1", false, alwaysOk, nil},
@@ -414,7 +411,7 @@ func TestMetaSyncData(t *testing.T) {
 	}
 
 	// newDataServer simulates a proxt or a target for meta sync's data tests
-	newServer := func(primary *proxyrunner, s *server, ch chan<- data) *httptest.Server {
+	newServer := func(primary *proxyrunner, s *metaSyncServer, ch chan<- data) *httptest.Server {
 		cnt := 0
 		id := s.id
 		failCnt := s.failCnt
@@ -494,10 +491,10 @@ func TestMetaSyncData(t *testing.T) {
 		syncer.run()
 	}(&wg)
 
-	proxy := newServer(primary, &server{"proxy", true, nil, []int{3, 4, 5}}, ch)
+	proxy := newServer(primary, &metaSyncServer{"proxy", true, nil, []int{3, 4, 5}}, ch)
 	defer proxy.Close()
 
-	target := newServer(primary, &server{"target", false, nil, []int{2}}, ch)
+	target := newServer(primary, &metaSyncServer{"target", false, nil, []int{2}}, ch)
 	defer target.Close()
 
 	// sync smap
@@ -565,7 +562,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	exp[smaptag+actiontag] = string(b)
 
-	proxy = newServer(primary, &server{"another proxy", true, nil, nil}, ch)
+	proxy = newServer(primary, &metaSyncServer{"another proxy", true, nil, nil}, ch)
 	defer proxy.Close()
 
 	b, err = primary.smap.marshal()

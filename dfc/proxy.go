@@ -313,6 +313,12 @@ func (p *proxyrunner) registerWithRetry(url string, timeout time.Duration) error
 // findRole helps proxy server to estabilish itself as either primary or non-primary
 // when starting up, a proxy will ask all other servers that is known to it for smap and lbmap.
 // role is determined by the map which has the highest version number.
+// L. Ding:
+// Originally this was designed as: before each broadcast call, smap from proxy and hint are
+// merged, this is unnecessary, reason is primary's local smap file is always saved before the map
+// is synced to all proxies/targets, so it is not possible that a proxy/target is not in the hint
+// map and has a higher smap version.
+// If a server is not in the hint map it will not call this starting proxy to register.
 func (p *proxyrunner) findRole() {
 	hint := &Smap{
 		Tmap: make(map[string]*daemonInfo),
@@ -325,50 +331,38 @@ func (p *proxyrunner) findRole() {
 		return
 	}
 
-	deadline := time.Now().Add(ctx.config.Timeout.Startup)
+	smap, lbmap := p.discoverServers(hint, time.Now().Add(ctx.config.Timeout.Startup), startupPollSleepTime)
+	lbmapLock.Lock()
+	if lbmap != nil && p.lbmap.version() < lbmap.version() {
+		p.lbmap = lbmap
+	}
+	lbmapLock.Unlock()
 
-	for {
-		u := p.smap.Join(hint)
-		smap, lbmap, done := p.discoverMaps(u)
-		if done {
-			lbmapLock.Lock()
-			if lbmap != nil && p.lbmap.version() < lbmap.version() {
-				p.lbmap = lbmap
-			}
-			lbmapLock.Unlock()
+	if smap == nil {
+		return
+	}
 
-			if smap != nil {
-				smapLock.Lock()
-				if smap.ProxySI.DaemonID == p.si.DaemonID {
-					glog.Infoln("This proxy is primary in found cluster map; remaining primary.")
-					p.smap = smap
-					smapLock.Unlock()
-					return
-				}
-				smapLock.Unlock()
+	smapLock.Lock()
+	if smap.ProxySI.DaemonID == p.si.DaemonID {
+		glog.Infoln("This proxy is primary in found cluster map; remaining primary.")
+		p.smap = smap
+		smapLock.Unlock()
+		return
+	}
+	smapLock.Unlock()
 
-				glog.Infof("This proxy (%s) appears to be not primary in the max-versioned cluster map", p.si.DaemonID)
-				glog.Infof("Registering with the real primary %s", smap.ProxySI.DaemonID)
-				err := p.registerWithRetry(smap.ProxySI.DirectURL, ctx.config.Timeout.Default)
-				if err != nil {
-					glog.Errorf("Error registering with primary proxy %v: %v. Retrying.", smap.ProxySI.DaemonID, err)
-				} else {
-					smapLock.Lock()
-					defer smapLock.Unlock()
-					p.becomeNonPrimaryProxy()
-					p.smap = smap
-					p.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
-					return
-				}
-			}
-		}
-
-		if time.Now().After(deadline) {
-			glog.Warning("findRole took too long")
-			return
-		}
-
-		time.Sleep(startupPollSleepTime)
+	glog.Infof("This proxy (%s) appears to be not primary in the max-versioned cluster map", p.si.DaemonID)
+	glog.Infof("Registering with the real primary %s", smap.ProxySI.DaemonID)
+	err = p.registerWithRetry(smap.ProxySI.DirectURL, ctx.config.Timeout.Default)
+	if err != nil {
+		glog.Errorf("Error registering with primary proxy %v: %v. Retrying.", smap.ProxySI.DaemonID, err)
+	} else {
+		smapLock.Lock()
+		defer smapLock.Unlock()
+		p.becomeNonPrimaryProxy()
+		p.smap = smap
+		p.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+		return
 	}
 }
 
@@ -2233,10 +2227,13 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 	return p.broadcast(path, query, method, body, servers, timeout...)
 }
 
-// discoverMaps calls out to all servers given in the server map, collect smaps and lbmaps
+// discoverServers calls out to all servers given in the server map, collect smaps and lbmaps
 // returned by all servers, pick out the one that has the highest version number as the current one.
-// returns true if discover is complete, otherwise false to indicate to caller that may be retry.
-func (p *proxyrunner) discoverMaps(serverMap *Smap) (*Smap, *lbmap, bool) {
+// if a server failed to respond(error), or respond with nil map, or respond with vote in progress,
+// it is ignored and retried until a valid respond or times out.
+// Note: serverMap could be modified upon return from this function.
+func (p *proxyrunner) discoverServers(serverMap *Smap, deadline time.Time,
+	waitBetweenPoll time.Duration) (*Smap, *lbmap) {
 	var (
 		maxVersionSMap  *Smap
 		maxVersionLBMap *lbmap
@@ -2246,48 +2243,59 @@ func (p *proxyrunner) discoverMaps(serverMap *Smap) (*Smap, *lbmap, bool) {
 	jsbytes, err := json.Marshal(msg)
 	assert(err == nil)
 
-	res := p.broadcastCluster(
-		URLPath(Rversion, Rdaemon),
-		nil, // query
-		http.MethodGet,
-		jsbytes,
-		serverMap,
-		ctx.config.Timeout.CplaneOperation,
-	)
+	for {
+		res := p.broadcastCluster(
+			URLPath(Rversion, Rdaemon),
+			nil, // query
+			http.MethodGet,
+			jsbytes,
+			serverMap,
+			ctx.config.Timeout.CplaneOperation,
+		)
 
-	for r := range res {
-		if r.err != nil {
-			glog.Warningf("Error retrieving cluster map from %v: %v", r.si.DaemonID, r.err)
-			return nil, nil, false
-		}
+		for r := range res {
+			if r.err != nil {
+				glog.Warningf("Error retrieving cluster map from %v: %v", r.si.DaemonID, r.err)
+				continue
+			}
 
-		svm := SmapVoteMsg{}
-		if err = json.Unmarshal(r.outjson, &svm); err != nil {
-			glog.Warningf("Error unmarshalling cluster map from %v: %v", r.si.DaemonID, err)
-			return nil, nil, false
-		}
+			svm := SmapVoteMsg{}
+			if err = json.Unmarshal(r.outjson, &svm); err != nil {
+				glog.Warningf("Error unmarshalling cluster map from %v: %v", r.si.DaemonID, err)
+				continue
+			}
 
-		if svm.Smap == nil || svm.Smap.version() == 0 {
-			glog.Warningf("Empty cluster map from %v", r.si.DaemonID)
-			return nil, nil, false
-		}
+			if svm.VoteInProgress {
+				continue
+			}
 
-		if svm.VoteInProgress {
-			// FIXME: Currently, the primary proxy only discovers a vote if it requests the
-			//        Smap from the candidate primary proxy.
-			return nil, nil, false
-		}
+			// remove the responded server from next broadcast
+			serverMap.Remove(r.si.DaemonID)
 
-		if maxVersionSMap == nil || svm.Smap.version() > maxVersionSMap.version() {
-			maxVersionSMap = svm.Smap
-		}
+			if svm.Smap == nil || svm.Smap.version() == 0 {
+				glog.Warningf("Empty cluster map from %v", r.si.DaemonID)
+			} else if maxVersionSMap == nil || svm.Smap.version() > maxVersionSMap.version() {
+				maxVersionSMap = svm.Smap
+			}
 
-		if svm.Lbmap != nil {
-			if maxVersionLBMap == nil || svm.Lbmap.version() > maxVersionLBMap.version() {
+			if svm.Lbmap == nil || svm.Lbmap.version() == 0 {
+				glog.Warningf("Empty LB map from %v", r.si.DaemonID)
+			} else if maxVersionLBMap == nil || svm.Lbmap.version() > maxVersionLBMap.version() {
 				maxVersionLBMap = svm.Lbmap
 			}
 		}
+
+		if serverMap.totalServers() == 0 {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			glog.Warning("discover map took too long")
+			break
+		}
+
+		time.Sleep(waitBetweenPoll)
 	}
 
-	return maxVersionSMap, maxVersionLBMap, true
+	return maxVersionSMap, maxVersionLBMap
 }

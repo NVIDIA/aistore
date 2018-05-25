@@ -222,38 +222,20 @@ func (m *Smap) deepcopy(dst *Smap) {
 	}
 }
 
+// Remove is a helper function that removes a server from the smap without knowing before hand
+// whether it is a proxy or a target.
+// Assuming the ID is unique for proxies and targets. If the ID shows up in both maps, both will be deleted.
+// No lock held during delete.
+// No map version change.
+func (m *Smap) Remove(id string) {
+	delete(m.Tmap, id)
+	delete(m.Pmap, id)
+}
+
 // totalServers returns total number of proxies plus targets.
 // no lock held.
 func (m *Smap) totalServers() int {
 	return len(m.Pmap) + len(m.Tmap)
-}
-
-// Join return the union of two Smap
-func (m *Smap) Join(other *Smap) *Smap {
-	u := &Smap{
-		Tmap: make(map[string]*daemonInfo),
-		Pmap: make(map[string]*daemonInfo),
-	}
-
-	smapLock.Lock()
-	for k, v := range m.Tmap {
-		u.Tmap[k] = v
-	}
-
-	for k, v := range m.Pmap {
-		u.Pmap[k] = v
-	}
-	smapLock.Unlock()
-
-	for k, v := range other.Tmap {
-		u.Tmap[k] = v
-	}
-
-	for k, v := range other.Pmap {
-		u.Pmap[k] = v
-	}
-
-	return u
 }
 
 // Dump prints the smap
