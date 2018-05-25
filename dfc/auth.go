@@ -10,34 +10,24 @@
 //    All user credentials are read from default files and environment variables.
 //    AWS: file ~/.aws/credentials
 //    GCP: file ~/gcp_creds.json and GOOGLE_CLOUD_PROJECT variable
-//         a user should be logged in to GCP before running any DFC operation
-//         that touches cloud objects
+//         a user should have logged at least once to GCP before running any DFC operation
 // 2. AuthN server is enabled and everything is set up
 //    - DFC reads userID from HTTP request header: 'Authorization: Bearer <token>'.
 //    - A user credentials is loaded for the userID
-//      AWS: CredDir points to a directory that contains a file with user
-//       credentials. Authn looks for a file with name 'credentials' or it takes
-//       the first file found in the directory. The file must contain a section
-//       for the userID in a form:
-//       [userId]
-//       region = us-east-1
+//      AWS: credentials are loaded from INI-file in memory. File must include the folowing lines:
+//       region = AWSREGION
 //       aws_access_key_id = USERACCESSKEY
 //       aws_secret_access_key = USERSECRETKEY
-//      GCP: CredDir points to a directory that contains user files. A file per
-//       a user. The file name must be 'userID' + '.json'
-//    - Besides user credentials it loads a projectId for GCP (required by
-//      bucketnames call)
-//    - After successful loading and checking the user's credentials it opens
-//      a new session with loaded from file data
-//    - Extra step for GCP: if creating session for a given user fails, it tries
-//      to start a session with default parameters
+//      GCP: credentials from memory saved to file <config.Auth.CredDir>/<ProvideGoogle>/<UserID>.json.
+//	    Then GCP session is intialized with the file content (GCP API does
+//          not have a way to load credentials from memory)
+// 3. If anything goes wrong: no user credentials found, invalid credentials
+//    format etc then default session is created (as if AuthN is disabled)
 package dfc
 
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -45,14 +35,17 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
+// Declare a new type for Context field names
+type contextID string
+
 const (
-	ctxUserID    = "userID"      // a field name of a context that contains userID
-	ctxCredsDir  = "credDir"     // a field of a context that contains path to directory with credentials
-	awsCredsFile = "credentials" // a default AWS file with user credentials
+	ctxUserID    contextID = "userID"    // a field name of a context that contains userID
+	ctxCredsDir  contextID = "credDir"   // a field of a context that contains path to directory with credentials
+	ctxUserCreds contextID = "userCreds" // a field of a context that contains user credentials
 )
 
 type (
-	// TokenList is a list of tokens pushed by authn after any token change
+	// TokenList is a list of tokens pushed by authn
 	TokenList struct {
 		Tokens []string `json:"tokens"`
 	}
@@ -61,15 +54,18 @@ type (
 		userID  string
 		issued  time.Time
 		expires time.Time
-		creds   map[string]string // TODO: what to keep in this field and how
+		creds   map[string]string
 	}
 
 	authList map[string]*authRec
 
 	authManager struct {
-		// decrypted token information from TokenList
 		sync.Mutex
+		// cache of decrypted tokens
 		tokens authList
+		// list of invalid tokens(revoked or of deleted users)
+		// Authn sends these tokens to primary for broadcasting
+		revokedTokens map[string]bool
 	}
 )
 
@@ -112,102 +108,109 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	if rec.expires, err = time.Parse(time.RFC822, expireStr); err != nil {
 		return nil, invalTokenErr
 	}
-	if rec.creds, ok = claims["creds"].(map[string]string); !ok {
-		rec.creds = make(map[string]string, 0)
+	rec.creds = make(map[string]string, 0)
+	if cc, ok := claims["creds"].(map[string]interface{}); ok {
+		for key, value := range cc {
+			if asStr, ok := value.(string); ok {
+				rec.creds[key] = asStr
+			} else {
+				glog.Warningf("Value is not string: %v [%T]", value, value)
+			}
+		}
+	} else {
+		glog.Info("Token for %s does not contain credentials", rec.userID)
 	}
 
 	return rec, nil
 }
 
-// Converts token list sent by authn and checks for correct format
-func newAuthList(tokenList *TokenList) (authList, error) {
-	auth := make(map[string]*authRec)
-	if tokenList == nil || len(tokenList.Tokens) == 0 {
-		return auth, nil
+// Retreives a string from context field or empty string if nothing found or
+//   the field is not of string type
+func getStringFromContext(ct context.Context, fieldName contextID) string {
+	fieldIf := ct.Value(fieldName)
+	if fieldIf == nil {
+		return ""
 	}
 
-	for _, tokenStr := range tokenList.Tokens {
-		rec, err := decryptToken(tokenStr)
-		if err != nil {
-			return nil, err
-		}
-		auth[tokenStr] = rec
+	strVal, ok := fieldIf.(string)
+	if !ok {
+		return ""
 	}
 
-	return auth, nil
+	return strVal
 }
 
-// Retreives a userID from context or empty string if nothing found
-func userIDFromContext(ct context.Context) string {
-	userIf := ct.Value(ctxUserID)
+// Retreives a userCreds from context or nil if nothing found
+func userCredsFromContext(ct context.Context) map[string]string {
+	userIf := ct.Value(ctxUserCreds)
 	if userIf == nil {
-		return ""
+		return nil
 	}
 
-	userID, ok := userIf.(string)
-	if !ok {
-		return ""
+	if userCreds, ok := userIf.(map[string]string); ok {
+		return userCreds
 	}
 
-	return userID
+	return nil
 }
 
-// Reads a directory with user credentials files.
-// userID should be empty for AWS and set for GCP.
-// If it is found it does additional checks:
-// - it is a directory, not a file
-// - it contains a file with user credentials (for AWS it looks for 'credentials' file, for GCP - "${userID}.json"
-// Returns a full path to file with credentials or error
-func userCredsPathFromContext(ct context.Context, userID string) (string, error) {
-	dirIf := ct.Value(ctxCredsDir)
-	if dirIf == nil {
-		return "", fmt.Errorf("Directory is not defined")
+// Add tokens to list of invalid ones. After that it cleans up the list
+// from expired tokens
+func (a *authManager) updateRevokedList(tokens *TokenList) {
+	if tokens == nil {
+		return
 	}
 
-	credDir, ok := dirIf.(string)
-	if !ok {
-		return "", fmt.Errorf("%s expected string type but it is %T (%v)", ctxCredsDir, dirIf, dirIf)
-	}
+	a.Lock()
+	defer a.Unlock()
 
-	stat, err := os.Stat(credDir)
-	if err != nil {
-		return "", fmt.Errorf("Invalid directory: %v", err)
+	for _, token := range tokens.Tokens {
+		a.revokedTokens[token] = true
+		delete(a.tokens, token)
 	}
-	if !stat.IsDir() {
-		return "", fmt.Errorf("%s is not a directory", credDir)
+	// clean up the list from obsolete data
+	for token := range a.revokedTokens {
+		rec, err := a.extractTokenData(token)
+		if err == nil && rec.expires.Before(time.Now()) {
+			delete(a.revokedTokens, token)
+		}
 	}
-
-	var credPath string
-	if userID == "" {
-		// AWS way - one file for all users
-		credPath = filepath.Join(credDir, awsCredsFile)
-	} else {
-		// GCP way - every user in a separate file
-		credPath = filepath.Join(credDir, userID+".json")
-	}
-
-	stat, err = os.Stat(credPath)
-	if err != nil {
-		glog.Errorf("Failed to open credential file: %v", err)
-		return "", fmt.Errorf("Failed to open credentials file")
-	}
-
-	if stat.IsDir() {
-		return "", fmt.Errorf("A file expected but %s is a directory", credPath)
-	}
-
-	return credPath, nil
 }
 
-// Looks for a token in the list of valid tokens and returns information
-// about a user for whom the token was issued
+// Checks if a token is valid:
+//   - must not be revoked one
+//   - must not be expired
+//   - must have all mandatory fields: userID, creds, issued, expires
+// Returns decrypted token information if it is valid
 func (a *authManager) validateToken(token string) (*authRec, error) {
 	a.Lock()
 	defer a.Unlock()
+
+	if _, ok := a.revokedTokens[token]; ok {
+		return nil, fmt.Errorf("Invalid token")
+	}
+
+	return a.extractTokenData(token)
+}
+
+// Decrypts token and returns information about a user for whom the token
+// was issued. Return error is the token expired or does not include all
+// mandatory fields
+// It is internal service function, so it does not lock anything
+func (a *authManager) extractTokenData(token string) (*authRec, error) {
+	var err error
+
 	auth, ok := a.tokens[token]
-	if !ok {
-		glog.Errorf("Token not found: %s", token)
-		return nil, fmt.Errorf("Token not found")
+	if !ok || auth == nil {
+		if auth, err = decryptToken(token); err != nil {
+			glog.Errorf("Invalid token was recieved: %s", token)
+			return nil, fmt.Errorf("Invalid token")
+		}
+		a.tokens[token] = auth
+	}
+
+	if auth == nil {
+		return nil, fmt.Errorf("Invalid token")
 	}
 
 	if auth.expires.Before(time.Now()) {

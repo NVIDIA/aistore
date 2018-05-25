@@ -6,8 +6,8 @@ import (
 	"log"
 	"path/filepath"
 
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/dfc"
 )
 
 var (
@@ -66,8 +66,11 @@ func main() {
 		glog.Fatalf("Failed to set up logger: %v\n", err)
 	}
 
-	dbPath := filepath.Join(conf.ConfDir, dbFile)
-	srv := newAuthServ(newUserManager(dbPath))
+	smapFile := filepath.Join(conf.ConfDir, smapConfig)
+	proxy := newProxy(smapFile, conf.Proxy.URL)
+
+	dbPath := filepath.Join(conf.ConfDir, userListFile)
+	srv := newAuthServ(newUserManager(dbPath, proxy))
 	if err := srv.run(); err != nil {
 		glog.Fatalf(err.Error())
 	}

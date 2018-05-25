@@ -72,7 +72,7 @@ type (
 //==========
 
 // "/"+Rversion+"/"+Rvote+"/"
-func (t *targetrunner) votehdlr(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
 		return
@@ -90,7 +90,7 @@ func (t *targetrunner) votehdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 // "/"+Rversion+"/"+Rvote+"/"
-func (p *proxyrunner) votehdlr(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
 		return

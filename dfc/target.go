@@ -1,8 +1,9 @@
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
+
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -35,9 +36,8 @@ const (
 	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
 	MaxPageSize      = 64 * 1024 // the maximum number of objects in a page (waring is logged in case of requested page size exceeds the limit)
 	workfileprefix   = ".~~~."
+	doesnotexist     = "does not exist"
 )
-
-const doesnotexist = "does not exist"
 
 type mountPath struct {
 	Path string       `json:"path"`
@@ -92,6 +92,7 @@ type targetrunner struct {
 	rtnamemap     *rtnamemap
 	prefetchQueue chan filesWithDeadline
 	statsdC       statsd.Client
+	authn         *authManager
 }
 
 // start target runner
@@ -140,15 +141,20 @@ func (t *targetrunner) run() error {
 	// prefetch
 	t.prefetchQueue = make(chan filesWithDeadline, prefetchChanSize)
 
+	t.authn = &authManager{
+		tokens:        make(map[string]*authRec),
+		revokedTokens: make(map[string]bool),
+	}
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", t.buckethdlr)
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", t.objecthdlr)
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, t.daemonhdlr)
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Rpush+"/", t.pushhdlr)
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, t.httphealth)
-	t.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", t.votehdlr)
+	t.httprunner.registerhdlr(URLPath(Rversion, Rbuckets)+"/", t.bucketHandler)
+	t.httprunner.registerhdlr(URLPath(Rversion, Robjects)+"/", t.objectHandler)
+	t.httprunner.registerhdlr(URLPath(Rversion, Rdaemon), t.daemonHandler)
+	t.httprunner.registerhdlr(URLPath(Rversion, Rpush)+"/", t.pushHandler)
+	t.httprunner.registerhdlr(URLPath(Rversion, Rhealth), t.httpHealth)
+	t.httprunner.registerhdlr(URLPath(Rversion, Rvote)+"/", t.voteHandler)
+	t.httprunner.registerhdlr(URLPath(Rversion, Rtokens), t.tokenHandler)
 	t.httprunner.registerhdlr("/", invalhdlr)
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
@@ -252,7 +258,7 @@ func (t *targetrunner) getPrimaryURLAndSI() (string, *daemonInfo) {
 //===========================================================================================
 
 // verb /Rversion/Rbuckets
-func (t *targetrunner) buckethdlr(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpbckget(w, r)
@@ -268,7 +274,7 @@ func (t *targetrunner) buckethdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 // verb /Rversion/Robjects
-func (t *targetrunner) objecthdlr(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpobjget(w, r)
@@ -789,8 +795,18 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handler for: "/"+Rversion+"/"+Rtokens
+func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodDelete:
+		t.httpTokenDelete(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
 // GET /Rversion/Rhealth
-func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	from := query.Get(URLParamFromID)
 
@@ -809,7 +825,7 @@ func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 }
 
 //  /Rversion/Rpush/bucket-name
-func (t *targetrunner) pushhdlr(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rpush); apitems == nil {
 		return
@@ -2137,7 +2153,7 @@ func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) 
 //===========================
 
 // "/"+Rversion+"/"+Rdaemon
-func (t *targetrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		t.httpdaeget(w, r)
@@ -2797,6 +2813,32 @@ func (t *targetrunner) runFSKeeper(err error) {
 	}
 }
 
+// Decrypts token and retreives userID from request header
+// Returns empty userID in case of token is invalid
+func (t *targetrunner) userFromRequest(r *http.Request) (*authRec, error) {
+	if r == nil {
+		return nil, nil
+	}
+
+	token := ""
+	tokenParts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(tokenParts) == 2 && tokenParts[0] == tokenStart {
+		token = tokenParts[1]
+	}
+
+	if token == "" {
+		// no token in header = use default credentials
+		return nil, nil
+	}
+
+	authrec, err := t.authn.validateToken(token)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to decrypt token [%s]: %v", token, err)
+	}
+
+	return authrec, nil
+}
+
 // If Authn server is enabled then the function tries to read a user credentials
 // (at this moment userID is enough) from HTTP request header: looks for
 // 'Authorization' header and decrypts it.
@@ -2808,10 +2850,16 @@ func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
 		return ct
 	}
 
-	userID := userIDFromRequest(r)
-	if userID != "" {
-		ct = context.WithValue(ct, ctxUserID, userID)
+	user, err := t.userFromRequest(r)
+	if err != nil {
+		glog.Errorf("Failed to extract token: %v", err)
+		return ct
+	}
+
+	if user != nil {
+		ct = context.WithValue(ct, ctxUserID, user.userID)
 		ct = context.WithValue(ct, ctxCredsDir, ctx.config.Auth.CredDir)
+		ct = context.WithValue(ct, ctxUserCreds, user.creds)
 	}
 
 	return ct
@@ -3010,4 +3058,20 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 	}
 
 	return t.broadcast(path, query, method, body, servers, timeout...)
+}
+
+func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
+	tokenList := &TokenList{}
+	apitems := t.restAPIItems(r.URL.Path, 5)
+	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
+		return
+	}
+
+	if err := t.readJSON(w, r, tokenList); err != nil {
+		s := fmt.Sprintf("Invalid token list: %v", err)
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+
+	t.authn.updateRevokedList(tokenList)
 }
