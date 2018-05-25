@@ -667,8 +667,13 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 //=================
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string, other ...interface{}) {
 	status := http.StatusBadRequest
+	shouldWriteError := true
 	if len(other) > 0 {
-		status = other[0].(int)
+		if v, ok := other[0].(int); ok {
+			status = v
+		} else if v, ok := other[0].(bool); ok {
+			shouldWriteError = v
+		}
 	}
 	s := http.StatusText(status) + ": " + specific + ": " + r.Method + " " + r.URL.Path
 	if _, file, line, ok := runtime.Caller(1); ok {
@@ -679,7 +684,9 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specif
 	}
 	glog.Errorln(s)
 	glog.Flush()
-	http.Error(w, s, status)
+	if shouldWriteError {
+		http.Error(w, s, status)
+	}
 	h.statsif.add("numerr", 1)
 }
 
