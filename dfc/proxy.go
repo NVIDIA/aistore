@@ -219,16 +219,25 @@ func (p *proxyrunner) run() error {
 
 func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 	var url string
+
+	// L. Ding
+	// Here the lock should be accquired, but don't to hold the lock during the intra-cluster calls.
+	// Code needs to be re-orged to have a better structure for lock handling.
 	if p.smap.ProxySI.DaemonID != "" {
 		url = p.smap.ProxySI.DirectURL
 	} else {
 		// Smap has not yet been synced
 		url = ctx.config.Proxy.Primary.URL
 	}
+
 	return p.registerWithURL(url, timeout)
 }
 
 func (p *proxyrunner) registerWithURL(proxyurl string, timeout time.Duration) (int, error) {
+	// L. Ding
+	// Definitely a race here when accessing p.si, it is hard to add a lock here becasue this function
+	// is called from different places, has to keep all callers happy and safe in term of calling
+	// with or without lock held.
 	jsbytes, err := json.Marshal(p.si)
 	assert(err == nil)
 
@@ -471,6 +480,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
+
+	// L. Ding: A race here between this HRW call and adding new target to cluster.
 	si, errstr := HrwTarget(bucket, objname, p.smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
@@ -1728,7 +1739,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	)
 	p.statsif.add("numpost", 1)
 
-	// local in-mem state updates under lock
 	smapLock.Lock()
 	defer smapLock.Unlock()
 	if proxy {
