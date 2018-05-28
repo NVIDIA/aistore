@@ -276,8 +276,9 @@ func (r *proxykalive) primarykeepalive() (stopped bool) {
 		}
 
 		smapLock.Lock()
-		// FIXME: (L. Ding) I think this is a bug, this should trigger a map sync to all proxies at least
-		//                  if not to cluster
+		// FIXME:
+		// This is a bug, this should trigger a map sync to all proxies at least if not to
+		// whole cluster
 		r.p.smap.del(sid)
 		smapLock.Unlock()
 	}

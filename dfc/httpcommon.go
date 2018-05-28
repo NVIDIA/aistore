@@ -198,8 +198,8 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 }
 
 // initSI initialize a daemon's identification (never changes once it is set)
-// L. Ding: Sadly httprunner has become the sharing point where common code for
-//          proxyrunner and targetrunner exist.
+// Note: Sadly httprunner has become the sharing point where common code for
+//       proxyrunner and targetrunner exist.
 func (h *httprunner) initSI() {
 	ipaddr, errstr := getipv4addr()
 	if errstr != "" {

@@ -35,10 +35,6 @@ type atimerunner struct {
 
 func (r *atimerunner) run() error {
 	glog.Infof("Starting %s", r.name)
-	r.chstop = make(chan struct{}, 4)
-	r.chfqn = make(chan string, chfqnSize)
-	r.atimemap = &atimemap{m: make(map[string]time.Time, atimeCacheIni)}
-
 	ticker := time.NewTicker(atimeSyncTime)
 loop:
 	for {

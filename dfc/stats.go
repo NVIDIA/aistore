@@ -266,6 +266,7 @@ func (r *proxystatsrunner) addL(name string, val int64) {
 		assert(false, "Invalid stats name "+name)
 	}
 	*v += val
+	// FIXME: This causes a race between this line and the 'logged = true' line in log().
 	s.logged = false
 }
 
@@ -322,6 +323,11 @@ func (r *storstatsrunner) log() (runlru bool) {
 		riostat.Lock()
 		r.CPUidle = riostat.CPUidle
 		for dev, iometrics := range riostat.Disk {
+			// This is not really a 'copy', iometrics is a map, this assignment makes storstatsrunner
+			// and iostatrunner share the same 'deviometrics', which causes races in other places, for
+			// example, in target.go, when responding to http get stats request, json marshal only
+			// acquired storstatsrunner's lock, but never acquired iostatrunner's lock, which causes
+			// read/write race.
 			r.Disk[dev] = iometrics // copy
 			if riostat.isZeroUtil(dev) {
 				continue // skip zeros
