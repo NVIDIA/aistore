@@ -521,13 +521,10 @@ It returns a buffer containing the formatted header and the user's file and line
 The depth specifies how many stack frames above lives the source line to be identified in the log message.
 
 Log lines have this form:
-	Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...
+	L hh:mm:ss.uuuuuu file:line] msg...
 where the fields are defined as follows:
 	L                A single character, representing the log level (eg 'I' for INFO)
-	mm               The month (zero padded; ie May is '05')
-	dd               The day (zero padded)
 	hh:mm:ss.uuuuuu  Time in hours, minutes and fractional seconds
-	threadid         The space-padded thread ID as returned by GetTID()
 	file             The file name
 	line             The line number
 	msg              The user-supplied message
@@ -559,24 +556,19 @@ func (l *loggingT) formatHeader(s severity, file string, line int) *buffer {
 
 	// Avoid Fprintf, for speed. The format is so simple that we can do it quickly by hand.
 	// It's worth about 3X. Fprintf is hard.
-	_, month, day := now.Date()
 	hour, minute, second := now.Clock()
-	// Lmmdd hh:mm:ss.uuuuuu threadid file:line]
+	// L hh:mm:ss.uuuuu file:line]
 	buf.tmp[0] = severityChar[s]
-	buf.twoDigits(1, int(month))
-	buf.twoDigits(3, day)
-	buf.tmp[5] = ' '
-	buf.twoDigits(6, hour)
-	buf.tmp[8] = ':'
-	buf.twoDigits(9, minute)
-	buf.tmp[11] = ':'
-	buf.twoDigits(12, second)
-	buf.tmp[14] = '.'
-	buf.nDigits(6, 15, now.Nanosecond()/1000, '0')
-	buf.tmp[21] = ' '
-	buf.nDigits(7, 22, pid, ' ') // TODO: should be TID
-	buf.tmp[29] = ' '
-	buf.Write(buf.tmp[:30])
+	buf.tmp[1] = ' '
+	buf.twoDigits(2, hour)
+	buf.tmp[4] = ':'
+	buf.twoDigits(5, minute)
+	buf.tmp[7] = ':'
+	buf.twoDigits(8, second)
+	buf.tmp[10] = '.'
+	buf.nDigits(6, 11, now.Nanosecond()/1000, '0')
+	buf.tmp[17] = ' '
+	buf.Write(buf.tmp[:18])
 	buf.WriteString(file)
 	buf.tmp[0] = ':'
 	n := buf.someDigits(1, line)
@@ -782,17 +774,16 @@ func stacks(all bool) []byte {
 var logExitFunc func(error)
 
 // exit is called if there is trouble creating or writing log files.
-// It flushes the logs and exits the program; there's no point in hanging around.
 // l.mu is held.
 func (l *loggingT) exit(err error) {
 	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
-	// If logExitFunc is set, we do that instead of exiting.
 	if logExitFunc != nil {
 		logExitFunc(err)
-		return
 	}
-	l.flushAll()
-	os.Exit(2)
+
+	// Originally, glog calls os.Exit(2) here. However for the sake of resilience,
+	// we don't want glog to kill a dfc process only is there is trouble creating
+	// or writing log files.
 }
 
 // syncBuffer joins a bufio.Writer to its underlying file, providing access to the
@@ -845,7 +836,7 @@ func (sb *syncBuffer) rotateFile(now time.Time) error {
 	fmt.Fprintf(&buf, "Log file created at: %s\n", now.Format("2006/01/02 15:04:05"))
 	fmt.Fprintf(&buf, "Running on machine: %s\n", host)
 	fmt.Fprintf(&buf, "Binary: Built with %s %s for %s/%s\n", runtime.Compiler, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	fmt.Fprintf(&buf, "Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg\n")
+	fmt.Fprintf(&buf, "Log line format: L hh:mm:ss.uuuuuu file:line] msg\n")
 	n, err := sb.file.Write(buf.Bytes())
 	sb.nbytes += uint64(n)
 	return err
