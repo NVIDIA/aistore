@@ -24,7 +24,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/golang/glog"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 const (

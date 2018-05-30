@@ -16,10 +16,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/golang/glog"
-
-[[constraint]]
-  branch = "master"
   name = "github.com/hkwi/h2c"
 
 [[constraint]]

@@ -30,7 +30,7 @@ import (
 	"net/http/httputil"
 
 	"github.com/OneOfOne/xxhash"
-	"github.com/golang/glog"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/hkwi/h2c"
 )
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/golang/glog"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 var (

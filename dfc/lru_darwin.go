@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 func getToEvict(mpath string, hwm uint32, lwm uint32) (int64, error) {

@@ -17,7 +17,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 
-	"github.com/golang/glog"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 type (

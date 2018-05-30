@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/golang/glog"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
