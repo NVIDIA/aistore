@@ -665,18 +665,25 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 // http err + spec message + code + stats
 //
 //=================
-func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, specific string, other ...interface{}) {
-	status := http.StatusBadRequest
-	if len(other) > 0 {
-		status = other[0].(int)
-	}
-	s := http.StatusText(status) + ": " + specific + ": " + r.Method + " " + r.URL.Path
-	if _, file, line, ok := runtime.Caller(1); ok {
-		if !strings.Contains(specific, ".go, #") {
+
+// richHTTPError returns a richly formatted error string for an HTTP request.
+func (h *httprunner) richHTTPError(r *http.Request, msg string, status, skip int) string {
+	s := http.StatusText(status) + ": " + msg + ": " + r.Method + " " + r.URL.Path
+	if _, file, line, ok := runtime.Caller(skip); ok {
+		if !strings.Contains(msg, ".go, #") {
 			f := filepath.Base(file)
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
 	}
+	return s
+}
+
+func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, other ...interface{}) {
+	status := http.StatusBadRequest
+	if len(other) > 0 {
+		status = other[0].(int)
+	}
+	s := h.richHTTPError(r, msg, status, 2)
 	glog.Errorln(s)
 	glog.Flush()
 	http.Error(w, s, status)
