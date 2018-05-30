@@ -35,20 +35,20 @@ Note that local and Cloud-based buckets support the same API with minor exceptio
 
 ## Getting Started
 
-If you've already installed Go, getting started with DFC takes about 30 seconds
-and consists in the following 4 steps:
+If you've already installed Go and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
 
 ```
 $ go get -u -v github.com/NVIDIA/dfcpub/dfc
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
+$ dep ensure
 $ make deploy
 $ go test ./tests -v -run=down -numfiles=2 -bucket=<your bucket name>
 ```
 
-The 1st command will install both the DFC source code and all its dependencies
+The 1st and 3rd commands will install the DFC source code and all its versioned dependencies
 under your configured $GOPATH.
 
-The 3rd - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)).
+The 4th - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)).
 
 Finally, for the last 4th command to work, you'll need to have a name - the name of a bucket.
 The bucket could be an AWS or GCP based one, or a DFC-own so-called "local bucket".
