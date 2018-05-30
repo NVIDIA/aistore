@@ -211,7 +211,12 @@ func (t *targetrunner) unregister() (int, error) {
 
 // getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
 // if smap is not synced, primary proxy is from config, otherwise from target's smap
+// smap lock is acquired to avoid race between this function and other smap access (for example,
+// receiving smap during metasync)
 func (t *targetrunner) getPrimaryURLAndSI() (string, *daemonInfo) {
+	smapLock.Lock()
+	defer smapLock.Unlock()
+
 	if t.smap.ProxySI == nil {
 		return ctx.config.Proxy.Primary.URL, nil
 	}
@@ -332,6 +337,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// L. Ding: A race here between this call and other lbmap access including receiving lbmap during
+	//          metasync.
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -775,6 +782,9 @@ func (t *targetrunner) httphealth(w http.ResponseWriter, r *http.Request) {
 	jsbytes, err := json.Marshal(status)
 	assert(err == nil, err)
 	ok := t.writeJSON(w, r, jsbytes, "thealthstatus")
+
+	smapLock.Lock()
+	defer smapLock.Unlock()
 	if ok && t.smap.ProxySI != nil && from == t.smap.ProxySI.DaemonID {
 		t.kalive.heardFrom(t.smap.ProxySI.DaemonID, false /* reset */)
 	}
@@ -1173,24 +1183,25 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 	return
 }
 
-func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*BucketList, error) {
 	type mresp struct {
 		infos *allfinfos
 		err   error
 	}
+
 	ch := make(chan *mresp, len(ctx.mountpaths.Available))
 	wg := &sync.WaitGroup{}
-	isLocal := t.islocalBucket(bucket)
 
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
 		defer wg.Done()
 		r := &mresp{t.newFileWalk(bucket, msg), nil}
 
-		if _, err = os.Stat(dir); err != nil {
+		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
 				r.err = err
 			}
+
 			// it means there was no PUT(for local bucket) or GET(for cloud bucket - cache is empty) yet
 			// Not an error, just skip the path
 			ch <- r
@@ -1198,10 +1209,11 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		}
 
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
-		if err = filepath.Walk(dir, r.infos.listwalkf); err != nil {
+		if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 			r.err = err
 		}
+
 		ch <- r
 	}
 
@@ -1209,17 +1221,19 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
+	isLocal := t.islocalBucket(bucket)
 	for mpath := range ctx.mountpaths.Available {
 		wg.Add(1)
-		localdir := ""
+		var localDir string
 		if isLocal {
-			localdir = filepath.Join(makePathLocal(mpath), bucket)
+			localDir = filepath.Join(makePathLocal(mpath), bucket)
 		} else {
-			localdir = filepath.Join(makePathCloud(mpath), bucket)
+			localDir = filepath.Join(makePathCloud(mpath), bucket)
 		}
 
-		go walkMpath(localdir)
+		go walkMpath(localDir)
 	}
+
 	wg.Wait()
 	close(ch)
 
@@ -1255,15 +1269,17 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (bucke
 		marker = allfinfos[pageSize-1].Name
 	}
 
-	bucketList = &BucketList{
+	bucketList := &BucketList{
 		Entries:    allfinfos,
 		PageMarker: marker,
 	}
+
 	if strings.Contains(msg.GetProps, GetTargetURL) {
 		for _, e := range bucketList.Entries {
 			e.TargetURL = t.si.DirectURL
 		}
 	}
+
 	return bucketList, nil
 }
 
@@ -2242,10 +2258,13 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget")
 	case GetWhatStats:
-		rr := getstorstatsrunner()
-		rr.Lock()
-		jsbytes, err = json.Marshal(rr)
-		rr.Unlock()
+		storageStatsRunner := getstorstatsrunner()
+		ioStatsRunner := getiostatrunner()
+		storageStatsRunner.Lock()
+		ioStatsRunner.Lock()
+		jsbytes, err = json.Marshal(storageStatsRunner)
+		ioStatsRunner.Unlock()
+		storageStatsRunner.Unlock()
 		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
@@ -2564,17 +2583,6 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 }
 
 func (t *targetrunner) startupMpaths() {
-	// fill-in mpaths
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	ctx.mountpaths.Offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	if t.testingFSPpaths() {
-		glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
-		t.testCachepathMounts()
-	} else {
-		t.fspath2mpath()
-		t.mpath2Fsid() // enforce FS uniqueness
-	}
-
 	for mpath := range ctx.mountpaths.Available {
 		cloudbctsfqn := makePathCloud(mpath)
 		if err := CreateDir(cloudbctsfqn); err != nil {
