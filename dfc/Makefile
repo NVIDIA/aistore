@@ -5,6 +5,33 @@ VERSION := 1.0.0
 BUILD := `git rev-parse HEAD`
 LDFLAGS=-ldflags "-X=dfc.Version=$(VERSION) -X=dfc.Build=$(BUILD)"
 
+REPOPATH=src/github.com/NVIDIA
+DEVPATH=src/gitlab-master.nvidia.com/aistorage/
+
+devinit:
+	@if [ -d "${GOPATH}/${REPOPATH}" ] && [ ! -L "${GOPATH}/${REPOPATH}" ]; then \
+		echo "Removing ${GOPATH}/${REPOPATH}" && \
+		rm -r "${GOPATH}/${REPOPATH}"; \
+	fi
+	@if [ -d "${GOPATH}/${REPOPATH}" ]; then \
+		echo "Deleting symbolic link" && \
+		rm "${GOPATH}/${REPOPATH}"; \
+	fi
+	@if [ ! -d "${GOPATH}/${REPOPATH}" ]; then \
+		echo "Creating symbolic link" && \
+		ln -s "${GOPATH}/${DEVPATH}" "${GOPATH}/${REPOPATH}"; \
+	fi
+
+devrefresh:
+	@if [ -d "${GOPATH}/${REPOPATH}" ] && [ -L "${GOPATH}/${REPOPATH}" ]; then \
+		echo "Refreshing symbolic link ${GOPATH}/${REPOPATH}" && \
+		rm -r "${GOPATH}/${REPOPATH}"; \
+	fi
+	@if [ ! -d "${GOPATH}/${REPOPATH}" ]; then \
+		echo "Creating symbolic link" && \
+		ln -s "${GOPATH}/${DEVPATH}" "${GOPATH}/${REPOPATH}"; \
+	fi
+
 build:
 	GOBIN=${GOPATH}/bin go build && go install
 	GOBIN=${GOPATH}/bin go install setup/dfc.go
