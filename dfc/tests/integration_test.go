@@ -71,7 +71,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh    = make(chan string, m.num)
-		errch         = make(chan error, 100)
+		errch         = make(chan error, m.num)
 		sgl           *dfc.SGLIO
 		maxNumGetErrs = uint64(m.num * m.numGetsEachFile / 10) // 10 % of GET requests
 	)
@@ -166,7 +166,7 @@ func TestProxyFailbackAndGetAndReRegisterInParallel(t *testing.T) {
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh    = make(chan string, m.num)
-		errch         = make(chan error, 100)
+		errch         = make(chan error, m.num)
 		sgl           *dfc.SGLIO
 		maxNumGetErrs = uint64(m.num * m.numGetsEachFile / 10) // 10 % of GET requests
 	)
