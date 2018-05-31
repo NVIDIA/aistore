@@ -433,7 +433,7 @@ existslocally:
 	written, err := io.CopyBuffer(w, file, buf)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
-		glog.Errorln(t.richHTTPError(r, errstr, http.StatusInternalServerError, 1))
+		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 		t.statsif.add("numerr", 1)
 		return
 	}

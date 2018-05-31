@@ -666,16 +666,9 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 //
 //=================
 
-// richHTTPError returns a richly formatted error string for an HTTP request.
-func (h *httprunner) richHTTPError(r *http.Request, msg string, status, skip int) string {
-	s := http.StatusText(status) + ": " + msg + ": " + r.Method + " " + r.URL.Path
-	if _, file, line, ok := runtime.Caller(skip); ok {
-		if !strings.Contains(msg, ".go, #") {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-	}
-	return s
+// errHTTP returns a formatted error string for an HTTP request.
+func (h *httprunner) errHTTP(r *http.Request, msg string, status int) string {
+	return http.StatusText(status) + ": " + msg + ": " + r.Method + " " + r.URL.Path
 }
 
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, other ...interface{}) {
@@ -683,7 +676,13 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	if len(other) > 0 {
 		status = other[0].(int)
 	}
-	s := h.richHTTPError(r, msg, status, 2)
+	s := h.errHTTP(r, msg, status)
+	if _, file, line, ok := runtime.Caller(1); ok {
+		if !strings.Contains(msg, ".go, #") {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+	}
 	glog.Errorln(s)
 	glog.Flush()
 	http.Error(w, s, status)
