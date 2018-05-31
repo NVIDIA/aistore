@@ -30,6 +30,7 @@ devrefresh:
 	@if [ ! -d "${GOPATH}/${REPOPATH}" ]; then \
 		echo "Creating symbolic link" && \
 		ln -s "${GOPATH}/${DEVPATH}" "${GOPATH}/${REPOPATH}"; \
+	else echo "Failed to create symlink: a regular direct exists"; \
 	fi
 
 build:
