@@ -21,18 +21,18 @@ const (
 )
 
 var (
-	numfiles   int
-	numworkers int
+	files   int
+	workers int
 	filesize   uint64
-	clibucket  string
-	proxyurl   string
+	bucket  string
+	url   string
 )
 
 func init() {
-	flag.StringVar(&proxyurl, "proxyurl", ProxyURL, "Proxy URL")
-	flag.StringVar(&clibucket, "bucket", "localbkt", "AWS or GCP bucket")
-	flag.IntVar(&numfiles, "files", 10, "Number of files to put")
-	flag.IntVar(&numworkers, "workers", 10, "Number of workers")
+	flag.StringVar(&url, "url", ProxyURL, "Proxy URL")
+	flag.StringVar(&bucket, "bucket", "local_benchmark_bucket", "AWS or GCP bucket")
+	flag.IntVar(&files, "files", 10, "Number of files to put")
+	flag.IntVar(&workers, "workers", 10, "Number of workers")
 	flag.Uint64Var(&filesize, "filesize", 1, "Size of files to put in MB")
 }
 
@@ -44,13 +44,13 @@ func worker(id int, jobs <-chan func()) {
 
 func main() {
 	flag.Parse()
-	jobs := make(chan func(), numfiles)
+	jobs := make(chan func(), files)
 
-	for w := 0; w < numworkers; w++ {
+	for w := 0; w < workers; w++ {
 		go worker(w, jobs)
 	}
 
-	err := putSpecificFiles(0, int64(baseseed), filesize*megabytes, numfiles, clibucket, jobs)
+	err := putSpecificFiles(0, int64(baseseed), filesize*megabytes, files, bucket, jobs)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
@@ -59,7 +59,7 @@ func main() {
 
 func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string, pool chan func()) error {
 	var (
-		errch = make(chan error, numfiles)
+		errch = make(chan error, files)
 		wg    = &sync.WaitGroup{}
 	)
 
@@ -74,7 +74,7 @@ func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket s
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			client.PutAsync(wg, proxyurl, r, bucket, "__bench/"+fname, errch, !testing.Verbose())
+			client.PutAsync(wg, url, r, bucket, "__bench/"+fname, errch, !testing.Verbose())
 		}
 	}
 	close(pool)

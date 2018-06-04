@@ -10,5 +10,9 @@ tar xf nghttp2-1.31.0.tar.bz2
 cd nghttp2-1.31.0
 ./configure --enable-apps
 make install
+
+# Set up links for shared libraries. See https://github.com/nghttp2/nghttp2/issues/916.
+sudo ldconfig -v
+
 cd -
 rm nghttp2-1.31.0.tar.bz2

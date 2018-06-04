@@ -5,7 +5,7 @@ N=$3
 C=$4
 
 uris=""
-prefix="http://$U/v1/files/$B/__bench/l"
+prefix="http://$U/v1/objects/$B/__bench/l"
 suffix=" "
 for i in `seq $N`; do 
     uris=$uris$prefix$i$suffix; 
