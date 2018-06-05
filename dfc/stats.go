@@ -60,10 +60,10 @@ type proxyCoreStats struct {
 	Listlatency int64 `json:"listlatency"` // ---/---
 	Numerr      int64 `json:"numerr"`
 	// omitempty
-	ngets  int64 `json:"-"`
-	nputs  int64 `json:"-"`
-	nlists int64 `json:"-"`
-	logged bool  `json:"-"`
+	ngets  int64
+	nputs  int64
+	nlists int64
+	logged bool
 }
 
 type targetCoreStats struct {
@@ -106,9 +106,9 @@ type storstatsrunner struct {
 	CPUidle string                  `json:"cpuidle"`
 	Disk    map[string]deviometrics `json:"disk"`
 	// omitempty
-	timeUpdatedCapacity time.Time               `json:"-"`
-	timeCheckedLogSizes time.Time               `json:"-"`
-	fsmap               map[syscall.Fsid]string `json:"-"`
+	timeUpdatedCapacity time.Time
+	timeCheckedLogSizes time.Time
+	fsmap               map[syscall.Fsid]string
 }
 
 type ClusterStats struct {

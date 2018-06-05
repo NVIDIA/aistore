@@ -1,9 +1,9 @@
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
 
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 // Authentication flow:
 // 1. If AuthN server is disabled or directory with user credentials is not set:
 //    Token in HTTP request header is ignored.
@@ -41,8 +41,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/dgrijalva/jwt-go"
 )
 
 const (
