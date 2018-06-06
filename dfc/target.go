@@ -499,7 +499,8 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !b {
-			t.invalmsghdlr(w, r, "Invalid request: PUT request must come from a proxy or target")
+			t.invalmsghdlr(w, r, fmt.Sprintf(
+				"Invalid request: PUT request from daemon ID: %s must come from a proxy", d))
 			return
 		}
 		errstr, errcode := t.doput(w, r, bucket, objname)
