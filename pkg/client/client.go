@@ -51,10 +51,10 @@ type (
 
 	// HTTPLatencies stores latency of a http request
 	HTTPLatencies struct {
-		ProxyConn           time.Duration // from request is created to proxy connection is estabilished
-		Proxy               time.Duration // from proxy connection is estabilished to redirected
-		TargetConn          time.Duration // from request is redirected to target connection is estabilished
-		Target              time.Duration // from target connection is estabilished to request is completed
+		ProxyConn           time.Duration // from request is created to proxy connection is established
+		Proxy               time.Duration // from proxy connection is established to redirected
+		TargetConn          time.Duration // from request is redirected to target connection is established
+		Target              time.Duration // from target connection is established to request is completed
 		PostHTTP            time.Duration // from http ends to after read data from http response and verify hash (if specified)
 		ProxyWroteHeader    time.Duration // from ProxyConn to header is written
 		ProxyWroteRequest   time.Duration // from ProxyWroteHeader to response body is written
@@ -67,9 +67,9 @@ type (
 
 var (
 	transport = &http.Transport{
-		Dial: (&net.Dialer{
+		DialContext: (&net.Dialer{
 			Timeout: 60 * time.Second,
-		}).Dial,
+		}).DialContext,
 		TLSHandshakeTimeout: 600 * time.Second,
 		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}

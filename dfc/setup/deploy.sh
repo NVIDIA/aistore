@@ -17,7 +17,12 @@
 ############################################
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
+USE_HTTPS=false
 PROXYURL="http://localhost:8080"
+if $USE_HTTPS; then
+    PROXYURL="https://localhost:8080"
+fi
+
 PORT=8079
 LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
 LOGROOT="/tmp/dfc"
@@ -194,6 +199,3 @@ if [[ $AUTHENABLED = "true" ]]; then
 	$GOPATH/bin/authn -config=$CONFFILE &
 	{ set +x; } 2>/dev/null
 fi
-
-sleep 2
-echo done

@@ -1,2 +1,6 @@
 #!/bin/bash
-curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://$1/v1/buckets/$2
+
+curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://localhost:8080/v1/buckets/$1
+
+# For HTTPS
+#curl -i -k -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' https://localhost:8080/v1/buckets/$1

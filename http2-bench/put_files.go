@@ -6,26 +6,23 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
-	blocksize = 1048576
-	baseseed  = 1062984096
-	megabytes = uint64(1024 * 1024)
+	kilobytes = uint64(1024)
 	smokeDir  = "/tmp/dfc/smoke"        // smoke test dir
 	ProxyURL  = "http://localhost:8080" // assuming local proxy is listening on 8080
 )
 
 var (
-	files   int
-	workers int
-	filesize   uint64
-	bucket  string
-	url   string
+	files    int
+	workers  int
+	filesize uint64
+	bucket   string
+	url      string
 )
 
 func init() {
@@ -33,10 +30,10 @@ func init() {
 	flag.StringVar(&bucket, "bucket", "local_benchmark_bucket", "AWS or GCP bucket")
 	flag.IntVar(&files, "files", 10, "Number of files to put")
 	flag.IntVar(&workers, "workers", 10, "Number of workers")
-	flag.Uint64Var(&filesize, "filesize", 1, "Size of files to put in MB")
+	flag.Uint64Var(&filesize, "filesize", 1, "Size of files to put in KB")
 }
 
-func worker(id int, jobs <-chan func()) {
+func worker(jobs <-chan func()) {
 	for j := range jobs {
 		j()
 	}
@@ -47,17 +44,17 @@ func main() {
 	jobs := make(chan func(), files)
 
 	for w := 0; w < workers; w++ {
-		go worker(w, jobs)
+		go worker(jobs)
 	}
 
-	err := putSpecificFiles(0, int64(baseseed), filesize*megabytes, files, bucket, jobs)
+	err := putSpecificFiles(filesize*kilobytes, files, bucket, jobs)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}
 }
 
-func putSpecificFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string, pool chan func()) error {
+func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan func()) error {
 	var (
 		errch = make(chan error, files)
 		wg    = &sync.WaitGroup{}

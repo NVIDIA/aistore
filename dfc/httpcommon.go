@@ -8,6 +8,7 @@ package dfc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -16,6 +17,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path"
@@ -27,9 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"net/http/httputil"
-
-	"crypto/tls"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
 	"github.com/hkwi/h2c"
@@ -178,14 +177,11 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	if numDaemons < 4 {
 		numDaemons = 4
 	}
-	if ctx.config.Net.HTTP.UseHTTPS {
-		glog.Fatalf("HTTPS for inter-cluster communications is not yet supported (and better be avoided)")
-	} else {
-		h.httpclient =
-			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
-		h.httpclientLongTimeout =
-			&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
-	}
+
+	h.httpclient =
+		&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
+	h.httpclientLongTimeout =
+		&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
 
 	if isproxy && ctx.config.Net.HTTP.UseAsProxy {
 		h.revProxy = &httputil.ReverseProxy{
@@ -244,6 +240,10 @@ func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
 		MaxIdleConnsPerHost: perhost,
 		MaxIdleConns:        perhost * numDaemons,
 	}
+	if ctx.config.Net.HTTP.UseHTTPS {
+		glog.Warningln("HTTPS for inter-cluster communications is not yet supported and should be avoided")
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 	return transport
 }
 
@@ -259,6 +259,7 @@ func (h *httprunner) run() error {
 	}
 	if ctx.config.Net.HTTP.UseHTTPS {
 		h.h = &http.Server{Addr: addr, Handler: handler, ErrorLog: h.glogger}
+
 		if !ctx.config.Net.HTTP.UseHTTP2 {
 			h.h.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 		}
@@ -812,7 +813,11 @@ func (h *httprunner) broadcast(path string, query url.Values, method string, bod
 			defer wg.Done()
 
 			var u url.URL
-			u.Scheme = "http"
+			if ctx.config.Net.HTTP.UseHTTPS {
+				u.Scheme = "https"
+			} else {
+				u.Scheme = "http"
+			}
 			u.Host = di.NodeIPAddr + ":" + di.DaemonPort
 			u.Path = path
 			u.RawQuery = query.Encode() // golang handles query == nil
