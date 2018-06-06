@@ -74,7 +74,6 @@ type dfconfig struct {
 	FSKeeper         fskeeperconf      `json:"fskeeper"`
 	Experimental     experimental      `json:"experimental"`
 	Auth             authconf          `json:"auth"`
-	H2c              bool              `json:"h2c"`
 	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
 	CallStats        callStats         `json:"callstats"`
 }
@@ -161,6 +160,7 @@ type l4cnf struct {
 
 type httpcnf struct {
 	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
+	UseHTTP2      bool   `json:"use_http2"`          // use HTTP/2 instead of HTTP/1.1
 	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
 	UseAsProxy    bool   `json:"use_as_proxy"`       // use DFC as an HTTP proxy
 	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate

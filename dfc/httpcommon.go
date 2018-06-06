@@ -32,6 +32,7 @@ import (
 	"github.com/OneOfOne/xxhash"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/hkwi/h2c"
+	"crypto/tls"
 )
 
 const ( // => Transport.MaxIdleConnsPerHost
@@ -251,13 +252,16 @@ func (h *httprunner) run() error {
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 	var handler http.Handler = h.mux
-	if ctx.config.H2c {
+	addr := ":" + ctx.config.Net.L4.Port
+	
+	if ctx.config.Net.HTTP.UseHTTP2 && !ctx.config.Net.HTTP.UseHTTPS {
 		handler = h2c.Server{Handler: handler}
 	}
-	portstring := ":" + ctx.config.Net.L4.Port
-
 	if ctx.config.Net.HTTP.UseHTTPS {
-		h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+		h.h = &http.Server{Addr: addr, Handler: handler, ErrorLog: h.glogger}
+		if !ctx.config.Net.HTTP.UseHTTP2 {
+			h.h.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
+		}
 		if err := h.h.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated %s with err: %v", h.name, err)
@@ -265,7 +269,7 @@ func (h *httprunner) run() error {
 			}
 		}
 	} else {
-		h.h = &http.Server{Addr: portstring, Handler: handler, ErrorLog: h.glogger}
+		h.h = &http.Server{Addr: addr, Handler: handler, ErrorLog: h.glogger}
 		if err := h.h.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated %s with err: %v", h.name, err)

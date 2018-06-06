@@ -72,6 +72,7 @@ $FSPATHS
 		},
 		"http": {
 			"max_num_targets":    16,
+			"use_http2":          false,
 			"use_https":          false,
 			"use_as_proxy":       false,
 			"server_certificate": "server.pem",
@@ -92,7 +93,6 @@ $FSPATHS
 		"enabled": $AUTHENABLED,
 		"creddir": "$CREDDIR"
 	},
-	"h2c": 				false,
 	"keepalivetracker": {
 		"proxy": {
 			"interval": "20s",
