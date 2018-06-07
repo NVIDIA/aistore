@@ -25,9 +25,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 const (
@@ -2516,21 +2516,29 @@ func (t *targetrunner) isworkfile(workfqn string) (iswork, isold bool) {
 }
 
 func (t *targetrunner) fspath2mpath() {
+	if len(ctx.config.FSpaths) == 0 {
+		// (usability) do not clutter the log with backtraces when starting up and validating config
+		glog.Errorln("FATAL: no fspaths - see README => Configuration and/or fspaths section in the config.sh")
+		os.Exit(1)
+	}
 	for fp := range ctx.config.FSpaths {
 		if len(fp) > 1 {
 			fp = strings.TrimSuffix(fp, "/")
 		}
 		if _, err := os.Stat(fp); err != nil {
-			glog.Fatalf("FATAL: fspath %q %s, err: %v", fp, doesnotexist, err)
+			glog.Errorf("FATAL: fspath %q %s, err: %v", fp, doesnotexist, err)
+			os.Exit(1)
 		}
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(fp, &statfs); err != nil {
-			glog.Fatalf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
+			glog.Errorf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
+			os.Exit(1)
 		}
 		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
 		_, ok := ctx.mountpaths.Available[mp.Path]
 		if ok {
-			glog.Fatalf("FATAL: invalid config: duplicated fspath %q", fp)
+			glog.Errorf("FATAL: invalid config: duplicated fspath %q", fp)
+			os.Exit(1)
 		}
 		ctx.mountpaths.Available[mp.Path] = mp
 	}
@@ -2553,13 +2561,13 @@ func (t *targetrunner) testCachepathMounts() {
 			mpath = instpath[0 : len(instpath)-1]
 		}
 		if err := CreateDir(mpath); err != nil {
-			glog.Fatalf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
-			return
+			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
+			os.Exit(1)
 		}
 		statfs := syscall.Statfs_t{}
 		if err := syscall.Statfs(mpath, &statfs); err != nil {
-			glog.Fatalf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
-			return
+			glog.Errorf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
+			os.Exit(1)
 		}
 		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
 		_, ok := ctx.mountpaths.Available[mp.Path]
@@ -2574,7 +2582,8 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
 			if !t.testingFSPpaths() {
-				glog.Fatalf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
+				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
+				os.Exit(1)
 			}
 			continue
 		}
@@ -2587,11 +2596,13 @@ func (t *targetrunner) startupMpaths() {
 	for mpath := range ctx.mountpaths.Available {
 		cloudbctsfqn := makePathCloud(mpath)
 		if err := CreateDir(cloudbctsfqn); err != nil {
-			glog.Fatalf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
+			glog.Errorf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
+			os.Exit(1)
 		}
 		localbctsfqn := makePathLocal(mpath)
 		if err := CreateDir(localbctsfqn); err != nil {
-			glog.Fatalf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
+			glog.Errorf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
+			os.Exit(1)
 		}
 	}
 
