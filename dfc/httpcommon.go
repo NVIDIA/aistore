@@ -29,10 +29,10 @@ import (
 
 	"net/http/httputil"
 
-	"github.com/OneOfOne/xxhash"
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/hkwi/h2c"
 	"crypto/tls"
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/OneOfOne/xxhash"
+	"github.com/hkwi/h2c"
 )
 
 const ( // => Transport.MaxIdleConnsPerHost
@@ -253,7 +253,7 @@ func (h *httprunner) run() error {
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 	var handler http.Handler = h.mux
 	addr := ":" + ctx.config.Net.L4.Port
-	
+
 	if ctx.config.Net.HTTP.UseHTTP2 && !ctx.config.Net.HTTP.UseHTTPS {
 		handler = h2c.Server{Handler: handler}
 	}
@@ -688,7 +688,6 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 		}
 	}
 	glog.Errorln(s)
-	glog.Flush()
 	http.Error(w, s, status)
 	h.statsif.add("numerr", 1)
 }

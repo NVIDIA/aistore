@@ -50,9 +50,10 @@ type metadata struct {
 // 4. GET the objects while simultaneously re-registering the target T
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	const (
-		num      = 20000
-		filesize = uint64(1024)
-		seed     = int64(111)
+		num       = 20000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 5
 	)
 
 	var (
@@ -67,13 +68,11 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 			wg:              &sync.WaitGroup{},
 			bucket:          TestLocalBucketName,
 		}
-		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
-		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
-		// all nodes in the cluster during re-registering. During this period, errors can occur.
-		filenameCh    = make(chan string, m.num)
-		errch         = make(chan error, m.num)
-		sgl           *dfc.SGLIO
-		maxNumGetErrs = uint64(m.num * m.numGetsEachFile / 10) // 10 % of GET requests
+		// With the current design, there exists a brief period of time
+		// during which GET errors can occur - see the timeline comment below
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *dfc.SGLIO
 	)
 	// Step 1.
 	m.smap, err = client.GetClusterMap(proxyurl)
@@ -126,26 +125,30 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	doGetsInParallel(&m)
 
 	m.wg.Wait()
-	tlogf("%d GET errors before target's local bucket map was updated (expected)\n", m.numGetErrsBefore)
-	if m.numGetErrsAfter > maxNumGetErrs {
-		t.Fatalf("Found %d GET errors (should be no more than %d/%d) after target's local bucket map was updated",
-			m.numGetErrsAfter, maxNumGetErrs, num*m.numGetsEachFile)
-	} else {
-		tlogf("Found %d GET errors (should be no more than %d/%d) after target's local bucket map was updated",
-			m.numGetErrsAfter, maxNumGetErrs, num*m.numGetsEachFile)
-	}
+	// ===================================================================
+	// the timeline (denoted as well in the doReregisterTarget() function) looks as follows:
+	// 	- T1: client executes ReRegister
+	// 	- T2: the cluster map gets updated
+	// 	- T3: re-registered target gets the updated local bucket map
+	// all the while GETs are running, and the "before" and "after" counters are almost
+	// exactly "separated" by the time T3 ("almost" because of the Sleep in doGetsInParallel())
+	// ===================================================================
+	resultsBeforeAfter(&m, num, maxErrPct)
 }
 
+// All of the above PLUS proxy failover/failback sequence in parallel
+// Namely:
 // 1. Unregister a target
 // 2. Create a local bucket
 // 3. Crash the primary proxy and PUT in parallel
 // 4. Failback to the original primary proxy, re-register target, and GET in parallel
-func TestProxyFailbackAndGetAndReRegisterInParallel(t *testing.T) {
+func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	const (
 		num                 = 20000
 		otherTasksToTrigger = 1
 		filesize            = uint64(1024)
 		seed                = int64(111)
+		maxErrPct           = 5
 	)
 
 	var (
@@ -165,10 +168,9 @@ func TestProxyFailbackAndGetAndReRegisterInParallel(t *testing.T) {
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
-		filenameCh    = make(chan string, m.num)
-		errch         = make(chan error, m.num)
-		sgl           *dfc.SGLIO
-		maxNumGetErrs = uint64(m.num * m.numGetsEachFile / 10) // 10 % of GET requests
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *dfc.SGLIO
 	)
 
 	// Step 1.
@@ -177,6 +179,9 @@ func TestProxyFailbackAndGetAndReRegisterInParallel(t *testing.T) {
 	m.origNumTargets = len(m.smap.Tmap)
 	if m.origNumTargets < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.origNumTargets)
+	}
+	if len(m.smap.Pmap) < 3 {
+		t.Fatalf("Must have 3 or more proxies/gateways in the cluster, have only %d", len(m.smap.Pmap))
 	}
 	for m.sid = range m.smap.Tmap {
 		break
@@ -237,13 +242,17 @@ func TestProxyFailbackAndGetAndReRegisterInParallel(t *testing.T) {
 	doGetsInParallel(&m)
 
 	m.wg.Wait()
-	tlogf("%d GET errors before target's local bucket map was updated (expected)\n", m.numGetErrsBefore)
-	if m.numGetErrsAfter > maxNumGetErrs {
-		t.Fatalf("Found %d GET errors (should be no more than %d/%d) after target's local bucket map was updated",
-			m.numGetErrsAfter, maxNumGetErrs, num*m.numGetsEachFile)
-	} else {
-		tlogf("Found %d GET errors (should be no more than %d/%d) after target's local bucket map was updated",
-			m.numGetErrsAfter, maxNumGetErrs, num*m.numGetsEachFile)
+	resultsBeforeAfter(&m, num, maxErrPct)
+}
+
+// see above - the T1/2/3 timeline and details
+func resultsBeforeAfter(m *metadata, num, maxErrPct int) {
+	tlogf("Errors before and after time=T3 (re-registered target gets the updated local bucket map): %d and %d, respectively\n",
+		m.numGetErrsBefore, m.numGetErrsAfter)
+	pctBefore := int(m.numGetErrsBefore) * 100 / (num * m.numGetsEachFile)
+	pctAfter := int(m.numGetErrsAfter) * 100 / (num * m.numGetsEachFile)
+	if pctBefore > maxErrPct || pctAfter > maxErrPct {
+		m.t.Fatalf("Error rates before %d%% or after %d%% T3 exceed the max %d%%\n", pctBefore, pctAfter, maxErrPct)
 	}
 }
 
@@ -293,33 +302,37 @@ func doGetsInParallel(m *metadata) {
 }
 
 func doReregisterTarget(m *metadata) {
+	const (
+		timeout12 = time.Second * 10
+		sleeptime = time.Millisecond * 10
+		loopcnt   = int(timeout12 / sleeptime)
+	)
 	defer m.wg.Done()
+	// T1
 	err := client.RegisterTarget(m.sid, m.smap)
 	checkFatal(err, m.t)
-PollLoop:
-	for i := 0; i < 25; i++ {
-		time.Sleep(time.Second)
-		m.smap = getClusterMap(m.t)
 
-		if len(m.smap.Tmap) == m.origNumTargets {
+	for i := 0; i < loopcnt; i++ {
+		time.Sleep(sleeptime)
+		if len(m.smap.Tmap) < m.origNumTargets {
+			m.smap = getClusterMap(m.t)
+			// T2
+			if len(m.smap.Tmap) == m.origNumTargets {
+				tlogf("T2: re-registered target %s\n", m.sid)
+			}
+		} else {
 			lbNames, err := client.GetLocalBucketNames(m.targetDirectURL)
 			checkFatal(err, m.t)
-			for _, b := range lbNames.Local {
-				if b == m.bucket {
-					break PollLoop
+			// T3
+			if stringInSlice(m.bucket, lbNames.Local) {
+				s := atomic.CompareAndSwapUint64(&m.reregistered, 0, 1)
+				if !s {
+					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
 				}
+				tlogf("T3: re-registered target %s got updated with the new local bucket map\n", m.sid)
+				break
 			}
 		}
-	}
-
-	if len(m.smap.Tmap) != m.origNumTargets {
-		m.t.Fatalf("Re-registration timed out: target %s, num targets now: %d, orig num targets: %d\n",
-			m.sid, len(m.smap.Tmap), m.origNumTargets)
-	}
-	tlogf("Re-registered target %s: the cluster is now back to %d targets\n", m.sid, m.origNumTargets)
-	s := atomic.CompareAndSwapUint64(&m.reregistered, 0, 1)
-	if !s {
-		m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
 	}
 }
 

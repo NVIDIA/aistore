@@ -1502,6 +1502,10 @@ func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 	}
 }
 
+//
+// FIXME: extract the most basic utility functions (such as the ones below)
+//        into a separate file within the dfc_test module
+//
 func min(a, b uint32) uint32 {
 	if a < b {
 		return a
