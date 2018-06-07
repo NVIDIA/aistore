@@ -1655,9 +1655,10 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.GetWhat {
 	case GetWhatStats:
-		getStatsMsg, err := json.Marshal(msg) // same message to all targets
-		assert(err == nil, err)
-		p.httpclugetstats(w, r, getStatsMsg)
+		ok := p.invokeHttpGetClusterStats(w, r, msg)
+		if !ok {
+			return
+		}
 	case GetWhatXaction:
 		ok := p.invokeHttpGetXaction(w, r, msg)
 		if !ok {
@@ -1671,9 +1672,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) invokeHttpGetXaction(
 	w http.ResponseWriter, r *http.Request, msg GetMsg) (
-	ok bool) {
-	outputXactionStats := p.newXactionStats()
-
+	bool) {
 	kind, err := p.getXactionKindFromProperties(msg.GetProps)
 	if err != nil {
 		glog.Errorf(
@@ -1681,17 +1680,44 @@ func (p *proxyrunner) invokeHttpGetXaction(
 			msg.GetProps,
 			err)
 		p.invalmsghdlr(w, r, err.Error())
-		return
+		return false
 	}
 
+	outputXactionStats := &XactionStats{}
 	outputXactionStats.Kind = kind
+	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r, msg)
+	if !ok {
+		e := fmt.Sprintf(
+			"Unable to invoke GetMsg on targets. GetMsg: [%v]",
+			msg)
+		glog.Errorf(e)
+		p.invalmsghdlr(w, r, e)
+		return false
+	}
+
+	outputXactionStats.TargetStats = targetStats
+	jsonBytes, err := json.Marshal(outputXactionStats)
+	if err != nil {
+		glog.Errorf(
+			"Unable to marshal outputXactionStats. Error: [%s]", err)
+		p.invalmsghdlr(w, r, err.Error())
+		return false
+	}
+
+	ok = p.writeJSON(w, r, jsonBytes, "getXaction")
+	return ok
+}
+
+func (p *proxyrunner) invokeHttpGetMsgOnTargets(
+	w http.ResponseWriter, r *http.Request, msg GetMsg) (
+	map[string]json.RawMessage, bool) {
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
 		glog.Errorf(
 			"Unable to marshal GetMsg. Error: [%v]",
 			err)
 		p.invalmsghdlr(w, r, "Unable to marshal GetMsg.")
-		return
+		return nil, false
 	}
 
 	results := p.broadcastTargets(
@@ -1703,52 +1729,46 @@ func (p *proxyrunner) invokeHttpGetXaction(
 		ctx.config.Timeout.Default,
 	)
 
+	targetResults := make(map[string]json.RawMessage, p.smap.count())
 	for result := range results {
 		if result.err != nil {
 			glog.Errorf(
 				"Failed to fetch xaction, props: %s",
 				msg.GetProps)
 			p.invalmsghdlr(w, r, result.errstr)
-			return
+			return nil, false
 		}
 
-		outputXactionStats.TargetStats[result.si.DaemonID] = json.RawMessage(
+		targetResults[result.si.DaemonID] = json.RawMessage(
 			result.outjson)
 	}
 
-	jsonBytes, err := json.Marshal(outputXactionStats)
-	assert(err == nil, err)
-	ok = p.writeJSON(w, r, jsonBytes, "getXaction")
-	return
+	return targetResults, true
 }
 
 // FIXME: read-lock
-func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, getstatsmsg []byte) {
-	out := p.newClusterStats()
-	for _, si := range p.smap.Tmap {
-		stats := &storstatsrunner{Capacity: make(map[string]*fscapacity)}
-		out.Target[si.DaemonID] = stats
-		u := si.DirectURL + URLPath(Rversion, Rdaemon)
-		res := p.call(r, si, u, r.Method, getstatsmsg)
-		if res.err != nil {
-			p.invalmsghdlr(w, r, res.errstr)
-			p.kalive.onerr(res.err, res.status)
-			return
-		}
-
-		if err := json.Unmarshal(res.outjson, stats); err != nil {
-			p.invalmsghdlr(w, r, string(res.outjson))
-			return
-		}
+func (p *proxyrunner) invokeHttpGetClusterStats(
+	w http.ResponseWriter, r *http.Request, msg GetMsg) (bool){
+	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r, msg)
+	if !ok {
+		errstr := fmt.Sprintf(
+			"Unable to invoke GetMsg on targets. GetMsg: [%v]",
+			msg)
+		glog.Errorf(errstr)
+		p.invalmsghdlr(w, r, errstr)
+		return false
 	}
 
+	out := &ClusterStatsRaw{}
+	out.Target = targetStats
 	rr := getproxystatsrunner()
 	rr.Lock()
 	out.Proxy = &rr.Core
 	jsbytes, err := json.Marshal(out)
 	rr.Unlock()
 	assert(err == nil, err)
-	p.writeJSON(w, r, jsbytes, "httpclugetstats")
+	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterStats")
+	return ok
 }
 
 // register|keepalive target

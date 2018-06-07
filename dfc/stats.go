@@ -116,6 +116,11 @@ type ClusterStats struct {
 	Target map[string]*storstatsrunner `json:"target"`
 }
 
+type ClusterStatsRaw struct {
+	Proxy  *proxyCoreStats            `json:"proxy"`
+	Target map[string]json.RawMessage `json:"target"`
+}
+
 type iostatrunner struct {
 	sync.Mutex
 	namedrunner
@@ -152,24 +157,6 @@ type (
 		TargetStats map[string]RebalanceTargetStats `json:"target"`
 	}
 )
-
-//==============================================================
-//
-// c-tor and methods
-//
-//==============================================================
-func (p *proxyrunner) newClusterStats() *ClusterStats {
-	targets := make(map[string]*storstatsrunner, p.smap.count())
-	for _, si := range p.smap.Tmap {
-		targets[si.DaemonID] = &storstatsrunner{Capacity: make(map[string]*fscapacity)}
-	}
-	return &ClusterStats{Target: targets}
-}
-
-func (p *proxyrunner) newXactionStats() *XactionStats {
-	targetStats := make(map[string]json.RawMessage, p.smap.count())
-	return &XactionStats{TargetStats: targetStats}
-}
 
 //==================
 //
