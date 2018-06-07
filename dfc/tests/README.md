@@ -26,7 +26,7 @@ This will skip some of the long running tests, it runs all unit tests plus some 
 
 To run individual tests:
 ```
-BUCKET=<bucket name> go test ./dfc/tests -v -run=regression
+BUCKET=<bucket name> go test ./dfc/tests -v -run=Regression
 BUCKET=<bucket name> go test ./dfc/tests -run=TestProxy/PrimaryCrash
 BUCKET=<bucket name> go test ./dfc/tests -v -run=smoke -numworkers=4
 ```
