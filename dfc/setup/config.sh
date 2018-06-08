@@ -57,7 +57,7 @@
 		"versioning":		"all"
 	},
 	"fspaths": {
-$FSPATHS
+	    $FSPATHS
 	},
 	"test_fspaths": {
 		"root":			"/tmp/dfc/",
