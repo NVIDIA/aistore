@@ -343,9 +343,7 @@ func rwstressCleanup(t *testing.T) {
 	}
 }
 
-// The regression verions of the test should run around 30 seconds
-// 25 files written 8 times takes 20-25 seconds
-func regressionRWStress(t *testing.T) {
+func TestRWStress(t *testing.T) {
 	numFiles = 25
 	numLoops = 8
 

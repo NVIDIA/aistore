@@ -17,13 +17,13 @@ import (
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"reflect"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -601,7 +601,7 @@ cleanup:
 	close(errch)
 }
 
-func TestHeadBucket(t *testing.T) {
+func TestHeadLocalBucket(t *testing.T) {
 	err := client.CreateLocalBucket(proxyurl, TestLocalBucketName)
 	if err != nil {
 		t.Fatal(err)
@@ -617,6 +617,31 @@ func TestHeadBucket(t *testing.T) {
 	err = client.DestroyLocalBucket(proxyurl, TestLocalBucketName)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHeadCloudBucket(t *testing.T) {
+	bprops, err := client.HeadBucket(proxyurl, clibucket)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if bprops == nil {
+		t.Errorf("Failed to get bucket %s head but no errors", bprops)
+		return
+	}
+
+	providerList := []string{dfc.ProviderAmazon, dfc.ProviderGoogle, dfc.ProviderDfc}
+	if !stringInSlice(bprops.CloudProvider, providerList) {
+		t.Errorf("Invalid bucket %s Cloud Provider: %s [must be one of %s]",
+			clibucket, bprops.CloudProvider, strings.Join(providerList, ", "))
+	}
+
+	versionModes := []string{dfc.VersionAll, dfc.VersionCloud, dfc.VersionLocal, dfc.VersionNone}
+	if !stringInSlice(bprops.Versioning, versionModes) {
+		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
+			clibucket, bprops.Versioning, strings.Join(versionModes, ", "))
 	}
 }
 
