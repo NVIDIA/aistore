@@ -1346,10 +1346,6 @@ OUTER:
 
 		targetsCompleted := 0
 		for _, targetStats := range rebalanceStats.TargetStats {
-			if targetsCompleted == len(rebalanceStats.TargetStats)-1 {
-				return
-			}
-
 			if len(targetStats.Xactions) > 0 {
 				for _, xaction := range targetStats.Xactions {
 					if xaction.Status != dfc.XactionStatusCompleted {
@@ -1359,6 +1355,9 @@ OUTER:
 			}
 
 			targetsCompleted++
+			if targetsCompleted == len(rebalanceStats.TargetStats) {
+				return
+			}
 		}
 	}
 }
