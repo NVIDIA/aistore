@@ -126,6 +126,33 @@ type iostatrunner struct {
 	cmd         *exec.Cmd
 }
 
+type (
+	XactionStats struct {
+		Kind        string                     `json:"kind"`
+		TargetStats map[string]json.RawMessage `json:"target"`
+	}
+
+	XactionDetails struct {
+		Id        int64     `json:"id"`
+		StartTime time.Time `json:"startTime"`
+		EndTime   time.Time `json:"endTime"`
+		Status    string    `json:"status"`
+	}
+
+	RebalanceTargetStats struct {
+		Xactions     []XactionDetails `json:"xactionDetails"`
+		NumSentFiles int64            `json:"numSentFiles"`
+		NumSentBytes int64            `json:"numSentBytes"`
+		NumRecvFiles int64            `json:"numRecvFiles"`
+		NumRecvBytes int64            `json:"numRecvBytes"`
+	}
+
+	RebalanceStats struct {
+		Kind        string                          `json:"kind"`
+		TargetStats map[string]RebalanceTargetStats `json:"target"`
+	}
+)
+
 //==============================================================
 //
 // c-tor and methods
@@ -137,6 +164,11 @@ func (p *proxyrunner) newClusterStats() *ClusterStats {
 		targets[si.DaemonID] = &storstatsrunner{Capacity: make(map[string]*fscapacity)}
 	}
 	return &ClusterStats{Target: targets}
+}
+
+func (p *proxyrunner) newXactionStats() *XactionStats {
+	targetStats := make(map[string]json.RawMessage, p.smap.count())
+	return &XactionStats{TargetStats: targetStats}
 }
 
 //==================

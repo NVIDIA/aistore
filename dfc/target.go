@@ -2267,12 +2267,79 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		ioStatsRunner.Unlock()
 		storageStatsRunner.Unlock()
 		assert(err == nil, err)
+	case GetWhatXaction:
+		kind, err := t.getXactionKindFromProperties(msg.GetProps)
+		if err != nil {
+			glog.Errorf(
+				"Unable to get kind from props: [%s]. Error: [%v]",
+				msg.GetProps,
+				err)
+			t.invalmsghdlr(w, r, err.Error())
+			return
+		}
+
+		// No need to handle default since getXactionKindFromProperties
+		// will return error for an invalid kind.
+		switch kind {
+		case XactionRebalance:
+			jsbytes, err = t.getRebalanceStats()
+			if err != nil {
+				s := fmt.Sprintf(
+					"Unable to get kind from props: [%s]. Error: [%v]",
+					msg.GetProps,
+					err)
+				glog.Errorf(s)
+				t.invalmsghdlr(w, r, s)
+				return
+			}
+		}
+
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
 	t.writeJSON(w, r, jsbytes, "httpdaeget")
+}
+
+func (t *targetrunner) getRebalanceStats() ([]byte, error) {
+	allXactionDetails := []XactionDetails{}
+
+	for _, xaction := range t.xactinp.xactinp {
+		if xaction.getkind() == XactionRebalance {
+			status := XactionStatusCompleted
+			if !xaction.finished() {
+				status = XactionStatusInProgress
+			}
+
+			xactionStats := XactionDetails{
+				Id:        xaction.getid(),
+				StartTime: xaction.getStartTime(),
+				EndTime:   xaction.getEndTime(),
+				Status:    status,
+			}
+
+			allXactionDetails = append(allXactionDetails, xactionStats)
+		}
+	}
+
+	storageStatsRunner := getstorstatsrunner()
+	storageStatsRunner.Lock()
+	rebalanceXactionStats := RebalanceTargetStats{Xactions: allXactionDetails}
+	rebalanceXactionStats.NumRecvBytes = storageStatsRunner.Core.Numrecvbytes
+	rebalanceXactionStats.NumRecvFiles = storageStatsRunner.Core.Numrecvfiles
+	rebalanceXactionStats.NumSentBytes = storageStatsRunner.Core.Numsentbytes
+	rebalanceXactionStats.NumSentFiles = storageStatsRunner.Core.Numsentfiles
+	storageStatsRunner.Unlock()
+	jsonBytes, err := json.Marshal(rebalanceXactionStats)
+	if err != nil {
+		err = fmt.Errorf(
+			"Unable to marshal rebalanceXactionStats. Error: %v",
+			err)
+		return []byte{}, err
+	}
+
+	return jsonBytes, nil
 }
 
 // management interface to register (unregistered) self

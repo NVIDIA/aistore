@@ -982,6 +982,64 @@ func GetClusterMap(url string) (dfc.Smap, error) {
 	return smap, nil
 }
 
+func GetXactionRebalance(proxyURL string) (dfc.RebalanceStats, error) {
+	var rebalanceStats dfc.RebalanceStats
+	responseBytes, err := getXactionResponse(proxyURL, dfc.XactionRebalance)
+	if err != nil {
+		return rebalanceStats, err
+	}
+
+	err = json.Unmarshal(responseBytes, &rebalanceStats)
+	if err != nil {
+		return rebalanceStats,
+			fmt.Errorf("Failed to unmarshal rebalance stats: %v", err)
+	}
+
+	return rebalanceStats, nil
+}
+
+func getXactionResponse(proxyURL string, kind string) ([]byte, error) {
+	getMsg := dfc.GetMsg{GetWhat: dfc.GetWhatXaction, GetProps: kind}
+	requestJson, err := json.Marshal(getMsg)
+	if err != nil {
+		return []byte{},
+			fmt.Errorf("Failed to marshal GetStatsMsg: %v", err)
+	}
+
+	request, err := http.NewRequest(
+		"GET",
+		proxyURL+dfc.URLPath(dfc.Rversion, dfc.Rcluster),
+		bytes.NewBuffer(requestJson))
+	if err != nil {
+		return []byte{},
+			fmt.Errorf("Failed to create request: %v", err)
+	}
+
+	r, err := client.Do(request)
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
+
+	if err != nil {
+		return []byte{}, err
+	}
+
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		return []byte{},
+			fmt.Errorf("Get xaction, HTTP Status %d", r.StatusCode)
+	}
+
+	var response []byte
+	response, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		return []byte{}, fmt.Errorf("Failed to read response body")
+	}
+
+	return response, nil
+}
+
 // GetPrimaryProxy returns the primary proxy's url of a cluster
 func GetPrimaryProxy(url string) (string, error) {
 	smap, err := GetClusterMap(url)

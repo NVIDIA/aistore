@@ -25,8 +25,8 @@ import (
 
 	"errors"
 
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
 )
 
 const startupPollSleepTime = time.Second * 3
@@ -1661,10 +1661,68 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		getStatsMsg, err := json.Marshal(msg) // same message to all targets
 		assert(err == nil, err)
 		p.httpclugetstats(w, r, getStatsMsg)
+	case GetWhatXaction:
+		ok := p.invokeHttpGetXaction(w, r, msg)
+		if !ok {
+			return
+		}
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 	}
+}
+
+func (p *proxyrunner) invokeHttpGetXaction(
+	w http.ResponseWriter, r *http.Request, msg GetMsg) (
+	ok bool) {
+	outputXactionStats := p.newXactionStats()
+
+	kind, err := p.getXactionKindFromProperties(msg.GetProps)
+	if err != nil {
+		glog.Errorf(
+			"Unable to get kind from props: [%s]. Error: [%s]",
+			msg.GetProps,
+			err)
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	outputXactionStats.Kind = kind
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		glog.Errorf(
+			"Unable to marshal GetMsg. Error: [%v]",
+			err)
+		p.invalmsghdlr(w, r, "Unable to marshal GetMsg.")
+		return
+	}
+
+	results := p.broadcastTargets(
+		URLPath(Rversion, Rdaemon),
+		nil, // query
+		r.Method,
+		msgBytes,
+		p.smap,
+		ctx.config.Timeout.Default,
+	)
+
+	for result := range results {
+		if result.err != nil {
+			glog.Errorf(
+				"Failed to fetch xaction, props: %s",
+				msg.GetProps)
+			p.invalmsghdlr(w, r, result.errstr)
+			return
+		}
+
+		outputXactionStats.TargetStats[result.si.DaemonID] = json.RawMessage(
+			result.outjson)
+	}
+
+	jsonBytes, err := json.Marshal(outputXactionStats)
+	assert(err == nil, err)
+	ok = p.writeJSON(w, r, jsonBytes, "getXaction")
+	return
 }
 
 // FIXME: read-lock

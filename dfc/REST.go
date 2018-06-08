@@ -121,6 +121,7 @@ const (
 	GetWhatConfig   = "config"
 	GetWhatSmap     = "smap"
 	GetWhatStats    = "stats"
+	GetWhatXaction  = "xaction"
 	GetWhatSmapVote = "smapvote"
 )
 
@@ -204,4 +205,13 @@ const (
 	Rvoteinit  = "init"
 	Rtokens    = "tokens"
 	Rmetasync  = "metasync"
+)
+
+const (
+	// Used by various Xaction APIs.
+	XactionRebalance = "rebalance"
+
+	// Denote the status of an Xaction.
+	XactionStatusInProgress = "InProgress"
+	XactionStatusCompleted  = "Completed"
 )

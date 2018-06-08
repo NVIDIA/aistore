@@ -189,6 +189,7 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://192.168.176.128:8080/v1/cluster` |
 | Rebalance cluster (proxy) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
 | Get cluster statistics (proxy) | GET {"what": "stats"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8080/v1/cluster` |
+| Get rebalance statistics (proxy) | GET {"what": "xaction", "props": "rebalance"} /v1/cluster | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "xaction", "props": "rebalance"}' http://192.168.176.128:8080/v1/cluster` |
 | Get target statistics | GET {"what": "stats"} /v1/daemon | `curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://192.168.176.128:8083/v1/daemon` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET http://192.168.176.128:8080/v1/objects/myS3bucket/myobject -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://192.168.176.128:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |

@@ -830,3 +830,14 @@ func (h *httprunner) broadcast(path string, query url.Values, method string, bod
 	close(ch)
 	return ch
 }
+
+func (h *httprunner) getXactionKindFromProperties(props string) (
+	kind string, err error) {
+	if props == XactionRebalance {
+		kind = XactionRebalance
+	} else {
+		err = fmt.Errorf("No valid xaction in properties: %s", props)
+	}
+
+	return
+}

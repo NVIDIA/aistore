@@ -21,6 +21,8 @@ import (
 type xactInterface interface {
 	getid() int64
 	getkind() string
+	getStartTime() time.Time
+	getEndTime() time.Time
 	tostring() string
 	abort()
 	finished() bool
@@ -72,6 +74,14 @@ func (xact *xactBase) getid() int64 {
 
 func (xact *xactBase) getkind() string {
 	return xact.kind
+}
+
+func (xact *xactBase) getStartTime() time.Time {
+	return xact.stime
+}
+
+func (xact *xactBase) getEndTime() time.Time {
+	return xact.etime
 }
 
 func (xact *xactBase) tostring() string { assert(false, "must be implemented"); return "" }

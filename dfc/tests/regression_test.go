@@ -824,7 +824,7 @@ func regressionRebalance(t *testing.T) {
 	//
 	// step 5. wait for rebalance to run its course
 	//
-	waitProgressBar("Rebalance: ", time.Second*10)
+	waitForRebalanceToComplete(t)
 	//
 	// step 6. statistics
 	//
@@ -1331,6 +1331,37 @@ func regressionObjectPrefix(t *testing.T) {
 // Helpers
 //
 //========
+
+func waitForRebalanceToComplete(t *testing.T) {
+OUTER:
+	for {
+		// Wait before querying so the rebalance statistics are populated.
+		time.Sleep(time.Second * 3)
+		tlogln("Waiting for rebalance to complete.")
+
+		rebalanceStats, err := client.GetXactionRebalance(proxyurl)
+		if err != nil {
+			t.Fatalf("Unable to get rebalance stats. Error: [%v]", err)
+		}
+
+		targetsCompleted := 0
+		for _, targetStats := range rebalanceStats.TargetStats {
+			if targetsCompleted == len(rebalanceStats.TargetStats)-1 {
+				return
+			}
+
+			if len(targetStats.Xactions) > 0 {
+				for _, xaction := range targetStats.Xactions {
+					if xaction.Status != dfc.XactionStatusCompleted {
+						continue OUTER
+					}
+				}
+			}
+
+			targetsCompleted++
+		}
+	}
+}
 
 func waitProgressBar(prefix string, wait time.Duration) {
 	const tickerStep = time.Second * 5
