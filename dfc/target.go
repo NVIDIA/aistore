@@ -183,6 +183,7 @@ func (t *targetrunner) stop(err error) {
 
 // target registration with proxy
 func (t *targetrunner) register(timeout time.Duration) (int, error) {
+	var newlbmap lbmap
 	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
 		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
@@ -197,6 +198,22 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 		res = t.call(nil, si, url, http.MethodPost, jsbytes, timeout)
 	} else {
 		res = t.call(nil, si, url, http.MethodPost, jsbytes)
+	}
+	if res.err != nil {
+		return res.status, res.err
+	}
+	// not being sent at cluster startup and keepalive..
+	if len(res.outjson) > 0 {
+		err := json.Unmarshal(res.outjson, &newlbmap)
+		assert(err == nil, err)
+		lbmapLock.Lock()
+		if t.lbmap.version() > newlbmap.version() {
+			glog.Errorf("register target - got lbmap: local version %d > %d", t.lbmap.version(), newlbmap.version())
+		} else {
+			glog.Infof("register target - got lbmap: upgrading local version %d to %d", t.lbmap.version(), newlbmap.version())
+		}
+		t.lbmap = &newlbmap
+		lbmapLock.Unlock()
 	}
 
 	return res.status, res.err

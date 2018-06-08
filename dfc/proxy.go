@@ -340,7 +340,7 @@ func (p *proxyrunner) findRole() {
 		return
 	}
 
-	smap, lbmap := p.discoverServers(hint, time.Now().Add(ctx.config.Timeout.Startup), startupPollSleepTime)
+	smap, lbmap := p.discoverClusterMeta(hint, time.Now().Add(ctx.config.Timeout.Startup), startupPollSleepTime)
 	lbmapLock.Lock()
 	if lbmap != nil && p.lbmap.version() < lbmap.version() {
 		p.lbmap = lbmap
@@ -688,8 +688,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		lbmapLock.Lock()
-		lbmap4ren := &lbmap{}
-		copyStruct(lbmap4ren, p.lbmap)
+		lbmap4ren := p.lbmap.cloneU()
 		lbmapLock.Unlock()
 
 		_, ok := lbmap4ren.LBmap[bucketFrom]
@@ -1546,9 +1545,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	smap4bcast := &Smap{}
-	copyStruct(smap4bcast, p.smap)
-
+	smap4bcast := p.smap.cloneU()
 	smapLock.Unlock()
 
 	urlPath := URLPath(Rversion, Rdaemon, Rproxy, proxyid)
@@ -1757,16 +1754,10 @@ func (p *proxyrunner) httpclugetstats(w http.ResponseWriter, r *http.Request, ge
 // register|keepalive target
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		nsi       daemonInfo
-		keepalive bool
-		register  bool
-		proxy     bool
-		msg       *ActionMsg
-		pi        *daemonInfo
+		nsi                          daemonInfo
+		keepalive, register, isproxy bool
+		msg                          *ActionMsg
 	)
-	if !p.checkPrimaryProxy("register target|proxy", w, r) {
-		return
-	}
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
@@ -1774,10 +1765,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 0 {
 		keepalive = apitems[0] == Rkeepalive
 		register = apitems[0] == Rregister
-		proxy = apitems[0] == Rproxy
-		if proxy && len(apitems) > 1 {
+		isproxy = apitems[0] == Rproxy
+		if isproxy && len(apitems) > 1 {
 			keepalive = apitems[1] == Rkeepalive
 		}
+	}
+	if !p.checkPrimaryProxy(fmt.Sprintf("register (isproxy=%t, keepalive=%t)", isproxy, keepalive), w, r) {
+		return
 	}
 	if p.readJSON(w, r, &nsi) != nil {
 		return
@@ -1797,61 +1791,79 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	)
 	p.statsif.add("numpost", 1)
 
+	// not to have nested locks..
+	lbmapLock.Lock()
+	lbmap4reg := p.lbmap.cloneU()
+	lbmapLock.Unlock()
+
 	smapLock.Lock()
 	defer smapLock.Unlock()
-	if proxy {
-		pi = &nsi
+	if isproxy {
 		osi := p.smap.getProxy(nsi.DaemonID)
-		var osidi *daemonInfo
-		if osi != nil {
-			osidi = osi
-		}
-		if !p.shouldAddToSmap(&nsi, osidi, keepalive, "proxy") {
+		if !p.nodeAlreadyExists(&nsi, osi, keepalive, "proxy") {
 			return
-		}
-		p.smap.addProxy(pi)
-		if glog.V(3) {
-			glog.Infof("register proxy %s (count %d)", nsi.DaemonID, p.smap.count())
 		}
 		msg = &ActionMsg{Action: ActRegProxy}
 	} else {
 		osi := p.smap.get(nsi.DaemonID)
-		if !p.shouldAddToSmap(&nsi, osi, keepalive, "target") {
+		if !p.nodeAlreadyExists(&nsi, osi, keepalive, "target") {
 			return
 		}
-		p.smap.add(&nsi)
 		if glog.V(3) {
 			glog.Infof("register target %s (count %d)", nsi.DaemonID, p.smap.count())
 		}
-
 		if register {
 			u := nsi.DirectURL + URLPath(Rversion, Rdaemon, Rregister)
 			res := p.call(nil, &nsi, u, http.MethodPost, nil, ProxyPingTimeout)
 			if res.err != nil {
-				p.invalmsghdlr(w, r, fmt.Sprintf("%v, %s", res.err, res.errstr), res.status)
-				p.kalive.onerr(res.err, res.status)
+				errstr := fmt.Sprintf("Failed to register target %s: %v, %s", nsi.DaemonID, res.err, res.errstr)
+				p.invalmsghdlr(w, r, errstr, res.status)
+				return
 			}
 		}
 		msg = &ActionMsg{Action: ActRegTarget}
 	}
 	if !p.startedup { // see clusterStartup()
+		p.registerToSmap(isproxy, &nsi)
 		return
 	}
-	if errstr := p.savesmapconf(); errstr != "" {
-		// take it back
-		if proxy {
-			p.smap.delProxy(nsi.DaemonID)
-		} else {
-			p.smap.del(nsi.DaemonID)
+	// upon joining a running cluster new target gets lbmap update right away
+	if !isproxy {
+		outjson, err := json.Marshal(lbmap4reg)
+		assert(err == nil, err)
+		p.writeJSON(w, r, outjson, "lbmap")
+	}
+	// update and distribute Smap
+	go func() {
+		smapLock.Lock()
+		defer smapLock.Unlock()
+
+		p.registerToSmap(isproxy, &nsi)
+		pair := &revspair{p.smap.cloneU(), msg}
+		p.metasyncer.sync(false, pair)
+
+		// in an unlikely event of
+		if errstr := p.savesmapconf(); errstr != "" {
+			glog.Errorln(errstr)
 		}
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	pair := &revspair{p.smap.cloneU(), msg}
-	p.metasyncer.sync(false, pair, p.lbmap.cloneU())
+	}()
 }
 
-func (p *proxyrunner) shouldAddToSmap(nsi *daemonInfo, osi *daemonInfo, keepalive bool, kind string) bool {
+func (p *proxyrunner) registerToSmap(isproxy bool, nsi *daemonInfo) {
+	if isproxy {
+		p.smap.addProxy(nsi)
+		if glog.V(3) {
+			glog.Infof("register proxy %s (count %d)", nsi.DaemonID, p.smap.count())
+		}
+	} else {
+		p.smap.add(nsi)
+		if glog.V(3) {
+			glog.Infof("register target %s (count %d)", nsi.DaemonID, p.smap.count())
+		}
+	}
+}
+
+func (p *proxyrunner) nodeAlreadyExists(nsi *daemonInfo, osi *daemonInfo, keepalive bool, kind string) bool {
 	if keepalive {
 		if osi == nil {
 			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", kind, nsi.DaemonID)
@@ -1925,7 +1937,11 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("Unregistered target {%s} (count %d)", sid, p.smap.count())
 		}
 		u := osi.DirectURL + URLPath(Rversion, Rdaemon)
-		p.call(nil, osi, u, http.MethodDelete, nil, ProxyPingTimeout)
+		res := p.call(nil, osi, u, http.MethodDelete, nil, ProxyPingTimeout)
+		if res.err != nil {
+			glog.Warningf("The target %s that is being unregistered failed to respond back: %v, %s",
+				osi.DaemonID, res.err, res.errstr)
+		}
 		msg = &ActionMsg{Action: ActUnregTarget}
 	}
 	if !p.startedup { // see clusterStartup()
@@ -1972,26 +1988,6 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
-			// L.Ding: Originally this is broadcast to targets only, but I believe this should be to
-			//         all targets and proxies, for example, set vmodule, because there is no filter
-			//         here, so I am sending this to all servers.
-			//
-			//         so the current code has two issues:
-			//         1. set loglevel it not populated to other proxies
-			//         2. primary proxy processes config like lowwm, which is not suppose to.
-			//
-			//         Why does the above p.setconfig() doesn't block primary proxy from failing these
-			//         sets? I think it is bug, bacause it calls httprunner's setconfig which is
-			//         shared by target and proxy and it takes all config.
-			//
-			//         when sending this primary approved message to all other proxies,
-			//         the message end up at a proxy's http handler, it checks message type, so
-			//         basically, same message processed by a proxy in different code path.
-			//
-			//         this can be fixed either by filtering the messages by type, broadcast to targets
-			//         or proxies accordingly, or a simple fix as sending to all servers, and let the
-			//         server chose to ignore the ones that are not supported, down side is this causes
-			//         some extra network traffic.
 			msgbytes, err := json.Marshal(msg) // same message -> all targets and proxies
 			assert(err == nil, err)
 
@@ -2020,8 +2016,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 
 		smapLock.Lock()
-		smap4bcast := &Smap{}
-		copyStruct(smap4bcast, p.smap)
+		smap4bcast := p.smap.cloneU()
 		smapLock.Unlock()
 
 		p.broadcastCluster(
@@ -2295,12 +2290,12 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 	return p.broadcast(path, query, method, body, servers, timeout...)
 }
 
-// discoverServers calls out to all servers given in the server map, collect smaps and lbmaps
-// returned by all servers, pick out the one that has the highest version number as the current one.
-// if a server failed to respond(error), or respond with nil map, or respond with vote in progress,
-// it is ignored and retried until a valid respond or times out.
-// Note: serverMap could be modified upon return from this function.
-func (p *proxyrunner) discoverServers(serverMap *Smap, deadline time.Time,
+//
+// given a (tentative) cluster map (Smap), discoverClusterMeta tries to call all the
+// respective nodes to GET their respective versions of the former,
+// as well as other cluster-wide metadata
+//
+func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 	waitBetweenPoll time.Duration) (*Smap, *lbmap) {
 	var (
 		maxVersionSMap  *Smap
@@ -2317,7 +2312,7 @@ func (p *proxyrunner) discoverServers(serverMap *Smap, deadline time.Time,
 			nil, // query
 			http.MethodGet,
 			jsbytes,
-			serverMap,
+			hintSmap,
 			ctx.config.Timeout.CplaneOperation,
 		)
 
@@ -2338,7 +2333,7 @@ func (p *proxyrunner) discoverServers(serverMap *Smap, deadline time.Time,
 			}
 
 			// remove the responded server from next broadcast
-			serverMap.Remove(r.si.DaemonID)
+			hintSmap.Remove(r.si.DaemonID)
 
 			if svm.Smap == nil || svm.Smap.version() == 0 {
 				glog.Warningf("Empty cluster map from %v", r.si.DaemonID)
@@ -2353,12 +2348,12 @@ func (p *proxyrunner) discoverServers(serverMap *Smap, deadline time.Time,
 			}
 		}
 
-		if serverMap.totalServers() == 0 {
+		if hintSmap.totalServers() == 0 {
 			break
 		}
 
 		if time.Now().After(deadline) {
-			glog.Warning("discover map took too long")
+			glog.Warning("discoverClusterMeta timed out")
 			break
 		}
 

@@ -353,11 +353,9 @@ func (v *cksumvalxxhash) get() (string, string) { return v.tag, v.val }
 
 func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
 
-// Li. Ding: LocalSave is not multi-thread safe, caller is responsible for serializing concurrent calls.
-
 //===========================================================================
 //
-// local (config) save and restore
+// local (config) save and restore - NOTE: caller is responsible to serialize
 //
 //===========================================================================
 func LocalSave(pathname string, v interface{}) error {
