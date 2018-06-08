@@ -379,3 +379,20 @@ This process allows a proxy to be rerun with the same command and environment va
 WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
 
 For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
+
+## Extended Action (xaction)
+
+Extended actions (xactions) are the operations that may take seconds, sometimes even minutes, to execute, that run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
+
+Examples of the supported extended actions include:
+
+* Cluster-wide rebalancing
+* LRU-based eviction
+* Prefetch
+* Consensus voting when electing a new leader
+
+At the time of this writing the corresponding RESTful API can query a single xaction kind: "rebalance". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
+
+```
+$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "xaction", "props": "rebalance"}' http://192.168.176.128:8080/v1/cluster
+```
