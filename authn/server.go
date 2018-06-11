@@ -18,13 +18,14 @@ import (
 	"os"
 	"strings"
 
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/dfc"
 )
 
 const (
 	pathUsers  = "users"
 	pathTokens = "tokens"
+	smapConfig = "smap.json"
 )
 
 // a message to generate token
@@ -75,6 +76,10 @@ func isSyscallWriteError(err error) bool {
 	}
 }
 
+func isValidProvider(prov string) bool {
+	return prov == dfc.ProviderAmazon || prov == dfc.ProviderGoogle || prov == dfc.ProviderDfc
+}
+
 //-------------------------------------
 // auth server
 //-------------------------------------
@@ -123,28 +128,32 @@ func (a *authServ) run() error {
 	return nil
 }
 
-func (a *authServ) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
+func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
 	a.mux.HandleFunc(path, handler)
+	if !strings.HasSuffix(path, "/") {
+		a.mux.HandleFunc(path+"/", handler)
+	}
 }
 
 func (a *authServ) registerPublicHandlers() {
-	a.registerhdlr(fmt.Sprintf("/%s/%s", dfc.Rversion, pathUsers), a.userhdlr)
-	a.registerhdlr(fmt.Sprintf("/%s/%s/", dfc.Rversion, pathUsers), a.userhdlr)
-	a.registerhdlr(fmt.Sprintf("/%s/%s", dfc.Rversion, pathTokens), a.tokenhdlr)
+	a.registerHandler(dfc.URLPath(dfc.Rversion, pathUsers), a.userHandler)
+	a.registerHandler(dfc.URLPath(dfc.Rversion, pathTokens), a.tokenHandler)
 }
 
-func (a *authServ) userhdlr(w http.ResponseWriter, r *http.Request) {
+func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
 		a.httpUserDel(w, r)
 	case http.MethodPost:
 		a.httpUserPost(w, r)
+	case http.MethodPut:
+		a.httpUserPut(w, r)
 	default:
 		invalhdlr(w, r, "Unsupported method", http.StatusBadRequest)
 	}
 }
 
-func (a *authServ) tokenhdlr(w http.ResponseWriter, r *http.Request) {
+func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
 		a.httpRevokeToken(w, r)
@@ -187,7 +196,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 
 func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	apiItems := a.restAPIItems(r.URL.Path, pathUsers)
-	if len(apiItems) != 1 {
+	if len(apiItems) == 0 {
 		invalhdlr(w, r, "User name is not defined", http.StatusBadRequest)
 		return
 	}
@@ -198,9 +207,13 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = a.users.delUser(apiItems[0]); err != nil {
-		glog.Errorf("Failed to delete user: %v\n", err)
-		invalhdlr(w, r, "Failed to delete user")
+	if len(apiItems) == 1 {
+		if err = a.users.delUser(apiItems[0]); err != nil {
+			glog.Errorf("Failed to delete user: %v\n", err)
+			invalhdlr(w, r, "Failed to delete user")
+		}
+	} else {
+		a.userRemoveCredentials(w, r)
 	}
 }
 
@@ -211,6 +224,42 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 	} else {
 		a.userLogin(w, r)
 	}
+}
+
+// Updates user credentials
+// If user did not have credentials before updating or the credentials changes
+//   then new user list is saved and sent to the proxy to update the cluster
+func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
+	apiItems := a.restAPIItems(r.URL.Path, pathUsers)
+	if len(apiItems) < 2 {
+		invalhdlr(w, r, "Invalid request")
+		return
+	}
+	err := a.checkAuthorization(w, r)
+	if err != nil {
+		glog.Errorf("Not authorized: %v\n", err)
+		return
+	}
+
+	userID := apiItems[0]
+	provider := apiItems[1]
+
+	b, err := ioutil.ReadAll(r.Body)
+	if len(b) == 0 {
+		invalhdlr(w, r, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if glog.V(4) {
+		glog.Infof("Received credentials for %s\n", userID)
+	}
+
+	if _, err := a.users.updateCredentials(userID, provider, string(b)); err != nil {
+		invalhdlr(w, r, fmt.Sprintf("Failed to update credentials: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	a.writeJSON(w, r, []byte("Credentials updated successfully"), "update credentials")
 }
 
 // Adds a new user to user list
@@ -292,13 +341,13 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userName := apiItems[0]
+	userID := apiItems[0]
 	pass := msg.Password
 	if glog.V(4) {
-		glog.Infof("User: %s, pass: %s\n", userName, pass)
+		glog.Infof("User: %s, pass: %s\n", userID, pass)
 	}
 
-	tokenString, err := a.users.issueToken(userName, pass)
+	tokenString, err := a.users.issueToken(userID, pass)
 	if err != nil {
 		glog.Errorf("Failed to generate token: %v\n", err)
 		invalhdlr(w, r, "Not authorized", http.StatusUnauthorized)
@@ -356,4 +405,30 @@ func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interfac
 		return err
 	}
 	return nil
+}
+
+// Removes user credentials
+// On successful update the function sends new credentials list to primary
+//   proxy to update the cluster
+func (a *authServ) userRemoveCredentials(w http.ResponseWriter, r *http.Request) {
+	apiItems := a.restAPIItems(r.URL.Path, pathUsers)
+	userID := apiItems[0]
+	provider := apiItems[1]
+	if !isValidProvider(provider) {
+		errmsg := fmt.Sprintf("Invalid cloud provider: %s", provider)
+		invalhdlr(w, r, errmsg, http.StatusBadRequest)
+		return
+	}
+
+	if glog.V(4) {
+		glog.Infof("Removing %s credentials for %s\n", provider, userID)
+	}
+
+	_, err := a.users.deleteCredentials(userID, provider)
+	if err != nil {
+		invalhdlr(w, r, fmt.Sprintf("Failed to delete credentials: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	a.writeJSON(w, r, []byte("Credentials updated successfully"), "update credentials")
 }

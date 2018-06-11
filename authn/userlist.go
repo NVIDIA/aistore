@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package main
 
 import (
@@ -11,21 +15,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 const (
-	dbFile = "users.json"
+	userListFile   = "users.json"
+	tokenFile      = ".tokens"
+	proxyTimeout   = time.Minute * 2 // maximum time for syncing Authn data with primary proxy
+	proxyRetryTime = time.Second * 5 // an interval between primary proxy detection attempts
 )
 
 type (
 	userInfo struct {
-		UserID          string `json:"name"`
-		Password        string `json:"password,omitempty"`
+		UserID          string            `json:"name"`
+		Password        string            `json:"password,omitempty"`
+		Creds           map[string]string `json:"creds,omitempty"`
 		passwordDecoded string
-		Creds           map[string]string `json:"creds,omitempty"` //TODO: aws?gcp?
 	}
 	tokenInfo struct {
 		UserID  string    `json:"username"`
@@ -33,16 +40,13 @@ type (
 		Expires time.Time `json:"expires"`
 		Token   string    `json:"token"`
 	}
-	tokenList struct {
-		Tokens []*tokenInfo `json:"tokens"`
-	}
 	userManager struct {
-		userMtx  sync.Mutex
-		tokenMtx sync.Mutex
-		Path     string               `json:"-"`
-		Users    map[string]*userInfo `json:"users"`
-		tokens   map[string]*tokenInfo
-		client   *http.Client
+		mtx    sync.Mutex
+		Path   string               `json:"-"`
+		Users  map[string]*userInfo `json:"users"`
+		tokens map[string]*tokenInfo
+		client *http.Client
+		proxy  *proxy
 	}
 )
 
@@ -69,7 +73,7 @@ func createHTTPClient() *http.Client {
 
 // Creates a new user manager. If user DB exists, it loads the data from the
 // file and decrypts passwords
-func newUserManager(dbPath string) *userManager {
+func newUserManager(dbPath string, proxy *proxy) *userManager {
 	var (
 		err   error
 		bytes []byte
@@ -79,6 +83,7 @@ func newUserManager(dbPath string) *userManager {
 		Users:  make(map[string]*userInfo, 0),
 		tokens: make(map[string]*tokenInfo, 0),
 		client: createHTTPClient(),
+		proxy:  proxy,
 	}
 	if _, err = os.Stat(dbPath); err != nil {
 		if !os.IsNotExist(err) {
@@ -89,6 +94,12 @@ func newUserManager(dbPath string) *userManager {
 
 	if err = dfc.LocalLoad(dbPath, &mgr.Users); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
+	}
+	// update loaded list: create empty map for users who do not have credentials in saved file
+	for _, uinfo := range mgr.Users {
+		if uinfo.Creds == nil {
+			uinfo.Creds = make(map[string]string, 0)
+		}
 	}
 
 	for _, info := range mgr.Users {
@@ -101,10 +112,10 @@ func newUserManager(dbPath string) *userManager {
 	return mgr
 }
 
-// save new user list to user DB
+// save new user list to file
+// It is called from functions of this module that acquire lock, so this
+//    function needs no locks
 func (m *userManager) saveUsers() (err error) {
-	m.userMtx.Lock()
-	defer m.userMtx.Unlock()
 	if err = dfc.LocalSave(m.Path, &m.Users); err != nil {
 		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
 	}
@@ -117,45 +128,40 @@ func (m *userManager) addUser(userID, userPass string) error {
 		return fmt.Errorf("Invalid credentials")
 	}
 
-	m.userMtx.Lock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
 	if _, ok := m.Users[userID]; ok {
-		m.userMtx.Unlock()
 		return fmt.Errorf("User '%s' already registered", userID)
 	}
 	m.Users[userID] = &userInfo{
 		UserID:          userID,
 		passwordDecoded: userPass,
 		Password:        base64.StdEncoding.EncodeToString([]byte(userPass)),
+		Creds:           make(map[string]string, 0),
 	}
-	m.userMtx.Unlock()
-
-	// clean up in case of there is an old token issued for the same UserID
-	m.tokenMtx.Lock()
-	delete(m.tokens, userID)
-	m.tokenMtx.Unlock()
 
 	return m.saveUsers()
 }
 
 // Deletes an existing user
 func (m *userManager) delUser(userID string) error {
-	m.userMtx.Lock()
+	m.mtx.Lock()
 	if _, ok := m.Users[userID]; !ok {
-		m.userMtx.Unlock()
+		m.mtx.Unlock()
 		return fmt.Errorf("User %s does not exist", userID)
 	}
 	delete(m.Users, userID)
-	m.userMtx.Unlock()
-
-	m.tokenMtx.Lock()
-	_, ok := m.tokens[userID]
+	token, ok := m.tokens[userID]
 	delete(m.tokens, userID)
-	m.tokenMtx.Unlock()
+	err := m.saveUsers()
+	m.mtx.Unlock()
+
 	if ok {
-		go m.sendTokensToProxy()
+		go m.sendRevokedTokensToProxy(token.Token)
 	}
 
-	return m.saveUsers()
+	return err
 }
 
 // Generates a token for a user if user credentials are valid. If the token is
@@ -171,14 +177,13 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 	)
 
 	// check user name and pass in DB
-	m.userMtx.Lock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
 	if user, ok = m.Users[userID]; !ok {
-		m.userMtx.Unlock()
 		return "", fmt.Errorf("Invalid credentials")
 	}
 	passwordDecoded := user.passwordDecoded
 	creds := user.Creds
-	m.userMtx.Unlock()
 
 	if passwordDecoded != pwd {
 		return "", fmt.Errorf("Invalid username or password")
@@ -186,15 +191,12 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 
 	// check if a user is already has got token. If existing token expired then
 	// delete it and reissue a new token
-	m.tokenMtx.Lock()
 	if token, ok = m.tokens[userID]; ok {
 		if token.Expires.After(time.Now()) {
-			m.tokenMtx.Unlock()
 			return token.Token, nil
 		}
 		delete(m.tokens, userID)
 	}
-	m.tokenMtx.Unlock()
 
 	// generate token
 	issued := time.Now()
@@ -219,10 +221,7 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 		Expires: expires,
 		Token:   tokenString,
 	}
-	m.tokenMtx.Lock()
 	m.tokens[userID] = token
-	m.tokenMtx.Unlock()
-	go m.sendTokensToProxy()
 
 	return tokenString, nil
 }
@@ -230,65 +229,41 @@ func (m *userManager) issueToken(userID, pwd string) (string, error) {
 // Delete existing token, a.k.a log out
 // If the token was removed successfully then it sends the proxy a new valid token list
 func (m *userManager) revokeToken(token string) {
-	tokenDeleted := false
-	m.tokenMtx.Lock()
+	m.mtx.Lock()
 	for id, info := range m.tokens {
 		if info.Token == token {
 			delete(m.tokens, id)
-			tokenDeleted = true
 			break
 		}
 	}
-	m.tokenMtx.Unlock()
+	m.mtx.Unlock()
 
-	if tokenDeleted {
-		go m.sendTokensToProxy()
-	}
+	// send the token in all case to allow an admin to revoke
+	// an existing token even after cluster restart
+	go m.sendRevokedTokensToProxy(token)
 }
 
 // update list of valid token on a proxy
-func (m *userManager) sendTokensToProxy() {
-	if conf.Proxy.URL == "" {
-		glog.Error("Proxy is not defined")
+func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
+	if len(tokens) == 0 {
+		return
+	}
+	if m.proxy.URL == "" {
+		glog.Warning("Primary proxy is not defined")
 		return
 	}
 
-	tokenList := &dfc.TokenList{Tokens: make([]string, 0, len(m.tokens))}
-	m.tokenMtx.Lock()
-	for userID, tokenRec := range m.tokens {
-		if tokenRec.Expires.Before(time.Now()) {
-			// remove expired token
-			delete(m.tokens, userID)
-			continue
-		}
-
-		tokenList.Tokens = append(tokenList.Tokens, tokenRec.Token)
-	}
-	m.tokenMtx.Unlock()
-
-	method := http.MethodPost
-	url := fmt.Sprintf("%s/%s/%s", conf.Proxy.URL, dfc.Rversion, dfc.Rtokens)
+	tokenList := dfc.TokenList{Tokens: tokens}
 	injson, _ := json.Marshal(tokenList)
-	request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := m.client.Do(request)
-	if err != nil {
-		glog.Errorf("Failed to http-call %s %s: error %v", method, url, err)
-		return
-	}
-	defer response.Body.Close()
-	if response.StatusCode >= http.StatusBadRequest {
-		glog.Errorf("Failed to http-call %s %s: error code %d", method, url, response.StatusCode)
+	if err := m.proxyRequest(http.MethodDelete, dfc.Rtokens, injson); err != nil {
+		glog.Errorf("Failed to send token list: %v", err)
 	}
 }
 
 func (m *userManager) userByToken(token string) (*userInfo, error) {
-	m.tokenMtx.Lock()
-	defer m.tokenMtx.Unlock()
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
 	for id, info := range m.tokens {
 		if info.Token == token {
 			if info.Expires.Before(time.Now()) {
@@ -296,8 +271,6 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 				return nil, fmt.Errorf("Token expired")
 			}
 
-			m.userMtx.Lock()
-			defer m.userMtx.Unlock()
 			user, ok := m.Users[id]
 			if !ok {
 				return nil, fmt.Errorf("Invalid token")
@@ -308,4 +281,99 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 	}
 
 	return nil, fmt.Errorf("Token not found")
+}
+
+// Generic function to send everything to primary proxy
+// It can detect primary proxy change and sent to the new one on the fly
+func (m *userManager) proxyRequest(method, path string, injson []byte) error {
+	startRequest := time.Now()
+	for {
+		url := m.proxy.URL + dfc.URLPath(dfc.Rversion, path)
+		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
+		if err != nil {
+			// Fatal - interrupt the loop
+			return err
+		}
+
+		request.Header.Set("Content-Type", "application/json")
+		response, err := m.client.Do(request)
+		var respCode int
+		if response != nil {
+			respCode = response.StatusCode
+			if response.Body != nil {
+				response.Body.Close()
+			}
+		}
+		if err == nil && respCode < http.StatusBadRequest {
+			return nil
+		}
+
+		glog.Errorf("Failed to http-call %s %s: error %v", method, url, err)
+		err = m.proxy.detectPrimary()
+		if err != nil {
+			// primary change is not detected or failed - interrupt the loop
+			return err
+		}
+
+		if time.Since(startRequest) > proxyTimeout {
+			return fmt.Errorf("Sending data to primary proxy timed out")
+		}
+
+		time.Sleep(proxyRetryTime)
+	}
+}
+
+func (m *userManager) updateCredentials(userID, provider, userCreds string) (bool, error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	if !isValidProvider(provider) {
+		return false, fmt.Errorf("Invalid cloud provider: %s", provider)
+	}
+
+	user, ok := m.Users[userID]
+	if !ok {
+		err := fmt.Errorf("User %s does not exist", userID)
+		return false, err
+	}
+
+	changed := user.Creds[provider] != userCreds
+	if changed {
+		user.Creds[provider] = userCreds
+		if token, ok := m.tokens[userID]; ok {
+			delete(m.tokens, userID)
+			go m.sendRevokedTokensToProxy(token.Token)
+		}
+	}
+
+	if changed {
+		if err := m.saveUsers(); err != nil {
+			glog.Errorf("Delete credentials failed to save user list: %v", err)
+		}
+	}
+
+	return changed, nil
+}
+
+func (m *userManager) deleteCredentials(userID, provider string) (bool, error) {
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+
+	if !isValidProvider(provider) {
+		return false, fmt.Errorf("Invalid cloud provider: %s", provider)
+	}
+
+	user, ok := m.Users[userID]
+	if !ok {
+		return false, fmt.Errorf("User %s does not exist", userID)
+	}
+	if _, ok = user.Creds[provider]; ok {
+		delete(user.Creds, provider)
+		if err := m.saveUsers(); err != nil {
+			glog.Errorf("Delete credentials failed to save user list: %v", err)
+		}
+		return true, nil
+	}
+
+	return false, nil
 }

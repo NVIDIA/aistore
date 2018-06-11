@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -43,9 +44,16 @@ type gcpAuthRec struct {
 // implements cloudif
 //
 //======
-type gcpimpl struct {
-	t *targetrunner
-}
+type (
+	gcpCreds struct {
+		projectID string
+		creds     string
+	}
+
+	gcpimpl struct {
+		t *targetrunner
+	}
+)
 
 //======
 //
@@ -64,7 +72,29 @@ func gcpErrorToHTTP(gcpError error) int {
 	return http.StatusInternalServerError
 }
 
+// If extractGCPCreds returns no error and gcpCreds is nil then the default
+//   GCP client is used (that loads credentials from dir ~/.config/gcloud/ -
+//   the directory is created after the first successful login with gsutil)
+func extractGCPCreds(credsList map[string]string) (*gcpCreds, error) {
+	if len(credsList) == 0 {
+		return nil, nil
+	}
+	raw, ok := credsList[ProviderGoogle]
+	if raw == "" || !ok {
+		return nil, nil
+	}
+	rec := &gcpAuthRec{}
+	if err := json.Unmarshal([]byte(raw), rec); err != nil {
+		return nil, err
+	}
+
+	return &gcpCreds{rec.ProjectID, raw}, nil
+}
+
 func defaultClient(gctx context.Context) (*storage.Client, context.Context, string, string) {
+	if glog.V(5) {
+		glog.Info("Creating default google cloud session")
+	}
 	if getProjID() == "" {
 		return nil, nil, "", "Failed to get ProjectID from GCP"
 	}
@@ -73,6 +103,27 @@ func defaultClient(gctx context.Context) (*storage.Client, context.Context, stri
 		return nil, nil, "", fmt.Sprintf("Failed to create client, err: %v", err)
 	}
 	return client, gctx, getProjID(), ""
+}
+
+func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
+	dir := filepath.Join(baseDir, ProviderGoogle)
+	filePath := filepath.Join(dir, userID+".json")
+
+	if _, err := os.Stat(filePath); err == nil {
+		// credentials already saved, no need to do anything
+		// TODO: keep the list of stored creds in-memory instead of calling os functions
+		return "", nil
+	}
+
+	if err := CreateDir(dir); err != nil {
+		return "", fmt.Errorf("Failed to create directory %s: %v", dir, err)
+	}
+
+	if err := ioutil.WriteFile(filePath, []byte(userCreds), 0755); err != nil {
+		return "", fmt.Errorf("Failed to save to file: %v", err)
+	}
+
+	return filePath, nil
 }
 
 // createClient support two ways of creating a connection to cloud:
@@ -90,39 +141,35 @@ func defaultClient(gctx context.Context) (*storage.Client, context.Context, stri
 // The function returns:
 //   connection to the cloud, GCP context, project_id, error_string
 // project_id is used only by getbucketnames function
+
 func createClient(ct context.Context) (*storage.Client, context.Context, string, string) {
 	gctx := context.Background()
-	userID := userIDFromContext(ct)
-	if userID == "" {
+	userID := getStringFromContext(ct, ctxUserID)
+	userCreds := userCredsFromContext(ct)
+	credsDir := getStringFromContext(ct, ctxCredsDir)
+	if userID == "" || userCreds == nil || credsDir == "" {
 		return defaultClient(gctx)
 	}
 
-	credPath, err := userCredsPathFromContext(ct, userID)
-	if err != nil {
-		glog.Errorf("Failed to read user credentials: %v", err)
+	creds, err := extractGCPCreds(userCreds)
+	if err != nil || creds == nil {
+		glog.Errorf("Failed to retrieve %s credentials %s: %v", ProviderGoogle, userID, err)
 		return defaultClient(gctx)
 	}
 
-	// read credentials file to retreive projectID
-	bytes, err := ioutil.ReadFile(credPath)
-	gcprec := &gcpAuthRec{}
+	filePath, err := saveCredentialsToFile(credsDir, userID, creds.creds)
 	if err != nil {
-		glog.Errorf("Failed to read credentials file: %v", err)
-		return nil, nil, "", "Failed to read credentials file"
-	}
-	err = json.Unmarshal(bytes, gcprec)
-	if err != nil {
-		glog.Errorf("Failed to unmarshal credentials file: %v", err)
-		return nil, nil, "", "Invalid credentials file format"
+		glog.Errorf("Failed to save credentials: %v", err)
+		return defaultClient(gctx)
 	}
 
-	// create a new session
-	client, err := storage.NewClient(gctx, option.WithCredentialsFile(credPath))
+	client, err := storage.NewClient(gctx, option.WithCredentialsFile(filePath))
 	if err != nil {
-		return nil, nil, "", fmt.Sprintf("Failed to create client, err: %v", err)
+		glog.Errorf("Failed to create storage client for %s: %v", userID, err)
+		return defaultClient(gctx)
 	}
 
-	return client, gctx, gcprec.ProjectID, ""
+	return client, gctx, creds.projectID, ""
 }
 
 //==================

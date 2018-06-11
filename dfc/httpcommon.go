@@ -87,32 +87,6 @@ func copyHeaders(rOrig, rNew *http.Request) {
 	}
 }
 
-// Decrypts token and retreive userID from it
-// Returns empty userID in case of token is invalid
-func userIDFromRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-
-	token := ""
-	tokenParts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-	if len(tokenParts) == 2 && tokenParts[0] == tokenStart {
-		token = tokenParts[1]
-	}
-
-	if token == "" {
-		return ""
-	}
-
-	authrec, err := decryptToken(token)
-	if err != nil {
-		glog.Errorf("Failed to decrypt token [%s]: %v", token, err)
-		return ""
-	}
-
-	return authrec.userID
-}
-
 //===========================================================================
 //
 // http runner

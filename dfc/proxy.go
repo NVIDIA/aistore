@@ -1,8 +1,9 @@
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
+
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -29,9 +30,10 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 )
 
-const startupPollSleepTime = time.Second * 3
-
-const tokenStart = "Bearer"
+const (
+	startupPollSleepTime = time.Second * 3
+	tokenStart           = "Bearer"
+)
 
 // Keeps a target response when doing parallel requests to all targets
 type bucketResp struct {
@@ -162,6 +164,10 @@ func (p *proxyrunner) run() error {
 	smapLock.Unlock()
 
 	p.metasyncer = getmetasyncer() // utilize the runner
+	p.authn = &authManager{
+		tokens:        make(map[string]*authRec),
+		revokedTokens: make(map[string]bool),
+	}
 
 	// startup: register and sync across
 	if p.primary {
@@ -177,19 +183,18 @@ func (p *proxyrunner) run() error {
 	// REST API: register proxy handlers and start listening
 	//
 	if ctx.config.Auth.Enabled {
-		p.authn = &authManager{}
-		p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", wrapHandler(p.buckethdlr, p.checkHTTPAuth))
-		p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", wrapHandler(p.objecthdlr, p.checkHTTPAuth))
+		p.httprunner.registerhdlr(URLPath(Rversion, Rbuckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
+		p.httprunner.registerhdlr(URLPath(Rversion, Robjects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
 	} else {
-		p.httprunner.registerhdlr("/"+Rversion+"/"+Rbuckets+"/", p.buckethdlr)
-		p.httprunner.registerhdlr("/"+Rversion+"/"+Robjects+"/", p.objecthdlr)
+		p.httprunner.registerhdlr(URLPath(Rversion, Rbuckets)+"/", p.bucketHandler)
+		p.httprunner.registerhdlr(URLPath(Rversion, Robjects)+"/", p.objectHandler)
 	}
 
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rdaemon, p.daemonhdlr)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rcluster, p.clusterhdlr)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rhealth, p.httphealth)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rvote+"/", p.votehdlr)
-	p.httprunner.registerhdlr("/"+Rversion+"/"+Rtokens, p.tokenhdlr)
+	p.httprunner.registerhdlr(URLPath(Rversion, Rdaemon), p.daemonHandler)
+	p.httprunner.registerhdlr(URLPath(Rversion, Rcluster), p.clusterHandler)
+	p.httprunner.registerhdlr(URLPath(Rversion, Rhealth), p.httpHealth)
+	p.httprunner.registerhdlr(URLPath(Rversion, Rvote)+"/", p.voteHandler)
+	p.httprunner.registerhdlr(URLPath(Rversion, Rtokens), p.tokenHandler)
 
 	if ctx.config.Net.HTTP.UseAsProxy {
 		p.httprunner.registerhdlr("/", p.reverseProxyHandler)
@@ -382,7 +387,7 @@ func (p *proxyrunner) findRole() {
 //===========================================================================================
 
 // verb /Rversion/Rbuckets/
-func (p *proxyrunner) buckethdlr(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpbckget(w, r)
@@ -398,7 +403,7 @@ func (p *proxyrunner) buckethdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 // verb /Rversion/Robjects/
-func (p *proxyrunner) objecthdlr(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpobjget(w, r)
@@ -636,7 +641,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /Rversion/Rhealth
-func (p *proxyrunner) httphealth(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 	proxycorestats := getproxystats()
 	jsbytes, err := json.Marshal(proxycorestats)
 	assert(err == nil, err)
@@ -1368,7 +1373,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 //===========================
 
 // "/"+Rversion+"/"+Rdaemon
-func (p *proxyrunner) daemonhdlr(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpdaeget(w, r)
@@ -1602,7 +1607,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 }
 
 // handler for: "/"+Rversion+"/"+Rcluster
-func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		p.httpcluget(w, r)
@@ -1620,10 +1625,10 @@ func (p *proxyrunner) clusterhdlr(w http.ResponseWriter, r *http.Request) {
 }
 
 // handler for: "/"+Rversion+"/"+Rtokens
-func (p *proxyrunner) tokenhdlr(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case http.MethodPost:
-		p.httptokenpost(w, r)
+	case http.MethodDelete:
+		p.httpTokenDelete(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -2124,12 +2129,8 @@ func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r 
 	return false
 }
 
-// update list of valid tokens
-func (p *proxyrunner) httptokenpost(w http.ResponseWriter, r *http.Request) {
-	var (
-		tokenList = &TokenList{}
-	)
-
+func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
+	tokenList := &TokenList{}
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
 		return
@@ -2141,16 +2142,25 @@ func (p *proxyrunner) httptokenpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newAuth, err := newAuthList(tokenList)
-	if err != nil {
-		s := fmt.Sprintf("Invalid token list: %v", err)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
+	p.authn.updateRevokedList(tokenList)
 
-	p.authn.Lock()
-	defer p.authn.Unlock()
-	p.authn.tokens = newAuth
+	if p.primary {
+		url := URLPath(Rversion, Rtokens)
+		jsonList, err := json.Marshal(tokenList)
+		if err != nil {
+			glog.Errorf("Failed to marshal token list: %v", err)
+			return
+		}
+		go func() {
+			smap := p.smap.cloneL().(*Smap)
+			ch := p.broadcastCluster(url, nil, http.MethodDelete, jsonList, smap, ctx.config.Timeout.CplaneOperation)
+			for r := range ch {
+				if r.err != nil {
+					glog.Errorf("Failed to broadcast token revoke request: %v", r.err)
+				}
+			}
+		}()
+	}
 }
 
 // Read a token from request header and validates it

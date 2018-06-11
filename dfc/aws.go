@@ -15,13 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 const (
@@ -38,8 +38,57 @@ const (
 // implements cloudif
 //
 //======
-type awsimpl struct {
-	t *targetrunner
+type (
+	awsCreds struct {
+		region string
+		key    string
+		secret string
+	}
+	awsimpl struct {
+		t *targetrunner
+	}
+)
+
+// If extractAWSCreds returns no error and awsCreds is nil then the default
+//   AWS client is used (that loads credentials from ~/.aws/credentials)
+func extractAWSCreds(credsList map[string]string) *awsCreds {
+	if len(credsList) == 0 {
+		return nil
+	}
+	raw, ok := credsList[ProviderAmazon]
+	if raw == "" || !ok {
+		return nil
+	}
+
+	// TODO: maybe authn should make JSON from INI before creating a token
+	// Now just parse AWS file in original INI-format
+	parts := strings.Split(raw, "\n")
+	creds := &awsCreds{}
+
+	for _, s := range parts {
+		if strings.HasPrefix(s, "region") {
+			values := strings.SplitN(s, "=", 2)
+			if len(values) == 2 {
+				creds.region = strings.TrimSpace(values[1])
+			}
+		} else if strings.HasPrefix(s, "aws_access_key_id") {
+			values := strings.SplitN(s, "=", 2)
+			if len(values) == 2 {
+				creds.key = strings.TrimSpace(values[1])
+			}
+		} else if strings.HasPrefix(s, "aws_secret_access_key") {
+			values := strings.SplitN(s, "=", 2)
+			if len(values) == 2 {
+				creds.secret = strings.TrimSpace(values[1])
+			}
+		}
+		if creds.region != "" && creds.key != "" && creds.secret != "" {
+			return creds
+		}
+	}
+
+	glog.Errorf("Invalid credentials: %#v\nUsing default AWS session", creds)
+	return nil
 }
 
 //======
@@ -64,43 +113,30 @@ type awsimpl struct {
 // tries to create a session with default parameters
 func createSession(ct context.Context) *session.Session {
 	// TODO: avoid creating sessions for each request
-	userID := userIDFromContext(ct)
-	if userID == "" {
+	userID := getStringFromContext(ct, ctxUserID)
+	userCreds := userCredsFromContext(ct)
+	if userID == "" || userCreds == nil {
+		if glog.V(5) {
+			glog.Info("No user ID or empty credentials: opening default session")
+		}
 		// default session
 		return session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable}))
 	}
 
-	credFile, err := userCredsPathFromContext(ct, "")
-	if err != nil {
-		glog.Errorf("Failed to read user credentials: %v", err)
+	creds := extractAWSCreds(userCreds)
+	if creds == nil {
+		glog.Errorf("Failed to retrieve %s credentials %s", ProviderAmazon, userID)
 		return session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable}))
 	}
 
-	creds := credentials.NewSharedCredentials(credFile, userID)
-	_, err = creds.Get()
-	if err != nil {
-		glog.Errorf("Failed to read credentials from file: %v", err)
-		return session.Must(session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable}))
-	}
-
+	awsCreds := credentials.NewStaticCredentials(creds.key, creds.secret, "")
 	conf := aws.Config{
-		Credentials: creds,
+		Region:      aws.String(creds.region),
+		Credentials: awsCreds,
 	}
-	return session.Must(session.NewSessionWithOptions(session.Options{
-		// Applies user-base credentials
-		Config: conf,
-		// To enable reading Region from the provided credentilas file.
-		// Disable means Region (in aws.Config) must be set manually,
-		//    otherwise error 'MissingRegion' raises
-		SharedConfigState: session.SharedConfigEnable,
-		// Sets the file name with regions
-		SharedConfigFiles: []string{credFile},
-		// Sets the section of INIs to read Region and Credential
-		Profile: userID,
-	}))
+	return session.Must(session.NewSessionWithOptions(session.Options{Config: conf}))
 }
 
 func awsErrorToHTTP(awsError error) int {
