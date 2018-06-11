@@ -130,6 +130,10 @@ type iostatrunner struct {
 }
 
 type (
+	XactionStatsRetriever interface {
+		getStats([]XactionDetails) ([]byte, error)
+	}
+
 	XactionStats struct {
 		Kind        string                     `json:"kind"`
 		TargetStats map[string]json.RawMessage `json:"target"`
@@ -153,6 +157,17 @@ type (
 	RebalanceStats struct {
 		Kind        string                          `json:"kind"`
 		TargetStats map[string]RebalanceTargetStats `json:"target"`
+	}
+
+	PrefetchTargetStats struct {
+		Xactions           []XactionDetails `json:"xactionDetails"`
+		NumFilesPrefetched int64            `json:"numFilesPrefetched"`
+		NumBytesPrefetched int64            `json:"numBytesPrefetched"`
+	}
+
+	PrefetchStats struct {
+		Kind        string                   `json:"kind"`
+		TargetStats map[string]PrefetchStats `json:"target"`
 	}
 )
 
@@ -586,4 +601,48 @@ func (r *storstatsrunner) addL(name string, val int64) {
 	}
 	*v += val
 	s.logged = false
+}
+
+func (p PrefetchTargetStats) getStats(allXactionDetails []XactionDetails) (
+	[]byte, error) {
+	storageStatsRunner := getstorstatsrunner()
+	storageStatsRunner.Lock()
+	prefetchXactionStats := PrefetchTargetStats{
+		Xactions:           allXactionDetails,
+		NumBytesPrefetched: storageStatsRunner.Core.Numprefetch,
+		NumFilesPrefetched: storageStatsRunner.Core.Bytesprefetched,
+	}
+	storageStatsRunner.Unlock()
+	jsonBytes, err := json.Marshal(prefetchXactionStats)
+	if err != nil {
+		err = fmt.Errorf(
+			"Unable to marshal prefetchXactionStats. Error: %v",
+			err)
+		return []byte{}, err
+	}
+
+	return jsonBytes, nil
+}
+
+func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) (
+	[]byte, error) {
+	storageStatsRunner := getstorstatsrunner()
+	storageStatsRunner.Lock()
+	rebalanceXactionStats := RebalanceTargetStats{
+		Xactions:     allXactionDetails,
+		NumRecvBytes: storageStatsRunner.Core.Numrecvbytes,
+		NumRecvFiles: storageStatsRunner.Core.Numrecvfiles,
+		NumSentBytes: storageStatsRunner.Core.Numsentbytes,
+		NumSentFiles: storageStatsRunner.Core.Numsentfiles,
+	}
+	storageStatsRunner.Unlock()
+	jsonBytes, err := json.Marshal(rebalanceXactionStats)
+	if err != nil {
+		err = fmt.Errorf(
+			"Unable to marshal rebalanceXactionStats. Error: %v",
+			err)
+		return []byte{}, err
+	}
+
+	return jsonBytes, nil
 }

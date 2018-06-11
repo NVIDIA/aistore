@@ -2297,22 +2297,18 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// No need to handle default since getXactionKindFromProperties
-		// will return error for an invalid kind.
-		switch kind {
-		case XactionRebalance:
-			jsbytes, err = t.getRebalanceStats()
-			if err != nil {
-				s := fmt.Sprintf(
-					"Unable to get kind from props: [%s]. Error: [%v]",
-					msg.GetProps,
-					err)
-				glog.Errorf(s)
-				t.invalmsghdlr(w, r, s)
-				return
-			}
+		xactionStatsRetriever := t.getXactionStatsRetriever(kind)
+		allXactionDetails := t.getXactionsByType(kind)
+		jsbytes, err = xactionStatsRetriever.getStats(allXactionDetails)
+		if err != nil {
+			s := fmt.Sprintf(
+				"Unable to get stats. Kind: [%s]. Error: [%v]",
+				kind,
+				err)
+			glog.Error(s)
+			t.invalmsghdlr(w, r, s)
+			return
 		}
-
 	default:
 		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
@@ -2321,11 +2317,25 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, jsbytes, "httpdaeget")
 }
 
-func (t *targetrunner) getRebalanceStats() ([]byte, error) {
-	allXactionDetails := []XactionDetails{}
+func (t *targetrunner) getXactionStatsRetriever(kind string) XactionStatsRetriever {
+	var xactionStatsRetriever XactionStatsRetriever
 
+	// No need to handle default since kind has already been validated by
+	// this point.
+	switch kind {
+	case XactionRebalance:
+		xactionStatsRetriever = RebalanceTargetStats{}
+	case XactionPrefetch:
+		xactionStatsRetriever = PrefetchTargetStats{}
+	}
+
+	return xactionStatsRetriever
+}
+
+func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
+	allXactionDetails := []XactionDetails{}
 	for _, xaction := range t.xactinp.xactinp {
-		if xaction.getkind() == XactionRebalance {
+		if xaction.getkind() == kind {
 			status := XactionStatusCompleted
 			if !xaction.finished() {
 				status = XactionStatusInProgress
@@ -2342,23 +2352,7 @@ func (t *targetrunner) getRebalanceStats() ([]byte, error) {
 		}
 	}
 
-	storageStatsRunner := getstorstatsrunner()
-	storageStatsRunner.Lock()
-	rebalanceXactionStats := RebalanceTargetStats{Xactions: allXactionDetails}
-	rebalanceXactionStats.NumRecvBytes = storageStatsRunner.Core.Numrecvbytes
-	rebalanceXactionStats.NumRecvFiles = storageStatsRunner.Core.Numrecvfiles
-	rebalanceXactionStats.NumSentBytes = storageStatsRunner.Core.Numsentbytes
-	rebalanceXactionStats.NumSentFiles = storageStatsRunner.Core.Numsentfiles
-	storageStatsRunner.Unlock()
-	jsonBytes, err := json.Marshal(rebalanceXactionStats)
-	if err != nil {
-		err = fmt.Errorf(
-			"Unable to marshal rebalanceXactionStats. Error: %v",
-			err)
-		return []byte{}, err
-	}
-
-	return jsonBytes, nil
+	return allXactionDetails
 }
 
 // management interface to register (unregistered) self

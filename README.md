@@ -397,7 +397,7 @@ Examples of the supported extended actions include:
 * Prefetch
 * Consensus voting when electing a new leader
 
-At the time of this writing the corresponding RESTful API can query a single xaction kind: "rebalance". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
+At the time of this writing the corresponding RESTful API can query two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
 
 ```
 $ curl -X GET -H 'Content-Type: application/json' -d '{"what": "xaction", "props": "rebalance"}' http://192.168.176.128:8080/v1/cluster

@@ -210,6 +210,7 @@ const (
 const (
 	// Used by various Xaction APIs.
 	XactionRebalance = "rebalance"
+	XactionPrefetch = "prefetch"
 
 	// Denote the status of an Xaction.
 	XactionStatusInProgress = "InProgress"

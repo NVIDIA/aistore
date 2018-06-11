@@ -358,6 +358,8 @@ loop:
 
 		}
 	}
+
+	xpre.etime = time.Now()
 	t.xactinp.del(xpre.id)
 }
 
