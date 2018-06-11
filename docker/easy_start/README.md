@@ -1,8 +1,10 @@
 ## Getting started easily with DFC using Docker
 
-`./easy_start_dfc.sh`
+1. `docker pull liangdrew/dfc`
+2. `docker run -di liangdrew/dfc`
+3. `./easy_start_dfc.sh`
 
-The above command will pull in the latest DFC docker image from Docker Hub, start the container, and start a deployment with one proxy and one target.
+[`easy_start_dfc.sh`](easy_start_dfc.sh) will deploy DFC with one proxy, one target, one local cache directory, and will be configured to use AWS as the cloud provider.
 
 ### Configuration
 
