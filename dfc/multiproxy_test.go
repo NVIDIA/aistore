@@ -256,7 +256,7 @@ func TestDiscoverServers(t *testing.T) {
 			}
 		}
 
-		smap, lbmap := primary.discoverServers(hint, time.Now().Add(tc.duration), time.Millisecond*100)
+		smap, lbmap := primary.discoverClusterMeta(hint, time.Now().Add(tc.duration), time.Millisecond*100)
 		if tc.smapVersion == 0 {
 			if smap != nil {
 				t.Errorf("test case %s: expecting nil smap", tc.name)

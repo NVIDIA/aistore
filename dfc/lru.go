@@ -129,7 +129,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	}
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {
-		glog.Infof("Warning (LRU race?): %s does not exist", fqn)
+		glog.Infof("Warning (LRU race?): %s "+doesnotexist, fqn)
 		glog.Flush()
 		return nil
 	}

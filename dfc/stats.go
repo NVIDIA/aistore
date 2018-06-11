@@ -96,15 +96,13 @@ type proxystatsrunner struct {
 	Core        proxyCoreStats `json:"core"`
 }
 
-type deviometrics map[string]string
-
 type storstatsrunner struct {
 	statsrunner `json:"-"`
 	Core        targetCoreStats        `json:"core"`
 	Capacity    map[string]*fscapacity `json:"capacity"`
 	// iostat
-	CPUidle string                  `json:"cpuidle"`
-	Disk    map[string]deviometrics `json:"disk"`
+	CPUidle string               `json:"cpuidle"`
+	Disk    map[string]simplekvs `json:"disk"`
 	// omitempty
 	timeUpdatedCapacity time.Time
 	timeCheckedLogSizes time.Time
@@ -127,7 +125,7 @@ type iostatrunner struct {
 	chsts       chan struct{}
 	CPUidle     string
 	metricnames []string
-	Disk        map[string]deviometrics
+	Disk        map[string]simplekvs
 	cmd         *exec.Cmd
 }
 
@@ -342,12 +340,9 @@ func (r *storstatsrunner) log() (runlru bool) {
 		riostat.Lock()
 		r.CPUidle = riostat.CPUidle
 		for dev, iometrics := range riostat.Disk {
-			// This is not really a 'copy', iometrics is a map, this assignment makes storstatsrunner
-			// and iostatrunner share the same 'deviometrics', which causes races in other places, for
-			// example, in target.go, when responding to http get stats request, json marshal only
-			// acquired storstatsrunner's lock, but never acquired iostatrunner's lock, which causes
-			// read/write race.
-			r.Disk[dev] = iometrics // copy
+			// FIXME (benign) storstatsrunner and iostatrunner share the same 'metrics'
+			// e.g. when responding to http get stats, we do not currently take riostat.Lock
+			r.Disk[dev] = iometrics
 			if riostat.isZeroUtil(dev) {
 				continue // skip zeros
 			}
@@ -484,7 +479,7 @@ func (r *storstatsrunner) fillfscap(fscapacity *fscapacity, statfs *syscall.Stat
 }
 
 func (r *storstatsrunner) init() {
-	r.Disk = make(map[string]deviometrics, 8)
+	r.Disk = make(map[string]simplekvs, 8)
 	// local filesystems and their cap-s
 	r.Capacity = make(map[string]*fscapacity)
 	r.fsmap = make(map[syscall.Fsid]string)

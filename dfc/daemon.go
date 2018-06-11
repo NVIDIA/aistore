@@ -70,12 +70,14 @@ type (
 		DaemonID   string `json:"daemon_id"`
 		DirectURL  string `json:"direct_url"`
 	}
+	// most basic and commonly used key/value map where both the keys and the values are strings
+	simplekvs map[string]string
 
 	// local (cache-only) bucket names and their TBD props
 	lbmap struct {
 		sync.Mutex
-		LBmap   map[string]string `json:"l_bmap"`
-		Version int64             `json:"version"`
+		LBmap   simplekvs `json:"l_bmap"`
+		Version int64     `json:"version"`
 	}
 
 	namedrunner struct {
@@ -276,7 +278,7 @@ func (m *Smap) marshal() (b []byte, err error) {
 }
 
 func newLBMap() *lbmap {
-	return &lbmap{LBmap: make(map[string]string)}
+	return &lbmap{LBmap: make(simplekvs)}
 }
 
 func (m *lbmap) add(b string) bool {
@@ -324,7 +326,7 @@ func (m *lbmap) copyL(dst *lbmap) {
 
 func (m *lbmap) deepcopy(dst *lbmap) {
 	copyStruct(dst, m)
-	dst.LBmap = make(map[string]string, len(m.LBmap))
+	dst.LBmap = make(simplekvs, len(m.LBmap))
 	for name, v := range m.LBmap {
 		dst.LBmap[name] = v
 	}

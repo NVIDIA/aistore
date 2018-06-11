@@ -53,10 +53,10 @@ type objectProps struct {
 //===========
 type cloudif interface {
 	listbucket(ctx context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
-	headbucket(ctx context.Context, bucket string) (bucketprops map[string]string, errstr string, errcode int)
+	headbucket(ctx context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//
-	headobject(ctx context.Context, bucket string, objname string) (objmeta map[string]string, errstr string, errcode int)
+	headobject(ctx context.Context, bucket string, objname string) (objmeta simplekvs, errstr string, errcode int)
 	//
 	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
 	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
@@ -165,7 +165,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	}
 
 	h.smap = &Smap{}
-	h.lbmap = &lbmap{LBmap: make(map[string]string)} // local (aka cache-only) buckets
+	h.lbmap = &lbmap{LBmap: make(simplekvs)} // local (aka cache-only) buckets
 }
 
 // initSI initialize a daemon's identification (never changes once it is set)
@@ -667,7 +667,7 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	h.statsif.add("numerr", 1)
 }
 
-func (h *httprunner) extractsmap(payload map[string]string) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
+func (h *httprunner) extractsmap(payload simplekvs) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
@@ -731,7 +731,7 @@ func (h *httprunner) extractsmap(payload map[string]string) (newsmap, oldsmap *S
 	return
 }
 
-func (h *httprunner) extractlbmap(payload map[string]string) (newlbmap *lbmap, msg *ActionMsg, errstr string) {
+func (h *httprunner) extractlbmap(payload simplekvs) (newlbmap *lbmap, msg *ActionMsg, errstr string) {
 	if _, ok := payload[lbmaptag]; !ok {
 		return
 	}
@@ -778,7 +778,7 @@ func (h *httprunner) broadcast(path string, query url.Values, method string, bod
 	servers []*daemonInfo, timeout ...time.Duration) chan callResult {
 	var (
 		ch = make(chan callResult, len(servers))
-		wg sync.WaitGroup
+		wg = &sync.WaitGroup{}
 	)
 
 	for _, s := range servers {
@@ -797,7 +797,7 @@ func (h *httprunner) broadcast(path string, query url.Values, method string, bod
 			u.RawQuery = query.Encode() // golang handles query == nil
 			res := h.call(nil, di, u.String(), method, body, timeout...)
 			ch <- res
-		}(s, &wg)
+		}(s, wg)
 	}
 
 	wg.Wait()

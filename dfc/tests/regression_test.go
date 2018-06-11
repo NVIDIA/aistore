@@ -1141,7 +1141,8 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	checkFatal(err, t)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
-		t.Fatalf("wrong number of local buckets, expected: %d. actual: %d", rtd.numLocalBuckets, len(buckets.Local))
+		t.Fatalf("wrong number of local buckets (names) before and after rename (before: %d. after: %d)",
+			rtd.numLocalBuckets, len(buckets.Local))
 	}
 
 	renamedBucketExists := false
@@ -1160,17 +1161,15 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	objs, err := client.ListObjects(proxyurl, rtd.renamedBucket, "", numPuts+1)
 	checkFatal(err, t)
 
-	waitForRebalanceToComplete(t)
-
 	if len(objs) != numPuts {
-		t.Fatalf("unexpected number of objects in renamed local bucket, expected: %d, actual: %d",
-			numPuts, len(objs))
+		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
+			rtd.bucket, rtd.renamedBucket, numPuts, len(objs))
 	}
 }
 
 func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 	var (
-		numPuts  = 10
+		numPuts  = 64
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
@@ -1191,6 +1190,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 
 	if rtd.rename {
 		doRenameRegressionTest(t, rtd, numPuts)
+		tlogf("\nRenamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
 		bucket = rtd.renamedBucket
 	}
 

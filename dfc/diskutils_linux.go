@@ -23,7 +23,7 @@ const (
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
 	r.chsts = make(chan struct{}, 1)
-	r.Disk = make(map[string]deviometrics, 0)
+	r.Disk = make(map[string]simplekvs, 0)
 	r.metricnames = make([]string, 0)
 	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
 	r.cmd = exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
@@ -57,11 +57,11 @@ func (r *iostatrunner) run() (err error) {
 				r.Lock()
 				device := fields[0]
 				var (
-					iometrics deviometrics
+					iometrics simplekvs
 					ok        bool
 				)
 				if iometrics, ok = r.Disk[device]; !ok {
-					iometrics = make(map[string]string, iostatnumdsk-1) // first time
+					iometrics = make(simplekvs, iostatnumdsk-1) // first time
 				}
 				for i := 1; i < iostatnumdsk; i++ {
 					name := r.metricnames[i-1]

@@ -253,11 +253,11 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 	return
 }
 
-func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketprops map[string]string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headbucket %s", bucket)
 	}
-	bucketprops = make(map[string]string)
+	bucketprops = make(simplekvs)
 
 	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -306,11 +306,11 @@ func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname string) (objmeta simplekvs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headobject %s/%s", bucket, objname)
 	}
-	objmeta = make(map[string]string)
+	objmeta = make(simplekvs)
 
 	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -367,7 +367,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
 	var (
 		htype, hval string
-		md          map[string]string
+		md          simplekvs
 	)
 	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -375,7 +375,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	}
 	if ohash != nil {
 		htype, hval = ohash.get()
-		md = make(map[string]string)
+		md = make(simplekvs)
 		md[gcpDfcHashType] = htype
 		md[gcpDfcHashVal] = hval
 	}

@@ -68,7 +68,7 @@ type dfconfig struct {
 	Rebalance        rebalanceconf     `json:"rebalance_conf"`
 	Cksum            cksumconfig       `json:"cksum_config"`
 	Ver              versionconfig     `json:"version_config"`
-	FSpaths          map[string]string `json:"fspaths"`
+	FSpaths          simplekvs         `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	Net              netconfig         `json:"netconfig"`
 	FSKeeper         fskeeperconf      `json:"fskeeper"`

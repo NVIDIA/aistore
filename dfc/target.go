@@ -655,25 +655,27 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketFrom, bucketTo := lbucket, msg.Name
+		if _, ok := t.lbmap.LBmap[bucketFrom]; !ok {
+			s := fmt.Sprintf("Local bucket %s does not exist", bucketFrom)
+			t.invalmsghdlr(w, r, s)
+			return
+		}
 		lbmap4ren, ok := msg.Value.(map[string]interface{})
 		if !ok {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value))
 			return
 		}
-		//
-		// convert/cast generic ActionMsg.Value
-		//
 		v1, ok1 := lbmap4ren["version"]
 		v2, ok2 := v1.(float64)
-		v3, ok3 := lbmap4ren["l_bmap"]
-		v4, ok4 := v3.(map[string]interface{})
-		if !ok1 || !ok2 || !ok3 || !ok4 {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T), (%+v, %T), (%+v, %T)",
-				v1, v1, v2, v2, v3, v3, v4, v4))
+		if !ok1 || !ok2 {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2))
 			return
 		}
-		version, lbmapif := int64(v2), v4
-		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, version, lbmapif); errstr != "" {
+		version := int64(v2)
+		if t.lbmap.version() != version {
+			glog.Warning("lbmap version %d != %d - proceeding to rename anyway", t.lbmap.version(), version)
+		}
+		if errstr := t.renamelocalbucket(bucketFrom, bucketTo); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -704,7 +706,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		islocal     bool
 		errstr      string
 		errcode     int
-		bucketprops map[string]string
+		bucketprops simplekvs
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
@@ -730,7 +732,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		bucketprops = make(map[string]string)
+		bucketprops = make(simplekvs)
 		bucketprops[CloudProvider] = ProviderDfc
 		bucketprops[Versioning] = VersionLocal
 	}
@@ -763,7 +765,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	var objmeta map[string]string
+	var objmeta simplekvs
 	if !islocal {
 		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r), bucket, objname)
 		if errstr != "" {
@@ -785,7 +787,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, http.StatusText(status), status)
 			return
 		}
-		objmeta = make(map[string]string)
+		objmeta = make(simplekvs)
 		objmeta["size"] = strconv.FormatInt(size, 10)
 		objmeta["version"] = version
 		glog.Infoln("httpobjhead FOUND:", bucket, objname, size, version)
@@ -880,53 +882,37 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, version int64, lbmapif map[string]interface{}) (errstr string) {
+func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string) (errstr string) {
 	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
+	t.lbmap.LBmap[bucketTo] = ""
+	lbmapLock.Unlock()
 
-	if t.lbmap.version() != version {
-		glog.Warning("lbmap version %d != %d - proceeding to rename anyway", t.lbmap.version(), version)
-	}
-	// FIXME: TODO: (temp shortcut)
-	//              must be two-phase Tx with the 1st phase to copy (and rollback if need be),
-	//              and the 2nd phase - to confirm and delete old
-	//              there's also the risk of races vs ongoing GETs and PUTs generating workfiles, etc.
-
-	// 1. lbmap = lbmap-from-the-request
-	t.lbmap.Version = version
-	t.lbmap.LBmap = make(map[string]string, len(lbmapif))
-	for k, v := range lbmapif {
-		vs, ok := v.(string)
-		if !ok {
-			errstr = fmt.Sprintf("Invalid lbmap format %s => (%+v, %T)", k, v, v)
-			return
-		}
-		t.lbmap.LBmap[k] = vs
-	}
-	for mpath := range ctx.mountpaths.Available {
-		todir := filepath.Join(makePathLocal(mpath), bucketTo)
-		if err := CreateDir(todir); err != nil {
-			errstr = fmt.Sprintf("Failed to create dir %s, err: %v", todir, err)
-			return
-		}
-	}
-	// 2. rename
-	t.lbmap.add(bucketTo) // must be done before
+	wg := &sync.WaitGroup{}
+	ch := make(chan string, len(ctx.mountpaths.Available))
 	for mpath := range ctx.mountpaths.Available {
 		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
-		if errstr = t.renameOne(fromdir, bucketFrom, bucketTo); errstr != "" {
-			glog.Errorln(errstr) /* beyond the point of no return */
+		wg.Add(1)
+		go func(fromdir string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			ch <- t.renameOne(fromdir, bucketFrom, bucketTo)
+		}(fromdir, wg)
+	}
+	wg.Wait()
+	close(ch)
+	for errstr = range ch {
+		if errstr != "" {
+			return
 		}
 	}
-	// 3. delete
 	for mpath := range ctx.mountpaths.Available {
 		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
 		if err := os.RemoveAll(fromdir); err != nil {
 			glog.Errorf("Failed to remove dir %s", fromdir)
 		}
 	}
-	// 4. cleanup - NOTE that the local lbmap version is advanced by +=2 at this point
+	lbmapLock.Lock()
 	t.lbmap.del(bucketFrom)
+	lbmapLock.Unlock()
 	return
 }
 
@@ -966,7 +952,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 // and the object should be refreshed from Cloud storage
 // It should be called only in case of the object is present in DFC cache
 func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
-	var objmeta map[string]string
+	var objmeta simplekvs
 	if objmeta, errstr, errcode = t.cloudif.headobject(ct, bucket, objname); errstr != "" {
 		return
 	}
@@ -2878,7 +2864,7 @@ func makePathCloud(basePath string) string {
 func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 	var (
 		h       = &t.httprunner
-		payload = make(map[string]string)
+		payload = make(simplekvs)
 	)
 
 	if h.readJSON(w, r, &payload) != nil {

@@ -592,7 +592,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		lbmapLock.Lock()
 		defer lbmapLock.Unlock()
 		if !p.lbmap.del(bucket) {
-			s := fmt.Sprintf("Local bucket %s does not exist", bucket)
+			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
@@ -698,7 +698,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 
 		_, ok := lbmap4ren.LBmap[bucketFrom]
 		if !ok {
-			s := fmt.Sprintf("Local bucket %s does not exist", bucketFrom)
+			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucketFrom)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
@@ -708,7 +708,6 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		// FIXME: must be 2-phase with the 1st phase to copy and the 2nd phase to confirm and delete old
 		if !p.renamelocalbucket(bucketFrom, bucketTo, lbmap4ren, &msg, r.Method) {
 			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, errstr)
@@ -830,11 +829,8 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *
 
 	p.lbmap.del(bucketFrom)
 	p.lbmap.add(bucketTo)
-	lbpathname := filepath.Join(p.confdir, lbname)
-	if err := LocalSave(lbpathname, p.lbmap); err != nil {
-		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
-		// FIXME: rollback?
-		return false
+	if errstr := p.savelbmapconf(); errstr != "" {
+		glog.Errorln(errstr)
 	}
 
 	p.metasyncer.sync(true, p.lbmap.cloneU())
@@ -2223,7 +2219,7 @@ func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		h       = &p.httprunner
-		payload = make(map[string]string)
+		payload = make(simplekvs)
 	)
 
 	if h.readJSON(w, r, &payload) != nil {
@@ -2264,9 +2260,8 @@ func (p *proxyrunner) receiveLBMap(newlbmap *lbmap, msg *ActionMsg) {
 	lbmapLock.Lock()
 	defer lbmapLock.Unlock()
 	p.lbmap = newlbmap
-	lbpathname := filepath.Join(p.confdir, lbname)
-	if err := LocalSave(lbpathname, p.lbmap); err != nil {
-		glog.Errorf("Failed to store lbmap %s, err: %v", lbpathname, err)
+	if errstr := p.savelbmapconf(); errstr != "" {
+		glog.Errorln(errstr)
 	}
 }
 

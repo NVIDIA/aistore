@@ -54,7 +54,7 @@ type (
 		userID  string
 		issued  time.Time
 		expires time.Time
-		creds   map[string]string
+		creds   simplekvs
 	}
 
 	authList map[string]*authRec
@@ -108,7 +108,7 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	if rec.expires, err = time.Parse(time.RFC822, expireStr); err != nil {
 		return nil, invalTokenErr
 	}
-	rec.creds = make(map[string]string, 0)
+	rec.creds = make(simplekvs, 0)
 	if cc, ok := claims["creds"].(map[string]interface{}); ok {
 		for key, value := range cc {
 			if asStr, ok := value.(string); ok {
@@ -141,13 +141,13 @@ func getStringFromContext(ct context.Context, fieldName contextID) string {
 }
 
 // Retreives a userCreds from context or nil if nothing found
-func userCredsFromContext(ct context.Context) map[string]string {
+func userCredsFromContext(ct context.Context) simplekvs {
 	userIf := ct.Value(ctxUserCreds)
 	if userIf == nil {
 		return nil
 	}
 
-	if userCreds, ok := userIf.(map[string]string); ok {
+	if userCreds, ok := userIf.(simplekvs); ok {
 		return userCreds
 	}
 

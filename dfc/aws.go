@@ -254,11 +254,11 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 	return
 }
 
-func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketprops map[string]string, errstr string, errcode int) {
+func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headbucket %s", bucket)
 	}
-	bucketprops = make(map[string]string)
+	bucketprops = make(simplekvs)
 
 	sess := createSession(ct)
 	svc := s3.New(sess)
@@ -311,11 +311,11 @@ func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname string) (objmeta map[string]string, errstr string, errcode int) {
+func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname string) (objmeta simplekvs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headobject %s/%s", bucket, objname)
 	}
-	objmeta = make(map[string]string)
+	objmeta = make(simplekvs)
 
 	sess := createSession(ct)
 	svc := s3.New(sess)

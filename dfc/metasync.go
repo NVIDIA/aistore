@@ -190,7 +190,7 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 		smap4bcast, smapSynced *Smap
 		jsbytes, jsmsg         []byte
 		err                    error
-		payload                = make(map[string]string)
+		payload                = make(simplekvs)
 		newversions            = make(map[string]revs)
 		check4newmembers       bool
 	)
@@ -317,7 +317,7 @@ func (y *metasyncer) handlePending() {
 		return
 	}
 
-	payload := make(map[string]string)
+	payload := make(simplekvs)
 	for _, revs := range y.synced.copies {
 		jsbytes, err = revs.marshal()
 		assert(err == nil, err)
