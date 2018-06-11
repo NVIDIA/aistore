@@ -1129,13 +1129,17 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 
 func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
-		fqn        = t.fqn(bucket, objname)
-		uname      = uniquename(bucket, objname)
-		getfqn     = t.fqn2workfile(fqn)
-		versioncfg = &ctx.config.Ver
-		cksumcfg   = &ctx.config.Cksum
-		errv       = ""
-		vchanged   = false
+		fqn         = t.fqn(bucket, objname)
+		uname       = uniquename(bucket, objname)
+		getfqn      = t.fqn2workfile(fqn)
+		versioncfg  = &ctx.config.Ver
+		cksumcfg    = &ctx.config.Cksum
+		isLocal     = t.bucketmd.islocal(bucket)
+		errv        string
+		nextTierURL string
+		vchanged    bool
+		inNextTier  bool
+		bucketProps simplekvs
 	)
 	// one cold GET at a time
 	if prefetch {
@@ -1148,7 +1152,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	// existence, access & versioning
 	coldget, size, version, eexists := t.lookupLocally(bucket, objname, fqn)
-	if !coldget && eexists == "" && !t.bucketmd.islocal(bucket) {
+	if !coldget && eexists == "" && !isLocal {
 		if versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 			vchanged, errv, _ = t.checkCloudVersion(ct, bucket, objname, version)
 			if errv == "" {
@@ -1176,9 +1180,24 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		goto ret
 	}
 	// cold
-	if props, errstr, errcode = getcloudif().getobj(ct, getfqn, bucket, objname); errstr != "" {
-		t.rtnamemap.unlockname(uname, true)
-		return
+	_, bucketProps = t.bucketmd.get(bucket, isLocal)
+	nextTierURL = bucketProps[URLParamNextTierURL]
+	if nextTierURL != "" {
+		if inNextTier, errstr, errcode = t.objectInNextTier(nextTierURL, bucket, objname); errstr != "" {
+			t.rtnamemap.unlockname(uname, true)
+			return
+		}
+	}
+	if inNextTier {
+		if props, errstr, errcode = t.getObjectNextTier(nextTierURL, bucket, objname, getfqn); errstr != "" {
+			t.rtnamemap.unlockname(uname, true)
+			return
+		}
+	} else {
+		if props, errstr, errcode = getcloudif().getobj(ct, getfqn, bucket, objname); errstr != "" {
+			t.rtnamemap.unlockname(uname, true)
+			return
+		}
 	}
 	defer func() {
 		if errstr != "" {
@@ -1938,8 +1957,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	defer t.rtnamemap.unlockname(uname, true)
 
 	if !localbucket && !evict {
-		errstr, errcode = getcloudif().deleteobj(ct, bucket, objname)
-		if errstr != "" {
+		if errstr, errcode = getcloudif().deleteobj(ct, bucket, objname); errstr != "" {
 			if errcode == 0 {
 				return fmt.Errorf("%s", errstr)
 			}

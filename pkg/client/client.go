@@ -643,6 +643,39 @@ func HeadObject(proxyurl, bucket, objname string) (objProps *ObjectProps, err er
 	return
 }
 
+func SetBucketProps(proxyurl, bucket, cloudProvider, nextTierURL string) error {
+	var url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, bucket) + fmt.Sprintf("?%s=%s&%s=%s",
+		dfc.URLParamCloudProvider, cloudProvider, dfc.URLParamNextTierURL, nextTierURL)
+
+	b, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActSetProps})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
+	if err != nil {
+		return fmt.Errorf("failed to create new HTTP request, err = %v", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do PUT request, err = %v", err)
+	}
+	defer func() {
+		resp.Body.Close()
+	}()
+
+	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body, err = %s", err)
+		}
+		return fmt.Errorf("failed SetBucketProps, HTTP status code: %d, HTTP response body: %s, bucket: %s",
+			resp.StatusCode, string(b), bucket)
+	}
+	return nil
+}
+
 func IsCached(proxyurl, bucket, objname string) (bool, error) {
 	var (
 		url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, bucket, objname) + "?" + dfc.URLParamCheckCached + "=true"

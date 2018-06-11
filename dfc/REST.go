@@ -157,7 +157,7 @@ const (
 	GetPropsIsCached = "iscached"
 	GetPropsBucket   = "bucket"
 	GetPropsVersion  = "version"
-	GetTargetURL     = "targetUrl"
+	GetTargetURL     = "targetURL"
 )
 
 //===================
