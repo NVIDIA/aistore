@@ -48,7 +48,13 @@ $ go test ./tests -v -run=down -numfiles=2 -bucket=<your bucket name>
 The 1st and 3rd commands will install the DFC source code and all its versioned dependencies
 under your configured $GOPATH.
 
-The 4th - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)).
+The 4th - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)). If you want to enable optional DFC authentication server(AuthN) execute instead:
+
+```
+$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
+
+```
+For more details about AuthN server please see [AuthN documetation](./authn/README.md)
 
 Finally, for the last 4th command to work, you'll need to have a name - the name of a bucket.
 The bucket could be an AWS or GCP based one, or a DFC-own so-called "local bucket".

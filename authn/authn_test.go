@@ -83,7 +83,7 @@ func testInvalidUser(mgr *userManager, t *testing.T) {
 }
 
 func reloadFromFile(mgr *userManager, t *testing.T) {
-	proxy := &proxy{URL: ""}
+	proxy := &proxy{}
 	newmgr := newUserManager(dbPath, proxy)
 	if newmgr == nil {
 		t.Error("New manager has not been created")
@@ -286,7 +286,7 @@ func TestToken(t *testing.T) {
 		token string
 	)
 
-	proxy := &proxy{URL: ""}
+	proxy := &proxy{}
 	mgr := newUserManager(dbPath, proxy)
 	if mgr == nil {
 		t.Fatal("Manager has not been created")

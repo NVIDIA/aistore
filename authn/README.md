@@ -5,7 +5,7 @@ DFC Authentication Server (AuthN)
 
 DFC Authentication Server provides a token-based security access to DFC REST API. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
 
-The server is a standalone application that manages users and their tokens. It reports to a primary DFC proxy all changes on the fly and immediately after each user login or logout. The result is that the DFC primary proxy (aka DFC gateway) always has updated set of valid tokens that grant access to the DFC and Cloud resources. 
+The server is a standalone application that manages users and their tokens. It reports to the primary DFC proxy all changes on the fly and immediately after each user login or logout. The result is that the DFC primary proxy (aka DFC gateway) always has updated set of valid tokens that grant access to the DFC and Cloud resources.
 
 For a client application, a typical workflow looks as follows:
 
@@ -24,6 +24,13 @@ Environment variables used by the deployment script to setup AuthN server:
 | AUTH_SU_NAME | admin | Super user name (see `A super user` section for details) |
 | AUTH_SU_PASS | admin | Super user password (see `A super user` section for details) |
 | SECRETKEY| aBitLongSecretKey | A secret key to encrypt and decrypt tokens |
+| CREDDIR | empty value | A path to directory to keep Google Storage user credentials |
+
+All variables can be set at DFC launch. Example of starting AuthN with default configuration:
+
+```
+$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
+```
 
 Note: before starting deployment process don't forget to change the default secret key used to encrypt and decrypt tokens.
 
@@ -48,7 +55,9 @@ By default, DFC deployment currently won't launch AuthN server. To start AuthN, 
 
 ### Superuser
 
-After deploying the cluster, there will be an automatically generated superuser account - a special account that cannot be deleted and that will be used exclusively to manage (add, delete) users. This superuser account does not have access to buckets and objects. 
+After deploying the cluster, there will be an automatically generated superuser account - a special account that cannot be deleted and that will be used exclusively to manage users and their credentials. This superuser account does not have access to buckets and objects.
+
+Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in $CONFDIR, default value is $HOME/.dfc.
 
 Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via `Authorization` field (for curl it is `curl -u<username>:<password ...`, for HTTP requesest it is header option `Authorization: Basic <base64-encoded-username:password>`).
 
@@ -57,7 +66,9 @@ Adding and deleting usernames requires superuser authentication. Super user cred
 | Operation | HTTP Action | Example |
 |---|---|---|
 | Add a user| POST {"name": "username", "password": "pass"} /v1/users | curl -X POST http://localhost:8203/v1/users -d '{"name": "username","password":"pass"}' -H 'Content-Type: application/json' -uadmin:admin |
-| Delete a user | DEL /v1/users/username | curl -X DEL http://localhost:8203/v1/users/username -uadmin:admin |
+| Delete a user | DELETE /v1/users/username | curl -X DELETE http://localhost:8203/v1/users/username -uadmin:admin |
+| Add a cloud credentials for a user | PUT /v1/users/username/cloud-provider {data} | curl -X PUT -L -H 'Content-Type: application/json' http://localhost:8203/v1/users/username/aws -uadmin:admin -T ~/.aws/credentials |
+| Remove user's cloud credentials | DELETE /v1/users/username/cloud-provider | curl -X DELETE -L http://localhost:8203/v1/users/username/aws -uadmin:admin |
 
 ## Token management
 
@@ -76,23 +87,64 @@ A generated token is returned as a JSON formatted message. Example: `{"token": "
 
 ## Interaction with DFC proxy/gateway
 
-DFC proxy requires a valid token in a request header - but only if AuthN is enabled.
-
-After each successful token generation and revoking AuthN sends a new list of valid tokens to DFC proxy. Every token includes all the information needed by the proxy to avoid extra HTTP calls:
+DFC proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:
 
 - UserID (username)
 - Time when the the token was generated
-- Time when the token will expire
-- Credentials to access AWS/GCP (ignored at the moment)
+- Time when the token expires
+- User's AWS/GCP credentials
+
+A token is validated by target. The token must not be expired and it must not be in black list. Black list is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. List of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.
 
 ### Calling DFC proxy API
 
 If authentication is enabled a REST API call to the DFC proxy must include a valid token issued by the AuthN. The token is passed in the request header in the format: `Authorization: Bearer <token>`. Curl example: `curl -L  http://localhost:8080/v1/buckets/* -X GET -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIs'`.
 
-At this moment, only requests to buckets and objects API require "tokenization".
+At this moment, only requests to buckets and objects API require a token.
+
+### AuthN server typical workflow
+
+If AuthN server is enabled then all requests to buckets and objects must contain a valid token issued by AuthN. Steps to generate and use a token:
+
+1. Superuser creates a user account
+
+```
+$ curl -X POST http://localhost:8203/v1/users \
+  -d '{"name": "username", "password": "pass"}' \
+  -H 'Content-Type: application/json' -uadmin:admin
+```
+2. If the user needs access to AWS or GCP, the superuser add user's credentials (example of adding AWS credentials from file)
+
+```
+$ curl -X PUT -L -H 'Content-Type: application/json' \
+  http://localhost:8203/v1/users/username/aws \
+  -uadmin:admin -T ~/.aws/credentials
+```
+3. The user requests a token
+
+```
+$ curl -X POST http://localhost:8203/v1/users/username \
+  -d '{"password": "pass"}' -H 'Content-Type: application/json'
+
+{"token": "eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"}
+
+```
+4. The user adds the token for every DFC request to a proxy or a target (list bucket example)
+
+```
+$ curl -L  http://localhost:8080/v1/buckets/bucketname -X GET \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer eyJhbGciOiJI.eyJjcmVkcyI.T6r6790" \
+  -d '{"props": "size"}'
+
+{"entries":
+ [{"name": "obj1", "size": 1048576, "ctime": "", "checksum": "", "type": "",
+   "atime":"", "bucket": "", "version": "", "iscached": false}
+ ],
+"pagemarker": ""}
+```
 
 ## Known limitations
 
 - **Per-bucket authentication**. It is currently not possible to limit user access to only a certain bucket, or buckets. Once users login, they have full access to all the data;
-- **In memory only**. All issued tokens are kept in memory. Restarting AuthN will have an effect of logging out all active users;
-- **Adding and removing AWS and GCP credentials**. Not supported yet.
+- **Token refresh**. There is no automatic token refreshing. By default a token expires in 30 minutes. So, if you are going to run something for longer time you should either add manual token refresh on getting 'No authorized' error or increase expiration time in settings.
