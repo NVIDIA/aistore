@@ -35,6 +35,12 @@ Note that local and Cloud-based buckets support the same API with minor exceptio
 
 ## Getting Started
 
+### Quick start with Docker
+
+To get started quickly with a containerized, one-proxy, one-target deployment of DFC, see [Getting started quickly with DFC using Docker](docker/quick_start/README.md).
+
+### Regular installation
+
 If you've already installed Go and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
 
 ```
