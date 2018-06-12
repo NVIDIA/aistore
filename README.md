@@ -75,7 +75,8 @@ $ go test ./tests -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS
 downloads up to 100 objects from the bucket called myS3bucket, whereby names of those objects
 will match 'a\d+' regex.
 
-For more testing/running command line options, please refer to [the source](dfc/tests/main_test.go).
+For more testing commands and command line options, please refer to the corresponding
+[README](dfc/tests/README.md) and/or the [test sources](dfc/tests/).
 
 For other useful commands, see the [Makefile](dfc/Makefile).
 
