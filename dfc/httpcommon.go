@@ -602,15 +602,21 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.Rebalance.Enabled = v
 		}
-	case "validate_cold_get":
+	case "validate_checksum_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse validate_cold_get, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse validate_checksum_cold_get, err: %v", err)
 		} else {
 			ctx.config.Cksum.ValidateColdGet = v
 		}
-	case "validate_warm_get":
+	case "validate_checksum_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse validate_warm_get, err: %v", err)
+			errstr = fmt.Sprintf("Failed to parse validate_checksum_warm_get, err: %v", err)
+		} else {
+			ctx.config.Cksum.ValidateWarmGet = v
+		}
+	case "validate_version_warm_get":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse validate_version_warm_get, err: %v", err)
 		} else {
 			ctx.config.Ver.ValidateWarmGet = v
 		}

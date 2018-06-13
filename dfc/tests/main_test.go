@@ -17,6 +17,7 @@ import (
 	"net/http"
 	_ "net/http/pprof" // profile
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -546,7 +547,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
-	bcoldget := cksumconfig["validate_cold_get"].(bool)
+	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
 	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
@@ -563,7 +564,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_cold_get", strconv.FormatBool(false), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	start := time.Now()
 	getfromfilelist(t, bucket, errch, fileslist, false)
@@ -576,7 +577,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errch, "get", t, false)
 	evictobjects(t, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_cold_get", strconv.FormatBool(true), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -587,7 +588,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tlogf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errch, "get", t, false)
 cleanup:
-	setConfig("validate_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	for _, fn := range fileslist {
 		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
@@ -879,6 +880,274 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
+// 1.	PUT file
+// 2.	Change contents of the file or change XXHash
+// 3.	GET file.
+// Note: The following test can only work when running on a local setup
+// (targets are co-located with where this test is running from, because
+// it searches a local oldFileIfo system)
+func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
+	localBuckets, err := client.ListBuckets(proxyurl, true)
+	if err != nil {
+		t.Error("Unable to test if the bucket is local or not.")
+	}
+	for _, localBucket := range localBuckets.Local {
+		if localBucket == clibucket {
+			t.Skipf("Skipped because bucket %s is local.", clibucket)
+		}
+	}
+	var (
+		numFiles               = 3
+		fileSize        uint64 = 1024
+		bucketName             = clibucket
+		seed                   = baseseed + 111
+		errorChannel           = make(chan error, numFiles*5)
+		fileNameChannel        = make(chan string, numfiles)
+		sgl             *dfc.SGLIO
+		fqn             string
+		fileName        string
+		oldFileInfo     os.FileInfo
+		newFileInfo     os.FileInfo
+		errstr          string
+		filesList       = make([]string, 0, numFiles)
+	)
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(fileSize)
+		defer sgl.Free()
+	}
+
+	tlogf("Creating %d objects\n", numFiles)
+	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, "", true, sgl)
+
+	fileName = <-fileNameChannel
+	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
+	// Fetch the file from cloud bucket.
+	_, _, err = client.Get(proxyurl, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	if err != nil {
+		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
+	}
+
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if filepath.Base(path) == fileName && strings.Contains(path, bucketName) {
+			fqn = path
+		}
+		return nil
+	}
+
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	checksumConfig := config["cksum_config"].(map[string]interface{})
+	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
+	oldChecksum := checksumConfig["checksum"].(string)
+	if !oldWarmGet {
+		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		if t.Failed() {
+			goto cleanup
+		}
+	}
+
+	filepath.Walk(rootDir, fsWalkFunc)
+	oldFileInfo, err = os.Stat(fqn)
+	if err != nil {
+		t.Errorf("Failed while reading the bucket from the local file system. Error: [%v]", err)
+	}
+
+	// Test when the contents of the file are changed
+	tlogf("\nChanging contents of the file [%s]: %s\n", fileName, fqn)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
+	checkFatal(err, t)
+	validateGETUponFileChangeForChecksumValidation(t, fileName, newFileInfo, fqn, oldFileInfo)
+
+	// Test when the xxHash of the file is changed
+	fileName = <-fileNameChannel
+	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
+	filepath.Walk(rootDir, fsWalkFunc)
+	oldFileInfo, err = os.Stat(fqn)
+	if err != nil {
+		t.Errorf("Failed while reading the bucket from the local file system. Error: [%v]", err)
+	}
+	tlogf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
+	errstr = dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde"))
+	if errstr != "" {
+		t.Error(errstr)
+	}
+	validateGETUponFileChangeForChecksumValidation(t, fileName, newFileInfo, fqn, oldFileInfo)
+
+	// Test for no checksum algo
+	fileName = <-fileNameChannel
+	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
+	filepath.Walk(rootDir, fsWalkFunc)
+	setConfig("checksum", dfc.ChecksumNone, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	if t.Failed() {
+		goto cleanup
+	}
+	tlogf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
+	errstr = dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde"))
+	if errstr != "" {
+		t.Error(errstr)
+	}
+	_, _, err = client.Get(proxyurl, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	if err != nil {
+		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
+	}
+
+cleanup:
+	// Restore old config
+	setConfig("checksum", fmt.Sprint(oldChecksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	wg := &sync.WaitGroup{}
+	for _, fn := range filesList {
+		if usingFile {
+			_ = os.Remove(LocalSrcDir + "/" + fn)
+		}
+
+		wg.Add(1)
+		go client.Del(proxyurl, clibucket, fn, wg, errorChannel, !testing.Verbose())
+	}
+	wg.Wait()
+	selectErr(errorChannel, "delete", t, false)
+	close(errorChannel)
+	close(fileNameChannel)
+}
+
+func validateGETUponFileChangeForChecksumValidation(
+	t *testing.T, fileName string, newFileInfo os.FileInfo, fqn string,
+	oldFileInfo os.FileInfo) {
+	// Do a GET to see to check if a cold get was executed by comparing old and new size
+	_, _, err := client.Get(proxyurl, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	if err != nil {
+		t.Errorf("Unable to GET file. Error: %v", err)
+	}
+	newFileInfo, err = os.Stat(fqn)
+	if err != nil {
+		t.Errorf("Failed while reading the file %s rom the local file system. Error: %v", fqn, err)
+	}
+	if newFileInfo.Size() != oldFileInfo.Size() {
+		t.Errorf("Both files should match in size since a cold get"+"should have been executed. Expected size: %d, Actual Size: %d", oldFileInfo.Size(), newFileInfo.Size())
+	}
+}
+
+// 1.	PUT file
+// 2.	Change contents of the file or change XXHash
+// 3.	GET file (first GET should fail with Internal Server Error and the
+// 		second should fail with not found).
+// Note: The following test can only work when running on a local setup
+// (targets are co-located with where this test is running from, because
+// it searches a local file system)
+func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
+	var (
+		numFiles        = 3
+		fileNameChannel = make(chan string, numFiles)
+		errorChannel    = make(chan error, 100)
+		sgl             *dfc.SGLIO
+		fileSize        = uint64(1024)
+		seed            = int64(111)
+		bucketName      = TestLocalBucketName
+		fqn             string
+		errstr          string
+	)
+
+	err := client.CreateLocalBucket(proxyurl, bucketName)
+	checkFatal(err, t)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, bucketName)
+		checkFatal(err, t)
+	}()
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(fileSize)
+		defer sgl.Free()
+	}
+
+	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, "", true, sgl)
+	selectErr(errorChannel, "put", t, false)
+
+	// Get Current Config
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	checksumConfig := config["cksum_config"].(map[string]interface{})
+	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
+	oldChecksum := checksumConfig["checksum"].(string)
+
+	var fileName string
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() && info.Name() == "cloud" {
+			return filepath.SkipDir
+		}
+		if filepath.Base(path) == fileName && strings.Contains(path, bucketName) {
+			fqn = path
+		}
+		return nil
+	}
+
+	if !oldWarmGet {
+		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		if t.Failed() {
+			goto cleanup
+		}
+	}
+
+	// Test changing the file content
+	fileName = <-fileNameChannel
+	filepath.Walk(rootDir, fsWalkFunc)
+	tlogf("Changing contents of the file [%s]: %s\n", fileName, fqn)
+	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
+	checkFatal(err, t)
+	executeTwoGETsForChecksumValidation(bucketName, fileName, t)
+
+	// Test changing the file xattr
+	fileName = <-fileNameChannel
+	filepath.Walk(rootDir, fsWalkFunc)
+	tlogf("Changing file xattr[%s]: %s\n", fileName, fqn)
+	errstr = dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde"))
+	if errstr != "" {
+		t.Error(errstr)
+	}
+	executeTwoGETsForChecksumValidation(bucketName, fileName, t)
+
+	// Test for none checksum algo
+	fileName = <-fileNameChannel
+	filepath.Walk(rootDir, fsWalkFunc)
+	setConfig("checksum", dfc.ChecksumNone, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	if t.Failed() {
+		goto cleanup
+	}
+	tlogf("Changing file xattr[%s]: %s\n", fileName, fqn)
+	errstr = dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde"))
+	if errstr != "" {
+		t.Error(errstr)
+	}
+	_, _, err = client.Get(proxyurl, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	if err != nil {
+		t.Error("A GET on an object when checksum algo is none should pass")
+	}
+
+cleanup:
+	// Restore old config
+	setConfig("checksum", fmt.Sprint(oldChecksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	close(errorChannel)
+	close(fileNameChannel)
+}
+
+func executeTwoGETsForChecksumValidation(bucket string, fName string, t *testing.T) {
+	_, _, err := client.Get(proxyurl, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
+	if err == nil {
+		t.Error("Error is nil, expected internal server error on a GET for an object")
+	}
+	if !strings.Contains(err.Error(), "http status 500") {
+		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
+	}
+	// Execute another GET to make sure that the object is deleted
+	_, _, err = client.Get(proxyurl, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
+	if err == nil {
+		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
+	}
+	if !strings.Contains(err.Error(), "http status 404") {
+		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%s]", err.Error())
+	}
+}
+
 func Test_checksum(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Long run only")
@@ -906,7 +1175,7 @@ func Test_checksum(t *testing.T) {
 	// Get Current Config
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
-	ocoldget := cksumconfig["validate_cold_get"].(bool)
+	ocoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
 	if ochksum == dfc.ChecksumXXHash {
 		htype = ochksum
@@ -937,7 +1206,7 @@ func Test_checksum(t *testing.T) {
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_cold_get", fmt.Sprint("false"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("false"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -955,7 +1224,7 @@ func Test_checksum(t *testing.T) {
 	switch clichecksum {
 	case "all":
 		setConfig("checksum", dfc.ChecksumXXHash, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -965,7 +1234,7 @@ func Test_checksum(t *testing.T) {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -987,7 +1256,7 @@ cleanup:
 	deletefromfilelist(t, bucket, errch, fileslist)
 	// restore old config
 	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-	setConfig("validate_cold_get", fmt.Sprint(ocoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 
 	return
 }

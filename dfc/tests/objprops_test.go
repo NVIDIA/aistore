@@ -408,11 +408,11 @@ func propsMainTest(t *testing.T, versioning string) {
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	versionCfg := config["version_config"].(map[string]interface{})
 	rebalanceCfg := config["rebalance_conf"].(map[string]interface{})
-	oldChkVersion := versionCfg["validate_warm_get"].(bool)
+	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	oldRBDelay := rebalanceCfg["startup_delay_time"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if oldVersioning != versioning {
 		setConfig("versioning", versioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
@@ -422,7 +422,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		}
 		if oldVersioning != versioning {
 			setConfig("versioning", oldVersioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)

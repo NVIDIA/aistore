@@ -168,13 +168,14 @@ type httpcnf struct {
 }
 
 type cksumconfig struct {
-	Checksum        string `json:"checksum"`          // DFC checksum: xxhash:none
-	ValidateColdGet bool   `json:"validate_cold_get"` // MD5 (ETag) validation upon cold GET
+	Checksum        string `json:"checksum"`                   // DFC checksum: xxhash:none
+	ValidateColdGet bool   `json:"validate_checksum_cold_get"` // MD5 (ETag) validation upon cold GET
+	ValidateWarmGet bool   `json:"validate_checksum_warm_get"` // MD5 (ETag) validation upon warm GET
 }
 
 type versionconfig struct {
-	ValidateWarmGet bool   `json:"validate_warm_get"` // True: validate object version upon warm GET
-	Versioning      string `json:"versioning"`        // types of objects versioning is enabled for: all, cloud, local, none
+	ValidateWarmGet bool   `json:"validate_version_warm_get"` // True: validate object version upon warm GET
+	Versioning      string `json:"versioning"`                // types of objects versioning is enabled for: all, cloud, local, none
 }
 
 type fskeeperconf struct {
