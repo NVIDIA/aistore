@@ -2,9 +2,11 @@
 
 This guide will help you set up a containerized, one-proxy, one-target deployment of DFC within seconds.
 
-1. `docker pull liangdrew/dfc`
-2. `docker run -di liangdrew/dfc`
+1. `docker pull aistorage/dfc-quick-start`
+2. `docker run -di aistorage/dfc-quick-start`
 3. `./quick_start_dfc.sh`
+
+The first command will pull the latest image from the repository. To pull an image with a specific tag, check out [the available tags](https://hub.docker.com/r/aistorage/dfc-quick-start/tags/) and do `docker pull aistorage/dfc-quick-start:<TAG>` instead.
 
 [`quick_start_dfc.sh`](quick_start_dfc.sh) will deploy DFC with one proxy, one target, one local cache directory, and will be configured to use AWS as the cloud provider.
 
