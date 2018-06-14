@@ -73,13 +73,6 @@ type (
 	// most basic and commonly used key/value map where both the keys and the values are strings
 	simplekvs map[string]string
 
-	// local (cache-only) bucket names and their TBD props
-	lbmap struct {
-		sync.Mutex
-		LBmap   simplekvs `json:"l_bmap"`
-		Version int64     `json:"version"`
-	}
-
 	namedrunner struct {
 		name string
 	}
@@ -120,7 +113,7 @@ var (
 	ctx       = &daemon{}
 	clivars   = &cliVars{}
 	smapLock  = &sync.Mutex{}
-	lbmapLock = &sync.Mutex{}
+	bucketMetaLock = &sync.Mutex{}
 )
 
 //====================
@@ -224,7 +217,7 @@ func (m *Smap) deepcopy(dst *Smap) {
 	}
 }
 
-// Remove is a helper function that removes a server from the smap without knowing before hand
+// Remove is a helper function that removes a server from the smap without knowing beforehand
 // whether it is a proxy or a target.
 // Assuming the ID is unique for proxies and targets. If the ID shows up in both maps, both will be deleted.
 // No lock held during delete.
@@ -273,78 +266,6 @@ func (m *Smap) cloneL() interface{} {
 }
 
 func (m *Smap) marshal() (b []byte, err error) {
-	b, err = json.Marshal(m)
-	return
-}
-
-func newLBMap() *lbmap {
-	return &lbmap{LBmap: make(simplekvs)}
-}
-
-func (m *lbmap) add(b string) bool {
-	_, ok := m.LBmap[b]
-	if ok {
-		return false
-	}
-	m.LBmap[b] = ""
-	m.Version++
-	return true
-}
-
-func (m *lbmap) contains(b string) (ok bool) {
-	_, ok = m.LBmap[b]
-	return
-}
-
-func (m *lbmap) del(b string) bool {
-	_, ok := m.LBmap[b]
-	if !ok {
-		return false
-	}
-	delete(m.LBmap, b)
-	m.Version++
-	return true
-}
-
-func (m *lbmap) versionL() int64 {
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	return m.Version
-}
-
-func (m *lbmap) cloneU() *lbmap {
-	dst := &lbmap{}
-	m.deepcopy(dst)
-	return dst
-}
-
-func (m *lbmap) copyL(dst *lbmap) {
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	m.deepcopy(dst)
-}
-
-func (m *lbmap) deepcopy(dst *lbmap) {
-	copyStruct(dst, m)
-	dst.LBmap = make(simplekvs, len(m.LBmap))
-	for name, v := range m.LBmap {
-		dst.LBmap[name] = v
-	}
-}
-
-//
-// revs interface
-//
-func (m *lbmap) tag() string    { return lbmaptag }
-func (m *lbmap) version() int64 { return m.Version }
-
-func (m *lbmap) cloneL() interface{} {
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	return m.cloneU()
-}
-
-func (m *lbmap) marshal() (b []byte, err error) {
 	b, err = json.Marshal(m)
 	return
 }

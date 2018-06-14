@@ -43,10 +43,10 @@ const (
 
 // $CONFDIR/*
 const (
-	lbname     = "localbuckets" // base name of the lbconfig file; not to confuse with config.Localbuckets mpath sub-directory
-	mpname     = "mpaths"       // base name to persist ctx.mountpaths
-	smapname   = "smap.json"
-	rebinpname = ".rebalancing"
+	bucketmdbase = "bucket-metadata" // base name of the config file; not to confuse with config.Localbuckets mpath
+	mpname       = "mpaths"          // base name to persist ctx.mountpaths
+	smapname     = "smap.json"
+	rebinpname   = ".rebalancing"
 )
 
 //==============================

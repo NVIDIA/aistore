@@ -189,7 +189,7 @@ func (t *targetrunner) stop(err error) {
 
 // target registration with proxy
 func (t *targetrunner) register(timeout time.Duration) (int, error) {
-	var newlbmap lbmap
+	var newbucketmd bucketMD
 	jsbytes, err := json.Marshal(t.si)
 	if err != nil {
 		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
@@ -210,16 +210,17 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 	}
 	// not being sent at cluster startup and keepalive..
 	if len(res.outjson) > 0 {
-		err := json.Unmarshal(res.outjson, &newlbmap)
+		err := json.Unmarshal(res.outjson, &newbucketmd)
 		assert(err == nil, err)
-		lbmapLock.Lock()
-		if t.lbmap.version() > newlbmap.version() {
-			glog.Errorf("register target - got lbmap: local version %d > %d", t.lbmap.version(), newlbmap.version())
+		bucketMetaLock.Lock()
+		if t.bucketmd.version() > newbucketmd.version() {
+			glog.Errorf("register target - got bucket-metadata: local version %d > %d", t.bucketmd.version(), newbucketmd.version())
 		} else {
-			glog.Infof("register target - got lbmap: upgrading local version %d to %d", t.lbmap.version(), newlbmap.version())
+			glog.Infof("register target - got bucket-metadata: upgrading local version %d to %d",
+				t.bucketmd.version(), newbucketmd.version())
 		}
-		t.lbmap = &newlbmap
-		lbmapLock.Unlock()
+		t.bucketmd = &newbucketmd
+		bucketMetaLock.Unlock()
 	}
 
 	return res.status, res.err
@@ -360,8 +361,6 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// FIXME: A race here between this call and other lbmap access including receiving
-	// lbmap during metasync.
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -655,31 +654,32 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketFrom, bucketTo := lbucket, msg.Name
-		if _, ok := t.lbmap.LBmap[bucketFrom]; !ok {
+		ok, props := t.bucketmd.get(bucketFrom, true)
+		if !ok {
 			s := fmt.Sprintf("Local bucket %s does not exist", bucketFrom)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
-		lbmap4ren, ok := msg.Value.(map[string]interface{})
+		bmd4ren, ok := msg.Value.(map[string]interface{})
 		if !ok {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value))
 			return
 		}
-		v1, ok1 := lbmap4ren["version"]
+		v1, ok1 := bmd4ren["version"]
 		v2, ok2 := v1.(float64)
 		if !ok1 || !ok2 {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2))
 			return
 		}
 		version := int64(v2)
-		if t.lbmap.version() != version {
-			glog.Warning("lbmap version %d != %d - proceeding to rename anyway", t.lbmap.version(), version)
+		if t.bucketmd.version() != version {
+			glog.Warning("bucket-metadata version %d != %d - proceeding to rename anyway", t.bucketmd.version(), version)
 		}
-		if errstr := t.renamelocalbucket(bucketFrom, bucketTo); errstr != "" {
+		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, props); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, t.lbmap.versionL())
+		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, t.bucketmd.versionL())
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -882,10 +882,10 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string) (errstr string) {
-	lbmapLock.Lock()
-	t.lbmap.LBmap[bucketTo] = ""
-	lbmapLock.Unlock()
+func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simplekvs) (errstr string) {
+	bucketMetaLock.Lock()
+	t.bucketmd.LBmap[bucketTo] = props
+	bucketMetaLock.Unlock()
 
 	wg := &sync.WaitGroup{}
 	ch := make(chan string, len(ctx.mountpaths.Available))
@@ -910,9 +910,9 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string) (errstr st
 			glog.Errorf("Failed to remove dir %s", fromdir)
 		}
 	}
-	lbmapLock.Lock()
-	t.lbmap.del(bucketFrom)
-	lbmapLock.Unlock()
+	bucketMetaLock.Lock()
+	t.bucketmd.del(bucketFrom, true)
+	bucketMetaLock.Unlock()
 	return
 }
 
@@ -1056,7 +1056,8 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	// existence, access & versioning
 	coldget, size, version, eexists := t.lookupLocally(bucket, objname, fqn)
-	if !coldget && eexists == "" && !t.islocalBucket(bucket) && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
+	if !coldget && eexists == "" && !t.bucketmd.islocal(bucket) &&
+		versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 		vchanged, errv, _ = t.checkCloudVersion(ct, bucket, objname, version)
 		if errv == "" {
 			coldget = vchanged
@@ -1151,7 +1152,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
-			if t.islocalBucket(bucket) {
+			if t.bucketmd.islocal(bucket) {
 				errstr = fmt.Sprintf("GET local: %s (%s/%s) %s", fqn, bucket, objname, doesnotexist)
 				return
 			}
@@ -1241,7 +1242,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	isLocal := t.islocalBucket(bucket)
+	isLocal := t.bucketmd.islocal(bucket)
 	for mpath := range ctx.mountpaths.Available {
 		wg.Add(1)
 		var localDir string
@@ -1305,7 +1306,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	bucketnames := &BucketNames{Cloud: make([]string, 0), Local: make([]string, 0, 64)}
-	for bucket := range t.lbmap.LBmap {
+	for bucket := range t.bucketmd.LBmap {
 		bucketnames.Local = append(bucketnames.Local, bucket)
 	}
 
@@ -1680,7 +1681,7 @@ func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fq
 		file          *os.File
 		err           error
 		renamed       bool
-		isBucketLocal = t.islocalBucket(bucket)
+		isBucketLocal = t.bucketmd.islocal(bucket)
 	)
 	defer func() {
 		if errstr != "" && !os.IsNotExist(err) && !renamed {
@@ -1824,7 +1825,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	)
 	fqn := t.fqn(bucket, objname)
 	uname := uniquename(bucket, objname)
-	localbucket := t.islocalBucket(bucket)
+	localbucket := t.bucketmd.islocal(bucket)
 
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
@@ -2120,7 +2121,7 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 }
 
 func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) (islocal bool, errstr string, errcode int) {
-	islocal = t.islocalBucket(bucket)
+	islocal = t.bucketmd.islocal(bucket)
 	proxylocalstr := r.URL.Query().Get(URLParamLocal)
 	if proxylocal, err := parsebool(proxylocalstr); err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, URLParamLocal, proxylocalstr)
@@ -2272,7 +2273,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := SmapVoteMsg{
 			VoteInProgress: false,
 			Smap:           t.smap.cloneL().(*Smap),
-			Lbmap:          t.lbmap.cloneL().(*lbmap),
+			BucketMD:       t.bucketmd.cloneL().(*bucketMD),
 		}
 		jsbytes, err := json.Marshal(msg)
 		assert(err == nil, err)
@@ -2515,11 +2516,6 @@ func (t *targetrunner) starttime() time.Time {
 	return t.uxprocess.starttime
 }
 
-func (t *targetrunner) islocalBucket(bucket string) bool {
-	_, ok := t.lbmap.LBmap[bucket]
-	return ok
-}
-
 func (t *targetrunner) testingFSPpaths() bool {
 	return ctx.config.TestFSP.Count > 0
 }
@@ -2527,7 +2523,7 @@ func (t *targetrunner) testingFSPpaths() bool {
 // (bucket, object) => (local hashed path, fully qualified name aka fqn)
 func (t *targetrunner) fqn(bucket, objname string) string {
 	mpath := hrwMpath(bucket, objname)
-	if t.islocalBucket(bucket) {
+	if t.bucketmd.islocal(bucket) {
 		return filepath.Join(makePathLocal(mpath), bucket, objname)
 	}
 	return filepath.Join(makePathCloud(mpath), bucket, objname)
@@ -2551,7 +2547,7 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
 			break
 		}
 		if fn(makePathLocal(mpath) + "/") {
-			ok = t.islocalBucket(bucket) && len(objname) > 0 && t.fqn(bucket, objname) == fqn
+			ok = t.bucketmd.islocal(bucket) && len(objname) > 0 && t.fqn(bucket, objname) == fqn
 			break
 		}
 	}
@@ -2731,7 +2727,7 @@ func (t *targetrunner) startupMpaths() {
 //    save/read/update version using xattrs. And the function returns that the
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
 func (t *targetrunner) versioningConfigured(bucket string) bool {
-	islocal := t.islocalBucket(bucket)
+	islocal := t.bucketmd.islocal(bucket)
 	versioning := ctx.config.Ver.Versioning
 	if islocal {
 		return versioning == VersionAll || versioning == VersionLocal
@@ -2878,28 +2874,28 @@ func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	newlbmap, actionlb, errstr := h.extractlbmap(payload)
+	newbucketmd, actionlb, errstr := h.extractbucketmd(payload)
 	if errstr != "" {
 		h.invalmsghdlr(w, r, errstr)
 		return
 	}
 
-	if newlbmap != nil {
-		t.receiveLBMap(newlbmap, actionlb)
+	if newbucketmd != nil {
+		t.receiveBucketMD(newbucketmd, actionlb)
 	}
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveLBMap(newlbmap *lbmap, msg *ActionMsg) {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
 	if msg.Action == "" {
-		glog.Infof("receive lbmap: version %d", newlbmap.version())
+		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
 	} else {
-		glog.Infof("receive lbmap: version %d, message %+v", newlbmap.version(), msg)
+		glog.Infof("receive bucket-metadata: version %d, message %+v", newbucketmd.version(), msg)
 	}
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	for bucket := range t.lbmap.LBmap {
-		_, ok := newlbmap.LBmap[bucket]
+	bucketMetaLock.Lock()
+	defer bucketMetaLock.Unlock()
+	for bucket := range t.bucketmd.LBmap {
+		_, ok := newbucketmd.LBmap[bucket]
 		if !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
 			for mpath := range ctx.mountpaths.Available {
@@ -2910,9 +2906,9 @@ func (t *targetrunner) receiveLBMap(newlbmap *lbmap, msg *ActionMsg) {
 			}
 		}
 	}
-	t.lbmap = newlbmap
+	t.bucketmd = newbucketmd
 	for mpath := range ctx.mountpaths.Available {
-		for bucket := range t.lbmap.LBmap {
+		for bucket := range t.bucketmd.LBmap {
 			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
 			if err := CreateDir(localbucketfqn); err != nil {
 				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)

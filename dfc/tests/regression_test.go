@@ -1133,7 +1133,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 }
 
-func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
+func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int, filesput chan string) {
 	err := client.RenameLocalBucket(proxyurl, rtd.bucket, rtd.renamedBucket)
 	checkFatal(err, t)
 
@@ -1162,6 +1162,18 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int) {
 	checkFatal(err, t)
 
 	if len(objs) != numPuts {
+		for name := range filesput {
+			found := false
+			for _, n := range objs {
+				if strings.Contains(n, name) || strings.Contains(name, n) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				tlogf("not found: %s\n", name)
+			}
+		}
 		t.Fatalf("wrong number of objects in the bucket %s renamed as %s (before: %d. after: %d)",
 			rtd.bucket, rtd.renamedBucket, numPuts, len(objs))
 	}
@@ -1189,7 +1201,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 	selectErr(errch, "put", t, true)
 
 	if rtd.rename {
-		doRenameRegressionTest(t, rtd, numPuts)
+		doRenameRegressionTest(t, rtd, numPuts, filesput)
 		tlogf("\nRenamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
 		bucket = rtd.renamedBucket
 	}

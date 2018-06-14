@@ -118,7 +118,7 @@ type httprunner struct {
 	statsif               statsif
 	kalive                kaliveif
 	smap                  *Smap
-	lbmap                 *lbmap
+	bucketmd              *bucketMD
 	callStatsServer       *CallStatsServer
 	revProxy              *httputil.ReverseProxy
 }
@@ -165,7 +165,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	}
 
 	h.smap = &Smap{}
-	h.lbmap = &lbmap{LBmap: make(simplekvs)} // local (aka cache-only) buckets
+	h.bucketmd = newBucketMD()
 }
 
 // initSI initialize a daemon's identification (never changes once it is set)
@@ -731,19 +731,19 @@ func (h *httprunner) extractsmap(payload simplekvs) (newsmap, oldsmap *Smap, msg
 	return
 }
 
-func (h *httprunner) extractlbmap(payload simplekvs) (newlbmap *lbmap, msg *ActionMsg, errstr string) {
-	if _, ok := payload[lbmaptag]; !ok {
+func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, msg *ActionMsg, errstr string) {
+	if _, ok := payload[bucketmdtag]; !ok {
 		return
 	}
-	newlbmap, msg = &lbmap{}, &ActionMsg{}
-	lbmapvalue := payload[lbmaptag]
+	newbucketmd, msg = &bucketMD{}, &ActionMsg{}
+	bmdvalue := payload[bucketmdtag]
 	msgvalue := ""
-	if err := json.Unmarshal([]byte(lbmapvalue), newlbmap); err != nil {
-		errstr = fmt.Sprintf("Failed to unmarshal new lbmap, value (%+v, %T), err: %v", lbmapvalue, lbmapvalue, err)
+	if err := json.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
+		errstr = fmt.Sprintf("Failed to unmarshal new bucket-metadata, value (%+v, %T), err: %v", bmdvalue, bmdvalue, err)
 		return
 	}
-	if _, ok := payload[lbmaptag+actiontag]; ok {
-		msgvalue = payload[lbmaptag+actiontag]
+	if _, ok := payload[bucketmdtag+actiontag]; ok {
+		msgvalue = payload[bucketmdtag+actiontag]
 		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
 			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
 			return
@@ -751,18 +751,18 @@ func (h *httprunner) extractlbmap(payload simplekvs) (newlbmap *lbmap, msg *Acti
 	}
 	if glog.V(3) {
 		if msg.Action == "" {
-			glog.Infof("extract lbmap ver=%d, msg=<nil>", newlbmap.version())
+			glog.Infof("extract bucket-metadata ver=%d, msg=<nil>", newbucketmd.version())
 		} else {
-			glog.Infof("extract lbmap ver=%d, msg=%+v", newlbmap.version(), msg)
+			glog.Infof("extract bucket-metadata ver=%d, msg=%+v", newbucketmd.version(), msg)
 		}
 	}
-	myver := h.lbmap.versionL()
-	if newlbmap.version() == myver {
-		newlbmap = nil
+	myver := h.bucketmd.versionL()
+	if newbucketmd.version() == myver {
+		newbucketmd = nil
 		return
 	}
-	if newlbmap.version() < myver {
-		errstr = fmt.Sprintf("Attempt to downgrade lbmap version %d to %d", myver, newlbmap.version())
+	if newbucketmd.version() < myver {
+		errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
 	}
 	return
 }

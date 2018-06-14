@@ -32,7 +32,7 @@ type (
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`
 		Smap      Smap      `json:"smap"`
-		lbmap     lbmap     `json:"lbmap"`
+		bucketmd  bucketMD  `json:"bucketmd"`
 		StartTime time.Time `json:"starttime"`
 		Initiator string    `json:"initiator"`
 	}
@@ -153,13 +153,14 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lbmapLock.Lock()
-	vlb := h.lbmap.version()
-	if vlb < msg.Record.lbmap.version() {
-		glog.Warningf("VoteRecord lbmap Version (%v) is newer than local lbmap (%v), updating Smap\n", msg.Record.lbmap.version(), vlb)
-		h.lbmap = &msg.Record.lbmap
+	bucketMetaLock.Lock()
+	vlb := h.bucketmd.version()
+	if vlb < msg.Record.bucketmd.version() {
+		glog.Warningf("VoteRecord bucket-metadata Version (%v) is newer than the local one (%v) - updating\n",
+			msg.Record.bucketmd.version(), vlb)
+		h.bucketmd = &msg.Record.bucketmd
 	}
-	lbmapLock.Unlock()
+	bucketMetaLock.Unlock()
 
 	vote, err := h.voteOnProxy(pi.DaemonID, currPrimaryID)
 	if err != nil {
@@ -256,7 +257,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		Initiator: p.si.DaemonID,
 	}
 	p.smap.copyL(&vr.Smap)
-	p.lbmap.copyL(&vr.lbmap)
+	p.bucketmd.copyL(&vr.bucketmd)
 
 	// The election should be started in a goroutine, as it must not hang the http handler
 	go p.proxyElection(vr, currPrimaryURL)
@@ -399,7 +400,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 				Candidate: vr.Candidate,
 				Primary:   vr.Primary,
 				Smap:      vr.Smap,
-				lbmap:     vr.lbmap,
+				bucketmd:  vr.bucketmd,
 				StartTime: time.Now(),
 				Initiator: p.si.DaemonID,
 			}})
@@ -503,7 +504,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
-		p.lbmap.copyL(&vr.lbmap)
+		p.bucketmd.copyL(&vr.bucketmd)
 		p.proxyElection(vr, currPrimaryURL)
 	} else {
 		glog.Infof("%v: Requesting Election from %v", p.si.DaemonID, nextPrimaryProxy.DaemonID)
@@ -514,7 +515,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
-		p.lbmap.copyL(&vr.lbmap)
+		p.bucketmd.copyL(&vr.bucketmd)
 		p.sendElectionRequest(vr, nextPrimaryProxy)
 	}
 }
@@ -540,7 +541,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		Initiator: t.si.DaemonID,
 	}
 	t.smap.copyL(&vr.Smap)
-	t.lbmap.copyL(&vr.lbmap)
+	t.bucketmd.copyL(&vr.bucketmd)
 	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 

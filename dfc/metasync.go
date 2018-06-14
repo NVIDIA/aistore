@@ -16,9 +16,9 @@ import (
 
 // enumerated REVS types (opaque TBD)
 const (
-	smaptag   = "smaptag"
-	lbmaptag  = "lbmaptag" //
-	actiontag = "-action"  // to make a pair (revs, action)
+	smaptag     = "smaptag"
+	bucketmdtag = "bucketmdtag" //
+	actiontag   = "-action"     // to make a pair (revs, action)
 )
 
 // =================== A Brief Theory of Operation =================================
@@ -59,7 +59,7 @@ const (
 // The usage is easy - there is a single sync() method that accepts variable
 // number of parameters. Example sync-ing asynchronously without action messages:
 //
-// 	sync(false, newsmap, p.lbmap.cloneL())
+// 	sync(false, newsmap, p.bucketmd.cloneL())
 //
 // To sync with action message(s) and to block until all the replicas are delivered,
 // do:

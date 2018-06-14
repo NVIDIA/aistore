@@ -104,9 +104,9 @@ type RangeMsg struct {
 
 // SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
 type SmapVoteMsg struct {
-	VoteInProgress bool   `json:"vote_in_progress"`
-	Smap           *Smap  `json:"smap"`
-	Lbmap          *lbmap `json:"lbmap"`
+	VoteInProgress bool      `json:"vote_in_progress"`
+	Smap           *Smap     `json:"smap"`
+	BucketMD       *bucketMD `json:"bucketmd"`
 }
 
 //===================
@@ -210,7 +210,7 @@ const (
 const (
 	// Used by various Xaction APIs.
 	XactionRebalance = "rebalance"
-	XactionPrefetch = "prefetch"
+	XactionPrefetch  = "prefetch"
 
 	// Denote the status of an Xaction.
 	XactionStatusInProgress = "InProgress"

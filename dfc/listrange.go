@@ -78,7 +78,7 @@ func (t *targetrunner) getListFromRange(ct context.Context, bucket, prefix, rege
 		fullbucketlist *BucketList
 		err            error
 	)
-	if t.islocalBucket(bucket) {
+	if t.bucketmd.islocal(bucket) {
 		fullbucketlist, err = t.prepareLocalObjectList(bucket, msg)
 	} else {
 		fullbucketlist, err = t.getListFromRangeCloud(ct, bucket, msg)
@@ -371,7 +371,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	)
 	versioncfg := &ctx.config.Ver
 	fqn := t.fqn(bucket, objname)
-	islocal := t.islocalBucket(bucket)
+	islocal := t.bucketmd.islocal(bucket)
 	//
 	// NOTE: lockless
 	//
@@ -406,7 +406,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 }
 
 func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	if t.islocalBucket(bucket) {
+	if t.bucketmd.islocal(bucket) {
 		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
 	}
 	var absdeadline time.Time
@@ -419,7 +419,7 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket
 }
 
 func (t *targetrunner) addPrefetchRange(ct context.Context, bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error {
-	if t.islocalBucket(bucket) {
+	if t.bucketmd.islocal(bucket) {
 		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
 	}
 

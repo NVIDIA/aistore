@@ -94,17 +94,17 @@ func (p *proxyrunner) run() error {
 
 	p.xactinp = newxactinp()
 
-	lbpathname := filepath.Join(p.confdir, lbname)
-	lbmapLock.Lock()
-	if LocalLoad(lbpathname, p.lbmap) != nil {
+	bucketmdfull := filepath.Join(p.confdir, bucketmdbase)
+	bucketMetaLock.Lock()
+	if LocalLoad(bucketmdfull, p.bucketmd) != nil {
 		// create empty
-		p.lbmap.Version = 1
-		if err := LocalSave(lbpathname, p.lbmap); err != nil {
-			glog.Fatalf("FATAL: cannot store localbucket config, err: %v", err)
+		p.bucketmd.Version = 1
+		if err := LocalSave(bucketmdfull, p.bucketmd); err != nil {
+			glog.Fatalf("FATAL: cannot store bucket-metadata, err: %v", err)
 		}
 	}
 
-	lbmapLock.Unlock()
+	bucketMetaLock.Unlock()
 	isproxy := os.Getenv("DFCPRIMARYPROXY")
 
 	// A proxy starts as primary if either (or both):
@@ -325,7 +325,7 @@ func (p *proxyrunner) registerWithRetry(url string, timeout time.Duration) error
 }
 
 // findRole helps proxy server to estabilish itself as either primary or non-primary
-// when starting up, a proxy will ask all other servers that is known to it for smap and lbmap.
+// when starting up, a proxy will ask all known nodes for their cluster maps and bucket meta.
 // role is determined by the map which has the highest version number.
 // Note:
 // Originally this was designed as: before each broadcast call, smap from proxy and hint are
@@ -345,12 +345,12 @@ func (p *proxyrunner) findRole() {
 		return
 	}
 
-	smap, lbmap := p.discoverClusterMeta(hint, time.Now().Add(ctx.config.Timeout.Startup), startupPollSleepTime)
-	lbmapLock.Lock()
-	if lbmap != nil && p.lbmap.version() < lbmap.version() {
-		p.lbmap = lbmap
+	smap, bucketmd := p.discoverClusterMeta(hint, time.Now().Add(ctx.config.Timeout.Startup), startupPollSleepTime)
+	bucketMetaLock.Lock()
+	if bucketmd != nil && p.bucketmd.version() < bucketmd.version() {
+		p.bucketmd = bucketmd
 	}
-	lbmapLock.Unlock()
+	bucketMetaLock.Unlock()
 
 	if smap == nil {
 		return
@@ -492,7 +492,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bucketmd.islocal(bucket))
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
@@ -549,7 +549,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t&%s=%s", si.DirectURL, r.URL.Path, URLParamLocal,
-		p.islocalBucket(bucket), URLParamDaemonID, p.httprunner.si.DaemonID)
+		p.bucketmd.islocal(bucket), URLParamDaemonID, p.httprunner.si.DaemonID)
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
@@ -585,23 +585,23 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActDestroyLB:
-		if !p.islocalBucket(bucket) {
+		if !p.bucketmd.islocal(bucket) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Cannot delete non-local bucket %s", bucket))
 			return
 		}
-		lbmapLock.Lock()
-		defer lbmapLock.Unlock()
-		if !p.lbmap.del(bucket) {
+		bucketMetaLock.Lock()
+		defer bucketMetaLock.Unlock()
+		if !p.bucketmd.del(bucket, true) {
 			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if errstr := p.savelbmapconf(); errstr != "" {
-			p.lbmap.add(bucket)
+		if errstr := p.savebmdconf(); errstr != "" {
+			p.bucketmd.add(bucket, true)
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
-		pair := &revspair{p.lbmap.cloneU(), &msg}
+		pair := &revspair{p.bucketmd.cloneU(), &msg}
 		p.metasyncer.sync(true, pair)
 	case ActDelete, ActEvict:
 		p.actionlistrange(w, r, &msg)
@@ -667,19 +667,19 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if !p.checkPrimaryProxy("create local bucket", w, r) {
 			return
 		}
-		lbmapLock.Lock()
-		defer lbmapLock.Unlock()
-		if !p.lbmap.add(lbucket) {
+		bucketMetaLock.Lock()
+		defer bucketMetaLock.Unlock()
+		if !p.bucketmd.add(lbucket, true) {
 			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if errstr := p.savelbmapconf(); errstr != "" {
-			p.lbmap.del(lbucket)
+		if errstr := p.savebmdconf(); errstr != "" {
+			p.bucketmd.del(lbucket, true)
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
-		pair := &revspair{p.lbmap.cloneU(), &msg}
+		pair := &revspair{p.bucketmd.cloneU(), &msg}
 		p.metasyncer.sync(true, pair)
 	case ActRenameLB:
 		if !p.checkPrimaryProxy("rename local bucket", w, r) {
@@ -692,32 +692,32 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
-		lbmapLock.Lock()
-		lbmap4ren := p.lbmap.cloneU()
-		lbmapLock.Unlock()
+		bucketMetaLock.Lock()
+		bmd4ren := p.bucketmd.cloneU()
+		bucketMetaLock.Unlock()
 
-		_, ok := lbmap4ren.LBmap[bucketFrom]
+		ok, _ := bmd4ren.get(bucketFrom, true)
 		if !ok {
 			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucketFrom)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		_, ok = lbmap4ren.LBmap[bucketTo]
+		ok, _ = bmd4ren.get(bucketTo, true)
 		if ok {
 			s := fmt.Sprintf("Local bucket %s already exists", bucketTo)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if !p.renamelocalbucket(bucketFrom, bucketTo, lbmap4ren, &msg, r.Method) {
+		if !p.renamelocalbucket(bucketFrom, bucketTo, bmd4ren, &msg, r.Method) {
 			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, errstr)
 		}
-		glog.Infof("renamed local bucket %s => %s, lbmap version %d", bucketFrom, bucketTo, p.lbmap.versionL())
+		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, p.bucketmd.versionL())
 	case ActSyncLB:
 		if !p.checkPrimaryProxy("synchronize local buckets", w, r) {
 			return
 		}
-		p.metasyncer.sync(false, p.lbmap.cloneL())
+		p.metasyncer.sync(false, p.bucketmd.cloneL())
 	case ActPrefetch:
 		p.actionlistrange(w, r, &msg)
 	default:
@@ -766,7 +766,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	for _, si = range p.smap.Tmap {
 		break
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bucketmd.islocal(bucket))
 	if glog.V(3) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
@@ -788,7 +788,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if errstr != "" {
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.islocalBucket(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bucketmd.islocal(bucket))
 	if glog.V(3) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
@@ -800,11 +800,11 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *lbmap, msg *ActionMsg, method string) bool {
+func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, bmd4ren *bucketMD, msg *ActionMsg, method string) bool {
 	smap4bcast := &Smap{}
 	p.smap.copyL(smap4bcast)
 
-	msg.Value = lbmap4ren
+	msg.Value = bmd4ren
 	jsbytes, err := json.Marshal(msg)
 	assert(err == nil, err)
 
@@ -824,16 +824,16 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, lbmap4ren *
 		}
 	}
 
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
+	bucketMetaLock.Lock()
+	defer bucketMetaLock.Unlock()
 
-	p.lbmap.del(bucketFrom)
-	p.lbmap.add(bucketTo)
-	if errstr := p.savelbmapconf(); errstr != "" {
+	p.bucketmd.del(bucketFrom, true)
+	p.bucketmd.add(bucketTo, true)
+	if errstr := p.savebmdconf(); errstr != "" {
 		glog.Errorln(errstr)
 	}
 
-	p.metasyncer.sync(true, p.lbmap.cloneU())
+	p.metasyncer.sync(true, p.bucketmd.cloneU())
 	return true
 }
 
@@ -842,7 +842,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	localonly, _ := parsebool(q.Get(URLParamLocal))
 	if localonly {
 		bucketnames := &BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
-		for bucket := range p.lbmap.LBmap {
+		for bucket := range p.bucketmd.LBmap {
 			bucketnames.Local = append(bucketnames.Local, bucket)
 		}
 		jsbytes, err := json.Marshal(bucketnames)
@@ -1184,7 +1184,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		return
 	}
 
-	if p.islocalBucket(bucket) {
+	if p.bucketmd.islocal(bucket) {
 		allentries, err = p.getLocalBucketObjects(bucket, listmsgjson)
 	} else {
 		allentries, err = p.getCloudBucketObjects(r, bucket, listmsgjson)
@@ -1223,10 +1223,10 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 	}
 }
 
-func (p *proxyrunner) savelbmapconf() (errstr string) {
-	lbpathname := filepath.Join(p.confdir, lbname)
-	if err := LocalSave(lbpathname, p.lbmap); err != nil {
-		errstr = fmt.Sprintf("Failed to store lbmap at %s, err: %v", lbpathname, err)
+func (p *proxyrunner) savebmdconf() (errstr string) {
+	bucketmdfull := filepath.Join(p.confdir, bucketmdbase)
+	if err := LocalSave(bucketmdfull, p.bucketmd); err != nil {
+		errstr = fmt.Sprintf("Failed to store bucket-metadata at %s, err: %v", bucketmdfull, err)
 	}
 	return
 }
@@ -1245,14 +1245,14 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 		return
 	}
 	lbucket, objname := apitems[0], strings.Join(apitems[1:], "/")
-	lbmapLock.Lock()
-	if !p.islocalBucket(lbucket) {
+	bucketMetaLock.Lock()
+	if !p.bucketmd.islocal(lbucket) {
 		s := fmt.Sprintf("Rename/move is supported only for cache-only buckets (%s does not appear to be local)", lbucket)
 		p.invalmsghdlr(w, r, s)
-		lbmapLock.Unlock()
+		bucketMetaLock.Unlock()
 		return
 	}
-	lbmapLock.Unlock()
+	bucketMetaLock.Unlock()
 
 	si, errstr := HrwTarget(lbucket, objname, p.smap)
 	if errstr != "" {
@@ -1291,7 +1291,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 	bucket := apitems[0]
-	islocal := p.islocalBucket(bucket)
+	islocal := p.bucketmd.islocal(bucket)
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
 		s := fmt.Sprintf("Failed to unmarshal JSMAP: Not a map[string]interface")
@@ -1404,7 +1404,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := SmapVoteMsg{
 			VoteInProgress: vote,
 			Smap:           p.smap.cloneL().(*Smap),
-			Lbmap:          p.lbmap.cloneL().(*lbmap),
+			BucketMD:       p.bucketmd.cloneL().(*bucketMD),
 		}
 		jsbytes, err := json.Marshal(msg)
 		assert(err == nil, err)
@@ -1672,8 +1672,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) invokeHttpGetXaction(
-	w http.ResponseWriter, r *http.Request, msg GetMsg) (
-	bool) {
+	w http.ResponseWriter, r *http.Request, msg GetMsg) bool {
 	kind, err := p.getXactionKindFromProperties(msg.GetProps)
 	if err != nil {
 		glog.Errorf(
@@ -1749,7 +1748,7 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(
 
 // FIXME: read-lock
 func (p *proxyrunner) invokeHttpGetClusterStats(
-	w http.ResponseWriter, r *http.Request, msg GetMsg) (bool){
+	w http.ResponseWriter, r *http.Request, msg GetMsg) bool {
 	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r, msg)
 	if !ok {
 		errstr := fmt.Sprintf(
@@ -1813,9 +1812,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.statsif.add("numpost", 1)
 
 	// not to have nested locks..
-	lbmapLock.Lock()
-	lbmap4reg := p.lbmap.cloneU()
-	lbmapLock.Unlock()
+	bucketMetaLock.Lock()
+	bmd4reg := p.bucketmd.cloneU()
+	bucketMetaLock.Unlock()
 
 	smapLock.Lock()
 	defer smapLock.Unlock()
@@ -1848,11 +1847,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.registerToSmap(isproxy, &nsi)
 		return
 	}
-	// upon joining a running cluster new target gets lbmap update right away
+	// upon joining a running cluster new target gets bucket-metadata right away
 	if !isproxy {
-		outjson, err := json.Marshal(lbmap4reg)
+		outjson, err := json.Marshal(bmd4reg)
 		assert(err == nil, err)
-		p.writeJSON(w, r, outjson, "lbmap")
+		p.writeJSON(w, r, outjson, "bucket-metadata")
 	}
 	// update and distribute Smap
 	go func() {
@@ -2081,7 +2080,7 @@ func (p *proxyrunner) clusterStartup(ntargets int) {
 		if nt >= ntargets {
 			glog.Infof("Reached the expected number %d/%d of target registrations", ntargets, nt)
 
-			p.metasyncer.sync(false, p.smap.cloneU(), p.lbmap.cloneU()) // false = non-blocking
+			p.metasyncer.sync(false, p.smap.cloneU(), p.bucketmd.cloneU()) // false = non-blocking
 			if errstr := p.savesmapconf(); errstr != "" {
 				glog.Errorln(errstr)
 			}
@@ -2098,16 +2097,7 @@ func (p *proxyrunner) clusterStartup(ntargets int) {
 	} else {
 		glog.Warningf("Timed out waiting for the specified number %d/%d of target registrations", ntargets, nt)
 	}
-	p.metasyncer.sync(false, p.smap.cloneU(), p.lbmap.cloneU())
-}
-
-//===================
-//
-//===================
-// FIXME: move to httpcommon
-func (p *proxyrunner) islocalBucket(bucket string) bool {
-	_, ok := p.lbmap.LBmap[bucket]
-	return ok
+	p.metasyncer.sync(false, p.smap.cloneU(), p.bucketmd.cloneU())
 }
 
 func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
@@ -2240,27 +2230,27 @@ func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	newlbmap, actionlb, errstr := h.extractlbmap(payload)
+	newbucketmd, actionlb, errstr := h.extractbucketmd(payload)
 	if errstr != "" {
 		h.invalmsghdlr(w, r, errstr)
 		return
 	}
 
-	if newlbmap != nil {
-		p.receiveLBMap(newlbmap, actionlb)
+	if newbucketmd != nil {
+		p.receiveBucketMD(newbucketmd, actionlb)
 	}
 }
 
-func (p *proxyrunner) receiveLBMap(newlbmap *lbmap, msg *ActionMsg) {
+func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
 	if msg.Action == "" {
-		glog.Infof("receive lbmap: version %d", newlbmap.version())
+		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
 	} else {
-		glog.Infof("receive lbmap: version %d, message %+v", newlbmap.version(), msg)
+		glog.Infof("receive bucket-metadata: version %d, message %+v", newbucketmd.version(), msg)
 	}
-	lbmapLock.Lock()
-	defer lbmapLock.Unlock()
-	p.lbmap = newlbmap
-	if errstr := p.savelbmapconf(); errstr != "" {
+	bucketMetaLock.Lock()
+	defer bucketMetaLock.Unlock()
+	p.bucketmd = newbucketmd
+	if errstr := p.savebmdconf(); errstr != "" {
 		glog.Errorln(errstr)
 	}
 }
@@ -2321,10 +2311,10 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 // as well as other cluster-wide metadata
 //
 func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
-	waitBetweenPoll time.Duration) (*Smap, *lbmap) {
+	waitBetweenPoll time.Duration) (*Smap, *bucketMD) {
 	var (
-		maxVersionSMap  *Smap
-		maxVersionLBMap *lbmap
+		maxVersionSMap *Smap
+		maxVerBucketMD *bucketMD
 	)
 
 	msg := GetMsg{GetWhat: GetWhatSmapVote}
@@ -2366,10 +2356,10 @@ func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 				maxVersionSMap = svm.Smap
 			}
 
-			if svm.Lbmap == nil || svm.Lbmap.version() == 0 {
-				glog.Warningf("Empty LB map from %v", r.si.DaemonID)
-			} else if maxVersionLBMap == nil || svm.Lbmap.version() > maxVersionLBMap.version() {
-				maxVersionLBMap = svm.Lbmap
+			if svm.BucketMD == nil || svm.BucketMD.version() == 0 {
+				glog.Warningf("Empty bucket-metadata from %v", r.si.DaemonID)
+			} else if maxVerBucketMD == nil || svm.BucketMD.version() > maxVerBucketMD.version() {
+				maxVerBucketMD = svm.BucketMD
 			}
 		}
 
@@ -2385,5 +2375,5 @@ func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 		time.Sleep(waitBetweenPoll)
 	}
 
-	return maxVersionSMap, maxVersionLBMap
+	return maxVersionSMap, maxVerBucketMD
 }

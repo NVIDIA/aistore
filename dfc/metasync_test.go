@@ -129,6 +129,27 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 	return ts
 }
 
+func TestMetaSyncDeepCopy(t *testing.T) {
+	bucketmd := newBucketMD()
+	bucketmd.add("bucket1", true, simplekvs{"a": "b", "c": "d"})
+	bucketmd.add("bucket2", true)
+	bucketmd.add("bucket3", false, simplekvs{"a": "b", "c": "d"})
+	bucketmd.add("bucket4", false)
+
+	clone := &bucketMD{}
+	bucketmd.deepcopy(clone)
+
+	b1, _ := json.Marshal(bucketmd)
+	s1 := string(b1)
+	b2, _ := json.Marshal(clone)
+	s2 := string(b2)
+	if s1 == "" || s2 == "" || s1 != s2 {
+		t.Log(s1)
+		t.Log(s2)
+		t.Fatal("marshal(bucketmd) != marshal(clone(bucketmd))")
+	}
+}
+
 // TestMetaSyncTransport is the driver for meta sync transport tests.
 // for each test case, it creates a primary proxy, starts the meta sync instance, run the test case,
 // verifies the result, and stop the syncer.
@@ -471,7 +492,7 @@ func TestMetaSyncData(t *testing.T) {
 		primary        = newPrimary()
 		syncer         = newmetasyncer(primary)
 		ch             = make(chan data, 5)
-		lbMap          = newLBMap()
+		bucketmd       = newBucketMD()
 		emptyActionMsg string
 	)
 
@@ -511,49 +532,49 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.sync(false, primary.smap.cloneU())
 	match(t, expRetry, ch, 1)
 
-	// sync lbmap, target fail and retry
-	lbMap.add("bucket1")
-	lbMap.add("bucket2")
-	b, err = lbMap.marshal()
+	// sync bucketmd, fail target and retry
+	bucketmd.add("bucket1", true, simplekvs{"a": "b", "c": "d"})
+	bucketmd.add("bucket2", true, simplekvs{"x": "", "y": ""})
+	b, err = bucketmd.marshal()
 	if err != nil {
-		t.Fatal("Failed to marshal lbMap, err =", err)
+		t.Fatal("Failed to marshal bucketmd, err =", err)
 	}
 
-	exp[lbmaptag] = string(b)
-	expRetry[lbmaptag] = string(b)
-	exp[lbmaptag+actiontag] = string(emptyActionMsg)
-	expRetry[lbmaptag+actiontag] = string(emptyActionMsg)
+	exp[bucketmdtag] = string(b)
+	expRetry[bucketmdtag] = string(b)
+	exp[bucketmdtag+actiontag] = string(emptyActionMsg)
+	expRetry[bucketmdtag+actiontag] = string(emptyActionMsg)
 
-	syncer.sync(false, lbMap)
+	syncer.sync(false, bucketmd)
 	match(t, exp, ch, 1)
 	match(t, expRetry, ch, 1)
 
-	// sync lbmap, proxy fail, new lbmap synced, expect proxy to receive the new lbmap after rejecting a few
-	// sync request
-	lbMap.add("bucket3")
-	b, err = lbMap.marshal()
+	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
+	// after rejecting a few sync requests
+	bucketmd.add("bucket3", true)
+	b, err = bucketmd.marshal()
 	if err != nil {
-		t.Fatal("Failed to marshal lbMap, err =", err)
+		t.Fatal("Failed to marshal bucketmd, err =", err)
 	}
 
-	exp[lbmaptag] = string(b)
-	syncer.sync(false, lbMap)
+	exp[bucketmdtag] = string(b)
+	syncer.sync(false, bucketmd)
 	match(t, exp, ch, 1)
 
-	lbMap.add("bucket4")
-	b, err = lbMap.marshal()
+	bucketmd.add("bucket4", true, simplekvs{"a": "e", "c": "f"})
+	b, err = bucketmd.marshal()
 	if err != nil {
-		t.Fatal("Failed to marshal lbMap, err =", err)
+		t.Fatal("Failed to marshal bucketmd, err =", err)
 	}
 
-	lbMapStr := string(b)
-	exp[lbmaptag] = lbMapStr
-	syncer.sync(false, lbMap)
+	bucketmdString := string(b)
+	exp[bucketmdtag] = bucketmdString
+	syncer.sync(false, bucketmd)
 	match(t, exp, ch, 2)
 
 	// sync smap
-	delete(exp, lbmaptag)
-	delete(exp, lbmaptag+actiontag)
+	delete(exp, bucketmdtag)
+	delete(exp, bucketmdtag+actiontag)
 
 	b, err = json.Marshal(&ActionMsg{"", "", primary.smap})
 	if err != nil {
@@ -588,23 +609,23 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.sync(false, &revspair{primary.smap.cloneU(), msgSMap})
 	match(t, exp, ch, 3)
 
-	// sync smap pair and lbmap pair
-	msgLBMap := &ActionMsg{"who cares", "whatever", "send me back"}
-	b, err = json.Marshal(msgLBMap)
+	// sync smap pair and bucketmd pair
+	msgBMD := &ActionMsg{"who cares", "whatever", "send me back"}
+	b, err = json.Marshal(msgBMD)
 	if err != nil {
 		t.Fatal("Failed to marshal action message, err =", err)
 	}
 
-	exp[lbmaptag] = lbMapStr
-	exp[lbmaptag+actiontag] = string(b)
+	exp[bucketmdtag] = bucketmdString
+	exp[bucketmdtag+actiontag] = string(b)
 	// note: 'Value' field was modified by the last call to sync()
 	msgSMap.Value = nil
-	syncer.sync(true, &revspair{primary.smap.cloneL().(*Smap), msgSMap}, &revspair{lbMap, msgLBMap})
+	syncer.sync(true, &revspair{primary.smap.cloneL().(*Smap), msgSMap}, &revspair{bucketmd, msgBMD})
 	match(t, exp, ch, 3)
 
-	// lbmap pair
+	// bucketmd pair
 	delete(exp, smaptag)
-	syncer.sync(true, &revspair{lbMap, msgLBMap})
+	syncer.sync(true, &revspair{bucketmd, msgBMD})
 	match(t, exp, ch, 3)
 
 	syncer.stop(nil)
@@ -684,7 +705,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		ip, port := getServerIPAndPort(s1.URL)
 		di := daemonInfo{DaemonID: id, DirectURL: s1.URL, NodeIPAddr: ip, DaemonPort: port}
 		primary.smap.add(&di)
-		syncer.sync(true, primary.lbmap)
+		syncer.sync(true, primary.bucketmd)
 		<-ch
 
 		// sync smap so meta syncer has a smap
@@ -702,7 +723,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		ip, port = getServerIPAndPort(s2.URL)
 		di = daemonInfo{DaemonID: id, DirectURL: s2.URL, NodeIPAddr: ip, DaemonPort: port}
 		primary.smap.add(&di)
-		syncer.sync(true, primary.lbmap)
+		syncer.sync(true, primary.bucketmd)
 		<-ch // target 1
 		<-ch // target 2
 		<-ch // all previously synced data to target 2
@@ -782,15 +803,15 @@ func TestMetaSyncReceive(t *testing.T) {
 			}
 		}
 
-		nilLBMap := func(l *lbmap) {
+		nilBMD := func(l *bucketMD) {
 			if l != nil {
-				t.Fatal("Expecting nil lbmap", l)
+				t.Fatal("Expecting nil bucketmd", l)
 			}
 		}
 
-		matchLBMap := func(a, b *lbmap) {
+		matchBMD := func(a, b *bucketMD) {
 			if !reflect.DeepEqual(a, b) {
-				t.Fatal("LBMap mismatch", a, b)
+				t.Fatal("bucketmd mismatch", a, b)
 			}
 		}
 
@@ -833,7 +854,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		)
 		proxy1 := proxyrunner{}
 		proxy1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		proxy1.lbmap = newLBMap()
+		proxy1.bucketmd = newBucketMD()
 
 		// empty payload
 		newSMap, oldSMap, actMsg, errStr := proxy1.extractsmap(make(map[string]string))
@@ -882,7 +903,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target1 := targetrunner{}
 		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target1.lbmap = newLBMap()
+		target1.bucketmd = newBucketMD()
 
 		c := func(n, o *Smap, m *ActionMsg, e string) {
 			noErr(e)
@@ -922,7 +943,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target2 := targetrunner{}
 		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target2.lbmap = newLBMap()
+		target2.bucketmd = newBucketMD()
 
 		syncer.sync(true, primary.smap.cloneU())
 		payload = <-chProxy
@@ -940,53 +961,53 @@ func TestMetaSyncReceive(t *testing.T) {
 		// same as above, extra sync caused by newly added target
 		payload = <-chTarget
 
-		// extract lbmap
+		// extract bucketmd
 		// empty payload
-		lb, actMsg, errStr := proxy1.extractlbmap(make(map[string]string))
+		lb, actMsg, errStr := proxy1.extractbucketmd(make(simplekvs))
 		if lb != nil || actMsg != nil || errStr != "" {
-			t.Fatal("Extract lbmap from empty payload returned data")
+			t.Fatal("Extract bucketmd from empty payload returned data")
 		}
 
-		lbMap := newLBMap()
-		syncer.sync(true, lbMap)
+		bucketmd := newBucketMD()
+		syncer.sync(true, bucketmd)
 		payload = <-chProxy
-		lb, actMsg, errStr = proxy1.extractlbmap(make(map[string]string))
+		lb, actMsg, errStr = proxy1.extractbucketmd(make(simplekvs))
 		if lb != nil || actMsg != nil || errStr != "" {
-			t.Fatal("Extract lbmap from empty payload returned data")
+			t.Fatal("Extract bucketmd from empty payload returned data")
 		}
 
 		payload = <-chTarget
 		payload = <-chTarget
 
-		lbMap.add("lb1")
-		lbMap.add("lb2")
-		syncer.sync(true, lbMap)
+		bucketmd.add("lb1", true, simplekvs{"a": "b", "c": "d"})
+		bucketmd.add("lb2", true, simplekvs{"m": "", "n": ""})
+		syncer.sync(true, bucketmd)
 		payload = <-chProxy
-		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
-		matchLBMap(lbMap, lb)
-		proxy1.lbmap = lb
+		matchBMD(bucketmd, lb)
+		proxy1.bucketmd = lb
 
 		payload = <-chTarget
 		payload = <-chTarget
 
 		// same version
-		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		noErr(errStr)
-		nilLBMap(lb)
+		nilBMD(lb)
 		emptyActionMsg(actMsg)
 
 		// older version
-		proxy1.lbmap.Version++
-		_, _, errStr = proxy1.extractlbmap(payload)
+		proxy1.bucketmd.Version++
+		_, _, errStr = proxy1.extractbucketmd(payload)
 		hasErr(errStr)
-		proxy1.lbmap.Version--
+		proxy1.bucketmd.Version--
 
 		am1 := ActionMsg{"Action", "Name", "Expecting this back"}
-		syncer.sync(true, &revspair{lbMap, &am1})
+		syncer.sync(true, &revspair{bucketmd, &am1})
 		payload = <-chTarget
-		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		matchActionMsg(&am1, actMsg)
 
 		payload = <-chProxy
@@ -997,7 +1018,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		json.Unmarshal(b, &am)
 		prevSMap = primary.smap.cloneU()
 
-		// new smap and new lbmap pairs
+		// new smap and new bucketmd pairs
 		s = httptest.NewServer(http.HandlerFunc(fProxy))
 		defer s.Close()
 		ip, port = getServerIPAndPort(s.URL)
@@ -1010,9 +1031,9 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		proxy2 := proxyrunner{}
 		proxy2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		proxy2.lbmap = newLBMap()
+		proxy2.bucketmd = newBucketMD()
 
-		lbMap.add("lb3")
+		bucketmd.add("lb3", true, simplekvs{"t": "s", "m": "d"})
 
 		c = func(n, o *Smap, m *ActionMsg, e string) {
 			noErr(e)
@@ -1021,49 +1042,49 @@ func TestMetaSyncReceive(t *testing.T) {
 			matchSMap(primary.smap, n)
 		}
 
-		clb := func(lb *lbmap, m *ActionMsg, e string) {
+		clb := func(lb *bucketMD, m *ActionMsg, e string) {
 			noErr(e)
 			matchActionMsg(&am1, m)
-			matchLBMap(lbMap, lb)
+			matchBMD(bucketmd, lb)
 		}
 
-		syncer.sync(true, &revspair{lbMap, &am1}, &revspair{primary.smap.cloneU(), &ActionMsg{"New proxy", "", nil}})
+		syncer.sync(true, &revspair{bucketmd, &am1}, &revspair{primary.smap.cloneU(), &ActionMsg{"New proxy", "", nil}})
 		payload = <-chProxy
-		lb, actMsg, errStr = proxy2.extractlbmap(payload)
+		lb, actMsg, errStr = proxy2.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
 		newSMap, oldSMap, actMsg, errStr = proxy2.extractsmap(payload)
 		c(newSMap, oldSMap, actMsg, errStr)
 
 		payload = <-chTarget
-		lb, actMsg, errStr = target2.extractlbmap(payload)
+		lb, actMsg, errStr = target2.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
 		newSMap, oldSMap, actMsg, errStr = target2.extractsmap(payload)
 		c(newSMap, oldSMap, actMsg, errStr)
 
 		payload = <-chProxy
-		lb, actMsg, errStr = proxy1.extractlbmap(payload)
+		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
 		newSMap, oldSMap, actMsg, errStr = proxy1.extractsmap(payload)
 		c(newSMap, oldSMap, actMsg, errStr)
 
 		payload = <-chTarget
-		lb, actMsg, errStr = target1.extractlbmap(payload)
+		lb, actMsg, errStr = target1.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
 		newSMap, oldSMap, actMsg, errStr = target1.extractsmap(payload)
 		c(newSMap, oldSMap, actMsg, errStr)
 
 		// this is the extra send to the newly added proxy.
 		// FIXME: meta sync has a bug here i believe unless it is by design.
-		//        the previous sync has lbmap and an action message, meta sync only saves the lbmap but not
-		//        the action message, so on this extra send, it picks up only the lbmap.
+		//        the previous sync has bucketmd and an action message, meta sync only saves the bucketmd but not
+		//        the action message, so on this extra send, it picks up only the bucketmd.
 		//        not a big deal for this case, but for retry case, retry proxy/target will not receive the
-		//        action message but only receives the lbmap.
+		//        action message but only receives the bucketmd.
 		//        same for smap, no old smap is picked up during retry or for newly added servers
 		payload = <-chProxy
-		lb, actMsg, errStr = proxy2.extractlbmap(payload)
+		lb, actMsg, errStr = proxy2.extractbucketmd(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
-		matchLBMap(lbMap, lb)
+		matchBMD(bucketmd, lb)
 		newSMap, oldSMap, actMsg, errStr = proxy2.extractsmap(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
@@ -1115,7 +1136,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target1 := targetrunner{}
 		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target1.lbmap = newLBMap()
+		target1.bucketmd = newBucketMD()
 
 		s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			d := make(map[string]string)
@@ -1133,25 +1154,25 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target2 := targetrunner{}
 		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target2.lbmap = newLBMap()
+		target2.bucketmd = newBucketMD()
 
-		lbMap := newLBMap()
-		lbMap.add("lb1")
+		bucketmd := newBucketMD()
+		bucketmd.add("lb1", true)
 
-		syncer.sync(true, primary.smap.cloneU(), lbMap)
+		syncer.sync(true, primary.smap.cloneU(), bucketmd)
 		<-chTarget
 		<-chTarget
 
-		lbMap.add("lb2")
-		syncer.sync(false, &revspair{lbMap, &ActionMsg{Action: "NB"}})
+		bucketmd.add("lb2", true, simplekvs{"a": "b", "c": "d"})
+		syncer.sync(false, &revspair{bucketmd, &ActionMsg{Action: "NB"}})
 		payload := <-chTarget
-		_, actMsg, _ := target2.extractlbmap(payload)
+		_, actMsg, _ := target2.extractbucketmd(payload)
 		if actMsg.Action == "" {
 			t.Fatal("Expecting action message")
 		}
 
 		payload = <-chTarget
-		_, actMsg, _ = target1.extractlbmap(payload)
+		_, actMsg, _ = target1.extractbucketmd(payload)
 		if actMsg.Action != "" {
 			t.Fatal("Not expecting action message")
 		}

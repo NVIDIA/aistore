@@ -18,11 +18,11 @@ type (
 	discoverServerHandler func(sv int64, lv int64) *httptest.Server
 
 	discoverServer struct {
-		id           string
-		isProxy      bool
-		smapVersion  int64
-		lbmapVersion int64
-		httpHandler  discoverServerHandler
+		id          string
+		isProxy     bool
+		smapVersion int64
+		bmdVersion  int64
+		httpHandler discoverServerHandler
 	}
 )
 
@@ -38,16 +38,16 @@ func newDiscoverServerPrimary() *proxyrunner {
 	return &p
 }
 
-// discoverServerDefaultHandler returns the smap and lbmap with the given version
+// discoverServerDefaultHandler returns the Smap and bucket-metadata with the given version
 func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 	smapVersion := sv
-	lbmapVersion := lv
+	bmdVersion := lv
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
 				Smap:           &Smap{Version: smapVersion},
-				Lbmap:          &lbmap{Version: lbmapVersion},
+				BucketMD:       &bucketMD{Version: bmdVersion},
 			}
 			b, _ := json.Marshal(msg)
 			w.Write(b)
@@ -56,17 +56,17 @@ func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 }
 
 // discoverServerVoteOnceHandler returns vote in progress on the first time it is call, returns
-// smap and lbmap on subsequent calls
+// Smap and bucket-metadata on subsequent calls
 func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
-	lbmapVersion := lv
+	bmdVersion := lv
 	f := func(w http.ResponseWriter, r *http.Request) {
 		cnt++
 		msg := SmapVoteMsg{
 			VoteInProgress: cnt == 1,
 			Smap:           &Smap{Version: smapVersion},
-			Lbmap:          &lbmap{Version: lbmapVersion},
+			BucketMD:       &bucketMD{Version: bmdVersion},
 		}
 		b, _ := json.Marshal(msg)
 		w.Write(b)
@@ -75,18 +75,19 @@ func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(f))
 }
 
-// discoverServerFailTwiceHandler fails the first two calls and return smap abd lbmap on subsequent calls
+// discoverServerFailTwiceHandler fails the first two calls and returns
+// Smap abd bucket-metadata on subsequent calls
 func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 	cnt := 0
 	smapVersion := sv
-	lbmapVersion := lv
+	bmdVersion := lv
 	f := func(w http.ResponseWriter, r *http.Request) {
 		cnt++
 		if cnt > 2 {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
 				Smap:           &Smap{Version: smapVersion},
-				Lbmap:          &lbmap{Version: lbmapVersion},
+				BucketMD:       &bucketMD{Version: bmdVersion},
 			}
 			b, _ := json.Marshal(msg)
 			w.Write(b)
@@ -98,7 +99,7 @@ func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(f))
 }
 
-// discoverServerAlwaysFailHandler always respond with error
+// discoverServerAlwaysFailHandler always responds with error
 func discoverServerAlwaysFailHandler(sv int64, lv int64) *httptest.Server {
 	f := func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
@@ -107,14 +108,14 @@ func discoverServerAlwaysFailHandler(sv int64, lv int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(f))
 }
 
-// discoverServerVoteInProgressHandler always respond with vote in progress
+// discoverServerVoteInProgressHandler always responds with vote in progress
 func discoverServerVoteInProgressHandler(sv int64, lv int64) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := SmapVoteMsg{
 				VoteInProgress: true,
 				Smap:           &Smap{Version: 12345},
-				Lbmap:          &lbmap{Version: 67890},
+				BucketMD:       &bucketMD{Version: 67890},
 			}
 			b, _ := json.Marshal(msg)
 			w.Write(b)
@@ -124,11 +125,11 @@ func discoverServerVoteInProgressHandler(sv int64, lv int64) *httptest.Server {
 
 func TestDiscoverServers(t *testing.T) {
 	tcs := []struct {
-		name         string
-		servers      []discoverServer
-		duration     time.Duration // how long to wait for discover servers call
-		smapVersion  int64         // expected return from discover servers
-		lbmapVersion int64         // use '0' if expecting nil smap or lbmap
+		name        string
+		servers     []discoverServer
+		duration    time.Duration // how long to wait for discover servers call
+		smapVersion int64         // expected return from discover servers
+		bmdVersion  int64         // use '0' if expecting nil Smap or bucket-metadata
 	}{
 		{
 			"empty hint map",
@@ -229,7 +230,7 @@ func TestDiscoverServers(t *testing.T) {
 			4,
 		},
 		{
-			"zero lbmap version",
+			"zero bucket-metadata version",
 			[]discoverServer{
 				{"p1", true, 1, 0, discoverServerDefaultHandler},
 				{"t1", false, 1, 0, discoverServerDefaultHandler},
@@ -247,7 +248,7 @@ func TestDiscoverServers(t *testing.T) {
 		hint := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
 
 		for _, s := range tc.servers {
-			ts := s.httpHandler(s.smapVersion, s.lbmapVersion)
+			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			ip, port := getServerIPAndPort(ts.URL)
 			if s.isProxy {
 				hint.addProxy(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
@@ -256,28 +257,28 @@ func TestDiscoverServers(t *testing.T) {
 			}
 		}
 
-		smap, lbmap := primary.discoverClusterMeta(hint, time.Now().Add(tc.duration), time.Millisecond*100)
+		smap, bucketmd := primary.discoverClusterMeta(hint, time.Now().Add(tc.duration), time.Millisecond*100)
 		if tc.smapVersion == 0 {
 			if smap != nil {
-				t.Errorf("test case %s: expecting nil smap", tc.name)
+				t.Errorf("test case %s: expecting nil Smap", tc.name)
 			}
 		} else {
 			if smap == nil {
-				t.Errorf("test case %s: expecting non-empty smap", tc.name)
+				t.Errorf("test case %s: expecting non-empty Smap", tc.name)
 			} else if tc.smapVersion != smap.Version {
 				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.smapVersion, smap.Version)
 			}
 		}
 
-		if tc.lbmapVersion == 0 {
-			if lbmap != nil {
-				t.Errorf("test case %s: expecting nil lbmap", tc.name)
+		if tc.bmdVersion == 0 {
+			if bucketmd != nil {
+				t.Errorf("test case %s: expecting nil bucket-metadata", tc.name)
 			}
 		} else {
-			if lbmap == nil {
-				t.Errorf("test case %s: expecting non-empty lbmap", tc.name)
-			} else if tc.lbmapVersion != lbmap.Version {
-				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.lbmapVersion, lbmap.Version)
+			if bucketmd == nil {
+				t.Errorf("test case %s: expecting non-empty bucket-metadata", tc.name)
+			} else if tc.bmdVersion != bucketmd.Version {
+				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.bmdVersion, bucketmd.Version)
 			}
 		}
 	}
