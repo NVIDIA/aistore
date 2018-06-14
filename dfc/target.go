@@ -373,6 +373,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
+		errcode = http.StatusInternalServerError
 		// given certain conditions (below) make an effort to locate the object cluster-wide
 		if islocal && strings.Contains(errstr, doesnotexist) {
 			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
@@ -382,8 +383,9 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 					goto existslocally
 				}
 			}
+			errcode = http.StatusNotFound
 		}
-		t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+		t.invalmsghdlr(w, r, errstr, errcode)
 		t.rtnamemap.unlockname(uname, false)
 		return
 	}
