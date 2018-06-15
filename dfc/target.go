@@ -886,6 +886,8 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 //====================================================================================
 func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simplekvs) (errstr string) {
 	bucketMetaLock.Lock()
+	// ready to receive migrated obj-s _after_ that point
+	// insert directly wo/ incrementing the version (metasyncer will do at the end of the operation)
 	t.bucketmd.LBmap[bucketTo] = props
 	bucketMetaLock.Unlock()
 
@@ -896,6 +898,7 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simp
 		wg.Add(1)
 		go func(fromdir string, wg *sync.WaitGroup) {
 			defer wg.Done()
+			time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
 			ch <- t.renameOne(fromdir, bucketFrom, bucketTo)
 		}(fromdir, wg)
 	}
@@ -1739,7 +1742,10 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		return
 	}
 	var size int64
+	bucketMetaLock.Lock()
 	fqn := t.fqn(bucket, objname)
+	ver := t.bucketmd.version()
+	bucketMetaLock.Unlock()
 	if t.si.DaemonID == from {
 		//
 		// the source
@@ -1773,7 +1779,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		// the destination
 		//
 		if glog.V(3) {
-			glog.Infof("Rebalance %s/%s from %s to %s (self)", bucket, objname, from, to)
+			glog.Infof("Rebalance %s/%s from %s to %s (self, %s, ver %d)", bucket, objname, from, to, fqn, ver)
 		}
 		putfqn := t.fqn2workfile(fqn)
 		_, err := os.Stat(fqn)
