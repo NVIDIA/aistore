@@ -29,6 +29,10 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
+const (
+	registerTimeout = time.Minute * 2
+)
+
 type (
 	// traceableTransport is an http.RoundTripper that keeps track of a http
 	// request and implements hooks to report HTTP tracing events.
@@ -1059,7 +1063,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	if err != nil {
 		return err
 	}
-	return WaitMapVersionSync(time.Now().Add(10*time.Second), smap, smap.Version, []string{smap.Tmap[sid].DaemonID})
+	return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{smap.Tmap[sid].DaemonID})
 }
 
 func RegisterTarget(sid string, smap dfc.Smap) error {
@@ -1068,7 +1072,7 @@ func RegisterTarget(sid string, smap dfc.Smap) error {
 	if err != nil {
 		return err
 	}
-	return WaitMapVersionSync(time.Now().Add(10*time.Second), smap, smap.Version, []string{})
+	return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
 }
 
 // HTTPRequest sends one HTTP request and checks result
