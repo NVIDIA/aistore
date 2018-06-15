@@ -57,17 +57,18 @@ const (
 
 // URL Query Parameter enum
 const (
-	URLParamLocal            = "local"      // true: bucket is expected to be local
-	URLParamFromID           = "from_id"    // from_id=string - ID to copy from
-	URLParamToID             = "to_id"      // to_id=string - ID to copy to
-	URLParamFromName         = "from_name"  // rename from
-	URLParamToName           = "to_name"    // rename to
-	URLParamCached           = "cachedonly" // true: return cached objects (names, metadata) instead of requesting the list from the cloud
-	URLParamSuspectedTarget  = "suspect"    // suspect=string - ID of the target suspected of failure
-	URLParamPrimaryCandidate = "candidate"  // candidate=string - ID of the candidate for primary proxy
-	URLParamForce            = "force"      // true: shutdown the primary proxy
-	URLParamPrepare          = "prepare"    // true: request is the prepare phase for primary proxy change
-	URLParamDaemonID         = "daemon_id"  // daemon ID
+	URLParamLocal            = "local"        // true: bucket is expected to be local
+	URLParamFromID           = "from_id"      // from_id=string - ID to copy from
+	URLParamToID             = "to_id"        // to_id=string - ID to copy to
+	URLParamFromName         = "from_name"    // rename from
+	URLParamToName           = "to_name"      // rename to
+	URLParamCached           = "cachedonly"   // true: return cached objects (names, metadata) instead of requesting the list from the cloud
+	URLParamSuspectedTarget  = "suspect"      // suspect=string - ID of the target suspected of failure
+	URLParamPrimaryCandidate = "candidate"    // candidate=string - ID of the candidate for primary proxy
+	URLParamForce            = "force"        // true: shutdown the primary proxy
+	URLParamPrepare          = "prepare"      // true: request is the prepare phase for primary proxy change
+	URLParamDaemonID         = "daemon_id"    // daemon ID
+	URLParamCheckCached      = "check_cached" // true: check if object is cached in DFC
 )
 
 // TODO: sort and some props are TBD

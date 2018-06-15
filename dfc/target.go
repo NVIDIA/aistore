@@ -372,10 +372,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
 	// existence, access & versioning
-	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
+	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); islocal && errstr != "" {
 		errcode = http.StatusInternalServerError
 		// given certain conditions (below) make an effort to locate the object cluster-wide
-		if islocal && strings.Contains(errstr, doesnotexist) {
+		if strings.Contains(errstr, doesnotexist) {
 			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
 			if aborted || running {
 				if props := t.getFromNeighbor(bucket, objname, r, islocal); props != nil {
@@ -768,17 +768,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var objmeta simplekvs
-	if !islocal {
-		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r), bucket, objname)
-		if errstr != "" {
-			if errcode == 0 {
-				t.invalmsghdlr(w, r, errstr)
-			} else {
-				t.invalmsghdlr(w, r, errstr, errcode)
-			}
-			return
-		}
-	} else {
+	c, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
+	if islocal || c {
 		fqn := t.fqn(bucket, objname)
 		var (
 			size    int64
@@ -793,6 +784,16 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		objmeta["size"] = strconv.FormatInt(size, 10)
 		objmeta["version"] = version
 		glog.Infoln("httpobjhead FOUND:", bucket, objname, size, version)
+	} else {
+		objmeta, errstr, errcode = getcloudif().headobject(t.contextWithAuth(r), bucket, objname)
+		if errstr != "" {
+			if errcode == 0 {
+				t.invalmsghdlr(w, r, errstr)
+			} else {
+				t.invalmsghdlr(w, r, errstr, errcode)
+			}
+			return
+		}
 	}
 	for k, v := range objmeta {
 		w.Header().Add(k, v)
@@ -1157,11 +1158,9 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
-			if t.bucketmd.islocal(bucket) {
-				errstr = fmt.Sprintf("GET local: %s (%s/%s) %s", fqn, bucket, objname, doesnotexist)
-				return
-			}
+			errstr = fmt.Sprintf("GET local: %s (%s/%s) %s", fqn, bucket, objname, doesnotexist)
 			coldget = true
+			return
 		case os.IsPermission(err):
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
 		default:

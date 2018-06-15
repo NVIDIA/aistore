@@ -806,6 +806,10 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bucketmd.islocal(bucket))
+	c, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
+	if c {
+		redirecturl += fmt.Sprintf("&%s=true", URLParamCheckCached)
+	}
 	if glog.V(3) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
