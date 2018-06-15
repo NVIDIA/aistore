@@ -112,11 +112,6 @@ func (p *proxyrunner) run() error {
 	// 2. The ID of the primary proxy in the config file is its ID
 	if isproxy == "" && ctx.config.Proxy.Primary.ID != p.si.DaemonID {
 		// Register proxy if it isn't the Primary proxy
-		err := p.registerWithRetry(ctx.config.Proxy.Primary.URL, 0)
-		if err != nil {
-			return fmt.Errorf("Failed to register with primary proxy: %v", err)
-		}
-
 		p.primary = false
 
 		// ask current primary for cluster smap
@@ -137,6 +132,26 @@ func (p *proxyrunner) run() error {
 		}
 
 		var smap Smap
+		err = json.Unmarshal(res.outjson, &smap)
+		if err != nil {
+			return fmt.Errorf("Error unmarshalling cluster map from Primary Proxy: %v", err)
+		}
+
+		// register to current primary
+		err = p.registerWithRetry(smap.ProxySI.DirectURL, 0)
+		if err != nil {
+			return fmt.Errorf("Failed to register with primary proxy: %v", err)
+		}
+
+		// re-request a new smap
+		// Maybe it is OK to save old smap that will be rewritten later. But the old
+		// smap does not have this proxy in smap and the primary can do sync before
+		// this proxy calls setPrimaryProxyAndSmapL. It may result in overwritting
+		// new smap with old one. So, do double call for the latest smap
+		res = p.call(nil, daemonInfo, url, http.MethodGet, jsbytes)
+		if res.err != nil {
+			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", res.err)
+		}
 		err = json.Unmarshal(res.outjson, &smap)
 		if err != nil {
 			return fmt.Errorf("Error unmarshalling cluster map from Primary Proxy: %v", err)
@@ -359,7 +374,9 @@ func (p *proxyrunner) findRole() {
 	smapLock.Lock()
 	if smap.ProxySI.DaemonID == p.si.DaemonID {
 		glog.Infoln("This proxy is primary in found cluster map; remaining primary.")
-		p.smap = smap
+		if smap.version() > p.smap.version() {
+			p.smap = smap
+		}
 		smapLock.Unlock()
 		return
 	}

@@ -1156,19 +1156,24 @@ func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 }
 
 func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, idsToIgnore []string) error {
+	inList := func(s string, values []string) bool {
+		for _, v := range values {
+			if s == v {
+				return true
+			}
+		}
+
+		return false
+	}
 	urls := make(map[string]struct{})
 	for _, d := range smap.Tmap {
-		for _, ignore := range idsToIgnore {
-			if d.DaemonID != ignore {
-				urls[d.DirectURL] = struct{}{}
-			}
+		if !inList(d.DaemonID, idsToIgnore) {
+			urls[d.DirectURL] = struct{}{}
 		}
 	}
 	for _, d := range smap.Pmap {
-		for _, ignore := range idsToIgnore {
-			if d.DaemonID != ignore {
-				urls[d.DirectURL] = struct{}{}
-			}
+		if !inList(d.DaemonID, idsToIgnore) {
+			urls[d.DirectURL] = struct{}{}
 		}
 	}
 
@@ -1190,6 +1195,7 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 		if time.Now().After(timeout) {
 			return fmt.Errorf("get server (%s) smap timedout", u)
 		}
+		fmt.Printf("Not responded nodes: %v\n", urls)
 		time.Sleep(1 * time.Second)
 	}
 	return nil

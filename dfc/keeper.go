@@ -230,21 +230,20 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	return stopped
 }
 
-func (r *proxykalive) primarykeepalive() (stopped bool) {
-	aval := time.Now().Unix()
-	if !atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, 0, aval) {
-		glog.Infof("primary keepalive is already in progress...")
-		return
-	}
-	defer atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, aval, 0)
-
+func (r *proxykalive) keepaliveDaemonMap(
+	daemons map[string]*daemonInfo, deleteFunc func(string)) (stopped bool, changed bool) {
 	from := "?" + URLParamFromID + "=" + r.p.si.DaemonID
-	for sid, si := range r.p.smap.Tmap {
+
+	for sid, si := range daemons {
+		if si.DaemonID == r.p.si.DaemonID {
+			// skip self
+			continue
+		}
 		if !r.timedOut(sid) {
 			continue
 		}
 
-		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+		url := si.DirectURL + URLPath(Rversion, Rhealth)
 		url += from
 		res := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
 		if res.err == nil {
@@ -252,14 +251,14 @@ func (r *proxykalive) primarykeepalive() (stopped bool) {
 		}
 
 		if res.status > 0 {
-			glog.Infof("Warning: target %s fails keepalive with status %d, err: %v", sid, res.status, res.err)
+			glog.Infof("Warning: %s fails keepalive with status %d, err: %v", sid, res.status, res.err)
 		} else {
-			glog.Infof("Warning: target %s fails keepalive, err: %v", sid, res.err)
+			glog.Infof("Warning: %s fails keepalive, err: %v", sid, res.err)
 		}
 
 		responded, stopped := r.poll(si, url)
 		if stopped {
-			return true
+			return true, false
 		}
 
 		if responded {
@@ -269,19 +268,42 @@ func (r *proxykalive) primarykeepalive() (stopped bool) {
 		// FIXME: Seek confirmation when keepalive fails
 		// the verdict
 		if res.status > 0 {
-			glog.Errorf("Target %s fails keepalive with status %d, err: %v - removing from the cluster map",
+			glog.Errorf("%s fails keepalive with status %d, err: %v - removing from the cluster map",
 				sid, res.status, res.err)
 		} else {
-			glog.Errorf("Target %s fails keepalive, err: %v - removing from the cluster map", sid, res.err)
+			glog.Errorf("%s fails keepalive, err: %v - removing from the cluster map", sid, res.err)
 		}
 
 		smapLock.Lock()
-		// FIXME:
-		// This is a bug, this should trigger a map sync to all proxies at least if not to
-		// whole cluster
-		r.p.smap.del(sid)
+		deleteFunc(sid)
 		smapLock.Unlock()
+		changed = true
 	}
+
+	return false, changed
+}
+
+func (r *proxykalive) primarykeepalive() (stopped bool) {
+	aval := time.Now().Unix()
+	if !atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, 0, aval) {
+		glog.Infof("primary keepalive is already in progress...")
+		return
+	}
+	defer atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, aval, 0)
+
+	stopped, targetsChanged := r.keepaliveDaemonMap(r.p.smap.Tmap, r.p.smap.del)
+	if stopped {
+		return true
+	}
+	stopped, proxiesChanged := r.keepaliveDaemonMap(r.p.smap.Pmap, r.p.smap.delProxy)
+	if stopped {
+		return true
+	}
+
+	if targetsChanged || proxiesChanged {
+		r.p.metasyncer.sync(false, r.p.smap.cloneL())
+	}
+
 	return false
 }
 
