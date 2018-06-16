@@ -24,6 +24,7 @@ const (
 	ActDestroyLB   = "destroylb"
 	ActRenameLB    = "renamelb"
 	ActSetConfig   = "setconfig"
+	ActSetProps    = "setprops"
 	ActRename      = "rename"
 	ActEvict       = "evict"
 	ActDelete      = "delete"
@@ -57,18 +58,20 @@ const (
 
 // URL Query Parameter enum
 const (
-	URLParamLocal            = "local"        // true: bucket is expected to be local
-	URLParamFromID           = "from_id"      // from_id=string - ID to copy from
-	URLParamToID             = "to_id"        // to_id=string - ID to copy to
-	URLParamFromName         = "from_name"    // rename from
-	URLParamToName           = "to_name"      // rename to
-	URLParamCached           = "cachedonly"   // true: return cached objects (names, metadata) instead of requesting the list from the cloud
-	URLParamSuspectedTarget  = "suspect"      // suspect=string - ID of the target suspected of failure
-	URLParamPrimaryCandidate = "candidate"    // candidate=string - ID of the candidate for primary proxy
-	URLParamForce            = "force"        // true: shutdown the primary proxy
-	URLParamPrepare          = "prepare"      // true: request is the prepare phase for primary proxy change
-	URLParamDaemonID         = "daemon_id"    // daemon ID
-	URLParamCheckCached      = "check_cached" // true: check if object is cached in DFC
+	URLParamLocal            = "local"          // true: bucket is expected to be local
+	URLParamFromID           = "from_id"        // from_id=string - ID to copy from
+	URLParamToID             = "to_id"          // to_id=string - ID to copy to
+	URLParamFromName         = "from_name"      // rename from
+	URLParamToName           = "to_name"        // rename to
+	URLParamCached           = "cachedonly"     // true: return cached objects (names, metadata) instead of requesting the list from the cloud
+	URLParamSuspectedTarget  = "suspect"        // suspect=string - ID of the target suspected of failure
+	URLParamPrimaryCandidate = "candidate"      // candidate=string - ID of the candidate for primary proxy
+	URLParamForce            = "force"          // true: shutdown the primary proxy
+	URLParamPrepare          = "prepare"        // true: request is the prepare phase for primary proxy change
+	URLParamDaemonID         = "daemon_id"      // daemon ID
+	URLParamCheckCached      = "check_cached"   // true: check if object is cached in DFC
+	URLParamNextTierURL      = "next_tier_url"  // proxyurl of the next (colder) tier
+	URLParamCloudProvider    = "cloud_provider" // one of: Cloud Provider enum above
 )
 
 // TODO: sort and some props are TBD
@@ -209,11 +212,11 @@ const (
 )
 
 const (
-	// Used by various Xaction APIs.
-	XactionRebalance = "rebalance"
-	XactionPrefetch  = "prefetch"
+	// Used by various Xaction APIs
+	XactionRebalance = ActRebalance
+	XactionPrefetch  = ActPrefetch
 
-	// Denote the status of an Xaction.
+	// Denote the status of an Xaction
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
 )

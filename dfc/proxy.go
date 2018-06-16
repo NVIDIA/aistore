@@ -414,6 +414,8 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpbckpost(w, r)
 	case http.MethodHead:
 		p.httpbckhead(w, r)
+	case http.MethodPut:
+		p.httpbckput(w, r)
 	default:
 		invalhdlr(w, r)
 	}
@@ -788,6 +790,79 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+}
+
+// PUT /v1/buckets/bucket-name
+func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		return
+	}
+
+	// validations
+	bucket := apitems[0]
+	if !p.validatebckname(w, r, bucket) {
+		return
+	}
+	var msg ActionMsg
+	if p.readJSON(w, r, &msg) != nil {
+		return
+	}
+	if msg.Action != ActSetProps {
+		s := fmt.Sprintf("Invalid ActionMsg [%v] - expecting '%s' action", msg, ActSetProps)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	query := r.URL.Query()
+	nexttierurl := query.Get(URLParamNextTierURL)
+	if nexttierurl != "" {
+		if _, err := url.ParseRequestURI(nexttierurl); err != nil {
+			s := fmt.Sprintf("Invalid %s=%s, err: %v", URLParamNextTierURL, nexttierurl, err)
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+	}
+	cldprovider := query.Get(URLParamCloudProvider)
+	if cldprovider != "" && cldprovider != ProviderAmazon && cldprovider != ProviderGoogle && cldprovider != ProviderDfc {
+		s := fmt.Sprintf("Invalid %s=%s", URLParamCloudProvider, cldprovider)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	if nexttierurl != "" && cldprovider == "" {
+		s := fmt.Sprintf("Tiered bucket must be associated with one of the supported Cloud providers (%s | %s | %s)",
+			ProviderAmazon, ProviderGoogle, ProviderDfc)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	// doing it
+	bucketMetaLock.Lock()
+	defer bucketMetaLock.Unlock()
+
+	islocal := p.bucketmd.islocal(bucket)
+	if islocal && cldprovider != ProviderDfc && cldprovider != "" {
+		s := fmt.Sprintf("Local bucket %s can only have '%s' as the Cloud provider", bucket, ProviderDfc)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	exists, props := p.bucketmd.get(bucket, islocal)
+	if !exists {
+		assert(!islocal)
+		p.bucketmd.add(bucket, false)
+	}
+	if props == nil {
+		props = make(simplekvs)
+	}
+	props[URLParamNextTierURL] = nexttierurl
+	props[URLParamCloudProvider] = cldprovider
+	p.bucketmd.set(bucket, islocal, props) // can also unset by assigning "" values
+
+	if errstr := p.savebmdconf(); errstr != "" {
+		glog.Errorln(errstr)
+	}
+
+	p.metasyncer.sync(true, p.bucketmd.cloneU())
 }
 
 // HEAD /v1/objects/bucket-name/object-name

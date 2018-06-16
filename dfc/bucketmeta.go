@@ -63,6 +63,31 @@ func (m *bucketMD) get(b string, local bool) (exists bool, props simplekvs) {
 	return
 }
 
+func (m *bucketMD) set(b string, local bool, props simplekvs) {
+	mm := m.LBmap
+	if !local {
+		mm = m.CBmap
+	}
+	if _, ok := mm[b]; !ok {
+		assert(false)
+	}
+
+	m.Version++
+	// revert it to nil when there are no values or all values are empty
+	havevalues := false
+	for _, v := range props {
+		if v != "" {
+			havevalues = true
+			break
+		}
+	}
+	if havevalues {
+		mm[b] = props
+	} else {
+		mm[b] = nil
+	}
+}
+
 func (m *bucketMD) islocal(bucket string) bool {
 	_, ok := m.LBmap[bucket]
 	return ok
