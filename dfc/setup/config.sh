@@ -49,12 +49,13 @@
 		"rebalancing_enabled": 	true
 	},
 	"cksum_config": {
-                 "checksum":		"xxhash",
-                 "validate_cold_get":	true
+                 "checksum":                    "xxhash",
+                 "validate_checksum_cold_get":	true,
+                 "validate_checksum_warm_get":	false
 	},
 	"version_config": {
-		"validate_warm_get":	false,
-		"versioning":		"all"
+		"validate_version_warm_get":    false,
+		"versioning":                   "all"
 	},
 	"fspaths": {
 	    $FSPATHS

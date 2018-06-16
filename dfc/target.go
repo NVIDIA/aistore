@@ -390,14 +390,37 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		if vchanged, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, version); errstr != "" {
-			t.invalmsghdlr(w, r, errstr, errcode)
+	if !coldget && !islocal {
+		if versioncfg.ValidateWarmGet && (version != "" &&
+			t.versioningConfigured(bucket)) {
+			if vchanged, errstr, errcode = t.checkCloudVersion(
+				ct, bucket, objname, version); errstr != "" {
+				t.invalmsghdlr(w, r, errstr, errcode)
+				t.rtnamemap.unlockname(uname, false)
+				return
+			}
+			// TODO: add a knob to return what's cached while upgrading the version async
+			coldget = vchanged
+		}
+	}
+	if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != ChecksumNone {
+		validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			t.rtnamemap.unlockname(uname, false)
 			return
 		}
-		// TODO: add a knob to return what's cached while upgrading the version async
-		coldget = vchanged
+		if !validChecksum {
+			if islocal {
+				if err := os.Remove(fqn); err != nil {
+					glog.Warningf("Bad checksum, failed to remove %s/%s, err: %v", bucket, objname, err)
+				}
+				t.invalmsghdlr(w, r, fmt.Sprintf("Bad checksum %s/%s", bucket, objname), http.StatusInternalServerError)
+				t.rtnamemap.unlockname(uname, false)
+				return
+			}
+			coldget = true
+		}
 	}
 	if coldget {
 		t.rtnamemap.unlockname(uname, false)
@@ -1048,6 +1071,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		uname      = uniquename(bucket, objname)
 		getfqn     = t.fqn2workfile(fqn)
 		versioncfg = &ctx.config.Ver
+		cksumcfg   = &ctx.config.Cksum
 		errv       = ""
 		vchanged   = false
 	)
@@ -1062,11 +1086,21 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	// existence, access & versioning
 	coldget, size, version, eexists := t.lookupLocally(bucket, objname, fqn)
-	if !coldget && eexists == "" && !t.bucketmd.islocal(bucket) &&
-		versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		vchanged, errv, _ = t.checkCloudVersion(ct, bucket, objname, version)
-		if errv == "" {
-			coldget = vchanged
+	if !coldget && eexists == "" && !t.bucketmd.islocal(bucket) {
+		if versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
+			vchanged, errv, _ = t.checkCloudVersion(ct, bucket, objname, version)
+			if errv == "" {
+				coldget = vchanged
+			}
+		}
+
+		if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != ChecksumNone {
+			validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
+			if errstr == "" {
+				coldget = !validChecksum
+			} else {
+				glog.Warningf("Failed while validating checksum. Error: [%s]", errstr)
+			}
 		}
 	}
 	if !coldget && eexists == "" {
@@ -3057,4 +3091,41 @@ func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t.authn.updateRevokedList(tokenList)
+}
+
+func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, slabSize int64) (validChecksum bool, errstr string) {
+	if checksumAlgo != ChecksumXXHash {
+		errstr := fmt.Sprintf("Unsupported checksum algorithm: [%s]", checksumAlgo)
+		return false, errstr
+	}
+
+	hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
+	if errstr != "" {
+		errstr = fmt.Sprintf("Unable to read checksum of object [%s], err: %s", fqn, errstr)
+		return false, errstr
+	}
+
+	if hashbinary == nil {
+		glog.Warningf("%s has no checksum - cannot validate", fqn)
+		return true, ""
+	}
+
+	file, err := os.Open(fqn)
+	if err != nil {
+		errstr := fmt.Sprintf("Failed to read object %s, err: %v", fqn, err)
+		return false, errstr
+	}
+
+	defer file.Close()
+	slab := selectslab(slabSize)
+	buf := slab.alloc()
+	defer slab.free(buf)
+	xx := xxhash.New64()
+	xxHashValue, errstr := ComputeXXHash(file, buf, xx)
+	if errstr != "" {
+		errstr := fmt.Sprintf("Unable to compute xxHash, err: %s", errstr)
+		return false, errstr
+	}
+
+	return string(hashbinary) == xxHashValue, ""
 }

@@ -17,19 +17,21 @@ import (
 )
 
 const (
-	baseDir         = "/tmp/dfc"
-	LocalDestDir    = "/tmp/dfc/dest" // client-side download destination
-	LocalSrcDir     = "/tmp/dfc/src"  // client-side src directory for upload
-	ColdValidStr    = "coldmd5"
-	ChksumValidStr  = "chksum"
-	ColdMD5str      = "coldmd5"
-	DeleteDir       = "/tmp/dfc/delete"
-	DeleteStr       = "delete"
-	SmokeDir        = "/tmp/dfc/smoke" // smoke test dir
-	SmokeStr        = "smoke"
-	largefilesize   = 4                // in MB
-	PhysMemSizeWarn = uint64(7 * 1024) // MBs
-	ProxyURL        = "http://localhost:8080"
+	baseDir                 = "/tmp/dfc"
+	LocalDestDir            = "/tmp/dfc/dest" // client-side download destination
+	LocalSrcDir             = "/tmp/dfc/src"  // client-side src directory for upload
+	ColdValidStr            = "coldmd5"
+	ChksumValidStr          = "chksum"
+	ColdMD5str              = "coldmd5"
+	DeleteDir               = "/tmp/dfc/delete"
+	ChecksumWarmValidateDir = "/tmp/dfc/checksumWarmValidate"
+	ChecksumWarmValidateStr = "checksumWarmValidate"
+	DeleteStr               = "delete"
+	SmokeDir                = "/tmp/dfc/smoke" // smoke test dir
+	SmokeStr                = "smoke"
+	largefilesize           = 4                // in MB
+	PhysMemSizeWarn         = uint64(7 * 1024) // MBs
+	ProxyURL                = "http://localhost:8080"
 )
 
 var (
