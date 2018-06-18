@@ -109,10 +109,10 @@ func (r *namedrunner) setname(n string) { r.name = n }
 //
 //====================
 var (
-	build     string
-	ctx       = &daemon{}
-	clivars   = &cliVars{}
-	smapLock  = &sync.Mutex{}
+	build          string
+	ctx            = &daemon{}
+	clivars        = &cliVars{}
+	smapLock       = &sync.Mutex{}
 	bucketMetaLock = &sync.Mutex{}
 )
 
@@ -141,10 +141,11 @@ func (m *Smap) delProxy(pid string) {
 	m.Version++
 }
 
-func (m *Smap) versionL() int64 {
+func (m *Smap) versionL() (v int64) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
-	return m.Version
+	v = m.Version
+	smapLock.Unlock()
+	return
 }
 
 func (m *Smap) count() int {
@@ -155,10 +156,11 @@ func (m *Smap) countProxies() int {
 	return len(m.Pmap)
 }
 
-func (m *Smap) countL() int {
+func (m *Smap) countL() (c int) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
-	return m.count()
+	c = m.count()
+	smapLock.Unlock()
+	return
 }
 
 func (m *Smap) get(sid string) *daemonInfo {
@@ -179,19 +181,22 @@ func (m *Smap) getProxy(pid string) *daemonInfo {
 
 func (m *Smap) containsL(id string) bool {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	if _, ok := m.Tmap[id]; ok {
-		return true
-	} else if _, ok := m.Pmap[id]; ok {
+		smapLock.Unlock()
 		return true
 	}
+	if _, ok := m.Pmap[id]; ok {
+		smapLock.Unlock()
+		return true
+	}
+	smapLock.Unlock()
 	return false
 }
 
 func (m *Smap) copyL(dst *Smap) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	m.deepcopy(dst)
+	smapLock.Unlock()
 }
 
 func (m *Smap) cloneU() *Smap {
@@ -259,10 +264,11 @@ func (m *Smap) Dump() {
 func (m *Smap) tag() string    { return smaptag }
 func (m *Smap) version() int64 { return m.Version }
 
-func (m *Smap) cloneL() interface{} {
+func (m *Smap) cloneL() (clone interface{}) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
-	return m.cloneU()
+	clone = m.cloneU()
+	smapLock.Unlock()
+	return
 }
 
 func (m *Smap) marshal() (b []byte, err error) {

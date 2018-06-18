@@ -389,10 +389,10 @@ func (p *proxyrunner) findRole() {
 		glog.Errorf("Error registering with primary proxy %v: %v. Retrying.", smap.ProxySI.DaemonID, err)
 	} else {
 		smapLock.Lock()
-		defer smapLock.Unlock()
 		p.becomeNonPrimaryProxy()
 		p.smap = smap
 		p.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+		smapLock.Unlock()
 		return
 	}
 }
@@ -609,18 +609,23 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketMetaLock.Lock()
-		defer bucketMetaLock.Unlock()
+		v := p.bucketmd.version()
+		_, props := p.bucketmd.get(bucket, true)
 		if !p.bucketmd.del(bucket, true) {
+			bucketMetaLock.Unlock()
 			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
 		if errstr := p.savebmdconf(); errstr != "" {
-			p.bucketmd.add(bucket, true)
+			p.bucketmd.add(bucket, true, props)
+			p.bucketmd.Version = v
+			bucketMetaLock.Unlock()
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
 		pair := &revspair{p.bucketmd.cloneU(), &msg}
+		bucketMetaLock.Unlock()
 		p.metasyncer.sync(true, pair)
 	case ActDelete, ActEvict:
 		p.actionlistrange(w, r, &msg)
@@ -687,18 +692,22 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketMetaLock.Lock()
-		defer bucketMetaLock.Unlock()
+		v := p.bucketmd.version()
 		if !p.bucketmd.add(lbucket, true) {
+			bucketMetaLock.Unlock()
 			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
 		if errstr := p.savebmdconf(); errstr != "" {
 			p.bucketmd.del(lbucket, true)
+			p.bucketmd.Version = v
+			bucketMetaLock.Unlock()
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
 		pair := &revspair{p.bucketmd.cloneU(), &msg}
+		bucketMetaLock.Unlock()
 		p.metasyncer.sync(true, pair)
 	case ActRenameLB:
 		if !p.checkPrimaryProxy("rename local bucket", w, r) {
@@ -838,10 +847,10 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	// doing it
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
 
 	islocal := p.bucketmd.islocal(bucket)
 	if islocal && cldprovider != ProviderDfc && cldprovider != "" {
+		bucketMetaLock.Unlock()
 		s := fmt.Sprintf("Local bucket %s can only have '%s' as the Cloud provider", bucket, ProviderDfc)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -862,7 +871,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		glog.Errorln(errstr)
 	}
 
-	p.metasyncer.sync(true, p.bucketmd.cloneU())
+	clone := p.bucketmd.cloneU()
+	bucketMetaLock.Unlock()
+	p.metasyncer.sync(true, clone)
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -921,15 +932,15 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, bmd4ren *bu
 	}
 
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
 
 	p.bucketmd.del(bucketFrom, true)
 	p.bucketmd.add(bucketTo, true)
 	if errstr := p.savebmdconf(); errstr != "" {
 		glog.Errorln(errstr)
 	}
-
-	p.metasyncer.sync(true, p.bucketmd.cloneU())
+	clone := p.bucketmd.cloneU()
+	bucketMetaLock.Unlock()
+	p.metasyncer.sync(true, clone)
 	return true
 }
 
@@ -981,11 +992,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 
 // Receives info about locally cached files from targets in batches
 // and merges with existing list of cloud files
-func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
-	dataCh chan *localFilePage, errch chan error, wg *sync.WaitGroup) {
-	if wg != nil {
-		defer wg.Done()
-	}
+func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry, dataCh chan *localFilePage, errch chan error) {
 	for rb := range dataCh {
 		if rb.err != nil {
 			if errch != nil {
@@ -1010,11 +1017,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry,
 
 // Request list of all cached files from a target.
 // The target returns its list in batches `pageSize` length
-func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo,
-	dataCh chan *localFilePage, wg *sync.WaitGroup, origmsg *GetMsg) {
-	if wg != nil {
-		defer wg.Done()
-	}
+func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, dataCh chan *localFilePage, origmsg *GetMsg) {
 	var msg GetMsg
 	copyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
@@ -1086,7 +1089,10 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	errch := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
-	go p.consumeCachedList(bucketMap, dataCh, errch, wgConsumer)
+	go func() {
+		p.consumeCachedList(bucketMap, dataCh, errch)
+		wgConsumer.Done()
+	}()
 
 	// since cached file page marker is not compatible with any cloud
 	// marker, it should be empty for the first call
@@ -1095,7 +1101,10 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	wg := &sync.WaitGroup{}
 	for _, daemon := range p.smap.Tmap {
 		wg.Add(1)
-		go p.generateCachedList(bucket, daemon, dataCh, wg, reqParams)
+		go func() {
+			p.generateCachedList(bucket, daemon, dataCh, reqParams)
+			wg.Done()
+		}()
 	}
 	wg.Wait()
 	close(dataCh)
@@ -1147,9 +1156,9 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	wg := &sync.WaitGroup{}
 
 	targetCallFn := func(si *daemonInfo) {
-		defer wg.Done()
 		resp, err := p.targetListBucket(nil, bucket, si, listmsgjson, islocal, cachedObjs)
 		chresult <- &targetReply{resp, err}
+		wg.Done()
 	}
 
 	for _, si := range p.smap.Tmap {
@@ -1306,10 +1315,10 @@ func (p *proxyrunner) receiveDrop(w http.ResponseWriter, r *http.Request, redire
 		glog.Errorf("Failed to GET redirect URL %q, err: %v", redirecturl, err)
 		return
 	}
-	defer newr.Body.Close()
 
 	bufreader := bufio.NewReader(newr.Body)
 	bytes, err := ReadToNull(bufreader)
+	newr.Body.Close()
 	if err != nil {
 		glog.Errorf("Failed to copy data to http, URL %q, err: %v", redirecturl, err)
 		return
@@ -1693,9 +1702,9 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	p.becomeNonPrimaryProxy()
 	p.setPrimaryProxy(proxyid, "" /* primaryToRemove */, false)
+	smapLock.Unlock()
 }
 
 // handler for: "/"+Rversion+"/"+Rcluster
@@ -1913,16 +1922,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	bucketMetaLock.Unlock()
 
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	if isproxy {
 		osi := p.smap.getProxy(nsi.DaemonID)
-		if !p.nodeAlreadyExists(&nsi, osi, keepalive, "proxy") {
+		if !p.addOrUpdateNode(&nsi, osi, keepalive, "proxy") {
+			smapLock.Unlock()
 			return
 		}
 		msg = &ActionMsg{Action: ActRegProxy}
 	} else {
 		osi := p.smap.get(nsi.DaemonID)
-		if !p.nodeAlreadyExists(&nsi, osi, keepalive, "target") {
+		if !p.addOrUpdateNode(&nsi, osi, keepalive, "target") {
+			smapLock.Unlock()
 			return
 		}
 		if glog.V(3) {
@@ -1934,6 +1944,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			if res.err != nil {
 				errstr := fmt.Sprintf("Failed to register target %s: %v, %s", nsi.DaemonID, res.err, res.errstr)
 				p.invalmsghdlr(w, r, errstr, res.status)
+				smapLock.Unlock()
 				return
 			}
 		}
@@ -1941,8 +1952,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}
 	if !p.startedup { // see clusterStartup()
 		p.registerToSmap(isproxy, &nsi)
+		smapLock.Unlock()
 		return
 	}
+	smapLock.Unlock()
+
 	// upon joining a running cluster new target gets bucket-metadata right away
 	if !isproxy {
 		outjson, err := json.Marshal(bmd4reg)
@@ -1952,16 +1966,16 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// update and distribute Smap
 	go func() {
 		smapLock.Lock()
-		defer smapLock.Unlock()
 
 		p.registerToSmap(isproxy, &nsi)
 		pair := &revspair{p.smap.cloneU(), msg}
-		p.metasyncer.sync(false, pair)
 
 		// in an unlikely event of
 		if errstr := p.savesmapconf(); errstr != "" {
 			glog.Errorln(errstr)
 		}
+		smapLock.Unlock()
+		p.metasyncer.sync(false, pair)
 	}()
 }
 
@@ -1979,7 +1993,7 @@ func (p *proxyrunner) registerToSmap(isproxy bool, nsi *daemonInfo) {
 	}
 }
 
-func (p *proxyrunner) nodeAlreadyExists(nsi *daemonInfo, osi *daemonInfo, keepalive bool, kind string) bool {
+func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepalive bool, kind string) bool {
 	if keepalive {
 		if osi == nil {
 			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", kind, nsi.DaemonID)
@@ -2030,10 +2044,11 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		sid = apitems[2]
 	}
 	smapLock.Lock()
-	defer smapLock.Unlock()
+	v := p.smap.version()
 	if isproxy {
 		psi = p.smap.getProxy(sid)
 		if psi == nil {
+			smapLock.Unlock()
 			glog.Errorf("Unknown proxy %s", sid)
 			return
 		}
@@ -2045,6 +2060,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	} else {
 		osi = p.smap.get(sid)
 		if osi == nil {
+			smapLock.Unlock()
 			glog.Errorf("Unknown target %s", sid)
 			return
 		}
@@ -2061,6 +2077,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		msg = &ActionMsg{Action: ActUnregTarget}
 	}
 	if !p.startedup { // see clusterStartup()
+		smapLock.Unlock()
 		return
 	}
 	if errstr := p.savesmapconf(); errstr != "" {
@@ -2070,13 +2087,17 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		} else {
 			p.smap.add(osi)
 		}
+		p.smap.Version = v
+		smapLock.Unlock()
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
 	if p.stopped {
+		smapLock.Unlock()
 		return
 	}
 	pair := &revspair{p.smap.cloneU(), msg}
+	smapLock.Unlock()
 	p.metasyncer.sync(true, pair)
 }
 
@@ -2165,18 +2186,20 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //
 //========================
 func (p *proxyrunner) clusterStartup(ntargets int) {
-	defer func() {
-		smapLock.Lock()
-		p.startedup = true
-		smapLock.Unlock()
-	}()
+	p.doClusterStartup(ntargets)
+	smapLock.Lock()
+	p.startedup = true
+	smapLock.Unlock()
+}
+
+func (p *proxyrunner) doClusterStartup(ntargets int) {
 	started, nt := time.Now(), 0
 	for time.Since(started) < ctx.config.Timeout.Startup && p.primary { // see p.findRole() loop above
 		nt = p.smap.countL()
 		if nt >= ntargets {
 			glog.Infof("Reached the expected number %d/%d of target registrations", ntargets, nt)
 
-			p.metasyncer.sync(false, p.smap.cloneU(), p.bucketmd.cloneU()) // false = non-blocking
+			p.metasyncer.sync(false, p.smap.cloneL(), p.bucketmd.cloneL()) // false = non-blocking
 			if errstr := p.savesmapconf(); errstr != "" {
 				glog.Errorln(errstr)
 			}
@@ -2193,19 +2216,20 @@ func (p *proxyrunner) clusterStartup(ntargets int) {
 	} else {
 		glog.Warningf("Timed out waiting for the specified number %d/%d of target registrations", ntargets, nt)
 	}
-	p.metasyncer.sync(false, p.smap.cloneU(), p.bucketmd.cloneU())
+	p.metasyncer.sync(false, p.smap.cloneL(), p.bucketmd.cloneL())
 }
 
 func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	if p.primary {
+		smapLock.Unlock()
 		return true
 	}
 	if p.smap.ProxySI != nil {
 		w.Header().Add(HeaderPrimaryProxyURL, p.smap.ProxySI.DirectURL)
 		w.Header().Add(HeaderPrimaryProxyID, p.smap.ProxySI.DaemonID)
 	}
+	smapLock.Unlock()
 	s := fmt.Sprintf("Cannot %s from non-primary proxy %v", action, p.si.DaemonID)
 	p.invalmsghdlr(w, r, s)
 	return false
@@ -2344,11 +2368,11 @@ func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
 		glog.Infof("receive bucket-metadata: version %d, message %+v", newbucketmd.version(), msg)
 	}
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
 	p.bucketmd = newbucketmd
 	if errstr := p.savebmdconf(); errstr != "" {
 		glog.Errorln(errstr)
 	}
+	bucketMetaLock.Unlock()
 }
 
 func (p *proxyrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {

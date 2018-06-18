@@ -73,8 +73,8 @@ func (r *atimerunner) atime(fqn string) (atime time.Time, ok bool) {
 		return
 	}
 	r.atimemap.Lock()
-	defer r.atimemap.Unlock()
 	atime, ok = r.atimemap.m[fqn]
+	r.atimemap.Unlock()
 	return
 }
 
@@ -112,12 +112,11 @@ func (r *atimerunner) heuristics() (n int) {
 }
 
 func (r *atimerunner) flush(n int) {
-	r.atimemap.Lock()
-	defer r.atimemap.Unlock()
 	var (
 		i     int
 		mtime time.Time
 	)
+	r.atimemap.Lock()
 	for fqn, atime := range r.atimemap.m {
 		finfo, err := os.Stat(fqn)
 		if err != nil {
@@ -149,4 +148,5 @@ func (r *atimerunner) flush(n int) {
 			break
 		}
 	}
+	r.atimemap.Unlock()
 }

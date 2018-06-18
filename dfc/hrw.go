@@ -38,9 +38,9 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr strin
 
 func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	if smap.countProxies() == 0 {
 		errstr = "DFC cluster map is empty: no proxies"
+		smapLock.Unlock()
 		return
 	}
 	var max uint64
@@ -54,6 +54,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 			pi = sinfo
 		}
 	}
+	smapLock.Unlock()
 	return
 }
 

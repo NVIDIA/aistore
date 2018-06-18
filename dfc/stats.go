@@ -254,7 +254,6 @@ func (r *proxystatsrunner) add(name string, val int64) {
 
 func (r *proxystatsrunner) addMany(nameval ...interface{}) {
 	r.Lock()
-	defer r.Unlock()
 	i := 0
 	for i < len(nameval) {
 		statsname, ok := nameval[i].(string)
@@ -265,6 +264,7 @@ func (r *proxystatsrunner) addMany(nameval ...interface{}) {
 		i++
 		r.addL(statsname, statsval)
 	}
+	r.Unlock()
 }
 
 func (r *proxystatsrunner) addL(name string, val int64) {
@@ -526,7 +526,6 @@ func (r *storstatsrunner) add(name string, val int64) {
 // FIXME: copy paste
 func (r *storstatsrunner) addMany(nameval ...interface{}) {
 	r.Lock()
-	defer r.Unlock()
 	i := 0
 	for i < len(nameval) {
 		statsname, ok := nameval[i].(string)
@@ -537,6 +536,7 @@ func (r *storstatsrunner) addMany(nameval ...interface{}) {
 		i++
 		r.addL(statsname, statsval)
 	}
+	r.Unlock()
 }
 
 func (r *storstatsrunner) addL(name string, val int64) {

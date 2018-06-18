@@ -237,19 +237,22 @@ func (t *targetrunner) unregister() (int, error) {
 // if smap is not synced, primary proxy is from config, otherwise from target's smap
 // smap lock is acquired to avoid race between this function and other smap access (for example,
 // receiving smap during metasync)
-func (t *targetrunner) getPrimaryURLAndSI() (string, *daemonInfo) {
+func (t *targetrunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 
 	if t.smap.ProxySI == nil {
-		return ctx.config.Proxy.Primary.URL, nil
+		url, proxysi = ctx.config.Proxy.Primary.URL, nil
+		smapLock.Unlock()
+		return
 	}
-
 	if t.smap.ProxySI.DaemonID != "" {
-		return t.smap.ProxySI.DirectURL, t.smap.ProxySI
+		url, proxysi = t.smap.ProxySI.DirectURL, t.smap.ProxySI
+		smapLock.Unlock()
+		return
 	}
-
-	return ctx.config.Proxy.Primary.URL, t.smap.ProxySI
+	url, proxysi = ctx.config.Proxy.Primary.URL, t.smap.ProxySI
+	smapLock.Unlock()
+	return
 }
 
 //===========================================================================================
@@ -845,13 +848,15 @@ func (t *targetrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 
 	jsbytes, err := json.Marshal(status)
 	assert(err == nil, err)
-	ok := t.writeJSON(w, r, jsbytes, "thealthstatus")
+	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
+		return
+	}
 
 	smapLock.Lock()
-	defer smapLock.Unlock()
-	if ok && t.smap.ProxySI != nil && from == t.smap.ProxySI.DaemonID {
+	if t.smap.ProxySI != nil && from == t.smap.ProxySI.DaemonID {
 		t.kalive.heardFrom(t.smap.ProxySI.DaemonID, false /* reset */)
 	}
+	smapLock.Unlock()
 }
 
 //  /Rversion/Rpush/bucket-name
@@ -923,9 +928,9 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simp
 		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
 		wg.Add(1)
 		go func(fromdir string, wg *sync.WaitGroup) {
-			defer wg.Done()
 			time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
 			ch <- t.renameOne(fromdir, bucketFrom, bucketTo)
+			wg.Done()
 		}(fromdir, wg)
 	}
 	wg.Wait()
@@ -1025,7 +1030,6 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		glog.Errorf("Failed to GET redirect URL %q, err: %v", geturl, err)
 		return
 	}
-	defer response.Body.Close()
 	var (
 		nhobj   cksumvalue
 		errstr  string
@@ -1039,9 +1043,11 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		inmem   = false // TODO: optimize
 	)
 	if _, nhobj, size, errstr = t.receive(getfqn, inmem, objname, "", hdhobj, response.Body); errstr != "" {
+		response.Body.Close()
 		glog.Errorf(errstr)
 		return
 	}
+	response.Body.Close()
 	if nhobj != nil {
 		nhtype, nhval := nhobj.get()
 		assert(hdhobj == nil || htype == nhtype)
@@ -1255,27 +1261,22 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
-		defer wg.Done()
 		r := &mresp{t.newFileWalk(bucket, msg), nil}
-
 		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
 				r.err = err
 			}
-
-			// it means there was no PUT(for local bucket) or GET(for cloud bucket - cache is empty) yet
-			// Not an error, just skip the path
-			ch <- r
+			ch <- r // not an error, just skip the path
+			wg.Done()
 			return
 		}
-
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
 		if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 			r.err = err
 		}
-
 		ch <- r
+		wg.Done()
 	}
 
 	// Traverse all mountpoints in parallel.
@@ -1718,19 +1719,25 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, o
 func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fqn string,
 	objprops *objectProps, rebalance bool) (errstr string, errcode int) {
 	var (
+		err     error
+		renamed bool
+	)
+	errstr, errcode, err, renamed = t.doPutCommit(ct, bucket, objname, putfqn, fqn, objprops, rebalance)
+	if errstr != "" && !os.IsNotExist(err) && !renamed {
+		if err = os.Remove(putfqn); err != nil {
+			glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
+		}
+		t.runFSKeeper(fmt.Errorf("%s", putfqn))
+	}
+	return
+}
+
+func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, fqn string,
+	objprops *objectProps, rebalance bool) (errstr string, errcode int, err error, renamed bool) {
+	var (
 		file          *os.File
-		err           error
-		renamed       bool
 		isBucketLocal = t.bucketmd.islocal(bucket)
 	)
-	defer func() {
-		if errstr != "" && !os.IsNotExist(err) && !renamed {
-			if err = os.Remove(putfqn); err != nil {
-				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
-			}
-			t.runFSKeeper(fmt.Errorf("%s", putfqn))
-		}
-	}()
 	// cloud
 	if !isBucketLocal && !rebalance {
 		if file, err = os.Open(putfqn); err != nil {
@@ -1757,16 +1764,19 @@ func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fq
 	// when all set and done:
 	uname := uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, true)
+
 	if err = os.Rename(putfqn, fqn); err != nil {
+		t.rtnamemap.unlockname(uname, true)
 		errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", putfqn, fqn, err)
 		return
 	}
 	renamed = true
 	if errstr = t.finalizeobj(fqn, objprops); errstr != "" {
+		t.rtnamemap.unlockname(uname, true)
 		glog.Errorf("finalizeobj %s/%s: %s (%+v)", bucket, objname, errstr, objprops)
 		return
 	}
+	t.rtnamemap.unlockname(uname, true)
 	return
 }
 
@@ -1942,11 +1952,11 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 	newobjname := msg.Name
 	fqn, uname := t.fqn(bucket, objname), uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, true)
 
 	if errstr = t.renameobject(bucket, objname, bucket, newobjname); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
+	t.rtnamemap.unlockname(uname, true)
 }
 
 func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
@@ -2123,7 +2133,6 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		}
 		return errstr
 	}
-	defer response.Body.Close()
 	if _, err = ioutil.ReadAll(response.Body); err != nil {
 		errstr = fmt.Sprintf("Failed to read sendfile response: %s/%s at %s => %s/%s at %s, err: %v",
 			bucket, objname, fromid, newbucket, newobjname, toid, err)
@@ -2133,8 +2142,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 				errstr += fmt.Sprintf(", trailer: %s", trailer)
 			}
 		}
+		response.Body.Close()
 		return errstr
 	}
+	response.Body.Close()
 	// stats
 	t.statsdC.Send("rebalance.send",
 		statsd.Metric{
@@ -2936,7 +2947,6 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
 		glog.Infof("receive bucket-metadata: version %d, message %+v", newbucketmd.version(), msg)
 	}
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
 	for bucket := range t.bucketmd.LBmap {
 		_, ok := newbucketmd.LBmap[bucket]
 		if !ok {
@@ -2958,6 +2968,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
 			}
 		}
 	}
+	bucketMetaLock.Unlock()
 }
 
 func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
@@ -3118,12 +3129,12 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 		return false, errstr
 	}
 
-	defer file.Close()
 	slab := selectslab(slabSize)
-	buf := slab.alloc()
-	defer slab.free(buf)
-	xx := xxhash.New64()
+	buf, xx := slab.alloc(), xxhash.New64()
 	xxHashValue, errstr := ComputeXXHash(file, buf, xx)
+	file.Close()
+	slab.free(buf)
+
 	if errstr != "" {
 		errstr := fmt.Sprintf("Unable to compute xxHash, err: %s", errstr)
 		return false, errstr

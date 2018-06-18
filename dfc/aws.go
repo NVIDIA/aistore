@@ -352,7 +352,6 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 		errstr = fmt.Sprintf("Failed to GET %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	defer obj.Body.Close()
 	// may not have dfc metadata
 	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
 		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
@@ -372,11 +371,13 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 		props.version = *obj.VersionId
 	}
 	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
+		obj.Body.Close()
 		return
 	}
 	if glog.V(4) {
 		glog.Infof("GET %s/%s", bucket, objname)
 	}
+	obj.Body.Close()
 	return
 }
 

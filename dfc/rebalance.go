@@ -172,9 +172,6 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 //=========================
 
 func (rcl *xrebpathrunner) oneRebalance() {
-	if rcl.wg != nil {
-		defer rcl.wg.Done()
-	}
 	if err := filepath.Walk(rcl.mpathplus, rcl.rebwalkf); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -183,6 +180,7 @@ func (rcl *xrebpathrunner) oneRebalance() {
 			glog.Errorf("Failed to traverse %s, err: %v", rcl.mpathplus, err)
 		}
 	}
+	rcl.wg.Done()
 }
 
 // the walking callback is execited by the LRU xaction

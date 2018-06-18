@@ -260,16 +260,16 @@ func (h *httprunner) run() error {
 func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.name, err)
 
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
-	defer cancel()
-
 	if h.h == nil {
 		return
 	}
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
+
 	err = h.h.Shutdown(contextwith)
 	if err != nil {
 		glog.Infof("Stopped %s, err: %v", h.name, err)
 	}
+	cancel()
 }
 
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
@@ -342,9 +342,6 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		return callResult{si, outjson, err, errstr, status}
 	}
 
-	assert(response != nil, "Unexpected: nil response with no error")
-	defer response.Body.Close()
-
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
 		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, method, url, err)
 		if err == io.EOF {
@@ -354,8 +351,10 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 			}
 		}
 
+		response.Body.Close()
 		return callResult{si, outjson, err, errstr, status}
 	}
+	response.Body.Close()
 
 	// err == nil && bad status: response.Body contains the error message
 	if response.StatusCode >= http.StatusBadRequest {
@@ -477,7 +476,6 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
 		glog.Errorln(s)
-		glog.Flush()
 		h.statsif.add("numerr", 1)
 		return
 	}

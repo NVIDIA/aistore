@@ -93,10 +93,11 @@ func (m *bucketMD) islocal(bucket string) bool {
 	return ok
 }
 
-func (m *bucketMD) versionL() int64 {
+func (m *bucketMD) versionL() (v int64) {
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
-	return m.Version
+	v = m.Version
+	bucketMetaLock.Unlock()
+	return
 }
 
 func (m *bucketMD) cloneU() *bucketMD {
@@ -107,8 +108,8 @@ func (m *bucketMD) cloneU() *bucketMD {
 
 func (m *bucketMD) copyL(dst *bucketMD) {
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
 	m.deepcopy(dst)
+	bucketMetaLock.Unlock()
 }
 
 func (m *bucketMD) deepcopy(dst *bucketMD) {
@@ -139,10 +140,11 @@ func (m *bucketMD) deepcopy(dst *bucketMD) {
 func (m *bucketMD) tag() string    { return bucketmdtag }
 func (m *bucketMD) version() int64 { return m.Version }
 
-func (m *bucketMD) cloneL() interface{} {
+func (m *bucketMD) cloneL() (clone interface{}) {
 	bucketMetaLock.Lock()
-	defer bucketMetaLock.Unlock()
-	return m.cloneU()
+	clone = m.cloneU()
+	bucketMetaLock.Unlock()
+	return
 }
 
 func (m *bucketMD) marshal() ([]byte, error) {

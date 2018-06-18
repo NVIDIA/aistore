@@ -162,8 +162,6 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 	}
 
 	a.Lock()
-	defer a.Unlock()
-
 	for _, token := range tokens.Tokens {
 		a.revokedTokens[token] = true
 		delete(a.tokens, token)
@@ -175,6 +173,7 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 			delete(a.revokedTokens, token)
 		}
 	}
+	a.Unlock()
 }
 
 // Checks if a token is valid:
@@ -182,15 +181,18 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 //   - must not be expired
 //   - must have all mandatory fields: userID, creds, issued, expires
 // Returns decrypted token information if it is valid
-func (a *authManager) validateToken(token string) (*authRec, error) {
+func (a *authManager) validateToken(token string) (ar *authRec, err error) {
 	a.Lock()
-	defer a.Unlock()
 
 	if _, ok := a.revokedTokens[token]; ok {
-		return nil, fmt.Errorf("Invalid token")
+		ar, err = nil, fmt.Errorf("Invalid token")
+		a.Unlock()
+		return
 	}
 
-	return a.extractTokenData(token)
+	ar, err = a.extractTokenData(token)
+	a.Unlock()
+	return
 }
 
 // Decrypts token and returns information about a user for whom the token

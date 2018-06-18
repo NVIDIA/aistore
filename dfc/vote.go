@@ -270,20 +270,22 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 //===================
 
 func (p *proxyrunner) proxyElection(vr *VoteRecord, currPrimaryURL string) {
+	if p.primary {
+		glog.Infoln("Already in Primary state.")
+		return
+	}
 	xele := p.xactinp.renewElection(p, vr)
 	if xele == nil {
 		glog.Infoln("An election is already in progress, returning.")
 		return
 	}
-	defer func() {
-		xele.etime = time.Now()
-		glog.Infoln(xele.tostring())
-		p.xactinp.del(xele.id)
-	}()
-	if p.primary {
-		glog.Infoln("Already in Primary state.")
-		return
-	}
+	p.doProxyElection(vr, currPrimaryURL, xele)
+	xele.etime = time.Now()
+	glog.Infoln(xele.tostring())
+	p.xactinp.del(xele.id) // FIXME - keep it; handle xele.finished() in the renew...
+}
+
+func (p *proxyrunner) doProxyElection(vr *VoteRecord, currPrimaryURL string, xele *xactElection) {
 	// First, ping current proxy with a short timeout: (Primary? State)
 	url := currPrimaryURL + "/" + Rversion + "/" + Rhealth
 	proxyup, err := p.pingWithTimeout(url, ctx.config.Timeout.ProxyPing)
@@ -351,7 +353,6 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 
 func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	chansize := p.smap.count() + p.smap.countProxies() - 1
 	resch := make(chan voteResult, chansize)
 
@@ -387,13 +388,11 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	}
 
 	close(resch)
+	smapLock.Unlock()
 	return resch
 }
 
 func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
-	smapLock.Lock()
-	defer smapLock.Unlock()
-
 	jsbytes, err := json.Marshal(
 		&VoteResultMessage{
 			VoteResult{
@@ -406,6 +405,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 			}})
 	assert(err == nil, err)
 
+	smapLock.Lock()
 	res := p.broadcastCluster(
 		URLPath(Rversion, Rvote, Rvoteres),
 		nil, // query
@@ -414,6 +414,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 		p.smap,
 		ctx.config.Timeout.CplaneOperation,
 	)
+	smapLock.Unlock()
 
 	errors := make(map[string]bool)
 	for r := range res {
@@ -427,13 +428,11 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 			errors[r.si.DaemonID] = true
 		}
 	}
-
 	return errors
 }
 
 func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 
 	p.primary = true
 	if proxyidToRemove != "" {
@@ -460,10 +459,12 @@ func (p *proxyrunner) becomePrimaryProxy(proxyidToRemove string) {
 
 	msg := &ActionMsg{Action: ActNewPrimary}
 	pair := &revspair{p.smap.cloneU(), msg}
+	smapLock.Unlock()
+
 	if glog.V(4) {
 		glog.Infof("Syncing smap after a victory[%v]: %v", msg.Action, pair.revs.version())
 	}
-	p.metasyncer.sync(false, pair)
+	p.metasyncer.sync(true, pair)
 }
 
 // Caller must lock smapLock
@@ -591,17 +592,19 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	return hrwmax.DaemonID == daemonID, nil
 }
 
-func (h *httprunner) setPrimaryProxyAndSmapL(smap *Smap) error {
+func (h *httprunner) setPrimaryProxyAndSmapL(smap *Smap) (err error) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
 	h.smap = smap
-	return h.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+	err = h.setPrimaryProxy(smap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
+	smapLock.Unlock()
+	return
 }
 
-func (h *httprunner) setPrimaryProxyL(newPrimaryProxy, primaryToRemove string, prepare bool) error {
+func (h *httprunner) setPrimaryProxyL(newPrimaryProxy, primaryToRemove string, prepare bool) (err error) {
 	smapLock.Lock()
-	defer smapLock.Unlock()
-	return h.setPrimaryProxy(newPrimaryProxy, primaryToRemove, prepare)
+	err = h.setPrimaryProxy(newPrimaryProxy, primaryToRemove, prepare)
+	smapLock.Unlock()
+	return
 }
 
 // setPrimaryProxy sets the primary proxy to the proxy in the cluster map with the ID newPrimaryProxy.

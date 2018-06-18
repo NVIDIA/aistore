@@ -152,16 +152,17 @@ func (q *xactInProgress) findU(by interface{}) (idx int, xact xactInterface) {
 
 func (q *xactInProgress) findL(by interface{}) (idx int, xact xactInterface) {
 	q.lock.Lock()
-	defer q.lock.Unlock()
-	return q.findU(by)
+	idx, xact = q.findU(by)
+	q.lock.Unlock()
+	return
 }
 
 func (q *xactInProgress) del(by interface{}) {
 	q.lock.Lock()
-	defer q.lock.Unlock()
 	k, xact := q.findU(by)
 	if xact == nil {
 		glog.Errorf("Failed to find xact by %#v", by)
+		q.lock.Unlock()
 		return
 	}
 	l := len(q.xactinp)
@@ -170,11 +171,11 @@ func (q *xactInProgress) del(by interface{}) {
 	}
 	q.xactinp[l-1] = nil
 	q.xactinp = q.xactinp[:l-1]
+	q.lock.Unlock()
 }
 
 func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xactRebalance {
 	q.lock.Lock()
-	defer q.lock.Unlock()
 	_, xx := q.findU(ActRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
@@ -182,6 +183,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 			assert(!(xreb.curversion > curversion))
 			if xreb.curversion == curversion {
 				glog.Infof("%s already running, nothing to do", xreb.tostring())
+				q.lock.Unlock()
 				return nil
 			}
 			xreb.abort()
@@ -191,6 +193,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 	xreb := &xactRebalance{xactBase: *newxactBase(id, ActRebalance), curversion: curversion}
 	xreb.targetrunner = t
 	q.add(xreb)
+	q.lock.Unlock()
 	return xreb
 }
 
@@ -208,7 +211,6 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 	}
 
 	q.lock.Lock()
-	defer q.lock.Unlock()
 	_, xx := q.findU(ActRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
@@ -216,32 +218,34 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 			running = true
 		}
 	}
+	q.lock.Unlock()
 	return
 }
 
 func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	q.lock.Lock()
-	defer q.lock.Unlock()
 	_, xx := q.findU(ActLRU)
 	if xx != nil {
 		xlru := xx.(*xactLRU)
 		glog.Infof("%s already running, nothing to do", xlru.tostring())
+		q.lock.Unlock()
 		return nil
 	}
 	id := q.uniqueid()
 	xlru := &xactLRU{xactBase: *newxactBase(id, ActLRU)}
 	xlru.targetrunner = t
 	q.add(xlru)
+	q.lock.Unlock()
 	return xlru
 }
 
 func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
 	q.lock.Lock()
-	defer q.lock.Unlock()
 	_, xx := q.findU(ActElection)
 	if xx != nil {
 		xele := xx.(*xactElection)
 		glog.Infof("%s already running, nothing to do", xele.tostring())
+		q.lock.Unlock()
 		return nil
 	}
 	id := q.uniqueid()
@@ -251,18 +255,19 @@ func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElec
 		vr:          vr,
 	}
 	q.add(xele)
+	q.lock.Unlock()
 	return xele
 }
 
 func (q *xactInProgress) abortAll() (sleep bool) {
 	q.lock.Lock()
-	defer q.lock.Unlock()
 	for _, xact := range q.xactinp {
 		if !xact.finished() {
 			xact.abort()
 			sleep = true
 		}
 	}
+	q.lock.Unlock()
 	return
 }
 

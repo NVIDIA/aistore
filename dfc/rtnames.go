@@ -42,16 +42,17 @@ func newrtnamemap(size int) *rtnamemap {
 
 func (rtnamemap *rtnamemap) trylockname(name string, exclusive bool, info *pendinginfo) bool {
 	rtnamemap.Lock()
-	defer rtnamemap.Unlock()
 
 	_, found := rtnamemap.m[name]
 	if found && exclusive {
+		rtnamemap.Unlock()
 		return false
 	}
 	if exclusive {
 		rtnamemap.m[name] = info
 		info.exclusive = true
 		info.rc = 0
+		rtnamemap.Unlock()
 		return true
 	}
 	// rlock
@@ -59,6 +60,7 @@ func (rtnamemap *rtnamemap) trylockname(name string, exclusive bool, info *pendi
 	if found {
 		realinfo = rtnamemap.m[name]
 		if realinfo.exclusive {
+			rtnamemap.Unlock()
 			return false
 		}
 	} else {
@@ -68,24 +70,25 @@ func (rtnamemap *rtnamemap) trylockname(name string, exclusive bool, info *pendi
 		realinfo.rc = 0
 	}
 	realinfo.rc++
+	rtnamemap.Unlock()
 	return true
 }
 
 func (rtnamemap *rtnamemap) downgradelock(name string) {
 	rtnamemap.Lock()
-	defer rtnamemap.Unlock()
 
 	info, found := rtnamemap.m[name]
 	assert(found)
 	info.exclusive = false
 	info.rc++
 	assert(info.rc == 1)
+	rtnamemap.Unlock()
 }
 
 func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
 	rtnamemap.Lock()
-	defer rtnamemap.Unlock()
 	if rtnamemap.aborted {
+		rtnamemap.Unlock()
 		return
 	}
 	info, ok := rtnamemap.m[name]
@@ -93,12 +96,14 @@ func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
 	if exclusive {
 		assert(info.exclusive)
 		delete(rtnamemap.m, name)
+		rtnamemap.Unlock()
 		return
 	}
 	info.rc--
 	if info.rc == 0 {
 		delete(rtnamemap.m, name)
 	}
+	rtnamemap.Unlock()
 }
 
 // FIXME: TODO: support timeout
@@ -107,18 +112,19 @@ func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendingi
 		return
 	}
 	ticker := time.NewTicker(poll)
-	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			if rtnamemap.trylockname(name, exclusive, info) {
 				glog.Infof("rtnamemap: lockname %s (%v) done", info.fqn, exclusive)
+				ticker.Stop()
 				return
 			}
 			glog.Infof("rtnamemap: lockname %s (%v) - retrying...", info.fqn, exclusive)
 			time.Sleep(time.Millisecond * time.Duration(rand.Intn(10)+1))
 		case <-rtnamemap.abrt:
 			rtnamemap.aborted = true
+			ticker.Stop()
 			return
 		}
 	}
@@ -127,10 +133,10 @@ func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendingi
 // log pending
 func (rtnamemap *rtnamemap) log() {
 	rtnamemap.Lock()
-	defer rtnamemap.Unlock()
 	for name, info := range rtnamemap.m {
 		glog.Infof("rtnamemap: %s => %s", name, info.String())
 	}
+	rtnamemap.Unlock()
 }
 
 func (rtnamemap *rtnamemap) stop() {

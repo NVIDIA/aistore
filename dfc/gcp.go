@@ -352,15 +352,16 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 		errstr = fmt.Sprintf("The object %s/%s either does not exist or is not accessible, err: %v", bucket, objname, err)
 		return
 	}
-	defer rc.Close()
 	// hashtype and hash could be empty for legacy objects.
 	props = &objectProps{version: fmt.Sprintf("%d", attrs.Generation)}
 	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, false, objname, md5, v, rc); errstr != "" {
+		rc.Close()
 		return
 	}
 	if glog.V(4) {
 		glog.Infof("GET %s/%s", bucket, objname)
 	}
+	rc.Close()
 	return
 }
 
@@ -384,8 +385,8 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	wc.Metadata = md
 	slab := selectslab(0)
 	buf := slab.alloc()
-	defer slab.free(buf)
 	written, err := io.CopyBuffer(wc, file, buf)
+	slab.free(buf)
 	if err != nil {
 		errstr = fmt.Sprintf("PUT %s/%s: failed to copy, err: %v", bucket, objname, err)
 		return
