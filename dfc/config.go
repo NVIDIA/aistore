@@ -168,9 +168,10 @@ type httpcnf struct {
 }
 
 type cksumconfig struct {
-	Checksum        string `json:"checksum"`                   // DFC checksum: xxhash:none
-	ValidateColdGet bool   `json:"validate_checksum_cold_get"` // MD5 (ETag) validation upon cold GET
-	ValidateWarmGet bool   `json:"validate_checksum_warm_get"` // MD5 (ETag) validation upon warm GET
+	Checksum                string `json:"checksum"`                   // DFC checksum: xxhash:none
+	ValidateColdGet         bool   `json:"validate_checksum_cold_get"` // MD5 (ETag) validation upon cold GET
+	ValidateWarmGet         bool   `json:"validate_checksum_warm_get"` // MD5 (ETag) validation upon warm GET
+	EnableReadRangeChecksum bool   `json:"enable_read_range_checksum"` // Return read range checksum otherwise return entire object checksum
 }
 
 type versionconfig struct {

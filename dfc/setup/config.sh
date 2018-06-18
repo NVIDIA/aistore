@@ -50,8 +50,9 @@
 	},
 	"cksum_config": {
                  "checksum":                    "xxhash",
-                 "validate_checksum_cold_get":	true,
-                 "validate_checksum_warm_get":	false
+                 "validate_checksum_cold_get":  true,
+                 "validate_checksum_warm_get":  false,
+                 "enable_read_range_checksum":  false
 	},
 	"version_config": {
 		"validate_version_warm_get":    false,

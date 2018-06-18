@@ -7,15 +7,19 @@ package dfc_test
 // For how to run tests, see README
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1174,6 +1178,135 @@ func executeTwoGETsForChecksumValidation(bucket string, fName string, t *testing
 	}
 	if !strings.Contains(err.Error(), "http status 404") {
 		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%s]", err.Error())
+	}
+}
+
+func TestRangeRead(t *testing.T) {
+	var (
+		numFiles        = 1
+		fileNameChannel = make(chan string, numFiles)
+		errorChannel    = make(chan error, numFiles)
+		sgl             *dfc.SGLIO
+		fileSize        = uint64(1024)
+		seed            = int64(131)
+		bucketName      = clibucket
+		fileName        string
+		byteRange       int64
+		iterations      int64
+	)
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(fileSize)
+		defer sgl.Free()
+	}
+
+	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, "", false, sgl)
+	selectErr(errorChannel, "put", t, false)
+
+	// Get Current Config
+	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	checksumConfig := config["cksum_config"].(map[string]interface{})
+	oldEnableReadRangeChecksum := checksumConfig["enable_read_range_checksum"].(bool)
+	if !oldEnableReadRangeChecksum {
+		setConfig("enable_read_range_checksum", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		if t.Failed() {
+			goto cleanup
+		}
+	}
+
+	fileName = <-fileNameChannel
+	tlogln("Testing valid cases.")
+	// Read the entire file range by range
+	// Read in ranges of 500 to test covered, partially covered and completely
+	// uncovered ranges
+	byteRange = 500
+	iterations = int64(fileSize) / byteRange
+	for i := int64(0); i < iterations; i += byteRange {
+		verifyValidRanges(t, bucketName, fileName, int64(i), byteRange, byteRange, true)
+	}
+	verifyValidRanges(t, bucketName, fileName, byteRange*iterations, byteRange, int64(fileSize)%byteRange, true)
+	verifyValidRanges(t, bucketName, fileName, int64(fileSize)+100, byteRange, 0, true)
+
+	tlogln("Testing invalid cases.")
+	verifyInvalidParams(t, bucketName, fileName, "", "1")
+	verifyInvalidParams(t, bucketName, fileName, "1", "")
+	verifyInvalidParams(t, bucketName, fileName, "-1", "-1")
+	verifyInvalidParams(t, bucketName, fileName, "1", "-1")
+	verifyInvalidParams(t, bucketName, fileName, "-1", "1")
+	verifyInvalidParams(t, bucketName, fileName, "1", "0")
+cleanup:
+	tlogln("Cleaning up...")
+	wg := &sync.WaitGroup{}
+
+	if usingFile {
+		_ = os.Remove(LocalSrcDir + "/" + fileName)
+	}
+
+	wg.Add(1)
+	go client.Del(proxyurl, clibucket, RangeGetStr+"/"+fileName, wg, errorChannel, !testing.Verbose())
+	wg.Wait()
+	selectErr(errorChannel, "delete", t, false)
+	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	close(errorChannel)
+	close(fileNameChannel)
+}
+
+func verifyValidRanges(t *testing.T, bucketName string, fileName string,
+	offset int64, length int64, expectedLength int64, validateChecksum bool) {
+	q := url.Values{}
+	q.Add(dfc.URLParamOffset, strconv.FormatInt(offset, 10))
+	q.Add(dfc.URLParamLength, strconv.FormatInt(length, 10))
+	var b bytes.Buffer
+	w := bufio.NewWriter(&b)
+	_, _, err := client.GetFileWithQuery(proxyurl, bucketName, RangeGetStr+"/"+fileName, nil, nil, true, validateChecksum, w, q)
+	if err != nil {
+		t.Errorf("Failed to get object %s/%s! Error: %v", bucketName, fileName, err)
+	}
+	err = w.Flush()
+	if err != nil {
+		t.Errorf("Unable to flush read bytes to buffer. Error:  %v", err)
+	}
+	var fqn string
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if filepath.Base(path) == fileName && strings.Contains(path, bucketName) {
+			fqn = path
+		}
+		return nil
+	}
+	filepath.Walk(rootDir, fsWalkFunc)
+	file, err := os.Open(fqn)
+	defer file.Close()
+	if err != nil {
+		t.Errorf("Unable to open file: %s. Error:  %v", fqn, err)
+	}
+	outputBytes := b.Bytes()
+	sectionReader := io.NewSectionReader(file, offset, length)
+	expectedBytesBuffer := new(bytes.Buffer)
+	_, err = expectedBytesBuffer.ReadFrom(sectionReader)
+	if err != nil {
+		t.Errorf("Unable to read the file %s, from offset: %d and length: %d. Error: %v", fqn, offset, length, err)
+	}
+	expectedBytes := expectedBytesBuffer.Bytes()
+	if len(outputBytes) != len(expectedBytes) {
+		t.Errorf("Bytes length mismatch. Expected bytes: [%d]. Actual bytes: [%d]", len(expectedBytes), len(outputBytes))
+	}
+	if int64(len(outputBytes)) != expectedLength {
+		t.Errorf("Returned bytes don't match expected length. Expected length: [%d]. Output length: [%d]", length, len(outputBytes))
+	}
+	for i := 0; i < len(expectedBytes); i++ {
+		if expectedBytes[i] != outputBytes[i] {
+			t.Errorf("Byte mismatch. Expected: %v, Actual: %v", string(expectedBytes), string(outputBytes))
+		}
+	}
+}
+
+func verifyInvalidParams(t *testing.T, bucketName string, fileName string, offset string, length string) {
+	q := url.Values{}
+	q.Add(dfc.URLParamOffset, offset)
+	q.Add(dfc.URLParamLength, length)
+	_, _, err := client.GetWithQuery(proxyurl, bucketName, RangeGetStr+"/"+fileName, nil, nil, false, true, q)
+	if err == nil {
+		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
 	}
 }
 

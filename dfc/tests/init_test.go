@@ -26,6 +26,8 @@ const (
 	DeleteDir               = "/tmp/dfc/delete"
 	ChecksumWarmValidateDir = "/tmp/dfc/checksumWarmValidate"
 	ChecksumWarmValidateStr = "checksumWarmValidate"
+	RangeGetDir             = "/tmp/dfc/rangeGet"
+	RangeGetStr             = "rangeGet"
 	DeleteStr               = "delete"
 	SmokeDir                = "/tmp/dfc/smoke" // smoke test dir
 	SmokeStr                = "smoke"

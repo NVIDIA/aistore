@@ -612,6 +612,12 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.Cksum.ValidateWarmGet = v
 		}
+	case "enable_read_range_checksum":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse enable_read_range_checksum, err: %v", err)
+		} else {
+			ctx.config.Cksum.EnableReadRangeChecksum = v
+		}
 	case "validate_version_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_version_warm_get, err: %v", err)

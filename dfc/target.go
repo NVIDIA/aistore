@@ -364,6 +364,12 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	offset, length, readRange, errstr := t.validateOffsetAndLength(r)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
 	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -448,13 +454,14 @@ existslocally:
 	if size == 0 {
 		glog.Warningf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
 	}
-	if !coldget && cksumcfg.Checksum != ChecksumNone {
+	returnRangeChecksum := readRange && cksumcfg.EnableReadRangeChecksum
+	if !coldget && !returnRangeChecksum && cksumcfg.Checksum != ChecksumNone {
 		hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" && hashbinary != nil {
 			nhobj = newcksumvalue(cksumcfg.Checksum, string(hashbinary))
 		}
 	}
-	if nhobj != nil {
+	if nhobj != nil && !returnRangeChecksum {
 		htype, hval := nhobj.get()
 		w.Header().Add(HeaderDfcChecksumType, htype)
 		w.Header().Add(HeaderDfcChecksumVal, hval)
@@ -476,11 +483,36 @@ existslocally:
 	}
 
 	defer file.Close()
+	if readRange {
+		size = length
+	}
 	slab := selectslab(size)
 	buf := slab.alloc()
 	defer slab.free(buf)
-	// copy
-	written, err := io.CopyBuffer(w, file, buf)
+
+	if cksumcfg.Checksum != ChecksumNone && returnRangeChecksum {
+		slab := selectslab(length)
+		buf := slab.alloc()
+		reader := io.NewSectionReader(file, offset, length)
+		xxhashval, errstr := ComputeXXHash(reader, buf, xxhash.New64())
+		slab.free(buf)
+		if errstr != "" {
+			s := fmt.Sprintf("Unable to compute checksum for byte range, offset:%d, length:%d from %s, err: %s", offset, length, fqn, errstr)
+			t.invalmsghdlr(w, r, s, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Add(HeaderDfcChecksumType, cksumcfg.Checksum)
+		w.Header().Add(HeaderDfcChecksumVal, xxhashval)
+	}
+
+	var written int64
+	if readRange {
+		reader := io.NewSectionReader(file, offset, length)
+		written, err = io.CopyBuffer(w, reader, buf)
+	} else {
+		// copy
+		written, err = io.CopyBuffer(w, file, buf)
+	}
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
 		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
@@ -513,6 +545,28 @@ existslocally:
 	)
 
 	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
+}
+func (t *targetrunner) validateOffsetAndLength(r *http.Request) (
+	offset int64, length int64, readRange bool, errstr string) {
+	query := r.URL.Query()
+	offsetStr, lengthStr := query.Get(URLParamOffset), query.Get(URLParamLength)
+	if offsetStr == "" && lengthStr == "" {
+		return
+	}
+	errstr = fmt.Sprintf("Invalid offset: [%s] and length: [%s] combination", offsetStr, lengthStr)
+	// Specifying only one is invalid
+	if offsetStr == "" || lengthStr == "" {
+		return
+	}
+	offset, err := strconv.ParseInt(url.QueryEscape(offsetStr), 10, 64)
+	if err != nil || offset < 0 {
+		return
+	}
+	length, err = strconv.ParseInt(url.QueryEscape(lengthStr), 10, 64)
+	if err != nil || length <= 0 {
+		return
+	}
+	return offset, length, true, ""
 }
 
 // PUT /Rversion/Robjects/bucket-name/object-name

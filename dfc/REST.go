@@ -72,6 +72,8 @@ const (
 	URLParamCheckCached      = "check_cached"   // true: check if object is cached in DFC
 	URLParamNextTierURL      = "next_tier_url"  // proxyurl of the next (colder) tier
 	URLParamCloudProvider    = "cloud_provider" // one of: Cloud Provider enum above
+	URLParamOffset           = "offset"       // Offset from where the object should be read
+	URLParamLength           = "length"       // Length, the total number of bytes that need to be read from the offset
 )
 
 // TODO: sort and some props are TBD

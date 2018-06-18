@@ -25,6 +25,8 @@ import (
 
 	"strconv"
 
+	"net/url"
+
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/OneOfOne/xxhash"
 )
@@ -247,7 +249,7 @@ func emitError(r *http.Response, err error, errch chan error) {
 }
 
 func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
-	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
+	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
 	)
@@ -258,6 +260,7 @@ func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 
 	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
 	req, _ := http.NewRequest("GET", url, nil)
+	req.URL.RawQuery = query.Encode() // golang handles query == nil
 
 	tr := &traceableTransport{
 		transport: transport,
@@ -323,13 +326,25 @@ func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 // Get sends a get request to proxy and discard the data returned
 func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool) (int64, HTTPLatencies, error) {
-	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard)
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, nil)
+}
+
+// Get sends a get request to proxy and discard the data returned
+func GetWithQuery(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool, q url.Values) (int64, HTTPLatencies, error) {
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, q)
 }
 
 // GetFile sends a get request to proxy and save the data returned to an io.Writer
 func GetFile(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
-	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w)
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w, nil)
+}
+
+// GetFile sends a get request to proxy and save the data returned to an io.Writer
+func GetFileWithQuery(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
+	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w, query)
 }
 
 func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
