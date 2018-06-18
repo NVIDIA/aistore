@@ -681,6 +681,35 @@ func TestHeadObject(t *testing.T) {
 	}
 }
 
+func TestHeadObjectCheckCached(t *testing.T) {
+	fileName := "headobject_check_cached_test_file"
+	fileSize := 1024
+	r, err := readers.NewRandReader(int64(fileSize), false)
+	defer r.Close()
+
+	if err != nil {
+		t.Fatalf("readers.NewFileReader failed, err = %v", err)
+	}
+
+	err = client.Put(proxyurl, r, clibucket, fileName, true)
+	checkFatal(err, t)
+
+	b, err := client.IsCached(proxyurl, clibucket, fileName)
+	checkFatal(err, t)
+	if !b {
+		t.Error("Expected object to be cached, got false from client.IsCached")
+	}
+
+	err = client.Del(proxyurl, clibucket, fileName, nil, nil, true)
+	checkFatal(err, t)
+
+	b, err = client.IsCached(proxyurl, clibucket, fileName)
+	checkFatal(err, t)
+	if b {
+		t.Error("Expected object to NOT be cached after deleting object, got true from client.IsCached")
+	}
+}
+
 func Benchmark_get(b *testing.B) {
 	var wg = &sync.WaitGroup{}
 	errch := make(chan error, 100)

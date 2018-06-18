@@ -628,6 +628,34 @@ func HeadObject(proxyurl, bucket, objname string) (objProps *ObjectProps, err er
 	return
 }
 
+func IsCached(proxyurl, bucket, objname string) (bool, error) {
+	var (
+		url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, bucket, objname) + "?" + dfc.URLParamCheckCached + "=true"
+		r   *http.Response
+	)
+	r, err := client.Head(url)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		r.Body.Close()
+	}()
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		if r.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		b, ioErr := ioutil.ReadAll(r.Body)
+		if ioErr != nil {
+			err = fmt.Errorf("failed to read response body, err = %s", ioErr)
+			return false, err
+		}
+		err = fmt.Errorf("IsCached failed: bucket/object: %s/%s, HTTP status code: %d, HTTP response body: %s",
+			bucket, objname, r.StatusCode, string(b))
+		return false, err
+	}
+	return true, nil
+}
+
 func checkHTTPStatus(resp *http.Response, op string) error {
 	if resp.StatusCode >= http.StatusBadRequest {
 		return ReqError{

@@ -867,6 +867,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
+	checkCached, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -881,8 +882,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bucketmd.islocal(bucket))
-	c, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
-	if c {
+	if checkCached {
 		redirecturl += fmt.Sprintf("&%s=true", URLParamCheckCached)
 	}
 	if glog.V(3) {

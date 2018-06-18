@@ -774,9 +774,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket, objname, errstr string
-		islocal                 bool
+		isLocal, checkCached    bool
 		errcode                 int
+		objmeta                 simplekvs
 	)
+	checkCached, _ = parsebool(r.URL.Query().Get(URLParamCheckCached))
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -785,14 +787,12 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
+	isLocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	var objmeta simplekvs
-	c, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
-	if islocal || c {
+	if isLocal || checkCached {
 		fqn := t.fqn(bucket, objname)
 		var (
 			size    int64
@@ -801,6 +801,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		if _, size, version, errstr = t.lookupLocally(bucket, objname, fqn); errstr != "" {
 			status := http.StatusNotFound
 			http.Error(w, http.StatusText(status), status)
+			return
+		} else if checkCached {
 			return
 		}
 		objmeta = make(simplekvs)
