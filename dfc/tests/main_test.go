@@ -64,6 +64,11 @@ func Test_download(t *testing.T) {
 		os.Exit(1)
 	}
 
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("Download test is for cloud buckets only")
+	}
+
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
 	resultChans := make([]chan workres, numworkers)
@@ -145,6 +150,8 @@ func Test_download(t *testing.T) {
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
 	for i := 0; i < numworkers; i++ {
@@ -195,6 +202,12 @@ func Test_matchdelete(t *testing.T) {
 		t.Fail()
 	default:
 	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func Test_putdeleteRange(t *testing.T) {
@@ -211,7 +224,7 @@ func Test_putdeleteRange(t *testing.T) {
 	if err := dfc.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
-
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 	errch := make(chan error, numfiles*5)
 	filesput := make(chan string, numfiles)
 	filesize := uint64(16 * 1024)
@@ -340,6 +353,12 @@ func Test_putdeleteRange(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 // PUT, then delete
@@ -356,6 +375,7 @@ func Test_putdelete(t *testing.T) {
 	errch := make(chan error, numfiles)
 	filesput := make(chan string, numfiles)
 	filesize := uint64(512 * 1024)
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 
 	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
@@ -398,6 +418,11 @@ func Test_putdelete(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func listObjects(t *testing.T, msg *dfc.GetMsg, bucket string, objLimit int) (*dfc.BucketList, error) {
@@ -453,33 +478,6 @@ func listObjects(t *testing.T, msg *dfc.GetMsg, bucket string, objLimit int) (*d
 	}
 	tlogf("-----------------\nTotal objects listed: %v\n", totalObjs)
 	return reslist, nil
-}
-
-func Test_list(t *testing.T) {
-	var (
-		pageSize = int(pagesize)
-		objLimit = int(objlimit)
-		bucket   = clibucket
-	)
-
-	// list the names, sizes, creation times and MD5 checksums
-	var msg *dfc.GetMsg
-	if props == "" {
-		msg = &dfc.GetMsg{GetProps: dfc.GetPropsSize + ", " + dfc.GetPropsCtime + ", " + dfc.GetPropsChecksum + ", " + dfc.GetPropsVersion, GetPageSize: pageSize}
-	} else {
-		msg = &dfc.GetMsg{GetProps: props, GetPageSize: pageSize}
-	}
-	if prefix != "" {
-		msg.GetPrefix = prefix
-	}
-
-	tlogf("Displaying properties: %s\n", msg.GetProps)
-	reslist, err := listObjects(t, msg, bucket, objLimit)
-	if err == nil {
-		if objLimit != 0 && len(reslist.Entries) > objLimit {
-			t.Errorf("Exceeded: %d entries\n", len(reslist.Entries))
-		}
-	}
 }
 
 func Test_bucketnames(t *testing.T) {
@@ -543,6 +541,11 @@ func Test_coldgetmd5(t *testing.T) {
 		filesize  = uint64(largefilesize * 1024 * 1024)
 		sgl       *dfc.SGLIO
 	)
+
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("Coldgetmd5 test is for cloud buckets only")
+	}
 
 	ldir := LocalSrcDir + "/" + ColdValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
@@ -626,6 +629,11 @@ func TestHeadLocalBucket(t *testing.T) {
 }
 
 func TestHeadCloudBucket(t *testing.T) {
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("TestHeadCloudBucket is for cloud buckets only")
+	}
+
 	bprops, err := client.HeadBucket(proxyurl, clibucket)
 	if err != nil {
 		t.Error(err)
@@ -686,6 +694,7 @@ func TestHeadObject(t *testing.T) {
 }
 
 func TestHeadObjectCheckCached(t *testing.T) {
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 	fileName := "headobject_check_cached_test_file"
 	fileSize := 1024
 	r, err := readers.NewRandReader(int64(fileSize), false)
@@ -711,6 +720,12 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	checkFatal(err, t)
 	if b {
 		t.Error("Expected object to NOT be cached after deleting object, got true from client.IsCached")
+	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
 	}
 }
 
@@ -920,19 +935,9 @@ func emitError(r *http.Response, err error, errch chan error) {
 // (targets are co-located with where this test is running from, because
 // it searches a local oldFileIfo system)
 func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
-	localBuckets, err := client.ListBuckets(proxyurl, true)
-	if err != nil {
-		t.Error("Unable to test if the bucket is local or not.")
-	}
-	for _, localBucket := range localBuckets.Local {
-		if localBucket == clibucket {
-			t.Skipf("Skipped because bucket %s is local.", clibucket)
-		}
-	}
 	var (
 		numFiles               = 3
 		fileSize        uint64 = 1024
-		bucketName             = clibucket
 		seed                   = baseseed + 111
 		errorChannel           = make(chan error, numFiles*5)
 		fileNameChannel        = make(chan string, numfiles)
@@ -945,24 +950,29 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		filesList       = make([]string, 0, numFiles)
 	)
 
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("TestRegressionCloudBuckets test is for cloud buckets only")
+	}
+
 	if usingSG {
 		sgl = dfc.NewSGLIO(fileSize)
 		defer sgl.Free()
 	}
 
 	tlogf("Creating %d objects\n", numFiles)
-	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, "", true, sgl)
+	putRandomFiles(0, seed, fileSize, numFiles, clibucket, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, "", true, sgl)
 
 	fileName = <-fileNameChannel
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	// Fetch the file from cloud bucket.
-	_, _, err = client.Get(proxyurl, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, _, err := client.Get(proxyurl, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
 	}
 
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, bucketName) {
+		if filepath.Base(path) == fileName && strings.Contains(path, clibucket) {
 			fqn = path
 		}
 		return nil
@@ -1019,7 +1029,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = client.Get(proxyurl, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, _, err = client.Get(proxyurl, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
 	if err != nil {
 		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
 	}
@@ -1200,6 +1210,7 @@ func TestRangeRead(t *testing.T) {
 		defer sgl.Free()
 	}
 
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, "", false, sgl)
 	selectErr(errorChannel, "put", t, false)
 
@@ -1249,6 +1260,12 @@ cleanup:
 	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	close(errorChannel)
 	close(fileNameChannel)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func verifyValidRanges(t *testing.T, bucketName string, fileName string,
@@ -1326,9 +1343,10 @@ func Test_checksum(t *testing.T) {
 		numPuts     = 5
 		filesize    = uint64(largefilesize * 1024 * 1024)
 		sgl         *dfc.SGLIO
+		totalio     = numPuts * largefilesize
 	)
-	totalio := (numPuts * largefilesize)
 
+	created := createLocalBucketIfNotExists(t, proxyurl, bucket)
 	ldir := LocalSrcDir + "/" + ChksumValidStr
 	if err := dfc.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
@@ -1420,6 +1438,12 @@ cleanup:
 	setConfig("checksum", fmt.Sprint(ochksum), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, bucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
+
 	return
 }
 
@@ -1459,4 +1483,31 @@ func evictobjects(t *testing.T, fileslist []string) {
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}
+}
+
+func createLocalBucketIfNotExists(t *testing.T, proxyurl, bucket string) (created bool) {
+	buckets, err := client.ListBuckets(proxyurl, false)
+	if err != nil {
+		t.Fatalf("Failed to read bucket list: %v", err)
+	}
+
+	if stringInSlice(bucket, buckets.Local) || stringInSlice(bucket, buckets.Cloud) {
+		return false
+	}
+
+	err = client.CreateLocalBucket(proxyurl, clibucket)
+	if err != nil {
+		t.Fatalf("Failed to create local bucket %s: %v", clibucket, err)
+	}
+
+	return true
+}
+
+func isCloudBucket(t *testing.T, proxyurl, bucket string) bool {
+	buckets, err := client.ListBuckets(proxyurl, false)
+	if err != nil {
+		t.Fatalf("Failed to read bucket list: %v", err)
+	}
+
+	return stringInSlice(bucket, buckets.Cloud)
 }

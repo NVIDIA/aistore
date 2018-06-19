@@ -1011,7 +1011,9 @@ func ListBuckets(proxyURL string, local bool) (*dfc.BucketNames, error) {
 	}
 
 	buckets := &dfc.BucketNames{}
-	err = json.Unmarshal(b, buckets)
+	if len(b) != 0 {
+		err = json.Unmarshal(b, buckets)
+	}
 	return buckets, err
 }
 
@@ -1210,9 +1212,13 @@ func GetLocalBucketNames(proxyurl string) (*dfc.BucketNames, error) {
 	}
 
 	var buckets dfc.BucketNames
-	err = json.Unmarshal(b, &buckets)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v", err)
+	if len(b) != 0 {
+		err = json.Unmarshal(b, &buckets)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
+		}
+	} else {
+		return nil, fmt.Errorf("Empty response instead of empty bucket list from %s\n", proxyurl)
 	}
 
 	return &buckets, nil

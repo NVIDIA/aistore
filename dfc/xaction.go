@@ -180,7 +180,11 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
-			assert(!(xreb.curversion > curversion))
+			if xreb.curversion > curversion {
+				glog.Errorf("%s version is greater than curversion %d", xreb.tostring(), curversion)
+				q.lock.Unlock()
+				return nil
+			}
 			if xreb.curversion == curversion {
 				glog.Infof("%s already running, nothing to do", xreb.tostring())
 				q.lock.Unlock()

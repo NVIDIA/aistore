@@ -419,6 +419,8 @@ func propsMainTest(t *testing.T, versioning string) {
 	}
 	setConfig("startup_delay_time", rbdelay, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
@@ -430,18 +432,20 @@ func propsMainTest(t *testing.T, versioning string) {
 		if oldRBDelay != "" {
 			setConfig("startup_delay_time", oldRBDelay, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		}
+
+		if created {
+			if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+				t.Errorf("Failed to delete local bucket: %v", err)
+			}
+		}
 	}()
 
-	// Skip the test when given a local bucket
 	props, err := client.HeadBucket(proxyurl, clibucket)
 	if err != nil {
-		t.Errorf("Could not execute HeadBucket Request: %v", err)
-		return
-	}
-	if props.CloudProvider == dfc.ProviderDfc {
-		isLocalBucket = true
+		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
 	versionEnabled := props.Versioning != dfc.VersionNone
+	isLocalBucket = props.CloudProvider == dfc.ProviderDfc
 
 	propsTestCore(t, versionEnabled, isLocalBucket)
 }

@@ -163,6 +163,11 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		targets    = make(map[string]struct{})
 	)
 
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("TestCloudListBucketGetTargetURL test is for cloud buckets only")
+	}
+
 	smap, err := client.GetClusterMap(proxyurl)
 	checkFatal(err, t)
 	if len(smap.Tmap) == 1 {
@@ -338,6 +343,7 @@ func TestListObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 	tlogf("Create a list of %d objects", numFiles)
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 	fileList := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
 		fname := fmt.Sprintf("obj%d", i+1)
@@ -404,6 +410,12 @@ func TestListObjects(t *testing.T) {
 	if usingFile {
 		for name := range filesput {
 			os.Remove(dir + "/" + name)
+		}
+	}
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
 }
@@ -500,10 +512,18 @@ func TestRenameObjects(t *testing.T) {
 }
 
 func TestObjectPrefix(t *testing.T) {
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t)
 	prefixLookup(t)
 	prefixCleanup(t)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func TestObjectsVersions(t *testing.T) {
@@ -511,6 +531,11 @@ func TestObjectsVersions(t *testing.T) {
 }
 
 func TestRegressionCloudBuckets(t *testing.T) {
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("TestRegressionCloudBuckets test is for cloud buckets only")
+	}
+
 	doBucketRegressionTest(t, regressionTestData{bucket: clibucket})
 }
 
@@ -537,6 +562,8 @@ func TestRebalance(t *testing.T) {
 			v.Core.Numsentbytes, v.Core.Numsentfiles, v.Core.Numrecvbytes, v.Core.Numrecvfiles
 	}
 
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+
 	//
 	// step 1. config
 	//
@@ -544,7 +571,14 @@ func TestRebalance(t *testing.T) {
 	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
 	defer func() {
 		setConfig("startup_delay_time", orebconfig["startup_delay_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+
+		if created {
+			if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+				t.Errorf("Failed to delete local bucket: %v", err)
+			}
+		}
 	}()
+
 	//
 	// cluster-wide reduce startup_delay_time
 	//
@@ -761,6 +795,11 @@ func TestLRU(t *testing.T) {
 		errch   = make(chan error, 100)
 		usedpct = uint32(100)
 	)
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("TestLRU test is for cloud buckets only")
+	}
+
 	getRandomFiles(0, 0, 20, clibucket, "", t, nil, errch)
 	// The error could be no object in the bucket. In that case, consider it as not an error;
 	// this test will be skipped
@@ -882,13 +921,8 @@ func TestPrefetchList(t *testing.T) {
 		netprefetches = int64(0)
 	)
 
-	// Skip the test when given a local bucket
-	props, err := client.HeadBucket(proxyurl, clibucket)
-	if err != nil {
-		t.Errorf("Could not execute HeadBucket Request: %v", err)
-		return
-	}
-	if props.CloudProvider == dfc.ProviderDfc {
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
 		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
 	}
 
@@ -914,7 +948,7 @@ func TestPrefetchList(t *testing.T) {
 
 	// 3. Evict those objects from the cache and prefetch them
 	tlogf("Evicting and Prefetching %d objects\n", len(files))
-	err = client.EvictList(proxyurl, clibucket, files, true, 0)
+	err := client.EvictList(proxyurl, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -946,6 +980,8 @@ func TestDeleteList(t *testing.T) {
 		errch  = make(chan error, numfiles)
 		files  = make([]string, 0)
 	)
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
 		r, err := readers.NewRandReader(fileSize, true /* withHash */)
@@ -973,6 +1009,12 @@ func TestDeleteList(t *testing.T) {
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func TestPrefetchRange(t *testing.T) {
@@ -986,13 +1028,8 @@ func TestPrefetchRange(t *testing.T) {
 		re            *regexp.Regexp
 	)
 
-	// Skip the test when given a local bucket
-	props, err := client.HeadBucket(proxyurl, clibucket)
-	if err != nil {
-		t.Errorf("Could not execute HeadBucket Request: %v", err)
-		return
-	}
-	if props.CloudProvider == dfc.ProviderDfc {
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
 		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
 	}
 
@@ -1082,6 +1119,9 @@ func TestDeleteRange(t *testing.T) {
 		wg             = &sync.WaitGroup{}
 		errch          = make(chan error, numfiles)
 	)
+
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
 		r, err := readers.NewRandReader(fileSize, true /* withHash */)
@@ -1130,6 +1170,12 @@ func TestDeleteRange(t *testing.T) {
 	bktlst, err = client.ListBucket(proxyurl, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
+	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
 	}
 }
 

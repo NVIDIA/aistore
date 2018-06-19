@@ -74,6 +74,9 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		errch      = make(chan error, m.num)
 		sgl        *dfc.SGLIO
 	)
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	// Step 1.
 	m.smap, err = client.GetClusterMap(proxyurl)
 	checkFatal(err, t)
@@ -172,6 +175,9 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		errch      = make(chan error, m.num)
 		sgl        *dfc.SGLIO
 	)
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 
 	// Step 1.
 	m.smap, err = client.GetClusterMap(proxyurl)

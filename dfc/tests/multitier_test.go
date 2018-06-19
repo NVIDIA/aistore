@@ -51,6 +51,11 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 		filesize = 1024
 	)
 
+	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	if !isCloud {
+		t.Skip("Download test is for cloud buckets only")
+	}
+
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {

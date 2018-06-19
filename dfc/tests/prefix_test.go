@@ -35,17 +35,24 @@ var (
 // and checks if the number of items equals the number of files with
 // the names starting with the prefix;
 // otherwise, the test creates (PUT) random files and executes 'a*' through 'z*' listings.
-func Test_prefix(t *testing.T) {
+func TestPrefix(t *testing.T) {
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
 		os.Exit(1)
 	}
 
 	tlogf("Looking for files with prefix [%s]\n", prefix)
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t)
 	prefixLookup(t)
 	prefixCleanup(t)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir string) int {

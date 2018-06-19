@@ -311,6 +311,7 @@ func rwstress(t *testing.T) {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 
+	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 	filelock.files = make([]fileLock, numFiles, numFiles)
 
 	generateRandomData(t, baseseed+10000, numFiles)
@@ -329,6 +330,12 @@ func rwstress(t *testing.T) {
 	wg.Wait()
 	rwDelLoop(t, fileNames, nil, doneCh, rwRunCleanUp)
 	rwstressCleanup(t)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func rwstressCleanup(t *testing.T) {
