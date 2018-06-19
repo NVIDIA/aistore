@@ -1813,27 +1813,37 @@ func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fq
 func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, fqn string,
 	objprops *objectProps, rebalance bool) (errstr string, errcode int, err error, renamed bool) {
 	var (
-		file          *os.File
-		isBucketLocal = t.bmdowner.get().islocal(bucket)
+		file     *os.File
+		bucketmd = t.bmdowner.get()
+		islocal  = bucketmd.islocal(bucket)
 	)
-	// cloud
-	if !isBucketLocal && !rebalance {
+
+	if !islocal && !rebalance {
 		if file, err = os.Open(putfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
 			return
 		}
-		if objprops.version, errstr, errcode = getcloudif().putobj(ct, file, bucket, objname, objprops.nhobj); errstr != "" {
-			_ = file.Close()
-			return
+		_, p := bucketmd.get(bucket, islocal)
+		if p.NextTierURL != "" && p.WritePolicy == RWPolicyNextTier {
+			if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file); errstr != "" {
+				glog.Errorf("Error putting object to next tier, err: %s, HTTP status code: %d", errstr, errcode)
+				file, err = os.Open(putfqn)
+				if err != nil {
+					errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
+				} else {
+					objprops.version, errstr, errcode = getcloudif().putobj(ct, file, bucket, objname, objprops.nhobj)
+				}
+			}
+		} else {
+			objprops.version, errstr, errcode = getcloudif().putobj(ct, file, bucket, objname, objprops.nhobj)
 		}
-		if err = file.Close(); err != nil {
-			glog.Errorf("Unexpected failure to close an already PUT file %s, err: %v", putfqn, err)
-			_ = os.Remove(putfqn)
+		_ = file.Close()
+		if errstr != "" {
 			return
 		}
 	}
 
-	if isBucketLocal && t.versioningConfigured(bucket) {
+	if islocal && t.versioningConfigured(bucket) {
 		if objprops.version, errstr = t.increaseObjectVersion(fqn); errstr != "" {
 			return
 		}

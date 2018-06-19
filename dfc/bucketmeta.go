@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	RWPolicyCloud    = "rw_policy_cloud"
-	RWPolicyNextTier = "rw_policy_next_tier"
+	RWPolicyCloud    = "cloud"
+	RWPolicyNextTier = "next_tier"
 )
 
 type BucketProps struct {
