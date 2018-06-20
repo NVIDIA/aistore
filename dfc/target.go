@@ -1094,9 +1094,8 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		version = response.Header.Get(HeaderDfcObjVersion)
 		fqn     = t.fqn(bucket, objname)
 		getfqn  = t.fqn2workfile(fqn)
-		inmem   = false // TODO: optimize
 	)
-	if _, nhobj, size, errstr = t.receive(getfqn, inmem, objname, "", hdhobj, response.Body); errstr != "" {
+	if _, nhobj, size, errstr = t.receive(getfqn, objname, "", hdhobj, response.Body); errstr != "" {
 		response.Body.Close()
 		glog.Errorf(errstr)
 		return
@@ -1700,8 +1699,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			}
 		}
 	}
-	inmem := ctx.config.Experimental.AckPut == AckWhenInMem
-	if sgl, nhobj, _, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
+	if sgl, nhobj, _, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
 	if nhobj != nil {
@@ -1907,10 +1905,9 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		var (
 			hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
-			inmem  = false // TODO
 			props  = &objectProps{version: r.Header.Get(HeaderDfcObjVersion)}
 		)
-		if _, props.nhobj, size, errstr = t.receive(putfqn, inmem, objname, "", hdhobj, r.Body); errstr != "" {
+		if _, props.nhobj, size, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
 			return
 		}
 		if props.nhobj != nil {
@@ -2519,7 +2516,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 // xxhash is always preferred over md5
 //
 //==============================================================================================
-func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, ohobj cksumvalue,
+func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalue,
 	reader io.Reader) (sgl *SGLIO, nhobj cksumvalue, written int64, errstr string) {
 	var (
 		err                  error
@@ -2528,18 +2525,13 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		ohtype, ohval, nhval string
 		cksumcfg             = &ctx.config.Cksum
 	)
-	// ack policy = memory
-	if inmem {
-		sgl = NewSGLIO(0)
-		filewriter = sgl
-	} else {
-		if file, err = CreateFile(fqn); err != nil {
-			t.runFSKeeper(fmt.Errorf("%s", fqn))
-			errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
-			return
-		}
-		filewriter = file
+
+	if file, err = CreateFile(fqn); err != nil {
+		t.runFSKeeper(fmt.Errorf("%s", fqn))
+		errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
+		return
 	}
+	filewriter = file
 	slab := selectslab(0)
 	buf := slab.alloc()
 	defer func() { // free & cleanup on err
@@ -2622,10 +2614,6 @@ func (t *targetrunner) receive(fqn string, inmem bool, objname, omd5 string, oho
 		if written, errstr = ReceiveAndChecksum(filewriter, reader, buf); errstr != "" {
 			return
 		}
-	}
-	// close and done
-	if inmem {
-		return
 	}
 	if err = file.Close(); err != nil {
 		errstr = fmt.Sprintf("Failed to close received file %s, err: %v", fqn, err)

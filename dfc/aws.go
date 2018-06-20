@@ -370,7 +370,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 	if obj.VersionId != nil {
 		props.version = *obj.VersionId
 	}
-	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, false, objname, md5, v, obj.Body); errstr != "" {
+	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, objname, md5, v, obj.Body); errstr != "" {
 		obj.Body.Close()
 		return
 	}

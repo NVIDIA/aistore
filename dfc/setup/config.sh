@@ -86,10 +86,6 @@
 		"offline_fs_check_time": "0",
 		"fskeeper_enabled":      false
 	},
-	"experimental": {
-		"ack_put":		"disk",
-		"max_mem_mb":		16
-	},
 	"auth": {
 		"secret": "$SECRETKEY",
 		"enabled": $AUTHENABLED,

@@ -62,6 +62,6 @@ func (t *targetrunner) getObjectNextTier(nextURL, bucket, objname, fqn string) (
 	}
 
 	p = &objectProps{}
-	_, p.nhobj, p.size, errstr = t.receive(fqn, false, objname, "", nil, r.Body)
+	_, p.nhobj, p.size, errstr = t.receive(fqn, objname, "", nil, r.Body)
 	return
 }

@@ -36,11 +36,6 @@ const (
 	VersionNone  = "none"
 )
 
-const (
-	AckWhenInMem  = "memory"
-	AckWhenOnDisk = "disk" // the default
-)
-
 // $CONFDIR/*
 const (
 	bucketmdbase = "bucket-metadata" // base name of the config file; not to confuse with config.Localbuckets mpath
@@ -71,7 +66,6 @@ type dfconfig struct {
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	Net              netconfig         `json:"netconfig"`
 	FSKeeper         fskeeperconf      `json:"fskeeper"`
-	Experimental     experimental      `json:"experimental"`
 	Auth             authconf          `json:"auth"`
 	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
 	CallStats        callStats         `json:"callstats"`
@@ -184,11 +178,6 @@ type fskeeperconf struct {
 	OfflineFSCheckTimeStr string        `json:"offline_fs_check_time"`
 	OfflineFSCheckTime    time.Duration `json:"-"` // omitempty
 	Enabled               bool          `json:"fskeeper_enabled"`
-}
-
-type experimental struct {
-	AckPut   string `json:"ack_put"`
-	MaxMemMB int    `json:"max_mem_mb"` // max memory size for the "memory" option - FIXME: niy
 }
 
 type authconf struct {

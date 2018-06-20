@@ -354,7 +354,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 	}
 	// hashtype and hash could be empty for legacy objects.
 	props = &objectProps{version: fmt.Sprintf("%d", attrs.Generation)}
-	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, false, objname, md5, v, rc); errstr != "" {
+	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, objname, md5, v, rc); errstr != "" {
 		rc.Close()
 		return
 	}
