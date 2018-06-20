@@ -1106,10 +1106,11 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	wg := &sync.WaitGroup{}
 	for _, daemon := range p.smap.Tmap {
 		wg.Add(1)
-		go func() {
-			p.generateCachedList(bucket, daemon, dataCh, reqParams)
+		// without this copy all goroutines get the same pointer
+		go func(d *daemonInfo) {
+			p.generateCachedList(bucket, d, dataCh, reqParams)
 			wg.Done()
-		}()
+		}(daemon)
 	}
 	wg.Wait()
 	close(dataCh)
@@ -1168,7 +1169,9 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 
 	for _, si := range p.smap.Tmap {
 		wg.Add(1)
-		go targetCallFn(si)
+		go func(d *daemonInfo) {
+			targetCallFn(d)
+		}(si)
 	}
 	wg.Wait()
 	close(chresult)

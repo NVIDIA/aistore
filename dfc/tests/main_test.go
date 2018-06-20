@@ -1506,7 +1506,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyurl, bucket string) (create
 func isCloudBucket(t *testing.T, proxyurl, bucket string) bool {
 	buckets, err := client.ListBuckets(proxyurl, false)
 	if err != nil {
-		t.Fatalf("Failed to read bucket list: %v", err)
+		t.Fatalf("Failed to read bucket names: %v", err)
 	}
 
 	return stringInSlice(bucket, buckets.Cloud)
