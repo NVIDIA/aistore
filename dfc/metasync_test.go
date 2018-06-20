@@ -133,10 +133,10 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
-	bucketmd.add("bucket1", true, simplekvs{"a": "b", "c": "d"})
-	bucketmd.add("bucket2", true)
-	bucketmd.add("bucket3", false, simplekvs{"a": "b", "c": "d"})
-	bucketmd.add("bucket4", false)
+	bucketmd.add("bucket1", true, BucketProps{CloudProvider: ProviderDfc, NextTierURL: "http://foo.com"})
+	bucketmd.add("bucket2", true, BucketProps{})
+	bucketmd.add("bucket3", false, BucketProps{CloudProvider: ProviderDfc})
+	bucketmd.add("bucket4", false, BucketProps{})
 
 	clone := &bucketMD{}
 	bucketmd.deepcopy(clone)
@@ -535,8 +535,9 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add("bucket1", true, simplekvs{"a": "b", "c": "d"})
-	bucketmd.add("bucket2", true, simplekvs{"x": "", "y": ""})
+	bucketmd.add("bucket1", true, BucketProps{CloudProvider: ProviderDfc})
+	bucketmd.add("bucket2", true, BucketProps{CloudProvider: ProviderDfc,
+		NextTierURL: "http://localhost:8082"})
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -553,7 +554,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
-	bucketmd.add("bucket3", true)
+	bucketmd.add("bucket3", true, BucketProps{})
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -563,7 +564,7 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.sync(false, bucketmd)
 	match(t, exp, ch, 1)
 
-	bucketmd.add("bucket4", true, simplekvs{"a": "e", "c": "f"})
+	bucketmd.add("bucket4", true, BucketProps{CloudProvider: ProviderDfc, NextTierURL: "http://foo.com"})
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -984,8 +985,8 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chTarget
 		payload = <-chTarget
 
-		bucketmd.add("lb1", true, simplekvs{"a": "b", "c": "d"})
-		bucketmd.add("lb2", true, simplekvs{"m": "", "n": ""})
+		bucketmd.add("lb1", true, BucketProps{CloudProvider: ProviderDfc})
+		bucketmd.add("lb2", true, BucketProps{CloudProvider: ProviderAmazon})
 		syncer.sync(true, bucketmd)
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
@@ -1042,7 +1043,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy2.bmdowner = &bmdowner{}
 		proxy2.bmdowner.put(newBucketMD())
 
-		bucketmd.add("lb3", true, simplekvs{"t": "s", "m": "d"})
+		bucketmd.add("lb3", true, BucketProps{CloudProvider: ProviderGoogle})
 
 		c = func(n, o *Smap, m *ActionMsg, e string) {
 			noErr(e)
@@ -1168,13 +1169,13 @@ func TestMetaSyncReceive(t *testing.T) {
 		target2.bmdowner.put(newBucketMD())
 
 		bucketmd := newBucketMD()
-		bucketmd.add("lb1", true)
+		bucketmd.add("lb1", true, BucketProps{})
 
 		syncer.sync(true, primary.smap.cloneU(), bucketmd)
 		<-chTarget
 		<-chTarget
 
-		bucketmd.add("lb2", true, simplekvs{"a": "b", "c": "d"})
+		bucketmd.add("lb2", true, BucketProps{CloudProvider: ProviderDfc})
 		syncer.sync(false, &revspair{bucketmd, &ActionMsg{Action: "NB"}})
 		payload := <-chTarget
 		_, actMsg, _ := target2.extractbucketmd(payload)

@@ -12,10 +12,15 @@ import (
 	"unsafe"
 )
 
+type BucketProps struct {
+	CloudProvider string `json:"cloud_provider,omitempty"`
+	NextTierURL   string `json:"next_tier_url,omitempty"`
+}
+
 type bucketMD struct {
-	LBmap   map[string]simplekvs `json:"l_bmap"` // local cache-only buckets and their props
-	CBmap   map[string]simplekvs `json:"c_bmap"` // Cloud-based buckets and their DFC-only metadata
-	Version int64                `json:"version"`
+	LBmap   map[string]BucketProps `json:"l_bmap"` // local cache-only buckets and their props
+	CBmap   map[string]BucketProps `json:"c_bmap"` // Cloud-based buckets and their DFC-only metadata
+	Version int64                  `json:"version"`
 }
 
 type bmdowner struct {
@@ -38,12 +43,12 @@ func (r *bmdowner) get() (bucketmd *bucketMD) {
 
 func newBucketMD() *bucketMD {
 	return &bucketMD{
-		LBmap: make(map[string]simplekvs),
-		CBmap: make(map[string]simplekvs),
+		LBmap: make(map[string]BucketProps),
+		CBmap: make(map[string]BucketProps),
 	}
 }
 
-func (m *bucketMD) add(b string, local bool, props ...simplekvs) bool {
+func (m *bucketMD) add(b string, local bool, p BucketProps) bool {
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
@@ -51,11 +56,7 @@ func (m *bucketMD) add(b string, local bool, props ...simplekvs) bool {
 	if _, ok := mm[b]; ok {
 		return false
 	}
-	if len(props) > 0 {
-		mm[b] = props[0]
-	} else {
-		mm[b] = nil
-	}
+	mm[b] = p
 	m.Version++
 	return true
 }
@@ -73,16 +74,16 @@ func (m *bucketMD) del(b string, local bool) bool {
 	return true
 }
 
-func (m *bucketMD) get(b string, local bool) (exists bool, props simplekvs) {
+func (m *bucketMD) get(b string, local bool) (bool, BucketProps) {
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
 	}
-	props, exists = mm[b]
-	return
+	p, ok := mm[b]
+	return ok, p
 }
 
-func (m *bucketMD) set(b string, local bool, props simplekvs) {
+func (m *bucketMD) set(b string, local bool, p BucketProps) {
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
@@ -92,19 +93,7 @@ func (m *bucketMD) set(b string, local bool, props simplekvs) {
 	}
 
 	m.Version++
-	// revert it to nil when there are no values or all values are empty
-	havevalues := false
-	for _, v := range props {
-		if v != "" {
-			havevalues = true
-			break
-		}
-	}
-	if havevalues {
-		mm[b] = props
-	} else {
-		mm[b] = nil
-	}
+	mm[b] = p
 }
 
 func (m *bucketMD) islocal(bucket string) bool {
@@ -120,22 +109,14 @@ func (m *bucketMD) cloneU() *bucketMD {
 
 func (m *bucketMD) deepcopy(dst *bucketMD) {
 	copyStruct(dst, m)
-	dst.LBmap = make(map[string]simplekvs, len(m.LBmap))
-	dst.CBmap = make(map[string]simplekvs, len(m.CBmap))
-	inmaps := [2]map[string]simplekvs{m.LBmap, m.CBmap}
-	outmaps := [2]map[string]simplekvs{dst.LBmap, dst.CBmap}
+	dst.LBmap = make(map[string]BucketProps, len(m.LBmap))
+	dst.CBmap = make(map[string]BucketProps, len(m.CBmap))
+	inmaps := [2]map[string]BucketProps{m.LBmap, m.CBmap}
+	outmaps := [2]map[string]BucketProps{dst.LBmap, dst.CBmap}
 	for i := 0; i < len(inmaps); i++ {
 		mm := outmaps[i]
 		for name, props := range inmaps[i] {
-			if props == nil {
-				mm[name] = nil
-				continue
-			}
-			propscopy := make(simplekvs, len(props))
-			for pn, pval := range props {
-				propscopy[pn] = pval
-			}
-			mm[name] = propscopy
+			mm[name] = props
 		}
 	}
 }

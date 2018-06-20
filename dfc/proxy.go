@@ -699,10 +699,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.Lock()
 		clone := p.bmdowner.get().cloneU()
-		if !clone.add(lbucket, true) {
+		if !clone.add(lbucket, true, BucketProps{}) {
 			p.bmdowner.Unlock()
-			s := fmt.Sprintf("Local bucket %s already exists", lbucket)
-			p.invalmsghdlr(w, r, s)
+			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
 			return
 		}
 		if errstr := p.savebmdconf(clone); errstr != "" {
@@ -860,13 +859,11 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	exists, props := clone.get(bucket, islocal)
 	if !exists {
 		assert(!islocal)
-		clone.add(bucket, false)
+		clone.add(bucket, false, BucketProps{})
 	}
-	if props == nil {
-		props = make(simplekvs)
-	}
-	props[URLParamNextTierURL] = nexttierurl
-	props[URLParamCloudProvider] = cldprovider
+
+	props.NextTierURL = nexttierurl
+	props.CloudProvider = cldprovider
 	clone.set(bucket, islocal, props) // can also unset by assigning "" values
 
 	if errstr := p.savebmdconf(clone); errstr != "" {
@@ -908,7 +905,9 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props simplekvs, msg *ActionMsg, method string) bool {
+func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props BucketProps,
+	msg *ActionMsg, method string) bool {
+
 	smap4bcast := &Smap{}
 	p.smap.copyL(smap4bcast)
 
