@@ -12,9 +12,16 @@ import (
 	"unsafe"
 )
 
+const (
+	RWPolicyCloud    = "rw_policy_cloud"
+	RWPolicyNextTier = "rw_policy_next_tier"
+)
+
 type BucketProps struct {
 	CloudProvider string `json:"cloud_provider,omitempty"`
 	NextTierURL   string `json:"next_tier_url,omitempty"`
+	ReadPolicy    string `json:"read_policy,omitempty"`
+	WritePolicy   string `json:"write_policy,omitempty"`
 }
 
 type bucketMD struct {

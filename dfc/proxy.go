@@ -809,12 +809,12 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// validations
 	bucket := apitems[0]
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	var msg ActionMsg
+	props := &BucketProps{}
+	msg := ActionMsg{Value: props}
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
@@ -823,51 +823,37 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-
-	query := r.URL.Query()
-	nexttierurl := query.Get(URLParamNextTierURL)
-	if nexttierurl != "" {
-		if _, err := url.ParseRequestURI(nexttierurl); err != nil {
-			s := fmt.Sprintf("Invalid %s=%s, err: %v", URLParamNextTierURL, nexttierurl, err)
-			p.invalmsghdlr(w, r, s)
-			return
-		}
-	}
-	cldprovider := query.Get(URLParamCloudProvider)
-	if cldprovider != "" && cldprovider != ProviderAmazon && cldprovider != ProviderGoogle && cldprovider != ProviderDfc {
-		s := fmt.Sprintf("Invalid %s=%s", URLParamCloudProvider, cldprovider)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-	if nexttierurl != "" && cldprovider == "" {
-		s := fmt.Sprintf("Tiered bucket must be associated with one of the supported Cloud providers (%s | %s | %s)",
-			ProviderAmazon, ProviderGoogle, ProviderDfc)
-		p.invalmsghdlr(w, r, s)
+	if err := validateBucketProps(props); err != nil {
+		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// doing it
 	bucketmd := p.bmdowner.get()
 	islocal := bucketmd.islocal(bucket)
-	if islocal && cldprovider != ProviderDfc && cldprovider != "" {
+	if islocal && props.CloudProvider != ProviderDfc && props.CloudProvider != "" {
 		s := fmt.Sprintf("Local bucket %s can only have '%s' as the Cloud provider", bucket, ProviderDfc)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
 	p.bmdowner.Lock()
 	clone := bucketmd.cloneU()
-	exists, props := clone.get(bucket, islocal)
+	exists, oldProps := clone.get(bucket, islocal)
 	if !exists {
 		assert(!islocal)
 		clone.add(bucket, false, BucketProps{})
 	}
+	oldProps.NextTierURL = props.NextTierURL
+	oldProps.CloudProvider = props.CloudProvider
+	if props.ReadPolicy != "" {
+		oldProps.ReadPolicy = props.ReadPolicy
+	}
+	if props.WritePolicy != "" {
+		oldProps.WritePolicy = props.WritePolicy
+	}
 
-	props.NextTierURL = nexttierurl
-	props.CloudProvider = cldprovider
-	clone.set(bucket, islocal, props) // can also unset by assigning "" values
-
-	if errstr := p.savebmdconf(clone); errstr != "" {
-		glog.Errorln(errstr)
+	clone.set(bucket, islocal, oldProps)
+	if e := p.savebmdconf(clone); e != "" {
+		glog.Errorln(e)
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
@@ -2504,4 +2490,42 @@ func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 	}
 
 	return maxVersionSMap, maxVerBucketMD
+}
+
+func validateBucketProps(props *BucketProps) error {
+	if props.NextTierURL != "" {
+		if _, err := url.ParseRequestURI(props.NextTierURL); err != nil {
+			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
+		}
+	}
+	if err := ValidateCloudProvider(props.CloudProvider); err != nil {
+		return err
+	}
+	if props.ReadPolicy != "" && props.ReadPolicy != RWPolicyCloud && props.ReadPolicy != RWPolicyNextTier {
+		return fmt.Errorf("invalid read policy: %s", props.ReadPolicy)
+	}
+	if props.WritePolicy != "" && props.WritePolicy != RWPolicyCloud && props.WritePolicy != RWPolicyNextTier {
+		return fmt.Errorf("invalid write policy: %s", props.WritePolicy)
+	}
+	if props.NextTierURL != "" {
+		if props.CloudProvider == "" {
+			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
+				ProviderAmazon, ProviderGoogle, ProviderDfc)
+		}
+		if props.ReadPolicy == "" {
+			props.ReadPolicy = RWPolicyNextTier
+		}
+		if props.WritePolicy == "" {
+			props.WritePolicy = RWPolicyCloud
+		}
+	}
+	return nil
+}
+
+func ValidateCloudProvider(provider string) error {
+	if provider != "" && provider != ProviderAmazon && provider != ProviderGoogle && provider != ProviderDfc {
+		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
+			ProviderAmazon, ProviderGoogle, ProviderDfc)
+	}
+	return nil
 }

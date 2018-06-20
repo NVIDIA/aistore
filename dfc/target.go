@@ -976,10 +976,10 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props BucketProps, clone *bucketMD) (errstr string) {
+func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketProps, clone *bucketMD) (errstr string) {
 	// ready to receive migrated obj-s _after_ that point
-	// insert directly wo/ incrementing the version (metasyncer will do at the end of the operation)
-	clone.LBmap[bucketTo] = props
+	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
+	clone.LBmap[bucketTo] = p
 	t.bmdowner.put(clone)
 
 	wg := &sync.WaitGroup{}
@@ -1186,7 +1186,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	// cold
 	_, bucketProps = bucketmd.get(bucket, islocal)
 	nextTierURL = bucketProps.NextTierURL
-	if nextTierURL != "" {
+	if nextTierURL != "" && bucketProps.ReadPolicy == RWPolicyNextTier {
 		if inNextTier, errstr, errcode = t.objectInNextTier(nextTierURL, bucket, objname); errstr != "" {
 			t.rtnamemap.unlockname(uname, true)
 			return

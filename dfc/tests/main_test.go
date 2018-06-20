@@ -634,27 +634,25 @@ func TestHeadCloudBucket(t *testing.T) {
 		t.Skip("TestHeadCloudBucket is for cloud buckets only")
 	}
 
-	bprops, err := client.HeadBucket(proxyurl, clibucket)
+	props, err := client.HeadBucket(proxyurl, clibucket)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if bprops == nil {
-		t.Errorf("Failed to get bucket %s head but no errors", bprops)
+	if props == nil {
+		t.Errorf("Failed to get bucket %s head but no errors", props)
 		return
 	}
 
-	providerList := []string{dfc.ProviderAmazon, dfc.ProviderGoogle, dfc.ProviderDfc}
-	if !stringInSlice(bprops.CloudProvider, providerList) {
-		t.Errorf("Invalid bucket %s Cloud Provider: %s [must be one of %s]",
-			clibucket, bprops.CloudProvider, strings.Join(providerList, ", "))
+	if err = dfc.ValidateCloudProvider(props.CloudProvider); err != nil {
+		t.Error(err)
 	}
 
 	versionModes := []string{dfc.VersionAll, dfc.VersionCloud, dfc.VersionLocal, dfc.VersionNone}
-	if !stringInSlice(bprops.Versioning, versionModes) {
+	if !stringInSlice(props.Versioning, versionModes) {
 		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
-			clibucket, bprops.Versioning, strings.Join(versionModes, ", "))
+			clibucket, props.Versioning, strings.Join(versionModes, ", "))
 	}
 }
 

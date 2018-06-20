@@ -643,11 +643,10 @@ func HeadObject(proxyurl, bucket, objname string) (objProps *ObjectProps, err er
 	return
 }
 
-func SetBucketProps(proxyurl, bucket, cloudProvider, nextTierURL string) error {
-	var url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, bucket) + fmt.Sprintf("?%s=%s&%s=%s",
-		dfc.URLParamCloudProvider, cloudProvider, dfc.URLParamNextTierURL, nextTierURL)
+func SetBucketProps(proxyurl, bucket string, props dfc.BucketProps) error {
+	var url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, bucket)
 
-	b, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActSetProps})
+	b, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActSetProps, Value: props})
 	if err != nil {
 		return err
 	}

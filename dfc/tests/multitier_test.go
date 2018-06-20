@@ -18,13 +18,12 @@ import (
 
 func TestGetObjectInNextTier(t *testing.T) {
 	var (
-		bucket = "multitier-test-bucket"
 		object = "multitier-test-object"
 		data   = []byte("this is the object you want!")
 	)
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, bucket, object) {
+		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
@@ -36,8 +35,18 @@ func TestGetObjectInNextTier(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	client.SetBucketProps(proxyurl, bucket, dfc.ProviderDfc, nextTierMock.URL)
-	n, _, err := client.Get(proxyurl, bucket, object, nil, nil, false, false)
+	err := client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
+		CloudProvider: dfc.ProviderDfc,
+		NextTierURL:   nextTierMock.URL,
+	})
+	checkFatal(err, t)
+	defer func() {
+		if err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{}); err != nil {
+			t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
+		}
+	}()
+
+	n, _, err := client.Get(proxyurl, clibucket, object, nil, nil, false, false)
 	checkFatal(err, t)
 	if int(n) != len(data) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(data), int(n))
@@ -46,7 +55,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 
 func TestGetObjectNotInNextTier(t *testing.T) {
 	var (
-		object   = "multitier-test-object"
+		object   = "multitier-get-test-object"
 		data     = []byte("this is some other object - not the one you want!")
 		filesize = 1024
 	)
@@ -76,8 +85,19 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	checkFatal(err, t)
 
 	err = client.Evict(proxyurl, clibucket, object)
+	checkFatal(err, t)
 
-	client.SetBucketProps(proxyurl, clibucket, dfc.ProviderDfc, nextTierMock.URL)
+	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
+		CloudProvider: dfc.ProviderDfc,
+		NextTierURL:   nextTierMock.URL,
+	})
+	checkFatal(err, t)
+	defer func() {
+		if err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{}); err != nil {
+			t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
+		}
+	}()
+
 	n, _, err := client.Get(proxyurl, clibucket, object, nil, nil, false, false)
 	checkFatal(err, t)
 	if int(n) != filesize {
