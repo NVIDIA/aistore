@@ -1,0 +1,593 @@
+openapi: "3.0.0"
+info:
+  version: "1.1.0"
+  title: DFC
+  description: "DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends."
+  termsOfService: ""
+  contact:
+    name: "NVIDIA-DFC"
+    email: "dfc-jenkins@nvidia.com"
+    url: "https://github.com/NVIDIA/dfcpub"
+  license:
+    name: MIT
+    url: https://github.com/NVIDIA/dfcpub/blob/master/LICENSE
+tags:
+  - name: Object
+    description: All APIs to interact with DFC objects
+    externalDocs:
+      url: https://github.com/NVIDIA/dfcpub
+  - name: Bucket
+    description: All APIs to interact with DFC buckets
+    externalDocs:
+      url: https://github.com/NVIDIA/dfcpub
+servers:
+  - url: http://localhost:8080/v1
+paths:
+  /objects/{bucket-name}/{object-name}:
+    get:
+      summary: Get object
+      operationId: get
+      tags:
+        - Object
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+        - name: object-name
+          in: path
+          description: Object name
+          required: true
+          schema:
+            type: string
+        - name: offset
+          in: query
+          description: Starting byte from where the read needs to be performed
+          schema:
+            type: integer
+        - name: length
+          in: query
+          description: Number of bytes that need to be returned starting from the offset
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Object at the location bucket-name/object-name
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: byte
+        '301':
+          description: "Permanent HTTP redirect"
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    put:
+      summary: Put object
+      operationId: put
+      tags:
+        - Object
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+        - name: object-name
+          in: path
+          description: Object name
+          required: true
+          schema:
+            type: string
+        - name: from_id
+          in: query
+          description: Source target ID
+          schema:
+            type: string
+        - name: to_id
+          in: query
+          description: Destination target ID
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Object at the location bucket-name/object-name put successfully
+        '307':
+          description: "Temporary HTTP redirect"
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    delete:
+      summary: Delete object
+      operationId: delete
+      tags:
+        - Object
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+        - name: object-name
+          in: path
+          description: Object name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Object at the location bucket-name/object-name deleted successfully
+        '307':
+          description: "Temporary HTTP redirect"
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    post:
+      summary: Perform operations on object such as rename
+      operationId: performOperation
+      tags:
+        - Object
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+        - name: object-name
+          in: path
+          description: Object name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Operation on bucket-name/object-name succeeded
+        '307':
+          description: "Temporary HTTP redirect"
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    head:
+      summary: Query object properties
+      operationId: getProperties
+      tags:
+        - Object
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+        - name: object-name
+          in: path
+          description: Object name
+          required: true
+          schema:
+            type: string
+        - name: check_cached
+          in: query
+          description: Check if the object is cached
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Properties of the object at the location bucket-name/object-name
+          headers:
+            CloudProvider:
+              schema:
+                type: string
+            Size:
+              schema:
+                type: integer
+            Version:
+              schema:
+                type: string
+        '307':
+          description: "Temporary HTTP redirect"
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /buckets/*:
+    get:
+      summary: Get bucket names
+      operationId: listNames
+      tags:
+        - Bucket
+      parameters:
+        - name: local
+          in: query
+          description: Get only local bucket names
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Cloud and local bucket names
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BucketNames'
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /buckets/{bucket-name}:
+    get:
+      summary: Get list of bucket objects and their properties
+      operationId: list
+      tags:
+        - Bucket
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BucketPropertiesAndOptions'
+      responses:
+        '200':
+          description: List of object properties in the specified bucket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectPoperties'
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    put:
+      summary: Set bucket properties
+      operationId: setProperties
+      tags:
+        - Bucket
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+        - name: cloud_provider
+          in: query
+          description: Bucket's cloud provider
+          schema:
+            type: string
+        - name: next_tier_url
+          in: query
+          description: URL for the next tier
+          schema:
+            type: string
+        - name: read_policy
+          in: query
+          description: Policy which defines how to perform reads in case of more tiers
+          schema:
+            $ref: '#/components/schemas/RWPolicy'
+        - name: write_policy
+          in: query
+          description: Policy which defines how to perform writes in case of more tiers
+          schema:
+            $ref: '#/components/schemas/RWPolicy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Bucket properties set successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    post:
+      summary: Perform operations on bucket such as create
+      operationId: performOperation
+      tags:
+        - Bucket
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Operation on bucket-name succeeded
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    delete:
+      summary: Delete operations on bucket and its contained objects
+      operationId: delete
+      tags:
+        - Bucket
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Bucket-name deleted successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    head:
+      summary: Query bucket properties
+      operationId: getProperties
+      tags:
+        - Bucket
+      parameters:
+        - name: bucket-name
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Properties of bucket-name
+          headers:
+            CloudProvider:
+              schema:
+                type: string
+            Versioning:
+              schema:
+                type: string
+        '307':
+          description: "Temporary HTTP redirect"
+          headers:
+            Location:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+components:
+  schemas:
+    InputParameters:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/Actions'
+        name:
+          type: string
+        value:
+          anyOf:
+            - $ref: '#/components/schemas/ListParameters'
+            - $ref: '#/components/schemas/RangeParameters'
+    Actions:
+      type: string
+      enum:
+        - evict
+        - rename
+        - createlb
+        - destroylb
+        - renamelb
+        - setprops
+        - prefetch
+        - delete
+    ListParameters:
+      properties:
+        deadline:
+          type: string
+        wait:
+          type: boolean
+        objnames:
+          type: array
+          items:
+            type: string
+      required:
+          - objnames
+    RangeParameters:
+      properties:
+        deadline:
+          type: string
+        wait:
+          type: boolean
+        prefix:
+          type: string
+        regex:
+          type: string
+        range:
+          type: string
+      required:
+        - regex
+        - prefix
+        - range
+    BucketNames:
+      type: object
+      properties:
+        cloud:
+          type: array
+          items:
+            type: string
+        local:
+          type: array
+          items:
+            type: string
+    BucketPropertiesAndOptions:
+      type: object
+      properties:
+        props:
+          type: string
+        time_format:
+          $ref: '#/components/schemas/TimeFormat'
+        prefix:
+          type: string
+        pagemarker:
+          type: string
+        pagesize:
+          type: string
+    ObjectPoperties:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        ctime:
+          type: integer
+        checksum:
+          type: string
+        type:
+          type: string
+        atime:
+          type: string
+        bucket:
+          type: string
+        version:
+          type: string
+        iscached:
+          type: string
+        targetURL:
+          type: string
+    ObjectPropertyTypes:
+      type: string
+      enum:
+        - size
+        - ctime
+        - checksum
+        - atime
+        - bucket
+        - version
+        - iscached
+        - targetURL
+    TimeFormat:
+      type: string
+      enum:
+       - ANSIC
+       - UnixDate
+       - RubyDate
+       - RFC822
+       - RFC822Z
+       - RFC850
+       - RFC1123
+       - RFC1123Z
+       - RFC3339
+       - RFC3339Nano
+       - Kitchen
+       - Stamp
+       - StampMilli
+       - StampMicro
+       - StampNano
+    CloudProvider:
+      type: string
+      enum:
+        - dfc
+        - aws
+        - gcp
+    Headers:
+      type: string
+      enum:
+        - CloudProvider
+        - Versioning
+        - Version
+        - Size
+    RWPolicy:
+      type: string
+      enum:
+        - rw_policy_cloud
+        - rw_policy_next_tier
+    Version:
+      type: string
+      enum:
+        - all
+        - cloud
+        - local
+        - none
