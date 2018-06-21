@@ -6,10 +6,10 @@
 package dfc_test
 
 import (
-	"testing"
-
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -37,14 +37,59 @@ func TestGetObjectInNextTier(t *testing.T) {
 
 	err := client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
 		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMock.URL,
-	})
+		NextTierURL:   nextTierMock.URL})
 	checkFatal(err, t)
-	defer func() {
-		if err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{}); err != nil {
-			t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
+	defer resetBucketProps(clibucket, t)
+
+	n, _, err := client.Get(proxyurl, clibucket, object, nil, nil, false, false)
+	checkFatal(err, t)
+	if int(n) != len(data) {
+		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(data), int(n))
+	}
+}
+
+func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
+	var (
+		object = "multitier-test-object"
+		data   = []byte("this is the object you want!")
+	)
+
+	if !isCloudBucket(t, proxyurl, clibucket) {
+		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+	}
+
+	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) {
+			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {
+				w.WriteHeader(http.StatusOK)
+			} else if r.Method == http.MethodGet {
+				http.Error(w, "some arbitrary internal server error", http.StatusInternalServerError)
+			} else {
+				http.Error(w, "bad request", http.StatusBadRequest)
+			}
 		}
-	}()
+	}))
+	defer nextTierMock.Close()
+
+	u := proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object)
+	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
+	checkFatal(err, t)
+
+	resp, err := http.DefaultClient.Do(req)
+	checkFatal(err, t)
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		t.Errorf("Expected status code 200, received status code %d", resp.StatusCode)
+	}
+
+	err = client.Evict(proxyurl, clibucket, object)
+	checkFatal(err, t)
+
+	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
+		CloudProvider: dfc.ProviderDfc,
+		NextTierURL:   nextTierMock.URL})
+	checkFatal(err, t)
+	defer resetBucketProps(clibucket, t)
 
 	n, _, err := client.Get(proxyurl, clibucket, object, nil, nil, false, false)
 	checkFatal(err, t)
@@ -60,9 +105,8 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 		filesize = 1024
 	)
 
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
-	if !isCloud {
-		t.Skip("Download test is for cloud buckets only")
+	if !isCloudBucket(t, proxyurl, clibucket) {
+		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -89,14 +133,9 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 
 	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
 		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMock.URL,
-	})
+		NextTierURL:   nextTierMock.URL})
 	checkFatal(err, t)
-	defer func() {
-		if err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{}); err != nil {
-			t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
-		}
-	}()
+	defer resetBucketProps(clibucket, t)
 
 	n, _, err := client.Get(proxyurl, clibucket, object, nil, nil, false, false)
 	checkFatal(err, t)
@@ -106,5 +145,11 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 
 	if err = client.Del(proxyurl, clibucket, object, nil, nil, true); err != nil {
 		t.Logf("bucket/object: %s/%s not deleted, err: %v", clibucket, object, err)
+	}
+}
+
+func resetBucketProps(bucket string, t *testing.T) {
+	if err := client.SetBucketProps(proxyurl, bucket, dfc.BucketProps{}); err != nil {
+		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
 }

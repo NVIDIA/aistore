@@ -1194,10 +1194,11 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	if inNextTier {
 		if props, errstr, errcode = t.getObjectNextTier(nextTierURL, bucket, objname, getfqn); errstr != "" {
-			t.rtnamemap.unlockname(uname, true)
-			return
+			glog.Errorf("Error getting object from next tier after successful lookup, err: %s, HTTP "+
+				"status code: %d", errstr, errcode)
 		}
-	} else {
+	}
+	if !inNextTier || (inNextTier && errstr != "") {
 		if props, errstr, errcode = getcloudif().getobj(ct, getfqn, bucket, objname); errstr != "" {
 			t.rtnamemap.unlockname(uname, true)
 			return
