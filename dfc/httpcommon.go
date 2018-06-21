@@ -118,7 +118,7 @@ type httprunner struct {
 	statsif               statsif
 	kalive                kaliveif
 	smap                  *Smap
-	bucketmd              *bucketMD
+	bmdowner              *bmdowner
 	callStatsServer       *CallStatsServer
 	revProxy              *httputil.ReverseProxy
 }
@@ -165,7 +165,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	}
 
 	h.smap = &Smap{}
-	h.bucketmd = newBucketMD()
+	h.bmdowner = &bmdowner{}
 }
 
 // initSI initialize a daemon's identification (never changes once it is set)
@@ -766,13 +766,12 @@ func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, 
 			glog.Infof("extract bucket-metadata ver=%d, msg=%+v", newbucketmd.version(), msg)
 		}
 	}
-	myver := h.bucketmd.versionL()
-	if newbucketmd.version() == myver {
+	myver := h.bmdowner.get().version()
+	if newbucketmd.version() <= myver {
+		if newbucketmd.version() < myver {
+			errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
+		}
 		newbucketmd = nil
-		return
-	}
-	if newbucketmd.version() < myver {
-		errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
 	}
 	return
 }

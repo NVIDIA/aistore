@@ -90,6 +90,8 @@ func newPrimary() *proxyrunner {
 	p.kalive = newproxykalive(&p)
 	p.callStatsServer = NewCallStatsServer(nil, 1, &statsd.Client{})
 	p.callStatsServer.Start()
+	p.bmdowner = &bmdowner{}
+	p.bmdowner.put(newBucketMD())
 	return &p
 }
 
@@ -705,7 +707,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		ip, port := getServerIPAndPort(s1.URL)
 		di := daemonInfo{DaemonID: id, DirectURL: s1.URL, NodeIPAddr: ip, DaemonPort: port}
 		primary.smap.add(&di)
-		syncer.sync(true, primary.bucketmd)
+		syncer.sync(true, primary.bmdowner.get())
 		<-ch
 
 		// sync smap so meta syncer has a smap
@@ -723,7 +725,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		ip, port = getServerIPAndPort(s2.URL)
 		di = daemonInfo{DaemonID: id, DirectURL: s2.URL, NodeIPAddr: ip, DaemonPort: port}
 		primary.smap.add(&di)
-		syncer.sync(true, primary.bucketmd)
+		syncer.sync(true, primary.bmdowner.get())
 		<-ch // target 1
 		<-ch // target 2
 		<-ch // all previously synced data to target 2
@@ -854,7 +856,8 @@ func TestMetaSyncReceive(t *testing.T) {
 		)
 		proxy1 := proxyrunner{}
 		proxy1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		proxy1.bucketmd = newBucketMD()
+		proxy1.bmdowner = &bmdowner{}
+		proxy1.bmdowner.put(newBucketMD())
 
 		// empty payload
 		newSMap, oldSMap, actMsg, errStr := proxy1.extractsmap(make(map[string]string))
@@ -903,7 +906,8 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target1 := targetrunner{}
 		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target1.bucketmd = newBucketMD()
+		target1.bmdowner = &bmdowner{}
+		target1.bmdowner.put(newBucketMD())
 
 		c := func(n, o *Smap, m *ActionMsg, e string) {
 			noErr(e)
@@ -943,7 +947,8 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target2 := targetrunner{}
 		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target2.bucketmd = newBucketMD()
+		target2.bmdowner = &bmdowner{}
+		target2.bmdowner.put(newBucketMD())
 
 		syncer.sync(true, primary.smap.cloneU())
 		payload = <-chProxy
@@ -987,7 +992,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		noErr(errStr)
 		emptyActionMsg(actMsg)
 		matchBMD(bucketmd, lb)
-		proxy1.bucketmd = lb
+		proxy1.bmdowner.put(lb)
 
 		payload = <-chTarget
 		payload = <-chTarget
@@ -999,10 +1004,13 @@ func TestMetaSyncReceive(t *testing.T) {
 		emptyActionMsg(actMsg)
 
 		// older version
-		proxy1.bucketmd.Version++
+		p1bmd := proxy1.bmdowner.get().cloneU()
+		p1bmd.Version++
+		proxy1.bmdowner.put(p1bmd)
 		_, _, errStr = proxy1.extractbucketmd(payload)
 		hasErr(errStr)
-		proxy1.bucketmd.Version--
+		p1bmd.Version--
+		proxy1.bmdowner.put(p1bmd)
 
 		am1 := ActionMsg{"Action", "Name", "Expecting this back"}
 		syncer.sync(true, &revspair{bucketmd, &am1})
@@ -1031,7 +1039,8 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		proxy2 := proxyrunner{}
 		proxy2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		proxy2.bucketmd = newBucketMD()
+		proxy2.bmdowner = &bmdowner{}
+		proxy2.bmdowner.put(newBucketMD())
 
 		bucketmd.add("lb3", true, simplekvs{"t": "s", "m": "d"})
 
@@ -1136,7 +1145,8 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target1 := targetrunner{}
 		target1.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target1.bucketmd = newBucketMD()
+		target1.bmdowner = &bmdowner{}
+		target1.bmdowner.put(newBucketMD())
 
 		s = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			d := make(map[string]string)
@@ -1154,7 +1164,8 @@ func TestMetaSyncReceive(t *testing.T) {
 			})
 		target2 := targetrunner{}
 		target2.smap = &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-		target2.bucketmd = newBucketMD()
+		target2.bmdowner = &bmdowner{}
+		target2.bmdowner.put(newBucketMD())
 
 		bucketmd := newBucketMD()
 		bucketmd.add("lb1", true)

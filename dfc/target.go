@@ -34,7 +34,7 @@ import (
 const (
 	DefaultPageSize  = 1000      // the number of cached file infos returned in one page
 	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
-	MaxPageSize      = 64 * 1024 // the maximum number of objects in a page (waring is logged in case of requested page size exceeds the limit)
+	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
 	workfileprefix   = ".~~~."
 	doesnotexist     = "does not exist"
 )
@@ -109,6 +109,9 @@ func (t *targetrunner) run() error {
 	t.httprunner.kalive = gettargetkalive()
 	t.xactinp = newxactinp()        // extended actions
 	t.rtnamemap = newrtnamemap(128) // lock/unlock name
+
+	bucketmd := newBucketMD()
+	t.bmdowner.put(bucketmd)
 
 	if status, err := t.register(0); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
@@ -212,17 +215,16 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 	if len(res.outjson) > 0 {
 		err := json.Unmarshal(res.outjson, &newbucketmd)
 		assert(err == nil, err)
-		bucketMetaLock.Lock()
-		if t.bucketmd.version() > newbucketmd.version() {
-			glog.Errorf("register target - got bucket-metadata: local version %d > %d", t.bucketmd.version(), newbucketmd.version())
+		t.bmdowner.Lock()
+		v := t.bmdowner.get().version()
+		if v > newbucketmd.version() {
+			glog.Errorf("register target - got bucket-metadata: local version %d > %d", v, newbucketmd.version())
 		} else {
-			glog.Infof("register target - got bucket-metadata: upgrading local version %d to %d",
-				t.bucketmd.version(), newbucketmd.version())
+			glog.Infof("register target - got bucket-metadata: upgrading local version %d to %d", v, newbucketmd.version())
 		}
-		t.bucketmd = &newbucketmd
-		bucketMetaLock.Unlock()
+		t.bmdowner.put(&newbucketmd)
+		t.bmdowner.Unlock()
 	}
-
 	return res.status, res.err
 }
 
@@ -363,21 +365,22 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-
 	offset, length, readRange, errstr := t.validateOffsetAndLength(r)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
-	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
+	bucketmd := t.bmdowner.get()
+	islocal := bucketmd.islocal(bucket)
+	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
 
 	// lockname(ro)
-	fqn, uname = t.fqn(bucket, objname), uniquename(bucket, objname)
+	fqn, uname = t.fqn(bucket, objname, islocal), uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
 	// existence, access & versioning
@@ -736,7 +739,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketFrom, bucketTo := lbucket, msg.Name
-		ok, props := t.bucketmd.get(bucketFrom, true)
+		bucketmd := t.bmdowner.get()
+		ok, props := bucketmd.get(bucketFrom, true)
 		if !ok {
 			s := fmt.Sprintf("Local bucket %s does not exist", bucketFrom)
 			t.invalmsghdlr(w, r, s)
@@ -754,14 +758,15 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		version := int64(v2)
-		if t.bucketmd.version() != version {
-			glog.Warning("bucket-metadata version %d != %d - proceeding to rename anyway", t.bucketmd.version(), version)
+		if bucketmd.version() != version {
+			glog.Warning("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
 		}
-		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, props); errstr != "" {
+		clone := bucketmd.cloneU()
+		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, props, clone); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, t.bucketmd.versionL())
+		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -798,7 +803,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	islocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
+	islocal = t.bmdowner.get().islocal(bucket)
+	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -831,7 +837,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket, objname, errstr string
-		isLocal, checkCached    bool
+		islocal, checkCached    bool
 		errcode                 int
 		objmeta                 simplekvs
 	)
@@ -844,13 +850,14 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	isLocal, errstr, errcode = t.checkLocalQueryParameter(bucket, r)
+	islocal = t.bmdowner.get().islocal(bucket)
+	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	if isLocal || checkCached {
-		fqn := t.fqn(bucket, objname)
+	if islocal || checkCached {
+		fqn := t.fqn(bucket, objname, islocal)
 		var (
 			size    int64
 			version string
@@ -969,12 +976,11 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simplekvs) (errstr string) {
-	bucketMetaLock.Lock()
+func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simplekvs, clone *bucketMD) (errstr string) {
 	// ready to receive migrated obj-s _after_ that point
 	// insert directly wo/ incrementing the version (metasyncer will do at the end of the operation)
-	t.bucketmd.LBmap[bucketTo] = props
-	bucketMetaLock.Unlock()
+	clone.LBmap[bucketTo] = props
+	t.bmdowner.put(clone)
 
 	wg := &sync.WaitGroup{}
 	ch := make(chan string, len(ctx.mountpaths.Available))
@@ -1000,9 +1006,7 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, props simp
 			glog.Errorf("Failed to remove dir %s", fromdir)
 		}
 	}
-	bucketMetaLock.Lock()
-	t.bucketmd.del(bucketFrom, true)
-	bucketMetaLock.Unlock()
+	clone.del(bucketFrom, true)
 	return
 }
 
@@ -1092,7 +1096,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		htype   = response.Header.Get(HeaderDfcChecksumType)
 		hdhobj  = newcksumvalue(htype, hval)
 		version = response.Header.Get(HeaderDfcObjVersion)
-		fqn     = t.fqn(bucket, objname)
+		fqn     = t.fqn(bucket, objname, islocal)
 		getfqn  = t.fqn2workfile(fqn)
 	)
 	if _, nhobj, size, errstr = t.receive(getfqn, objname, "", hdhobj, response.Body); errstr != "" {
@@ -1128,12 +1132,13 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 
 func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
-		fqn         = t.fqn(bucket, objname)
+		bucketmd    = t.bmdowner.get()
+		islocal     = bucketmd.islocal(bucket)
+		fqn         = t.fqn(bucket, objname, islocal)
 		uname       = uniquename(bucket, objname)
 		getfqn      = t.fqn2workfile(fqn)
 		versioncfg  = &ctx.config.Ver
 		cksumcfg    = &ctx.config.Cksum
-		isLocal     = t.bucketmd.islocal(bucket)
 		errv        string
 		nextTierURL string
 		vchanged    bool
@@ -1151,7 +1156,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	// existence, access & versioning
 	coldget, size, version, eexists := t.lookupLocally(bucket, objname, fqn)
-	if !coldget && eexists == "" && !isLocal {
+	if !coldget && eexists == "" && !islocal {
 		if versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
 			vchanged, errv, _ = t.checkCloudVersion(ct, bucket, objname, version)
 			if errv == "" {
@@ -1179,7 +1184,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		goto ret
 	}
 	// cold
-	_, bucketProps = t.bucketmd.get(bucket, isLocal)
+	_, bucketProps = bucketmd.get(bucket, islocal)
 	nextTierURL = bucketProps[URLParamNextTierURL]
 	if nextTierURL != "" {
 		if inNextTier, errstr, errcode = t.objectInNextTier(nextTierURL, bucket, objname); errstr != "" {
@@ -1355,11 +1360,11 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	isLocal := t.bucketmd.islocal(bucket)
+	islocal := t.bmdowner.get().islocal(bucket)
 	for mpath := range ctx.mountpaths.Available {
 		wg.Add(1)
 		var localDir string
-		if isLocal {
+		if islocal {
 			localDir = filepath.Join(makePathLocal(mpath), bucket)
 		} else {
 			localDir = filepath.Join(makePathCloud(mpath), bucket)
@@ -1419,7 +1424,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	bucketnames := &BucketNames{Cloud: make([]string, 0), Local: make([]string, 0, 64)}
-	for bucket := range t.bucketmd.LBmap {
+	bucketmd := t.bmdowner.get()
+	for bucket := range bucketmd.LBmap {
 		bucketnames.Local = append(bucketnames.Local, bucket)
 	}
 
@@ -1466,7 +1472,8 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		errstr  string
 		errcode int
 	)
-	islocal, errstr, errcode := t.checkLocalQueryParameter(bucket, r)
+	islocal := t.bmdowner.get().islocal(bucket)
+	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -1602,14 +1609,12 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 		}
 	}
 	if ci.needChkSum {
-		fqn := ci.t.fqn(ci.bucket, relname)
 		xxhex, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" {
 			fileInfo.Checksum = hex.EncodeToString(xxhex)
 		}
 	}
 	if ci.needVersion {
-		fqn := ci.t.fqn(ci.bucket, relname)
 		version, errstr := Getxattr(fqn, XattrObjVersion)
 		if errstr == "" {
 			fileInfo.Version = string(version)
@@ -1665,7 +1670,8 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	)
 	started = time.Now()
 	cksumcfg := &ctx.config.Cksum
-	fqn := t.fqn(bucket, objname)
+	islocal := t.bmdowner.get().islocal(bucket)
+	fqn := t.fqn(bucket, objname, islocal)
 	putfqn := t.fqn2workfile(fqn)
 	hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
 	if hdhobj != nil {
@@ -1807,7 +1813,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 	objprops *objectProps, rebalance bool) (errstr string, errcode int, err error, renamed bool) {
 	var (
 		file          *os.File
-		isBucketLocal = t.bucketmd.islocal(bucket)
+		isBucketLocal = t.bmdowner.get().islocal(bucket)
 	)
 	// cloud
 	if !isBucketLocal && !rebalance {
@@ -1858,10 +1864,9 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		return
 	}
 	var size int64
-	bucketMetaLock.Lock()
-	fqn := t.fqn(bucket, objname)
-	ver := t.bucketmd.version()
-	bucketMetaLock.Unlock()
+	bucketmd := t.bmdowner.get()
+	fqn := t.fqn(bucket, objname, bucketmd.islocal(bucket))
+	ver := bucketmd.version()
 	if t.si.DaemonID == from {
 		//
 		// the source
@@ -1946,14 +1951,14 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		errstr  string
 		errcode int
 	)
-	fqn := t.fqn(bucket, objname)
+	islocal := t.bmdowner.get().islocal(bucket)
+	fqn := t.fqn(bucket, objname, islocal)
 	uname := uniquename(bucket, objname)
-	localbucket := t.bucketmd.islocal(bucket)
 
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
-	if !localbucket && !evict {
+	if !islocal && !evict {
 		if errstr, errcode = getcloudif().deleteobj(ct, bucket, objname); errstr != "" {
 			if errcode == 0 {
 				return fmt.Errorf("%s", errstr)
@@ -1975,7 +1980,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if localbucket && !evict {
+			if islocal && !evict {
 				return fmt.Errorf("DELETE local: file %s (local bucket %s, object %s) %s", fqn, bucket, objname, doesnotexist)
 			}
 
@@ -1983,7 +1988,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return nil
 		}
 	}
-	if !(evict && localbucket) {
+	if !(evict && islocal) {
 		// Don't evict from a local bucket (this would be deletion)
 		if err := os.Remove(fqn); err != nil {
 			return err
@@ -2019,7 +2024,9 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 		return
 	}
 	newobjname := msg.Name
-	fqn, uname := t.fqn(bucket, objname), uniquename(bucket, objname)
+	islocal := t.bmdowner.get().islocal(bucket)
+	fqn := t.fqn(bucket, objname, islocal)
+	uname := uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
 	if errstr = t.renameobject(bucket, objname, bucket, newobjname); errstr != "" {
@@ -2033,7 +2040,9 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	if si, errstr = HrwTarget(bucketTo, objnameTo, t.smap); errstr != "" {
 		return
 	}
-	fqn := t.fqn(bucketFrom, objnameFrom)
+	bucketmd := t.bmdowner.get()
+	islocalFrom := bucketmd.islocal(bucketFrom)
+	fqn := t.fqn(bucketFrom, objnameFrom, islocalFrom)
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
@@ -2041,7 +2050,8 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	}
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
-		newfqn := t.fqn(bucketTo, objnameTo)
+		islocalTo := bucketmd.islocal(bucketTo)
+		newfqn := t.fqn(bucketTo, objnameTo, islocalTo)
 		dirname := filepath.Dir(newfqn)
 		if err := CreateDir(dirname); err != nil {
 			errstr = fmt.Sprintf("Unexpected failure to create local dir %s, err: %v", dirname, err)
@@ -2145,8 +2155,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	url := destsi.DirectURL + "/" + Rversion + "/" + Robjects + "/"
 	url += newbucket + "/" + newobjname
 	url += fmt.Sprintf("?%s=%s&%s=%s", URLParamFromID, fromid, URLParamToID, toid)
-
-	fqn := t.fqn(bucket, objname)
+	islocal := t.bmdowner.get().islocal(bucket)
+	fqn := t.fqn(bucket, objname, islocal)
 	file, err := os.Open(fqn)
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
@@ -2243,8 +2253,7 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 	return
 }
 
-func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request) (islocal bool, errstr string, errcode int) {
-	islocal = t.bucketmd.islocal(bucket)
+func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request, islocal bool) (errstr string, errcode int) {
 	proxylocalstr := r.URL.Query().Get(URLParamLocal)
 	if proxylocal, err := parsebool(proxylocalstr); err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, URLParamLocal, proxylocalstr)
@@ -2396,7 +2405,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		msg := SmapVoteMsg{
 			VoteInProgress: false,
 			Smap:           t.smap.cloneL().(*Smap),
-			BucketMD:       t.bucketmd.cloneL().(*bucketMD),
+			BucketMD:       t.bmdowner.get(),
 		}
 		jsbytes, err := json.Marshal(msg)
 		assert(err == nil, err)
@@ -2635,9 +2644,9 @@ func (t *targetrunner) testingFSPpaths() bool {
 }
 
 // (bucket, object) => (local hashed path, fully qualified name aka fqn)
-func (t *targetrunner) fqn(bucket, objname string) string {
+func (t *targetrunner) fqn(bucket, objname string, islocal bool) string {
 	mpath := hrwMpath(bucket, objname)
-	if t.bucketmd.islocal(bucket) {
+	if islocal {
 		return filepath.Join(makePathLocal(mpath), bucket, objname)
 	}
 	return filepath.Join(makePathCloud(mpath), bucket, objname)
@@ -2655,13 +2664,15 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
 		return false
 	}
 	ok := true
+	bucketmd := t.bmdowner.get()
 	for mpath := range ctx.mountpaths.Available {
 		if fn(makePathCloud(mpath) + "/") {
-			ok = len(objname) > 0 && t.fqn(bucket, objname) == fqn
+			ok = len(objname) > 0 && t.fqn(bucket, objname, false) == fqn
 			break
 		}
 		if fn(makePathLocal(mpath) + "/") {
-			ok = t.bucketmd.islocal(bucket) && len(objname) > 0 && t.fqn(bucket, objname) == fqn
+			islocal := bucketmd.islocal(bucket)
+			ok = islocal && len(objname) > 0 && t.fqn(bucket, objname, true) == fqn
 			break
 		}
 	}
@@ -2841,7 +2852,7 @@ func (t *targetrunner) startupMpaths() {
 //    save/read/update version using xattrs. And the function returns that the
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
 func (t *targetrunner) versioningConfigured(bucket string) bool {
-	islocal := t.bucketmd.islocal(bucket)
+	islocal := t.bmdowner.get().islocal(bucket)
 	versioning := ctx.config.Ver.Versioning
 	if islocal {
 		return versioning == VersionAll || versioning == VersionLocal
@@ -2966,48 +2977,58 @@ func makePathCloud(basePath string) string {
 }
 
 func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
-	var (
-		h       = &t.httprunner
-		payload = make(simplekvs)
-	)
-
-	if h.readJSON(w, r, &payload) != nil {
+	var payload = make(simplekvs)
+	if t.readJSON(w, r, &payload) != nil {
 		return
 	}
 
-	newsmap, oldsmap, actionsmap, errstr := h.extractsmap(payload)
+	newsmap, oldsmap, actionsmap, errstr := t.extractsmap(payload)
 	if errstr != "" {
-		h.invalmsghdlr(w, r, errstr)
+		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
 	if newsmap != nil {
 		errstr = t.receiveSMap(newsmap, oldsmap, actionsmap)
 		if errstr != "" {
-			h.invalmsghdlr(w, r, errstr)
+			t.invalmsghdlr(w, r, errstr)
 		}
 	}
 
-	newbucketmd, actionlb, errstr := h.extractbucketmd(payload)
+	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
 	if errstr != "" {
-		h.invalmsghdlr(w, r, errstr)
+		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
 	if newbucketmd != nil {
-		t.receiveBucketMD(newbucketmd, actionlb)
+		if errstr = t.receiveBucketMD(newbucketmd, actionlb); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+		}
 	}
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (errstr string) {
 	if msg.Action == "" {
 		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
 	} else {
 		glog.Infof("receive bucket-metadata: version %d, message %+v", newbucketmd.version(), msg)
 	}
-	bucketMetaLock.Lock()
-	for bucket := range t.bucketmd.LBmap {
+	t.bmdowner.Lock()
+	bucketmd := t.bmdowner.get()
+	myver := bucketmd.version()
+	if newbucketmd.version() <= myver {
+		t.bmdowner.Unlock()
+		if newbucketmd.version() < myver {
+			errstr = fmt.Sprintf("Attempt to downgrade bucket-metadata version %d to %d", myver, newbucketmd.version())
+		}
+		return
+	}
+	t.bmdowner.put(newbucketmd)
+	t.bmdowner.Unlock()
+
+	for bucket := range bucketmd.LBmap {
 		_, ok := newbucketmd.LBmap[bucket]
 		if !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
@@ -3019,16 +3040,15 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) {
 			}
 		}
 	}
-	t.bucketmd = newbucketmd
 	for mpath := range ctx.mountpaths.Available {
-		for bucket := range t.bucketmd.LBmap {
+		for bucket := range bucketmd.LBmap {
 			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
 			if err := CreateDir(localbucketfqn); err != nil {
 				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
 			}
 		}
 	}
-	bucketMetaLock.Unlock()
+	return
 }
 
 func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {

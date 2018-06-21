@@ -8,13 +8,32 @@ package dfc
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
+	"unsafe"
 )
 
 type bucketMD struct {
-	sync.Mutex
 	LBmap   map[string]simplekvs `json:"l_bmap"` // local cache-only buckets and their props
 	CBmap   map[string]simplekvs `json:"c_bmap"` // Cloud-based buckets and their DFC-only metadata
 	Version int64                `json:"version"`
+}
+
+type bmdowner struct {
+	sync.Mutex
+	bucketmd unsafe.Pointer
+}
+
+func (r *bmdowner) put(bucketmd *bucketMD) {
+	atomic.StorePointer(&r.bucketmd, unsafe.Pointer(bucketmd))
+}
+
+// the intended and implied usage of this inconspicuous method is CoW:
+// - read (shared/replicated bucket-metadata object) freely
+// - clone for writing
+// - and never-ever modify in place
+func (r *bmdowner) get() (bucketmd *bucketMD) {
+	bucketmd = (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
+	return
 }
 
 func newBucketMD() *bucketMD {
@@ -93,23 +112,10 @@ func (m *bucketMD) islocal(bucket string) bool {
 	return ok
 }
 
-func (m *bucketMD) versionL() (v int64) {
-	bucketMetaLock.Lock()
-	v = m.Version
-	bucketMetaLock.Unlock()
-	return
-}
-
 func (m *bucketMD) cloneU() *bucketMD {
 	dst := &bucketMD{}
 	m.deepcopy(dst)
 	return dst
-}
-
-func (m *bucketMD) copyL(dst *bucketMD) {
-	bucketMetaLock.Lock()
-	m.deepcopy(dst)
-	bucketMetaLock.Unlock()
 }
 
 func (m *bucketMD) deepcopy(dst *bucketMD) {
@@ -140,10 +146,8 @@ func (m *bucketMD) deepcopy(dst *bucketMD) {
 func (m *bucketMD) tag() string    { return bucketmdtag }
 func (m *bucketMD) version() int64 { return m.Version }
 
-func (m *bucketMD) cloneL() (clone interface{}) {
-	bucketMetaLock.Lock()
+func (m *bucketMD) cloneL() (clone interface{}) { // FIXME: remove from revs
 	clone = m.cloneU()
-	bucketMetaLock.Unlock()
 	return
 }
 

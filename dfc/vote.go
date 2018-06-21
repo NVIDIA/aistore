@@ -153,15 +153,17 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketMetaLock.Lock()
-	vlb := h.bucketmd.version()
+	h.bmdowner.Lock()
+	vlb, newer := h.bmdowner.get().version(), false
 	if vlb < msg.Record.bucketmd.version() {
+		newer = true
+		h.bmdowner.put(&msg.Record.bucketmd)
+	}
+	h.bmdowner.Unlock()
+	if newer {
 		glog.Warningf("VoteRecord bucket-metadata Version (%v) is newer than the local one (%v) - updating\n",
 			msg.Record.bucketmd.version(), vlb)
-		h.bucketmd = &msg.Record.bucketmd
 	}
-	bucketMetaLock.Unlock()
-
 	vote, err := h.voteOnProxy(pi.DaemonID, currPrimaryID)
 	if err != nil {
 		h.invalmsghdlr(w, r, err.Error())
@@ -257,7 +259,8 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		Initiator: p.si.DaemonID,
 	}
 	p.smap.copyL(&vr.Smap)
-	p.bucketmd.copyL(&vr.bucketmd)
+	bucketmd := p.bmdowner.get()
+	bucketmd.deepcopy(&vr.bucketmd) // FIXME: redefine VoteRecord et al. to contain pointers
 
 	// The election should be started in a goroutine, as it must not hang the http handler
 	go p.proxyElection(vr, currPrimaryURL)
@@ -505,7 +508,8 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
-		p.bucketmd.copyL(&vr.bucketmd)
+		bucketmd := p.bmdowner.get()
+		bucketmd.deepcopy(&vr.bucketmd) // FIXME: VoteRecord must contain pointers to meta here and elsewhere
 		p.proxyElection(vr, currPrimaryURL)
 	} else {
 		glog.Infof("%v: Requesting Election from %v", p.si.DaemonID, nextPrimaryProxy.DaemonID)
@@ -516,7 +520,8 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		p.smap.copyL(&vr.Smap)
-		p.bucketmd.copyL(&vr.bucketmd)
+		bucketmd := p.bmdowner.get()
+		bucketmd.deepcopy(&vr.bucketmd)
 		p.sendElectionRequest(vr, nextPrimaryProxy)
 	}
 }
@@ -542,7 +547,8 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		Initiator: t.si.DaemonID,
 	}
 	t.smap.copyL(&vr.Smap)
-	t.bucketmd.copyL(&vr.bucketmd)
+	bucketmd := t.bmdowner.get()
+	bucketmd.deepcopy(&vr.bucketmd) // FIXME
 	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 
