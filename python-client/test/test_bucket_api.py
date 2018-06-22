@@ -34,6 +34,7 @@ class TestBucketApi(unittest.TestCase):
         self.object = openapi_client.api.object_api.ObjectApi(api_client)
         self.models = openapi_client.models
         self.BUCKET_NAME = os.environ["BUCKET"]
+        self.NEXT_TIER_URL = "http://foo.com"
         self.FILE_SIZE = 128
         self.SLEEP_LONG_SECONDS = 15
         self.created_objects = []
@@ -125,19 +126,30 @@ class TestBucketApi(unittest.TestCase):
         """
         bucket_name = self.__create_local_bucket()
         input_params = self.models.InputParameters(self.models.Actions.SETPROPS)
-        self.bucket.set_properties(bucket_name, input_params,
-                                   cloud_provider=self.models.CloudProvider.DFC,
-                                   next_tier_url="http://foo",
-                                   read_policy=self.models.RWPolicy.CLOUD,
-                                   write_policy=self.models.RWPolicy.NEXT_TIER)
+        input_params.value = self.models.BucketProps(
+            self.models.CloudProvider.DFC,
+            self.NEXT_TIER_URL,
+            self.models.RWPolicy.CLOUD,
+            self.models.RWPolicy.NEXT_TIER
+        )
+        self.bucket.set_properties(bucket_name, input_params)
+
         headers = self.bucket.get_properties_with_http_info(bucket_name)[2]
         cloud_provider = headers[self.models.Headers.CLOUDPROVIDER]
         self.assertEqual(cloud_provider, self.models.CloudProvider.DFC,
-                         "Incorrect Versioning in HEADER returned")
+                         "Incorrect CloudProvider in HEADER returned")
         versioning = headers[self.models.Headers.VERSIONING]
         self.assertEqual(versioning, self.models.Version.LOCAL,
                          "Incorrect Versioning in HEADER returned")
-        # TODO: Update this when missing properties are added in GET
+        next_tier_url = headers[self.models.Headers.NEXTTIERURL]
+        self.assertEqual(next_tier_url, self.NEXT_TIER_URL,
+                         "Incorrect NextTierURL in HEADER returned")
+        read_policy = headers[self.models.Headers.READPOLICY]
+        self.assertEqual(read_policy, self.models.RWPolicy.CLOUD,
+                         "Incorrect ReadPolicy in HEADER returned")
+        write_policy = headers[self.models.Headers.WRITEPOLICY]
+        self.assertEqual(write_policy, self.models.RWPolicy.NEXT_TIER,
+                         "Incorrect WritePolicy in HEADER returned")
 
     def test_prefetch_list_objects(self):
         """

@@ -153,6 +153,9 @@ type ReqError struct {
 type BucketProps struct {
 	CloudProvider string
 	Versioning    string
+	NextTierURL   string
+	ReadPolicy    string
+	WritePolicy   string
 }
 
 type ObjectProps struct {
@@ -582,32 +585,30 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 	return string(b)
 }
 
-func HeadBucket(proxyurl, bucket string) (bucketprops *BucketProps, err error) {
-	var (
-		url = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
-		r   *http.Response
-	)
-	bucketprops = &BucketProps{}
-	r, err = client.Head(url)
+func HeadBucket(proxyURL, bucket string) (*BucketProps, error) {
+	r, err := client.Head(proxyURL + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, bucket))
 	if err != nil {
-		return
+		return nil, err
 	}
 	defer func() {
 		r.Body.Close()
 	}()
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		b, ioErr := ioutil.ReadAll(r.Body)
-		if ioErr != nil {
-			err = fmt.Errorf("failed to read response body, err = %s", ioErr)
-			return
+	if r.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"ioutil.ReadAll falled on response body, err: %v, HTTP status code: %d", err, r.StatusCode)
 		}
-		err = fmt.Errorf("head bucket: %s failed, HTTP status code: %d, HTTP response body: %s",
+		return nil, fmt.Errorf("head bucket: %s failed, HTTP status code: %d, HTTP response body: %s",
 			bucket, r.StatusCode, string(b))
-		return
 	}
-	bucketprops.CloudProvider = r.Header.Get(dfc.CloudProvider)
-	bucketprops.Versioning = r.Header.Get(dfc.Versioning)
-	return
+	return &BucketProps{
+		CloudProvider: r.Header.Get(dfc.CloudProvider),
+		Versioning:    r.Header.Get(dfc.Versioning),
+		NextTierURL:   r.Header.Get(dfc.NextTierURL),
+		ReadPolicy:    r.Header.Get(dfc.ReadPolicy),
+		WritePolicy:   r.Header.Get(dfc.WritePolicy),
+	}, nil
 }
 
 func HeadObject(proxyurl, bucket, objname string) (objProps *ObjectProps, err error) {

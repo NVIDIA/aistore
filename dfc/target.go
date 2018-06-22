@@ -803,12 +803,14 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	islocal = t.bmdowner.get().islocal(bucket)
+	bucketmd := t.bmdowner.get()
+	islocal = bucketmd.islocal(bucket)
 	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
+
 	if !islocal {
 		bucketprops, errstr, errcode = getcloudif().headbucket(t.contextWithAuth(r), bucket)
 		if errstr != "" {
@@ -828,9 +830,14 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !t.versioningConfigured(bucket) {
 		bucketprops[Versioning] = VersionNone
 	}
+
 	for k, v := range bucketprops {
 		w.Header().Add(k, v)
 	}
+	_, props := bucketmd.get(bucket, islocal)
+	w.Header().Add(NextTierURL, props.NextTierURL)
+	w.Header().Add(ReadPolicy, props.ReadPolicy)
+	w.Header().Add(WritePolicy, props.WritePolicy)
 }
 
 // HEAD /Rversion/Robjects/bucket-name/object-name

@@ -614,45 +614,73 @@ func TestHeadLocalBucket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		checkFatal(client.DestroyLocalBucket(proxyurl, TestLocalBucketName), t)
+	}()
 
-	props, err := client.HeadBucket(proxyurl, TestLocalBucketName)
-	if err != nil {
-		t.Errorf("Failed to execute HeadBucket: %v", err)
-	} else if props.CloudProvider != dfc.ProviderDfc {
-		t.Errorf("Received incorrect Server from HeadBucket: \"%v\", expecting \"DFC\"", props.CloudProvider)
+	nextTierURL := "http://foo.com"
+	err = client.SetBucketProps(proxyurl, TestLocalBucketName, dfc.BucketProps{
+		CloudProvider: dfc.ProviderDfc,
+		NextTierURL:   nextTierURL,
+		ReadPolicy:    dfc.RWPolicyCloud,
+		WritePolicy:   dfc.RWPolicyNextTier,
+	})
+	checkFatal(err, t)
+
+	p, err := client.HeadBucket(proxyurl, TestLocalBucketName)
+	checkFatal(err, t)
+
+	if p.CloudProvider != dfc.ProviderDfc {
+		t.Errorf("Expected cloud provider: %s, received cloud provider: %s", dfc.CloudProvider, p.CloudProvider)
+	}
+	if p.ReadPolicy != dfc.RWPolicyCloud {
+		t.Errorf("Expected read policy: %s, received read policy: %s", dfc.RWPolicyCloud, p.ReadPolicy)
+	}
+	if p.WritePolicy != dfc.RWPolicyNextTier {
+		t.Errorf("Expected write policy: %s, received write policy: %s", dfc.RWPolicyNextTier, p.WritePolicy)
+	}
+	if p.NextTierURL != nextTierURL {
+		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", nextTierURL, p.NextTierURL)
 	}
 
-	err = client.DestroyLocalBucket(proxyurl, TestLocalBucketName)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestHeadCloudBucket(t *testing.T) {
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
-	if !isCloud {
-		t.Skip("TestHeadCloudBucket is for cloud buckets only")
+	if !isCloudBucket(t, proxyurl, clibucket) {
+		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
 	}
 
-	props, err := client.HeadBucket(proxyurl, clibucket)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	nextTierURL := "http://foo.com"
+	err := client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
+		CloudProvider: dfc.ProviderAmazon,
+		NextTierURL:   nextTierURL,
+		ReadPolicy:    dfc.RWPolicyCloud,
+		WritePolicy:   dfc.RWPolicyNextTier,
+	})
+	checkFatal(err, t)
+	defer resetBucketProps(clibucket, t)
 
-	if props == nil {
-		t.Errorf("Failed to get bucket %s head but no errors", props)
-		return
-	}
-
-	if err = dfc.ValidateCloudProvider(props.CloudProvider); err != nil {
-		t.Error(err)
-	}
+	p, err := client.HeadBucket(proxyurl, clibucket)
+	checkFatal(err, t)
 
 	versionModes := []string{dfc.VersionAll, dfc.VersionCloud, dfc.VersionLocal, dfc.VersionNone}
-	if !stringInSlice(props.Versioning, versionModes) {
+	if !stringInSlice(p.Versioning, versionModes) {
 		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
-			clibucket, props.Versioning, strings.Join(versionModes, ", "))
+			clibucket, p.Versioning, strings.Join(versionModes, ", "))
+	}
+
+	if err = dfc.ValidateCloudProvider(p.CloudProvider); err != nil {
+		t.Error(err)
+	}
+
+	if p.ReadPolicy != dfc.RWPolicyCloud {
+		t.Errorf("Expected read policy: %s, received read policy: %s", dfc.RWPolicyCloud, p.ReadPolicy)
+	}
+	if p.WritePolicy != dfc.RWPolicyNextTier {
+		t.Errorf("Expected write policy: %s, received write policy: %s", dfc.RWPolicyNextTier, p.WritePolicy)
+	}
+	if p.NextTierURL != nextTierURL {
+		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", nextTierURL, p.NextTierURL)
 	}
 }
 

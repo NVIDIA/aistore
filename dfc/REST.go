@@ -47,6 +47,9 @@ const (
 const (
 	CloudProvider         = "CloudProvider"         // from Cloud Provider enum
 	Versioning            = "Versioning"            // Versioning state for a bucket: "enabled"/"disabled"
+	NextTierURL           = "NextTierURL"           // URL of the next tier in a DFC multi-tier environment
+	ReadPolicy            = "ReadPolicy"            // Policy used for reading in a DFC multi-tier environment
+	WritePolicy           = "WritePolicy"           // Policy used for writing in a DFC multi-tier environment
 	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation

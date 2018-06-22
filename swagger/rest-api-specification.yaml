@@ -441,6 +441,15 @@ paths:
             Versioning:
               schema:
                 type: string
+            NextTierURL:
+              schema:
+                type: string
+            ReadPolicy:
+              schema:
+                type: string
+            WritePolicy:
+              schema:
+                type: string
         '307':
           description: "Temporary HTTP redirect"
           headers:
@@ -573,6 +582,7 @@ components:
           anyOf:
             - $ref: '#/components/schemas/ListParameters'
             - $ref: '#/components/schemas/RangeParameters'
+            - $ref: '#/components/schemas/BucketProps'
     Actions:
       type: string
       enum:
@@ -615,6 +625,16 @@ components:
         - regex
         - prefix
         - range
+    BucketProps:
+      properties:
+        cloud_provider:
+          type: string
+        next_tier_url:
+          type: string
+        read_policy:
+          type: string
+        write_policy:
+          type: string
     BucketNames:
       type: object
       properties:
@@ -702,6 +722,9 @@ components:
       enum:
         - CloudProvider
         - Versioning
+        - NextTierURL
+        - ReadPolicy
+        - WritePolicy
         - Version
         - Size
         - HeaderDfcChecksumType

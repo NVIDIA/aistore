@@ -18,6 +18,7 @@ from __future__ import absolute_import
 from openapi_client.models.actions import Actions
 from openapi_client.models.bucket_names import BucketNames
 from openapi_client.models.bucket_properties_and_options import BucketPropertiesAndOptions
+from openapi_client.models.bucket_props import BucketProps
 from openapi_client.models.cloud_provider import CloudProvider
 from openapi_client.models.headers import Headers
 from openapi_client.models.input_parameters import InputParameters

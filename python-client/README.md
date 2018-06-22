@@ -94,6 +94,7 @@ Class | Method | HTTP request | Description
  - [Actions](docs/Actions.md)
  - [BucketNames](docs/BucketNames.md)
  - [BucketPropertiesAndOptions](docs/BucketPropertiesAndOptions.md)
+ - [BucketProps](docs/BucketProps.md)
  - [CloudProvider](docs/CloudProvider.md)
  - [Headers](docs/Headers.md)
  - [InputParameters](docs/InputParameters.md)
