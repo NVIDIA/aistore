@@ -108,5 +108,5 @@ Class | Method | HTTP request | Description
 
 ## Author
 
-test@nvidia.com
+dfc-jenkins@nvidia.com
 
