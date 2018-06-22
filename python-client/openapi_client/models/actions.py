@@ -35,6 +35,9 @@ class Actions(object):
     SETPROPS = "setprops"
     PREFETCH = "prefetch"
     DELETE = "delete"
+    SETCONFIG = "setconfig"
+    SHUTDOWN = "shutdown"
+    REBALANCE = "rebalance"
 
     """
     Attributes:

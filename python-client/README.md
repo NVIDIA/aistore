@@ -77,6 +77,11 @@ Class | Method | HTTP request | Description
 *BucketApi* | [**list_names**](docs/BucketApi.md#list_names) | **GET** /buckets/* | Get bucket names
 *BucketApi* | [**perform_operation**](docs/BucketApi.md#perform_operation) | **POST** /buckets/{bucket-name} | Perform operations on bucket such as create
 *BucketApi* | [**set_properties**](docs/BucketApi.md#set_properties) | **PUT** /buckets/{bucket-name} | Set bucket properties
+*ClusterApi* | [**perform_operation**](docs/ClusterApi.md#perform_operation) | **PUT** /cluster/ | Perform cluster wide operations such as setting config value, shutting down proxy/target etc.
+*ClusterApi* | [**register_target**](docs/ClusterApi.md#register_target) | **POST** /cluster/register/ | Register storage target
+*ClusterApi* | [**set_primary_proxy**](docs/ClusterApi.md#set_primary_proxy) | **PUT** /cluster/proxy/{primary-proxy-id} | Set primary proxy
+*ClusterApi* | [**unregister_target**](docs/ClusterApi.md#unregister_target) | **DELETE** /cluster/daemon/{daemonId} | Unregister the storage target
+*DaemonApi* | [**perform_operation**](docs/DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
 *ObjectApi* | [**delete**](docs/ObjectApi.md#delete) | **DELETE** /objects/{bucket-name}/{object-name} | Delete object
 *ObjectApi* | [**get**](docs/ObjectApi.md#get) | **GET** /objects/{bucket-name}/{object-name} | Get object
 *ObjectApi* | [**get_properties**](docs/ObjectApi.md#get_properties) | **HEAD** /objects/{bucket-name}/{object-name} | Query object properties
@@ -93,6 +98,7 @@ Class | Method | HTTP request | Description
  - [Headers](docs/Headers.md)
  - [InputParameters](docs/InputParameters.md)
  - [ListParameters](docs/ListParameters.md)
+ - [NodeConfiguration](docs/NodeConfiguration.md)
  - [ObjectPoperties](docs/ObjectPoperties.md)
  - [ObjectPropertyTypes](docs/ObjectPropertyTypes.md)
  - [RWPolicy](docs/RWPolicy.md)

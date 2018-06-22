@@ -17,6 +17,8 @@ from __future__ import absolute_import
 
 # import apis into sdk package
 from openapi_client.api.bucket_api import BucketApi
+from openapi_client.api.cluster_api import ClusterApi
+from openapi_client.api.daemon_api import DaemonApi
 from openapi_client.api.object_api import ObjectApi
 
 # import ApiClient
@@ -30,6 +32,7 @@ from openapi_client.models.cloud_provider import CloudProvider
 from openapi_client.models.headers import Headers
 from openapi_client.models.input_parameters import InputParameters
 from openapi_client.models.list_parameters import ListParameters
+from openapi_client.models.node_configuration import NodeConfiguration
 from openapi_client.models.object_poperties import ObjectPoperties
 from openapi_client.models.object_property_types import ObjectPropertyTypes
 from openapi_client.models.rw_policy import RWPolicy

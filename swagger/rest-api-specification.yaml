@@ -20,6 +20,14 @@ tags:
     description: All APIs to interact with DFC buckets
     externalDocs:
       url: https://github.com/NVIDIA/dfcpub
+  - name: Cluster
+    description: All APIs to perform operations on the DFC cluster
+    externalDocs:
+      url: https://github.com/NVIDIA/dfcpub
+  - name: Daemon
+    description: All APIs to perform operations on individual DFC daemons
+    externalDocs:
+      url: https://github.com/NVIDIA/dfcpub
 servers:
   - url: http://localhost:8080/v1
 paths:
@@ -438,6 +446,113 @@ paths:
             text/plain:
               schema:
                 type: string
+  /cluster/:
+    put:
+      summary: Perform cluster wide operations such as setting config value, shutting down proxy/target etc.
+      operationId: performOperation
+      tags:
+        - Cluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Cluster operation triggered successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /cluster/register/:
+    post:
+      summary: Register storage target
+      operationId: registerTarget
+      tags:
+        - Cluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeConfiguration'
+      responses:
+        '200':
+          description: Target registered successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /cluster/daemon/{daemonId}:
+    delete:
+      summary: Unregister the storage target
+      operationId: unregisterTarget
+      tags:
+        - Cluster
+      parameters:
+        - name: daemonId
+          in: path
+          description: ID of the target daemon
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Storage target unregistered successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /cluster/proxy/{primary-proxy-id}:
+    put:
+      summary: Set primary proxy
+      operationId: setPrimaryProxy
+      tags:
+        - Cluster
+      parameters:
+        - name: primary-proxy-id
+          in: path
+          description: Bucket name
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Primary proxy set successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /daemon/:
+    put:
+      summary: Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
+      operationId: performOperation
+      tags:
+        - Daemon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Operation on DFC daemon triggered successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
 components:
   schemas:
     InputParameters:
@@ -462,6 +577,9 @@ components:
         - setprops
         - prefetch
         - delete
+        - setconfig
+        - shutdown
+        - rebalance
     ListParameters:
       properties:
         deadline:
@@ -591,3 +709,14 @@ components:
         - cloud
         - local
         - none
+    NodeConfiguration:
+      type: object
+      properties:
+        node_ip_addr:
+          type: string
+        daemon_port:
+          type: string
+        daemon_id:
+          type: string
+        direct_url:
+          type: string

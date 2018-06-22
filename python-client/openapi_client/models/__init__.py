@@ -22,6 +22,7 @@ from openapi_client.models.cloud_provider import CloudProvider
 from openapi_client.models.headers import Headers
 from openapi_client.models.input_parameters import InputParameters
 from openapi_client.models.list_parameters import ListParameters
+from openapi_client.models.node_configuration import NodeConfiguration
 from openapi_client.models.object_poperties import ObjectPoperties
 from openapi_client.models.object_property_types import ObjectPropertyTypes
 from openapi_client.models.rw_policy import RWPolicy

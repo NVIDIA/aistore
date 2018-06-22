@@ -16,12 +16,12 @@ from __future__ import absolute_import
 import unittest
 
 import openapi_client
-from openapi_client.models.headers import Headers  # noqa: E501
+from openapi_client.models.node_configuration import NodeConfiguration  # noqa: E501
 from openapi_client.rest import ApiException
 
 
-class TestHeaders(unittest.TestCase):
-    """Headers unit test stubs"""
+class TestNodeConfiguration(unittest.TestCase):
+    """NodeConfiguration unit test stubs"""
 
     def setUp(self):
         pass
@@ -29,10 +29,10 @@ class TestHeaders(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def testHeaders(self):
-        """Test Headers"""
+    def testNodeConfiguration(self):
+        """Test NodeConfiguration"""
         # FIXME: construct object with mandatory attributes with example values
-        # model = openapi_client.models.headers.Headers()  # noqa: E501
+        # model = openapi_client.models.node_configuration.NodeConfiguration()  # noqa: E501
         pass
 
 
