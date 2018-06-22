@@ -17,9 +17,10 @@ import (
 )
 
 const (
-	fsCheckInterval     = time.Second * 30
-	tmpDirnameTemplate  = "DFC-TEMP-DIR"
-	tmpFilenameTemplate = "DFC-TEMP-FILE"
+	fsCheckInterval  = time.Second * 30
+	tmpNameTemplate  = "DFC-TMP"
+	tmpLargeFileSize = 10 * 1024 * 1024
+	tmpFileChunkSize = 16 * 1024
 )
 
 type okmap struct {
@@ -29,16 +30,28 @@ type okmap struct {
 
 type fskeeper struct {
 	namedrunner
-	checknow chan error
-	chstop   chan struct{}
-	atomic   int64
-	okmap    *okmap
-	t        *targetrunner
+	checknow   chan error
+	chstop     chan struct{}
+	atomic     int64
+	okmap      *okmap
+	fnTempName func(string) string
+
+	// pointers to common data
+	config     *fskeeperconf
+	mountpaths *mountedFS
 }
 
 // construction
-func newfskeeper(t *targetrunner) *fskeeper {
-	return &fskeeper{t: t}
+func newFSKeeper(conf *fskeeperconf,
+	mounts *mountedFS, f func(string) string) *fskeeper {
+	return &fskeeper{
+		config:     conf,
+		mountpaths: mounts,
+		chstop:     make(chan struct{}, 4),
+		checknow:   make(chan error, 16),
+		okmap:      &okmap{okmap: make(map[string]time.Time, 16)},
+		fnTempName: f,
+	}
 }
 
 //=========================================================
@@ -65,9 +78,9 @@ func (k *fskeeper) skipCheck(mpath string) bool {
 		return false
 	}
 
-	interval := ctx.config.FSKeeper.FSCheckTime
-	if _, avail := ctx.mountpaths.Available[mpath]; !avail {
-		interval = ctx.config.FSKeeper.OfflineFSCheckTime
+	interval := k.config.FSCheckTime
+	if _, avail := k.mountpaths.Available[mpath]; !avail {
+		interval = k.config.OfflineFSCheckTime
 	}
 
 	return time.Since(last) < interval
@@ -75,9 +88,6 @@ func (k *fskeeper) skipCheck(mpath string) bool {
 
 func (k *fskeeper) run() error {
 	glog.Infof("Starting %s", k.name)
-	k.chstop = make(chan struct{}, 4)
-	k.checknow = make(chan error, 16)
-	k.okmap = &okmap{okmap: make(map[string]time.Time, 16)}
 	ticker := time.NewTicker(fsCheckInterval)
 	for {
 		select {
@@ -100,36 +110,36 @@ func (k *fskeeper) stop(err error) {
 }
 
 func (k *fskeeper) checkAlivePaths(err error) {
-	for _, mp := range ctx.mountpaths.Available {
+	for _, mp := range k.mountpaths.Available {
 		if err == nil && k.skipCheck(mp.Path) {
 			continue
 		}
 
-		ok := k.pathTest(mp.Path)
+		ok := k.pathTest(mp.Path, err == nil)
 		if !ok {
 			glog.Errorf("Mountpath %s is unavailable. Disabling it...", mp.Path)
-			ctx.mountpaths.Lock()
-			delete(ctx.mountpaths.Available, mp.Path)
-			ctx.mountpaths.Offline[mp.Path] = mp
-			ctx.mountpaths.Unlock()
+			k.mountpaths.Lock()
+			delete(k.mountpaths.Available, mp.Path)
+			k.mountpaths.Offline[mp.Path] = mp
+			k.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
 	}
 }
 
 func (k *fskeeper) checkOfflinePaths(err error) {
-	for _, mp := range ctx.mountpaths.Offline {
+	for _, mp := range k.mountpaths.Offline {
 		if err == nil && k.skipCheck(mp.Path) {
 			continue
 		}
 
-		ok := k.pathTest(mp.Path)
+		ok := k.pathTest(mp.Path, true)
 		if ok {
 			glog.Infof("Mountpath %s is back. Enabling it...", mp.Path)
-			ctx.mountpaths.Lock()
-			delete(ctx.mountpaths.Offline, mp.Path)
-			ctx.mountpaths.Available[mp.Path] = mp
-			ctx.mountpaths.Unlock()
+			k.mountpaths.Lock()
+			delete(k.mountpaths.Offline, mp.Path)
+			k.mountpaths.Available[mp.Path] = mp
+			k.mountpaths.Unlock()
 		}
 		k.timestamp(mp.Path)
 	}
@@ -146,20 +156,20 @@ func (k *fskeeper) checkPaths(err error) {
 		glog.Infof("Path check: got err %v, checking now...", err)
 	}
 
-	if err != nil || ctx.config.FSKeeper.FSCheckTime != 0 {
+	if err != nil || k.config.FSCheckTime != 0 {
 		k.checkAlivePaths(err)
 	}
-	if ctx.config.FSKeeper.OfflineFSCheckTime != 0 {
+	if k.config.OfflineFSCheckTime != 0 {
 		k.checkOfflinePaths(err)
 	}
 
-	if len(ctx.mountpaths.Available) == 0 && len(ctx.mountpaths.Offline) != 0 {
+	if len(k.mountpaths.Available) == 0 {
 		glog.Fatal("All mounted filesystems are down")
 	}
 }
 
-func (k *fskeeper) pathTest(mountpath string) (ok bool) {
-	tmpdir, err := ioutil.TempDir(mountpath, tmpDirnameTemplate)
+func (k *fskeeper) pathTest(mountpath string, fastCheck bool) (ok bool) {
+	tmpdir, err := ioutil.TempDir(mountpath, tmpNameTemplate)
 	if err != nil {
 		glog.Errorf("Failed to create temporary directory: %v", err)
 		return false
@@ -171,7 +181,7 @@ func (k *fskeeper) pathTest(mountpath string) (ok bool) {
 		}
 	}()
 
-	tmpfilename := k.t.fqn2workfile(path.Join(tmpdir, tmpFilenameTemplate))
+	tmpfilename := k.fnTempName(path.Join(tmpdir, tmpNameTemplate))
 	tmpfile, err := os.OpenFile(tmpfilename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		glog.Errorf("Failed to create temporary file: %v", err)
@@ -183,9 +193,20 @@ func (k *fskeeper) pathTest(mountpath string) (ok bool) {
 		}
 	}()
 
-	if _, err := tmpfile.Write([]byte("temporary file content")); err != nil {
-		glog.Errorf("Failed to write to file %s: %v", tmpfile.Name(), err)
-		return false
+	if fastCheck {
+		if _, err := tmpfile.Write([]byte("temporary file content")); err != nil {
+			glog.Errorf("Failed to write to file %s: %v", tmpfile.Name(), err)
+			return false
+		}
+	} else {
+		chunk := make([]byte, tmpFileChunkSize, tmpFileChunkSize)
+		writeCnt := tmpLargeFileSize / tmpFileChunkSize
+		for i := 0; i < writeCnt; i++ {
+			if _, err := tmpfile.Write(chunk); err != nil {
+				glog.Errorf("Failed to write to file %s: %v", tmpfile.Name(), err)
+				return false
+			}
+		}
 	}
 
 	return true

@@ -365,7 +365,8 @@ func dfcinit() {
 		}
 
 		if ctx.config.FSKeeper.Enabled {
-			ctx.rg.add(newfskeeper(t), xfskeeper)
+			ctx.rg.add(newFSKeeper(&ctx.config.FSKeeper,
+				&ctx.mountpaths, t.fqn2workfile), xfskeeper)
 		}
 
 		ctx.rg.add(&atimerunner{
