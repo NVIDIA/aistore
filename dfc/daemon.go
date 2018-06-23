@@ -492,12 +492,12 @@ func getcloudif() cloudif {
 	return rr.cloudif
 }
 
-func getfskeeper() *fskeeper {
+func getFSKeeper() *fsKeeper {
 	if !ctx.config.FSKeeper.Enabled {
 		return nil
 	}
 	r := ctx.rg.runmap[xfskeeper]
-	rr, ok := r.(*fskeeper)
+	rr, ok := r.(*fsKeeper)
 	assert(ok)
 	return rr
 }

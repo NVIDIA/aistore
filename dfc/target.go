@@ -1230,7 +1230,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 			if err := os.Remove(getfqn); err != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, err)
 			}
-			t.runFSKeeper(fmt.Errorf("%s", fqn))
+			t.runFSKeeper(fqn)
 		}
 	}()
 	if err := os.Rename(getfqn, fqn); err != nil {
@@ -1305,7 +1305,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
 		default:
 			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
-			t.runFSKeeper(fmt.Errorf("%s", fqn))
+			t.runFSKeeper(fqn)
 		}
 		return
 	}
@@ -1313,7 +1313,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 	if bytes, errs := Getxattr(fqn, XattrObjVersion); errs == "" {
 		version = string(bytes)
 	} else {
-		t.runFSKeeper(fmt.Errorf("%s", fqn))
+		t.runFSKeeper(fqn)
 	}
 	return
 }
@@ -1350,8 +1350,8 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 
 func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*BucketList, error) {
 	type mresp struct {
-		infos *allfinfos
-		err   error
+		infos      *allfinfos
+		failedPath string
 	}
 
 	ch := make(chan *mresp, len(ctx.mountpaths.Available))
@@ -1359,10 +1359,10 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
-		r := &mresp{t.newFileWalk(bucket, msg), nil}
+		r := &mresp{t.newFileWalk(bucket, msg), ""}
 		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
-				r.err = err
+				r.failedPath = dir
 			}
 			ch <- r // not an error, just skip the path
 			wg.Done()
@@ -1371,7 +1371,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 		r.infos.rootLength = len(dir) + 1 // +1 for separator between bucket and filename
 		if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
-			r.err = err
+			r.failedPath = dir
 		}
 		ch <- r
 		wg.Done()
@@ -1403,9 +1403,9 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	allfinfos := make([]*BucketEntry, 0, 0)
 	fileCount := 0
 	for r := range ch {
-		if r.err != nil {
-			t.runFSKeeper(r.err)
-			return nil, r.err
+		if r.failedPath != "" {
+			t.runFSKeeper(r.failedPath)
+			return nil, fmt.Errorf("Failed to read %s", r.failedPath)
 		}
 
 		pageSize = r.infos.limit
@@ -1780,14 +1780,14 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, o
 	// sgl => fqn sequence
 	file, err := CreateFile(putfqn)
 	if err != nil {
-		t.runFSKeeper(fmt.Errorf("%s", putfqn))
+		t.runFSKeeper(putfqn)
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
 		return
 	}
 	reader := NewReader(sgl)
 	written, err := io.CopyBuffer(file, reader, buf)
 	if err != nil {
-		t.runFSKeeper(fmt.Errorf("%s", putfqn))
+		t.runFSKeeper(putfqn)
 		glog.Errorln("sglToCloudAsync: CopyBuffer", err)
 		if err1 := file.Close(); err != nil {
 			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
@@ -1825,7 +1825,7 @@ func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fq
 		if err = os.Remove(putfqn); err != nil {
 			glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
 		}
-		t.runFSKeeper(fmt.Errorf("%s", putfqn))
+		t.runFSKeeper(putfqn)
 	}
 	return
 }
@@ -2577,7 +2577,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	)
 
 	if file, err = CreateFile(fqn); err != nil {
-		t.runFSKeeper(fmt.Errorf("%s", fqn))
+		t.runFSKeeper(fqn)
 		errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
 		return
 	}
@@ -2589,7 +2589,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		if errstr == "" {
 			return
 		}
-		t.runFSKeeper(fmt.Errorf("%s", fqn))
+		t.runFSKeeper(fqn)
 		if err = file.Close(); err != nil {
 			glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
 		}
@@ -2949,9 +2949,9 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 
 // runFSKeeper wakes up FSKeeper and makes it to run filesystem check
 // immediately if err != nil
-func (t *targetrunner) runFSKeeper(err error) {
+func (t *targetrunner) runFSKeeper(filepath string) {
 	if ctx.config.FSKeeper.Enabled {
-		getfskeeper().onerr(err)
+		getFSKeeper().onerr(filepath)
 	}
 }
 
