@@ -305,7 +305,8 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	if res.err == nil {
 		return true, false, delta
 	}
-	glog.Warningf("initial keepalive failed, err: %v, status: %d, polling again", res.err, res.status)
+	glog.Warningf("initial keepalive failed, timeout: %v, err: %v, status: %d, polling again",
+		timeout, res.err, res.status)
 	ok, stopped = pkr.retry(to, args)
 	return ok, stopped, defaultTimeout
 }
@@ -393,7 +394,7 @@ func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID
 	if err == nil {
 		return
 	}
-	glog.Infof("daemon -> primary proxy keepalive failed, err: %v, status: %d", err, s)
+	glog.Infof("daemon -> primary proxy keepalive failed, timeout: %v, err: %v, status: %d", timeout, err, s)
 
 	var i int
 	ticker := time.NewTicker(cmn.GCO.Get().Timeout.CplaneOperation * keepaliveRetryFactor)

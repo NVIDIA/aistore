@@ -64,8 +64,8 @@
     "service/s3/s3manager",
     "service/sts"
   ]
-  revision = "1186f7e6f000ce13edff71ed5ecc8b0e27ba38d7"
-  version = "v1.15.33"
+  revision = "10d5f1478e28a17062fd79617a8022f5499462d5"
+  version = "v1.15.34"
 
 [[projects]]
   name = "github.com/cloudfoundry/gosigar"

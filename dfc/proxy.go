@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
@@ -131,6 +133,7 @@ func (p *proxyrunner) Run() error {
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Daemon), p.daemonHandler)
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Cluster), p.clusterHandler)
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), p.tokenHandler)
+	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Sort), p.sortHandler)
 
 	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
@@ -1916,6 +1919,47 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpTokenDelete(w, r)
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /token path")
+	}
+}
+
+func (p *proxyrunner) sortHandler(w http.ResponseWriter, r *http.Request) {
+	var metrics []byte
+	if r.Method != http.MethodPost {
+		p.invalmsghdlr(w, r, fmt.Sprintf("invalid HTTP method: %s, must be POST", r.Method))
+		return
+	}
+	rs := dsort.RequestSpec{}
+	if p.readJSON(w, r, &rs) != nil {
+		return
+	}
+	rs.TargetOrderSalt = []byte(time.Now().Format("15:04:05.000000"))
+	b, err := jsoniter.ConfigFastest.Marshal(rs)
+	if err != nil {
+		s := fmt.Sprintf("unable to marshal RequestSpec: %+v, err: %v", rs, err)
+		glog.Errorf(s)
+		p.invalmsghdlr(w, r, s, http.StatusInternalServerError)
+		return
+	}
+	glog.Infoln("broadcasting sort request to all targets")
+	callRes := p.broadcastTargets(
+		api.URLPath(api.Version, api.Sort), nil, http.MethodPost, b, p.smapowner.get(), 0)
+	for c := range callRes {
+		if len(c.outjson) > 0 {
+			// Print out metrics in one place (the proxy) for user convenience.
+			metrics = append(metrics, c.outjson...)
+		}
+		if c.err != nil {
+			p.invalmsghdlr(w, r, fmt.Sprintf(
+				"failed to execute sort, err: %v, status: %d, msg: %s", c.err, c.status, c.errstr),
+				http.StatusInternalServerError)
+			return
+		}
+	}
+	if len(metrics) > 0 {
+		glog.Info(string(metrics))
+		w.Write(metrics)
+	} else {
+		w.Write([]byte("no metrics"))
 	}
 }
 

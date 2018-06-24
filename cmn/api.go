@@ -123,6 +123,12 @@ const (
 	URLParamBMDVersion       = "vbm" // version of the bucket-metadata
 	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
 	URLParamReadahead        = "rah" // Proxy to target: readeahed
+
+	// dsort
+	URLParamBucket                = "bucket" // TODO: remove?!
+	URLParamTotalCompressionRatio = "total_compression_ratio"
+	URLParamTotalInputShardsSeen  = "total_input_shards_seen"
+	URLParamPathToContents        = "path_to_contents"
 )
 
 // TODO: sort and some props are TBD
@@ -283,6 +289,12 @@ const (
 	Voteres    = "result"
 	VoteInit   = "init"
 	Mountpaths = "mountpaths"
+
+	// dsort
+	Sort           = "sort"
+	Records        = "records"
+	RecordContents = "record-contents"
+	Shards         = "shards"
 )
 
 const (
