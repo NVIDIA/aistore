@@ -344,14 +344,14 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		nhobj                  cksumvalue
-		bucket, objname, fqn   string
-		uname, errstr, version string
-		size                   int64
-		props                  *objectProps
-		started                time.Time
-		errcode                int
-		coldget, vchanged      bool
+		nhobj                         cksumvalue
+		bucket, objname, fqn          string
+		uname, errstr, version        string
+		size                          int64
+		props                         *objectProps
+		started                       time.Time
+		errcode                       int
+		coldget, vchanged, inNextTier bool
 	)
 	started = time.Now()
 	cksumcfg := &ctx.config.Cksum
@@ -388,14 +388,27 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		errcode = http.StatusInternalServerError
 		// given certain conditions (below) make an effort to locate the object cluster-wide
 		if strings.Contains(errstr, doesnotexist) {
+			errcode = http.StatusNotFound
 			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
 			if aborted || running {
 				if props := t.getFromNeighbor(bucket, objname, r, islocal); props != nil {
 					size, nhobj = props.size, props.nhobj
 					goto existslocally
 				}
+			} else {
+				_, p := bucketmd.get(bucket, islocal)
+				if p.NextTierURL != "" {
+					if inNextTier, errstr, errcode = t.objectInNextTier(p.NextTierURL, bucket, objname); inNextTier {
+						props, errstr, errcode = t.getObjectNextTier(p.NextTierURL, bucket, objname, fqn)
+						if errstr == "" {
+							size, nhobj = props.size, props.nhobj
+							goto existslocally
+						}
+						glog.Errorf("Error getting object from next tier after successful lookup, err: %s,"+
+							" HTTP status code: %d", errstr, errcode)
+					}
+				}
 			}
-			errcode = http.StatusNotFound
 		}
 		t.invalmsghdlr(w, r, errstr, errcode)
 		t.rtnamemap.unlockname(uname, false)
@@ -1833,7 +1846,8 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 		_, p := bucketmd.get(bucket, islocal)
 		if p.NextTierURL != "" && p.WritePolicy == RWPolicyNextTier {
 			if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file); errstr != "" {
-				glog.Errorf("Error putting object to next tier, err: %s, HTTP status code: %d", errstr, errcode)
+				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
+					bucket, objname, errstr, errcode)
 				file, err = os.Open(putfqn)
 				if err != nil {
 					errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
@@ -1844,16 +1858,25 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 		} else {
 			objprops.version, errstr, errcode = getcloudif().putobj(ct, file, bucket, objname, objprops.nhobj)
 		}
-		_ = file.Close()
-		if errstr != "" {
-			return
+	} else if islocal {
+		if t.versioningConfigured(bucket) {
+			if objprops.version, errstr = t.increaseObjectVersion(fqn); errstr != "" {
+				return
+			}
+		}
+		_, p := bucketmd.get(bucket, islocal)
+		if p.NextTierURL != "" {
+			if file, err = os.Open(putfqn); err != nil {
+				errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
+			} else if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file); errstr != "" {
+				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
+					bucket, objname, errstr, errcode)
+			}
 		}
 	}
-
-	if islocal && t.versioningConfigured(bucket) {
-		if objprops.version, errstr = t.increaseObjectVersion(fqn); errstr != "" {
-			return
-		}
+	file.Close()
+	if errstr != "" {
+		return
 	}
 
 	// when all set and done:

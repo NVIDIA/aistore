@@ -622,7 +622,7 @@ func TestHeadLocalBucket(t *testing.T) {
 	err = client.SetBucketProps(proxyurl, TestLocalBucketName, dfc.BucketProps{
 		CloudProvider: dfc.ProviderDfc,
 		NextTierURL:   nextTierURL,
-		ReadPolicy:    dfc.RWPolicyCloud,
+		ReadPolicy:    dfc.RWPolicyNextTier,
 		WritePolicy:   dfc.RWPolicyNextTier,
 	})
 	checkFatal(err, t)
@@ -633,8 +633,8 @@ func TestHeadLocalBucket(t *testing.T) {
 	if p.CloudProvider != dfc.ProviderDfc {
 		t.Errorf("Expected cloud provider: %s, received cloud provider: %s", dfc.CloudProvider, p.CloudProvider)
 	}
-	if p.ReadPolicy != dfc.RWPolicyCloud {
-		t.Errorf("Expected read policy: %s, received read policy: %s", dfc.RWPolicyCloud, p.ReadPolicy)
+	if p.ReadPolicy != dfc.RWPolicyNextTier {
+		t.Errorf("Expected read policy: %s, received read policy: %s", dfc.RWPolicyNextTier, p.ReadPolicy)
 	}
 	if p.WritePolicy != dfc.RWPolicyNextTier {
 		t.Errorf("Expected write policy: %s, received write policy: %s", dfc.RWPolicyNextTier, p.WritePolicy)
@@ -669,7 +669,7 @@ func TestHeadCloudBucket(t *testing.T) {
 			clibucket, p.Versioning, strings.Join(versionModes, ", "))
 	}
 
-	if err = dfc.ValidateCloudProvider(p.CloudProvider); err != nil {
+	if err = dfc.ValidateCloudProvider(p.CloudProvider, false); err != nil {
 		t.Error(err)
 	}
 

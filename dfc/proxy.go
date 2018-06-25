@@ -823,23 +823,20 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, s)
 		return
 	}
-	if err := validateBucketProps(props); err != nil {
+
+	bucketmd := p.bmdowner.get()
+	isLocal := bucketmd.islocal(bucket)
+
+	if err := validateBucketProps(props, isLocal); err != nil {
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	bucketmd := p.bmdowner.get()
-	islocal := bucketmd.islocal(bucket)
-	if islocal && props.CloudProvider != ProviderDfc && props.CloudProvider != "" {
-		s := fmt.Sprintf("Local bucket %s can only have '%s' as the Cloud provider", bucket, ProviderDfc)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
 	p.bmdowner.Lock()
 	clone := bucketmd.cloneU()
-	exists, oldProps := clone.get(bucket, islocal)
+	exists, oldProps := clone.get(bucket, isLocal)
 	if !exists {
-		assert(!islocal)
+		assert(!isLocal)
 		clone.add(bucket, false, BucketProps{})
 	}
 	oldProps.NextTierURL = props.NextTierURL
@@ -851,7 +848,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		oldProps.WritePolicy = props.WritePolicy
 	}
 
-	clone.set(bucket, islocal, oldProps)
+	clone.set(bucket, isLocal, oldProps)
 	if e := p.savebmdconf(clone); e != "" {
 		glog.Errorln(e)
 	}
@@ -2492,20 +2489,26 @@ func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 	return maxVersionSMap, maxVerBucketMD
 }
 
-func validateBucketProps(props *BucketProps) error {
+func validateBucketProps(props *BucketProps, isLocal bool) error {
 	if props.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(props.NextTierURL); err != nil {
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
 		}
 	}
-	if err := ValidateCloudProvider(props.CloudProvider); err != nil {
+	if err := ValidateCloudProvider(props.CloudProvider, isLocal); err != nil {
 		return err
 	}
 	if props.ReadPolicy != "" && props.ReadPolicy != RWPolicyCloud && props.ReadPolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid read policy: %s", props.ReadPolicy)
 	}
+	if props.ReadPolicy == RWPolicyCloud && isLocal {
+		return fmt.Errorf("read policy for local bucket cannot be '%s'", RWPolicyCloud)
+	}
 	if props.WritePolicy != "" && props.WritePolicy != RWPolicyCloud && props.WritePolicy != RWPolicyNextTier {
 		return fmt.Errorf("invalid write policy: %s", props.WritePolicy)
+	}
+	if props.WritePolicy == RWPolicyCloud && isLocal {
+		return fmt.Errorf("write policy for local bucket cannot be '%s'", RWPolicyCloud)
 	}
 	if props.NextTierURL != "" {
 		if props.CloudProvider == "" {
@@ -2515,17 +2518,21 @@ func validateBucketProps(props *BucketProps) error {
 		if props.ReadPolicy == "" {
 			props.ReadPolicy = RWPolicyNextTier
 		}
-		if props.WritePolicy == "" {
+		if props.WritePolicy == "" && !isLocal {
 			props.WritePolicy = RWPolicyCloud
+		} else if props.WritePolicy == "" && isLocal {
+			props.WritePolicy = RWPolicyNextTier
 		}
 	}
 	return nil
 }
 
-func ValidateCloudProvider(provider string) error {
+func ValidateCloudProvider(provider string, isLocal bool) error {
 	if provider != "" && provider != ProviderAmazon && provider != ProviderGoogle && provider != ProviderDfc {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
 			ProviderAmazon, ProviderGoogle, ProviderDfc)
+	} else if isLocal && provider != ProviderDfc && provider != "" {
+		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", ProviderDfc)
 	}
 	return nil
 }
