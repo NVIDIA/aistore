@@ -52,6 +52,17 @@ class TestObjectApi(unittest.TestCase):
         for bucket_name in self.created_buckets:
             self.bucket.delete(bucket_name, input_params)
 
+    def test_object_headers(self):
+        object_name, _ = self.__put_random_object()
+        headers = self.object.get_with_http_info(
+            self.BUCKET_NAME, object_name)[2]
+        self.assertTrue(self.models.Headers.HEADERDFCCHECKSUMTYPE in headers,
+                        "ChecksumType not in header for [%s/%s]" %
+                        (self.BUCKET_NAME, object_name))
+        self.assertTrue(headers[self.models.Headers.HEADERDFCCHECKSUMVAL] ,
+                        "ChecksumVal is None or empty [%s/%s]" %
+                        (self.BUCKET_NAME, object_name))
+
     def test_apis_with_get(self):
         """
         Test case for GET, PUT and DELETE object.

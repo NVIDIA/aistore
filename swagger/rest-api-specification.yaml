@@ -63,6 +63,13 @@ paths:
       responses:
         '200':
           description: Object at the location bucket-name/object-name
+          headers:
+            HeaderDfcChecksumType:
+              schema:
+                type: string
+            HeaderDfcChecksumVal:
+              schema:
+                type: string
           content:
             application/octet-stream:
               schema:
@@ -697,6 +704,8 @@ components:
         - Versioning
         - Version
         - Size
+        - HeaderDfcChecksumType
+        - HeaderDfcChecksumVal
     RWPolicy:
       type: string
       enum:

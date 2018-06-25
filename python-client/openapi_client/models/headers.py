@@ -31,6 +31,8 @@ class Headers(object):
     VERSIONING = "Versioning"
     VERSION = "Version"
     SIZE = "Size"
+    HEADERDFCCHECKSUMTYPE = "HeaderDfcChecksumType"
+    HEADERDFCCHECKSUMVAL = "HeaderDfcChecksumVal"
 
     """
     Attributes:
