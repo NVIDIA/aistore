@@ -123,9 +123,7 @@ func (q *xactInProgress) uniqueid() int64 {
 }
 
 func (q *xactInProgress) add(xact xactInterface) {
-	l := len(q.xactinp)
-	q.xactinp = append(q.xactinp, nil)
-	q.xactinp[l] = xact
+	q.xactinp = append(q.xactinp, xact)
 }
 
 func (q *xactInProgress) findU(by interface{}) (idx int, xact xactInterface) {
