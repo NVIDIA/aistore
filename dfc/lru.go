@@ -18,23 +18,21 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
-// types
-type fileinfo struct {
+type fileInfo struct {
 	fqn     string
 	usetime time.Time
 	size    int64
-	index   int
 }
 
-type maxheap []*fileinfo
+type fileInfoMinHeap []*fileInfo
 
 type lructx struct {
 	cursize int64
 	totsize int64
 	newest  time.Time
 	xlru    *xactLRU
-	h       *maxheap
-	oldwork []*fileinfo
+	heap    *fileInfoMinHeap
+	oldwork []*fileInfo
 	t       *targetrunner
 }
 
@@ -81,7 +79,7 @@ func (t *targetrunner) runLRU() {
 // TODO: local-buckets-first LRU policy
 func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
 	defer fschkwg.Done()
-	h := &maxheap{}
+	h := &fileInfoMinHeap{}
 	heap.Init(h)
 
 	toevict, err := getToEvict(bucketdir, ctx.config.LRU.HighWM, ctx.config.LRU.LowWM)
@@ -91,8 +89,8 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/MiB)
 
 	// init LRU context
-	var oldwork []*fileinfo
-	lctx := &lructx{totsize: toevict, xlru: xlru, h: h, oldwork: oldwork, t: t}
+	var oldwork []*fileInfo
+	lctx := &lructx{totsize: toevict, xlru: xlru, heap: h, oldwork: oldwork, t: t}
 
 	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
 		s := err.Error()
@@ -120,7 +118,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	}
 	var (
 		iswork, isold bool
-		xlru, h       = lctx.xlru, lctx.h
+		xlru, h       = lctx.xlru, lctx.heap
 	)
 	if iswork, isold = lctx.t.isworkfile(fqn); iswork {
 		if !isold {
@@ -149,7 +147,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 
 	atime, mtime, stat := getAmTimes(osfi)
 	if isold {
-		fi := &fileinfo{
+		fi := &fileInfo{
 			fqn:  fqn,
 			size: stat.Size,
 		}
@@ -183,7 +181,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	// push and update the context
-	fi := &fileinfo{
+	fi := &fileInfo{
 		fqn:     fqn,
 		usetime: usetime,
 		size:    stat.Size,
@@ -197,7 +195,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 }
 
 func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) error {
-	h := lctx.h
+	h := lctx.heap
 	var (
 		fevicted, bevicted int64
 	)
@@ -210,7 +208,7 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 		glog.Infof("LRU: GC-ed %q", fi.fqn)
 	}
 	for h.Len() > 0 && toevict > 0 {
-		fi := heap.Pop(h).(*fileinfo)
+		fi := heap.Pop(h).(*fileInfo)
 		if err := t.lruEvict(fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
@@ -246,35 +244,25 @@ func (t *targetrunner) lruEvict(fqn string) error {
 	return nil
 }
 
-//===========================================================================
-//
-// max-heap
-//
-//===========================================================================
-func (mh maxheap) Len() int { return len(mh) }
+// fileInfoMinHeap keeps fileInfo sorted by access time with oldest on top of the heap.
+func (h fileInfoMinHeap) Len() int { return len(h) }
 
-func (mh maxheap) Less(i, j int) bool {
-	return mh[i].usetime.Before(mh[j].usetime)
+func (h fileInfoMinHeap) Less(i, j int) bool {
+	return h[i].usetime.Before(h[j].usetime)
 }
 
-func (mh maxheap) Swap(i, j int) {
-	mh[i], mh[j] = mh[j], mh[i]
-	mh[i].index = i
-	mh[j].index = j
+func (h fileInfoMinHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
 }
 
-func (mh *maxheap) Push(x interface{}) {
-	n := len(*mh)
-	fi := x.(*fileinfo)
-	fi.index = n
-	*mh = append(*mh, fi)
+func (h *fileInfoMinHeap) Push(x interface{}) {
+	*h = append(*h, x.(*fileInfo))
 }
 
-func (mh *maxheap) Pop() interface{} {
-	old := *mh
+func (h *fileInfoMinHeap) Pop() interface{} {
+	old := *h
 	n := len(old)
 	fi := old[n-1]
-	fi.index = -1
-	*mh = old[0 : n-1]
+	*h = old[0 : n-1]
 	return fi
 }
