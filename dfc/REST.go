@@ -25,6 +25,7 @@ const (
 	ActRenameLB    = "renamelb"
 	ActSetConfig   = "setconfig"
 	ActSetProps    = "setprops"
+	ActListObjects = "listobjects"
 	ActRename      = "rename"
 	ActEvict       = "evict"
 	ActDelete      = "delete"
@@ -80,7 +81,7 @@ const (
 )
 
 // TODO: sort and some props are TBD
-// GetMsg represents properties and options for get requests
+// GetMsg represents properties and options for requests which fetch entities
 type GetMsg struct {
 	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
@@ -123,7 +124,7 @@ type SmapVoteMsg struct {
 //
 //===================
 
-// GetMsg.GetWhat enum
+// URLParamWhat enum
 const (
 	GetWhatFile     = "file" // { "what": "file" } is implied by default and can be omitted
 	GetWhatConfig   = "config"

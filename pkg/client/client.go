@@ -386,8 +386,7 @@ func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
 func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) (*dfc.BucketList, error) {
 	var (
-		url     = proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
-		request *http.Request
+		url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, bucket)
 	)
 
 	reslist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0, 1000)}
@@ -414,11 +413,11 @@ func ListBucket(proxyurl, bucket string, msg *dfc.GetMsg, objectCountLimit int) 
 		if len(injson) == 0 {
 			resp, err = client.Get(url)
 		} else {
-			request, err = http.NewRequest("GET", url, bytes.NewBuffer(injson))
-			if err == nil {
-				request.Header.Set("Content-Type", "application/json")
-				resp, err = client.Do(request)
+			injson, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActListObjects, Value: msg})
+			if err != nil {
+				return nil, err
 			}
+			resp, err = client.Post(url, "application/json", bytes.NewBuffer(injson))
 		}
 
 		if err != nil {

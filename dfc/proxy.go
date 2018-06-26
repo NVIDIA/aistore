@@ -10,8 +10,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -448,7 +446,6 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
 	if p.smapowner.get().countTargets() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
@@ -466,34 +463,8 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		p.getbucketnames(w, r, bucket)
 		return
 	}
-	// list the bucket
-	pagemarker, ok := p.listbucket(w, r, bucket)
-	if ok {
-		delta := time.Since(started)
-		p.statsdC.Send("list",
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency",
-				Value: float64(delta / time.Millisecond),
-			},
-		)
-
-		lat := int64(delta / 1000)
-		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
-
-		if glog.V(3) {
-			if pagemarker != "" {
-				glog.Infof("LIST: %s, page %s, %d µs", bucket, pagemarker, lat)
-			} else {
-				glog.Infof("LIST: %s, %d µs", bucket, lat)
-			}
-		}
-	}
+	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
+	p.invalmsghdlr(w, r, s)
 }
 
 // GET /v1/objects/bucket-name/object-name
@@ -685,6 +656,7 @@ func (p *proxyrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 
 // POST { action } /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	var msg ActionMsg
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
@@ -754,9 +726,42 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.metasyncer.sync(false, p.bmdowner.get())
 	case ActPrefetch:
 		p.actionlistrange(w, r, &msg)
+	case ActListObjects:
+		p.listBucketAndCollectStats(w, r, lbucket, msg, started)
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
+	}
+}
+
+func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
+	r *http.Request, lbucket string, msg ActionMsg, started time.Time) {
+	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
+	if ok {
+		delta := time.Since(started)
+		p.statsdC.Send("list",
+			statsd.Metric{
+				Type:  statsd.Counter,
+				Name:  "count",
+				Value: 1,
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency",
+				Value: float64(delta / time.Millisecond),
+			},
+		)
+
+		lat := int64(delta / 1000)
+		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
+
+		if glog.V(3) {
+			if pagemarker != "" {
+				glog.Infof("LIST: %s, page %s, %d µs", lbucket, pagemarker, lat)
+			} else {
+				glog.Infof("LIST: %s, %d µs", lbucket, lat)
+			}
+		}
 	}
 }
 
@@ -965,10 +970,20 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
-	reqBody []byte, islocal bool, cached bool) (*bucketResp, error) {
+	getMsg *GetMsg, islocal bool, cached bool) (*bucketResp, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
 		Rbuckets, bucket, URLParamLocal, islocal, URLParamCached, cached)
-	res := p.call(r, dinfo, url, http.MethodGet, reqBody, ctx.config.Timeout.Default)
+
+	actionMsgBytes, err := json.Marshal(ActionMsg{Action: ActListObjects, Value: getMsg})
+	if err != nil {
+		return &bucketResp{
+			outjson: nil,
+			err:     err,
+			id:      dinfo.DaemonID,
+		}, err
+	}
+
+	res := p.call(r, dinfo, url, http.MethodPost, actionMsgBytes, ctx.config.Timeout.Default)
 	if res.err != nil {
 		p.kalive.onerr(res.err, res.status)
 	}
@@ -1012,10 +1027,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, data
 	copyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
 	for {
-		// re-marshall with an updated PageMarker
-		listmsgjson, err := json.Marshal(&msg)
-		assert(err == nil, err)
-		resp, err := p.targetListBucket(nil, bucket, daemon, listmsgjson, false /* islocal */, true /* cachedObjects */)
+		resp, err := p.targetListBucket(nil, bucket, daemon, &msg, false /* islocal */, true /* cachedObjects */)
 		if err != nil {
 			if dataCh != nil {
 				dataCh <- &localFilePage{
@@ -1149,7 +1161,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	wg := &sync.WaitGroup{}
 
 	targetCallFn := func(si *daemonInfo) {
-		resp, err := p.targetListBucket(nil, bucket, si, listmsgjson, islocal, cachedObjs)
+		resp, err := p.targetListBucket(nil, bucket, si, msg, islocal, cachedObjs)
 		chresult <- &targetReply{resp, err}
 		wg.Done()
 	}
@@ -1226,7 +1238,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	// first, get the cloud object list from a random target
 	smap := p.smapowner.get()
 	for _, si := range smap.Tmap {
-		resp, err = p.targetListBucket(r, bucket, si, listmsgjson, islocal, cachedObjects)
+		resp, err = p.targetListBucket(r, bucket, si, &msg, islocal, cachedObjects)
 		if err != nil {
 			return
 		}
@@ -1270,17 +1282,11 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (pagemarker string, ok bool) {
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *ActionMsg) (pagemarker string, ok bool) {
 	var allentries *BucketList
-	listmsgjson, err := ioutil.ReadAll(r.Body)
+	listmsgjson, err := json.Marshal(actionMsg.Value)
 	if err != nil {
-		s := fmt.Sprintf("listbucket: Failed to read %s request, err: %v", r.Method, err)
-		if err == io.EOF {
-			trailer := r.Trailer.Get("Error")
-			if trailer != "" {
-				s = fmt.Sprintf("listbucket: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-			}
-		}
+		s := fmt.Sprintf("Unable to marshal action message: %v. Error: %v", actionMsg, err)
 		p.invalmsghdlr(w, r, s)
 		return
 	}

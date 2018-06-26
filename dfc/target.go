@@ -317,7 +317,6 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /Rversion/Rbuckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	started := time.Now()
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
@@ -331,29 +330,8 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		t.getbucketnames(w, r)
 		return
 	}
-	// list the bucket and return
-	tag, ok := t.listbucket(w, r, bucket)
-	if ok {
-		delta := time.Since(started)
-		t.statsdC.Send("list",
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency",
-				Value: float64(delta / time.Millisecond),
-			},
-		)
-
-		lat := int64(delta / 1000)
-		t.statsif.addMany("numlist", int64(1), "listlatency", lat)
-		if glog.V(3) {
-			glog.Infof("LIST %s: %s, %d µs", tag, bucket, lat)
-		}
-	}
+	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
+	t.invalmsghdlr(w, r, s)
 }
 
 // GET /Rversion/Robjects/bucket[+"/"+objname]
@@ -749,6 +727,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 // POST /Rversion/Rbuckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	var msg ActionMsg
 	if t.readJSON(w, r, &msg) != nil {
 		return
@@ -794,6 +773,38 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
+	case ActListObjects:
+		apitems := t.restAPIItems(r.URL.Path, 5)
+		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+			return
+		}
+		lbucket := apitems[0]
+		if !t.validatebckname(w, r, lbucket) {
+			return
+		}
+		// list the bucket and return
+		tag, ok := t.listbucket(w, r, lbucket, &msg)
+		if ok {
+			delta := time.Since(started)
+			t.statsdC.Send("list",
+				statsd.Metric{
+					Type:  statsd.Counter,
+					Name:  "count",
+					Value: 1,
+				},
+				statsd.Metric{
+					Type:  statsd.Timer,
+					Name:  "latency",
+					Value: float64(delta / time.Millisecond),
+				},
+			)
+
+			lat := int64(delta / 1000)
+			t.statsif.addMany("numlist", int64(1), "listlatency", lat)
+			if glog.V(3) {
+				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, lat)
+			}
+		}
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -1500,7 +1511,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string) (tag string, ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *ActionMsg) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -1517,13 +1528,24 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-	msg := &GetMsg{}
-	if t.readJSON(w, r, msg) != nil {
+
+	getMsgJson, err := json.Marshal(actionMsg.Value)
+	if err != nil {
+		errstr := fmt.Sprintf("Unable to marshal 'value' in request: %v", actionMsg.Value)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	var msg GetMsg
+	err = json.Unmarshal(getMsgJson, &msg)
+	if err != nil {
+		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a GetMsg: %v", actionMsg.Value)
+		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 	if islocal {
 		tag = "local"
-		if errstr, ok = t.doLocalBucketList(w, r, bucket, msg); errstr != "" {
+		if errstr, ok = t.doLocalBucketList(w, r, bucket, &msg); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		}
 		return // ======================================>
@@ -1531,10 +1553,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	// cloud bucket
 	if useCache {
 		tag = "cloud cached"
-		jsbytes, errstr, errcode = t.listCachedObjects(bucket, msg)
+		jsbytes, errstr, errcode = t.listCachedObjects(bucket, &msg)
 	} else {
 		tag = "cloud"
-		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r), bucket, msg)
+		jsbytes, errstr, errcode = getcloudif().listbucket(t.contextWithAuth(r), bucket, &msg)
 	}
 	if errstr != "" {
 		if errcode == 0 {

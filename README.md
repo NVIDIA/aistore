@@ -210,7 +210,7 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET http://localhost:8080/v1/objects/myS3bucket/myobject?offset=1024&length=512 -o myobject` |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://localhost:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |
 | Get bucket names | GET /v1/buckets/\* | `curl -X GET http://localhost:8080/v1/buckets/*` <sup>[6](#ft6)</sup> |
-| List bucket | GET { properties-and-options... } /v1/buckets/bucket-name | `curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size"}' http://localhost:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
+| List bucket | GET { properties-and-options... } /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' http://localhost:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
 | Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://localhost:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
 | Copy object | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://localhost:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L http://localhost:8080/v1/objects/mybucket/mydirectory/myobject` |
@@ -276,7 +276,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
 
 ```
-$ curl -X GET -L -H 'Content-Type: application/json' -d '{"props": "size, checksum", "prefix": "smoke/"}' http://localhost:8080/v1/buckets/myBucket
+$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
 ```
 
 This request will produce an output that (in part) may look as follows:
@@ -293,13 +293,13 @@ The following Go code retrieves a list of all of object names from a named bucke
 // e.g. proxyurl: "http://localhost:8080"
 url := proxyurl + "/v1/buckets/" + bucket
 
-msg := &dfc.GetMsg{}
+msg := &dfc.ActionMsg{Action: dfc.ActListObjects}
 fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
 for {
     // 1. First, send the request
     jsbytes, _ := json.Marshal(msg)
-    request, _ := http.NewRequest("GET", url, bytes.NewBuffer(jsbytes))
-    r, _ := http.DefaultClient.Do(request)
+    r, _ := http.DefaultClient.Post(url, "application/json", bytes.NewBuffer(jsbytes))
+
     defer func(r *http.Response){
         r.Body.Close()
     }(r)
