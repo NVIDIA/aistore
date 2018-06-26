@@ -114,24 +114,19 @@ func (p *proxyrunner) run() error {
 		p.primary = false
 
 		// ask current primary for cluster smap
-		url := fmt.Sprintf("%s/%s/%s", ctx.config.Proxy.Primary.URL, Rversion, Rdaemon)
-		msg := GetMsg{GetWhat: GetWhatSmap}
-		jsbytes, err := json.Marshal(msg)
-		if err != nil {
-			return fmt.Errorf("Failed to create json message: %v", err)
-		}
+		url := fmt.Sprintf("%s/%s/%s?%s=%s", ctx.config.Proxy.Primary.URL, Rversion, Rdaemon, URLParamWhat, GetWhatSmap)
 
 		daemonInfo := &daemonInfo{}
 		if p.smap.ProxySI != nil {
 			daemonInfo = p.smap.ProxySI
 		}
-		res := p.call(nil, daemonInfo, url, http.MethodGet, jsbytes)
+		res := p.call(nil, daemonInfo, url, http.MethodGet, nil)
 		if res.err != nil {
 			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", res.err)
 		}
 
 		var smap Smap
-		err = json.Unmarshal(res.outjson, &smap)
+		err := json.Unmarshal(res.outjson, &smap)
 		if err != nil {
 			return fmt.Errorf("Error unmarshalling cluster map from Primary Proxy: %v", err)
 		}
@@ -147,7 +142,7 @@ func (p *proxyrunner) run() error {
 		// smap does not have this proxy in smap and the primary can do sync before
 		// this proxy calls setPrimaryProxyAndSmapL. It may result in overwritting
 		// new smap with old one. So, do double call for the latest smap
-		res = p.call(nil, daemonInfo, url, http.MethodGet, jsbytes)
+		res = p.call(nil, daemonInfo, url, http.MethodGet, nil)
 		if res.err != nil {
 			return fmt.Errorf("Error retrieving cluster map from Primary Proxy: %v", res.err)
 		}
@@ -1471,11 +1466,8 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	var msg GetMsg
-	if p.readJSON(w, r, &msg) != nil {
-		return
-	}
-	switch msg.GetWhat {
+	getWhat := r.URL.Query().Get(URLParamWhat)
+	switch getWhat {
 	case GetWhatConfig:
 		jsbytes, err := json.Marshal(ctx.config)
 		assert(err == nil)
@@ -1500,7 +1492,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
 	default:
-		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
 		p.invalmsghdlr(w, r, s)
 	}
 }
@@ -1740,34 +1732,31 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 
 // gets target info
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
-	var msg GetMsg
-	if p.readJSON(w, r, &msg) != nil {
-		return
-	}
-	switch msg.GetWhat {
+	getWhat := r.URL.Query().Get(URLParamWhat)
+	switch getWhat {
 	case GetWhatStats:
-		ok := p.invokeHttpGetClusterStats(w, r, msg)
+		ok := p.invokeHttpGetClusterStats(w, r)
 		if !ok {
 			return
 		}
 	case GetWhatXaction:
-		ok := p.invokeHttpGetXaction(w, r, msg)
+		ok := p.invokeHttpGetXaction(w, r)
 		if !ok {
 			return
 		}
 	default:
-		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
 		p.invalmsghdlr(w, r, s)
 	}
 }
 
-func (p *proxyrunner) invokeHttpGetXaction(
-	w http.ResponseWriter, r *http.Request, msg GetMsg) bool {
-	kind, err := p.getXactionKindFromProperties(msg.GetProps)
+func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Request) bool {
+	getProps := r.URL.Query().Get(URLParamProps)
+	kind, err := p.getXactionKindFromProperties(getProps)
 	if err != nil {
 		glog.Errorf(
 			"Unable to get kind from props: [%s]. Error: [%s]",
-			msg.GetProps,
+			getProps,
 			err)
 		p.invalmsghdlr(w, r, err.Error())
 		return false
@@ -1775,11 +1764,11 @@ func (p *proxyrunner) invokeHttpGetXaction(
 
 	outputXactionStats := &XactionStats{}
 	outputXactionStats.Kind = kind
-	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r, msg)
+	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
 	if !ok {
 		e := fmt.Sprintf(
-			"Unable to invoke GetMsg on targets. GetMsg: [%v]",
-			msg)
+			"Unable to invoke GetMsg on targets. Query: [%s]",
+			r.URL.RawQuery)
 		glog.Errorf(e)
 		p.invalmsghdlr(w, r, e)
 		return false
@@ -1798,23 +1787,13 @@ func (p *proxyrunner) invokeHttpGetXaction(
 	return ok
 }
 
-func (p *proxyrunner) invokeHttpGetMsgOnTargets(
-	w http.ResponseWriter, r *http.Request, msg GetMsg) (
+func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (
 	map[string]json.RawMessage, bool) {
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		glog.Errorf(
-			"Unable to marshal GetMsg. Error: [%v]",
-			err)
-		p.invalmsghdlr(w, r, "Unable to marshal GetMsg.")
-		return nil, false
-	}
-
 	results := p.broadcastTargets(
 		URLPath(Rversion, Rdaemon),
-		nil, // query
+		r.URL.Query(),
 		r.Method,
-		msgBytes,
+		nil, // body
 		p.smap,
 		ctx.config.Timeout.Default,
 	)
@@ -1823,8 +1802,8 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(
 	for result := range results {
 		if result.err != nil {
 			glog.Errorf(
-				"Failed to fetch xaction, props: %s",
-				msg.GetProps)
+				"Failed to fetch xaction, query: %s",
+				r.URL.RawQuery)
 			p.invalmsghdlr(w, r, result.errstr)
 			return nil, false
 		}
@@ -1838,12 +1817,12 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(
 
 // FIXME: read-lock
 func (p *proxyrunner) invokeHttpGetClusterStats(
-	w http.ResponseWriter, r *http.Request, msg GetMsg) bool {
-	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r, msg)
+	w http.ResponseWriter, r *http.Request) bool {
+	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
-			"Unable to invoke GetMsg on targets. GetMsg: [%v]",
-			msg)
+			"Unable to invoke GetMsg on targets. Query: [%s]",
+			r.URL.RawQuery)
 		glog.Errorf(errstr)
 		p.invalmsghdlr(w, r, errstr)
 		return false
@@ -2428,16 +2407,14 @@ func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 		maxVerBucketMD *bucketMD
 	)
 
-	msg := GetMsg{GetWhat: GetWhatSmapVote}
-	jsbytes, err := json.Marshal(msg)
-	assert(err == nil)
-
+	q := url.Values{}
+	q.Add(URLParamWhat, GetWhatSmapVote)
 	for {
 		res := p.broadcastCluster(
 			URLPath(Rversion, Rdaemon),
-			nil, // query
+			q, // query
 			http.MethodGet,
-			jsbytes,
+			nil, // body
 			hintSmap,
 			ctx.config.Timeout.CplaneOperation,
 		)
@@ -2449,7 +2426,7 @@ func (p *proxyrunner) discoverClusterMeta(hintSmap *Smap, deadline time.Time,
 			}
 
 			svm := SmapVoteMsg{}
-			if err = json.Unmarshal(r.outjson, &svm); err != nil {
+			if err := json.Unmarshal(r.outjson, &svm); err != nil {
 				glog.Warningf("Error unmarshalling cluster map from %v: %v", r.si.DaemonID, err)
 				continue
 			}

@@ -2423,15 +2423,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
 		return
 	}
-	var msg GetMsg
-	if t.readJSON(w, r, &msg) != nil {
-		return
-	}
+	getWhat := r.URL.Query().Get(URLParamWhat)
 	var (
 		jsbytes []byte
 		err     error
 	)
-	switch msg.GetWhat {
+	switch getWhat {
 	case GetWhatConfig:
 		jsbytes, err = json.Marshal(ctx.config)
 		assert(err == nil, err)
@@ -2461,11 +2458,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		storageStatsRunner.Unlock()
 		assert(err == nil, err)
 	case GetWhatXaction:
-		kind, err := t.getXactionKindFromProperties(msg.GetProps)
+		getProps := r.URL.Query().Get(URLParamProps)
+		kind, err := t.getXactionKindFromProperties(getProps)
 		if err != nil {
 			glog.Errorf(
 				"Unable to get kind from props: [%s]. Error: [%v]",
-				msg.GetProps,
+				getProps,
 				err)
 			t.invalmsghdlr(w, r, err.Error())
 			return
@@ -2484,7 +2482,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		s := fmt.Sprintf("Unexpected GetMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected GET request, what: [%s]", getWhat)
 		t.invalmsghdlr(w, r, s)
 		return
 	}

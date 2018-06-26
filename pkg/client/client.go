@@ -922,12 +922,9 @@ func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]strin
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {
 	url := server + "/" + dfc.Rversion + "/" + dfc.Rdaemon
-	msg, err := json.Marshal(&dfc.GetMsg{GetWhat: dfc.GetWhatConfig})
-	if err != nil {
-		return HTTPLatencies{}, err
-	}
 
-	req, _ := http.NewRequest("GET", url, bytes.NewBuffer(msg))
+	req, _ := http.NewRequest("GET", url, nil)
+	req.URL.RawQuery = getWhatRawQuery(dfc.GetWhatConfig, "")
 	tr := &traceableTransport{
 		transport: transport,
 		tsBegin:   time.Now(),
@@ -1020,17 +1017,9 @@ func ListBuckets(proxyURL string, local bool) (*dfc.BucketNames, error) {
 // GetClusterMap retrives a DFC's server map
 // Note: this may not be a good idea to expose the map to clients, but this how it is for now.
 func GetClusterMap(url string) (dfc.Smap, error) {
-	injson, err := json.Marshal(dfc.GetMsg{GetWhat: dfc.GetWhatSmap})
-	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to marshal GetStatsMsg: %v", err)
-	}
-
-	req, err := http.NewRequest("GET", url+"/"+dfc.Rversion+"/"+dfc.Rdaemon, bytes.NewBuffer(injson))
-	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to create request: %v", err)
-	}
-
-	r, err := client.Do(req)
+	q := getWhatRawQuery(dfc.GetWhatSmap, "")
+	requestURL := fmt.Sprintf("%s?%s", url+dfc.URLPath(dfc.Rversion, dfc.Rdaemon), q)
+	r, err := client.Get(requestURL)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
@@ -1081,23 +1070,9 @@ func GetXactionRebalance(proxyURL string) (dfc.RebalanceStats, error) {
 }
 
 func getXactionResponse(proxyURL string, kind string) ([]byte, error) {
-	getMsg := dfc.GetMsg{GetWhat: dfc.GetWhatXaction, GetProps: kind}
-	requestJson, err := json.Marshal(getMsg)
-	if err != nil {
-		return []byte{},
-			fmt.Errorf("Failed to marshal GetStatsMsg: %v", err)
-	}
-
-	request, err := http.NewRequest(
-		"GET",
-		proxyURL+dfc.URLPath(dfc.Rversion, dfc.Rcluster),
-		bytes.NewBuffer(requestJson))
-	if err != nil {
-		return []byte{},
-			fmt.Errorf("Failed to create request: %v", err)
-	}
-
-	r, err := client.Do(request)
+	q := getWhatRawQuery(dfc.GetWhatXaction, kind)
+	url := fmt.Sprintf("%s?%s", proxyURL+dfc.URLPath(dfc.Rversion, dfc.Rcluster), q)
+	r, err := client.Get(url)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
@@ -1285,4 +1260,13 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 		time.Sleep(1 * time.Second)
 	}
 	return nil
+}
+
+func getWhatRawQuery(getWhat string, getProps string) string {
+	q := url.Values{}
+	q.Add(dfc.URLParamWhat, getWhat)
+	if getProps != "" {
+		q.Add(dfc.URLParamProps, getProps)
+	}
+	return q.Encode()
 }

@@ -75,12 +75,13 @@ const (
 	URLParamCheckCached      = "check_cached" // true: check if object is cached in DFC
 	URLParamOffset           = "offset"       // Offset from where the object should be read
 	URLParamLength           = "length"       // Length, the total number of bytes that need to be read from the offset
+	URLParamWhat             = "what"         // "config" | "stats" | "xaction" ...
+	URLParamProps            = "props"        // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
 )
 
 // TODO: sort and some props are TBD
 // GetMsg represents properties and options for get requests
 type GetMsg struct {
-	GetWhat       string `json:"what"`        // "config" | "stats" ...
 	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
 	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below

@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof" // profile
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -51,8 +52,6 @@ const (
 )
 
 var (
-	GetConfigMsg     = dfc.GetMsg{GetWhat: dfc.GetWhatConfig}
-	GetStatsMsg      = dfc.GetMsg{GetWhat: dfc.GetWhatStats}
 	RenameMsg        = dfc.ActionMsg{Action: dfc.ActRename}
 	HighWaterMark    = uint32(80)
 	LowWaterMark     = uint32(60)
@@ -1326,17 +1325,9 @@ waitloop:
 }
 
 func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterStats) {
-	injson, err := json.Marshal(GetStatsMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
-	}
-
-	req, err := http.NewRequest("GET", proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, bytes.NewBuffer(injson))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-
-	resp, err := httpclient.Do(req)
+	q := getWhatRawQuery(dfc.GetWhatStats)
+	url := fmt.Sprintf("%s?%s", proxyurl+dfc.URLPath(dfc.Rversion, dfc.Rcluster), q)
+	resp, err := httpclient.Get(url)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -1361,17 +1352,9 @@ func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterSt
 }
 
 func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats map[string]interface{}) {
-	injson, err := json.Marshal(GetStatsMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal GetStatsMsg: %v", err)
-	}
-
-	req, err := http.NewRequest("GET", URL+RestAPIDaemonSuffix, bytes.NewBuffer(injson))
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-
-	resp, err := httpclient.Do(req)
+	q := getWhatRawQuery(dfc.GetWhatStats)
+	url := fmt.Sprintf("%s?%s", URL+RestAPIDaemonSuffix, q)
+	resp, err := httpclient.Get(url)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -1405,17 +1388,9 @@ func getClusterMap(t *testing.T) dfc.Smap {
 }
 
 func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[string]interface{}) {
-	injson, err := json.Marshal(GetConfigMsg)
-	if err != nil {
-		t.Fatalf("Failed to marshal GetConfigMsg: %v", err)
-	}
-
-	req, err := http.NewRequest("GET", URL, bytes.NewBuffer(injson))
-	if err != nil {
-		t.Errorf("Failed to create request: %v", err)
-	}
-
-	resp, err := httpclient.Do(req)
+	q := getWhatRawQuery(dfc.GetWhatConfig)
+	url := fmt.Sprintf("%s?%s", URL, q)
+	resp, err := httpclient.Get(url)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -1517,4 +1492,10 @@ func stringInSlice(str string, values []string) bool {
 	}
 
 	return false
+}
+
+func getWhatRawQuery(getWhat string) string {
+	q := url.Values{}
+	q.Add(dfc.URLParamWhat, getWhat)
+	return q.Encode()
 }
