@@ -4,11 +4,60 @@ All URIs are relative to *http://localhost:8080/v1*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
+[**get**](ClusterApi.md#get) | **GET** /cluster/ | Get cluster related details
 [**perform_operation**](ClusterApi.md#perform_operation) | **PUT** /cluster/ | Perform cluster wide operations such as setting config value, shutting down proxy/target etc.
 [**register_target**](ClusterApi.md#register_target) | **POST** /cluster/register/ | Register storage target
 [**set_primary_proxy**](ClusterApi.md#set_primary_proxy) | **PUT** /cluster/proxy/{primary-proxy-id} | Set primary proxy
 [**unregister_target**](ClusterApi.md#unregister_target) | **DELETE** /cluster/daemon/{daemonId} | Unregister the storage target
 
+
+# **get**
+> object get(what, props=props)
+
+Get cluster related details
+
+### Example
+```python
+from __future__ import print_function
+import time
+import openapi_client
+from openapi_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = openapi_client.ClusterApi()
+what = openapi_client.GetWhat() # GetWhat | Cluster details which need to be fetched
+props = openapi_client.GetProps() # GetProps | Additional properties describing the cluster details (optional)
+
+try:
+    # Get cluster related details
+    api_response = api_instance.get(what, props=props)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling ClusterApi->get: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **what** | [**GetWhat**](.md)| Cluster details which need to be fetched | 
+ **props** | [**GetProps**](.md)| Additional properties describing the cluster details | [optional] 
+
+### Return type
+
+**object**
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/jsontext/plain
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **perform_operation**
 > perform_operation(input_parameters)
@@ -56,7 +105,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **register_target**
-> register_target(node_configuration)
+> register_target(daemon_info)
 
 Register storage target
 
@@ -70,11 +119,11 @@ from pprint import pprint
 
 # create an instance of the API class
 api_instance = openapi_client.ClusterApi()
-node_configuration = openapi_client.NodeConfiguration() # NodeConfiguration | 
+daemon_info = openapi_client.DaemonInfo() # DaemonInfo | 
 
 try:
     # Register storage target
-    api_instance.register_target(node_configuration)
+    api_instance.register_target(daemon_info)
 except ApiException as e:
     print("Exception when calling ClusterApi->register_target: %s\n" % e)
 ```
@@ -83,7 +132,7 @@ except ApiException as e:
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **node_configuration** | [**NodeConfiguration**](NodeConfiguration.md)|  | 
+ **daemon_info** | [**DaemonInfo**](DaemonInfo.md)|  | 
 
 ### Return type
 

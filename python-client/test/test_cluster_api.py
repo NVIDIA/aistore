@@ -17,9 +17,7 @@ import unittest
 
 import openapi_client
 from openapi_client.api.cluster_api import ClusterApi  # noqa: E501
-from openapi_client.rest import ApiException
 
-@unittest.skip("These won't work until the GET APIs are fixed.")
 class TestClusterApi(unittest.TestCase):
     """ClusterApi unit test stubs"""
 
@@ -28,6 +26,7 @@ class TestClusterApi(unittest.TestCase):
         configuration.debug = False
         api_client = openapi_client.ApiClient(configuration)
         self.cluster = openapi_client.api.cluster_api.ClusterApi(api_client)
+        self.daemon = openapi_client.api.daemon_api.DaemonApi(api_client)
         self.models = openapi_client.models
 
     def tearDown(self):
@@ -36,23 +35,29 @@ class TestClusterApi(unittest.TestCase):
     def test_target_apis(self):
         """
         1. Get cluster map
-        2. Make a valid target and register it
-        3. Get cluster map and validate that the target is added
-        4. Remove target
-        5. Check target removed
+        2. Unregister a target
+        3. Verify
+        4. Reregister target
+        5. Verify
         """
-        # FIXME: Fix this after get cluster map API is added
-        ip = "172.16.174.64"
-        port = "8084"
-        daemonId = "29040:"+port
-        self.cluster.unregister_target("29040:8084")
-        node_config = self.models.NodeConfiguration(
-            ip,
-            port,
-            daemonId,
-            "http://"+ip+":"+port
-        )
-        self.cluster.register_target(node_config)
+        smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
+        target =  smap.tmap.values()[1]
+        daemon_info = self.models.DaemonInfo(
+            target.node_ip_addr,
+            target.daemon_port,
+            target.daemon_id,
+            target.direct_url)
+
+        self.cluster.unregister_target(daemon_info.daemon_id)
+        smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
+        self.assertTrue(daemon_info.daemon_id not in smap.tmap.keys(),
+                        "Unregistered target still present")
+
+        self.cluster.register_target(daemon_info)
+        smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
+        self.assertTrue(daemon_info.daemon_id in smap.tmap.keys(),
+                        "Registered target not present")
+
 
     def test_cluster_config_api(self):
         """
@@ -60,10 +65,26 @@ class TestClusterApi(unittest.TestCase):
         2. Get config value to test that it matches the value
         :return:
         """
-        # FIXME: Fix this after get config is added
         input_params = self.models.InputParameters(
             self.models.Actions.SETCONFIG,
             "enable_read_range_checksum", "true")
+        self.cluster.perform_operation(input_params)
+        target_ids = self.daemon.get(self.models.GetWhat.SMAP)["tmap"].keys()
+        target_ports = [target_id.split(":")[1] for target_id in target_ids]
+        old_host = self.cluster.api_client.configuration.host
+        for target_port in target_ports:
+            self.daemon.api_client.configuration.host = (
+                    "http://localhost:%d/v1"%int(target_port))
+
+            config = DictParser.parse(self.daemon.get(
+                self.models.GetWhat.CONFIG))
+            self.assertTrue(config.cksum_config.enable_read_range_checksum,
+                            "Set config value not getting reflected.")
+
+        self.cluster.api_client.configuration.host = old_host
+        input_params = self.models.InputParameters(
+            self.models.Actions.SETCONFIG,
+            "enable_read_range_checksum", "false")
         self.cluster.perform_operation(input_params)
 
     @unittest.skip("Running this test will cause the cluster to shutdown.")
@@ -89,10 +110,54 @@ class TestClusterApi(unittest.TestCase):
         1. Get primary proxy
         2. Make some other proxy primary
         3. Get primary proxy and verify
+        4. Update primary proxy back
         :return:
         """
-        # FIXME: Fix this after get cluster map API is added
-        self.cluster.set_primary_proxy("29040:8081")
+        smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
+        primary_proxy = smap.proxy_si.daemon_id
+        new_primary_proxy = None
+        for proxy_id in smap.pmap.keys():
+            if proxy_id != primary_proxy:
+                new_primary_proxy = proxy_id
+                break
+        self.cluster.set_primary_proxy(new_primary_proxy)
+        updated_primary_proxy = DictParser.parse(
+            self.daemon.get(self.models.GetWhat.SMAP)).proxy_si.daemon_id
+        self.assertEqual(updated_primary_proxy, new_primary_proxy,
+                         "Primary proxy not updated")
+        self.cluster.api_client.configuration.host = (
+                "http://localhost:%s/v1" % new_primary_proxy[-4:])
+        self.cluster.set_primary_proxy(primary_proxy)
+        self.cluster.api_client.configuration.host = (
+                "http://localhost:%s/v1" % primary_proxy[-4:])
+
+    def test_cluster_stats(self):
+        stats = DictParser.parse(self.cluster.get(self.models.GetWhat.STATS))
+        self.assertTrue(len(stats.target.keys()) != 0,
+                        "No targets retrieved while querying for stats")
+
+    def test_cluster__xaction_stats(self):
+        stats = DictParser.parse(self.cluster.get(
+            what=self.models.GetWhat.XACTION,
+            props=self.models.GetProps.REBALANCE))
+        self.assertTrue(len(stats.target.keys()) != 0,
+                        "No targets retrieved while querying for stats")
+
+class DictParser(dict):
+    __getattr__= dict.__getitem__
+
+    def __init__(self, d):
+        self.update(**dict((k, self.parse(v))
+                           for k, v in d.iteritems()))
+
+    @classmethod
+    def parse(cls, v):
+        if isinstance(v, dict):
+            return cls(v)
+        elif isinstance(v, list):
+            return [cls.parse(i) for i in v]
+        else:
+            return v
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,11 +1,11 @@
-# ObjectPoperties
+# ObjectProperties
 
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **name** | **str** |  | [optional] 
 **size** | **int** |  | [optional] 
-**ctime** | **int** |  | [optional] 
+**ctime** | **str** |  | [optional] 
 **checksum** | **str** |  | [optional] 
 **type** | **str** |  | [optional] 
 **atime** | **str** |  | [optional] 

@@ -105,7 +105,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **list**
-> ObjectPoperties list(bucket_name, bucket_properties_and_options)
+> ObjectProperties list(bucket_name, bucket_properties_and_options)
 
 Get list of bucket objects and their properties
 
@@ -139,7 +139,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-[**ObjectPoperties**](ObjectPoperties.md)
+[**ObjectProperties**](ObjectProperties.md)
 
 ### Authorization
 

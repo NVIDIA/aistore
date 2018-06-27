@@ -6,7 +6,7 @@ info:
   termsOfService: ""
   contact:
     name: "NVIDIA-DFC"
-    email: "dfc-jenkins@nvidia.com"
+    email: "dfcdev@exchange.nvidia.com"
     url: "https://github.com/NVIDIA/dfcpub"
   license:
     name: MIT
@@ -55,11 +55,13 @@ paths:
           description: Starting byte from where the read needs to be performed
           schema:
             type: integer
+            format: int64
         - name: length
           in: query
           description: Number of bytes that need to be returned starting from the offset
           schema:
             type: integer
+            format: int64
       responses:
         '200':
           description: Object at the location bucket-name/object-name
@@ -246,6 +248,7 @@ paths:
             Size:
               schema:
                 type: integer
+                format: int32
             Version:
               schema:
                 type: string
@@ -311,7 +314,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ObjectPoperties'
+                $ref: '#/components/schemas/ObjectProperties'
         default:
           description: An unexpected error was encountered
           content:
@@ -463,6 +466,39 @@ paths:
               schema:
                 type: string
   /cluster/:
+    get:
+      summary: Get cluster related details
+      operationId: get
+      tags:
+        - Cluster
+      parameters:
+        - name: what
+          in: query
+          description: Cluster details which need to be fetched
+          required: true
+          schema:
+            $ref: '#/components/schemas/GetWhat'
+        - name: props
+          in: query
+          description: Additional properties describing the cluster details
+          schema:
+            $ref: '#/components/schemas/GetProps'
+      responses:
+        '200':
+          description: Requested cluster details
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/RebalanceClusterStatistics'
+                  - $ref: '#/components/schemas/PrefetchClusterStatistics'
+                  - $ref: '#/components/schemas/ClusterStatistics'
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
     put:
       summary: Perform cluster wide operations such as setting config value, shutting down proxy/target etc.
       operationId: performOperation
@@ -494,7 +530,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NodeConfiguration'
+              $ref: '#/components/schemas/DaemonInfo'
       responses:
         '200':
           description: Target registered successfully
@@ -549,6 +585,34 @@ paths:
               schema:
                 type: string
   /daemon/:
+    get:
+      summary: Get daemon related details
+      operationId: get
+      tags:
+        - Daemon
+      parameters:
+        - name: what
+          in: query
+          description: Daemon details which needs to be fetched
+          required: true
+          schema:
+            $ref: '#/components/schemas/GetWhat'
+      responses:
+        '200':
+          description: Requested daemon details
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ClusterMap'
+                  - $ref: '#/components/schemas/TargetStatistics'
+                  - $ref: '#/components/schemas/DaemonConfiguration'
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
     put:
       summary: Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
       operationId: performOperation
@@ -579,7 +643,7 @@ components:
         name:
           type: string
         value:
-          anyOf:
+          oneOf:
             - $ref: '#/components/schemas/ListParameters'
             - $ref: '#/components/schemas/RangeParameters'
             - $ref: '#/components/schemas/BucketProps'
@@ -659,15 +723,16 @@ components:
           type: string
         pagesize:
           type: string
-    ObjectPoperties:
+    ObjectProperties:
       type: object
       properties:
         name:
           type: string
         size:
           type: integer
+          format: int64
         ctime:
-          type: integer
+          type: string
         checksum:
           type: string
         type:
@@ -732,8 +797,8 @@ components:
     RWPolicy:
       type: string
       enum:
-        - rw_policy_cloud
-        - rw_policy_next_tier
+        - cloud
+        - next_tier
     Version:
       type: string
       enum:
@@ -741,7 +806,7 @@ components:
         - cloud
         - local
         - none
-    NodeConfiguration:
+    DaemonInfo:
       type: object
       properties:
         node_ip_addr:
@@ -752,3 +817,407 @@ components:
           type: string
         direct_url:
           type: string
+    GetWhat:
+      type: string
+      enum:
+        - smap
+        - config
+        - stats
+        - xaction
+    GetProps:
+      type: string
+      enum:
+        - rebalance
+        - prefetch
+    ClusterMap:
+      type: object
+      properties:
+        tmap:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DaemonInfo'
+        pmap:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DaemonInfo'
+        proxy_si:
+          $ref: '#/components/schemas/DaemonInfo'
+        version:
+          type: integer
+          format: int64
+    DaemonCoreStatistics:
+      type: object
+      properties:
+        numget:
+          type: integer
+          format: int64
+        numput:
+          type: integer
+          format: int64
+        numpost:
+          type: integer
+          format: int64
+        numdelete:
+          type: integer
+          format: int64
+        numrename:
+          type: integer
+          format: int64
+        numlist:
+          type: integer
+          format: int64
+        getlatency:
+          type: integer
+          format: int64
+        putlatency:
+          type: integer
+          format: int64
+        listlatency:
+          type: integer
+          format: int64
+        numerr:
+          type: integer
+          format: int64
+    TargetCoreStatistics:
+      allOf:
+        - $ref: '#/components/schemas/DaemonCoreStatistics'
+        - type: object
+          properties:
+            numcoldget:
+              type: integer
+              format: int64
+            bytesloaded:
+              type: integer
+              format: int64
+            bytesevicted:
+              type: integer
+              format: int64
+            filesevicted:
+              type: integer
+              format: int64
+            numsentfiles:
+              type: integer
+              format: int64
+            numsentbytes:
+              type: integer
+              format: int64
+            numrecvfiles:
+              type: integer
+              format: int64
+            numrecvbytes:
+              type: integer
+              format: int64
+            numprefetch:
+              type: integer
+              format: int64
+            bytesprefetched:
+              type: integer
+              format: int64
+            numvchanged:
+              type: integer
+              format: int64
+            bytesvchanged:
+              type: integer
+              format: int64
+            numbadchecksum:
+              type: integer
+              format: int64
+            bytesbadchecksum:
+              type: integer
+              format: int64
+    FileSystemCapacity:
+      type: object
+      properties:
+        used:
+          type: integer
+          format: int64
+        avail:
+          type: integer
+          format: int64
+        usedpct:
+          type: integer
+          format: int32
+    TargetStatistics:
+      type: object
+      properties:
+        core:
+          $ref: '#/components/schemas/TargetCoreStatistics'
+        capacity:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/FileSystemCapacity'
+        cpuidle:
+          type: string
+        disk:
+          type: object
+          additionalProperties:
+            type: string
+    ClusterStatistics:
+      type: object
+      properties:
+        proxy:
+          $ref: '#/components/schemas/DaemonCoreStatistics'
+        target:
+          $ref: '#/components/schemas/TargetStatistics'
+    ProxyConfiguration:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        passthru:
+          type: boolean
+    KeepAliveTrackerConfiguration:
+      type: object
+      properties:
+        interval:
+          type: string
+        name:
+          type: string
+        max:
+          type: string
+        factor:
+          type: integer
+          format: int32
+    DaemonConfiguration:
+      type: object
+      properties:
+        confdir:
+          type: string
+        cloudprovider:
+          type: string
+        cloud_buckets:
+          type: string
+        local_buckets:
+          type: string
+        log:
+          type: object
+          properties:
+            logdir:
+              type: string
+            loglevel:
+              type: string
+            logmaxsize:
+              type: integer
+              format: int64
+            logmaxtotal:
+              type: integer
+              format: int64
+        periodic:
+          type: object
+          properties:
+            stats_time:
+              type: string
+            retry_sync_time:
+              type: string
+        timeout:
+          type: object
+          properties:
+            default_timeout:
+              type: string
+            default_long_timeout:
+              type: string
+            max_keepalive:
+              type: string
+            proxy_ping:
+              type: string
+            cplane_operation:
+              type: string
+            send_file_time:
+              type: string
+            startup_time:
+              type: string
+        proxyconfig:
+          type: object
+          properties:
+            primary:
+              $ref: '#/components/schemas/ProxyConfiguration'
+            original:
+              $ref: '#/components/schemas/ProxyConfiguration'
+        lru_config:
+          type: object
+          properties:
+            lowwm:
+              type: integer
+              format: int32
+            highwm:
+              type: integer
+              format: int32
+            atime_cache_max:
+              type: integer
+              format: int64
+            dont_evict_time:
+              type: string
+            capacity_upd_time:
+              type: string
+            lru_enabled:
+              type: boolean
+        rebalance_conf:
+          type: object
+          properties:
+            startup_delay_time:
+              type: string
+            dest_retry_time:
+              type: string
+            rebalancing_enabled:
+              type: boolean
+        cksum_config:
+          type: object
+          properties:
+            checksum:
+              type: string
+            validate_checksum_cold_get:
+              type: boolean
+            validate_checksum_warm_get:
+              type: boolean
+            enable_read_range_checksum:
+              type: boolean
+        version_config:
+          type: object
+          properties:
+            validate_version_warm_get:
+              type: boolean
+            versioning:
+              type: string
+        fspaths:
+          type: object
+          additionalProperties:
+            type: string
+        test_fspaths:
+          type: object
+          properties:
+            root:
+              type: string
+            count:
+              type: integer
+              format: int32
+            instance:
+              type: integer
+              format: int32
+        netconfig:
+          type: object
+          properties:
+            ipv4:
+              type: string
+            l4:
+              type: object
+              properties:
+                proto:
+                  type: string
+                port:
+                    type: string
+            http:
+              type: object
+              properties:
+                max_num_targets:
+                  type: integer
+                  format: int32
+                use_http2:
+                  type: boolean
+                use_https:
+                  type: boolean
+                use_as_proxy:
+                  type: boolean
+                server_certificate:
+                  type: string
+                server_key:
+                  type: string
+        fskeeper:
+          type: object
+          properties:
+            fs_check_time:
+              type: string
+            offline_fs_check_time:
+              type: string
+            fskeeper_enabled:
+              type: boolean
+        auth:
+          type: object
+          properties:
+            secret:
+              type: string
+            enabled:
+              type: boolean
+            creddir:
+              type: string
+        keepalivetracker:
+          type: object
+          properties:
+            proxy:
+              $ref: '#/components/schemas/KeepAliveTrackerConfiguration'
+            target:
+              $ref: '#/components/schemas/KeepAliveTrackerConfiguration'
+        callstats:
+          type: object
+          properties:
+            request_included:
+              type: array
+              items:
+                type: string
+            factor:
+              type: number
+              format: float
+    XactionDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        startTime:
+          type: string
+        endTime:
+          type: string
+        status:
+          type: string
+    RebalanceTargetStatistics:
+      type: object
+      properties:
+        xactionDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/XactionDetails'
+        numSentFiles:
+          type: integer
+          format: int64
+        numSentBytes:
+          type: integer
+          format: int64
+        numRecvFiles:
+          type: integer
+          format: int64
+        numRecvBytes:
+          type: integer
+          format: int64
+
+    PrefetchTargetStatistics:
+      type: object
+      properties:
+        xactionDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/XactionDetails'
+        numFilesPrefetched:
+          type: integer
+          format: int64
+        numBytesPrefetched:
+          type: integer
+          format: int64
+    RebalanceClusterStatistics:
+      type: object
+      properties:
+        kind:
+          type: string
+        target:
+          type: object
+          additionalProperties:
+              $ref: '#/components/schemas/RebalanceTargetStatistics'
+    PrefetchClusterStatistics:
+      type: object
+      properties:
+        kind:
+          type: string
+        target:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PrefetchTargetStatistics'

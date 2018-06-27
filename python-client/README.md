@@ -77,10 +77,12 @@ Class | Method | HTTP request | Description
 *BucketApi* | [**list_names**](docs/BucketApi.md#list_names) | **GET** /buckets/* | Get bucket names
 *BucketApi* | [**perform_operation**](docs/BucketApi.md#perform_operation) | **POST** /buckets/{bucket-name} | Perform operations on bucket such as create
 *BucketApi* | [**set_properties**](docs/BucketApi.md#set_properties) | **PUT** /buckets/{bucket-name} | Set bucket properties
+*ClusterApi* | [**get**](docs/ClusterApi.md#get) | **GET** /cluster/ | Get cluster related details
 *ClusterApi* | [**perform_operation**](docs/ClusterApi.md#perform_operation) | **PUT** /cluster/ | Perform cluster wide operations such as setting config value, shutting down proxy/target etc.
 *ClusterApi* | [**register_target**](docs/ClusterApi.md#register_target) | **POST** /cluster/register/ | Register storage target
 *ClusterApi* | [**set_primary_proxy**](docs/ClusterApi.md#set_primary_proxy) | **PUT** /cluster/proxy/{primary-proxy-id} | Set primary proxy
 *ClusterApi* | [**unregister_target**](docs/ClusterApi.md#unregister_target) | **DELETE** /cluster/daemon/{daemonId} | Unregister the storage target
+*DaemonApi* | [**get**](docs/DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
 *DaemonApi* | [**perform_operation**](docs/DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
 *ObjectApi* | [**delete**](docs/ObjectApi.md#delete) | **DELETE** /objects/{bucket-name}/{object-name} | Delete object
 *ObjectApi* | [**get**](docs/ObjectApi.md#get) | **GET** /objects/{bucket-name}/{object-name} | Get object
@@ -96,16 +98,48 @@ Class | Method | HTTP request | Description
  - [BucketPropertiesAndOptions](docs/BucketPropertiesAndOptions.md)
  - [BucketProps](docs/BucketProps.md)
  - [CloudProvider](docs/CloudProvider.md)
+ - [ClusterMap](docs/ClusterMap.md)
+ - [ClusterStatistics](docs/ClusterStatistics.md)
+ - [DaemonConfiguration](docs/DaemonConfiguration.md)
+ - [DaemonConfigurationAuth](docs/DaemonConfigurationAuth.md)
+ - [DaemonConfigurationCallstats](docs/DaemonConfigurationCallstats.md)
+ - [DaemonConfigurationCksumConfig](docs/DaemonConfigurationCksumConfig.md)
+ - [DaemonConfigurationFskeeper](docs/DaemonConfigurationFskeeper.md)
+ - [DaemonConfigurationKeepalivetracker](docs/DaemonConfigurationKeepalivetracker.md)
+ - [DaemonConfigurationLog](docs/DaemonConfigurationLog.md)
+ - [DaemonConfigurationLruConfig](docs/DaemonConfigurationLruConfig.md)
+ - [DaemonConfigurationNetconfig](docs/DaemonConfigurationNetconfig.md)
+ - [DaemonConfigurationNetconfigHttp](docs/DaemonConfigurationNetconfigHttp.md)
+ - [DaemonConfigurationNetconfigL4](docs/DaemonConfigurationNetconfigL4.md)
+ - [DaemonConfigurationPeriodic](docs/DaemonConfigurationPeriodic.md)
+ - [DaemonConfigurationProxyconfig](docs/DaemonConfigurationProxyconfig.md)
+ - [DaemonConfigurationRebalanceConf](docs/DaemonConfigurationRebalanceConf.md)
+ - [DaemonConfigurationTestFspaths](docs/DaemonConfigurationTestFspaths.md)
+ - [DaemonConfigurationTimeout](docs/DaemonConfigurationTimeout.md)
+ - [DaemonConfigurationVersionConfig](docs/DaemonConfigurationVersionConfig.md)
+ - [DaemonCoreStatistics](docs/DaemonCoreStatistics.md)
+ - [DaemonInfo](docs/DaemonInfo.md)
+ - [FileSystemCapacity](docs/FileSystemCapacity.md)
+ - [GetProps](docs/GetProps.md)
+ - [GetWhat](docs/GetWhat.md)
  - [Headers](docs/Headers.md)
  - [InputParameters](docs/InputParameters.md)
+ - [KeepAliveTrackerConfiguration](docs/KeepAliveTrackerConfiguration.md)
  - [ListParameters](docs/ListParameters.md)
- - [NodeConfiguration](docs/NodeConfiguration.md)
- - [ObjectPoperties](docs/ObjectPoperties.md)
+ - [ObjectProperties](docs/ObjectProperties.md)
  - [ObjectPropertyTypes](docs/ObjectPropertyTypes.md)
+ - [PrefetchClusterStatistics](docs/PrefetchClusterStatistics.md)
+ - [PrefetchTargetStatistics](docs/PrefetchTargetStatistics.md)
+ - [ProxyConfiguration](docs/ProxyConfiguration.md)
  - [RWPolicy](docs/RWPolicy.md)
  - [RangeParameters](docs/RangeParameters.md)
+ - [RebalanceClusterStatistics](docs/RebalanceClusterStatistics.md)
+ - [RebalanceTargetStatistics](docs/RebalanceTargetStatistics.md)
+ - [TargetCoreStatistics](docs/TargetCoreStatistics.md)
+ - [TargetStatistics](docs/TargetStatistics.md)
  - [TimeFormat](docs/TimeFormat.md)
  - [Version](docs/Version.md)
+ - [XactionDetails](docs/XactionDetails.md)
 
 
 ## Documentation For Authorization
@@ -115,5 +149,5 @@ Class | Method | HTTP request | Description
 
 ## Author
 
-dfc-jenkins@nvidia.com
+dfcdev@exchange.nvidia.com
 
