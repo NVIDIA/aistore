@@ -378,21 +378,15 @@ The election process is as follows:
 
 ### Proxy Startup Process
 
-While it is running, a proxy persists the cluster map when it changes, loading it as the hint cluster map on startup. When a proxy starts up as primary, it performs the following process:
+While it is running, a proxy persists the cluster map when it changes, loading it as the discovery cluster map on startup. When a proxy starts up as primary, it performs the following process:
 
-- It requests the cluster map from each proxy and target in the union of the current cluster map and the hint cluster map.
+- It requests the cluster map from each proxy and target in the union of the current cluster map and the discovery cluster map.
 - If any target or proxy signaled that a vote is in progress, it waits a short time, and restarts the process.
 - If not, it picks the cluster map with the maximum version to be the current cluster map.
 - If it is the primary proxy in that cluster map: It continues as primary.
 - If it is not the primary proxy in that cluster map: It registers to the primary proxy from that cluster map, becoming non-primary.
 
 This process allows a proxy to be rerun with the same command and environment variables, even if it should no longer be primary.
-
-### Current Limitations
-
-- The current primary proxy is determined at startup, through either the configuration file or the -proxyurl command line variable. This means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fail, and rejoin.
-- DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
-- Currently, only the candidate primary proxy keeps track of the fact that a vote is happening. This means that if the candidate primary proxy is not in the hint cluster map when a proxy starts up, a proxy may start as primary at the same time as an election completes, changing the primary proxy.
 
 ## WebDAV
 
@@ -416,3 +410,37 @@ At the time of this writing the corresponding RESTful API can query two xaction 
 ```
 $ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
 ```
+
+## Multi-tiering
+
+DFC can be deployed with multiple consecutive DFC clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
+
+<img src="images/multi-tier.png" alt="DFC multi-tier overview" width="680">
+
+Tiering is configured at the bucket level by setting bucket properties, for example:
+
+```
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
+
+The following fields are used to configure multi-tiering:
+
+* `next_tier_url`: an absolute URI corresponding to the primary proxy of the next tier configured for the bucket specified
+* `read_policy`: `"next_tier"` or `"cloud"` (defaults to `"next_tier"` if not set)
+* `write_policy`: `"next_tier"` or `"cloud"` (defaults to `"cloud"` if not set)
+
+For the `"next_tier"` policy, a tier will read or write to the next tier specified by the `next_tier_url` field. On failure, it will read or write to the cloud (aka AWS or GCP).
+
+For the `"cloud"` policy, a tier will read or write to the cloud (aka AWS or GCP) directly from that tier.
+
+Currently, the endpoints which support multi-tier policies are the following:
+
+* GET /v1/objects/bucket-name/object-name
+* PUT /v1/objects/bucket-name/object-name
+
+## DFC Limitations
+
+- The current primary proxy is determined at startup, through either the configuration file or the -proxyurl command line variable. This means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fails, or rejoins.
+- DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
+- Currently, only the candidate primary proxy keeps track of the fact that a vote is happening. This means that if the candidate primary proxy is not in the discovery cluster map when a proxy starts up, a proxy may start as primary at the same time as an election completes, changing the primary proxy.
+
