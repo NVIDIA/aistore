@@ -108,7 +108,7 @@ func (m *bucketMD) islocal(bucket string) bool {
 	return ok
 }
 
-func (m *bucketMD) cloneU() *bucketMD {
+func (m *bucketMD) clone() *bucketMD {
 	dst := &bucketMD{}
 	m.deepcopy(dst)
 	return dst
@@ -135,7 +135,7 @@ func (m *bucketMD) tag() string    { return bucketmdtag }
 func (m *bucketMD) version() int64 { return m.Version }
 
 func (m *bucketMD) cloneL() (clone interface{}) { // FIXME: remove from revs
-	clone = m.cloneU()
+	clone = m.clone()
 	return
 }
 

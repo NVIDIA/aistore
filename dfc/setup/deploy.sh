@@ -197,3 +197,5 @@ if [[ $AUTHENABLED = "true" ]]; then
 	$GOPATH/bin/authn -config=$CONFFILE &
 	{ set +x; } 2>/dev/null
 fi
+sleep 0.1
+echo done

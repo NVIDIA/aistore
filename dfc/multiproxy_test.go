@@ -132,7 +132,7 @@ func TestDiscoverServers(t *testing.T) {
 		bmdVersion  int64         // use '0' if expecting nil Smap or bucket-metadata
 	}{
 		{
-			"empty hint map",
+			"empty discovery Smap",
 			[]discoverServer{},
 			time.Millisecond,
 			0,
@@ -245,19 +245,18 @@ func TestDiscoverServers(t *testing.T) {
 		primary := newDiscoverServerPrimary()
 		defer primary.callStatsServer.Stop()
 
-		hint := &Smap{Tmap: make(map[string]*daemonInfo), Pmap: make(map[string]*daemonInfo)}
-
+		discoverSmap := newSmap()
 		for _, s := range tc.servers {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			ip, port := getServerIPAndPort(ts.URL)
 			if s.isProxy {
-				hint.addProxy(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
+				discoverSmap.addProxy(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
 			} else {
-				hint.add(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
+				discoverSmap.addTarget(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
 			}
 		}
 
-		smap, bucketmd := primary.discoverClusterMeta(hint, time.Now().Add(tc.duration), time.Millisecond*100)
+		smap, bucketmd := primary.discoverClusterMeta(discoverSmap, time.Now().Add(tc.duration), time.Millisecond*100)
 		if tc.smapVersion == 0 {
 			if smap != nil {
 				t.Errorf("test case %s: expecting nil Smap", tc.name)

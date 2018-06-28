@@ -93,13 +93,13 @@
 	},
 	"keepalivetracker": {
 		"proxy": {
-			"interval": "20s",
+			"interval": "10s",
 			"name": "heartbeat",
 			"max": "20s",
 			"factor": 3
 		},
 		"target": {
-			"interval": "20s",
+			"interval": "10s",
 			"name": "heartbeat",
 			"max": "20s",
 			"factor": 3

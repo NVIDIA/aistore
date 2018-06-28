@@ -854,7 +854,7 @@ func waitForNoLocalBucket(url, name string) error {
 			}
 
 			if time.Now().After(to) {
-				return fmt.Errorf("wait for no local bucket timed out, target = %s", s.DirectURL)
+				return fmt.Errorf("timed out waiting for local bucket %s being removed, target %s", name, s.DirectURL)
 			}
 
 			time.Sleep(time.Second)
@@ -1033,7 +1033,7 @@ func GetClusterMap(url string) (dfc.Smap, error) {
 	}
 
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return dfc.Smap{}, fmt.Errorf("get cluster map, http status %d", r.StatusCode)
+		return dfc.Smap{}, fmt.Errorf("get Smap, http status %d", r.StatusCode)
 	}
 
 	var (
@@ -1047,7 +1047,7 @@ func GetClusterMap(url string) (dfc.Smap, error) {
 
 	err = json.Unmarshal(b, &smap)
 	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal smap: %v", err)
+		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal Smap: %v", err)
 	}
 
 	return smap, nil
@@ -1254,10 +1254,16 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 		}
 
 		if time.Now().After(timeout) {
-			return fmt.Errorf("get server (%s) smap timedout", u)
+			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s", prevVersion, u)
 		}
-		fmt.Printf("Not responded nodes: %v\n", urls)
-		time.Sleep(1 * time.Second)
+		if len(urls) > 0 {
+			fmt.Printf("wait-for-Smap-synced: ")
+			for k, _ := range urls {
+				fmt.Printf("%s ", k)
+			}
+			fmt.Printf("did not respond yet\n")
+			time.Sleep(time.Second)
+		}
 	}
 	return nil
 }

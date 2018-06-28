@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -41,15 +40,6 @@ type (
 		proxyurl  string
 	}
 
-	// FIXME: consider sync.Map; NOTE: atomic version is used by readers
-	// Smap contains id:daemonInfo pairs and related metadata
-	Smap struct {
-		Tmap    map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
-		Pmap    map[string]*daemonInfo `json:"pmap"` // proxyID -> proxyInfo
-		ProxySI *daemonInfo            `json:"proxy_si"`
-		Version int64                  `json:"version"`
-	}
-
 	mountedFS struct {
 		sync.Mutex `json:"-"`
 		Available  map[string]*mountPath `json:"available"`
@@ -63,13 +53,6 @@ type (
 		rg         *rungroup
 	}
 
-	// each daemon is represented by:
-	daemonInfo struct {
-		NodeIPAddr string `json:"node_ip_addr"`
-		DaemonPort string `json:"daemon_port"`
-		DaemonID   string `json:"daemon_id"`
-		DirectURL  string `json:"direct_url"`
-	}
 	// most basic and commonly used key/value map where both the keys and the values are strings
 	simplekvs map[string]string
 
@@ -93,11 +76,12 @@ type (
 
 	// callResult contains data returned by a server to server call
 	callResult struct {
-		si      *daemonInfo
-		outjson []byte
-		err     error
-		errstr  string
-		status  int
+		si            *daemonInfo
+		outjson       []byte
+		err           error
+		errstr        string
+		newPrimaryURL string
+		status        int
 	}
 )
 
@@ -109,171 +93,10 @@ func (r *namedrunner) setname(n string) { r.name = n }
 //
 //====================
 var (
-	build    string
-	ctx      = &daemon{}
-	clivars  = &cliVars{}
-	smapLock = &sync.Mutex{}
+	build   string
+	ctx     = &daemon{}
+	clivars = &cliVars{}
 )
-
-//====================
-//
-// smap wrapper - NOTE - caller must take the lock
-//
-//====================
-func (m *Smap) add(si *daemonInfo) {
-	m.Tmap[si.DaemonID] = si
-	m.Version++
-}
-
-func (m *Smap) addProxy(pi *daemonInfo) {
-	m.Pmap[pi.DaemonID] = pi
-	m.Version++
-}
-
-func (m *Smap) del(sid string) {
-	delete(m.Tmap, sid)
-	m.Version++
-}
-
-func (m *Smap) delProxy(pid string) {
-	delete(m.Pmap, pid)
-	m.Version++
-}
-
-func (m *Smap) versionL() (v int64) {
-	smapLock.Lock()
-	v = m.Version
-	smapLock.Unlock()
-	return
-}
-
-func (m *Smap) count() int {
-	return len(m.Tmap)
-}
-
-func (m *Smap) countProxies() int {
-	return len(m.Pmap)
-}
-
-func (m *Smap) countL() (c int) {
-	smapLock.Lock()
-	c = m.count()
-	smapLock.Unlock()
-	return
-}
-
-func (m *Smap) get(sid string) *daemonInfo {
-	si, ok := m.Tmap[sid]
-	if !ok {
-		return nil
-	}
-	return si
-}
-
-func (m *Smap) getProxy(pid string) *daemonInfo {
-	pi, ok := m.Pmap[pid]
-	if !ok {
-		return nil
-	}
-	return pi
-}
-
-func (m *Smap) containsL(id string) bool {
-	smapLock.Lock()
-	if _, ok := m.Tmap[id]; ok {
-		smapLock.Unlock()
-		return true
-	}
-	if _, ok := m.Pmap[id]; ok {
-		smapLock.Unlock()
-		return true
-	}
-	smapLock.Unlock()
-	return false
-}
-
-func (m *Smap) copyL(dst *Smap) {
-	smapLock.Lock()
-	m.deepcopy(dst)
-	smapLock.Unlock()
-}
-
-func (m *Smap) cloneU() *Smap {
-	dst := &Smap{}
-	m.deepcopy(dst)
-	return dst
-}
-
-func (m *Smap) deepcopy(dst *Smap) {
-	copyStruct(dst, m)
-	dst.Tmap = make(map[string]*daemonInfo, len(m.Tmap))
-	for id, v := range m.Tmap {
-		dst.Tmap[id] = v
-	}
-
-	dst.Pmap = make(map[string]*daemonInfo, len(m.Pmap))
-	for id, v := range m.Pmap {
-		dst.Pmap[id] = v
-	}
-
-	if m.ProxySI != nil {
-		copyStruct(dst.ProxySI, m.ProxySI)
-	}
-}
-
-// Remove is a helper function that removes a server from the smap without knowing beforehand
-// whether it is a proxy or a target.
-// Assuming the ID is unique for proxies and targets. If the ID shows up in both maps, both will be deleted.
-// No lock held during delete.
-// No map version change.
-func (m *Smap) Remove(id string) {
-	delete(m.Tmap, id)
-	delete(m.Pmap, id)
-}
-
-// totalServers returns total number of proxies plus targets.
-// no lock held.
-func (m *Smap) totalServers() int {
-	return len(m.Pmap) + len(m.Tmap)
-}
-
-// Dump prints the smap
-func (m *Smap) Dump() {
-	fmt.Printf("Smap: version = %d\n", m.Version)
-	fmt.Printf("Targets\n")
-	for _, v := range m.Tmap {
-		fmt.Printf("\tid = %-15s\turl = %s\n", v.DaemonID, v.DirectURL)
-	}
-
-	fmt.Printf("Proxies\n")
-	for _, v := range m.Pmap {
-		fmt.Printf("\tid = %-15s\turl = %-30s\n", v.DaemonID, v.DirectURL)
-	}
-
-	fmt.Printf("Primary proxy\n")
-	if m.ProxySI != nil {
-		fmt.Printf("\tid = %-15s\turl = %-30s\n",
-			m.ProxySI.DaemonID, m.ProxySI.DirectURL)
-	}
-}
-
-//
-// revs interface
-//
-func (m *Smap) tag() string    { return smaptag }
-func (m *Smap) version() int64 { return m.Version }
-
-func (m *Smap) cloneL() (clone interface{}) {
-	smapLock.Lock()
-	clone = m.cloneU()
-	smapLock.Unlock()
-	return
-}
-
-func (m *Smap) marshal() (b []byte, err error) {
-	b, err = json.Marshal(m)
-	return
-}
 
 //====================
 //
@@ -298,7 +121,7 @@ func (g *rungroup) run() error {
 		}(i, r)
 	}
 
-	// wait here for the first completed runner(likely signal runner)
+	// wait here for (any/first) runner termination
 	err := <-g.errch
 
 	for _, r := range g.runarr {
@@ -347,8 +170,7 @@ func dfcinit() {
 	}
 	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 	if clivars.role == xproxy {
-		confdir := ctx.config.Confdir
-		p := &proxyrunner{confdir: confdir}
+		p := &proxyrunner{}
 		p.initSI()
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)

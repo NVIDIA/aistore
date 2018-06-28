@@ -117,7 +117,7 @@ type httprunner struct {
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	statsif               statsif
 	kalive                kaliveif
-	smap                  *Smap
+	smapowner             *smapowner
 	bmdowner              *bmdowner
 	callStatsServer       *CallStatsServer
 	revProxy              *httputil.ReverseProxy
@@ -164,7 +164,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		}
 	}
 
-	h.smap = &Smap{}
+	h.smapowner = &smapowner{}
 	h.bmdowner = &bmdowner{}
 }
 
@@ -277,13 +277,14 @@ func (h *httprunner) stop(err error) {
 func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method string, injson []byte,
 	timeout ...time.Duration) callResult {
 	var (
-		request  *http.Request
-		response *http.Response
-		sid      = "unknown"
-		outjson  []byte
-		err      error
-		errstr   string
-		status   int
+		request       *http.Request
+		response      *http.Response
+		sid           = "unknown"
+		outjson       []byte
+		err           error
+		errstr        string
+		newPrimaryURL string
+		status        int
 	)
 
 	startedAt := time.Now()
@@ -314,7 +315,7 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 
 	if err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
-		return callResult{si, outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, "", status}
 	}
 
 	copyHeaders(rOrig, request)
@@ -335,13 +336,14 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		if response != nil && response.StatusCode > 0 {
 			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, method, url, response.Status, err)
 			status = response.StatusCode
-			return callResult{si, outjson, err, errstr, status}
+			return callResult{si, outjson, err, errstr, "", status}
 		}
 
 		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, method, url, err)
-		return callResult{si, outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, "", status}
 	}
 
+	newPrimaryURL = response.Header.Get(HeaderPrimaryProxyURL)
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
 		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, method, url, err)
 		if err == io.EOF {
@@ -352,7 +354,7 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		}
 
 		response.Body.Close()
-		return callResult{si, outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, newPrimaryURL, status}
 	}
 	response.Body.Close()
 
@@ -361,14 +363,14 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
 		errstr = err.Error()
 		status = response.StatusCode
-		return callResult{si, outjson, err, errstr, status}
+		return callResult{si, outjson, err, errstr, newPrimaryURL, status}
 	}
 
 	if sid != "unknown" {
 		h.kalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{si, outjson, err, errstr, status}
+	return callResult{si, outjson, err, errstr, newPrimaryURL, status}
 }
 
 //=============================
@@ -677,7 +679,7 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	h.statsif.add("numerr", 1)
 }
 
-func (h *httprunner) extractsmap(payload simplekvs) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload simplekvs) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
@@ -695,29 +697,40 @@ func (h *httprunner) extractsmap(payload simplekvs) (newsmap, oldsmap *Smap, msg
 			return
 		}
 	}
-	if glog.V(3) {
-		if msg.Action == "" {
-			glog.Infof("extract Smap ver=%d, msg=<nil>", newsmap.version())
-		} else {
-			glog.Infof("extract Smap ver=%d, action=%s", newsmap.version(), msg.Action)
-		}
-	}
-	myver := h.smap.versionL()
+	localsmap := h.smapowner.get()
+	myver := localsmap.version()
 	if newsmap.version() == myver {
 		newsmap = nil
 		return
 	}
-	if newsmap.version() < myver {
-		errstr = fmt.Sprintf("Attempt to downgrade smap version %d to %d", myver, newsmap.version())
+	if !newsmap.isValid() {
+		errstr = fmt.Sprintf("Invalid Smap version %d - lacking or missing the primary", newsmap.version())
+		newsmap = nil
 		return
 	}
+	if newsmap.version() < myver {
+		if h.si != nil && localsmap.getTarget(h.si.DaemonID) == nil {
+			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap version %d to %d", h.si.DaemonID, myver, newsmap.version())
+			newsmap = nil
+			return
+		}
+		if h.si != nil && localsmap.getTarget(h.si.DaemonID) != nil {
+			glog.Errorf("target %s: receive Smap version %d < %d local - proceeding anyway",
+				h.si.DaemonID, newsmap.version(), localsmap.version())
+		} else {
+			errstr = fmt.Sprintf("Attempt to downgrade Smap version %d to %d", myver, newsmap.version())
+			return
+		}
+	}
+
+	glog.Infof("receive Smap: version %d (local %d), ntargets %d, action %s",
+		newsmap.version(), localsmap.version(), newsmap.countTargets(), msg.Action)
+
 	if msgvalue == "" || msg.Value == nil {
 		// synchronize with no action message and no old smap
 		return
 	}
 	// old smap
-	oldsmap.Tmap = make(map[string]*daemonInfo)
-	oldsmap.Pmap = make(map[string]*daemonInfo)
 	v1, ok1 := msg.Value.(map[string]interface{})
 	assert(ok1, fmt.Sprintf("msg (%+v, %T), msg.Value (%+v, %T)", msg, msg, msg.Value, msg.Value))
 	v2, ok2 := v1["tmap"]
@@ -729,6 +742,8 @@ func (h *httprunner) extractsmap(payload simplekvs) (newsmap, oldsmap *Smap, msg
 	pmapif, ok5 := v4.(map[string]interface{})
 	assert(ok5)
 	versionf := v1["version"].(float64)
+
+	oldsmap.init(len(tmapif), len(pmapif))
 
 	// partial restore of the old smap - keeping only the respective DaemonIDs and version
 	for sid := range tmapif {
@@ -757,13 +772,6 @@ func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, 
 		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
 			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
 			return
-		}
-	}
-	if glog.V(3) {
-		if msg.Action == "" {
-			glog.Infof("extract bucket-metadata ver=%d, msg=<nil>", newbucketmd.version())
-		} else {
-			glog.Infof("extract bucket-metadata ver=%d, msg=%+v", newbucketmd.version(), msg)
 		}
 	}
 	myver := h.bmdowner.get().version()

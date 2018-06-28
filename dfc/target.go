@@ -113,6 +113,10 @@ func (t *targetrunner) run() error {
 	bucketmd := newBucketMD()
 	t.bmdowner.put(bucketmd)
 
+	smap := newSmap()
+	smap.addTarget(t.si)
+	t.smapowner.put(smap)
+
 	if status, err := t.register(0); err != nil {
 		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
 		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
@@ -198,17 +202,35 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
 	}
 
-	url, si := t.getPrimaryURLAndSI()
+	url, psi := t.getPrimaryURLAndSI()
 	url += "/" + Rversion + "/" + Rcluster
-
+repeat:
 	var res callResult
 	if timeout > 0 { // keepalive
 		url += "/" + Rkeepalive
-		res = t.call(nil, si, url, http.MethodPost, jsbytes, timeout)
+		res = t.call(nil, psi, url, http.MethodPost, jsbytes, timeout)
 	} else {
-		res = t.call(nil, si, url, http.MethodPost, jsbytes)
+		res = t.call(nil, psi, url, http.MethodPost, jsbytes)
 	}
 	if res.err != nil {
+		s := url
+		if psi != nil {
+			s = psi.DaemonID
+		}
+		if res.newPrimaryURL != "" {
+			newurl := res.newPrimaryURL + "/" + Rversion + "/" + Rcluster
+			if newurl != url {
+				url = newurl
+				psi = nil
+				glog.Errorf("%s: (register => %s: %v - retrying => %s...)", t.si.DaemonID, s, res.err, url)
+				goto repeat
+			}
+		}
+		if IsErrConnectionRefused(res.err) {
+			glog.Errorf("%s: (register => %s: connection refused)", t.si.DaemonID, s)
+		} else {
+			glog.Errorf("%s: (register => %s: %v)", t.si.DaemonID, s, res.err)
+		}
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive..
@@ -236,24 +258,20 @@ func (t *targetrunner) unregister() (int, error) {
 }
 
 // getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
-// if smap is not synced, primary proxy is from config, otherwise from target's smap
+// if Smap is not yet synced, use the primary proxy from the config
 // smap lock is acquired to avoid race between this function and other smap access (for example,
 // receiving smap during metasync)
 func (t *targetrunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
-	smapLock.Lock()
-
-	if t.smap.ProxySI == nil {
+	smap := t.smapowner.get()
+	if smap.ProxySI == nil {
 		url, proxysi = ctx.config.Proxy.Primary.URL, nil
-		smapLock.Unlock()
 		return
 	}
-	if t.smap.ProxySI.DaemonID != "" {
-		url, proxysi = t.smap.ProxySI.DirectURL, t.smap.ProxySI
-		smapLock.Unlock()
+	if smap.ProxySI.DaemonID != "" {
+		url, proxysi = smap.ProxySI.DirectURL, smap.ProxySI
 		return
 	}
-	url, proxysi = ctx.config.Proxy.Primary.URL, t.smap.ProxySI
-	smapLock.Unlock()
+	url, proxysi = ctx.config.Proxy.Primary.URL, smap.ProxySI
 	return
 }
 
@@ -610,17 +628,13 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// PUT
-		d := query.Get(URLParamDaemonID)
-		b := false
-		for id := range t.smap.Pmap {
-			if id == d {
-				b = true
-				break
-			}
+		pid := query.Get(URLParamDaemonID)
+		if pid == "" {
+			t.invalmsghdlr(w, r, "PUT requests are expected to be redirected")
+			return
 		}
-		if !b {
-			t.invalmsghdlr(w, r, fmt.Sprintf(
-				"Invalid request: PUT request from daemon ID: %s must come from a proxy", d))
+		if t.smapowner.get().getProxy(pid) == nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("PUT from an unknown proxy/gateway ID '%s' - Smap out of sync?", pid))
 			return
 		}
 		errstr, errcode := t.doput(w, r, bucket, objname)
@@ -774,7 +788,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if bucketmd.version() != version {
 			glog.Warning("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
 		}
-		clone := bucketmd.cloneU()
+		clone := bucketmd.clone()
 		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, props, clone); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
@@ -933,11 +947,10 @@ func (t *targetrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	smapLock.Lock()
-	if t.smap.ProxySI != nil && from == t.smap.ProxySI.DaemonID {
-		t.kalive.heardFrom(t.smap.ProxySI.DaemonID, false /* reset */)
+	smap := t.smapowner.get()
+	if smap.ProxySI != nil && from == smap.ProxySI.DaemonID {
+		t.kalive.heardFrom(smap.ProxySI.DaemonID, false /* reset */)
 	}
-	smapLock.Unlock()
 }
 
 //  /Rversion/Rpush/bucket-name
@@ -1324,7 +1337,7 @@ func (t *targetrunner) lookupRemotely(bucket, objname string) *daemonInfo {
 		nil, // query
 		http.MethodHead,
 		nil,
-		t.smap, // FIXME: lock?
+		t.smapowner.get(),
 		ctx.config.Timeout.MaxKeepalive,
 	)
 
@@ -1924,9 +1937,9 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, doesnotexist, t.si.DaemonID)
 			return
 		}
-		si, ok := t.smap.Tmap[to]
-		if !ok {
-			errstr = fmt.Sprintf("File copy: unknown destination %s (do syncsmap?)", to)
+		si := t.smapowner.get().getTarget(to)
+		if si == nil {
+			errstr = fmt.Sprintf("File copy: unknown destination %s (Smap not in-sync?)", to)
 			return
 		}
 		size = finfo.Size()
@@ -2078,7 +2091,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg Ac
 
 func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
 	var si *daemonInfo
-	if si, errstr = HrwTarget(bucketTo, objnameTo, t.smap); errstr != "" {
+	if si, errstr = HrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
 		return
 	}
 	bucketmd := t.bmdowner.get()
@@ -2345,15 +2358,9 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if t.readJSON(w, r, newsmap) != nil {
 				return
 			}
-			smapLock.Lock()
-			orig := t.smap
-			t.smap = newsmap
-			err := t.setPrimaryProxy(newsmap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
-			if err != nil {
-				t.smap = orig
-				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to put Smap, err: %v", err))
+			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
+				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
-			smapLock.Unlock()
 			return
 		case Rmetasync:
 			t.receiveMeta(w, r)
@@ -2410,12 +2417,30 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		t.invalmsghdlr(w, r, s)
 		return
 	}
-	err = t.setPrimaryProxyL(proxyid, "" /* primaryToRemove */, prepare)
-	if err != nil {
-		s := fmt.Sprintf("Failed to Set Primary Proxy to %v: %v", proxyid, err)
+
+	smap := t.smapowner.get()
+	psi := smap.getProxy(proxyid)
+	if psi == nil {
+		s := fmt.Sprintf("New primary proxy %s not present in the local Smap: %s", proxyid, smap.pp())
 		t.invalmsghdlr(w, r, s)
 		return
 	}
+	if prepare {
+		if glog.V(4) {
+			glog.Info("Preparation step: do nothing")
+		}
+		return
+	}
+	t.smapowner.Lock()
+	clone := smap.clone()
+	clone.ProxySI = psi
+	if s := t.smapowner.persist(clone, false /*saveSmap*/); s != "" {
+		t.smapowner.Unlock()
+		t.invalmsghdlr(w, r, s)
+		return
+	}
+	t.smapowner.put(clone)
+	t.smapowner.Unlock()
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
@@ -2433,7 +2458,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = json.Marshal(ctx.config)
 		assert(err == nil, err)
 	case GetWhatSmap:
-		jsbytes, err = json.Marshal(t.smap)
+		jsbytes, err = json.Marshal(t.smapowner.get())
 		assert(err == nil, err)
 	case GetWhatSmapVote:
 		// FIXME:
@@ -2442,7 +2467,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		// are reporting vote in progress, but may be for other use cases and for correctness.
 		msg := SmapVoteMsg{
 			VoteInProgress: false,
-			Smap:           t.smap.cloneL().(*Smap),
+			Smap:           t.smapowner.get(),
 			BucketMD:       t.bmdowner.get(),
 		}
 		jsbytes, err := json.Marshal(msg)
@@ -3021,14 +3046,14 @@ func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newsmap, oldsmap, actionsmap, errstr := t.extractsmap(payload)
+	newsmap, oldsmap, actionsmap, errstr := t.extractSmap(payload)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
 	if newsmap != nil {
-		errstr = t.receiveSMap(newsmap, oldsmap, actionsmap)
+		errstr = t.receiveSmap(newsmap, oldsmap, actionsmap)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		}
@@ -3052,7 +3077,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	if msg.Action == "" {
 		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
 	} else {
-		glog.Infof("receive bucket-metadata: version %d, message %+v", newbucketmd.version(), msg)
+		glog.Infof("receive bucket-metadata: version %d, action %s", newbucketmd.version(), msg.Action)
 	}
 	t.bmdowner.Lock()
 	bucketmd := t.bmdowner.get()
@@ -3090,16 +3115,13 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	return
 }
 
-func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
 	var (
 		newtargetid  string
 		existentialQ bool
 	)
-	if msg.Action == "" {
-		glog.Infof("receive Smap: version %d (old %d), ntargets %d", newsmap.version(), oldsmap.version(), len(newsmap.Tmap))
-	} else {
-		glog.Infof("receive Smap: version %d (old %d), ntargets %d, message %+v", newsmap.version(), oldsmap.version(), len(newsmap.Tmap), msg)
-	}
+	glog.Infof("receive Smap: version %d (old %d), ntargets %d, action %s",
+		newsmap.version(), oldsmap.version(), newsmap.countTargets(), msg.Action)
 	newlen := len(newsmap.Tmap)
 	oldlen := len(oldsmap.Tmap)
 
@@ -3126,31 +3148,25 @@ func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 		}
 	}
 	if !existentialQ {
-		errstr = fmt.Sprintf("FATAL: new Smap does not contain the target %s = self", t.si.DaemonID)
+		errstr = fmt.Sprintf("Not finding self %s in the new Smap: %s", t.si.DaemonID, newsmap.pp())
 		return
 	}
 
-	smapLock.Lock()
-	orig := t.smap
-	t.smap = newsmap
-	err := t.setPrimaryProxy(newsmap.ProxySI.DaemonID, "" /* primaryToRemove */, false /* prepare */)
-	smap4xaction := newsmap.cloneU()
-	if err != nil {
-		t.smap = orig
-		smapLock.Unlock()
-		for _, ln := range infoln {
-			glog.Infoln(ln)
-		}
-		errstr = fmt.Sprintf("Failed to receive Smap, err: %v", err)
+	errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */)
+	if errstr != "" {
 		return
 	}
-	smapLock.Unlock()
+	if !newsmap.isPresent(t.si, false) {
+		// FIXME: investigate further
+		s := fmt.Sprintf("Warning: received Smap without self '%s': %s", t.si.DaemonID, newsmap.pp())
+		glog.Errorln(s)
+	}
 
 	for _, ln := range infoln {
 		glog.Infoln(ln)
 	}
 	if msg.Action == ActRebalance {
-		go t.runRebalance(smap4xaction, newtargetid)
+		go t.runRebalance(newsmap, newtargetid)
 		return
 	}
 	if oldlen == 0 {
@@ -3176,15 +3192,14 @@ func (t *targetrunner) receiveSMap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 		if aborted && !running {
 			f := func() {
 				time.Sleep(ctx.config.Rebalance.StartupDelayTime - uptime)
-				currsmap := t.smap.cloneL().(*Smap)
-				t.runRebalance(currsmap, "")
+				t.runRebalance(t.smapowner.get(), "")
 			}
 			go runRebalanceOnce.Do(f) // only once at startup
 		}
 		return
 	}
 	// xaction
-	go t.runRebalance(smap4xaction, newtargetid)
+	go t.runRebalance(newsmap, newtargetid)
 	return
 }
 

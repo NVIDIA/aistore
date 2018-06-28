@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"fmt"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -154,7 +155,7 @@ type Registerer interface {
 	register(timeout time.Duration) (int, error)
 }
 
-// keepaliveCommon is shared by none primary proxies and targets
+// keepaliveCommon is shared by non-primary proxies and targets
 // calls register right away, if it fails, continue to call until successfully registered or asked to stop
 func keepaliveCommon(r Registerer, controlCh chan controlSignal) (stopped bool) {
 	timeout := kalivetimeout
@@ -193,7 +194,7 @@ func keepaliveCommon(r Registerer, controlCh chan controlSignal) (stopped bool) 
 				continue
 			}
 
-			glog.Warningf("keepalive: Unexpected status %d, err: %v", status, err)
+			glog.Warningf("keepalive: err %v (%d)", err, status)
 		case sig := <-controlCh:
 			if sig.msg == stop {
 				stopped = true
@@ -208,19 +209,13 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 		glog.Infof("proxy %s keepalive triggered by err %v", r.p.si.DaemonID, err)
 	}
 
-	smapLock.Lock()
-
-	if r.p.primary {
-		smapLock.Unlock()
+	smap := r.p.smapowner.get()
+	if smap.isPrimary(r.p.si) {
 		return r.primarykeepalive()
 	}
-
-	if r.p.smap.ProxySI == nil || !r.timedOut(r.p.smap.ProxySI.DaemonID) {
-		smapLock.Unlock()
+	if smap.ProxySI == nil || !r.timedOut(smap.ProxySI.DaemonID) {
 		return
 	}
-
-	smapLock.Unlock()
 
 	stopped = keepaliveCommon(r.p, r.controlCh)
 	if stopped {
@@ -230,19 +225,35 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	return stopped
 }
 
-func (r *proxykalive) keepaliveDaemonMap(
-	daemons map[string]*daemonInfo, deleteFunc func(string)) (stopped bool, changed bool) {
-	from := "?" + URLParamFromID + "=" + r.p.si.DaemonID
-
+func (r *proxykalive) primaryLiveAndSync(checkProxies bool) (stopped, repeat, nonprimary bool) {
+	var (
+		daemons     map[string]*daemonInfo
+		action      string
+		removed     int
+		clone       *Smap
+		from        = "?" + URLParamFromID + "=" + r.p.si.DaemonID
+		smap        = r.p.smapowner.get()
+		origversion = smap.version()
+		tag         = "target"
+	)
+	if checkProxies {
+		tag = "proxy"
+		daemons = smap.Pmap
+	} else {
+		daemons = smap.Tmap
+	}
 	for sid, si := range daemons {
 		if si.DaemonID == r.p.si.DaemonID {
-			// skip self
+			assert(checkProxies)
 			continue
+		}
+		if !r.p.smapowner.get().isPrimary(r.p.si) {
+			nonprimary = true
+			return
 		}
 		if !r.timedOut(sid) {
 			continue
 		}
-
 		url := si.DirectURL + URLPath(Rversion, Rhealth)
 		url += from
 		res := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
@@ -250,60 +261,94 @@ func (r *proxykalive) keepaliveDaemonMap(
 			continue
 		}
 
-		if res.status > 0 {
-			glog.Infof("Warning: %s fails keepalive with status %d, err: %v", sid, res.status, res.err)
-		} else {
-			glog.Infof("Warning: %s fails keepalive, err: %v", sid, res.err)
-		}
+		glog.Infof("Warning: %s %s fails keepalive: err %v (status %d)", tag, sid, res.err, res.status)
 
-		responded, stopped := r.poll(si, url)
+		var responded bool
+		responded, stopped = r.poll(si, url)
 		if stopped {
-			return true, false
+			return
 		}
-
 		if responded {
 			continue
 		}
 
-		// FIXME: Seek confirmation when keepalive fails
 		// the verdict
-		if res.status > 0 {
-			glog.Errorf("%s fails keepalive with status %d, err: %v - removing from the cluster map",
-				sid, res.status, res.err)
-		} else {
-			glog.Errorf("%s fails keepalive, err: %v - removing from the cluster map", sid, res.err)
+		glog.Errorf("%s %s fails keepalive: err %v (status %d)", tag, sid, res.err, res.status)
+		if clone == nil {
+			clone = smap.clone()
 		}
-
-		smapLock.Lock()
-		deleteFunc(sid)
-		smapLock.Unlock()
-		changed = true
+		if checkProxies {
+			clone.delProxy(sid)
+		} else {
+			clone.delTarget(sid)
+		}
+		removed++
 	}
 
-	return false, changed
+	if removed == 0 { // all good
+		return
+	}
+
+	r.p.smapowner.Lock()
+	currversion := r.p.smapowner.get().version()
+	if currversion != origversion {
+		// serializing keepalive removals vis-a-vis cluster map changes that may have occured
+		// for any other (non keepalive-related) reasons
+		glog.Warningf("Concurrent: Smap version change (%d => %d) and keepalive removals (%t/%d)",
+			origversion, currversion, checkProxies, removed)
+		repeat = true
+		r.p.smapowner.Unlock()
+		return
+	}
+	if !r.p.smapowner.get().isPrimary(r.p.si) {
+		glog.Infof("Concurrent: primary => non-primary and keepalive removals (%t/%d)",
+			origversion, currversion, checkProxies, removed)
+		r.p.smapowner.Unlock()
+		return
+	}
+	r.p.smapowner.put(clone)
+	if errstr := r.p.smapowner.persist(clone, true); errstr != "" {
+		glog.Errorln(errstr)
+	}
+	r.p.smapowner.Unlock()
+
+	if checkProxies {
+		action = fmt.Sprintf("keepalive: removed %d proxy/gateway(s)", removed)
+	} else {
+		action = fmt.Sprintf("keepalive: removed %d target(s)", removed)
+	}
+	msg := &ActionMsg{Action: action}
+	pair := &revspair{clone, msg}
+	r.p.metasyncer.sync(true, pair)
+	return
 }
 
 func (r *proxykalive) primarykeepalive() (stopped bool) {
+	var repeat, nonprimary bool
 	aval := time.Now().Unix()
 	if !atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, 0, aval) {
 		glog.Infof("primary keepalive is already in progress...")
 		return
 	}
 	defer atomic.CompareAndSwapInt64(&r.primaryKeepaliveInProgress, aval, 0)
-
-	stopped, targetsChanged := r.keepaliveDaemonMap(r.p.smap.Tmap, r.p.smap.del)
-	if stopped {
-		return true
+rep1:
+	stopped, repeat, nonprimary = r.primaryLiveAndSync(false /*checkProxies */)
+	if stopped || nonprimary {
+		return
 	}
-	stopped, proxiesChanged := r.keepaliveDaemonMap(r.p.smap.Pmap, r.p.smap.delProxy)
-	if stopped {
-		return true
+	if repeat {
+		time.Sleep(proxypollival)
+		goto rep1
 	}
-
-	if targetsChanged || proxiesChanged {
-		r.p.metasyncer.sync(false, r.p.smap.cloneL())
+rep2:
+	stopped, repeat, nonprimary = r.primaryLiveAndSync(true /*checkProxies */)
+	if stopped || nonprimary {
+		return
 	}
-
+	if repeat {
+		time.Sleep(proxypollival)
+		goto rep2
+	}
 	return false
 }
 

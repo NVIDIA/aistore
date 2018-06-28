@@ -59,12 +59,12 @@ const (
 // The usage is easy - there is a single sync() method that accepts variable
 // number of parameters. Example sync-ing asynchronously without action messages:
 //
-// 	sync(false, newsmap, p.bucketmd.cloneL())
+// 	sync(false, newsmap, bucketmd.clone())
 //
 // To sync with action message(s) and to block until all the replicas are delivered,
 // do:
 //
-//  	pair := &revspair{ p.smap.cloneU(), &ActionMsg{...} }
+//  	pair := &revspair{ smap, &ActionMsg{...} }
 //  	sync(true, pair)
 //
 // On the receiving side, the metasyncer-generated payload gets extracted,
@@ -76,7 +76,6 @@ const (
 
 type revs interface {
 	tag() string                    // known tags enumerated above
-	cloneL() interface{}            // clone self - the impl. must take lock if need be
 	version() int64                 // version - locking not required
 	marshal() (b []byte, err error) // json-marshal - ditto
 }
@@ -119,13 +118,18 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 }
 
 func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
-	assert(y.p != nil)
-	if !y.p.primary {
-		lead := "?"
-		if y.p.smap.ProxySI != nil {
-			lead = y.p.smap.ProxySI.DaemonID
+	smap := y.p.smapowner.get()
+	if !smap.isPrimary(y.p.si) {
+		reason := "the primary"
+		if !smap.isPresent(y.p.si, true) {
+			reason = "present in the Smap"
 		}
-		glog.Errorf("%s (self) is not the primary proxy (%s) - cannot distribute REVS", y.p.si.DaemonID, lead)
+		lead := "?"
+		if smap.ProxySI != nil {
+			lead = smap.ProxySI.DaemonID
+		}
+		glog.Errorf("%s self is not %s (primary=%s, Smap v%d) - failing the 'sync' request",
+			y.p.si.DaemonID, reason, lead, smap.version())
 		return
 	}
 
@@ -208,7 +212,11 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 			assert(ok2)
 			revs, msg = mpair.revs, mpair.msg
 			if glog.V(3) {
-				glog.Infof("dosync tag=%s, msg=%+v", revs.tag(), msg)
+				glog.Infof("dosync %s, version=%d, action=%s", revs.tag(), revs.version(), msg.Action)
+			}
+		} else {
+			if glog.V(3) {
+				glog.Infof("dosync %s, version=%d", revs.tag(), revs.version())
 			}
 		}
 		tag := revs.tag()
@@ -232,14 +240,18 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 	jsbytes, err = json.Marshal(payload)
 	assert(err == nil, err)
 
+	smap := y.p.smapowner.get()
 	if v, ok := newversions[smaptag]; ok {
 		smap4bcast = v.(*Smap)
 		check4newmembers = (smapSynced != nil)
 	} else if smapSynced == nil {
-		smap4bcast = y.p.smap.cloneL().(*Smap)
-	} else if smapSynced.version() != y.p.smap.versionL() {
-		assert(smapSynced.version() < y.p.smap.versionL())
-		smap4bcast = y.p.smap.cloneL().(*Smap)
+		smap4bcast = smap
+	} else if smapSynced.version() != smap.version() {
+		if smapSynced.version() > smap.version() {
+			s := fmt.Sprintf("%s: sync-ed Smap v%d > v%d the current", y.p.si.DaemonID, smapSynced.version(), smap.version())
+			assert(false, s)
+		}
+		smap4bcast = smap
 		check4newmembers = true
 	} else {
 		smap4bcast = smapSynced
@@ -306,8 +318,9 @@ func (y *metasyncer) handlePending() {
 		err     error
 	)
 
+	smap := y.p.smapowner.get()
 	for id := range y.pending.diamonds {
-		if !y.p.smap.containsL(id) {
+		if !smap.containsID(id) {
 			delete(y.pending.diamonds, id)
 		}
 	}

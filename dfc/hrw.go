@@ -18,9 +18,7 @@ func uniquename(bucket, objname string) string {
 }
 
 func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr string) {
-	// NOTE: commented out on purpose - trading off read access to unlocked map
-	//       smap.Lock(); defer smap.Unlock()
-	if smap.count() == 0 {
+	if smap.countTargets() == 0 {
 		errstr = "DFC cluster map is empty: no targets"
 		return
 	}
@@ -37,10 +35,8 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr strin
 }
 
 func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
-	smapLock.Lock()
 	if smap.countProxies() == 0 {
 		errstr = "DFC cluster map is empty: no proxies"
-		smapLock.Unlock()
 		return
 	}
 	var max uint64
@@ -54,7 +50,6 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 			pi = sinfo
 		}
 	}
-	smapLock.Unlock()
 	return
 }
 

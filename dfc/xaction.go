@@ -279,12 +279,12 @@ func (q *xactInProgress) abortAll() (sleep bool) {
 //
 //===================
 func (xact *xactLRU) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format("15:04:05.000000"))
 	}
-	fin := time.Since(xact.targetrunner.starttime())
-	return fmt.Sprintf("xaction %s:%d %v finished %v", xact.kind, xact.id, start, fin)
+	d := xact.etime.Sub(xact.stime)
+	return fmt.Sprintf("xaction %s:%d %v finished %v (duration %v)", xact.kind, xact.id,
+		xact.stime.Format("15:04:05.000000"), xact.etime.Format("15:04:05.000000"), d)
 }
 
 //===================
@@ -293,12 +293,12 @@ func (xact *xactLRU) tostring() string {
 //
 //===================
 func (xact *xactRebalance) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, start)
+		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, xact.stime.Format("15:04:05.000000"))
 	}
-	fin := time.Since(xact.targetrunner.starttime())
-	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v", xact.kind, xact.id, xact.curversion, start, fin)
+	d := xact.etime.Sub(xact.stime)
+	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v (duration %v)",
+		xact.kind, xact.id, xact.curversion, xact.stime.Format("15:04:05.000000"), xact.etime.Format("15:04:05.000000"), d)
 }
 
 func (xact *xactRebalance) abort() {
@@ -312,12 +312,12 @@ func (xact *xactRebalance) abort() {
 //
 //==============
 func (xact *xactElection) tostring() string {
-	start := xact.stime.Sub(xact.proxyrunner.starttime)
 	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format("15:04:05.000000"))
 	}
-	fin := time.Since(xact.proxyrunner.starttime)
-	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
+	d := xact.etime.Sub(xact.stime)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v (duration %v)", xact.kind, xact.id,
+		xact.stime.Format("15:04:05.000000"), xact.etime.Format("15:04:05.000000"), d)
 }
 
 func (xact *xactElection) abort() {

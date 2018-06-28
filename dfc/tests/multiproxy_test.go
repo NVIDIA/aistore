@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package dfc_test
 
 import (
@@ -47,14 +51,7 @@ var (
 	}
 )
 
-// Note: This sounds stupid but it is true, proxyurl is a global variable used to get primary proxy
-//       url from command line when the tests start, but it is used globally everywhere, for example,
-//       in getClusterMap(), for proxy tests, since the primary proxy will change, in order to use
-//       functions like getClusterMap(), it has to maintain proxyurl always points to the current
-//       primary proxy, the right way to do it is remove the dependency of proxyurl from getClusterMap(),
-//       but who knows how many such things exist.
-
-func TestProxy(t *testing.T) {
+func TestMultiProxy(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
@@ -76,10 +73,6 @@ func TestProxy(t *testing.T) {
 	}
 
 	clusterHealthCheck(t, smap)
-
-	// note: enable after set primary is fixed in dfc
-	// resetPrimaryProxy(originalPrimaryProxyID, t)
-	// proxyurl = originalPrimaryProxyURL
 }
 
 // clusterHealthCheck verifies the cluster has the same servers after tests
@@ -163,13 +156,13 @@ func primaryCrash(t *testing.T) {
 	}
 
 	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("new primary proxy", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
-		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, newPrimaryID)
+		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
 
 	// re-construct the command line to start the original proxy but add the current primary proxy to the args
@@ -181,13 +174,13 @@ func primaryCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	smap, err = waitForPrimaryProxy("restore", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
-		t.Fatalf("Previous Primary Proxy did not rejoin the cluster.")
+		t.Fatalf("Previous primary proxy did not rejoin the cluster")
 	}
 	if err = checkPmapVersions(); err != nil {
 		t.Error(err)
@@ -231,13 +224,13 @@ func primaryAndTargetCrash(t *testing.T) {
 	}
 
 	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("new primary proxy", smap.Version, testing.Verbose(), origProxyCount-1, origTargetCount-1)
+	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1, origTargetCount-1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
-		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, newPrimaryID)
+		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
 
 	targs = setProxyURLArg(targs, newPrimaryURL)
@@ -252,7 +245,7 @@ func primaryAndTargetCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = waitForPrimaryProxy("restore", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +282,7 @@ func proxyCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	smap, err = waitForPrimaryProxy("smap changed", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = waitForPrimaryProxy("to propagate new Smap", smap.Version, testing.Verbose(), origProxyCount-1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +293,7 @@ func proxyCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	smap, err = waitForPrimaryProxy("restore", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +346,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	}
 
 	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("new primary", smap.Version, testing.Verbose(), origProxyCount-2)
+	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +355,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	smap, err = waitForPrimaryProxy("new primary", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,21 +364,21 @@ func primaryAndProxyCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	smap, err = waitForPrimaryProxy("restore", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
-		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, newPrimaryID)
+		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
-		t.Fatalf("Previous Primary Proxy did not rejoin the cluster.")
+		t.Fatalf("Previous primary proxy %s did not rejoin the cluster", oldPrimaryID)
 	}
 
 	if _, ok := smap.Pmap[secondID]; !ok {
-		t.Fatalf("Second Proxy did not rejoin the cluster.")
+		t.Fatalf("Second proxy %s did not rejoin the cluster", secondID)
 	}
 }
 
@@ -406,13 +399,13 @@ func targetRejoin(t *testing.T) {
 	}
 
 	cmd, args, err := kill(httpclient, url, port)
-	smap, err = waitForPrimaryProxy("target crash", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to synchronize on 'target crashed'", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, ok := smap.Tmap[id]; ok {
-		t.Fatalf("Killed Target was not removed from the cluster map: %v", id)
+		t.Fatalf("Killed target was not removed from the Smap: %v", id)
 	}
 
 	args = removeProxyURLArg(args)
@@ -421,22 +414,24 @@ func targetRejoin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	smap, err = waitForPrimaryProxy("target rejoin", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to synchronize on 'target rejoined'", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, ok := smap.Tmap[id]; !ok {
-		t.Fatalf("Restarted Target did not rejoin the cluster: %v", id)
+		t.Fatalf("Restarted target %s did not rejoin the cluster", id)
 	}
 }
 
-// crashAndFastRestore kills the primary and restore before a new leader is elected
+// crashAndFastRestore kills the primary and restores it before a new leader is elected
 func crashAndFastRestore(t *testing.T) {
 	smap := getClusterMap(t)
 
 	url := smap.ProxySI.DirectURL
 	id := smap.ProxySI.DaemonID
+	tlogf("The current primary %s, Smap version %d\n", id, smap.Version)
+
 	cmd, args, err := kill(httpclient, url, smap.ProxySI.DaemonPort)
 	if err != nil {
 		t.Fatal(err)
@@ -448,17 +443,18 @@ func crashAndFastRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tlogf("The %s is currently restarting\n", id)
 
 	// Note: using (version - 1) because the primary will restart with its old version,
 	//       there will be no version change for this restore, so force beginning version to 1 less
-	//       than original version in order to use waitForPrimaryProxy
-	smap, err = waitForPrimaryProxy("restore", smap.Version-1, testing.Verbose())
+	//       than the original version in order to use waitForPrimaryProxy
+	smap, err = waitForPrimaryProxy("to restore", smap.Version-1, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if smap.ProxySI.DaemonID != id {
-		t.Fatalf("incorrect primary proxy, exp = %s, act = %s", smap.ProxySI.DaemonID, id)
+		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, id)
 	}
 }
 
@@ -479,7 +475,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 
 	go runMockTarget(mocktgt, stopch, &smap)
 
-	smap, err = waitForPrimaryProxy("mock target", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
+	smap, err = waitForPrimaryProxy("to synchronize on 'new mock target'", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +488,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	}
 
 	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("new primary", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,26 +504,26 @@ func joinWhileVoteInProgress(t *testing.T) {
 	smap = getClusterMap(t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
-		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, newPrimaryID)
+		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
 
 	if _, ok := smap.Pmap[oldPrimaryID]; ok {
-		t.Fatalf("Previous Primary Proxy rejoined the cluster during a vote")
+		t.Fatalf("Previous primary proxy rejoined the cluster during a vote")
 	}
 
 	mocktgt.vote = false
 
-	smap, err = waitForPrimaryProxy("rejoin", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to synchronize new Smap", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
-		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, newPrimaryID)
+		t.Fatalf("Wrong primary proxy: %s, expectinge: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
-		t.Fatalf("Previous Primary Proxy did not rejoin the cluster")
+		t.Fatalf("Previous primary proxy did not rejoin the cluster")
 	}
 
 	// time to kill the mock target, job well done
@@ -541,7 +537,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	default:
 	}
 
-	_, err = waitForPrimaryProxy("kill mock", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy("to kill mock target", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -617,17 +613,17 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 	}
 
 	proxyurl = nextProxyURL
-	smap, err = waitForPrimaryProxy("new primary proxy", oldVer, testing.Verbose(), oldProxyCnt-1)
+	smap, err = waitForPrimaryProxy("to designate new primary", oldVer, testing.Verbose(), oldProxyCnt-1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if smap.ProxySI == nil {
-		t.Fatalf("Nil ProxySI in retrieved cluster map.")
+		t.Fatalf("Nil ProxySI in retrieved Smap")
 	}
 
 	if smap.ProxySI.DaemonID != nextProxyID {
-		t.Fatalf("Incorrect Primary Proxy: %v, should be: %v", smap.ProxySI.DaemonID, nextProxyID)
+		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, nextProxyID)
 	}
 
 	args = setProxyURLArg(args, nextProxyURL)
@@ -636,7 +632,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = waitForPrimaryProxy("restore", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -821,7 +817,7 @@ loop:
 		time.Sleep(time.Second)
 
 		proxyurl = nextProxyURL
-		smap, err = waitForPrimaryProxy("primary crash", smap.Version, testing.Verbose())
+		smap, err = waitForPrimaryProxy("to propagate 'primary crashed'", smap.Version, testing.Verbose())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -836,7 +832,7 @@ loop:
 			t.Fatal(err)
 		}
 
-		_, err = waitForPrimaryProxy("primary restore", smap.Version, testing.Verbose())
+		_, err = waitForPrimaryProxy("to synchronize on 'primary restored'", smap.Version, testing.Verbose())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -979,7 +975,7 @@ func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary 
 
 	cmdStart := exec.Command(cmd, args...)
 	if asPrimary {
-		// Sets the environment variable to start as Primary Proxy to true
+		// Sets the environment variable to start as primary proxy to true
 		env := os.Environ()
 		env = append(env, "DFCPRIMARYPROXY=TRUE")
 		cmdStart.Env = env
@@ -1081,7 +1077,7 @@ func resetPrimaryProxy(proxyid string, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = waitForPrimaryProxy("restore primary proxy", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy("to restore primary proxy", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1168,8 +1164,7 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 		if totalTargets > 0 {
 			fmt.Printf("Waiting for %d targets\n", totalTargets)
 		}
-		fmt.Printf("Waiting for cluster on %s[%d] .", reason, origVersion)
-		defer fmt.Println()
+		fmt.Printf("Waiting for the cluster %s [Smap version > %d]\n", reason, origVersion)
 	}
 
 	for {
@@ -1181,8 +1176,9 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 		doCheckSMap := (totalTargets == 0 || len(smap.Tmap) == totalTargets) &&
 			(totalProxies == 0 || len(smap.Pmap) == totalProxies)
 		if !doCheckSMap {
-			tlogf("SMap is not updated yet at %s, targets: %d == %d, proxies: %d == %d (passed time: %v)\n",
-				proxyurl, totalTargets, len(smap.Tmap), totalProxies, len(smap.Pmap), time.Since(timeStart))
+			d := time.Since(timeStart)
+			tlogf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
+				proxyurl, totalTargets, len(smap.Tmap), totalProxies, len(smap.Pmap), d.Truncate(time.Second))
 		}
 
 		// if the primary's map changed to the state we want, wait for the map get populated
@@ -1198,7 +1194,7 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 				}
 
 				if time.Now().After(to) {
-					return smap, fmt.Errorf("get primary proxy's smap timedout")
+					return smap, fmt.Errorf("primary proxy's Smap timed out")
 				}
 				time.Sleep(time.Second)
 			}
@@ -1220,13 +1216,9 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 
 		lastVersion = smap.Version
 		time.Sleep(time.Second * 5)
-
-		if verbose {
-			fmt.Printf(".")
-		}
 	}
 
-	return dfc.Smap{}, fmt.Errorf("Timed out while waiting for cluster to stabilize")
+	return dfc.Smap{}, fmt.Errorf("Timed out waiting for the cluster to stabilize")
 }
 
 const (
@@ -1369,7 +1361,7 @@ func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 // after primaryCrash test
 func primarySetToOriginal(t *testing.T) {
 	smap := getClusterMap(t)
-	tlogf("SMAP version at start: %d\n", smap.Version)
+	tlogf("Smap version: %d\n", smap.Version)
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
 	origconf := proxyconf["original"].(map[string]interface{})
@@ -1423,7 +1415,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	defer r.Body.Close()
 	proxyurl = origURL
-	smap, err = waitForPrimaryProxy("new primary proxy", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose())
 	if err != nil {
 		t.Fatal(err)
 	}

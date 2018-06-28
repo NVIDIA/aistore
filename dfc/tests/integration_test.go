@@ -314,6 +314,7 @@ func doReregisterTarget(m *metadata) {
 		loopcnt   = int(timeout12 / sleeptime)
 	)
 	defer m.wg.Done()
+	tlogf("Re-registering target %s...\n", m.sid)
 	// T1
 	err := client.RegisterTarget(m.sid, m.smap)
 	checkFatal(err, m.t)
@@ -335,7 +336,7 @@ func doReregisterTarget(m *metadata) {
 				if !s {
 					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
 				}
-				tlogf("T3: re-registered target %s got updated with the new local bucket map\n", m.sid)
+				tlogf("T3: re-registered target %s got updated with the new bucket-metadata\n", m.sid)
 				break
 			}
 		}
