@@ -163,7 +163,7 @@ $ make rmcache
 DFC supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
 ```
-$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "config"}' http://localhost:8080/v1/daemon
+$ curl -X GET http://localhost:8080/v1/daemon?what=config
 ```
 
 This command queries the DFC configuration; at the time of this writing it'll result in a JSON output that looks as follows:
@@ -179,15 +179,15 @@ In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief
 2. URL path: hostname or IP address of one of the DFC servers.
 
 By convention, a RESTful operation performed on a DFC proxy server usually implies a "clustered" scope. Exceptions include querying
-proxy's own configuration via `{"what": "config"}` message.
+proxy's own configuration via `?what=config` query string parameter.
 
 3. URL path: version of the REST API, resource that is operated upon, and possibly more forward-slash delimited specifiers.
 
 For example: /v1/cluster where 'v1' is the currently supported API version and 'cluster' is the resource.
 
-4. Control message in JSON format, e.g. `{"what": "config"}`.
+4. Control message in the query string parameter, e.g. `?what=config`.
 
-> Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e.g., an entire cluster or a given daemon. Further, they may also include context-specific and JSON-encoded control message to, for instance, distinguish between getting system statistics (`{"what": "stats"}`) versus system configuration (`{"what": "config"}`).
+> Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e.g., an entire cluster or a given daemon. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
 Note that 'localhost' in the examples below is mostly intended for developers and first time users that run the entire DFC system on their Linux laptops. It is implied, however, that the gateway's IP address or hostname is used in all other cases/environments/deployment scenarios.
 
@@ -210,7 +210,7 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET http://localhost:8080/v1/objects/myS3bucket/myobject?offset=1024&length=512 -o myobject` |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://localhost:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |
 | Get bucket names | GET /v1/buckets/\* | `curl -X GET http://localhost:8080/v1/buckets/*` <sup>[6](#ft6)</sup> |
-| List bucket | GET { properties-and-options... } /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' http://localhost:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
+| List objects in bucket | POST {"action": "listobjects", "value":{  properties-and-options... }} /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' http://localhost:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
 | Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://localhost:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
 | Copy object | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://localhost:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
 | Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L http://localhost:8080/v1/objects/mybucket/mydirectory/myobject` |
@@ -245,10 +245,10 @@ ___
 ### Example: querying runtime statistics
 
 ```
-$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "stats"}' http://localhost:8080/v1/cluster
+$ curl -X GET http://localhost:8080/v1/cluster?what=stats
 ```
 
-This single command causes execution of multiple `GET {"what": "stats"}` requests within the DFC cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
+This single command causes execution of multiple `GET ?what=stats` requests within the DFC cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
 
 <img src="images/dfc-get-stats.png" alt="DFC statistics" width="440">
 
@@ -414,5 +414,5 @@ Examples of the supported extended actions include:
 At the time of this writing the corresponding RESTful API can query two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
 
 ```
-$ curl -X GET -H 'Content-Type: application/json' -d '{"what": "xaction", "props": "rebalance"}' http://localhost:8080/v1/cluster
+$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
 ```
