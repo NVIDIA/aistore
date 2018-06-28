@@ -16,12 +16,12 @@ from __future__ import absolute_import
 import unittest
 
 import openapi_client
-from openapi_client.models.bucket_properties_and_options import BucketPropertiesAndOptions  # noqa: E501
+from openapi_client.models.object_property_list import ObjectPropertyList  # noqa: E501
 from openapi_client.rest import ApiException
 
 
-class TestBucketPropertiesAndOptions(unittest.TestCase):
-    """BucketPropertiesAndOptions unit test stubs"""
+class TestObjectPropertyList(unittest.TestCase):
+    """ObjectPropertyList unit test stubs"""
 
     def setUp(self):
         pass
@@ -29,10 +29,10 @@ class TestBucketPropertiesAndOptions(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def testBucketPropertiesAndOptions(self):
-        """Test BucketPropertiesAndOptions"""
+    def testObjectPropertyList(self):
+        """Test ObjectPropertyList"""
         # FIXME: construct object with mandatory attributes with example values
-        # model = openapi_client.models.bucket_properties_and_options.BucketPropertiesAndOptions()  # noqa: E501
+        # model = openapi_client.models.object_property_list.ObjectPropertyList()  # noqa: E501
         pass
 
 

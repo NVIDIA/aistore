@@ -6,7 +6,6 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**delete**](BucketApi.md#delete) | **DELETE** /buckets/{bucket-name} | Delete operations on bucket and its contained objects
 [**get_properties**](BucketApi.md#get_properties) | **HEAD** /buckets/{bucket-name} | Query bucket properties
-[**list**](BucketApi.md#list) | **GET** /buckets/{bucket-name} | Get list of bucket objects and their properties
 [**list_names**](BucketApi.md#list_names) | **GET** /buckets/* | Get bucket names
 [**perform_operation**](BucketApi.md#perform_operation) | **POST** /buckets/{bucket-name} | Perform operations on bucket such as create
 [**set_properties**](BucketApi.md#set_properties) | **PUT** /buckets/{bucket-name} | Set bucket properties
@@ -104,54 +103,6 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-# **list**
-> ObjectProperties list(bucket_name, bucket_properties_and_options)
-
-Get list of bucket objects and their properties
-
-### Example
-```python
-from __future__ import print_function
-import time
-import openapi_client
-from openapi_client.rest import ApiException
-from pprint import pprint
-
-# create an instance of the API class
-api_instance = openapi_client.BucketApi()
-bucket_name = 'bucket_name_example' # str | Bucket name
-bucket_properties_and_options = openapi_client.BucketPropertiesAndOptions() # BucketPropertiesAndOptions | 
-
-try:
-    # Get list of bucket objects and their properties
-    api_response = api_instance.list(bucket_name, bucket_properties_and_options)
-    pprint(api_response)
-except ApiException as e:
-    print("Exception when calling BucketApi->list: %s\n" % e)
-```
-
-### Parameters
-
-Name | Type | Description  | Notes
-------------- | ------------- | ------------- | -------------
- **bucket_name** | **str**| Bucket name | 
- **bucket_properties_and_options** | [**BucketPropertiesAndOptions**](BucketPropertiesAndOptions.md)|  | 
-
-### Return type
-
-[**ObjectProperties**](ObjectProperties.md)
-
-### Authorization
-
-No authorization required
-
-### HTTP request headers
-
- - **Content-Type**: application/json
- - **Accept**: application/jsontext/plain
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
 # **list_names**
 > BucketNames list_names(local=local)
 
@@ -199,7 +150,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **perform_operation**
-> perform_operation(bucket_name, input_parameters)
+> ObjectPropertyList perform_operation(bucket_name, input_parameters)
 
 Perform operations on bucket such as create
 
@@ -218,7 +169,8 @@ input_parameters = openapi_client.InputParameters() # InputParameters |
 
 try:
     # Perform operations on bucket such as create
-    api_instance.perform_operation(bucket_name, input_parameters)
+    api_response = api_instance.perform_operation(bucket_name, input_parameters)
+    pprint(api_response)
 except ApiException as e:
     print("Exception when calling BucketApi->perform_operation: %s\n" % e)
 ```
@@ -232,7 +184,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-void (empty response body)
+[**ObjectPropertyList**](ObjectPropertyList.md)
 
 ### Authorization
 
@@ -241,7 +193,7 @@ No authorization required
 ### HTTP request headers
 
  - **Content-Type**: application/json
- - **Accept**: text/plain
+ - **Accept**: application/jsontext/plain
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

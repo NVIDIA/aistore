@@ -290,37 +290,6 @@ paths:
               schema:
                 type: string
   /buckets/{bucket-name}:
-    get:
-      summary: Get list of bucket objects and their properties
-      operationId: list
-      tags:
-        - Bucket
-      parameters:
-        - name: bucket-name
-          in: path
-          description: Bucket name
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BucketPropertiesAndOptions'
-      responses:
-        '200':
-          description: List of object properties in the specified bucket
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ObjectProperties'
-        default:
-          description: An unexpected error was encountered
-          content:
-            text/plain:
-              schema:
-                type: string
     put:
       summary: Set bucket properties
       operationId: setProperties
@@ -389,6 +358,10 @@ paths:
       responses:
         '200':
           description: Operation on bucket-name succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObjectPropertyList'
         default:
           description: An unexpected error was encountered
           content:
@@ -647,6 +620,7 @@ components:
             - $ref: '#/components/schemas/ListParameters'
             - $ref: '#/components/schemas/RangeParameters'
             - $ref: '#/components/schemas/BucketProps'
+            - $ref: '#/components/schemas/ObjectPropertiesRequestParams'
     Actions:
       type: string
       enum:
@@ -661,6 +635,7 @@ components:
         - setconfig
         - shutdown
         - rebalance
+        - listobjects
     ListParameters:
       properties:
         deadline:
@@ -710,7 +685,7 @@ components:
           type: array
           items:
             type: string
-    BucketPropertiesAndOptions:
+    ObjectPropertiesRequestParams:
       type: object
       properties:
         props:
@@ -747,6 +722,15 @@ components:
           type: string
         targetURL:
           type: string
+    ObjectPropertyList:
+      type: object
+      properties:
+        pagemarker:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObjectProperties'
     ObjectPropertyTypes:
       type: string
       enum:

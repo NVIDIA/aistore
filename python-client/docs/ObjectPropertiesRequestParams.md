@@ -1,4 +1,4 @@
-# BucketPropertiesAndOptions
+# ObjectPropertiesRequestParams
 
 ## Properties
 Name | Type | Description | Notes

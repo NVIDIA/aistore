@@ -27,7 +27,6 @@ from openapi_client.configuration import Configuration
 # import models into sdk package
 from openapi_client.models.actions import Actions
 from openapi_client.models.bucket_names import BucketNames
-from openapi_client.models.bucket_properties_and_options import BucketPropertiesAndOptions
 from openapi_client.models.bucket_props import BucketProps
 from openapi_client.models.cloud_provider import CloudProvider
 from openapi_client.models.cluster_map import ClusterMap
@@ -59,6 +58,8 @@ from openapi_client.models.input_parameters import InputParameters
 from openapi_client.models.keep_alive_tracker_configuration import KeepAliveTrackerConfiguration
 from openapi_client.models.list_parameters import ListParameters
 from openapi_client.models.object_properties import ObjectProperties
+from openapi_client.models.object_properties_request_params import ObjectPropertiesRequestParams
+from openapi_client.models.object_property_list import ObjectPropertyList
 from openapi_client.models.object_property_types import ObjectPropertyTypes
 from openapi_client.models.prefetch_cluster_statistics import PrefetchClusterStatistics
 from openapi_client.models.prefetch_target_statistics import PrefetchTargetStatistics

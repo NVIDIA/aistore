@@ -66,11 +66,27 @@ class TestBucketApi(unittest.TestCase):
                         "Bucket name [%s] does not exist in cloud/local" %
                         self.BUCKET_NAME)
 
-    @unittest.skip("This needs to be fixed after the LIST API is updated")
     def test_list_bucket(self):
-        # FIXME: This won't work with the current DFC API since Swagger doesn't
-        # support a GET with request body
-        pass
+        """
+        1. Create bucket
+        2. Create object in bucket
+        3. List objects and verify that the object is present in the bucket
+        :return:
+        """
+        bucket_name = self.__create_local_bucket()
+        object_name, _ = self.__put_random_object(bucket_name)
+        props = self.models.ObjectPropertyTypes.CHECKSUM
+        requestParams = self.models.ObjectPropertiesRequestParams(props)
+        input_params = self.models.InputParameters(
+            self.models.Actions.LISTOBJECTS, value=requestParams)
+        objectProperties = self.bucket.perform_operation(
+            bucket_name, input_params)
+        self.assertTrue(len(objectProperties.entries) == 1,
+                        "Properties of object present in bucket not returned.")
+        self.assertTrue(objectProperties.entries[0].name == object_name,
+                        "Properties of object present in bucket not returned.")
+        self.assertTrue(objectProperties.entries[0].checksum,
+                        "Properties of object present in bucket not returned.")
 
     def test_bucket_get_create_delete(self):
         """

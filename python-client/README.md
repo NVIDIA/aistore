@@ -73,7 +73,6 @@ Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *BucketApi* | [**delete**](docs/BucketApi.md#delete) | **DELETE** /buckets/{bucket-name} | Delete operations on bucket and its contained objects
 *BucketApi* | [**get_properties**](docs/BucketApi.md#get_properties) | **HEAD** /buckets/{bucket-name} | Query bucket properties
-*BucketApi* | [**list**](docs/BucketApi.md#list) | **GET** /buckets/{bucket-name} | Get list of bucket objects and their properties
 *BucketApi* | [**list_names**](docs/BucketApi.md#list_names) | **GET** /buckets/* | Get bucket names
 *BucketApi* | [**perform_operation**](docs/BucketApi.md#perform_operation) | **POST** /buckets/{bucket-name} | Perform operations on bucket such as create
 *BucketApi* | [**set_properties**](docs/BucketApi.md#set_properties) | **PUT** /buckets/{bucket-name} | Set bucket properties
@@ -95,7 +94,6 @@ Class | Method | HTTP request | Description
 
  - [Actions](docs/Actions.md)
  - [BucketNames](docs/BucketNames.md)
- - [BucketPropertiesAndOptions](docs/BucketPropertiesAndOptions.md)
  - [BucketProps](docs/BucketProps.md)
  - [CloudProvider](docs/CloudProvider.md)
  - [ClusterMap](docs/ClusterMap.md)
@@ -127,6 +125,8 @@ Class | Method | HTTP request | Description
  - [KeepAliveTrackerConfiguration](docs/KeepAliveTrackerConfiguration.md)
  - [ListParameters](docs/ListParameters.md)
  - [ObjectProperties](docs/ObjectProperties.md)
+ - [ObjectPropertiesRequestParams](docs/ObjectPropertiesRequestParams.md)
+ - [ObjectPropertyList](docs/ObjectPropertyList.md)
  - [ObjectPropertyTypes](docs/ObjectPropertyTypes.md)
  - [PrefetchClusterStatistics](docs/PrefetchClusterStatistics.md)
  - [PrefetchTargetStatistics](docs/PrefetchTargetStatistics.md)
