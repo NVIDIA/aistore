@@ -32,7 +32,6 @@ type (
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`
 		Smap      Smap      `json:"smap"`
-		bucketmd  bucketMD  `json:"bucketmd"`
 		StartTime time.Time `json:"starttime"`
 		Initiator string    `json:"initiator"`
 	}
@@ -155,17 +154,6 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.bmdowner.Lock()
-	vlb, newer := h.bmdowner.get().version(), false
-	if vlb < msg.Record.bucketmd.version() {
-		newer = true
-		h.bmdowner.put(&msg.Record.bucketmd)
-	}
-	h.bmdowner.Unlock()
-	if newer {
-		glog.Warningf("VoteRecord bucket-metadata Version (%v) is newer than the local one (%v) - updating\n",
-			msg.Record.bucketmd.version(), vlb)
-	}
 	vote, err := h.voteOnProxy(psi.DaemonID, currPrimaryID)
 	if err != nil {
 		h.invalmsghdlr(w, r, err.Error())
@@ -291,8 +279,6 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 	// include resulting Smap in the response
 	currSmap = p.smapowner.get()
 	currSmap.deepcopy(&vr.Smap)
-	bucketmd := p.bmdowner.get()
-	bucketmd.deepcopy(&vr.bucketmd) // FIXME: redefine VoteRecord et al. to contain pointers
 
 	// election should be started in a goroutine as it must not hang the http handler
 	go p.proxyElection(vr, currPrimaryURL)
@@ -435,7 +421,6 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 				Candidate: vr.Candidate,
 				Primary:   vr.Primary,
 				Smap:      vr.Smap,
-				bucketmd:  vr.bucketmd,
 				StartTime: time.Now(),
 				Initiator: p.si.DaemonID,
 			}})
@@ -493,8 +478,6 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		smap.deepcopy(&vr.Smap)
-		bucketmd := p.bmdowner.get()
-		bucketmd.deepcopy(&vr.bucketmd) // FIXME: VoteRecord must contain pointers to meta here and elsewhere
 		p.proxyElection(vr, currPrimaryURL)
 	} else {
 		glog.Infof("%s: Requesting election (candidate = %s)", p.si.DaemonID, nextPrimaryProxy.DaemonID)
@@ -505,8 +488,6 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 			Initiator: p.si.DaemonID,
 		}
 		smap.deepcopy(&vr.Smap)
-		bucketmd := p.bmdowner.get()
-		bucketmd.deepcopy(&vr.bucketmd)
 		p.sendElectionRequest(vr, nextPrimaryProxy)
 	}
 }
@@ -533,8 +514,6 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 		Initiator: t.si.DaemonID,
 	}
 	smap.deepcopy(&vr.Smap)
-	bucketmd := t.bmdowner.get()
-	bucketmd.deepcopy(&vr.bucketmd) // FIXME
 	t.sendElectionRequest(vr, nextPrimaryProxy)
 }
 

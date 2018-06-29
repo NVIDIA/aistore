@@ -219,10 +219,6 @@ func (m *Smap) deepcopy(dst *Smap) {
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
 	}
-
-	if m.ProxySI != nil {
-		copyStruct(dst.ProxySI, m.ProxySI)
-	}
 }
 
 func (m *Smap) totalServers() int {
