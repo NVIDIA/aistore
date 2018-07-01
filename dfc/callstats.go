@@ -82,7 +82,7 @@ func (c *CallStatsServer) Stop() {
 // calls will come to here and can trigger a write to closed channel error.
 // Unlikely but can happen.
 func (c *CallStatsServer) Call(url string, latency time.Duration, failed bool) {
-	c.ch <- callInfo{url, latency, failed}
+	// c.ch <- callInfo{url, latency, failed}
 }
 
 func (c *CallStatsServer) worker() {
