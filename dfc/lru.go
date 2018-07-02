@@ -86,7 +86,9 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 	if err != nil {
 		return
 	}
-	glog.Infof("LRU %s: to evict %.2f MB", bucketdir, float64(toevict)/MiB)
+	glog.Infof("Initiating LRU for directory: %s. Need to evict: %.2f MB."+
+		" [It is possible that less data gets evicted because of `dont_evict_time` setting in the config.]",
+		bucketdir, float64(toevict)/MiB)
 
 	// init LRU context
 	var oldwork []*fileInfo
