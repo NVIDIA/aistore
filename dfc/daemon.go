@@ -72,6 +72,7 @@ type (
 		run() error
 		stop(error)
 		setname(string)
+		getName() string
 	}
 
 	// callResult contains data returned by a server to server call
@@ -86,6 +87,7 @@ type (
 )
 
 func (r *namedrunner) setname(n string) { r.name = n }
+func (r *namedrunner) getName() string  { return r.name }
 
 //====================
 //
@@ -117,13 +119,14 @@ func (g *rungroup) run() error {
 	g.stpch = make(chan error, 1)
 	for i, r := range g.runarr {
 		go func(i int, r runner) {
-			g.errch <- r.run()
+			err := r.run()
+			glog.Errorf("Runner [%s] threw error [%v].", r.getName(), err)
+			g.errch <- err
 		}(i, r)
 	}
 
 	// wait here for (any/first) runner termination
 	err := <-g.errch
-
 	for _, r := range g.runarr {
 		r.stop(err)
 	}
@@ -197,9 +200,11 @@ func dfcinit() {
 		}
 
 		ctx.rg.add(&atimerunner{
-			chstop:   make(chan struct{}, 4),
-			chfqn:    make(chan string, chfqnSize),
-			atimemap: &atimemap{m: make(map[string]time.Time, atimeCacheIni)},
+			chstop:      make(chan struct{}, 4),
+			chfqn:       make(chan string, chfqnSize),
+			atimemap:    &atimemap{fsToFilesMap: make(map[string]map[string]time.Time, atimeCacheIni)},
+			chGetAtime:  make(chan string),
+			chSendAtime: make(chan accessTimeResponse),
 		}, xatime)
 
 		// Note:
@@ -219,7 +224,7 @@ func dfcinit() {
 			t.testCachepathMounts()
 		} else {
 			t.fspath2mpath()
-			t.mpath2Fsid() // enforce FS uniqueness
+			t.checkIfAllFSIDsAreUnique()
 		}
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)

@@ -482,6 +482,11 @@ At the time of this writing the corresponding RESTful API (section [REST Operati
 $ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
 ```
 
+### Throttling of Xactions
+DFC supports throttling Xactions based on disk utilization. This is governed by two parameters in the [configuration file](dfc/setup/config.sh) - 'disk_util_low_wm' and 'disk_util_high_wm'. If the disk utilization is below the low watermark then the xaction is not throttled; if it is above the watermark, the xaction is throttled with a sleep duration which increases or decreases linearly with the disk utilization. The throttle duration maxes out at 1 second.
+
+At the time of this writing, only LRU supports throttling.
+
 ## Multi-tiering
 
 DFC can be deployed with multiple consecutive DFC clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.

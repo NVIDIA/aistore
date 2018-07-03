@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"os"
-	"sync"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -21,16 +20,22 @@ const (
 	atimeHWM      = 80
 )
 
+type accessTimeResponse struct {
+	accessTime time.Time
+	ok         bool
+}
+
 type atimemap struct {
-	sync.Mutex
-	m map[string]time.Time
+	fsToFilesMap map[string]map[string]time.Time
 }
 
 type atimerunner struct {
 	namedrunner
-	chfqn    chan string // FIXME: consider { fqn, xxhash }
-	chstop   chan struct{}
-	atimemap *atimemap
+	chfqn       chan string // FIXME: consider { fqn, xxhash }
+	chstop      chan struct{}
+	atimemap    *atimemap
+	chGetAtime  chan string             // Process request to get atime of an fqn
+	chSendAtime chan accessTimeResponse // Return access time of an fqn
 }
 
 func (r *atimerunner) run() error {
@@ -40,13 +45,15 @@ loop:
 	for {
 		select {
 		case <-ticker.C:
-			if n := r.heuristics(); n > 0 {
-				r.flush(n)
+			for fileSystem := range r.atimemap.fsToFilesMap {
+				if n := r.heuristics(fileSystem); n > 0 {
+					r.flush(fileSystem, n)
+				}
 			}
 		case fqn := <-r.chfqn:
-			r.atimemap.Lock()
-			r.atimemap.m[fqn] = time.Now()
-			r.atimemap.Unlock()
+			r.updateATimeInATimeMap(fqn)
+		case fqn := <-r.chGetAtime:
+			r.chSendAtime <- r.handleInputOnGetATimeChannel(fqn)
 		case <-r.chstop:
 			ticker.Stop() // NOTE: not flushing cached atimes
 			break loop
@@ -68,21 +75,15 @@ func (r *atimerunner) touch(fqn string) {
 	}
 }
 
-func (r *atimerunner) atime(fqn string) (atime time.Time, ok bool) {
-	if !ctx.config.LRU.LRUEnabled {
-		return
-	}
-	r.atimemap.Lock()
-	atime, ok = r.atimemap.m[fqn]
-	r.atimemap.Unlock()
-	return
+func (r *atimerunner) atime(fqn string) {
+	r.chGetAtime <- fqn
 }
 
-func (r *atimerunner) heuristics() (n int) {
+func (r *atimerunner) heuristics(fileSystem string) (n int) {
 	if !ctx.config.LRU.LRUEnabled {
 		return
 	}
-	l := len(r.atimemap.m)
+	l := len(r.atimemap.fsToFilesMap[fileSystem])
 	if l <= atimeCacheIni {
 		return
 	}
@@ -91,8 +92,11 @@ func (r *atimerunner) heuristics() (n int) {
 		wm = int(uint64(l) * 100 / ctx.config.LRU.AtimeCacheMax)
 	}
 	riostat := getiostatrunner()
-	maxutil := riostat.getMaxUtil()
-
+	maxutil := float32(-1)
+	util, ok := riostat.getDiskUtilizationFromFileSystem(fileSystem)
+	if ok {
+		maxutil = util
+	}
 	switch {
 	case maxutil >= 0 && maxutil < 50: // idle
 		n = l / 4
@@ -109,17 +113,16 @@ func (r *atimerunner) heuristics() (n int) {
 	return
 }
 
-func (r *atimerunner) flush(n int) {
+func (r *atimerunner) flush(fileSystem string, n int) {
 	var (
 		i     int
 		mtime time.Time
 	)
-	r.atimemap.Lock()
-	for fqn, atime := range r.atimemap.m {
+	for fqn, atime := range r.atimemap.fsToFilesMap[fileSystem] {
 		finfo, err := os.Stat(fqn)
 		if err != nil {
 			if os.IsNotExist(err) {
-				delete(r.atimemap.m, fqn)
+				delete(r.atimemap.fsToFilesMap[fileSystem], fqn)
 				i++
 			} else {
 				glog.Warningf("failing to touch %s, err: %v", fqn, err)
@@ -129,13 +132,13 @@ func (r *atimerunner) flush(n int) {
 		mtime = finfo.ModTime()
 		if err = os.Chtimes(fqn, atime, mtime); err != nil {
 			if os.IsNotExist(err) {
-				delete(r.atimemap.m, fqn)
+				delete(r.atimemap.fsToFilesMap[fileSystem], fqn)
 				i++
 			} else {
 				glog.Warningf("can't touch %s, err: %v", fqn, err) // FIXME: carry on forever?
 			}
 		} else {
-			delete(r.atimemap.m, fqn)
+			delete(r.atimemap.fsToFilesMap[fileSystem], fqn)
 			i++
 			if glog.V(4) {
 				glog.Infof("touch %s at %v", fqn, atime)
@@ -146,5 +149,30 @@ func (r *atimerunner) flush(n int) {
 			break
 		}
 	}
-	r.atimemap.Unlock()
+}
+
+func (r *atimerunner) handleInputOnGetATimeChannel(fqn string) accessTimeResponse {
+	if !ctx.config.LRU.LRUEnabled {
+		return accessTimeResponse{}
+	}
+	fileSystem := getFileSystemUsingMountPath(fqn)
+	if fileSystem == "" {
+		return accessTimeResponse{}
+	}
+	if _, isOk := r.atimemap.fsToFilesMap[fileSystem]; !isOk {
+		return accessTimeResponse{}
+	}
+	accessTime, ok := r.atimemap.fsToFilesMap[fileSystem][fqn]
+	return accessTimeResponse{accessTime: accessTime, ok: ok}
+}
+
+func (r *atimerunner) updateATimeInATimeMap(fqn string) {
+	fileSystem := getFileSystemUsingMountPath(fqn)
+	if fileSystem == "" {
+		return
+	}
+	if _, ok := r.atimemap.fsToFilesMap[fileSystem]; !ok {
+		r.atimemap.fsToFilesMap[fileSystem] = make(map[string]time.Time)
+	}
+	r.atimemap.fsToFilesMap[fileSystem][fqn] = time.Now()
 }

@@ -13,22 +13,13 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
-func getToEvict(mpath string, hwm uint32, lwm uint32) (int64, error) {
-	statfs := syscall.Statfs_t{}
-	if err := syscall.Statfs(mpath, &statfs); err != nil {
-		glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
-		return -1, err
+func getFSStats(mountPath string) (blocks uint64, bavail uint64, bsize int64, err error) {
+	fsStats := syscall.Statfs_t{}
+	if err = syscall.Statfs(mountPath, &fsStats); err != nil {
+		glog.Errorf("Failed to fsStats mount path %q, err: %v", mountPath, err)
+		return
 	}
-	blocks, bavail, bsize := statfs.Blocks, statfs.Bavail, statfs.Bsize
-	used := blocks - bavail
-	usedpct := used * 100 / blocks
-	glog.Infof("Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", blocks, bavail, usedpct, hwm, lwm)
-	if usedpct < uint64(hwm) {
-		return 0, nil // 0 to evict
-	}
-	lwmblocks := blocks * uint64(lwm) / 100
-	return int64(used-lwmblocks) * int64(bsize), nil
-
+	return fsStats.Blocks, fsStats.Bavail, int64(fsStats.Bsize), nil
 }
 
 func getAmTimes(osfi os.FileInfo) (time.Time, time.Time, *syscall.Stat_t) {

@@ -121,11 +121,19 @@ type ClusterStatsRaw struct {
 type iostatrunner struct {
 	sync.Mutex
 	namedrunner
-	chsts       chan struct{}
-	CPUidle     string
-	metricnames []string
-	Disk        map[string]simplekvs
-	process     *os.Process // running iostat process. Required so it can be killed later
+	chsts                chan struct{}
+	CPUidle              string
+	metricnames          []string
+	Disk                 map[string]simplekvs
+	process              *os.Process // running iostat process. Required so it can be killed later
+	FileSystemToDisksMap map[string]StringSet
+}
+
+type StringSet map[string]struct{}
+
+type ThrottleChecker interface {
+	getDiskUtilizationFromPath(string) (float32, bool)
+	getFSUsedPercentage(string) (uint64, bool)
 }
 
 type (
@@ -642,4 +650,28 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) (
 	}
 
 	return jsonBytes, nil
+}
+
+func getToEvict(mpath string, hwm uint32, lwm uint32) (int64, error) {
+	blocks, bavail, bsize, err := getFSStats(mpath)
+	if err != nil {
+		return -1, err
+	}
+	used := blocks - bavail
+	usedpct := used * 100 / blocks
+	glog.Infof("Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", blocks, bavail, usedpct, hwm, lwm)
+	if usedpct < uint64(hwm) {
+		return 0, nil // 0 to evict
+	}
+	lwmblocks := blocks * uint64(lwm) / 100
+	return int64(used-lwmblocks) * bsize, nil
+}
+
+func (r *iostatrunner) getFSUsedPercentage(mountPath string) (usedPercentage uint64, ok bool) {
+	totalBlocks, blocksAvailable, _, err := getFSStats(mountPath)
+	if err != nil {
+		return
+	}
+	usedBlocks := totalBlocks - blocksAvailable
+	return usedBlocks * 100 / totalBlocks, true
 }

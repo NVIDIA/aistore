@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"path/filepath"
 )
 
 const (
@@ -31,9 +33,23 @@ func NewIostatRunner() *iostatrunner {
 	}
 }
 
+type LsBlk struct {
+	BlockDevices []BlockDevice `json:"blockdevices"`
+}
+
+type BlockDevice struct {
+	Name              string             `json:"name"`
+	ChildBlockDevices []ChildBlockDevice `json:"children"`
+}
+
+type ChildBlockDevice struct {
+	Name string `json:"name"`
+}
+
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
 	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
+	r.FileSystemToDisksMap = getFileSystemToDiskMap()
 	cmd := exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
 	stdout, err := cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)
@@ -59,11 +75,10 @@ func (r *iostatrunner) run() (err error) {
 			r.Lock()
 			r.CPUidle = fields[iostatnumsys-1]
 			r.Unlock()
-		} else if len(fields) == iostatnumdsk {
+		} else if len(fields) >= iostatnumdsk {
 			if strings.HasPrefix(fields[0], "Device") {
 				if len(r.metricnames) == 0 {
 					r.metricnames = append(r.metricnames, fields[1:]...)
-					assert(len(r.metricnames) == iostatnumdsk-1)
 				}
 			} else {
 				r.Lock()
@@ -73,9 +88,9 @@ func (r *iostatrunner) run() (err error) {
 					ok        bool
 				)
 				if iometrics, ok = r.Disk[device]; !ok {
-					iometrics = make(simplekvs, iostatnumdsk-1) // first time
+					iometrics = make(simplekvs, len(fields)-1) // first time
 				}
-				for i := 1; i < iostatnumdsk; i++ {
+				for i := 1; i < len(fields); i++ {
 					name := r.metricnames[i-1]
 					iometrics[name] = fields[i]
 				}
@@ -118,9 +133,47 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 	return false
 }
 
-func (r *iostatrunner) getMaxUtil() (maxutil float64) {
+func (r *iostatrunner) getDiskUtilizationFromPath(path string) (utilization float32, ok bool) {
+	fileSystem := getFileSystemUsingMountPath(path)
+	if fileSystem == "" {
+		return
+	}
+	return r.getDiskUtilizationFromFileSystem(fileSystem)
+}
+
+func (r *iostatrunner) getDiskUtilizationFromFileSystem(fileSystem string) (utilization float32, ok bool) {
+	disks, isOk := r.FileSystemToDisksMap[fileSystem]
+	if !isOk {
+		return
+	}
+	utilization = float32(r.getMaxUtil(disks))
+	if utilization < 0 {
+		return
+	}
+	return utilization, true
+}
+
+func (r *iostatrunner) getMaxUtil(disks StringSet) (maxutil float64) {
 	maxutil = -1
+	if err := CheckIostatVersion(); err != nil {
+		return
+	}
 	r.Lock()
+	if len(disks) > 0 {
+		for disk := range disks {
+			if ioMetrics, ok := r.Disk[disk]; ok {
+				if utilStr, ok := ioMetrics["%util"]; ok {
+					if util, err := strconv.ParseFloat(utilStr, 32); err == nil {
+						if util > maxutil {
+							maxutil = util
+						}
+					}
+				}
+			}
+		}
+		r.Unlock()
+		return
+	}
 	for _, iometrics := range r.Disk {
 		if utilstr, ok := iometrics["%util"]; ok {
 			if util, err := strconv.ParseFloat(utilstr, 32); err == nil {
@@ -132,6 +185,96 @@ func (r *iostatrunner) getMaxUtil() (maxutil float64) {
 	}
 	r.Unlock()
 	return
+}
+
+func getFileSystemUsingMountPath(filePath string) (fileSystem string) {
+	mountPath := getMountPathFromFilePath(filePath)
+	if mountPath == "" {
+		return
+	}
+	return ctx.mountpaths.Available[mountPath].FileSystem
+}
+
+func getMountPathFromFilePath(filePath string) string {
+	matchingMountPaths := make(StringSet)
+	for mountPath := range ctx.mountpaths.Available {
+		cleanMountPath := filepath.Clean(mountPath)
+		relativePath, err := filepath.Rel(cleanMountPath, filepath.Clean(filePath))
+		// If the relative path starts with two dots, it means that the file
+		// path is outside the mount path.
+		if err != nil || strings.HasPrefix(relativePath, "..") {
+			continue
+		}
+		matchingMountPaths[cleanMountPath] = struct{}{}
+	}
+
+	maxLength := -1
+	longestPrefixMountPath := ""
+	for path := range matchingMountPaths {
+		pathLength := len(path)
+		assert(pathLength != maxLength, fmt.Sprintf("Path length cannot be similar to an existing length"))
+		if pathLength > maxLength {
+			maxLength = pathLength
+			longestPrefixMountPath = path
+		}
+	}
+
+	return longestPrefixMountPath
+}
+
+func getFileSystemFromPath(fsPath string) (fileSystem string) {
+	getFSCommand := fmt.Sprintf("df -P '%s' | awk 'END{print $1}'", fsPath)
+	outputBytes, err := exec.Command("sh", "-c", getFSCommand).Output()
+	if err != nil || len(outputBytes) == 0 {
+		glog.Errorf("Unable to retrieve FS from FSPath. Error: [%v]", fsPath, err)
+		return
+	}
+	fileSystem = strings.TrimSpace(string(outputBytes))
+	return fileSystem
+}
+
+func getDiskFromFileSystem(fileSystem string) (disks StringSet) {
+	getDiskCommand := exec.Command("lsblk", "-no", "name", "-J")
+	outputBytes, err := getDiskCommand.Output()
+	if err != nil || len(outputBytes) == 0 {
+		glog.Errorf("Unable to retrieve disks from FS [%s].", fileSystem)
+		return
+	}
+
+	disks = getDisksFromLsblkOutput(outputBytes, fileSystem)
+	return
+}
+
+func getDisksFromLsblkOutput(lsblkOutputBytes []byte, fileSystem string) (disks StringSet) {
+	disks = make(StringSet)
+	device := strings.TrimPrefix(fileSystem, "/dev/")
+	var lsBlkOutput LsBlk
+	err := json.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
+	if err != nil {
+		glog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
+		return
+	}
+	for _, blockDevice := range lsBlkOutput.BlockDevices {
+		for _, child := range blockDevice.ChildBlockDevices {
+			if child.Name == device {
+				disks[blockDevice.Name] = struct{}{}
+			}
+		}
+	}
+	return
+}
+
+func getFileSystemToDiskMap() map[string]StringSet {
+	fileSystemToDiskMap := make(map[string]StringSet, len(ctx.mountpaths.Available))
+	for _, mountPath := range ctx.mountpaths.Available {
+		disks := getDiskFromFileSystem(mountPath.FileSystem)
+		if len(disks) == 0 {
+			continue
+		}
+		fileSystemToDiskMap[mountPath.FileSystem] = disks
+	}
+
+	return fileSystemToDiskMap
 }
 
 // CheckIostatVersion determines whether iostat command is present and

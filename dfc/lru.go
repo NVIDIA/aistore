@@ -27,14 +27,24 @@ type fileInfo struct {
 type fileInfoMinHeap []*fileInfo
 
 type lructx struct {
-	cursize int64
-	totsize int64
-	newest  time.Time
-	xlru    *xactLRU
-	heap    *fileInfoMinHeap
-	oldwork []*fileInfo
-	t       *targetrunner
+	cursize                    int64
+	totsize                    int64
+	newest                     time.Time
+	xlru                       *xactLRU
+	heap                       *fileInfoMinHeap
+	oldwork                    []*fileInfo
+	t                          *targetrunner
+	currentThrottleSleepInMS   float32
+	previousDiskUtilPercentage float32
+	fsUsedPercentage           uint64
+	lastDiskUtilCheckTime      time.Time
+	lastFSCapacityCheckTime    time.Time
 }
+
+const (
+	InitialThrottleSleepDurationInMS = 1
+	FSCapacityCheckDuation           = 1 * time.Second
+)
 
 func (t *targetrunner) runLRU() {
 	// FIXME: if LRU config has changed we need to force new LRU transaction
@@ -92,7 +102,13 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 
 	// init LRU context
 	var oldwork []*fileInfo
-	lctx := &lructx{totsize: toevict, xlru: xlru, heap: h, oldwork: oldwork, t: t}
+	lctx := &lructx{
+		totsize: toevict,
+		xlru:    xlru,
+		heap:    h,
+		oldwork: oldwork,
+		t:       t,
+	}
 
 	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
 		s := err.Error()
@@ -111,6 +127,14 @@ func (t *targetrunner) oneLRU(bucketdir string, fschkwg *sync.WaitGroup, xlru *x
 // the walking callback is execited by the LRU xaction
 // (notice the receiver)
 func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
+	sleepDuration, isThrottleRequired := lctx.getSleepDurationForThrottle(fqn,
+		FSCapacityCheckDuation, getiostatrunner())
+	glog.Infof("Fetched sleep duration for throttle for FQN [%s]. "+
+		"Duration: [%v]. IsThrottleRequired: [%v]", fqn, sleepDuration, isThrottleRequired)
+	if isThrottleRequired {
+		time.Sleep(sleepDuration)
+	}
+
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
 		return err
@@ -159,8 +183,12 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 
 	// object eviction: access time
 	usetime := atime
-	if cachedatime, ok := getatimerunner().atime(fqn); ok {
-		usetime = cachedatime
+
+	aTimeRunner := getatimerunner()
+	aTimeRunner.atime(fqn)
+	accessTimeResponse := <-aTimeRunner.chSendAtime
+	if accessTimeResponse.ok {
+		usetime = accessTimeResponse.accessTime
 	} else if mtime.After(atime) {
 		usetime = mtime
 	}
@@ -267,4 +295,74 @@ func (h *fileInfoMinHeap) Pop() interface{} {
 	fi := old[n-1]
 	*h = old[0 : n-1]
 	return fi
+}
+
+func (lctx *lructx) getSleepDurationForThrottle(fqn string,
+	fsCapacityCheckDuration time.Duration, throttleChecker ThrottleChecker) (
+	throttleDuration time.Duration, isThrottleRequired bool) {
+	mountPath := getMountPathFromFilePath(fqn)
+	if mountPath == "" {
+		glog.Errorf("Unable to retrieve mount path from file path [%s]. Won't throttle.", fqn)
+		return
+	}
+
+	if time.Now().After(lctx.lastFSCapacityCheckTime.Add(fsCapacityCheckDuration)) {
+		usedFSPercentage, ok := throttleChecker.getFSUsedPercentage(fqn)
+		if !ok {
+			glog.Errorf("Unable to retrieve FS used capacity from mount path [%s]. Won't throttle.", mountPath)
+			return
+		}
+		lctx.fsUsedPercentage = usedFSPercentage
+		lctx.lastFSCapacityCheckTime = time.Now()
+	}
+
+	if lctx.fsUsedPercentage > uint64(ctx.config.LRU.HighWM) {
+		return
+	}
+
+	currentDiskUtilPercentage := lctx.previousDiskUtilPercentage
+	// Fetch disk utilization only after StatsTime has elapsed since
+	// `iostatrunner` updates disk utilization only after StatsTime duration has
+	// elapsed.
+	if time.Now().After(lctx.lastDiskUtilCheckTime.Add(ctx.config.Periodic.StatsTime)) {
+		diskUtilPercentage, ok := throttleChecker.getDiskUtilizationFromPath(fqn)
+		if !ok {
+			glog.Error("Unable to retrieve FS disk utilization. Won't throttle.")
+			return
+		}
+		lctx.lastDiskUtilCheckTime = time.Now()
+		if diskUtilPercentage < float32(ctx.config.Xaction.DiskUtilLowWM) {
+			return
+		}
+		currentDiskUtilPercentage = diskUtilPercentage
+	}
+
+	if currentDiskUtilPercentage <= 1.05*lctx.previousDiskUtilPercentage &&
+		currentDiskUtilPercentage >= 0.95*lctx.previousDiskUtilPercentage {
+		glog.Infof("Current and previous utilization are same. [%d]. "+
+			"Not updating throttling duration [%d].",
+			currentDiskUtilPercentage, lctx.currentThrottleSleepInMS)
+	} else if currentDiskUtilPercentage > float32(ctx.config.Xaction.DiskUtilHighWM) {
+		// To avoid precision errors
+		if lctx.currentThrottleSleepInMS < 0.001 {
+			lctx.currentThrottleSleepInMS = InitialThrottleSleepDurationInMS
+		} else {
+			lctx.currentThrottleSleepInMS *= 2
+			if lctx.currentThrottleSleepInMS > 1000 {
+				lctx.currentThrottleSleepInMS = 1000
+			}
+		}
+	} else {
+		// To avoid precision errors
+		if lctx.currentThrottleSleepInMS < 0.001 {
+			lctx.currentThrottleSleepInMS = InitialThrottleSleepDurationInMS
+		}
+		multiplier := (currentDiskUtilPercentage - float32(ctx.config.Xaction.DiskUtilLowWM)) /
+			float32(ctx.config.Xaction.DiskUtilHighWM-ctx.config.Xaction.DiskUtilLowWM)
+		lctx.currentThrottleSleepInMS = lctx.currentThrottleSleepInMS + lctx.currentThrottleSleepInMS*multiplier
+	}
+
+	lctx.previousDiskUtilPercentage = currentDiskUtilPercentage
+	// time.Duration truncates float to int. Convert to Microseconds and then back to handle float values.
+	return time.Duration(lctx.currentThrottleSleepInMS*1000) * time.Microsecond, true
 }

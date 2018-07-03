@@ -32,10 +32,38 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 	return true
 }
 
-func (r *iostatrunner) getMaxUtil() (maxutil float64) {
+func (r *iostatrunner) getMaxUtil(disks StringSet) (maxutil float64) {
 	return float64(-1)
 }
 
 func CheckIostatVersion() error {
 	return errors.New("Not yet implemented")
+}
+
+func (r *iostatrunner) getDiskUtilizationFromFileSystem(path string) (utilization float32, ok bool) {
+	return float32(-1), false
+}
+
+func (r *iostatrunner) getDiskUtilizationFromPath(path string) (utilization float32, ok bool) {
+	return float32(-1), false
+}
+
+func getFileSystemUsingMountPath(filePath string) (fileSystem string) {
+	return
+}
+
+func getFileSystemFromPath(fsPath string) (fileSystem string) {
+	return
+}
+
+func getDiskFromFileSystem(fileSystem string) (disks StringSet) {
+	return make(StringSet)
+}
+
+func getMountPathFromFilePath(filePath string) (mountPath string) {
+	return
+}
+
+func getDisksFromLsblkOutput(lsblkOutputBytes []byte, fileSystem string) (disks StringSet) {
+	return make(StringSet)
 }

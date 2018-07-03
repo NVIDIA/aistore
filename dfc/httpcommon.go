@@ -531,6 +531,18 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.LRU.DontEvictTime, ctx.config.LRU.DontEvictTimeStr = v, value
 		}
+	case "disk_util_low_wm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf("Failed to convert disk_util_low_wm, err: %v", err)
+		} else {
+			ctx.config.Xaction.DiskUtilLowWM = v
+		}
+	case "disk_util_high_wm":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf("Failed to convert disk_util_high_wm, err: %v", err)
+		} else {
+			ctx.config.Xaction.DiskUtilHighWM = v
+		}
 	case "capacity_upd_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse capacity_upd_time, err: %v", err)

@@ -37,6 +37,10 @@
 		"capacity_upd_time":	"10m",
 		"lru_enabled":  	true
 	},
+	"xaction_config":{
+	    "disk_util_low_wm":      60,
+	    "disk_util_high_wm":     80
+	},
 	"rebalance_conf": {
 		"startup_delay_time":	"3m",
 		"dest_retry_time":	"2m",

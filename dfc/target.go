@@ -40,8 +40,9 @@ const (
 )
 
 type mountPath struct {
-	Path string       `json:"path"`
-	Fsid syscall.Fsid `json:"fsid"`
+	Path       string       `json:"path"`
+	Fsid       syscall.Fsid `json:"fsid"`
+	FileSystem string       `json:"fileSystem"`
 }
 
 type allfinfos struct {
@@ -2780,7 +2781,14 @@ func (t *targetrunner) fspath2mpath() {
 			glog.Errorf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
 			os.Exit(1)
 		}
-		mp := &mountPath{Path: fp, Fsid: statfs.Fsid}
+		fileSystem := getFileSystemFromPath(fp)
+		if fileSystem == "" {
+			glog.Errorf("FATAL: cannot retrieve file system from fspath %q, err: %v", fp)
+			os.Exit(1)
+		}
+
+		mp := &mountPath{Path: fp, Fsid: statfs.Fsid, FileSystem: fileSystem}
+
 		_, ok := ctx.mountpaths.Available[mp.Path]
 		if ok {
 			glog.Errorf("FATAL: invalid config: duplicated fspath %q", fp)
@@ -2815,15 +2823,20 @@ func (t *targetrunner) testCachepathMounts() {
 			glog.Errorf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
 			os.Exit(1)
 		}
-		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid}
+		fileSystem := getFileSystemFromPath(mpath)
+		if fileSystem == "" {
+			glog.Errorf("FATAL: cannot retrieve file system from fspath %q, err: %v", mpath)
+			os.Exit(1)
+		}
+		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid, FileSystem: fileSystem}
 		_, ok := ctx.mountpaths.Available[mp.Path]
 		assert(!ok)
 		ctx.mountpaths.Available[mp.Path] = mp
 	}
 }
 
-func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
-	fsmap = make(map[syscall.Fsid]string, len(ctx.mountpaths.Available))
+func (t *targetrunner) checkIfAllFSIDsAreUnique() {
+	fsmap := make(map[syscall.Fsid]string, len(ctx.mountpaths.Available))
 	for _, mountpath := range ctx.mountpaths.Available {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
@@ -2835,7 +2848,6 @@ func (t *targetrunner) mpath2Fsid() (fsmap map[syscall.Fsid]string) {
 		}
 		fsmap[mountpath.Fsid] = mountpath.Path
 	}
-	return
 }
 
 func (t *targetrunner) startupMpaths() {

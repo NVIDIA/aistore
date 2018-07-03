@@ -7,14 +7,27 @@
 # To deploy DFC with code coverage enabled, set ENABLE_CODE_COVERAGE=1.
 # After runs, to collect code coverage data:
 # 1. run: make kill
-#    wait until all DFC processes are stopped, currently this is not automated, on screen, it will
-#    show "coverage: x.y% of statements" for each process, this indicates the proper termination and
-#    successful creation of coverage data for one process.
+#	wait until all DFC processes are stopped, currently this is not automated, on screen, it will
+#	show "coverage: x.y% of statements" for each process, this indicates the proper termination and
+#	successful creation of coverage data for one process.
 # 2. run: make code-coverage
-#    this will generate dfc_cov.html file under /tmp/dfc
+#	this will generate dfc_cov.html file under /tmp/dfc
 # 3. view the result
-#    open /tmp/dfc/dfc_cov.html in a browser
+#	open /tmp/dfc/dfc_cov.html in a browser
 ############################################
+
+isCommandAvailable () {
+	command=$1
+	versionCheckArgs=$2
+	$command $versionCheckArgs > /dev/null 2>&1
+	if [[ $? -ne 0 ]]; then
+		echo "Error: '$command' not available."
+		exit 1
+	fi
+}
+
+isCommandAvailable "lsblk" "--version"
+isCommandAvailable "df" "--version"
 
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 USE_HTTPS=false
@@ -49,6 +62,7 @@ touch $TMPF;
 OS=$(uname -s)
 case $OS in
 	Linux) #Linux
+		isCommandAvailable "iostat" "-V"
 		setfattr -n user.comment -v comment $TMPF
 		;;
 	Darwin) #macOS
@@ -139,9 +153,9 @@ LOGDIR="$LOGROOT/authn/log"
 source $DIR/authn.sh
 
 
-# -logtostderr=false 		# Logs are written to standard error
-# -alsologtostderr=false 	# Logs are written to standard error and files
-# -stderrthreshold=ERROR 	# Log errors and above are written to stderr and files
+# -logtostderr=false		 # Logs are written to standard error
+# -alsologtostderr=false	 # Logs are written to standard error and files
+# -stderrthreshold=ERROR	 # Log errors and above are written to stderr and files
 # build
 BUILD=`git rev-parse --short HEAD`
 if [ "$ENABLE_CODE_COVERAGE" == "" ]

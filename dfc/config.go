@@ -59,6 +59,7 @@ type dfconfig struct {
 	Timeout          timeoutconfig     `json:"timeout"`
 	Proxy            proxyconfig       `json:"proxyconfig"`
 	LRU              lruconfig         `json:"lru_config"`
+	Xaction          xactionConfig     `json:"xaction_config"`
 	Rebalance        rebalanceconf     `json:"rebalance_conf"`
 	Cksum            cksumconfig       `json:"cksum_config"`
 	Ver              versionconfig     `json:"version_config"`
@@ -68,6 +69,11 @@ type dfconfig struct {
 	FSKeeper         fskeeperconf      `json:"fskeeper"`
 	Auth             authconf          `json:"auth"`
 	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
+}
+
+type xactionConfig struct {
+	DiskUtilLowWM  uint32 `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
+	DiskUtilHighWM uint32 `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
 }
 
 type logconfig struct {
@@ -299,6 +305,12 @@ func validateconf() (err error) {
 	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 		return fmt.Errorf("Invalid LRU configuration %+v", ctx.config.LRU)
 	}
+
+	diskUtilHWM, diskUtilLWM := ctx.config.Xaction.DiskUtilHighWM, ctx.config.Xaction.DiskUtilLowWM
+	if diskUtilHWM <= 0 || diskUtilLWM <= 0 || diskUtilHWM <= diskUtilLWM || diskUtilLWM > 100 || diskUtilHWM > 100 {
+		return fmt.Errorf("Invalid Xaction configuration %+v", ctx.config.Xaction)
+	}
+
 	if ctx.config.Cksum.Checksum != ChecksumXXHash && ctx.config.Cksum.Checksum != ChecksumNone {
 		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
 	}
