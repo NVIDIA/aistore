@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+
 export LOGDIR=/var/log/dfc
 export CONFDIR=/dfc
 export CONFFILE=$HOME/dfc.json
@@ -13,7 +14,19 @@ export CONFFILE_COLLECTD=$HOME/collectd.json
 export GRAPHITE_SERVER=`cat ./inventory/graphana.txt`
 export TESTFSPATHCOUNT=0
 export c=0
-export FSPATHS=export FSPATHS='"/dfc/xvdl": " ", "/dfc/xvdm": " ", "/dfc/xvdn": " ", "/dfc/xvdo": " ", "/dfc/xvdp": " ", "/dfc/xvdq": " ", "/dfc/xvdr": " ", "/dfc/xvds": " ", "/dfc/xvdt": " ", "/dfc/xvdu": " ", "/dfc/xvdv": " ", "/dfc/xvdw": " "'
+export AUTHENABLED=false
+export USE_HTTPS=false
+FSP=
+for disk in "$@"; do
+    if [ -z "$FSP" ]; then
+	FSP='"/dfc/'$disk'": " "'
+    else
+        FSP=$FSP', "/dfc/'$disk'": " "'
+    fi
+done
+echo FSPATHS are $FSP
+#export FSPATHS='"/dfc/xvdb": " ", "/dfc/xvdc": " ", "/dfc/xvdd": " ", "/dfc/xvde": " "'
+export FSPATHS=$FSP
 export IPV4LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$//')
 sudo rm -rf dfcproxy.json || true
 sudo rm -rf dfc.json || true

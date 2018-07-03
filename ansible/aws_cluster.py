@@ -31,21 +31,18 @@ def load_dfc_cluster(cluster, clients):
     dfc = {
         'targets' : None,
         'proxy'   : None,
-        'clients' : None
+        'clients' : None,
+        'new_targets' : None
     }
     ec2_conn = ec2_connect_to_region()
     dfc['targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Target*'})
+    dfc['new_targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_NewTarget*'})
     dfc['proxy'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Proxy*'})
     dfc['clients'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Client*'})
     if len(dfc['clients']) > clients:
         dfc['clients'] = dfc['clients'][:clients]
         logger.info("Considering reduced number of clients {}".format(len(dfc['clients'])))
-
-    for key in dfc:
-        if not dfc[key]:    
-            logger.error("Failed to fetch cluster {0}, make sure AWS instances are tagged with format Cluster_Type(Target/Clients/Proxy)".format(key))
-            raise Exception("Failed to fetch cluster")
-
+    
     cluster_inventory = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.ini')
     cluster_txt = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.txt')
     with open(cluster_inventory, 'w') as c, open(cluster_txt, 'w') as ct:
@@ -227,6 +224,9 @@ def stop_dfc_cluster(dfc):
 def update_dfc_cluster(dfc):
     subprocess.call('./updatedfc.sh')
 
+def cleanup_dfc_cluster(dfc):
+    subprocess.call('./cleandfc.sh')
+    
 if __name__ == '__main__':
 
     setupLogger()
@@ -234,8 +234,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="", add_help=False)
     parser.add_argument("--help", action="help")
     parser.add_argument("--cluster", dest='cluster', required=True, help="Name of the cluster to operate on")
-    parser.add_argument("--command", dest="command", required=True, help="Supported commands - create, terminate, restart, shutdown, update")
+    parser.add_argument("--command", dest="command", required=True, help="Supported commands - create, terminate, restart, shutdown, update, cleanup")
     parser.add_argument("--clients", dest="clients", required=False, help="Number of clients to use, default 4", default=4)
+
     args = parser.parse_args()
 
     cluster = args.cluster
@@ -248,5 +249,6 @@ if __name__ == '__main__':
         stop_dfc_cluster(dfc)
     elif args.command == 'update':
         update_dfc_cluster(dfc)
-
+    elif args.command == 'cleanup':
+        cleanup_dfc_cluster(dfc)
 

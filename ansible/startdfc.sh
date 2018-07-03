@@ -17,8 +17,5 @@ parallel-ssh -h inventory/proxy.txt -i 'cat ~/dfc.json'
 parallel-ssh -h inventory/proxy.txt -i 'tail -20 /var/log/dfcproxy/dfc.INFO'
 parallel-ssh -h inventory/targets.txt -i 'tail -20 /var/log/dfc/dfc.INFO'
 parallel-ssh -h inventory/targets.txt -i 'tail -20 /var/log/dfcproxy/dfc.INFO'
-parallel-ssh -h inventory/proxy.txt -i 'tail -20 /var/log/dfcproxy/dfc.ERROR' || true
-parallel-ssh -h inventory/targets.txt -i 'tail -20 /var/log/dfc/dfc.ERROR' || true
-parallel-ssh -h inventory/targets.txt -i 'tail -20 /var/log/dfcproxy/dfc.ERROR' || true
 
 
