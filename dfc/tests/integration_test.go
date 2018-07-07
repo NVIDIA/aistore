@@ -189,6 +189,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	if len(m.smap.Pmap) < 3 {
 		t.Fatalf("Must have 3 or more proxies/gateways in the cluster, have only %d", len(m.smap.Pmap))
 	}
+	tlogf("Num targets %d, num proxies %d\n", m.origNumTargets, len(m.smap.Pmap))
 	for m.sid = range m.smap.Tmap {
 		break
 	}
@@ -220,11 +221,11 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// Step 3.
 	m.wg.Add(1)
 	go func() {
-		primaryCrash(t)
+		primaryCrashElectRestart(t)
 		m.wg.Done()
 	}()
 
-	// PUT phase is timed to ensure it doesn't finish before primaryCrash() begins
+	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
 	time.Sleep(5 * time.Second)
 	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
 	putRandomFiles(0, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)

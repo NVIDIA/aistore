@@ -716,7 +716,7 @@ func checkHTTPStatus(resp *http.Response, op string) error {
 
 func discardHTTPResp(resp *http.Response) {
 	bufreader := bufio.NewReader(resp.Body)
-	dfc.ReadToNull(bufreader)
+	io.Copy(ioutil.Discard, bufreader)
 }
 
 // Put sends a PUT request to the given URL
@@ -1225,15 +1225,15 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 
 		return false
 	}
-	urls := make(map[string]struct{})
+	urls := make(map[string]int64)
 	for _, d := range smap.Tmap {
 		if !inList(d.DaemonID, idsToIgnore) {
-			urls[d.DirectURL] = struct{}{}
+			urls[d.DirectURL] = 0
 		}
 	}
 	for _, d := range smap.Pmap {
 		if !inList(d.DaemonID, idsToIgnore) {
-			urls[d.DirectURL] = struct{}{}
+			urls[d.DirectURL] = 0
 		}
 	}
 
@@ -1246,21 +1246,21 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 		if err != nil && !dfc.IsErrConnectionRefused(err) {
 			return err
 		}
-
+		urls[u] = smap.Version
 		if err == nil && smap.Version > prevVersion {
 			delete(urls, u)
 			continue
 		}
 
 		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s", prevVersion, u)
+			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, u, smap.Version)
 		}
 		if len(urls) > 0 {
-			fmt.Printf("wait-for-Smap-synced: ")
-			for k, _ := range urls {
-				fmt.Printf("%s ", k)
+			fmt.Printf("wait-for-Smap-synced (> v%d): ", prevVersion)
+			for k, smapV := range urls {
+				fmt.Printf("%s(v%d) ", k, smapV)
 			}
-			fmt.Printf("did not respond yet\n")
+			fmt.Printf("\n")
 			time.Sleep(time.Second)
 		}
 	}

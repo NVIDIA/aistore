@@ -128,6 +128,10 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := h.smapowner.get()
+	if smap.ProxySI == nil {
+		h.invalmsghdlr(w, r, fmt.Sprintf("Cannot vote: current primary undefined, local Smap v%d", smap.version()))
+		return
+	}
 	currPrimaryID := smap.ProxySI.DaemonID
 	isproxy := smap.getProxy(h.si.DaemonID) != nil
 	if candidate == currPrimaryID {
@@ -137,11 +141,11 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	newsmap := &msg.Record.Smap
 	psi := newsmap.getProxy(candidate)
 	if psi == nil {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate '%s' not present in the VoteRecord Smap: %s", candidate, newsmap.pp()))
+		h.invalmsghdlr(w, r, fmt.Sprintf("Candidate '%s' not present in the VoteRecord %s", candidate, newsmap.pp()))
 		return
 	}
 	if !newsmap.isPresent(h.si, isproxy) {
-		h.invalmsghdlr(w, r, fmt.Sprintf("Self '%s' not present in the VoteRecord Smap: %s", h.si.DaemonID, newsmap.pp()))
+		h.invalmsghdlr(w, r, fmt.Sprintf("Self '%s' not present in the VoteRecord Smap %s", h.si.DaemonID, newsmap.pp()))
 		return
 	}
 
@@ -194,7 +198,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	}
 
 	vr := msg.Result
-	glog.Infof("%v received vote result: %v\n", h.si.DaemonID, vr)
+	glog.Infof("%s: received vote result: new primary %s", h.si.DaemonID, vr.Candidate)
 
 	newprimary, oldprimary := vr.Candidate, vr.Primary
 
@@ -202,7 +206,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	isproxy := smap.getProxy(h.si.DaemonID) != nil
 	psi := smap.getProxy(newprimary)
 	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local Smap: %s", newprimary, smap.pp())
+		s := fmt.Sprintf("New primary proxy %s not present in the local %s", newprimary, smap.pp())
 		h.invalmsghdlr(w, r, s)
 		return
 	}
@@ -219,6 +223,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	}
 	h.smapowner.put(clone)
 	h.smapowner.Unlock()
+	glog.Infof("resulting %s", clone.pp())
 }
 
 // PUT "/"+Rversion+"/"+Rvote+"/"+Rvoteinit
@@ -242,7 +247,7 @@ func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !newsmap.isPresent(p.si, true) {
-		s := fmt.Sprintf("Self '%s' not present in the Vote Request Smap: %s", p.si.DaemonID, newsmap.pp())
+		s := fmt.Sprintf("Self '%s' not present in the Vote Request %s", p.si.DaemonID, newsmap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -312,7 +317,7 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, currPrimaryURL string, xel
 	proxyup, err := p.pingWithTimeout(url, ctx.config.Timeout.ProxyPing)
 	if proxyup {
 		// Move back to Idle state
-		glog.Infof("current primary %s is up: moving back to idle state", currPrimaryURL)
+		glog.Infof("current primary %s is up: moving back to idle", currPrimaryURL)
 		return
 	}
 	if err != nil {
@@ -323,11 +328,10 @@ func (p *proxyrunner) doProxyElection(vr *VoteRecord, currPrimaryURL string, xel
 	// Begin Election State
 	elected, votingErrors := p.electAmongProxies(vr)
 	if !elected {
-		// Move back to Idle state
-		glog.Infoln("Primary proxy election failed: moving back to idle state")
+		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", currPrimaryURL)
 		return
 	}
-	glog.Infoln("Moving to election state phase 2")
+	glog.Infoln("Moving to election state phase 2 (commit)")
 	// Begin Election2 State
 	confirmationErrors := p.confirmElectionVictory(vr)
 
@@ -354,7 +358,15 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 
 	for res := range resch {
 		if res.err != nil {
-			glog.Warningf("Error response from %s, err: %v", res.daemonID, res.err)
+			if IsErrConnectionRefused(res.err) {
+				if res.daemonID == vr.Primary {
+					glog.Infof("Expected response from %s (current/failed primary): connection refused", res.daemonID)
+				} else {
+					glog.Warningf("Error response from %s: connection refused", res.daemonID)
+				}
+			} else {
+				glog.Warningf("Error response from %s, err: %v", res.daemonID, res.err)
+			}
 			errors[res.daemonID] = true
 			n++
 		} else {
@@ -399,7 +411,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 			resch <- voteResult{
 				yes:      false,
 				daemonID: r.si.DaemonID,
-				err:      fmt.Errorf("Error reading response from %s(%s): %v", r.si.DaemonID, r.si.DirectURL, r.err),
+				err:      r.err,
 			}
 		} else {
 			resch <- voteResult{
@@ -525,7 +537,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 
 	res := h.call(nil, nextPrimaryProxy, url, http.MethodPut, jsbytes)
 	if res.err != nil {
-		if IsErrConnectionRefused(err) {
+		if IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(time.Second)
 				res = h.call(nil, nextPrimaryProxy, url, http.MethodPut, jsbytes)

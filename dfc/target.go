@@ -114,7 +114,7 @@ func (t *targetrunner) run() error {
 	t.bmdowner.put(bucketmd)
 
 	smap := newSmap()
-	smap.addTarget(t.si)
+	smap.Tmap[t.si.DaemonID] = t.si
 	t.smapowner.put(smap)
 
 	if status, err := t.register(0); err != nil {
@@ -196,41 +196,17 @@ func (t *targetrunner) stop(err error) {
 
 // target registration with proxy
 func (t *targetrunner) register(timeout time.Duration) (int, error) {
-	var newbucketmd bucketMD
-	jsbytes, err := json.Marshal(t.si)
-	if err != nil {
-		return 0, fmt.Errorf("Unexpected failure to json-marshal %+v, err: %v", t.si, err)
-	}
-
-	url, psi := t.getPrimaryURLAndSI()
-	url += "/" + Rversion + "/" + Rcluster
-repeat:
-	var res callResult
-	if timeout > 0 { // keepalive
-		url += "/" + Rkeepalive
-		res = t.call(nil, psi, url, http.MethodPost, jsbytes, timeout)
-	} else {
-		res = t.call(nil, psi, url, http.MethodPost, jsbytes)
+	var (
+		newbucketmd bucketMD
+		res         callResult
+	)
+	if timeout == 0 {
+		res = t.join(false, "")
+	} else { // keepalive
+		url, psi := t.getPrimaryURLAndSI()
+		res = t.registerToURL(url, psi, timeout, false, "")
 	}
 	if res.err != nil {
-		s := url
-		if psi != nil {
-			s = psi.DaemonID
-		}
-		if res.newPrimaryURL != "" {
-			newurl := res.newPrimaryURL + "/" + Rversion + "/" + Rcluster
-			if newurl != url {
-				url = newurl
-				psi = nil
-				glog.Errorf("%s: (register => %s: %v - retrying => %s...)", t.si.DaemonID, s, res.err, url)
-				goto repeat
-			}
-		}
-		if IsErrConnectionRefused(res.err) {
-			glog.Errorf("%s: (register => %s: connection refused)", t.si.DaemonID, s)
-		} else {
-			glog.Errorf("%s: (register => %s: %v)", t.si.DaemonID, s, res.err)
-		}
 		return res.status, res.err
 	}
 	// not being sent at cluster startup and keepalive..
@@ -247,32 +223,14 @@ repeat:
 		t.bmdowner.put(&newbucketmd)
 		t.bmdowner.Unlock()
 	}
-	return res.status, res.err
+	return 0, nil
 }
 
 func (t *targetrunner) unregister() (int, error) {
 	url, si := t.getPrimaryURLAndSI()
-	url += "/" + Rversion + "/" + Rcluster + "/" + Rdaemon + "/" + t.si.DaemonID
+	url += URLPath(Rversion, Rcluster, Rdaemon, t.si.DaemonID)
 	res := t.call(nil, si, url, http.MethodDelete, nil)
 	return res.status, res.err
-}
-
-// getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
-// if Smap is not yet synced, use the primary proxy from the config
-// smap lock is acquired to avoid race between this function and other smap access (for example,
-// receiving smap during metasync)
-func (t *targetrunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
-	smap := t.smapowner.get()
-	if smap.ProxySI == nil {
-		url, proxysi = ctx.config.Proxy.Primary.URL, nil
-		return
-	}
-	if smap.ProxySI.DaemonID != "" {
-		url, proxysi = smap.ProxySI.DirectURL, smap.ProxySI
-		return
-	}
-	url, proxysi = ctx.config.Proxy.Primary.URL, smap.ProxySI
-	return
 }
 
 //===========================================================================================
@@ -2383,6 +2341,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
+			glog.Infof("%s: %s v%d done", t.si.DaemonID, Rsyncsmap, newsmap.version())
 			return
 		case Rmetasync:
 			t.receiveMeta(w, r)
@@ -2443,7 +2402,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	smap := t.smapowner.get()
 	psi := smap.getProxy(proxyid)
 	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local Smap: %s", proxyid, smap.pp())
+		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
 		t.invalmsghdlr(w, r, s)
 		return
 	}
@@ -3142,8 +3101,15 @@ func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 		newtargetid  string
 		existentialQ bool
 	)
-	glog.Infof("receive Smap: version %d (old %d), ntargets %d, action %s",
-		newsmap.version(), oldsmap.version(), newsmap.countTargets(), msg.Action)
+	var s string
+	if oldsmap.version() > 0 {
+		s = fmt.Sprintf(" (prev non-local %d)", oldsmap.version())
+	}
+	if msg.Action != "" {
+		s = ", action " + msg.Action
+	}
+	glog.Infof("receive Smap: version %d%s, ntargets %d, primary %s%s",
+		newsmap.version(), s, newsmap.countTargets(), newsmap.ProxySI.DaemonID, s)
 	newlen := len(newsmap.Tmap)
 	oldlen := len(oldsmap.Tmap)
 
@@ -3170,7 +3136,7 @@ func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 		}
 	}
 	if !existentialQ {
-		errstr = fmt.Sprintf("Not finding self %s in the new Smap: %s", t.si.DaemonID, newsmap.pp())
+		errstr = fmt.Sprintf("Not finding self %s in the new %s", t.si.DaemonID, newsmap.pp())
 		return
 	}
 

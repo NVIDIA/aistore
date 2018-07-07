@@ -36,10 +36,11 @@ type daemonInfo struct {
 
 // Cluster Map aka Smap
 type Smap struct {
-	Tmap    map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
-	Pmap    map[string]*daemonInfo `json:"pmap"` // proxyID -> proxyInfo
-	ProxySI *daemonInfo            `json:"proxy_si"`
-	Version int64                  `json:"version"`
+	Tmap      map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
+	Pmap      map[string]*daemonInfo `json:"pmap"` // proxyID -> proxyInfo
+	NonElects simplekvs              `json:"non_electable"`
+	ProxySI   *daemonInfo            `json:"proxy_si"`
+	Version   int64                  `json:"version"`
 }
 
 type smapowner struct {
@@ -87,14 +88,11 @@ func (r *smapowner) synchronize(newsmap *Smap, saveSmap, lesserVersionIsErr bool
 }
 
 func (r *smapowner) persist(newsmap *Smap, saveSmap bool) (errstr string) {
-	origID := ctx.config.Proxy.Primary.ID
-	origURL := ctx.config.Proxy.Primary.URL
-	ctx.config.Proxy.Primary.ID = newsmap.ProxySI.DaemonID
-	ctx.config.Proxy.Primary.URL = newsmap.ProxySI.DirectURL
+	origURL := ctx.config.Proxy.PrimaryURL
+	ctx.config.Proxy.PrimaryURL = newsmap.ProxySI.DirectURL
 	if err := LocalSave(clivars.conffile, ctx.config); err != nil {
 		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.conffile, err)
-		ctx.config.Proxy.Primary.ID = origID
-		ctx.config.Proxy.Primary.URL = origURL
+		ctx.config.Proxy.PrimaryURL = origURL
 		return
 	}
 
@@ -120,7 +118,7 @@ func (m *Smap) init(tsize, psize int) {
 
 func (m *Smap) pp() string {
 	s, _ := json.MarshalIndent(m, "", "\t")
-	return fmt.Sprintf("Smap version %d\n:%s", m.version(), string(s))
+	return fmt.Sprintf("Smap v%d:\n%s", m.version(), string(s))
 }
 
 func (m *Smap) isValid() bool {
@@ -219,10 +217,6 @@ func (m *Smap) deepcopy(dst *Smap) {
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
 	}
-}
-
-func (m *Smap) totalServers() int {
-	return m.countTargets() + m.countProxies()
 }
 
 //

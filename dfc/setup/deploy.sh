@@ -30,6 +30,7 @@ SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"
 AUTHENABLED="${AUTHENABLED:-false}"
 AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
 AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
+NON_ELECTABLE=false
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0
@@ -75,7 +76,14 @@ read proxycount
 if ! [[ "$proxycount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$proxycount' is not a number"; exit 1
 elif  [ $proxycount -lt 1 ] ; then
-    echo "Error: $proxycount must be at least 1"; exit 1
+	echo "Error: $proxycount must be at least 1"; exit 1
+fi
+if [ $proxycount -gt 1 ] ; then
+	let DISCOVERYPORT=$PORT+1
+	DISCOVERYURL="http://localhost:$DISCOVERYPORT"
+	if $USE_HTTPS; then
+		DISCOVERYURL="https://localhost:$DISCOVERYPORT"
+	fi
 fi
 
 START=0
@@ -141,6 +149,7 @@ then
 	EXE=$GOPATH/bin/dfc
 	go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" setup/dfc.go
 else
+	echo "Note: code test-coverage enabled!"
 	EXE=$GOPATH/bin/dfc_coverage.test
 	rm $LOGROOT/*.cov
 	go test . -c -run=TestCoverage -v -o $EXE -cover

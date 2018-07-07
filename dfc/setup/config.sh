@@ -24,16 +24,10 @@
 		"startup_time":		"1m"
 	},
 	"proxyconfig": {
-		"primary": {
-			"id":		"${PROXYID}",
-			"url": 		"${PROXYURL}",
-			"passthru": 	true
-		},
-		"original": {
-			"id":		"${PROXYID}",
-			"url": 		"${PROXYURL}",
-			"passthru": 	true
-		}
+		"non_electable":	${NON_ELECTABLE},
+		"primary_url":		"${PROXYURL}",
+		"original_url": 	"${PROXYURL}",
+		"discovery_url": 	"${DISCOVERYURL}"
 	},
 	"lru_config": {
 		"lowwm":		75,

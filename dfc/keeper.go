@@ -210,6 +210,9 @@ func (r *proxykalive) keepalive(err error) (stopped bool) {
 	}
 
 	smap := r.p.smapowner.get()
+	if smap == nil || !smap.isValid() {
+		return
+	}
 	if smap.isPrimary(r.p.si) {
 		return r.primarykeepalive()
 	}
@@ -273,7 +276,7 @@ func (r *proxykalive) primaryLiveAndSync(checkProxies bool) (stopped, repeat, no
 		}
 
 		// the verdict
-		glog.Errorf("%s %s fails keepalive: err %v (status %d)", tag, sid, res.err, res.status)
+		glog.Errorf("%s %s fails keepalive: err %v (status %d) - removing", tag, sid, res.err, res.status)
 		if clone == nil {
 			clone = smap.clone()
 		}
@@ -397,7 +400,10 @@ func (r *targetkalive) keepalive(err error) (stopped bool) {
 
 	stopped = keepaliveCommon(r.t, r.controlCh)
 	if stopped {
-		r.t.onPrimaryProxyFailure()
+		smap := r.t.smapowner.get()
+		if smap != nil && smap.isValid() {
+			r.t.onPrimaryProxyFailure()
+		}
 	}
 
 	return stopped

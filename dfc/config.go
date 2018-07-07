@@ -105,14 +105,10 @@ type timeoutconfig struct {
 }
 
 type proxyconfig struct {
-	Primary  proxycnf `json:"primary"`
-	Original proxycnf `json:"original"`
-}
-
-type proxycnf struct {
-	ID       string `json:"id"`       // used to register caching servers/other proxies
-	URL      string `json:"url"`      // used to register caching servers/other proxies
-	Passthru bool   `json:"passthru"` // false: get then redirect, true (default): redirect right away
+	NonElectable bool   `json:"non_electable"`
+	PrimaryURL   string `json:"primary_url"`
+	OriginalURL  string `json:"original_url"`
+	DiscoveryURL string `json:"discovery_url"`
 }
 
 type lruconfig struct {
@@ -237,8 +233,7 @@ func initconfigparam() error {
 		ctx.config.Periodic.StatsTime = clivars.statstime
 	}
 	if clivars.proxyurl != "" {
-		ctx.config.Proxy.Primary.ID = ""
-		ctx.config.Proxy.Primary.URL = clivars.proxyurl
+		ctx.config.Proxy.PrimaryURL = clivars.proxyurl
 	}
 	if clivars.loglevel != "" {
 		if err = setloglevel(clivars.loglevel); err != nil {

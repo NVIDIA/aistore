@@ -137,8 +137,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	// clivars proxyurl overrides config proxy settings.
 	// If it is set, the proxy will not register as the primary proxy.
 	if clivars.proxyurl != "" {
-		ctx.config.Proxy.Primary.ID = ""
-		ctx.config.Proxy.Primary.URL = clivars.proxyurl
+		ctx.config.Proxy.PrimaryURL = clivars.proxyurl
 	}
 	h.statsif = s
 	// http client
@@ -584,12 +583,6 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.LRU.HighWM, checkwm = v, true
 		}
-	case "passthru":
-		if v, err := strconv.ParseBool(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse passthru (proxy-only), err: %v", err)
-		} else {
-			ctx.config.Proxy.Primary.Passthru = v
-		}
 	case "lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
@@ -704,27 +697,29 @@ func (h *httprunner) extractSmap(payload simplekvs) (newsmap, oldsmap *Smap, msg
 		return
 	}
 	if !newsmap.isValid() {
-		errstr = fmt.Sprintf("Invalid Smap version %d - lacking or missing the primary", newsmap.version())
+		errstr = fmt.Sprintf("Invalid Smap v%d - lacking or missing the primary", newsmap.version())
 		newsmap = nil
 		return
 	}
 	if newsmap.version() < myver {
 		if h.si != nil && localsmap.getTarget(h.si.DaemonID) == nil {
-			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap version %d to %d", h.si.DaemonID, myver, newsmap.version())
+			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap v%d to v%d", h.si.DaemonID, myver, newsmap.version())
 			newsmap = nil
 			return
 		}
 		if h.si != nil && localsmap.getTarget(h.si.DaemonID) != nil {
-			glog.Errorf("target %s: receive Smap version %d < %d local - proceeding anyway",
+			glog.Errorf("target %s: receive Smap v%d < v%d local - proceeding anyway",
 				h.si.DaemonID, newsmap.version(), localsmap.version())
 		} else {
-			errstr = fmt.Sprintf("Attempt to downgrade Smap version %d to %d", myver, newsmap.version())
+			errstr = fmt.Sprintf("Attempt to downgrade Smap v%d to v%d", myver, newsmap.version())
 			return
 		}
 	}
-
-	glog.Infof("receive Smap: version %d (local %d), ntargets %d, action %s",
-		newsmap.version(), localsmap.version(), newsmap.countTargets(), msg.Action)
+	s := ""
+	if msg.Action != "" {
+		s = ", action " + msg.Action
+	}
+	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newsmap.version(), localsmap.version(), newsmap.countTargets(), s)
 
 	if msgvalue == "" || msg.Value == nil {
 		// synchronize with no action message and no old smap
@@ -831,4 +826,121 @@ func (h *httprunner) getXactionKindFromProperties(props string) (
 
 	err := fmt.Errorf("Invalid xaction in properties: %s", props)
 	return "", err
+}
+
+// ================================== Background =========================================
+//
+// Generally, DFC clusters can be deployed with arbitrary numbers of DFC proxies.
+// Each proxy/gateway provides full access to the clustered objects and collaborates with
+// all other proxies to perform majority-voted HA failovers.
+//
+// Not all proxies are equal though.
+//
+// Two out of all proxies can be designated via configuration as "original" and
+// "discovery". The "original" (located at the configurable "original_url") is expected
+// to be the primary (i.e., the leader) at cluster deployment time.
+//
+// Later on, when and if some HA event triggers an automated failover, the role of the
+// primary may be (automatically) assumed by a different proxy/gateway, with the
+// corresponding update getting synchronized across all running nodes.
+// A new node, however, could potentially experience a problem when trying to join the
+// cluster simply because its configuration would still be referring to the old primary.
+// The added "discovery_url" is precisely intended to address this scenario.
+//
+// Here's how a node joins a DFC cluster:
+// - first, there's the primary proxy/gateway referenced by the current cluster map (Smap)
+//   or - during the cluster deployment time - by the the configured "primary_url"
+//   (see setup/config.sh)
+//
+// - if that one fails, the new node goes ahead and tries the alternatives:
+// 	- ctx.config.Proxy.DiscoveryURL ("discovery_url")
+// 	- ctx.config.Proxy.OriginalURL ("original_url")
+// - but only if those are defined and different from the previously tried.
+//
+// ================================== Background =========================================
+func (h *httprunner) join(isproxy bool, extra string) (res callResult) {
+	url, psi := h.getPrimaryURLAndSI()
+	res = h.registerToURL(url, psi, 0, isproxy, extra)
+	if res.err == nil {
+		return
+	}
+	if ctx.config.Proxy.DiscoveryURL != "" && ctx.config.Proxy.DiscoveryURL != url {
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.DiscoveryURL)
+		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, 0, isproxy, extra)
+		if resAlt.err == nil {
+			res = resAlt
+			return
+		}
+	}
+	if ctx.config.Proxy.OriginalURL != "" && ctx.config.Proxy.OriginalURL != url &&
+		ctx.config.Proxy.OriginalURL != ctx.config.Proxy.DiscoveryURL {
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.OriginalURL)
+		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, 0, isproxy, extra)
+		if resAlt.err == nil {
+			res = resAlt
+			return
+		}
+	}
+	return
+}
+
+func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, extra string) (res callResult) {
+	info, err := json.Marshal(h.si)
+	assert(err == nil, err)
+
+	f := func(inurl string, isproxy bool, timeout time.Duration, extra string) (outurl string) {
+		if isproxy {
+			outurl = inurl + URLPath(Rversion, Rcluster, Rproxy)
+		} else {
+			outurl = inurl + URLPath(Rversion, Rcluster)
+		}
+		if timeout > 0 { // keepalive
+			outurl += URLPath(Rkeepalive)
+		}
+		if extra != "" {
+			outurl += "?" + extra
+		}
+		return
+	}
+	regurl := f(url, isproxy, timeout, extra)
+	for rcount := 0; rcount < 2; rcount++ {
+		if timeout > 0 {
+			res = h.call(nil, psi, regurl, http.MethodPost, info, timeout)
+		} else {
+			res = h.call(nil, psi, regurl, http.MethodPost, info)
+		}
+		if res.err == nil {
+			return
+		}
+		if res.newPrimaryURL != "" {
+			glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, regurl, res.err, url)
+			regurl = f(res.newPrimaryURL, isproxy, timeout, extra)
+			continue
+		}
+		if IsErrConnectionRefused(res.err) {
+			glog.Errorf("%s: (register => %s: connection refused)", h.si.DaemonID, regurl)
+		} else {
+			glog.Errorf("%s: (register => %s: %v)", h.si.DaemonID, regurl, res.err)
+		}
+		break
+	}
+	return
+}
+
+// getPrimaryURLAndSI is a helper function to return primary proxy's URL and daemon info
+// if Smap is not yet synced, use the primary proxy from the config
+// smap lock is acquired to avoid race between this function and other smap access (for example,
+// receiving smap during metasync)
+func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
+	smap := h.smapowner.get()
+	if smap == nil || smap.ProxySI == nil {
+		url, proxysi = ctx.config.Proxy.PrimaryURL, nil
+		return
+	}
+	if smap.ProxySI.DaemonID != "" {
+		url, proxysi = smap.ProxySI.DirectURL, smap.ProxySI
+		return
+	}
+	url, proxysi = ctx.config.Proxy.PrimaryURL, smap.ProxySI
+	return
 }

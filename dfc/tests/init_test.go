@@ -95,8 +95,7 @@ func init() {
 		"The length to run the Multiple Proxy Stress Test for")
 	flag.StringVar(&clichecksum, "checksum", "all", "all | xxhash | coldmd5")
 	flag.IntVar(&cycles, "cycles", 15, "Number of PUT cycles")
-	flag.DurationVar(&proxyChangeLatency, "proxychangelatency", time.Second*30,
-		"Time for cluster to stablize after a proxy change")
+	flag.DurationVar(&proxyChangeLatency, "proxychangelatency", time.Minute*2, "Time for cluster to stabilize after a proxy change")
 
 	flag.Parse()
 

@@ -62,22 +62,22 @@ const (
 
 // URL Query Parameter enum
 const (
-	URLParamLocal            = "local"        // true: bucket is expected to be local
-	URLParamFromID           = "from_id"      // from_id=string - ID to copy from
-	URLParamToID             = "to_id"        // to_id=string - ID to copy to
-	URLParamFromName         = "from_name"    // rename from
-	URLParamToName           = "to_name"      // rename to
-	URLParamCached           = "cachedonly"   // true: return cached objects (names, metadata) instead of requesting the list from the cloud
-	URLParamSuspectedTarget  = "suspect"      // suspect=string - ID of the target suspected of failure
-	URLParamPrimaryCandidate = "candidate"    // candidate=string - ID of the candidate for primary proxy
-	URLParamForce            = "force"        // true: shutdown the primary proxy
-	URLParamPrepare          = "prepare"      // true: request is the prepare phase for primary proxy change
-	URLParamDaemonID         = "daemon_id"    // daemon ID
-	URLParamCheckCached      = "check_cached" // true: check if object is cached in DFC
-	URLParamOffset           = "offset"       // Offset from where the object should be read
-	URLParamLength           = "length"       // Length, the total number of bytes that need to be read from the offset
-	URLParamWhat             = "what"         // "config" | "stats" | "xaction" ...
-	URLParamProps            = "props"        // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
+	URLParamLocal            = "local"         // true: bucket is expected to be local
+	URLParamFromID           = "from_id"       // from_id=string - ID to copy from
+	URLParamToID             = "to_id"         // to_id=string - ID to copy to
+	URLParamFromName         = "from_name"     // rename from
+	URLParamToName           = "to_name"       // rename to
+	URLParamCached           = "cachedonly"    // true: return cached objects (names, metadata) instead of requesting the list from the cloud
+	URLParamPrimaryCandidate = "candidate"     // ID of the candidate for the primary proxy
+	URLParamForce            = "force"         // true: shutdown the primary proxy
+	URLParamPrepare          = "prepare"       // true: request belongs to the "prepare" phase of the primary proxy election
+	URLParamDaemonID         = "daemon_id"     // daemon ID
+	URLParamCheckCached      = "check_cached"  // true: check if object is cached in DFC
+	URLParamOffset           = "offset"        // Offset from where the object should be read
+	URLParamLength           = "length"        // the total number of bytes that need to be read from the offset
+	URLParamWhat             = "what"          // "config" | "stats" | "xaction" ...
+	URLParamProps            = "props"         // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
+	URLParamNonElectable     = "non_electable" // true: proxy is non-electable for the primary role
 )
 
 // TODO: sort and some props are TBD

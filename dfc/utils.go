@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/url"
 	"os"
@@ -304,15 +303,6 @@ func ComputeXXHash(reader io.Reader, buf []byte, xx hash.Hash64) (csum string, e
 	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
 	csum = hex.EncodeToString(hashInBytes)
 	return csum, ""
-}
-
-//===========================================================================
-//
-// dummy io.Writer & ReadToNull() helper
-//
-//===========================================================================
-func ReadToNull(r io.Reader) (int64, error) {
-	return io.Copy(ioutil.Discard, r)
 }
 
 //===========================================================================

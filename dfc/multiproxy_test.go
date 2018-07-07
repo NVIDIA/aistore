@@ -30,6 +30,7 @@ type (
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
 	p.si = &daemonInfo{DaemonID: "primary"}
+	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	p.kalive = newproxykalive(&p)
@@ -176,8 +177,8 @@ func TestDiscoverServers(t *testing.T) {
 				{"t2", false, 1, 2, discoverServerDefaultHandler},
 			},
 			time.Millisecond * 300,
-			1,
-			2,
+			0,
+			0,
 		},
 		{
 			"vote once",
@@ -185,7 +186,7 @@ func TestDiscoverServers(t *testing.T) {
 				{"t1", false, 4, 5, discoverServerVoteOnceHandler},
 				{"t2", false, 1, 2, discoverServerDefaultHandler},
 			},
-			time.Millisecond * 300,
+			time.Millisecond * 3000,
 			4,
 			5,
 		},
@@ -195,7 +196,7 @@ func TestDiscoverServers(t *testing.T) {
 				{"t1", false, 4, 5, discoverServerFailTwiceHandler},
 				{"t2", false, 1, 2, discoverServerDefaultHandler},
 			},
-			time.Millisecond * 400,
+			time.Millisecond * 3000,
 			4,
 			5,
 		},
@@ -220,7 +221,7 @@ func TestDiscoverServers(t *testing.T) {
 			5,
 		},
 		{
-			"zero smap version",
+			"zero Smap version",
 			[]discoverServer{
 				{"p1", true, 0, 3, discoverServerDefaultHandler},
 				{"t1", false, 0, 4, discoverServerDefaultHandler},
@@ -255,14 +256,14 @@ func TestDiscoverServers(t *testing.T) {
 				discoverSmap.addTarget(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
 			}
 		}
-
-		smap, bucketmd := primary.discoverClusterMeta(discoverSmap, time.Now().Add(tc.duration), time.Millisecond*100)
+		primary.smapowner.put(discoverSmap)
+		smap, bucketmd := primary.meta(time.Now().Add(tc.duration))
 		if tc.smapVersion == 0 {
-			if smap != nil {
+			if smap != nil && smap.version() > 0 {
 				t.Errorf("test case %s: expecting nil Smap", tc.name)
 			}
 		} else {
-			if smap == nil {
+			if smap == nil || smap.version() == 0 {
 				t.Errorf("test case %s: expecting non-empty Smap", tc.name)
 			} else if tc.smapVersion != smap.Version {
 				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.smapVersion, smap.Version)
@@ -270,11 +271,11 @@ func TestDiscoverServers(t *testing.T) {
 		}
 
 		if tc.bmdVersion == 0 {
-			if bucketmd != nil {
+			if bucketmd != nil && bucketmd.version() > 0 {
 				t.Errorf("test case %s: expecting nil bucket-metadata", tc.name)
 			}
 		} else {
-			if bucketmd == nil {
+			if bucketmd == nil || bucketmd.version() == 0 {
 				t.Errorf("test case %s: expecting non-empty bucket-metadata", tc.name)
 			} else if tc.bmdVersion != bucketmd.Version {
 				t.Errorf("test case %s: expecting %d, got %d", tc.name, tc.bmdVersion, bucketmd.Version)

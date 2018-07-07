@@ -63,7 +63,6 @@ var (
 		"startup_delay_time": fmt.Sprintf("%v", UpdTime),
 		"lowwm":              fmt.Sprintf("%d", LowWaterMark),
 		"highwm":             fmt.Sprintf("%d", HighWaterMark),
-		"passthru":           "true",
 		"lru_enabled":        "true",
 	}
 	httpclient = &http.Client{}
@@ -708,8 +707,6 @@ func TestConfig(t *testing.T) {
 	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
-	oproxyconfig := oconfig["proxyconfig"].(map[string]interface{})
-	oprimary := oproxyconfig["primary"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
@@ -719,8 +716,6 @@ func TestConfig(t *testing.T) {
 	nconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nrebconfig := nconfig["rebalance_conf"].(map[string]interface{})
-	nproxyconfig := nconfig["proxyconfig"].(map[string]interface{})
-	nprimary := nproxyconfig["primary"].(map[string]interface{})
 	nperiodic := nconfig["periodic"].(map[string]interface{})
 
 	if nperiodic["stats_time"] != configRegression["stats_time"] {
@@ -768,15 +763,6 @@ func TestConfig(t *testing.T) {
 	} else {
 		o := olruconfig["lowwm"].(float64)
 		setConfig("lowwm", strconv.Itoa(int(o)), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-	}
-	if pt, err := strconv.ParseBool(configRegression["passthru"]); err != nil {
-		t.Fatalf("Error parsing Passthru: %v", err)
-	} else if nprimary["passthru"] != pt {
-		t.Errorf("Proxy Passthru was not set properly: %v, should be %v",
-			nprimary["passthru"], pt)
-	} else {
-		o := oprimary["passthru"].(bool)
-		setConfig("passthru", strconv.FormatBool(o), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)

@@ -6,6 +6,8 @@
 package dfc
 
 import (
+	"fmt"
+
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -39,9 +41,17 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 		errstr = "DFC cluster map is empty: no proxies"
 		return
 	}
-	var max uint64
+	var (
+		max     uint64
+		skipped int
+	)
 	for id, sinfo := range smap.Pmap {
 		if id == idToSkip {
+			skipped++
+			continue
+		}
+		if _, ok := smap.NonElects[id]; ok {
+			skipped++
 			continue
 		}
 		cs := xxhash.ChecksumString64S(id, mLCG32)
@@ -49,6 +59,9 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 			max = cs
 			pi = sinfo
 		}
+	}
+	if pi == nil {
+		errstr = fmt.Sprintf("Cannot HRW-select proxy: current count=%d, skipped=%d", smap.countProxies(), skipped)
 	}
 	return
 }

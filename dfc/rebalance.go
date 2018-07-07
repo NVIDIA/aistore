@@ -40,7 +40,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		if sid == t.si.DaemonID {
 			continue
 		}
-		url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+		url := si.DirectURL + URLPath(Rversion, Rhealth)
 		url += from
 		pollstarted, ok := time.Now(), false
 		timeout := kalivetimeout
@@ -132,7 +132,7 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 			if sid == t.si.DaemonID {
 				continue
 			}
-			url := si.DirectURL + "/" + Rversion + "/" + Rhealth
+			url := si.DirectURL + URLPath(Rversion, Rhealth)
 			res := t.call(nil, si, url, http.MethodGet, nil)
 			// retry once
 			if res.err == context.DeadlineExceeded {
