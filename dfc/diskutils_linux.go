@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"bufio"
+	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -16,8 +17,9 @@ import (
 )
 
 const (
-	iostatnumsys = 6
-	iostatnumdsk = 14
+	iostatnumsys     = 6
+	iostatnumdsk     = 14
+	iostatMinVersion = 11
 )
 
 // iostat -cdxtm 10
@@ -118,40 +120,38 @@ func (r *iostatrunner) getMaxUtil() (maxutil float64) {
 	return
 }
 
-//===========================
-//
-// check presence and version
-//
-//===========================
-func iostatverok() (ok bool) {
-	version := []int64{}
+// Check determines whether `iostat` command is present and
+// is not too old (at least version `iostatMinVersion` is required).
+func (r *iostatrunner) Check() error {
 	cmd := exec.Command("iostat", "-V")
 
 	vbytes, err := cmd.CombinedOutput()
 	if err != nil {
-		glog.Errorf("iostat err: %v", err)
-		return
+		return fmt.Errorf("[iostat] Error: %v", err)
 	}
+
 	vwords := strings.Split(string(vbytes), "\n")
 	if vwords = strings.Split(vwords[0], " "); len(vwords) < 3 {
-		glog.Errorf("iostat: unknown iostat version format %v", vwords)
-		return
+		return fmt.Errorf("[iostat] Error: unknown iostat version format %v", vwords)
 	}
+
 	vss := strings.Split(vwords[2], ".")
 	if len(vss) < 3 {
-		glog.Errorf("iostat: unexpected version format: %v", vss)
+		return fmt.Errorf("[iostat] Error: unexpected version format: %v", vss)
 	}
+
+	version := []int64{}
 	for _, vs := range vss {
 		v, err := strconv.ParseInt(vs, 10, 64)
 		if err != nil {
-			glog.Errorf("iostat: failed to parse version %v", vss)
-			return
+			return fmt.Errorf("[iostat] Error: failed to parse version %v", vss)
 		}
 		version = append(version, v)
 	}
-	if version[0] < 11 {
-		glog.Errorf("iostat version %v is too old", version)
-		return
+
+	if version[0] < iostatMinVersion {
+		return fmt.Errorf("[iostat] Error: version %v is too old. At least %v version is required", version, iostatMinVersion)
 	}
-	return true
+
+	return nil
 }

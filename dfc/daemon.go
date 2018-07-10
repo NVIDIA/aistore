@@ -182,8 +182,12 @@ func dfcinit() {
 		ctx.rg.add(t, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
 		ctx.rg.add(newtargetkalive(t), xtargetkalive)
-		if iostatverok() {
-			ctx.rg.add(&iostatrunner{}, xiostat)
+
+		isr := &iostatrunner{}
+		if err := isr.Check(); err != nil {
+			glog.Errorf("%v", err)
+		} else {
+			ctx.rg.add(t, xiostat)
 		}
 
 		if ctx.config.FSKeeper.Enabled {

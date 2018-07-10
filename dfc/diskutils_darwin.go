@@ -5,6 +5,8 @@
  */
 package dfc
 
+import "errors"
+
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
 	assert(false, "niy")
@@ -15,8 +17,8 @@ func (r *iostatrunner) stop(err error) {
 	assert(false, "niy")
 }
 
-func iostatverok() (ok bool) {
-	return
+func (r *iostatrunner) Check() error {
+	return errors.New("Not yet implemented")
 }
 
 func (r *iostatrunner) isZeroUtil(dev string) bool {
