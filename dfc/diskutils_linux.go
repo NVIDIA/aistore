@@ -28,15 +28,19 @@ func (r *iostatrunner) run() (err error) {
 	r.Disk = make(map[string]simplekvs, 0)
 	r.metricnames = make([]string, 0)
 	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
-	r.cmd = exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
-	stdout, err := r.cmd.StdoutPipe()
+	cmd := exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
+	stdout, err := cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)
 	if err != nil {
 		return
 	}
-	if err = r.cmd.Start(); err != nil {
+	if err = cmd.Start(); err != nil {
 		return
 	}
+
+	// Assigning started process
+	r.process = cmd.Process
+
 	glog.Infof("Starting %s", r.name)
 	for {
 		b, err := reader.ReadBytes('\n')
@@ -87,7 +91,13 @@ func (r *iostatrunner) stop(err error) {
 	var v struct{}
 	r.chsts <- v
 	close(r.chsts)
-	if err := r.cmd.Process.Kill(); err != nil {
+
+	// Do nothing when process was not started
+	if r.process == nil {
+		return
+	}
+
+	if err := r.process.Kill(); err != nil {
 		glog.Errorf("Failed to kill iostat, err: %v", err)
 	}
 }

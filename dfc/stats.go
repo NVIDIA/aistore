@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -126,7 +125,7 @@ type iostatrunner struct {
 	CPUidle     string
 	metricnames []string
 	Disk        map[string]simplekvs
-	cmd         *exec.Cmd
+	process     *os.Process // running iostat process. Required so it can be killed later
 }
 
 type (
