@@ -281,6 +281,9 @@ func validateconf() (err error) {
 	if ctx.config.Periodic.StatsTime, err = time.ParseDuration(ctx.config.Periodic.StatsTimeStr); err != nil {
 		return fmt.Errorf("Bad stats-time format %s, err: %v", ctx.config.Periodic.StatsTimeStr, err)
 	}
+	if int(ctx.config.Periodic.StatsTime/time.Second) <= 0 {
+		return fmt.Errorf("stats-time refresh period is too low (should be higher than 1 second")
+	}
 	if ctx.config.Periodic.RetrySyncTime, err = time.ParseDuration(ctx.config.Periodic.RetrySyncTimeStr); err != nil {
 		return fmt.Errorf("Bad retry_sync_time format %s, err: %v", ctx.config.Periodic.RetrySyncTimeStr, err)
 	}

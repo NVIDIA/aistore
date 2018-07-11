@@ -137,7 +137,7 @@ func (z *SGLIO) Write(p []byte) (n int, err error) {
 	}
 	idx, off, poff := z.woff/z.slab.getsize(), z.woff%z.slab.getsize(), 0
 	for wlen > 0 {
-		size := min64(z.slab.getsize()-off, int64(wlen))
+		size := MinI64(z.slab.getsize()-off, int64(wlen))
 		buf := z.sgl[idx]
 		copy(buf[off:], p[poff:poff+int(size)])
 		z.woff += size
@@ -162,13 +162,13 @@ func (z *SGLIO) readAtOffset(b []byte, roffin int64) (n int, err error, roff int
 	}
 	idx, off := int(roff/z.slab.getsize()), roff%z.slab.getsize()
 	buf := z.sgl[idx]
-	size := min64(int64(len(b)), z.woff-roff)
+	size := MinI64(int64(len(b)), z.woff-roff)
 	n = copy(b[:size], buf[off:])
 	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
 		idx++
 		buf = z.sgl[idx]
-		size = min64(int64(len(b)-n), z.woff-roff)
+		size = MinI64(int64(len(b)-n), z.woff-roff)
 		n1 := copy(b[n:n+int(size)], buf)
 		roff += int64(n1)
 		n += n1

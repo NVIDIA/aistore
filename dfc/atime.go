@@ -13,11 +13,11 @@ import (
 )
 
 const (
-	chfqnSize     = 1024
-	atimeCacheIni = 4 * 1024
-	atimeSyncTime = time.Minute * 3
-	atimeLWM      = 60
-	atimeHWM      = 80
+	chfqnSize                = 1024
+	atimeCacheFlushThreshold = 4 * 1024 // number of items before which we do not preform any flushing
+	atimeSyncTime            = time.Minute * 3
+	atimeLWM                 = 60
+	atimeHWM                 = 80
 )
 
 type accessTimeResponse struct {
@@ -29,6 +29,14 @@ type atimemap struct {
 	fsToFilesMap map[string]map[string]time.Time
 }
 
+// atimerunner's responsibilities include updating object/file access
+// times and making sure that those background updates are not impacting
+// datapath (or rather, impacting the datapath as little as possible).
+// As such, atimerunner can be thought of as an extension of the LRU (lru.go)
+// or any alternative caching mechanisms that can be added in the future.
+// Access times get flushed when the system idle - otherwise, they get
+// accumulated up to a certain point (aka watermark) and get synced to disk
+// anyway.
 type atimerunner struct {
 	namedrunner
 	chfqn       chan string // FIXME: consider { fqn, xxhash }
@@ -46,7 +54,7 @@ loop:
 		select {
 		case <-ticker.C:
 			for fileSystem := range r.atimemap.fsToFilesMap {
-				if n := r.heuristics(fileSystem); n > 0 {
+				if n := r.getNumberItemsToFlush(fileSystem); n > 0 {
 					r.flush(fileSystem, n)
 				}
 			}
@@ -69,6 +77,7 @@ func (r *atimerunner) stop(err error) {
 	close(r.chstop)
 }
 
+// touch sends update request of access time for fqn to atimerunner.
 func (r *atimerunner) touch(fqn string) {
 	if ctx.config.LRU.LRUEnabled {
 		r.chfqn <- fqn
@@ -79,40 +88,45 @@ func (r *atimerunner) atime(fqn string) {
 	r.chGetAtime <- fqn
 }
 
-func (r *atimerunner) heuristics(fileSystem string) (n int) {
+// getNumberItemsToFlush estimates the number of timestamps that must
+// be flushed from the atime map - by taking into account the max
+// utilitization of the corresponding local filesystem
+// (or, more exactly, the corresponding local filesystem's disks)
+func (r *atimerunner) getNumberItemsToFlush(fileSystem string) (n int) {
 	if !ctx.config.LRU.LRUEnabled {
 		return
 	}
-	l := len(r.atimemap.fsToFilesMap[fileSystem])
-	if l <= atimeCacheIni {
+	atimeMapSize := len(r.atimemap.fsToFilesMap[fileSystem])
+	if atimeMapSize <= atimeCacheFlushThreshold {
 		return
 	}
-	wm := 100
-	if uint64(l) < ctx.config.LRU.AtimeCacheMax {
-		wm = int(uint64(l) * 100 / ctx.config.LRU.AtimeCacheMax)
-	}
+
+	filling := MinU64(100, uint64(atimeMapSize)*100/ctx.config.LRU.AtimeCacheMax)
 	riostat := getiostatrunner()
-	maxutil := float32(-1)
+
+	maxDiskUtil := float32(-1)
 	util, ok := riostat.getDiskUtilizationFromFileSystem(fileSystem)
 	if ok {
-		maxutil = util
+		maxDiskUtil = util
 	}
+
 	switch {
-	case maxutil >= 0 && maxutil < 50: // idle
-		n = l / 4
-	case wm > atimeHWM: // atime map capacity at high watermark
-		if wm == 100 {
-			n = l / 2
-		} else {
-			n = l / 4
-		}
-	case wm > atimeLWM && maxutil >= 0 && maxutil < 90: // low watermark => weighted formula
-		f := float64(wm-atimeLWM) / float64(atimeHWM-atimeLWM) * float64(l)
+	case maxDiskUtil >= 0 && maxDiskUtil < 50: // disk is idle so we can utilize it a bit
+		n = atimeMapSize / 4
+	case filling == 100: // max capacity reached - flushing a great number of items is required
+		n = atimeMapSize / 2
+	case filling > atimeHWM: // atime map capacity at high watermark
+		n = atimeMapSize / 4
+	case filling > atimeLWM: // low watermark => weighted formula
+		f := float64(filling-atimeLWM) / float64(atimeHWM-atimeLWM) * float64(atimeMapSize)
 		n = int(f) / 4
 	}
+
 	return
 }
 
+// flush tries to change access and modification time for at most n files in
+// the atime map, and removes them from the map.
 func (r *atimerunner) flush(fileSystem string, n int) {
 	var (
 		i     int

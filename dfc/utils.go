@@ -54,7 +54,16 @@ func assert(cond bool, args ...interface{}) {
 	glog.Fatalln(message)
 }
 
-func min64(a, b int64) int64 {
+// MinU64 returns min value of a and b for uint64 types
+func MinU64(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// MinI64 returns min value of a and b for int64 types
+func MinI64(a, b int64) int64 {
 	if a < b {
 		return a
 	}

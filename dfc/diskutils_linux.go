@@ -14,8 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"path/filepath"
+
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 const (
@@ -47,28 +48,30 @@ type ChildBlockDevice struct {
 }
 
 // iostat -cdxtm 10
-func (r *iostatrunner) run() (err error) {
-	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
+func (r *iostatrunner) run() error {
 	r.FileSystemToDisksMap = getFileSystemToDiskMap()
-	cmd := exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
+	refreshPeriod := int(ctx.config.Periodic.StatsTime / time.Second)
+	cmd := exec.Command("iostat", "-cdxtm", strconv.Itoa(refreshPeriod))
 	stdout, err := cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)
 	if err != nil {
-		return
+		return err
 	}
 	if err = cmd.Start(); err != nil {
-		return
+		return err
 	}
 
 	// Assigning started process
 	r.process = cmd.Process
 
 	glog.Infof("Starting %s", r.name)
+
 	for {
 		b, err := reader.ReadBytes('\n')
 		if err != nil {
-			break
+			return err
 		}
+
 		line := string(b)
 		fields := strings.Fields(line)
 		if len(fields) == iostatnumsys {
@@ -104,7 +107,6 @@ func (r *iostatrunner) run() (err error) {
 		default:
 		}
 	}
-	return
 }
 
 func (r *iostatrunner) stop(err error) {

@@ -196,7 +196,7 @@ func dfcinit() {
 		ctx.rg.add(&atimerunner{
 			chstop:      make(chan struct{}, 4),
 			chfqn:       make(chan string, chfqnSize),
-			atimemap:    &atimemap{fsToFilesMap: make(map[string]map[string]time.Time, atimeCacheIni)},
+			atimemap:    &atimemap{fsToFilesMap: make(map[string]map[string]time.Time, atimeCacheFlushThreshold)},
 			chGetAtime:  make(chan string),
 			chSendAtime: make(chan accessTimeResponse),
 		}, xatime)
