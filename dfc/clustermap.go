@@ -72,7 +72,7 @@ func (r *smapowner) synchronize(newsmap *Smap, saveSmap, lesserVersionIsErr bool
 		myver := smap.version()
 		if newsmap.version() <= myver {
 			if lesserVersionIsErr && newsmap.version() < myver {
-				errstr = fmt.Sprintf("Attempt to downgrade local Smap v%d to %s", myver, newsmap.pp())
+				errstr = fmt.Sprintf("Attempt to downgrade local Smap v%d to v%d", myver, newsmap.version())
 			}
 			r.Unlock()
 			return
@@ -214,6 +214,23 @@ func (m *Smap) deepcopy(dst *Smap) {
 	}
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
+	}
+}
+
+func (m *Smap) merge(dst *Smap) {
+	for id, v := range m.Tmap {
+		if _, ok1 := dst.Tmap[id]; !ok1 {
+			if _, ok2 := dst.Pmap[id]; !ok2 {
+				dst.Tmap[id] = v
+			}
+		}
+	}
+	for id, v := range m.Pmap {
+		if _, ok1 := dst.Pmap[id]; !ok1 {
+			if _, ok2 := dst.Tmap[id]; !ok2 {
+				dst.Pmap[id] = v
+			}
+		}
 	}
 }
 

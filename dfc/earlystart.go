@@ -76,16 +76,7 @@ func (p *proxyrunner) bootstrap() {
 		if smap.version() > found.version() {
 			glog.Infof("Discovered Smap v%d (primary=%s): merging => local v%d (primary=%s)",
 				found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
-			for id, v := range found.Tmap {
-				if _, ok := smap.Tmap[id]; !ok {
-					smap.Tmap[id] = v
-				}
-			}
-			for id, v := range found.Pmap {
-				if _, ok := smap.Pmap[id]; !ok {
-					smap.Pmap[id] = v
-				}
-			}
+			found.merge(smap)
 		} else {
 			glog.Infof("Discovered Smap v%d (primary=%s): overriding local v%d (primary=%s)",
 				found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
@@ -201,16 +192,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	if smap.version() > 0 {
 		assert(smap.countTargets() > 0 || smap.countProxies() > 1)
 		haveRegistratons = true
-		for id, v := range guessSmap.Tmap {
-			if _, ok := smap.Tmap[id]; !ok {
-				smap.Tmap[id] = v
-			}
-		}
-		for id, v := range guessSmap.Pmap {
-			if _, ok := smap.Pmap[id]; !ok {
-				smap.Pmap[id] = v
-			}
-		}
+		guessSmap.merge(smap)
 		p.smapowner.put(smap)
 	} else { // otherwise, use the previously discovered/merged Smap
 		p.smapowner.put(guessSmap)
@@ -300,7 +282,17 @@ func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 	// that was constructed from scratch via node-joins
 	glog.Infof("%s: merging discovered Smap v%d (%d, %d)", p.si.DaemonID,
 		maxVerSmap.version(), maxVerSmap.countTargets(), maxVerSmap.countProxies())
-	p.primaryMerge(maxVerSmap)
+
+	p.smapowner.Lock()
+	clone := p.smapowner.get().clone()
+	maxVerSmap.merge(clone)
+	clone.Version++
+	if clone.version() < maxVerSmap.version() {
+		clone.Version = maxVerSmap.version() + 1
+	}
+	p.smapowner.put(clone)
+	p.smapowner.Unlock()
+	glog.Infof("Merged %s", clone.pp())
 }
 
 func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
@@ -360,26 +352,6 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 		time.Sleep(time.Second)
 	}
 	return maxVersionSmap, maxVerBucketMD
-}
-
-func (p *proxyrunner) primaryMerge(maxVerSmap *Smap) {
-	p.smapowner.Lock()
-	currSmap := p.smapowner.get()
-	if currSmap.countTargets() > 0 || currSmap.countProxies() > 1 {
-		for id, v := range currSmap.Tmap {
-			maxVerSmap.Tmap[id] = v
-		}
-		for id, v := range currSmap.Pmap {
-			maxVerSmap.Pmap[id] = v
-		}
-		maxVerSmap.Version++
-		glog.Infof("Merged %s", maxVerSmap.pp())
-	}
-	if maxVerSmap.Version < currSmap.Version {
-		maxVerSmap.Version = currSmap.Version + 1
-	}
-	p.smapowner.put(maxVerSmap)
-	p.smapowner.Unlock()
 }
 
 func (p *proxyrunner) registerWithRetry() error {
