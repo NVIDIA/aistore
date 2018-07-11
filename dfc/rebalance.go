@@ -43,7 +43,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		url := si.DirectURL + URLPath(Rversion, Rhealth)
 		url += from
 		pollstarted, ok := time.Now(), false
-		timeout := kalivetimeout
+		timeout := ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor
 		for {
 			res := t.call(nil, si, url, http.MethodGet, nil, timeout)
 			if res.err == nil {
@@ -63,7 +63,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 			if time.Since(pollstarted) > ctx.config.Rebalance.DestRetryTime {
 				break
 			}
-			time.Sleep(proxypollival * 2)
+			time.Sleep(ctx.config.Timeout.CplaneOperation * proxyPollFactor * 2)
 		}
 		if !ok {
 			glog.Errorf("Not starting rebalancing x-action: target %s appears to be offline", sid)
@@ -136,7 +136,8 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 			res := t.call(nil, si, url, http.MethodGet, nil)
 			// retry once
 			if res.err == context.DeadlineExceeded {
-				res = t.call(nil, si, url, http.MethodGet, nil, kalivetimeout*2)
+				res = t.call(nil, si, url, http.MethodGet, nil,
+					ctx.config.Timeout.CplaneOperation*keepaliveTimeoutFactor*2)
 			}
 
 			if res.err != nil {
@@ -148,7 +149,7 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 			err := json.Unmarshal(res.outjson, status)
 			if err == nil {
 				if status.IsRebalancing {
-					time.Sleep(proxypollival * 2)
+					time.Sleep(ctx.config.Timeout.CplaneOperation * proxyPollFactor * 2)
 					count++
 				}
 			} else {

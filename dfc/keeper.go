@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	proxypollival = time.Second * 5
-	targetpollivl = time.Second * 5
-	kalivetimeout = time.Second * 2
+	proxyPollFactor        = 5
+	targetPollFactor       = 5
+	keepaliveTimeoutFactor = 2
 
 	someError  = "error"
 	stop       = "stop"
@@ -133,7 +133,7 @@ func (r *kalive) run() error {
 				ticker.Stop()
 				return nil
 			case someError:
-				if time.Since(lastCheck) >= proxypollival {
+				if time.Since(lastCheck) >= ctx.config.Timeout.CplaneOperation*proxyPollFactor {
 					lastCheck = time.Now()
 					if stopped := r.k.keepalive(sig.err); stopped {
 						ticker.Stop()
@@ -158,7 +158,7 @@ type Registerer interface {
 // keepaliveCommon is shared by non-primary proxies and targets
 // calls register right away, if it fails, continue to call until successfully registered or asked to stop
 func keepaliveCommon(r Registerer, controlCh chan controlSignal) (stopped bool) {
-	timeout := kalivetimeout
+	timeout := ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor
 	status, err := r.register(timeout)
 	if err == nil {
 		return
@@ -167,7 +167,7 @@ func keepaliveCommon(r Registerer, controlCh chan controlSignal) (stopped bool) 
 	glog.Infof("Warning: keepalive failed with err: %v, status %d", err, status)
 
 	// until success or stop
-	poller := time.NewTicker(targetpollivl)
+	poller := time.NewTicker(ctx.config.Timeout.CplaneOperation * targetPollFactor)
 	defer poller.Stop()
 	for {
 		select {
@@ -259,7 +259,8 @@ func (r *proxykalive) primaryLiveAndSync(checkProxies bool) (stopped, repeat, no
 		}
 		url := si.DirectURL + URLPath(Rversion, Rhealth)
 		url += from
-		res := r.p.call(nil, si, url, http.MethodGet, nil, kalivetimeout)
+		res := r.p.call(nil, si, url, http.MethodGet, nil,
+			ctx.config.Timeout.CplaneOperation*keepaliveTimeoutFactor)
 		if res.err == nil {
 			continue
 		}
@@ -340,7 +341,7 @@ rep1:
 		return
 	}
 	if repeat {
-		time.Sleep(proxypollival)
+		time.Sleep(ctx.config.Timeout.CplaneOperation * proxyPollFactor)
 		goto rep1
 	}
 rep2:
@@ -349,7 +350,7 @@ rep2:
 		return
 	}
 	if repeat {
-		time.Sleep(proxypollival)
+		time.Sleep(ctx.config.Timeout.CplaneOperation * proxyPollFactor)
 		goto rep2
 	}
 	return false
@@ -358,8 +359,8 @@ rep2:
 func (r *proxykalive) poll(si *daemonInfo, url string) (responded, stopped bool) {
 	var (
 		maxedout = 0
-		timeout  = kalivetimeout
-		poller   = time.NewTicker(proxypollival)
+		timeout  = ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor
+		poller   = time.NewTicker(ctx.config.Timeout.CplaneOperation * proxyPollFactor)
 	)
 	defer poller.Stop()
 	for maxedout < 2 {
