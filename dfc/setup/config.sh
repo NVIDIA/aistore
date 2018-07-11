@@ -98,10 +98,6 @@
 			"max": "20s",
 			"factor": 3
 		}
-	},
-	"callstats": {
-		"request_included": [ "keepalive", "metasync" ],
-		"factor": 2.5
 	}
 }
 EOL

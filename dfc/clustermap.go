@@ -74,10 +74,8 @@ func (r *smapowner) synchronize(newsmap *Smap, saveSmap, lesserVersionIsErr bool
 			if lesserVersionIsErr && newsmap.version() < myver {
 				errstr = fmt.Sprintf("Attempt to downgrade local Smap v%d to %s", myver, newsmap.pp())
 			}
-			if newsmap.ProxySI == smap.ProxySI {
-				r.Unlock()
-				return
-			}
+			r.Unlock()
+			return
 		}
 	}
 	if errstr = r.persist(newsmap, saveSmap); errstr == "" {

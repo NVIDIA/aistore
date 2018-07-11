@@ -1045,38 +1045,6 @@ func getOutboundIP() net.IP {
 	return conn.LocalAddr().(*net.UDPAddr).IP
 }
 
-// resetPrimaryProxy sends a http request to the current primary proxy process to ask it set primary
-// proxy of the cluster to 'proxyid'.
-func resetPrimaryProxy(proxyid string, t *testing.T) {
-	smap := getClusterMap(t)
-	url := smap.ProxySI.DirectURL + "/" + dfc.Rversion + "/" + dfc.Rcluster + "/" + dfc.Rproxy + "/" + proxyid
-	req, err := http.NewRequest(http.MethodPut, url, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r, err := httpclient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer func() {
-		if r.Body != nil {
-			r.Body.Close()
-		}
-	}()
-
-	_, err = ioutil.ReadAll(r.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = waitForPrimaryProxy("to restore primary proxy", smap.Version, testing.Verbose())
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Read Pmap from all proxies and checks versions. If any proxy's smap version
 // differs from primary's one then an error returned
 func checkPmapVersions() error {

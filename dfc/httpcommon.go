@@ -119,7 +119,6 @@ type httprunner struct {
 	kalive                kaliveif
 	smapowner             *smapowner
 	bmdowner              *bmdowner
-	callStatsServer       *CallStatsServer
 	revProxy              *httputil.ReverseProxy
 }
 
@@ -285,9 +284,6 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		newPrimaryURL string
 		status        int
 	)
-
-	startedAt := time.Now()
-	defer h.callStatsServer.Call(url, time.Now().Sub(startedAt), err != nil)
 
 	if si != nil {
 		sid = si.DaemonID

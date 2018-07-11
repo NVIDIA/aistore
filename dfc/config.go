@@ -68,7 +68,6 @@ type dfconfig struct {
 	FSKeeper         fskeeperconf      `json:"fskeeper"`
 	Auth             authconf          `json:"auth"`
 	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
-	CallStats        callStats         `json:"callstats"`
 }
 
 type logconfig struct {
@@ -196,11 +195,6 @@ type keepaliveTrackerConf struct {
 type keepaliveTrackers struct {
 	Proxy  keepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
 	Target keepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
-}
-
-type callStats struct {
-	RequestIncluded []string `json:"request_included"`
-	Factor          float32  `json:"factor"`
 }
 
 //==============================

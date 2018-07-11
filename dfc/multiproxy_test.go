@@ -10,8 +10,6 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
 )
 
 type (
@@ -34,8 +32,6 @@ func newDiscoverServerPrimary() *proxyrunner {
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	p.kalive = newproxykalive(&p)
-	p.callStatsServer = NewCallStatsServer(nil, 1, &statsd.Client{})
-	p.callStatsServer.Start()
 	return &p
 }
 
@@ -244,7 +240,6 @@ func TestDiscoverServers(t *testing.T) {
 
 	for _, tc := range tcs {
 		primary := newDiscoverServerPrimary()
-		defer primary.callStatsServer.Stop()
 
 		discoverSmap := newSmap()
 		for _, s := range tc.servers {
