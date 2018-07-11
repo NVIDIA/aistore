@@ -2404,14 +2404,17 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 	t.smapowner.Lock()
-	clone := smap.clone()
-	clone.ProxySI = psi
-	if s := t.smapowner.persist(clone, false /*saveSmap*/); s != "" {
-		t.smapowner.Unlock()
-		t.invalmsghdlr(w, r, s)
-		return
+	smap = t.smapowner.get()
+	if smap.ProxySI.DaemonID != psi.DaemonID {
+		clone := smap.clone()
+		clone.ProxySI = psi
+		if s := t.smapowner.persist(clone, false /*saveSmap*/); s != "" {
+			t.smapowner.Unlock()
+			t.invalmsghdlr(w, r, s)
+			return
+		}
+		t.smapowner.put(clone)
 	}
-	t.smapowner.put(clone)
 	t.smapowner.Unlock()
 }
 
