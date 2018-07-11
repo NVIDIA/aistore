@@ -17,14 +17,14 @@ func (r *iostatrunner) stop(err error) {
 	assert(false, "niy")
 }
 
-func (r *iostatrunner) Check() error {
-	return errors.New("Not yet implemented")
-}
-
 func (r *iostatrunner) isZeroUtil(dev string) bool {
 	return true
 }
 
 func (r *iostatrunner) getMaxUtil() (maxutil float64) {
 	return float64(-1)
+}
+
+func CheckIostatVersion() error {
+	return errors.New("Not yet implemented")
 }

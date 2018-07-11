@@ -130,9 +130,9 @@ func (r *iostatrunner) getMaxUtil() (maxutil float64) {
 	return
 }
 
-// Check determines whether `iostat` command is present and
+// CheckIostatVersion determines whether iostat command is present and
 // is not too old (at least version `iostatMinVersion` is required).
-func (r *iostatrunner) Check() error {
+func CheckIostatVersion() error {
 	cmd := exec.Command("iostat", "-V")
 
 	vbytes, err := cmd.CombinedOutput()
