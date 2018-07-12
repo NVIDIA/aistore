@@ -2451,6 +2451,12 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatStats:
 		storageStatsRunner := getstorstatsrunner()
 		ioStatsRunner := getiostatrunner()
+		// The reason why we lock ioStatRunner here
+		// is because storageStatRunner and ioStatRunner share the
+		// same value (for example CPUidle is copied from ioStatRunner
+		// to storageStatRunner). So to prevent inconsistencies
+		// we want to be sure that both of those structs are locked
+		// before we begin marshalling.
 		storageStatsRunner.Lock()
 		ioStatsRunner.Lock()
 		jsbytes, err = json.Marshal(storageStatsRunner)

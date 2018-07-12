@@ -86,15 +86,13 @@ func (r *atimerunner) heuristics() (n int) {
 	if l <= atimeCacheIni {
 		return
 	}
-	maxutil := float64(-1)
 	wm := 100
 	if uint64(l) < ctx.config.LRU.AtimeCacheMax {
 		wm = int(uint64(l) * 100 / ctx.config.LRU.AtimeCacheMax)
 	}
 	riostat := getiostatrunner()
-	if riostat != nil {
-		maxutil = riostat.getMaxUtil()
-	}
+	maxutil := riostat.getMaxUtil()
+
 	switch {
 	case maxutil >= 0 && maxutil < 50: // idle
 		n = l / 4
