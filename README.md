@@ -95,7 +95,7 @@ The 4th - deploys DFC daemons locally (for details, please see [the script](dfc/
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 
 ```
-For more details about AuthN server please see [AuthN documetation](./authn/README.md)
+For more details about AuthN server please see [AuthN documentation](./authn/README.md)
 
 Finally, for the last 4th command to work, you'll need to have a name - the name of a bucket.
 The bucket could be an AWS or GCP based one, or a DFC-own so-called "local bucket".
@@ -114,6 +114,8 @@ For more testing commands and command line options, please refer to the correspo
 [README](dfc/tests/README.md) and/or the [test sources](dfc/tests/).
 
 For other useful commands, see the [Makefile](dfc/Makefile).
+
+Regular installation enables filesystem health checker(FSHC). It can be disabled via configuration. When enabled, FSHC performs I/O error triggered checks on all the local filesystems utilized by a given DFC target. Please see [FSHC readme](./fshc.md) for details.
 
 ### A few tips
 

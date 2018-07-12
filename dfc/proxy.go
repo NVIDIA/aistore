@@ -27,6 +27,10 @@ import (
 
 const tokenStart = "Bearer"
 
+type ClusterMountpathsRaw struct {
+	Targets map[string]json.RawMessage `json:"targets"`
+}
+
 // Keeps a target response when doing parallel requests to all targets
 type bucketResp struct {
 	outjson []byte
@@ -1581,6 +1585,10 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
+	case GetWhatMountpaths:
+		if ok := p.invokeHttpGetClusterMountpaths(w, r); !ok {
+			return
+		}
 	default:
 		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
 		p.invalmsghdlr(w, r, s)
@@ -1674,6 +1682,25 @@ func (p *proxyrunner) invokeHttpGetClusterStats(
 	rr.Unlock()
 	assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterStats")
+	return ok
+}
+
+func (p *proxyrunner) invokeHttpGetClusterMountpaths(
+	w http.ResponseWriter, r *http.Request) bool {
+	targetMountpaths, ok := p.invokeHttpGetMsgOnTargets(w, r)
+	if !ok {
+		errstr := fmt.Sprintf(
+			"Unable to invoke GetMsg on targets. Query: [%s]", r.URL.RawQuery)
+		glog.Errorf(errstr)
+		p.invalmsghdlr(w, r, errstr)
+		return false
+	}
+
+	out := &ClusterMountpathsRaw{}
+	out.Targets = targetMountpaths
+	jsbytes, err := json.Marshal(out)
+	assert(err == nil, err)
+	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterMountpaths")
 	return ok
 }
 

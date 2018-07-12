@@ -146,6 +146,7 @@ func (t *targetrunner) run() error {
 		tokens:        make(map[string]*authRec),
 		revokedTokens: make(map[string]bool),
 	}
+
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
@@ -442,6 +443,7 @@ existslocally:
 			errstr = fmt.Sprintf("Failed to open local file %s, err: %v", fqn, err)
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		}
+		t.fshc(err, fqn)
 		return
 	}
 
@@ -479,6 +481,7 @@ existslocally:
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
 		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
+		t.fshc(err, fqn)
 		t.statsif.add("numerr", 1)
 		return
 	}
@@ -1139,6 +1142,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		vchanged    bool
 		inNextTier  bool
 		bucketProps BucketProps
+		err         error
 	)
 	// one cold GET at a time
 	if prefetch {
@@ -1202,14 +1206,15 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	defer func() {
 		if errstr != "" {
 			t.rtnamemap.unlockname(uname, true)
-			if err := os.Remove(getfqn); err != nil {
-				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, err)
+			if errRemove := os.Remove(getfqn); errRemove != nil {
+				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, errRemove)
+				t.fshc(errRemove, getfqn)
 			}
-			t.runFSKeeper(fqn)
 		}
 	}()
-	if err := os.Rename(getfqn, fqn); err != nil {
+	if err = os.Rename(getfqn, fqn); err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", getfqn, fqn, err)
+		t.fshc(err, fqn)
 		return
 	}
 	if errstr = t.finalizeobj(fqn, props); errstr != "" {
@@ -1280,15 +1285,13 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
 		default:
 			errstr = fmt.Sprintf("Failed to fstat %s, err: %v", fqn, err)
-			t.runFSKeeper(fqn)
+			t.fshc(err, fqn)
 		}
 		return
 	}
 	size = finfo.Size()
 	if bytes, errs := Getxattr(fqn, XattrObjVersion); errs == "" {
 		version = string(bytes)
-	} else {
-		t.runFSKeeper(fqn)
 	}
 	return
 }
@@ -1327,6 +1330,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	type mresp struct {
 		infos      *allfinfos
 		failedPath string
+		err        error
 	}
 
 	ch := make(chan *mresp, len(ctx.mountpaths.Available))
@@ -1334,10 +1338,11 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 	// function to traverse one mountpoint
 	walkMpath := func(dir string) {
-		r := &mresp{t.newFileWalk(bucket, msg), ""}
+		r := &mresp{t.newFileWalk(bucket, msg), "", nil}
 		if _, err := os.Stat(dir); err != nil {
 			if !os.IsNotExist(err) {
 				r.failedPath = dir
+				r.err = err
 			}
 			ch <- r // not an error, just skip the path
 			wg.Done()
@@ -1347,6 +1352,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 		if err := filepath.Walk(dir, r.infos.listwalkf); err != nil {
 			glog.Errorf("Failed to traverse path %q, err: %v", dir, err)
 			r.failedPath = dir
+			r.err = err
 		}
 		ch <- r
 		wg.Done()
@@ -1378,8 +1384,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	allfinfos := make([]*BucketEntry, 0, 0)
 	fileCount := 0
 	for r := range ch {
-		if r.failedPath != "" {
-			t.runFSKeeper(r.failedPath)
+		if r.err != nil {
+			t.fshc(r.err, r.failedPath)
 			return nil, fmt.Errorf("Failed to read %s", r.failedPath)
 		}
 
@@ -1766,19 +1772,19 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, o
 	// sgl => fqn sequence
 	file, err := CreateFile(putfqn)
 	if err != nil {
-		t.runFSKeeper(putfqn)
+		t.fshc(err, putfqn)
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
 		return
 	}
 	reader := NewReader(sgl)
 	written, err := io.CopyBuffer(file, reader, buf)
 	if err != nil {
-		t.runFSKeeper(putfqn)
+		t.fshc(err, putfqn)
 		glog.Errorln("sglToCloudAsync: CopyBuffer", err)
-		if err1 := file.Close(); err != nil {
+		if err1 := file.Close(); err1 != nil {
 			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
 		}
-		if err2 := os.Remove(putfqn); err != nil {
+		if err2 := os.Remove(putfqn); err2 != nil {
 			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err2)
 		}
 		return
@@ -1787,7 +1793,7 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, o
 	err = file.Close()
 	if err != nil {
 		glog.Errorln("sglToCloudAsync: Close", err)
-		if err1 := os.Remove(putfqn); err != nil {
+		if err1 := os.Remove(putfqn); err1 != nil {
 			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
 		}
 		return
@@ -1808,10 +1814,10 @@ func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fq
 	)
 	errstr, errcode, err, renamed = t.doPutCommit(ct, bucket, objname, putfqn, fqn, objprops, rebalance)
 	if errstr != "" && !os.IsNotExist(err) && !renamed {
+		t.fshc(err, putfqn)
 		if err = os.Remove(putfqn); err != nil {
 			glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
 		}
-		t.runFSKeeper(putfqn)
 	}
 	return
 }
@@ -2339,6 +2345,9 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		case Rmetasync:
 			t.receiveMeta(w, r)
 			return
+		case Rmountpaths:
+			t.enableMountpath(w, r)
+			return
 		default:
 		}
 	}
@@ -2447,9 +2456,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Smap:           t.smapowner.get(),
 			BucketMD:       t.bmdowner.get(),
 		}
-		jsbytes, err := json.Marshal(msg)
+		jsbytes, err = json.Marshal(msg)
 		assert(err == nil, err)
-		t.writeJSON(w, r, jsbytes, "httpdaeget")
 	case GetWhatStats:
 		storageStatsRunner := getstorstatsrunner()
 		ioStatsRunner := getiostatrunner()
@@ -2486,6 +2494,25 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				kind,
 				err)
 			glog.Error(s)
+			t.invalmsghdlr(w, r, s)
+			return
+		}
+	case GetWhatMountpaths:
+		mpList := MountpathList{
+			Available: make([]string, 0),
+			Disabled:  make([]string, 0),
+		}
+		ctx.mountpaths.Lock()
+		for _, mp := range ctx.mountpaths.Available {
+			mpList.Available = append(mpList.Available, mp.Path)
+		}
+		for _, mp := range ctx.mountpaths.Disabled {
+			mpList.Disabled = append(mpList.Disabled, mp.Path)
+		}
+		ctx.mountpaths.Unlock()
+		jsbytes, err = json.Marshal(&mpList)
+		if err != nil {
+			s := fmt.Sprintf("Failed to marshal mountpaths: %v", err)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
@@ -2583,7 +2610,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	)
 
 	if file, err = CreateFile(fqn); err != nil {
-		t.runFSKeeper(fqn)
+		t.fshc(err, fqn)
 		errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
 		return
 	}
@@ -2595,7 +2622,6 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		if errstr == "" {
 			return
 		}
-		t.runFSKeeper(fqn)
 		if err = file.Close(); err != nil {
 			glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
 		}
@@ -2607,7 +2633,9 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	if cksumcfg.Checksum != ChecksumNone {
 		assert(cksumcfg.Checksum == ChecksumXXHash)
 		xx := xxhash.New64()
-		if written, errstr = ReceiveAndChecksum(filewriter, reader, buf, xx); errstr != "" {
+		if written, err = ReceiveAndChecksum(filewriter, reader, buf, xx); err != nil {
+			errstr = err.Error()
+			t.fshc(err, fqn)
 			return
 		}
 		hashIn64 := xx.Sum64()
@@ -2641,7 +2669,9 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		}
 	} else if omd5 != "" && cksumcfg.ValidateColdGet {
 		md5 := md5.New()
-		if written, errstr = ReceiveAndChecksum(filewriter, reader, buf, md5); errstr != "" {
+		if written, err = ReceiveAndChecksum(filewriter, reader, buf, md5); err != nil {
+			errstr = err.Error()
+			t.fshc(err, fqn)
 			return
 		}
 		hashInBytes := md5.Sum(nil)[:16]
@@ -2667,7 +2697,9 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			return
 		}
 	} else {
-		if written, errstr = ReceiveAndChecksum(filewriter, reader, buf); errstr != "" {
+		if written, err = ReceiveAndChecksum(filewriter, reader, buf); err != nil {
+			errstr = err.Error()
+			t.fshc(err, fqn)
 			return
 		}
 	}
@@ -2884,7 +2916,7 @@ func (t *targetrunner) detectMpathChanges() {
 		changed bool
 		old     = &mountedFS{}
 	)
-	old.Available, old.Offline = make(map[string]*mountPath), make(map[string]*mountPath)
+	old.Available, old.Disabled = make(map[string]*mountPath), make(map[string]*mountPath)
 	if err := LocalLoad(mpathconfigfqn, old); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
@@ -2975,11 +3007,28 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 	return
 }
 
-// runFSKeeper wakes up FSKeeper and makes it to run filesystem check
+// fshc wakes up FSHC and makes it to run filesystem check
 // immediately if err != nil
-func (t *targetrunner) runFSKeeper(filepath string) {
-	if ctx.config.FSKeeper.Enabled {
-		getFSKeeper().onerr(filepath)
+func (t *targetrunner) fshc(err error, filepath string) {
+	glog.Errorf("FSHealthChecker called with error: %#v, file: %s", err, filepath)
+
+	if !isIOError(err) {
+		return
+	}
+
+	keyName := getMountPathFromFilePath(filepath)
+	if keyName != "" {
+		t.statsdC.Send(keyName+".io.errors",
+			statsd.Metric{
+				Type:  statsd.Counter,
+				Name:  "count",
+				Value: 1,
+			},
+		)
+	}
+
+	if ctx.config.FSChecker.Enabled {
+		getfshealthchecker().onerr(filepath)
 	}
 }
 
@@ -3043,6 +3092,41 @@ func makePathLocal(basePath string) string {
 // builds fqn of directory for cloud buckets from mountpath
 func makePathCloud(basePath string) string {
 	return filepath.Join(basePath, ctx.config.CloudBuckets)
+}
+
+func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request) {
+	mp := MountpathReq{}
+	if t.readJSON(w, r, &mp) != nil {
+		return
+	}
+	if mp.Mountpath == "" {
+		t.invalmsghdlr(w, r, "Mountpath is not defined")
+		return
+	}
+
+	ctx.mountpaths.Lock()
+	for m := range ctx.mountpaths.Available {
+		if m == mp.Mountpath {
+			w.WriteHeader(http.StatusNoContent)
+			ctx.mountpaths.Unlock()
+			return
+		}
+	}
+
+	for m := range ctx.mountpaths.Disabled {
+		if m == mp.Mountpath {
+			glog.Infof("Reenabling mountpath %s", m)
+			minfo := ctx.mountpaths.Disabled[m]
+			ctx.mountpaths.Available[m] = minfo
+			delete(ctx.mountpaths.Disabled, m)
+			ctx.mountpaths.Unlock()
+			return
+		}
+	}
+
+	t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mp.Mountpath),
+		http.StatusNotFound)
+	ctx.mountpaths.Unlock()
 }
 
 func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {

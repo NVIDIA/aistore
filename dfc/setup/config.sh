@@ -79,10 +79,12 @@
 			"server_key":         "server.key"
 		}
 	},
-	"fskeeper": {
+	"fschecker": {
 		"fs_check_time":         "0",
-		"offline_fs_check_time": "0",
-		"fskeeper_enabled":      false
+		"disabled_fs_check_time": "0",
+		"fschecker_enabled":      true,
+		"fschecker_test_files":   4,
+		"fschecker_error_limit":  2
 	},
 	"auth": {
 		"secret": "$SECRETKEY",

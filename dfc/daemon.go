@@ -17,17 +17,17 @@ import (
 
 // runners
 const (
-	xproxy        = "proxy"
-	xtarget       = "target"
-	xsignal       = "signal"
-	xproxystats   = "proxystats"
-	xstorstats    = "storstats"
-	xproxykalive  = "proxykalive"
-	xtargetkalive = "targetkalive"
-	xiostat       = "iostat"
-	xfskeeper     = "fskeeper"
-	xatime        = "atime"
-	xmetasyncer   = "metasyncer"
+	xproxy           = "proxy"
+	xtarget          = "target"
+	xsignal          = "signal"
+	xproxystats      = "proxystats"
+	xstorstats       = "storstats"
+	xproxykalive     = "proxykalive"
+	xtargetkalive    = "targetkalive"
+	xiostat          = "iostat"
+	xatime           = "atime"
+	xmetasyncer      = "metasyncer"
+	xfshealthchecker = "fshealthchecker"
 )
 
 type (
@@ -43,7 +43,7 @@ type (
 	mountedFS struct {
 		sync.Mutex `json:"-"`
 		Available  map[string]*mountPath `json:"available"`
-		Offline    map[string]*mountPath `json:"offline"`
+		Disabled   map[string]*mountPath `json:"disabled"`
 	}
 
 	// daemon instance: proxy or storage target
@@ -193,11 +193,6 @@ func dfcinit() {
 		}
 		ctx.rg.add(NewIostatRunner(), xiostat)
 
-		if ctx.config.FSKeeper.Enabled {
-			ctx.rg.add(newFSKeeper(&ctx.config.FSKeeper,
-				&ctx.mountpaths, t.fqn2workfile), xfskeeper)
-		}
-
 		ctx.rg.add(&atimerunner{
 			chstop:      make(chan struct{}, 4),
 			chfqn:       make(chan string, chfqnSize),
@@ -206,9 +201,13 @@ func dfcinit() {
 			chSendAtime: make(chan accessTimeResponse),
 		}, xatime)
 
+		ctx.rg.add(
+			newFSHealthChecker(&ctx.mountpaths, &ctx.config.FSChecker, t.fqn2workfile),
+			xfshealthchecker)
+
 		// for mountpath definition, see fspath2mpath()
 		ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
-		ctx.mountpaths.Offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
+		ctx.mountpaths.Disabled = make(map[string]*mountPath, len(ctx.config.FSpaths))
 		if t.testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 			t.testCachepathMounts()
@@ -307,19 +306,16 @@ func getcloudif() cloudif {
 	return rr.cloudif
 }
 
-func getFSKeeper() *fsKeeper {
-	if !ctx.config.FSKeeper.Enabled {
-		return nil
-	}
-	r := ctx.rg.runmap[xfskeeper]
-	rr, ok := r.(*fsKeeper)
+func getmetasyncer() *metasyncer {
+	r := ctx.rg.runmap[xmetasyncer]
+	rr, ok := r.(*metasyncer)
 	assert(ok)
 	return rr
 }
 
-func getmetasyncer() *metasyncer {
-	r := ctx.rg.runmap[xmetasyncer]
-	rr, ok := r.(*metasyncer)
+func getfshealthchecker() *fsHealthChecker {
+	r := ctx.rg.runmap[xfshealthchecker]
+	rr, ok := r.(*fsHealthChecker)
 	assert(ok)
 	return rr
 }

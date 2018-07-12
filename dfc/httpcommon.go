@@ -639,6 +639,12 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			return err.Error()
 		}
+	case "fschecker_enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse fschecker_enabled, err: %v", err)
+		} else {
+			ctx.config.FSChecker.Enabled = v
+		}
 	default:
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)
 	}

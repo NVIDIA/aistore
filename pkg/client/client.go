@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	registerTimeout = time.Minute * 2
+	registerTimeout    = time.Minute * 2
+	maxBodyErrorLength = 256
 )
 
 type (
@@ -197,24 +198,30 @@ func Tcping(url string) (err error) {
 
 func readResponse(r *http.Response, w io.Writer, err error, src string, validate bool) (int64, string, error) {
 	var (
-		len  int64
-		hash string
+		length int64
+		hash   string
 	)
 
 	// Note: This code can use some cleanup.
 	if err == nil {
 		if r.StatusCode >= http.StatusBadRequest {
-			return 0, "", fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
+			bytes, err := ioutil.ReadAll(r.Body)
+			if err != nil || len(bytes) == 0 || len(bytes) > maxBodyErrorLength {
+				// it seems the body is empty or it contains an object instead of error text
+				return 0, "", fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
+			} else {
+				return 0, "", fmt.Errorf("Bad status code from %s: http status %d, error: %s", src, r.StatusCode, string(bytes))
+			}
 		}
 
 		bufreader := bufio.NewReader(r.Body)
 		if validate {
-			len, hash, err = ReadWriteWithHash(bufreader, w)
+			length, hash, err = ReadWriteWithHash(bufreader, w)
 			if err != nil {
 				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
 			}
 		} else {
-			if len, err = io.Copy(w, bufreader); err != nil {
+			if length, err = io.Copy(w, bufreader); err != nil {
 				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
 			}
 		}
@@ -222,7 +229,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
 	}
 
-	return len, hash, nil
+	return length, hash, nil
 }
 
 func discardResponse(r *http.Response, err error, src string) (int64, error) {
@@ -1250,4 +1257,58 @@ func getWhatRawQuery(getWhat string, getProps string) string {
 		q.Add(dfc.URLParamProps, getProps)
 	}
 	return q.Encode()
+}
+
+func TargetMountpaths(targetUrl string) (*dfc.MountpathList, error) {
+	q := getWhatRawQuery(dfc.GetWhatMountpaths, "")
+	url := fmt.Sprintf("%s?%s", targetUrl+dfc.URLPath(dfc.Rversion, dfc.Rdaemon), q)
+
+	resp, err := client.Get(url)
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("Target mountpath list, HTTP error code = %d", resp.StatusCode)
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read response body, err = %v", err)
+	}
+
+	mp := &dfc.MountpathList{
+		Available: make([]string, 0),
+		Disabled:  make([]string, 0),
+	}
+
+	err = json.Unmarshal(b, mp)
+
+	return mp, err
+}
+
+func EnableTargetMountpath(daemonUrl, mpath string) error {
+	url := daemonUrl + dfc.URLPath(dfc.Rversion, dfc.Rdaemon, dfc.Rmountpaths)
+	reqBody := dfc.MountpathReq{mpath}
+	msg, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, _ := http.NewRequest("PUT", url, bytes.NewReader(msg))
+	resp, err := client.Do(req)
+
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+
+	_, _, err = readResponse(resp, ioutil.Discard, err, daemonUrl, false /* validate */)
+	return err
 }
