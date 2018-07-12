@@ -186,9 +186,7 @@ type authconf struct {
 type keepaliveTrackerConf struct {
 	IntervalStr string        `json:"interval"` // keepalives are sent(target)/checked(promary proxy) every interval
 	Interval    time.Duration `json:"-"`
-	Name        string        `json:"name"` // "heartbeat", "average"
-	MaxStr      string        `json:"max"`  // "heartbeat" only
-	Max         time.Duration `json:"-"`
+	Name        string        `json:"name"`   // "heartbeat", "average"
 	Factor      int           `json:"factor"` // "average" only
 }
 
@@ -334,26 +332,16 @@ func validateconf() (err error) {
 		return fmt.Errorf("bad proxy keep alive interval %s", ctx.config.KeepaliveTracker.Proxy.IntervalStr)
 	}
 
-	ctx.config.KeepaliveTracker.Proxy.Max, err = time.ParseDuration(ctx.config.KeepaliveTracker.Proxy.MaxStr)
-	if err != nil {
-		return fmt.Errorf("bad proxy keep alive max %s", ctx.config.KeepaliveTracker.Proxy.MaxStr)
-	}
-
 	ctx.config.KeepaliveTracker.Target.Interval, err = time.ParseDuration(ctx.config.KeepaliveTracker.Target.IntervalStr)
 	if err != nil {
 		return fmt.Errorf("bad target keep alive interval %s", ctx.config.KeepaliveTracker.Target.IntervalStr)
 	}
 
-	ctx.config.KeepaliveTracker.Target.Max, err = time.ParseDuration(ctx.config.KeepaliveTracker.Target.MaxStr)
-	if err != nil {
-		return fmt.Errorf("bad targetkeep alive max %s", ctx.config.KeepaliveTracker.Target.MaxStr)
-	}
-
-	if !IsKeepaliveTypeSupported(ctx.config.KeepaliveTracker.Proxy.Name) {
+	if !ValidKeepaliveType(ctx.config.KeepaliveTracker.Proxy.Name) {
 		return fmt.Errorf("bad proxy keepalive tracker type %s", ctx.config.KeepaliveTracker.Proxy.Name)
 	}
 
-	if !IsKeepaliveTypeSupported(ctx.config.KeepaliveTracker.Target.Name) {
+	if !ValidKeepaliveType(ctx.config.KeepaliveTracker.Target.Name) {
 		return fmt.Errorf("bad target keepalive tracker type %s", ctx.config.KeepaliveTracker.Target.Name)
 	}
 

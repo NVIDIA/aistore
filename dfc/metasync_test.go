@@ -84,7 +84,6 @@ func newPrimary() *proxyrunner {
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.Periodic.RetrySyncTime = time.Millisecond * 100
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
-	ctx.config.KeepaliveTracker.Proxy.MaxStr = "20s"
 	ctx.config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	p.kalive = newproxykalive(&p)
 
