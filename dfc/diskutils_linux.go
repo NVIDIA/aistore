@@ -22,11 +22,17 @@ const (
 	iostatMinVersion = 11
 )
 
+// NewIostatRunner initalizes iostatrunner struct with default values
+func NewIostatRunner() *iostatrunner {
+	return &iostatrunner{
+		chsts:       make(chan struct{}, 1),
+		Disk:        make(map[string]simplekvs, 0),
+		metricnames: make([]string, 0),
+	}
+}
+
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
-	r.chsts = make(chan struct{}, 1)
-	r.Disk = make(map[string]simplekvs, 0)
-	r.metricnames = make([]string, 0)
 	iostatival := strconv.Itoa(int(ctx.config.Periodic.StatsTime / time.Second))
 	cmd := exec.Command("iostat", "-c", "-d", "-x", "-t", "-m", iostatival)
 	stdout, err := cmd.StdoutPipe()
@@ -92,13 +98,11 @@ func (r *iostatrunner) stop(err error) {
 	r.chsts <- v
 	close(r.chsts)
 
-	// Do nothing when process was not started
-	if r.process == nil {
-		return
-	}
-
-	if err := r.process.Kill(); err != nil {
-		glog.Errorf("Failed to kill iostat, err: %v", err)
+	// Kill process if started
+	if r.process != nil {
+		if err := r.process.Kill(); err != nil {
+			glog.Errorf("Failed to kill iostat, err: %v", err)
+		}
 	}
 }
 

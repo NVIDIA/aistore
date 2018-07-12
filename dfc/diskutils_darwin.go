@@ -7,6 +7,17 @@ package dfc
 
 import "errors"
 
+// NewIostatRunner initalizes iostatrunner struct with default values.
+// TODO: For now iostat is not supported for mac, so values may not valid.
+func NewIostatRunner() *iostatrunner {
+	return &iostatrunner{
+		chsts:       make(chan struct{}, 1),
+		CPUidle:     "(error: iostat unavailable)",
+		Disk:        make(map[string]simplekvs, 0),
+		metricnames: make([]string, 0),
+	}
+}
+
 // iostat -cdxtm 10
 func (r *iostatrunner) run() (err error) {
 	assert(false, "niy")

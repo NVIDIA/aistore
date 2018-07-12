@@ -350,36 +350,34 @@ func (r *storstatsrunner) log() (runlru bool) {
 
 	// disk
 	riostat := getiostatrunner()
-	if riostat != nil {
-		riostat.Lock()
-		r.CPUidle = riostat.CPUidle
-		for dev, iometrics := range riostat.Disk {
-			// FIXME (benign) storstatsrunner and iostatrunner share the same 'metrics'
-			// e.g. when responding to http get stats, we do not currently take riostat.Lock
-			r.Disk[dev] = iometrics
-			if riostat.isZeroUtil(dev) {
-				continue // skip zeros
-			}
-			b, err := json.Marshal(r.Disk[dev])
-			if err == nil {
-				lines = append(lines, dev+": "+string(b))
-			}
-
-			var stats []statsd.Metric
-			for k, v := range iometrics {
-				stats = append(stats, statsd.Metric{
-					Type:  statsd.Gauge,
-					Name:  k,
-					Value: v,
-				})
-			}
-
-			gettarget().statsdC.Send("iostat_"+dev, stats...)
+	riostat.Lock()
+	r.CPUidle = riostat.CPUidle
+	for dev, iometrics := range riostat.Disk {
+		// FIXME (benign) storstatsrunner and iostatrunner share the same 'metrics'
+		// e.g. when responding to http get stats, we do not currently take riostat.Lock
+		r.Disk[dev] = iometrics
+		if riostat.isZeroUtil(dev) {
+			continue // skip zeros
+		}
+		b, err := json.Marshal(r.Disk[dev])
+		if err == nil {
+			lines = append(lines, dev+": "+string(b))
 		}
 
-		lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
-		riostat.Unlock()
+		var stats []statsd.Metric
+		for k, v := range iometrics {
+			stats = append(stats, statsd.Metric{
+				Type:  statsd.Gauge,
+				Name:  k,
+				Value: v,
+			})
+		}
+
+		gettarget().statsdC.Send("iostat_"+dev, stats...)
 	}
+
+	lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
+	riostat.Unlock()
 
 	r.Core.logged = true
 	r.Unlock()

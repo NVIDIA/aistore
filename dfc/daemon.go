@@ -183,11 +183,13 @@ func dfcinit() {
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
 		ctx.rg.add(newtargetkalive(t), xtargetkalive)
 
+		// `iostat` runner is required in some parts of the code.
+		// We need to ensure that it is installed and the version is
+		// high enough.
 		if err := CheckIostatVersion(); err != nil {
-			glog.Errorf("%v", err)
-		} else {
-			ctx.rg.add(&iostatrunner{}, xiostat)
+			glog.Exit(err)
 		}
+		ctx.rg.add(NewIostatRunner(), xiostat)
 
 		if ctx.config.FSKeeper.Enabled {
 			ctx.rg.add(newFSKeeper(&ctx.config.FSKeeper,
@@ -298,8 +300,8 @@ func getstorstatsrunner() *storstatsrunner {
 
 func getiostatrunner() *iostatrunner {
 	r := ctx.rg.runmap[xiostat]
-	rr, _ := r.(*iostatrunner)
-	// not asserting: a) sysstat installed? b) mac
+	rr, ok := r.(*iostatrunner)
+	assert(ok)
 	return rr
 }
 
