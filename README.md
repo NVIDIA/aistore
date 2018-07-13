@@ -1,16 +1,42 @@
-DFC: Distributed File Cache with Amazon and Google Cloud backends
+DFC: Distributed File Cache with Amazon and Google Cloud Backends
 -----------------------------------------------------------------
 
 ## Overview
 
 DFC is a simple distributed caching service written in Go. The service
-consists of arbitrary number of gateways (realized as http **proxy** servers),
+consists of arbitrary number of gateways (realized as HTTP **proxy** servers),
 and any number of storage **targets** utilizing local disks:
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
 
 Users connect to the proxies and execute RESTful commands. Data then moves
-directly between storage targets that cache this data and the requesting http(s) clients.
+directly between storage targets that cache this data and the requesting HTTP(S) clients.
+
+
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+  * [Quick trial start with Docker](#quick-trial-start-with-docker)
+  * [Quick trial start with DFC as an HTTP proxy](#quick-trial-start-with-dfc-as-an-http-proxy)
+  * [Regular installation](#regular-installation)
+- [Helpful Links: Go](#helpful-links-go)
+- [Helpful Links: AWS](#helpful-links-aws)
+- [Configuration](#configuration)
+  * [Disabling extended attributes](#disabling-extended-attributes)
+  * [Enabling HTTPS](#enabling-https)
+- [Miscellaneous](#miscellaneous)
+- [REST Operations](#rest-operations)
+- [List Bucket](#list-bucket)
+- [Cache Rebalancing](#cache-rebalancing)
+- [List/Range Operations](#listrange-operations)
+- [Multiple Proxies](#multiple-proxies)
+- [WebDAV](#webdav)
+- [Extended Actions](#extended-actions-xactions)
+- [Multi-tiering](#multi-tiering)
+- [Limitations](#dfc-limitations)
+
+
 
 ## Prerequisites
 
@@ -35,15 +61,26 @@ Note that local and Cloud-based buckets support the same API with minor exceptio
 
 ## Getting Started
 
-### Quick start with Docker
+### Quick trial start with Docker
 
 To get started quickly with a containerized, one-proxy, one-target deployment of DFC, see [Getting started quickly with DFC using Docker](docker/quick_start/README.md).
+
+### Quick trial start with DFC as an HTTP proxy
+
+1. Set the field `use_as_proxy` to `true` in  [the configuration](dfc/setup/config.sh) prior to deployment.
+2. Set the environment variable `http_proxy` (supported by most UNIX systems) to the primary proxy URL of your DFC cluster.
+
+```shell
+$ export http_proxy=<PRIMARY-PROXY-URL>
+```
+
+When these two are set, DFC will act as a reverse proxy for your outgoing HTTP requests. _Note that this should only be used for a quick trial of DFC, and not for production systems_.
 
 ### Regular installation
 
 If you've already installed Go and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
 
-```
+```shell
 $ go get -u -v github.com/NVIDIA/dfcpub/dfc
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
 $ dep ensure
@@ -56,7 +93,7 @@ under your configured $GOPATH.
 
 The 4th - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)). If you want to enable optional DFC authentication server(AuthN) execute instead:
 
-```
+```shell
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 
 ```
@@ -68,7 +105,7 @@ The bucket could be an AWS or GCP based one, or a DFC-own so-called "local bucke
 Assuming the bucket exists, the 'go test' command above will download 2 (two) objects. Similarly:
 
 
-```
+```shell
 $ go test ./tests -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS3bucket
 ```
 
@@ -126,13 +163,13 @@ files respectively.
 
 The following sequence downloads 100 objects from the bucket called "myS3bucket":
 
-```
+```shell
 $ go test -v -run=down -bucket=myS3bucket
 ```
 
 and then finds the corresponding cached objects in the local bucket and cloud buckets, respectively:
 
-```
+```shell
 $ find /tmp/dfc -type f | grep local
 $ find /tmp/dfc -type f | grep cloud
 ```
@@ -144,7 +181,7 @@ section in their respective configurations points to the /tmp/dfc directory
 
 Further, to locate all the logs, run:
 
-```
+```shell
 $ find $LOGDIR -type f | grep log
 ```
 
@@ -152,17 +189,17 @@ where $LOGDIR is the configured logging directory as per [DFC configuration](dfc
 
 
 To terminate a running DFC service and cleanup local caches, run:
-```
+```shell
 $ make kill
 $ make rmcache
 ```
 
-## REST operations
+## REST Operations
 
 
 DFC supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
-```
+```shell
 $ curl -X GET http://localhost:8080/v1/daemon?what=config
 ```
 
@@ -244,7 +281,7 @@ ___
 
 ### Example: querying runtime statistics
 
-```
+```shell
 $ curl -X GET http://localhost:8080/v1/cluster?what=stats
 ```
 
@@ -275,7 +312,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 
 To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
 
-```
+```shell
 $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
 ```
 
@@ -394,7 +431,7 @@ WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that 
 
 For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
 
-## Extended Action (xaction)
+## Extended Actions (xactions)
 
 Extended actions (xactions) are the operations that may take seconds, sometimes even minutes, to execute, that run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
 
@@ -407,7 +444,7 @@ Examples of the supported extended actions include:
 
 At the time of this writing the corresponding RESTful API can query two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
 
-```
+```shell
 $ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
 ```
 
@@ -419,7 +456,7 @@ DFC can be deployed with multiple consecutive DFC clusters aka "tiers" sitting b
 
 Tiering is configured at the bucket level by setting bucket properties, for example:
 
-```
+```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
