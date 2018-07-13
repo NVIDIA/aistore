@@ -1089,27 +1089,6 @@ func GetPrimaryProxy(url string) (string, error) {
 	return smap.ProxySI.DirectURL, nil
 }
 
-func UnregisterTarget(proxyURL, sid string) error {
-	smap, err := GetClusterMap(proxyURL)
-	if err != nil {
-		return fmt.Errorf("GetClusterMap() failed, err = %v", err)
-	}
-	err = HTTPRequest("DELETE", proxyURL+"/"+dfc.Rversion+"/"+dfc.Rcluster+"/"+"daemon"+"/"+sid, nil)
-	if err != nil {
-		return err
-	}
-	return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{smap.Tmap[sid].DaemonID})
-}
-
-func RegisterTarget(sid string, smap dfc.Smap) error {
-	si := smap.Tmap[sid]
-	err := HTTPRequest("POST", si.DirectURL+"/"+dfc.Rversion+"/"+dfc.Rdaemon+"/"+dfc.Rregister, nil)
-	if err != nil {
-		return err
-	}
-	return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
-}
-
 // HTTPRequest sends one HTTP request and checks result
 func HTTPRequest(method string, url string, msg io.Reader) error {
 	req, err := http.NewRequest(method, url, msg)
@@ -1198,58 +1177,6 @@ func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 	return false, nil
 }
 
-func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, idsToIgnore []string) error {
-	inList := func(s string, values []string) bool {
-		for _, v := range values {
-			if s == v {
-				return true
-			}
-		}
-
-		return false
-	}
-	urls := make(map[string]int64)
-	for _, d := range smap.Tmap {
-		if !inList(d.DaemonID, idsToIgnore) {
-			urls[d.DirectURL] = 0
-		}
-	}
-	for _, d := range smap.Pmap {
-		if !inList(d.DaemonID, idsToIgnore) {
-			urls[d.DirectURL] = 0
-		}
-	}
-
-	for len(urls) > 0 {
-		var u string
-		for u = range urls {
-			break
-		}
-		smap, err := GetClusterMap(u)
-		if err != nil && !dfc.IsErrConnectionRefused(err) {
-			return err
-		}
-		urls[u] = smap.Version
-		if err == nil && smap.Version > prevVersion {
-			delete(urls, u)
-			continue
-		}
-
-		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, u, smap.Version)
-		}
-		if len(urls) > 0 {
-			fmt.Printf("wait-for-Smap-synced (> v%d): ", prevVersion)
-			for k, smapV := range urls {
-				fmt.Printf("%s(v%d) ", k, smapV)
-			}
-			fmt.Printf("\n")
-			time.Sleep(time.Second)
-		}
-	}
-	return nil
-}
-
 func getWhatRawQuery(getWhat string, getProps string) string {
 	q := url.Values{}
 	q.Add(dfc.URLParamWhat, getWhat)
@@ -1311,4 +1238,98 @@ func EnableTargetMountpath(daemonUrl, mpath string) error {
 
 	_, _, err = readResponse(resp, ioutil.Discard, err, daemonUrl, false /* validate */)
 	return err
+}
+
+func UnregisterTarget(proxyURL, sid string) error {
+	smap, err := GetClusterMap(proxyURL)
+	if err != nil {
+		return fmt.Errorf("GetClusterMap() failed, err = %v", err)
+	}
+
+	target, ok := smap.Tmap[sid]
+	var idsToIgnore []string
+	if ok {
+		idsToIgnore = []string{target.DaemonID}
+	}
+
+	err = HTTPRequest(http.MethodDelete, proxyURL+dfc.URLPath(dfc.Rversion, dfc.Rcluster, dfc.Rdaemon, sid), nil)
+	if err != nil {
+		return err
+	}
+
+	// If target does not exists in cluster we should not wait for map version
+	// sync because update will not be scheduled
+	if ok {
+		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, idsToIgnore)
+	}
+
+	return nil
+}
+
+func RegisterTarget(sid, targetDirectURL string, smap dfc.Smap) error {
+	_, ok := smap.Tmap[sid]
+	err := HTTPRequest(http.MethodPost, targetDirectURL+dfc.URLPath(dfc.Rversion, dfc.Rdaemon, dfc.Rregister), nil)
+	if err != nil {
+		return err
+	}
+
+	// If target is already in cluster we should not wait for map version
+	// sync because update will not be scheduled
+	if !ok {
+		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
+	}
+
+	return nil
+}
+
+func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, idsToIgnore []string) error {
+	inList := func(s string, values []string) bool {
+		for _, v := range values {
+			if s == v {
+				return true
+			}
+		}
+
+		return false
+	}
+	urls := make(map[string]int64)
+	for _, d := range smap.Tmap {
+		if !inList(d.DaemonID, idsToIgnore) {
+			urls[d.DirectURL] = 0
+		}
+	}
+	for _, d := range smap.Pmap {
+		if !inList(d.DaemonID, idsToIgnore) {
+			urls[d.DirectURL] = 0
+		}
+	}
+
+	for len(urls) > 0 {
+		var u string
+		for u = range urls {
+			break
+		}
+		smap, err := GetClusterMap(u)
+		if err != nil && !dfc.IsErrConnectionRefused(err) {
+			return err
+		}
+		urls[u] = smap.Version
+		if err == nil && smap.Version > prevVersion {
+			delete(urls, u)
+			continue
+		}
+
+		if time.Now().After(timeout) {
+			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, u, smap.Version)
+		}
+		if len(urls) > 0 {
+			fmt.Printf("wait-for-Smap-synced (> v%d): ", prevVersion)
+			for k, smapV := range urls {
+				fmt.Printf("%s(v%d) ", k, smapV)
+			}
+			fmt.Printf("\n")
+			time.Sleep(time.Second)
+		}
+	}
+	return nil
 }

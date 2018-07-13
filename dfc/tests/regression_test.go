@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof" // profile
 	"net/url"
@@ -26,7 +27,6 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-	"math/rand"
 )
 
 type Test struct {
@@ -102,7 +102,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		checkFatal(err, t)
 	}()
 
-	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
+	putRandomFiles(seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, true)
 
 	msg := &dfc.GetMsg{GetPageSize: int(pagesize), GetProps: dfc.GetTargetURL}
@@ -181,8 +181,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, seed, fileSize, numberOfFiles, bucketName, t, nil,
-		errorCh, fileNameCh, SmokeDir, prefix, "", true, sgl)
+	putRandomFiles(seed, fileSize, numberOfFiles, bucketName, t, nil, errorCh, fileNameCh, SmokeDir, prefix, true, sgl)
 	selectErr(errorCh, "put", t, true)
 	defer func() {
 		files := make([]string, numberOfFiles)
@@ -268,7 +267,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, "", true, sgl)
+	putRandomFiles(seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 
 	// Test corrupting the file contents
@@ -492,8 +491,8 @@ func TestRenameObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir,
-		RenameStr, "", !testing.Verbose(), sgl)
+	putRandomFiles(baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir,
+		RenameStr, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {
@@ -561,13 +560,14 @@ func TestRebalance(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 	var (
-		sid      string
-		numPuts  = 40
-		filesput = make(chan string, numPuts)
-		errch    = make(chan error, 100)
-		wg       = &sync.WaitGroup{}
-		sgl      *dfc.SGLIO
-		filesize = uint64(1024 * 128)
+		sid             string
+		targetDirectURL string
+		numPuts         = 40
+		filesput        = make(chan string, numPuts)
+		errch           = make(chan error, 100)
+		wg              = &sync.WaitGroup{}
+		sgl             *dfc.SGLIO
+		filesize        = uint64(1024 * 128)
 	)
 	filesSentOrig := make(map[string]int64)
 	bytesSentOrig := make(map[string]int64)
@@ -617,6 +617,8 @@ func TestRebalance(t *testing.T) {
 	for sid = range smap.Tmap {
 		break
 	}
+	targetDirectURL = smap.Tmap[sid].DirectURL
+
 	err := client.UnregisterTarget(proxyurl, sid)
 	checkFatal(err, t)
 	tlogf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
@@ -627,14 +629,14 @@ func TestRebalance(t *testing.T) {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
-	putRandomFiles(0, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
-		SmokeStr, "", !testing.Verbose(), sgl)
+	putRandomFiles(baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
+		SmokeStr, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 
 	//
 	// step 4. register back
 	//
-	err = client.RegisterTarget(sid, smap)
+	err = client.RegisterTarget(sid, targetDirectURL, smap)
 	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
@@ -804,7 +806,7 @@ func TestLRU(t *testing.T) {
 		t.Skip("TestLRU test is for cloud buckets only")
 	}
 
-	getRandomFiles(0, 0, 20, clibucket, "", t, nil, errch)
+	getRandomFiles(0, 20, clibucket, "", t, nil, errch)
 	// The error could be no object in the bucket. In that case, consider it as not an error;
 	// this test will be skipped
 	if len(errch) != 0 {
@@ -827,7 +829,7 @@ func TestLRU(t *testing.T) {
 		hwms[k] = lrucfg["highwm"]
 	}
 	// add a few more
-	getRandomFiles(0, 0, 3, clibucket, "", t, nil, errch)
+	getRandomFiles(0, 3, clibucket, "", t, nil, errch)
 	selectErr(errch, "get", t, true)
 	//
 	// find out min usage %% across all targets
@@ -891,7 +893,7 @@ func TestLRU(t *testing.T) {
 		return
 	}
 	waitProgressBar("LRU: ", sleeptime/2)
-	getRandomFiles(0, 0, 1, clibucket, "", t, nil, errch)
+	getRandomFiles(0, 1, clibucket, "", t, nil, errch)
 	waitProgressBar("LRU: ", sleeptime/2)
 	//
 	// results
@@ -1245,8 +1247,8 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
-		SmokeStr, "", !testing.Verbose(), sgl)
+	putRandomFiles(baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
+		SmokeStr, !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "put", t, true)
 
@@ -1256,7 +1258,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 		bucket = rtd.renamedBucket
 	}
 
-	getRandomFiles(0, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
+	getRandomFiles(0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {
 		if usingFile {

@@ -38,7 +38,7 @@ func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]stri
 		t.Errorf("Failed to create reader: %v", err)
 		t.Fail()
 	}
-	for fname, _ := range oldVersions {
+	for fname := range oldVersions {
 		err = client.Put(proxyurl, r, bucket, fname, !testing.Verbose())
 		if err != nil {
 			t.Errorf("Failed to put new data to object %s/%s, err: %v", bucket, fname, err)
@@ -85,7 +85,7 @@ func propsReadObjects(t *testing.T, bucket string, filelist map[string]string) {
 	versChanged, bytesChanged := propsStats(t)
 	tlogf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
-	for fname, _ := range filelist {
+	for fname := range filelist {
 		_, _, err := client.Get(proxyurl, bucket, fname, nil, nil, false, false)
 		if err != nil {
 			t.Errorf("Failed to read %s/%s, err: %v", bucket, fname, err)
@@ -112,7 +112,7 @@ func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *dfc.
 	evictMap := make(map[string]bool, toEvict)
 	tlogf("Evicting %v objects:\n", toEvict)
 
-	for fname, _ := range objMap {
+	for fname := range objMap {
 		evictMap[fname] = true
 		toEvictList = append(toEvictList, fname)
 		tlogf("    %s/%s\n", bucket, fname)
@@ -216,9 +216,13 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 		t.Skipf("Only %d targets found, need at least 2", l)
 	}
 
-	var removedSid string
-	for sid := range smap.Tmap {
+	var (
+		removedSid             string
+		removedTargetDirectURL string
+	)
+	for sid, daemon := range smap.Tmap {
 		removedSid = sid
+		removedTargetDirectURL = daemon.DirectURL
 		break
 	}
 
@@ -233,7 +237,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	newobjs := propsUpdateObjects(t, bucket, objects, msg, versionEnabled, isLocalBucket)
 
 	tlogf("Reregistering target...\n")
-	err = client.RegisterTarget(removedSid, smap)
+	err = client.RegisterTarget(removedSid, removedTargetDirectURL, smap)
 	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
@@ -295,7 +299,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 func propsCleanupObjects(t *testing.T, bucket string, newVersions map[string]string) {
 	errch := make(chan error, 100)
 	wg := &sync.WaitGroup{}
-	for objname, _ := range newVersions {
+	for objname := range newVersions {
 		wg.Add(1)
 		go client.Del(proxyurl, bucket, objname, wg, errch, !testing.Verbose())
 	}
@@ -325,9 +329,8 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	// Create a few objects
 	tlogf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
-	htype := dfc.ChecksumNone
-	putRandomFiles(0, baseseed+110, filesize, int(numPuts), bucket, t, nil, errch, filesput,
-		ldir, versionDir, htype, true, sgl)
+	putRandomFiles(baseseed+110, filesize, int(numPuts), bucket, t, nil, errch, filesput,
+		ldir, versionDir, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput)
 	for fname := range filesput {

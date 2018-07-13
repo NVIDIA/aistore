@@ -11,10 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 var (
@@ -111,15 +110,15 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 					sgl = sgls[i]
 				}
 
-				putRandomFiles(i, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
-					SmokeDir, SmokeStr, "", !testing.Verbose(), sgl)
+				putRandomFiles(bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
+					SmokeDir, SmokeStr, !testing.Verbose(), sgl)
 				wg.Done()
 			}(i)
 			nPut--
 		} else {
 			wg.Add(1)
 			go func(i int) {
-				getRandomFiles(i, bseed+int64(i), numops, clibucket, SmokeStr+"/", t, nil, errch)
+				getRandomFiles(bseed+int64(i), numops, clibucket, SmokeStr+"/", t, nil, errch)
 				wg.Done()
 			}(i)
 			nGet--
@@ -133,7 +132,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	}
 }
 
-func getRandomFiles(id int, seed int64, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+func getRandomFiles(seed int64, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -229,9 +228,9 @@ func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket st
 	}
 }
 
-func putRandomFiles(id int, seed int64, fileSize uint64, numPuts int, bucket string,
+func putRandomFiles(seed int64, fileSize uint64, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
-	dir, keystr, htype string, silent bool, sgl *dfc.SGLIO) {
+	dir, keystr string, silent bool, sgl *dfc.SGLIO) {
 	if wg != nil {
 		defer wg.Done()
 	}

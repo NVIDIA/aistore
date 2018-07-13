@@ -382,8 +382,8 @@ func Test_putdelete(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput,
-		DeleteDir, DeleteStr, "", !testing.Verbose(), sgl)
+	putRandomFiles(baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput,
+		DeleteDir, DeleteStr, !testing.Verbose(), sgl)
 	close(filesput)
 
 	// Declare one channel per worker to pass the keyname
@@ -561,8 +561,8 @@ func Test_coldgetmd5(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir,
-		ColdValidStr, "", true, sgl)
+	putRandomFiles(baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir,
+		ColdValidStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {
@@ -987,7 +987,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	tlogf("Creating %d objects\n", numFiles)
-	putRandomFiles(0, seed, fileSize, numFiles, clibucket, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, "", true, sgl)
+	putRandomFiles(seed, fileSize, numFiles, clibucket, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
 
 	fileName = <-fileNameChannel
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
@@ -1129,7 +1129,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, "", true, sgl)
+	putRandomFiles(seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
 	selectErr(errorChannel, "put", t, false)
 
 	// Get Current Config
@@ -1237,7 +1237,7 @@ func TestRangeRead(t *testing.T) {
 	}
 
 	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
-	putRandomFiles(0, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, "", false, sgl)
+	putRandomFiles(seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, false, sgl)
 	selectErr(errorChannel, "put", t, false)
 
 	// Get Current Config
@@ -1365,7 +1365,6 @@ func Test_checksum(t *testing.T) {
 		bucket      = clibucket
 		start, curr time.Time
 		duration    time.Duration
-		htype       string
 		numPuts     = 5
 		filesize    = uint64(largefilesize * 1024 * 1024)
 		sgl         *dfc.SGLIO
@@ -1383,17 +1382,14 @@ func Test_checksum(t *testing.T) {
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
-	if ochksum == dfc.ChecksumXXHash {
-		htype = ochksum
-	}
 
 	if usingSG {
 		sgl = dfc.NewSGLIO(filesize)
 		defer sgl.Free()
 	}
 
-	putRandomFiles(0, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir,
-		ChksumValidStr, htype, true, sgl)
+	putRandomFiles(0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir,
+		ChksumValidStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput) // to exit for-range
 	for fname := range filesput {

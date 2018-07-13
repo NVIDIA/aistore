@@ -1119,7 +1119,7 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 		if !doCheckSMap {
 			d := time.Since(timeStart)
 			tlogf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
-				proxyurl, totalTargets, len(smap.Tmap), totalProxies, len(smap.Pmap), d.Truncate(time.Second))
+				proxyurl, len(smap.Tmap), totalTargets, len(smap.Pmap), totalProxies, d.Truncate(time.Second))
 		}
 
 		// if the primary's map changed to the state we want, wait for the map get populated
