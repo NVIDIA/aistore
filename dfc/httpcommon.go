@@ -826,15 +826,15 @@ func (h *httprunner) getXactionKindFromProperties(props string) (
 
 // ================================== Background =========================================
 //
-// Generally, DFC clusters can be deployed with arbitrary numbers of DFC proxies.
+// Generally, DFC clusters can be deployed with an arbitrary numbers of DFC proxies.
 // Each proxy/gateway provides full access to the clustered objects and collaborates with
 // all other proxies to perform majority-voted HA failovers.
 //
 // Not all proxies are equal though.
 //
 // Two out of all proxies can be designated via configuration as "original" and
-// "discovery". The "original" (located at the configurable "original_url") is expected
-// to be the primary (i.e., the leader) at cluster deployment time.
+// "discovery." The "original" (located at the configurable "original_url") is expected
+// to be the primary at cluster (initial) deployment time.
 //
 // Later on, when and if some HA event triggers an automated failover, the role of the
 // primary may be (automatically) assumed by a different proxy/gateway, with the

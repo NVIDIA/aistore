@@ -4,7 +4,7 @@ DFC: Distributed File Cache with Amazon and Google Cloud Backends
 ## Overview
 
 DFC is a simple distributed caching service written in Go. The service
-consists of arbitrary number of gateways (realized as HTTP **proxy** servers),
+consists of an arbitrary number of gateways (realized as HTTP **proxy** servers),
 and any number of storage **targets** utilizing local disks:
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
@@ -30,12 +30,11 @@ directly between storage targets that cache this data and the requesting HTTP(S)
 - [List Bucket](#list-bucket)
 - [Cache Rebalancing](#cache-rebalancing)
 - [List/Range Operations](#listrange-operations)
-- [Multiple Proxies](#multiple-proxies)
+- [Joining a Running Cluster](#joining-a-running-cluster)
+- [Highly Available Control Plane](#highly-available-control-plane)
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
 - [Multi-tiering](#multi-tiering)
-- [Limitations](#dfc-limitations)
-
 
 
 ## Prerequisites
@@ -394,36 +393,73 @@ Range APIs take an optional prefix, a regular expression, and a numeric range. A
 | range | Represented as "min:max", corresponding to the inclusive range from min to max. Either or both of min and max may be empty strings (""), in which case they will be ignored. If regex is an empty string, range will be ignored. |
 
 #### Examples
+
 | Prefix | Regex |  Escaped Regex | Range | Matches<br>(the match is highlighted) | Doesn't Match |
 | --- | --- | --- | --- | --- | --- |
 | "__tst/test-" | `"\d22\d"` | `"\\d22\\d"` | "1000:2000" | "__tst/test-`1223`"<br>"__tst/test-`1229`-4000.dat"<br>"__tst/test-1111-`1229`.dat"<br>"__tst/test-`1222`2-40000.dat" | "__prod/test-1223"<br>"__tst/test-1333"<br>"__tst/test-2222-4000.dat" |
 | "a/b/c" | `"^\d+1\d"` | `"^\\d+1\\d"` | ":100000" | "a/b/c/`110`"<br>"a/b/c/`99919`-200000.dat"<br>"a/b/c/`2314`video-big" | "a/b/110"<br>"a/b/c/d/110"<br>"a/b/c/video-99919-20000.dat"<br>"a/b/c/100012"<br>"a/b/c/30331" |
 
-## Multiple Proxies
+## Joining a Running Cluster
 
-DFC can be run with multiple proxies. When there are multiple proxies, one of them is the primary proxy, and any others are secondary proxies. The primary proxy is the only one allowed to be used for actions related to the Smap (Registration, Local Bucket actions). The URL of the current primary proxy must be specified in the config file at the time a proxy or target is run. On startup, a proxy will start as Primary if the environment variable DFCPRIMARYPROXY is set to any non-empty string. If it is unset, it will start as primary if its id matches the id of the current primary proxy in the configuration file, unless the command line variable -proxyurl is set.
+DFC clusters can be deployed with an arbitrary number of DFC proxies. Each proxy/gateway provides full access to the clustered objects and collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](#highly-available-control-plane) below).
 
-When any target or proxy discovers that the primary proxy is not working (because a keepalive fails), they intitiate a vote to determine the next primary proxy.
-The election process is as follows:
+Not all proxies are equal though. Two out of all proxies can be designated via [DFC configuration](dfc/setup/config.sh)) as an "original" and a "discovery." The "original" one (located at the configurable "original_url") is expected to point to the primary at the cluster initial deployment time.
 
-- A candidate is selected via Highest Random Weight
-- That candidate is notified that an election is beginning
-- After the candidate confirms that the current primary proxy is down, it sends vote requests to all other proxies/targets
-- Each recipient responds affirmatively if they have not recently communicated with the primary proxy, and the candidate proxy has the Highest Random Weight according to their local Smap.
-- If the candidate receives a majority of affirmative responses it sends a confirmation message to all other targets and proxies and becomes the primary proxy.
-- Upon reception of the confirmation message, a recipient removes the previous primary proxy from their local Smap, and updates the primary proxy to the winning candidate.
+Later on, when and if an HA event triggers automated failover, the role of the primary will be automatically assumed by a different proxy/gateway, with the corresponding cluster map (Smap) update getting synchronized across all running nodes.
 
-### Proxy Startup Process
+A new node, however, could potentially experience a problem when trying to join an already deployed and running cluster - simply because its configuration may still be referring to the old primary. The "discovery_url" (see [DFC configuration](dfc/setup/config.sh)) is precisely intended to address this scenario.
 
-While it is running, a proxy persists the cluster map when it changes, loading it as the discovery cluster map on startup. When a proxy starts up as primary, it performs the following process:
+Here's how a new node joins a running DFC cluster:
 
-- It requests the cluster map from each proxy and target in the union of the current cluster map and the discovery cluster map.
-- If any target or proxy signaled that a vote is in progress, it waits a short time, and restarts the process.
-- If not, it picks the cluster map with the maximum version to be the current cluster map.
-- If it is the primary proxy in that cluster map: It continues as primary.
-- If it is not the primary proxy in that cluster map: It registers to the primary proxy from that cluster map, becoming non-primary.
+- first, there's the primary proxy/gateway referenced by the current cluster map (Smap) and/or - during the cluster deployment time - by the configured "primary_url" (see [DFC configuration](dfc/setup/config.sh))
 
-This process allows a proxy to be rerun with the same command and environment variables, even if it should no longer be primary.
+- if joining via the "primary_url" fails, then the new node goes ahead and tries the alternatives:
+  - "discovery_url"
+  - "original_url"
+- but only if those are defined and different from the previously tried.
+
+## Highly Available Control Plane
+
+DFC cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
+Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via DFC REST API (section [REST Operations](#rest-operations)).
+
+It is, therefore, recommended that DFC cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).
+
+When there are multiple proxies, only one of them acts as the primary while all the rest are, respectively, non-primaries. The primary proxy's (primary) responsibility is serializing updates of the cluster-level metadata (which is also versioned and immutable).
+
+Further:
+
+- Each proxy/gateway stores a local copy of the cluster map (Smap)
+- Each Smap instance is immutable and versioned; the versioning is monotonic (increasing)
+- Only the current primary (leader) proxy distributes Smap updates to all other clustered nodes
+
+### Bootstrap
+
+The proxy's bootstrap sequence initiates by executing the following three main steps:
+
+- step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;
+- step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
+- step 3: use all of the above _and_ the environment setting "DFCPRIMARYPROXY" to figure out whether this proxy is to keep starting up as the primary (and if not, join as a non-primary).
+
+Further, the proxy/gateway that keeps starting up at this point as a primary executes more steps:
+
+- (i)    initialize empty Smap;
+- (ii)   wait a configured time for other nodes to join;
+- (iii)  merge the Smap containing newly joined nodes with the Smap that was previously discovered;
+- (iiii) and use the latter to rediscover cluster-wide metadata and resolve remaining conflicts, if any.
+
+If during any of these steps the proxy finds out that it must be joining the cluster as a non-primary then it simply does so.
+
+### Election
+
+The primary proxy election process is as follows:
+
+- A candidate to replace the current (failed) primary is selected;
+- The candidate is notified that an election is commencing;
+- After the candidate (proxy) confirms that the current primary proxy is down, it broadcasts vote requests to all other nodes;
+- Each recipient node confirms whether the current primary is down and whether the candidate proxy has the HRW (Highest Random Weight) according to the local Smap;
+- If confirmed, the node responds with Yes, otherwise it's a No;
+- If and when the candidate receives a majority of affirmative responses it performs the commit phase of this two-phase process by distributing an updated cluster map to all nodes;
 
 ## WebDAV
 
@@ -474,10 +510,3 @@ Currently, the endpoints which support multi-tier policies are the following:
 
 * GET /v1/objects/bucket-name/object-name
 * PUT /v1/objects/bucket-name/object-name
-
-## DFC Limitations
-
-- The current primary proxy is determined at startup, through either the configuration file or the -proxyurl command line variable. This means that if the primary proxy changes, the configuration file of any new targets joining the cluster must change. This limitation does not apply to targets that are a part of the cluster when the primary proxy changes, fails, or rejoins.
-- DFC does not currently handle the case where the primary proxy and the next highest random weight proxy both fail at the same time, so this will result in no new primary proxy being chosen.
-- Currently, only the candidate primary proxy keeps track of the fact that a vote is happening. This means that if the candidate primary proxy is not in the discovery cluster map when a proxy starts up, a proxy may start as primary at the same time as an election completes, changing the primary proxy.
-

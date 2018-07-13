@@ -35,7 +35,7 @@ func (p *proxyrunner) bootstrap() {
 		q              = url.Values{}
 	)
 	// step 1: load a local copy of the cluster map and
-	//         and try to use it for discovery of the current one
+	//         try to use it for discovery of the current one
 	smap = newSmap()
 	if err := LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
 		if smap.countTargets() > 0 || smap.countProxies() > 1 {
