@@ -3,14 +3,11 @@ DFC: Distributed File Cache with Amazon and Google Cloud Backends
 
 ## Overview
 
-DFC is a simple distributed caching service written in Go. The service
-consists of an arbitrary number of gateways (realized as HTTP **proxy** servers),
-and any number of storage **targets** utilizing local disks:
+DFC is a simple distributed caching service written in Go. The service consists of an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks:
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
 
-Users connect to the proxies and execute RESTful commands. Data then moves
-directly between storage targets that cache this data and the requesting HTTP(S) clients.
+Users connect to the proxies and execute RESTful commands. Data then moves directly between storage targets that cache this data and the requesting HTTP(S) clients.
 
 
 ## Table of Contents
@@ -20,18 +17,21 @@ directly between storage targets that cache this data and the requesting HTTP(S)
   * [Quick trial start with Docker](#quick-trial-start-with-docker)
   * [Quick trial start with DFC as an HTTP proxy](#quick-trial-start-with-dfc-as-an-http-proxy)
   * [Regular installation](#regular-installation)
+  * [A few tips](#a-few-tips)
 - [Helpful Links: Go](#helpful-links-go)
 - [Helpful Links: AWS](#helpful-links-aws)
 - [Configuration](#configuration)
   * [Disabling extended attributes](#disabling-extended-attributes)
   * [Enabling HTTPS](#enabling-https)
-- [Miscellaneous](#miscellaneous)
 - [REST Operations](#rest-operations)
 - [List Bucket](#list-bucket)
 - [Cache Rebalancing](#cache-rebalancing)
 - [List/Range Operations](#listrange-operations)
 - [Joining a Running Cluster](#joining-a-running-cluster)
 - [Highly Available Control Plane](#highly-available-control-plane)
+  * [Bootstrap](#bootstrap)
+  * [Election](#election)
+  * [Non-electable gateways](#non-electable-gateways)
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
 - [Multi-tiering](#multi-tiering)
@@ -44,19 +44,16 @@ directly between storage targets that cache this data and the requesting HTTP(S)
 * Optionally, extended attributes (xattrs)
 * Optionally, Amazon (AWS) or Google Cloud (GCP) account
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes),
-or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not
-always be enabled in the OS kernel (configurations) - the fact that can be easily
-found out by running setfattr (Linux) or xattr (macOS) command as shown in this
-[single-host local deployment script](dfc/setup/deploy.sh).
-If this is the case - that is, if you happen not to have xattrs handy, you can configure DFC
-not to use them at all (section **Configuration** below).
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not always be enabled in the OS kernel (configurations) - the fact that can be easily found out by running setfattr (Linux) or xattr (macOS) command as shown in this [single-host local deployment script](dfc/setup/deploy.sh).
 
-To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket.
-If you don't have Amazon and/or Google Cloud accounts, you can use DFC local buckets as illustrated
-a) in the **API** section below and b) in the [test sources](dfc/tests/regression_test.go).
-Note that local and Cloud-based buckets support the same API with minor exceptions
-(only local buckets can be renamed, for instance).
+If this is the case - that is, if you happen not to have xattrs handy, you can configure DFC not to use them at all (section **Configuration** below).
+
+To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket. If you don't have or don't want to use Amazon and/or Google Cloud accounts - or if you simply deploy DFC as a non-redundant object store - you can use so caled *local buckets* as illustrated:
+
+a) in the [REST Operations](#rest-operations) section below, and
+b) in the [test sources](dfc/tests/regression_test.go)
+
+Note that local and Cloud-based buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
 
 ## Getting Started
 
@@ -116,6 +113,38 @@ For more testing commands and command line options, please refer to the correspo
 
 For other useful commands, see the [Makefile](dfc/Makefile).
 
+### A few tips
+
+The following sequence downloads 100 objects from the bucket called "myS3bucket":
+
+```shell
+$ go test -v -run=down -bucket=myS3bucket
+```
+
+and then finds the corresponding cached objects in the local bucket and cloud buckets, respectively:
+
+```shell
+$ find /tmp/dfc -type f | grep local
+$ find /tmp/dfc -type f | grep cloud
+```
+
+This, of course, assumes that all DFC daemons are local and non-containerized (don't forget to run 'make deploy' to make it happen) - and that the "test_fspaths" section in their respective configurations (see [DFC configuration](dfc/setup/config.sh)) points to the /tmp/dfc.
+
+Further, to locate all the logs, run:
+
+```shell
+$ find $LOGDIR -type f | grep log
+```
+
+where $LOGDIR is the configured logging directory as per [DFC configuration](dfc/setup/config.sh).
+
+
+To terminate a running DFC service and cleanup local caches, run:
+```shell
+$ make kill
+$ make rmcache
+```
+
 ## Helpful Links: Go
 
 * [How to write Go code](https://golang.org/doc/code.html)
@@ -148,50 +177,11 @@ and
 
 ### Disabling extended attributes
 
-To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all
-targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh)
-that'd be further used to deploy the cluster.
+To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh) that'd be further used to deploy the cluster.
 
 ### Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify
-"server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key
-files respectively.
-
-## Miscellaneous
-
-The following sequence downloads 100 objects from the bucket called "myS3bucket":
-
-```shell
-$ go test -v -run=down -bucket=myS3bucket
-```
-
-and then finds the corresponding cached objects in the local bucket and cloud buckets, respectively:
-
-```shell
-$ find /tmp/dfc -type f | grep local
-$ find /tmp/dfc -type f | grep cloud
-```
-
-This, of course, assumes that all DFC daemons are local and non-containerized
- - don't forget to run 'make deploy' to make it happen - and that the "test_fspaths"
-section in their respective configurations points to the /tmp/dfc directory
-(see section **Configuration** for details).
-
-Further, to locate all the logs, run:
-
-```shell
-$ find $LOGDIR -type f | grep log
-```
-
-where $LOGDIR is the configured logging directory as per [DFC configuration](dfc/setup/config.sh).
-
-
-To terminate a running DFC service and cleanup local caches, run:
-```shell
-$ make kill
-$ make rmcache
-```
+To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify "server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key files respectively (see [DFC configuration](dfc/setup/config.sh)).
 
 ## REST Operations
 
@@ -294,7 +284,7 @@ More usage examples can be found in the [the source](dfc/tests/regression_test.g
 
 The ListBucket API returns a page of object names (and, optionally, their properties including sizes, creation times, checksums, and more), in addition to a token allowing the next page to be retrieved.
 
-### properties-and-options
+#### properties-and-options
 The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
 
 | Property/Option | Description | Value |
@@ -307,7 +297,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 
  <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the DFC cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the DFC cache. [↩](#a6)
 
-### Example: listing local and Cloud buckets
+#### Example: listing local and Cloud buckets
 
 To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
 
@@ -321,7 +311,7 @@ This request will produce an output that (in part) may look as follows:
 
 For many more examples, please refer to the [test sources](dfc/tests/) in the repository.
 
-### Example: Listing All Pages
+#### Example: Listing all pages
 
 The following Go code retrieves a list of all of object names from a named bucket (note: error handling omitted):
 
@@ -373,7 +363,7 @@ DFC provides two APIs to operate on groups of objects: List, and Range. Both of 
 | deadline | The amount of time before the request expires formatted as a [golang duration string](https://golang.org/pkg/time/#ParseDuration). A timeout of 0 means no timeout.| 0 |
 | wait | If true, a response will be sent only when the operation completes or the deadline passes. When false, a response will be sent once the operation is initiated. When setting wait=true, ensure your request has a timeout at least as long as the deadline. | false |
 
-### List
+#### List
 
 List APIs take a JSON array of object names, and initiate the operation on those objects.
 
@@ -381,7 +371,7 @@ List APIs take a JSON array of object names, and initiate the operation on those
 | --- | --- |
 | objnames | JSON array of object names |
 
-### Range
+#### Range
 
 Range APIs take an optional prefix, a regular expression, and a numeric range. A matching object name will begin with the prefix and contain a number that satisfies both the regex and the range as illustrated below.
 
@@ -461,6 +451,10 @@ The primary proxy election process is as follows:
 - If confirmed, the node responds with Yes, otherwise it's a No;
 - If and when the candidate receives a majority of affirmative responses it performs the commit phase of this two-phase process by distributing an updated cluster map to all nodes;
 
+### Non-electable gateways
+
+DFC cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([DFC configuration](dfc/setup/config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
+
 ## WebDAV
 
 WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
@@ -469,7 +463,9 @@ For information on how to run it and details, please refer to the [WebDAV README
 
 ## Extended Actions (xactions)
 
-Extended actions (xactions) are the operations that may take seconds, sometimes even minutes, to execute, that run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
+Extended actions (xactions) are the operations that may take seconds, sometimes minutes or even hours, to execute. Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
+
+Extended actions throttle themselves based on xaction-specific configurable watermarks and local system utilizations. Extended action that runs LRU-based evictions, for instance, will perform the "balancing act" (of running faster or slower) by taking into account remaining free local capacity as well as the current target's utilization.
 
 Examples of the supported extended actions include:
 
@@ -478,7 +474,7 @@ Examples of the supported extended actions include:
 * Prefetch
 * Consensus voting when electing a new leader
 
-At the time of this writing the corresponding RESTful API can query two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
+At the time of this writing the corresponding RESTful API (section [REST Operations](#rest-operations)) includes support for querying two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
 
 ```shell
 $ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
