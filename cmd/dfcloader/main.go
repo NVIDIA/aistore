@@ -73,7 +73,7 @@ type (
 		usingSG           bool
 		usingFile         bool
 		tmpDir            string // only used when usingFile is true
-		occurance         int    // when multiple of instances of loader running on the same host
+		loaderID          int    // when multiple of instances of loader running on the same host
 		statsdPort        int
 		batchSize         int  // batch is used for bootstraping(list) and delete
 		getConfig         bool // true if only run get proxy config request
@@ -123,7 +123,7 @@ func parseCmdLine() (params, error) {
 	flag.StringVar(&p.readerType, "readertype", readers.ReaderTypeSG,
 		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", readers.ReaderTypeSG,
 			readers.ReaderTypeFile, readers.ReaderTypeInMem, readers.ReaderTypeRand))
-	flag.IntVar(&p.occurance, "occurance", 1, "Id to identify a loader when multiple instances of loader runningon the same host")
+	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for local statsd server")
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
 	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
@@ -240,7 +240,7 @@ func main() {
 	}
 
 	statsdC, err = statsd.New("localhost", runParams.statsdPort,
-		fmt.Sprintf("dfcloader.%s-%d", host, runParams.occurance))
+		fmt.Sprintf("dfcloader.%s-%d", host, runParams.loaderID))
 	if err != nil {
 		fmt.Println("Failed to connect to statd, running without statsd")
 	}

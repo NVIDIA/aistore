@@ -35,6 +35,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
 - [Multi-tiering](#multi-tiering)
+- [Command-line Load Generator](#command-line-load-generator)
 - [Metrics with StatsD](#metrics-with-statsd)
 
 
@@ -508,14 +509,20 @@ Currently, the endpoints which support multi-tier policies are the following:
 * GET /v1/objects/bucket-name/object-name
 * PUT /v1/objects/bucket-name/object-name
 
+## Command-line Load Generator
+
+`dfcloader` is a command-line tool for generating load for DFC. Run `$ dfcloader -help` for usage information, or [see the source](cmd/dfcloader/main.go).
+
 ## Metrics with StatsD
 
-In DFC, the StatsD daemon is configured to start on `localhost` on port `8125`. All metric tags are logged using the following pattern:
+In DFC, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) daemon on `localhost` on port `8125` (fixed) via [UDP](https://en.wikipedia.org/wiki/User_Datagram_Protocol). If a target or proxy cannot connect to the StatsD daemon at start-up, then it will run without StatsD. StatsD can publish local statistics to a backend service for aggregate data visualizations (read more [here](https://github.com/etsy/statsd/blob/master/docs/backend.md)).
+
+All metric tags are logged using the following pattern:
 
 `prefix.bucket.metric_name.metric_value|metric_type`,
 
-where `prefix` is either `dfcproxy.<daemon_id>` or `dfctarget.<daemon_id>`, and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
-
+where `prefix` is either `dfcproxy.<daemon_id>`, `dfctarget.<daemon_id>`, or `dfcloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
+:
 Tracked metrics include the following:
 
 ### Proxy metrics:
@@ -560,9 +567,37 @@ Tracked metrics include the following:
 * `dfctarget.<daemon_id>.iostat_*.gauge.<value>|g`
 
 ### Keepalive Metrics
+
 * `<prefix>.keepalive.heartbeat.<id>.delta.<value>|g`
 * `<prefix>.keepalive.heartbeat.<id>.count.1|c`
 * `<prefix>.keepalive.average.<id>.delta.<value>|g`
 * `<prefix>.keepalive.average.<id>.count.1|c`
 * `<prefix>.keepalive.average.<id>.reset.1|c`
 
+### dfcloader Metrics
+
+* `dfcloader.<ip>.<loader_id>.get.pending.<value>|g`
+* `dfcloader.<ip>.<loader_id>.get.count.1|c`
+* `dfcloader.<ip>.<loader_id>.get.latency.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.throughput.<value>|c`
+* `dfcloader.<ip>.<loader_id>.get.latency.proxyconn.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.proxy.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.targetconn.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.target.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.posthttp.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.proxyheader.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.targetheader.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.targetrequest.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.latency.targetresponse.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.get.error.1|c`
+* `dfcloader.<ip>.<loader_id>.put.pending.<value>|g`
+* `dfcloader.<ip>.<loader_id>.put.count.<value>|g`
+* `dfcloader.<ip>.<loader_id>.put.latency.<value>|,s`
+* `dfcloader.<ip>.<loader_id>.put.throughput.<value>|c`
+* `dfcloader.<ip>.<loader_id>.put.error.1|c`
+* `dfcloader.<ip>.<loader_id>.getconfig.count.1|c`
+* `dfcloader.<ip>.<loader_id>.getconfig.latency.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>|ms`
+* `dfcloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>|ms`
