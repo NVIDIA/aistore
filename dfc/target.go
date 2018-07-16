@@ -1246,7 +1246,7 @@ ret:
 
 			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size, "bytesvchanged", props.size, "numvchanged", int64(1))
 		} else {
-			t.statsdC.Send("coldget",
+			t.statsdC.Send("get.cold",
 				statsd.Metric{
 					Type:  statsd.Counter,
 					Name:  "count",

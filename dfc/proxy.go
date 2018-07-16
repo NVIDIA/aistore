@@ -1718,14 +1718,14 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsdC.Send("post",
+	p.statsdC.Send("cluster_post",
 		statsd.Metric{
 			Type:  statsd.Counter,
 			Name:  "count",
 			Value: 1,
 		},
 	)
-	p.statsif.add("numpost", 1)
+	p.statsif.add("numclusterpost", 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()

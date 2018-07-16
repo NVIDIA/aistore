@@ -35,6 +35,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
 - [Multi-tiering](#multi-tiering)
+- [Metrics with StatsD](#metrics-with-statsd)
 
 
 ## Prerequisites
@@ -506,3 +507,62 @@ Currently, the endpoints which support multi-tier policies are the following:
 
 * GET /v1/objects/bucket-name/object-name
 * PUT /v1/objects/bucket-name/object-name
+
+## Metrics with StatsD
+
+In DFC, the StatsD daemon is configured to start on `localhost` on port `8125`. All metric tags are logged using the following pattern:
+
+`prefix.bucket.metric_name.metric_value|metric_type`,
+
+where `prefix` is either `dfcproxy.<daemon_id>` or `dfctarget.<daemon_id>`, and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
+
+Tracked metrics include the following:
+
+### Proxy metrics:
+
+* `dfcproxy.<daemon_id>.get.count.1|c`
+* `dfcproxy.<daemon_id>.get.latency.<value>|ms`
+* `dfcproxy.<daemon_id>.put.count.1|c`
+* `dfcproxy.<daemon_id>.put.latency.<value>|ms`
+* `dfcproxy.<daemon_id>.delete.count.1|c`
+* `dfcproxy.<daemon_id>.list.count.1|c`
+* `dfcproxy.<daemon_id>.list.latency.<value>|ms`
+* `dfcproxy.<daemon_id>.rename.count.1|c`
+* `dfcproxy.<daemon_id>.cluster_post.count.1|c`
+
+### Target Metrics
+
+* `dfctarget.<daemon_id>.get.count.1|c`
+* `dfctarget.<daemon_id>.get.latency.<value>|ms`
+* `dfctarget.<daemon_id>.get.cold.count.1|c`
+* `dfctarget.<daemon_id>.get.cold.bytesloaded.<value>|c`
+* `dfctarget.<daemon_id>.get.cold.vchanged.<value>|c`
+* `dfctarget.<daemon_id>.get.cold.bytesvchanged.<value>|c`
+* `dfctarget.<daemon_id>.put.count.1|c`
+* `dfctarget.<daemon_id>.put.latency.<value>|ms`
+* `dfctarget.<daemon_id>.delete.count.1|c`
+* `dfctarget.<daemon_id>.list.count.1|c`
+* `dfctarget.<daemon_id>.list.latency.<value>|ms`
+* `dfctarget.<daemon_id>.rename.count.1|c`
+* `dfctarget.<daemon_id>.evict.files.1|c`
+* `dfctarget.<daemon_id>.evict.bytes.<value>|c`
+* `dfctarget.<daemon_id>.rebalance.receive.files.1|c`
+* `dfctarget.<daemon_id>.rebalance.receive.bytes.<value>|c`
+* `dfctarget.<daemon_id>.rebalance.send.files.1|c`
+* `dfctarget.<daemon_id>.rebalance.send.bytes.<value>|c`
+* `dfctarget.<daemon_id>.error.badchecksum.xxhash.count.1|c`
+* `dfctarget.<daemon_id>.error.badchecksum.xxhash.bytes.<value>|c`
+* `dfctarget.<daemon_id>.error.badchecksum.md5.count.1|c`
+* `dfctarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
+
+### Disk Metrics
+
+* `dfctarget.<daemon_id>.iostat_*.gauge.<value>|g`
+
+### Keepalive Metrics
+* `<prefix>.keepalive.heartbeat.<id>.delta.<value>|g`
+* `<prefix>.keepalive.heartbeat.<id>.count.1|c`
+* `<prefix>.keepalive.average.<id>.delta.<value>|g`
+* `<prefix>.keepalive.average.<id>.count.1|c`
+* `<prefix>.keepalive.average.<id>.reset.1|c`
+
