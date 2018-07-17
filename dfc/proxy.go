@@ -1725,7 +1725,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			Value: 1,
 		},
 	)
-	p.statsif.add("numclusterpost", 1)
+	p.statsif.add("numpost", 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
