@@ -64,7 +64,6 @@ type (
 		runarr []runner
 		runmap map[string]runner // redundant, named
 		errch  chan error
-		idxch  chan int
 		stpch  chan error
 	}
 
@@ -266,13 +265,6 @@ func getproxystatsrunner() *proxystatsrunner {
 func getproxystats() *proxyCoreStats {
 	rr := getproxystatsrunner()
 	return &rr.Core
-}
-
-func getproxy() *proxyrunner {
-	r := ctx.rg.runmap[xproxy]
-	rr, ok := r.(*proxyrunner)
-	assert(ok)
-	return rr
 }
 
 func getproxykalive() *proxykalive {

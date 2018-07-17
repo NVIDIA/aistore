@@ -134,11 +134,6 @@ func (m *bucketMD) deepcopy(dst *bucketMD) {
 func (m *bucketMD) tag() string    { return bucketmdtag }
 func (m *bucketMD) version() int64 { return m.Version }
 
-func (m *bucketMD) cloneL() (clone interface{}) { // FIXME: remove from revs
-	clone = m.clone()
-	return
-}
-
 func (m *bucketMD) marshal() ([]byte, error) {
 	return json.Marshal(m)
 }

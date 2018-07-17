@@ -385,14 +385,6 @@ func LocalLoad(pathname string, v interface{}) (err error) {
 	return
 }
 
-func osRemove(prefix, fqn string) error {
-	if err := os.Remove(fqn); err != nil {
-		return err
-	}
-	glog.Infof("%s: removed %q", prefix, fqn)
-	return nil
-}
-
 // as of 1.9 net/http does not appear to provide any better way..
 func IsErrConnectionRefused(err error) (yes bool) {
 	if uerr, ok := err.(*url.Error); ok {

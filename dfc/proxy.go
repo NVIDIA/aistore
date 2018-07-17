@@ -58,14 +58,12 @@ func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.Handle
 //===========================================================================
 type proxyrunner struct {
 	httprunner
-	starttime   time.Time
-	smapversion int64
-	xactinp     *xactInProgress
-	syncmapinp  int64
-	statsdC     statsd.Client
-	authn       *authManager
-	startedUp   int64
-	metasyncer  *metasyncer
+	starttime  time.Time
+	xactinp    *xactInProgress
+	statsdC    statsd.Client
+	authn      *authManager
+	startedUp  int64
+	metasyncer *metasyncer
 }
 
 // start proxy runner

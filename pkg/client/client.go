@@ -172,14 +172,6 @@ type Reader interface {
 	Description() string
 }
 
-type bytesReaderCloser struct {
-	bytes.Reader
-}
-
-func (q *bytesReaderCloser) Close() error {
-	return nil
-}
-
 func (err ReqError) Error() string {
 	return err.message
 }
@@ -701,22 +693,6 @@ func IsCached(proxyurl, bucket, objname string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func checkHTTPStatus(resp *http.Response, op string) error {
-	if resp.StatusCode >= http.StatusBadRequest {
-		return ReqError{
-			code:    resp.StatusCode,
-			message: fmt.Sprintf("Bad status code from %s", op),
-		}
-	}
-
-	return nil
-}
-
-func discardHTTPResp(resp *http.Response) {
-	bufreader := bufio.NewReader(resp.Body)
-	io.Copy(ioutil.Discard, bufreader)
 }
 
 // Put sends a PUT request to the given URL

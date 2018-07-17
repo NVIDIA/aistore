@@ -86,7 +86,6 @@ type targetCoreStats struct {
 type statsrunner struct {
 	sync.Mutex
 	namedrunner
-	statslogger
 	chsts chan struct{}
 }
 

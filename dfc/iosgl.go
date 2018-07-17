@@ -13,7 +13,6 @@ import (
 
 const (
 	largeSizeUseThresh = MiB / 2
-	warnSizeThresh     = GiB
 	minSizeUnknown     = 32 * KiB
 )
 

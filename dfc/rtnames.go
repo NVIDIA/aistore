@@ -130,15 +130,6 @@ func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendingi
 	}
 }
 
-// log pending
-func (rtnamemap *rtnamemap) log() {
-	rtnamemap.Lock()
-	for name, info := range rtnamemap.m {
-		glog.Infof("rtnamemap: %s => %s", name, info.String())
-	}
-	rtnamemap.Unlock()
-}
-
 func (rtnamemap *rtnamemap) stop() {
 	close(rtnamemap.abrt)
 }

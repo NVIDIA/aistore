@@ -51,12 +51,6 @@ type (
 		Result VoteResult `json:"voteresult"`
 	}
 
-	// ErrPair contains an Error and the Daemon which caused the error
-	ErrPair struct {
-		err      error
-		daemonID string
-	}
-
 	voteResult struct {
 		yes      bool
 		daemonID string
