@@ -511,21 +511,27 @@ Currently, the endpoints which support multi-tier policies are the following:
 
 ## Command-line Load Generator
 
-`dfcloader` is a command-line tool for generating load for DFC. Run `$ dfcloader -help` for usage information, or [see the source](cmd/dfcloader/main.go).
+`dfcloader` is a command-line tool that is included with DFC and that can be immediately used to generate load and evaluate cluster performance.
+
+For usage, run `$ dfcloader -help` or see [the source](cmd/dfcloader/main.go) for usage examples.
 
 ## Metrics with StatsD
 
-In DFC, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) daemon on `localhost` on port `8125` (fixed) via [UDP](https://en.wikipedia.org/wiki/User_Datagram_Protocol). If a target or proxy cannot connect to the StatsD daemon at start-up, then it will run without StatsD. StatsD can publish local statistics to a backend service for aggregate data visualizations (read more [here](https://github.com/etsy/statsd/blob/master/docs/backend.md)).
+In DFC, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) local daemon listening on a UDP port `8125` (which is currently fixed). If a target or proxy cannot connect to the StatsD daemon at startup, the target (or proxy) will run without StatsD.
 
-All metric tags are logged using the following pattern:
+StatsD publishies local statistics to a compliant backend service (e.g., [graphite](https://graphite.readthedocs.io/en/latest/)) for easy but powerful stats aggregation and visualization.
+
+Please read more on StatsD [here](https://github.com/etsy/statsd/blob/master/docs/backend.md).
+
+All metric tags (or simply, metrics) are logged using the following pattern:
 
 `prefix.bucket.metric_name.metric_value|metric_type`,
 
-where `prefix` is either `dfcproxy.<daemon_id>`, `dfctarget.<daemon_id>`, or `dfcloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
-:
-Tracked metrics include the following:
+where `prefix` is one of: `dfcproxy.<daemon_id>`, `dfctarget.<daemon_id>`, or `dfcloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
 
-### Proxy metrics:
+Metrics that DFC generates are named and grouped as follows:
+
+#### Proxy metrics:
 
 * `dfcproxy.<daemon_id>.get.count.1|c`
 * `dfcproxy.<daemon_id>.get.latency.<value>|ms`
@@ -537,7 +543,7 @@ Tracked metrics include the following:
 * `dfcproxy.<daemon_id>.rename.count.1|c`
 * `dfcproxy.<daemon_id>.cluster_post.count.1|c`
 
-### Target Metrics
+#### Target Metrics
 
 * `dfctarget.<daemon_id>.get.count.1|c`
 * `dfctarget.<daemon_id>.get.latency.<value>|ms`
@@ -562,11 +568,11 @@ Tracked metrics include the following:
 * `dfctarget.<daemon_id>.error.badchecksum.md5.count.1|c`
 * `dfctarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
 
-### Disk Metrics
+#### Disk Metrics
 
 * `dfctarget.<daemon_id>.iostat_*.gauge.<value>|g`
 
-### Keepalive Metrics
+#### Keepalive Metrics
 
 * `<prefix>.keepalive.heartbeat.<id>.delta.<value>|g`
 * `<prefix>.keepalive.heartbeat.<id>.count.1|c`
@@ -574,7 +580,7 @@ Tracked metrics include the following:
 * `<prefix>.keepalive.average.<id>.count.1|c`
 * `<prefix>.keepalive.average.<id>.reset.1|c`
 
-### dfcloader Metrics
+#### dfcloader Metrics
 
 * `dfcloader.<ip>.<loader_id>.get.pending.<value>|g`
 * `dfcloader.<ip>.<loader_id>.get.count.1|c`
