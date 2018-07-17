@@ -49,7 +49,7 @@ type (
 	// daemon instance: proxy or storage target
 	daemon struct {
 		config     dfconfig
-		mountpaths mountedFS
+		mountpaths mountedFS // for mountpath definition, see fspath2mpath()
 		rg         *rungroup
 	}
 
@@ -206,16 +206,7 @@ func dfcinit() {
 			chSendAtime: make(chan accessTimeResponse),
 		}, xatime)
 
-		// Note:
-		// Move this code from run() to here to fix a race between target run() and storage stats
-		// run() DFC's runner start doesn't have a concept of sequence, all runners are started
-		// without a clean way of making sure all fields needed by a runner are initialized.
-		// The code should be reworked to include a clean way of initializing all runnners
-		// sequentilly based on runner's dependency, so when runners' run()
-		// is called, they have all their needed fields created and initialized.
-		// Here is one example, when targetrunner.run() and storstatsrunner.run() both are running,
-		// ctx.mountpaths.Available is supposed to be filled by targetrunner when it calls startupMpaths(),
-		// but storstatsrunner.run() started to use it, resulted in the read/write race.
+		// for mountpath definition, see fspath2mpath()
 		ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
 		ctx.mountpaths.Offline = make(map[string]*mountPath, len(ctx.config.FSpaths))
 		if t.testingFSPpaths() {

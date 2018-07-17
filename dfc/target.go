@@ -125,8 +125,9 @@ func (t *targetrunner) run() error {
 			return err
 		}
 	}
-	// fill-in, detect changes, persist
-	t.startupMpaths()
+	t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
+	t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
+	t.detectMpathChanges()
 
 	// cloud provider
 	if ctx.config.CloudProvider == ProviderAmazon {
@@ -2762,9 +2763,15 @@ func (t *targetrunner) isworkfile(workfqn string) (iswork, isold bool) {
 	return
 }
 
+// Terminology:
+// - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
+// - each mountpath is, simply, a local directory that is serviced by a local filesystem;
+// - there's a 1-to-1 relationship between a mountpath and a local filesystem
+//   (different mountpaths map onto different filesystems, and vise versa);
+// - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 func (t *targetrunner) fspath2mpath() {
 	if len(ctx.config.FSpaths) == 0 {
-		// (usability) do not clutter the log with backtraces when starting up and validating config
+		// (usability) not to clutter the log with backtraces when starting up and validating config
 		glog.Errorln("FATAL: no fspaths - see README => Configuration and/or fspaths section in the config.sh")
 		os.Exit(1)
 	}
@@ -2850,20 +2857,25 @@ func (t *targetrunner) checkIfAllFSIDsAreUnique() {
 	}
 }
 
-func (t *targetrunner) startupMpaths() {
+func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath string) string) {
+	if basename == "" {
+		glog.Errorf("FATAL: empty basename for the %s buckets directory", s)
+		os.Exit(1)
+	}
 	for mpath := range ctx.mountpaths.Available {
-		cloudbctsfqn := makePathCloud(mpath)
-		if err := CreateDir(cloudbctsfqn); err != nil {
-			glog.Errorf("FATAL: cannot create cloud buckets dir %q, err: %v", cloudbctsfqn, err)
+		dir := f(mpath)
+		if _, ok := ctx.mountpaths.Available[dir]; ok {
+			glog.Errorf("FATAL: local namespace partitioning conflict: %s vs %s", mpath, dir)
 			os.Exit(1)
 		}
-		localbctsfqn := makePathLocal(mpath)
-		if err := CreateDir(localbctsfqn); err != nil {
-			glog.Errorf("FATAL: cannot create local buckets dir %q, err: %v", localbctsfqn, err)
+		if err := CreateDir(dir); err != nil {
+			glog.Errorf("FATAL: cannot create %s buckets dir %q, err: %v", s, dir, err)
 			os.Exit(1)
 		}
 	}
+}
 
+func (t *targetrunner) detectMpathChanges() {
 	// mpath config dir
 	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
 

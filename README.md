@@ -524,7 +524,7 @@ For usage, run `$ dfcloader -help` or see [the source](cmd/dfcloader/main.go) fo
 
 In DFC, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) local daemon listening on a UDP port `8125` (which is currently fixed). If a target or proxy cannot connect to the StatsD daemon at startup, the target (or proxy) will run without StatsD.
 
-StatsD publishies local statistics to a compliant backend service (e.g., [graphite](https://graphite.readthedocs.io/en/latest/)) for easy but powerful stats aggregation and visualization.
+StatsD publishes local statistics to a compliant backend service (e.g., [graphite](https://graphite.readthedocs.io/en/latest/)) for easy but powerful stats aggregation and visualization.
 
 Please read more on StatsD [here](https://github.com/etsy/statsd/blob/master/docs/backend.md).
 
