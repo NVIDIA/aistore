@@ -120,7 +120,7 @@ func (g *rungroup) run() error {
 	for i, r := range g.runarr {
 		go func(i int, r runner) {
 			err := r.run()
-			glog.Errorf("Runner [%s] threw error [%v].", r.getName(), err)
+			glog.Warningf("Runner [%s] threw error [%v].", r.getName(), err)
 			g.errch <- err
 		}(i, r)
 	}
