@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
+const maxRetrySeconds = 5
+
 // Background:
 // 	- Each proxy/gateway stores a local copy of the cluster map (Smap)
 // 	- Each Smap instance is versioned; the versioning is monotonic (increasing)
@@ -118,12 +120,17 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 
 	f := func() {
 		// get Smap
-		res := p.call(nil, p.si, url, http.MethodGet, nil)
-		if res.err != nil {
-			if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
-				time.Sleep(time.Second)
-				res = p.call(nil, p.si, url, http.MethodGet, nil)
+		var res callResult
+		for i := 0; i < maxRetrySeconds; i++ {
+			res = p.call(nil, p.si, url, http.MethodGet, nil)
+			if res.err != nil {
+				if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
+					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, url)
+					time.Sleep(time.Second)
+					continue
+				}
 			}
+			break
 		}
 		if res.err != nil {
 			s := fmt.Sprintf("Error getting Smap from primary %s: %v", url, res.err)
@@ -170,6 +177,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 // 	- (iiii) discover cluster-wide metadata, and resolve remaining conflicts
 func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	// (i) initialize empty Smap
+	assert(p.smapowner.get() == nil)
 	p.smapowner.Lock()
 	startupSmap := newSmap()
 	startupSmap.Pmap[p.si.DaemonID] = p.si

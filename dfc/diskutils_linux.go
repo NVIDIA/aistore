@@ -226,7 +226,7 @@ func getFileSystemFromPath(fsPath string) (fileSystem string) {
 	getFSCommand := fmt.Sprintf("df -P '%s' | awk 'END{print $1}'", fsPath)
 	outputBytes, err := exec.Command("sh", "-c", getFSCommand).Output()
 	if err != nil || len(outputBytes) == 0 {
-		glog.Errorf("Unable to retrieve FS from FSPath. Error: [%v]", fsPath, err)
+		glog.Errorf("Unable to retrieve FS from fspath %s, err: %v", fsPath, err)
 		return
 	}
 	fileSystem = strings.TrimSpace(string(outputBytes))

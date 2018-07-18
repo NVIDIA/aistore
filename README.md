@@ -433,16 +433,16 @@ The proxy's bootstrap sequence initiates by executing the following three main s
 
 - step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;
 - step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
-- step 3: use all of the above _and_ the environment setting "DFCPRIMARYPROXY" to figure out whether this proxy is to keep starting up as the primary (and if not, join as a non-primary).
+- step 3: use all of the above _and_ the environment setting "DFCPRIMARYPROXY" to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
 
-Further, the proxy/gateway that keeps starting up at this point as a primary executes more steps:
+Further, the (potentially) primary proxy executes more steps:
 
 - (i)    initialize empty Smap;
 - (ii)   wait a configured time for other nodes to join;
 - (iii)  merge the Smap containing newly joined nodes with the Smap that was previously discovered;
 - (iiii) and use the latter to rediscover cluster-wide metadata and resolve remaining conflicts, if any.
 
-If during any of these steps the proxy finds out that it must be joining the cluster as a non-primary then it simply does so.
+If during any of these steps the proxy finds out that it must be joining as a non-primary then it simply does so.
 
 ### Election
 
@@ -453,7 +453,7 @@ The primary proxy election process is as follows:
 - After the candidate (proxy) confirms that the current primary proxy is down, it broadcasts vote requests to all other nodes;
 - Each recipient node confirms whether the current primary is down and whether the candidate proxy has the HRW (Highest Random Weight) according to the local Smap;
 - If confirmed, the node responds with Yes, otherwise it's a No;
-- If and when the candidate receives a majority of affirmative responses it performs the commit phase of this two-phase process by distributing an updated cluster map to all nodes;
+- If and when the candidate receives a majority of affirmative responses it performs the commit phase of this two-phase process by distributing an updated cluster map to all nodes.
 
 ### Non-electable gateways
 

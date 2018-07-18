@@ -98,6 +98,7 @@ type targetrunner struct {
 
 // start target runner
 func (t *targetrunner) run() error {
+	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.kalive = gettargetkalive()
 	t.xactinp = newxactinp()        // extended actions
@@ -109,22 +110,23 @@ func (t *targetrunner) run() error {
 	smap := newSmap()
 	smap.Tmap[t.si.DaemonID] = t.si
 	t.smapowner.put(smap)
-
-	if status, err := t.register(0); err != nil {
-		glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
-		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
-			glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
-			time.Sleep(time.Second * 3)
-			if _, err = t.register(0); err != nil {
-				glog.Errorf("Target %s failed to register with proxy, err: %v", t.si.DaemonID, err)
-				glog.Errorf("Target %s is terminating", t.si.DaemonID)
-				return err
+	for i := 0; i < maxRetrySeconds; i++ {
+		var status int
+		if status, ereg = t.register(0); ereg != nil {
+			if IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
+				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
+				time.Sleep(time.Second)
+				continue
 			}
-			glog.Errorf("Success: target %s joined the cluster", t.si.DaemonID)
-		} else {
-			return err
 		}
+		break
 	}
+	if ereg != nil {
+		glog.Errorf("Target %s failed to register, err: %v", t.si.DaemonID, ereg)
+		glog.Errorf("Target %s is terminating", t.si.DaemonID)
+		return ereg
+	}
+
 	t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
 	t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
 	t.detectMpathChanges()
@@ -2864,7 +2866,7 @@ func (t *targetrunner) testCachepathMounts() {
 		}
 		fileSystem := getFileSystemFromPath(mpath)
 		if fileSystem == "" {
-			glog.Errorf("FATAL: cannot retrieve file system from fspath %q, err: %v", mpath)
+			glog.Errorf("FATAL: cannot retrieve file system from fspath %q", mpath)
 			os.Exit(1)
 		}
 		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid, FileSystem: fileSystem}

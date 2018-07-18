@@ -91,6 +91,7 @@ func (p *proxyrunner) run() error {
 	p.metasyncer = getmetasyncer()
 
 	// startup sequence - see earlystart.go for the steps and commentary
+	assert(p.smapowner.get() == nil)
 	p.bootstrap()
 
 	p.authn = &authManager{
@@ -1257,7 +1258,18 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
 
 	case GetWhatSmap:
-		jsbytes, err := json.Marshal(p.smapowner.get())
+		smap := p.smapowner.get()
+		for smap == nil || !smap.isValid() {
+			if p.startedup(0) != 0 { // must be starting up
+				smap = p.smapowner.get()
+				assert(smap.isValid())
+				break
+			}
+			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si.DaemonID, GetWhatSmap)
+			time.Sleep(time.Second)
+			smap = p.smapowner.get()
+		}
+		jsbytes, err := json.Marshal(smap)
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
 
@@ -1704,7 +1716,7 @@ func (p *proxyrunner) invokeHttpGetClusterMountpaths(
 	return ok
 }
 
-// register|keepalive target
+// register|keepalive target|proxy
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		nsi                   daemonInfo
@@ -2031,6 +2043,16 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
 	smap := p.smapowner.get()
+	if smap == nil || !smap.isValid() {
+		if p.startedup(0) != 0 { // must be starting up
+			smap = p.smapowner.get()
+			assert(smap.isValid())
+		} else {
+			s := fmt.Sprintf("%s is starting up: cannot execute '%v' yet...", p.si.DaemonID, action)
+			p.invalmsghdlr(w, r, s)
+			return false
+		}
+	}
 	if smap.isPrimary(p.si) {
 		return true
 	}
