@@ -575,6 +575,11 @@ Metrics that DFC generates are named and grouped as follows:
 * `dfctarget.<daemon_id>.error.badchecksum.md5.count.1|c`
 * `dfctarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
 
+Example of how these metrics show up in a grafana dashboard:
+
+<img src="images/target-statsd-grafana.png" alt="Target Metrics" width="256">
+
+
 #### Disk Metrics
 
 * `dfctarget.<daemon_id>.iostat_*.gauge.<value>|g`
