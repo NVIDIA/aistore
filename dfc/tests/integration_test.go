@@ -6,6 +6,7 @@
 package dfc_test
 
 import (
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,6 +21,11 @@ import (
 type repFile struct {
 	repetitions int
 	filename    string
+}
+
+type daemonInfo struct {
+	sid       string
+	directURL string
 }
 
 type metadata struct {
@@ -252,6 +258,75 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	resultsBeforeAfter(&m, num, maxErrPct)
 }
 
+func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
+	const (
+		unregisterTargetCount = 2
+		newLocalBucketCount   = 3
+	)
+	var (
+		err error
+		m   = metadata{
+			t:      t,
+			wg:     &sync.WaitGroup{},
+			bucket: TestLocalBucketName,
+		}
+	)
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	// Initialize metadata
+	m.smap, err = client.GetClusterMap(proxyurl)
+	checkFatal(err, m.t)
+	m.origNumTargets = len(m.smap.Tmap)
+	if m.origNumTargets < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.origNumTargets)
+	}
+	tlogf("Num targets %d\n", m.origNumTargets)
+
+	var targets []daemonInfo
+	for sid, daemon := range m.smap.Tmap {
+		targets = append(targets, daemonInfo{sid: sid, directURL: daemon.DirectURL})
+	}
+
+	// Unregister targets
+	for i := 0; i < unregisterTargetCount; i++ {
+		err = client.UnregisterTarget(proxyurl, targets[i].sid)
+		checkFatal(err, t)
+		n := len(getClusterMap(t).Tmap)
+		if n != m.origNumTargets-(i+1) {
+			t.Fatalf("%d targets expected after unregister, actually %d targets", m.origNumTargets-(i+1), n)
+		}
+		tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[i].directURL, n)
+	}
+
+	m.wg.Add(unregisterTargetCount)
+	for i := 0; i < unregisterTargetCount; i++ {
+		go func(number int) {
+			err = client.RegisterTarget(targets[number].sid, m.smap)
+			checkFatal(err, t)
+			m.wg.Done()
+		}(i)
+	}
+
+	m.wg.Add(newLocalBucketCount)
+	for i := 0; i < newLocalBucketCount; i++ {
+		go func(number int) {
+			err = client.CreateLocalBucket(proxyurl, TestLocalBucketName+strconv.Itoa(number))
+			checkFatal(err, t)
+			m.wg.Done()
+		}(i)
+
+		defer func(number int) {
+			err := client.DestroyLocalBucket(proxyurl, TestLocalBucketName+strconv.Itoa(number))
+			checkFatal(err, t)
+		}(i)
+	}
+
+	m.wg.Wait()
+	assertClusterState(&m)
+}
+
 // see above - the T1/2/3 timeline and details
 func resultsBeforeAfter(m *metadata, num, maxErrPct int) {
 	tlogf("Errors before and after time=T3 (re-registered target gets the updated local bucket map): %d and %d, respectively\n",
@@ -341,6 +416,24 @@ func doReregisterTarget(m *metadata) {
 				break
 			}
 		}
+	}
+}
+
+func assertClusterState(m *metadata) {
+	smap, err := waitForPrimaryProxy(
+		"to check cluster state",
+		m.smap.Version, testing.Verbose(),
+		0,
+		m.origNumTargets,
+	)
+	checkFatal(err, m.t)
+
+	targetCount := len(smap.Tmap)
+	if targetCount != m.origNumTargets {
+		m.t.Errorf(
+			"cluster state is not preserved. targets (before: %d, now: %d)",
+			m.origNumTargets, targetCount,
+		)
 	}
 }
 

@@ -96,10 +96,11 @@ type metasyncer struct {
 		diamonds map[string]*daemonInfo
 		refused  map[string]*daemonInfo
 	}
-	chfeed     chan []interface{}
-	chfeedwait chan []interface{}
-	chstop     chan struct{}
-	retryTimer *time.Timer
+	stopCh        chan struct{} // channel for stopping the metasyncer
+	asyncJobCh    chan []interface{}
+	syncJobCh     chan []interface{}
+	syncJobDoneCh chan struct{} // channel for waiting for syncJobCh to finish its job
+	retryTimer    *time.Timer
 }
 
 // c-tor
@@ -107,9 +108,10 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 	y = &metasyncer{p: p}
 	y.synced.copies = make(map[string]revs)
 	y.pending.diamonds = make(map[string]*daemonInfo)
-	y.chstop = make(chan struct{}, 4)
-	y.chfeed = make(chan []interface{}, 16)
-	y.chfeedwait = make(chan []interface{})
+	y.stopCh = make(chan struct{}, 1)
+	y.asyncJobCh = make(chan []interface{}, 16)
+	y.syncJobCh = make(chan []interface{})
+	y.syncJobDoneCh = make(chan struct{})
 
 	y.retryTimer = time.NewTimer(time.Duration(time.Hour))
 	// no retry to run yet
@@ -143,10 +145,13 @@ func (y *metasyncer) sync(wait bool, revsvec ...interface{}) {
 	}
 
 	if wait {
-		y.chfeedwait <- revsvec
-		<-y.chfeedwait
+		// When multiple jobs are submitted, only one will be run. Rest will block
+		// on chFeedWait channel since it is unbuffered.
+		y.syncJobCh <- revsvec
+		// Block until the job is finished.
+		<-y.syncJobDoneCh
 	} else {
-		y.chfeed <- revsvec
+		y.asyncJobCh <- revsvec
 	}
 }
 
@@ -155,19 +160,18 @@ func (y *metasyncer) run() error {
 
 	for {
 		select {
-		case revsvec, ok := <-y.chfeedwait:
+		case revsvec, ok := <-y.syncJobCh:
 			if ok {
 				y.doSync(revsvec)
-				var s []interface{}
-				y.chfeedwait <- s
+				y.syncJobDoneCh <- struct{}{}
 			}
-		case revsvec, ok := <-y.chfeed:
+		case revsvec, ok := <-y.asyncJobCh:
 			if ok {
 				y.doSync(revsvec)
 			}
 		case <-y.retryTimer.C:
 			y.handlePending()
-		case <-y.chstop:
+		case <-y.stopCh:
 			y.retryTimer.Stop()
 			return nil
 		}
@@ -183,10 +187,11 @@ func (y *metasyncer) run() error {
 func (y *metasyncer) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", y.name, err)
 
-	y.chstop <- struct{}{}
-	close(y.chstop)
-	close(y.chfeed)
-	close(y.chfeedwait)
+	y.stopCh <- struct{}{}
+	close(y.stopCh)
+	close(y.asyncJobCh)
+	close(y.syncJobCh)
+	close(y.syncJobDoneCh)
 }
 
 func (y *metasyncer) doSync(revsvec []interface{}) {
