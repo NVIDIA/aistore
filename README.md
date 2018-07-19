@@ -179,6 +179,10 @@ and
 
 <img src="images/dfc-config-2-commented.png" alt="DFC configuration: local filesystems" width="548">
 
+As shown above, the "test_fspaths" section of the configuration corresponds to a single local filesystem being partitioned between both local and Cloud buckets. In production deployments, we use the (alternative) "fspaths" section that includes a number of local directories, whereby each directory is based on a different local filesystem. An example of 12 fspaths (and 12 local filesystems) follows below:
+
+<img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
+
 ### Disabling extended attributes
 
 To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh) that'd be further used to deploy the cluster.
