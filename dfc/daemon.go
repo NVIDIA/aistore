@@ -208,7 +208,7 @@ func dfcinit() {
 		// for mountpath definition, see fspath2mpath()
 		ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
 		ctx.mountpaths.Disabled = make(map[string]*mountPath, len(ctx.config.FSpaths))
-		if t.testingFSPpaths() {
+		if testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 			t.testCachepathMounts()
 		} else {

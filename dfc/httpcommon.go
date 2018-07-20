@@ -182,9 +182,11 @@ func (h *httprunner) initSI() {
 	if id != "" {
 		h.si.DaemonID = id
 	} else {
-		split := strings.Split(ipaddr, ".")
-		cs := xxhash.ChecksumString32S(split[len(split)-1], mLCG32)
-		h.si.DaemonID = strconv.Itoa(int(cs&0xffff)) + ":" + ctx.config.Net.L4.Port
+		cs := xxhash.ChecksumString32S(ipaddr, mLCG32)
+		h.si.DaemonID = strconv.Itoa(int(cs & 0xfffff))
+		if testingFSPpaths() {
+			h.si.DaemonID += ":" + ctx.config.Net.L4.Port
+		}
 	}
 
 	proto := "http"

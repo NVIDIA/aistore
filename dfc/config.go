@@ -393,3 +393,9 @@ func setGLogVModule(v string) error {
 
 	return err
 }
+
+// testingFSPpath returns true if DFC is running in dev environment, and
+// moreover, all the cluster is running on a single machine
+func testingFSPpaths() bool {
+	return ctx.config.TestFSP.Count > 0
+}

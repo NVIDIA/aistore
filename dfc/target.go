@@ -2720,10 +2720,6 @@ func (t *targetrunner) starttime() time.Time {
 	return t.uxprocess.starttime
 }
 
-func (t *targetrunner) testingFSPpaths() bool {
-	return ctx.config.TestFSP.Count > 0
-}
-
 // (bucket, object) => (local hashed path, fully qualified name aka fqn)
 func (t *targetrunner) fqn(bucket, objname string, islocal bool) string {
 	mpath := hrwMpath(bucket, objname)
@@ -2850,7 +2846,7 @@ func (t *targetrunner) testCachepathMounts() {
 	}
 	for i := 0; i < ctx.config.TestFSP.Count; i++ {
 		var mpath string
-		if t.testingFSPpaths() {
+		if testingFSPpaths() {
 			mpath = filepath.Join(instpath, strconv.Itoa(i+1))
 		} else {
 			mpath = instpath[0 : len(instpath)-1]
@@ -2881,7 +2877,7 @@ func (t *targetrunner) checkIfAllFSIDsAreUnique() {
 	for _, mountpath := range ctx.mountpaths.Available {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
-			if !t.testingFSPpaths() {
+			if !testingFSPpaths() {
 				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
 				os.Exit(1)
 			}
