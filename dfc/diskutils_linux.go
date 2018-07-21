@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"path/filepath"
-
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
@@ -25,8 +23,8 @@ const (
 	iostatMinVersion = 11
 )
 
-// NewIostatRunner initalizes iostatrunner struct with default values
-func NewIostatRunner() *iostatrunner {
+// newIostatRunner initalizes iostatrunner struct with default values
+func newIostatRunner() *iostatrunner {
 	return &iostatrunner{
 		chsts:       make(chan struct{}, 1),
 		Disk:        make(map[string]simplekvs, 0),
@@ -49,7 +47,16 @@ type ChildBlockDevice struct {
 
 // iostat -cdxtm 10
 func (r *iostatrunner) run() error {
-	r.FileSystemToDisksMap = getFileSystemToDiskMap()
+	r.fsdisks = make(map[string]StringSet, len(ctx.mountpaths.Available))
+	for _, mountPath := range ctx.mountpaths.Available {
+		disks := fs2disks(mountPath.FileSystem)
+		if len(disks) == 0 {
+			glog.Errorf("filesystem (%+v) - no disks?", mountPath)
+			continue
+		}
+		r.fsdisks[mountPath.FileSystem] = disks
+	}
+
 	refreshPeriod := int(ctx.config.Periodic.StatsTime / time.Second)
 	cmd := exec.Command("iostat", "-cdxtm", strconv.Itoa(refreshPeriod))
 	stdout, err := cmd.StdoutPipe()
@@ -135,121 +142,63 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 	return false
 }
 
-func (r *iostatrunner) getDiskUtilizationFromPath(path string) (utilization float32, ok bool) {
-	fileSystem := getFileSystemUsingMountPath(path)
-	if fileSystem == "" {
+func (r *iostatrunner) diskUtilFromFQN(fqn string) (util float32, ok bool) {
+	fs := fqn2fs(fqn)
+	if fs == "" {
 		return
 	}
-	return r.getDiskUtilizationFromFileSystem(fileSystem)
+	return r.maxUtilFS(fs)
 }
 
-func (r *iostatrunner) getDiskUtilizationFromFileSystem(fileSystem string) (utilization float32, ok bool) {
-	disks, isOk := r.FileSystemToDisksMap[fileSystem]
+func (r *iostatrunner) maxUtilFS(fs string) (util float32, ok bool) {
+	r.RLock()
+	disks, isOk := r.fsdisks[fs]
 	if !isOk {
+		r.RUnlock()
 		return
 	}
-	utilization = float32(r.getMaxUtil(disks))
-	if utilization < 0 {
+	util = float32(maxUtilDisks(r.Disk, disks))
+	r.RUnlock()
+	if util < 0 {
 		return
 	}
-	return utilization, true
+	return util, true
 }
 
-func (r *iostatrunner) getMaxUtil(disks StringSet) (maxutil float64) {
-	maxutil = -1
-	if err := CheckIostatVersion(); err != nil {
-		return
-	}
-	r.Lock()
-	if len(disks) > 0 {
-		for disk := range disks {
-			if ioMetrics, ok := r.Disk[disk]; ok {
-				if utilStr, ok := ioMetrics["%util"]; ok {
-					if util, err := strconv.ParseFloat(utilStr, 32); err == nil {
-						if util > maxutil {
-							maxutil = util
-						}
-					}
-				}
-			}
-		}
-		r.Unlock()
-		return
-	}
-	for _, iometrics := range r.Disk {
-		if utilstr, ok := iometrics["%util"]; ok {
-			if util, err := strconv.ParseFloat(utilstr, 32); err == nil {
-				if util > maxutil {
-					maxutil = util
-				}
-			}
-		}
-	}
-	r.Unlock()
-	return
-}
-
-func getFileSystemUsingMountPath(filePath string) (fileSystem string) {
-	mountPath := getMountPathFromFilePath(filePath)
-	if mountPath == "" {
-		return
-	}
-	return ctx.mountpaths.Available[mountPath].FileSystem
-}
-
-func getMountPathFromFilePath(filePath string) string {
-	matchingMountPaths := make(StringSet)
-	for mountPath := range ctx.mountpaths.Available {
-		cleanMountPath := filepath.Clean(mountPath)
-		relativePath, err := filepath.Rel(cleanMountPath, filepath.Clean(filePath))
-		// If the relative path starts with two dots, it means that the file
-		// path is outside the mount path.
-		if err != nil || strings.HasPrefix(relativePath, "..") {
-			continue
-		}
-		matchingMountPaths[cleanMountPath] = struct{}{}
-	}
-
-	maxLength := -1
-	longestPrefixMountPath := ""
-	for path := range matchingMountPaths {
-		pathLength := len(path)
-		assert(pathLength != maxLength, fmt.Sprintf("Path length cannot be similar to an existing length"))
-		if pathLength > maxLength {
-			maxLength = pathLength
-			longestPrefixMountPath = path
-		}
-	}
-
-	return longestPrefixMountPath
-}
-
-func getFileSystemFromPath(fsPath string) (fileSystem string) {
-	getFSCommand := fmt.Sprintf("df -P '%s' | awk 'END{print $1}'", fsPath)
+// NOTE: Since this invokes a shell command, it is slow.
+// Do not use this in code paths which are executed per object.
+// This method is used only at startup to store the file systems
+// for each mount path.
+func fqn2fsAtStartup(fqn string) (fs string) {
+	getFSCommand := fmt.Sprintf("df -P '%s' | awk 'END{print $1}'", fqn)
 	outputBytes, err := exec.Command("sh", "-c", getFSCommand).Output()
 	if err != nil || len(outputBytes) == 0 {
-		glog.Errorf("Unable to retrieve FS from fspath %s, err: %v", fsPath, err)
+		glog.Errorf("Unable to retrieve FS from fspath %s, err: %v", fqn, err)
 		return
 	}
-	fileSystem = strings.TrimSpace(string(outputBytes))
-	return fileSystem
+	fs = strings.TrimSpace(string(outputBytes))
+	return fs
 }
 
-func getDiskFromFileSystem(fileSystem string) (disks StringSet) {
+// NOTE: Since this invokes a shell command, it is slow.
+// Do not use this in code paths which are executed per object.
+// This method is used only while starting the iostat runner to
+// retrieve the disks associated with a file system.
+func fs2disks(fs string) (disks StringSet) {
 	getDiskCommand := exec.Command("lsblk", "-no", "name", "-J")
 	outputBytes, err := getDiskCommand.Output()
 	if err != nil || len(outputBytes) == 0 {
-		glog.Errorf("Unable to retrieve disks from FS [%s].", fileSystem)
+		glog.Errorf("Unable to retrieve disks from FS [%s].", fs)
 		return
 	}
 
-	disks = getDisksFromLsblkOutput(outputBytes, fileSystem)
+	disks = lsblkOutput2disks(outputBytes, fs)
 	return
 }
 
-func getDisksFromLsblkOutput(lsblkOutputBytes []byte, fileSystem string) (disks StringSet) {
+func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks StringSet) {
 	disks = make(StringSet)
-	device := strings.TrimPrefix(fileSystem, "/dev/")
+	device := strings.TrimPrefix(fs, "/dev/")
 	var lsBlkOutput LsBlk
 	err := json.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
 	if err != nil {
@@ -259,29 +208,18 @@ func getDisksFromLsblkOutput(lsblkOutputBytes []byte, fileSystem string) (disks 
 	for _, blockDevice := range lsBlkOutput.BlockDevices {
 		for _, child := range blockDevice.ChildBlockDevices {
 			if child.Name == device {
-				disks[blockDevice.Name] = struct{}{}
+				if _, ok := disks[blockDevice.Name]; !ok {
+					disks[blockDevice.Name] = struct{}{}
+				}
 			}
 		}
 	}
 	return
 }
 
-func getFileSystemToDiskMap() map[string]StringSet {
-	fileSystemToDiskMap := make(map[string]StringSet, len(ctx.mountpaths.Available))
-	for _, mountPath := range ctx.mountpaths.Available {
-		disks := getDiskFromFileSystem(mountPath.FileSystem)
-		if len(disks) == 0 {
-			continue
-		}
-		fileSystemToDiskMap[mountPath.FileSystem] = disks
-	}
-
-	return fileSystemToDiskMap
-}
-
-// CheckIostatVersion determines whether iostat command is present and
+// checkIostatVersion determines whether iostat command is present and
 // is not too old (at least version `iostatMinVersion` is required).
-func CheckIostatVersion() error {
+func checkIostatVersion() error {
 	cmd := exec.Command("iostat", "-V")
 
 	vbytes, err := cmd.CombinedOutput()

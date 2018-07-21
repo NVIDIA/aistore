@@ -252,7 +252,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		os.Remove(tempFile.Name())
 	}()
 
-	ctx.rg.add(NewIostatRunner(), xiostat)
+	ctx.rg.add(newIostatRunner(), xiostat)
 	go ctx.rg.run()
 
 	// When LRU is not enabled, function should return 0
@@ -305,7 +305,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		os.Remove(tempFile.Name())
 	}()
 
-	iostatr := NewIostatRunner()
+	iostatr := newIostatRunner()
 	iostatr.Disk = map[string]simplekvs{
 		"disk1": simplekvs{
 			"%util": "21.34",
@@ -350,7 +350,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		os.Remove(tempFile.Name())
 	}()
 
-	iostatr := NewIostatRunner()
+	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
 	go ctx.rg.run()
 
@@ -364,12 +364,12 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = map[string]simplekvs{
-		"disk1": simplekvs{
-			"%util": "99.34",
-		},
+	iostatr.Disk = make(map[string]simplekvs)
+	disks := fs2disks(fs)
+	for disk := range disks {
+		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk]["%util"] = "99.94"
 	}
-
 	n := atimer.getNumberItemsToFlush(fs)
 	if n != itemCount/2 {
 		t.Error("when filling is 100% we should flush 50% of the cache")
@@ -396,7 +396,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		os.Remove(tempFile.Name())
 	}()
 
-	iostatr := NewIostatRunner()
+	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
 	go ctx.rg.run()
 
@@ -410,10 +410,11 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = map[string]simplekvs{
-		"disk1": simplekvs{
-			"%util": "99.34",
-		},
+	iostatr.Disk = make(map[string]simplekvs)
+	disks := fs2disks(fs)
+	for disk := range disks {
+		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.getNumberItemsToFlush(fs)
 	if n != itemCount/4 {
@@ -442,7 +443,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		os.Remove(tempFile.Name())
 	}()
 
-	iostatr := NewIostatRunner()
+	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
 	go ctx.rg.run()
 
@@ -456,10 +457,11 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = map[string]simplekvs{
-		"disk1": simplekvs{
-			"%util": "99.34",
-		},
+	iostatr.Disk = make(map[string]simplekvs)
+	disks := fs2disks(fs)
+	for disk := range disks {
+		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.getNumberItemsToFlush(fs)
 	if n == 0 {
@@ -488,7 +490,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		os.Remove(tempFile.Name())
 	}()
 
-	iostatr := NewIostatRunner()
+	iostatr := newIostatRunner()
 
 	ctx.rg.add(iostatr, xiostat)
 	go ctx.rg.run()
@@ -503,10 +505,11 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	time.Sleep(time.Millisecond) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = map[string]simplekvs{
-		"disk1": simplekvs{
-			"%util": "99.34",
-		},
+	iostatr.Disk = make(map[string]simplekvs)
+	disks := fs2disks(fs)
+	for disk := range disks {
+		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk]["%util"] = "99.34"
 	}
 	n := atimer.getNumberItemsToFlush(fs)
 	if n != 0 {
@@ -522,7 +525,7 @@ func getTempFile(t *testing.T, prefix string) (*os.File, string) {
 	if err != nil {
 		t.Fatalf("Unable to create temp file.")
 	}
-	fileSystem := getFileSystemFromPath(tempFile.Name())
+	fileSystem := fqn2fsAtStartup(tempFile.Name())
 	if len(ctx.mountpaths.Available) == 0 {
 		ctx.mountpaths.Available = make(map[string]*mountPath)
 	}

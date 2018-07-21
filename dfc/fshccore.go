@@ -190,7 +190,7 @@ func (f *fsHealthChecker) runMpathTest(mpath, filepath string) {
 }
 
 func (f *fsHealthChecker) checkFile(filepath string) {
-	mpath := getMountPathFromFilePath(filepath)
+	mpath := fqn2mountPath(filepath)
 	if mpath == "" {
 		glog.Errorf("Failed to get mountpath for file %s", filepath)
 		return

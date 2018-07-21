@@ -40,7 +40,8 @@ const (
 )
 
 type mountPath struct {
-	Path       string       `json:"path"`
+	Path       string       `json:"path"` // clean
+	origPath   string       // As entered by the user, must be used for logging / returning errors
 	Fsid       syscall.Fsid `json:"fsid"`
 	FileSystem string       `json:"fileSystem"`
 }
@@ -2446,56 +2447,26 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = json.Marshal(t.smapowner.get())
 		assert(err == nil, err)
 	case GetWhatSmapVote:
-		// FIXME:
-		// Tragets participate in voting, why not return VoteInProgress's true state here?
-		// Not that important in term of primary started up's use case because as long proxies
-		// are reporting vote in progress, but may be for other use cases and for correctness.
-		msg := SmapVoteMsg{
-			VoteInProgress: false,
-			Smap:           t.smapowner.get(),
-			BucketMD:       t.bmdowner.get(),
-		}
+		_, xx := t.xactinp.findL(ActElection)
+		vote := xx != nil
+		msg := SmapVoteMsg{VoteInProgress: vote, Smap: t.smapowner.get(), BucketMD: t.bmdowner.get()}
 		jsbytes, err = json.Marshal(msg)
 		assert(err == nil, err)
 	case GetWhatStats:
-		storageStatsRunner := getstorstatsrunner()
-		ioStatsRunner := getiostatrunner()
-		// The reason why we lock ioStatRunner here
-		// is because storageStatRunner and ioStatRunner share the
-		// same value (for example CPUidle is copied from ioStatRunner
-		// to storageStatRunner). So to prevent inconsistencies
-		// we want to be sure that both of those structs are locked
-		// before we begin marshalling.
-		storageStatsRunner.Lock()
-		ioStatsRunner.Lock()
-		jsbytes, err = json.Marshal(storageStatsRunner)
-		ioStatsRunner.Unlock()
-		storageStatsRunner.Unlock()
+		rst := getstorstatsrunner()
+		rst.RLock()
+		jsbytes, err = json.Marshal(rst)
+		rst.RUnlock()
 		assert(err == nil, err)
 	case GetWhatXaction:
-		getProps := r.URL.Query().Get(URLParamProps)
-		kind, err := t.getXactionKindFromProperties(getProps)
-		if err != nil {
-			glog.Errorf(
-				"Unable to get kind from props: [%s]. Error: [%v]",
-				getProps,
-				err)
-			t.invalmsghdlr(w, r, err.Error())
+		kind := r.URL.Query().Get(URLParamProps)
+		if errstr := isXactionQueryable(kind); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-
 		xactionStatsRetriever := t.getXactionStatsRetriever(kind)
 		allXactionDetails := t.getXactionsByType(kind)
-		jsbytes, err = xactionStatsRetriever.getStats(allXactionDetails)
-		if err != nil {
-			s := fmt.Sprintf(
-				"Unable to get stats. Kind: [%s]. Error: [%v]",
-				kind,
-				err)
-			glog.Error(s)
-			t.invalmsghdlr(w, r, s)
-			return
-		}
+		jsbytes = xactionStatsRetriever.getStats(allXactionDetails)
 	case GetWhatMountpaths:
 		mpList := MountpathList{
 			Available: make([]string, 0),
@@ -2815,13 +2786,14 @@ func (t *targetrunner) fspath2mpath() {
 			glog.Errorf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
 			os.Exit(1)
 		}
-		fileSystem := getFileSystemFromPath(fp)
+		fileSystem := fqn2fsAtStartup(fp)
 		if fileSystem == "" {
 			glog.Errorf("FATAL: cannot retrieve file system from fspath %q, err: %v", fp)
 			os.Exit(1)
 		}
 
-		mp := &mountPath{Path: fp, Fsid: statfs.Fsid, FileSystem: fileSystem}
+		cleanPath := filepath.Clean(fp)
+		mp := &mountPath{Path: cleanPath, origPath: fp, Fsid: statfs.Fsid, FileSystem: fileSystem}
 
 		_, ok := ctx.mountpaths.Available[mp.Path]
 		if ok {
@@ -2857,7 +2829,7 @@ func (t *targetrunner) testCachepathMounts() {
 			glog.Errorf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
 			os.Exit(1)
 		}
-		fileSystem := getFileSystemFromPath(mpath)
+		fileSystem := fqn2fsAtStartup(mpath)
 		if fileSystem == "" {
 			glog.Errorf("FATAL: cannot retrieve file system from fspath %q", mpath)
 			os.Exit(1)
@@ -2875,7 +2847,7 @@ func (t *targetrunner) checkIfAllFSIDsAreUnique() {
 		mp2, ok := fsmap[mountpath.Fsid]
 		if ok {
 			if !testingFSPpaths() {
-				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.Path, mp2)
+				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.origPath, mp2)
 				os.Exit(1)
 			}
 			continue
@@ -3011,7 +2983,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 		return
 	}
 
-	keyName := getMountPathFromFilePath(filepath)
+	keyName := fqn2mountPath(filepath)
 	if keyName != "" {
 		t.statsdC.Send(keyName+".io.errors",
 			statsd.Metric{

@@ -1608,17 +1608,11 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Request) bool {
-	getProps := r.URL.Query().Get(URLParamProps)
-	kind, err := p.getXactionKindFromProperties(getProps)
-	if err != nil {
-		glog.Errorf(
-			"Unable to get kind from props: [%s]. Error: [%s]",
-			getProps,
-			err)
-		p.invalmsghdlr(w, r, err.Error())
+	kind := r.URL.Query().Get(URLParamProps)
+	if errstr := isXactionQueryable(kind); errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
 		return false
 	}
-
 	outputXactionStats := &XactionStats{}
 	outputXactionStats.Kind = kind
 	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)

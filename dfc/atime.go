@@ -105,7 +105,7 @@ func (r *atimerunner) getNumberItemsToFlush(fileSystem string) (n int) {
 	riostat := getiostatrunner()
 
 	maxDiskUtil := float32(-1)
-	util, ok := riostat.getDiskUtilizationFromFileSystem(fileSystem)
+	util, ok := riostat.maxUtilFS(fileSystem)
 	if ok {
 		maxDiskUtil = util
 	}
@@ -169,11 +169,11 @@ func (r *atimerunner) handleInputOnGetATimeChannel(fqn string) accessTimeRespons
 	if !ctx.config.LRU.LRUEnabled {
 		return accessTimeResponse{}
 	}
-	fileSystem := getFileSystemUsingMountPath(fqn)
+	fileSystem := fqn2fs(fqn)
 	if fileSystem == "" {
 		return accessTimeResponse{}
 	}
-	if _, isOk := r.atimemap.fsToFilesMap[fileSystem]; !isOk {
+	if _, ok := r.atimemap.fsToFilesMap[fileSystem]; !ok {
 		return accessTimeResponse{}
 	}
 	accessTime, ok := r.atimemap.fsToFilesMap[fileSystem][fqn]
@@ -181,7 +181,7 @@ func (r *atimerunner) handleInputOnGetATimeChannel(fqn string) accessTimeRespons
 }
 
 func (r *atimerunner) updateATimeInATimeMap(fqn string) {
-	fileSystem := getFileSystemUsingMountPath(fqn)
+	fileSystem := fqn2fs(fqn)
 	if fileSystem == "" {
 		return
 	}

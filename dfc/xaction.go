@@ -58,7 +58,7 @@ type xactElection struct {
 	vr          *VoteRecord
 }
 
-//====================
+//===================
 //
 // xactBase
 //

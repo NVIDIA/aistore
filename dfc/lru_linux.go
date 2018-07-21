@@ -13,10 +13,10 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
-func getFSStats(mountPath string) (blocks uint64, bavail uint64, bsize int64, err error) {
+func getFSStats(path string) (blocks uint64, bavail uint64, bsize int64, err error) {
 	fsStats := syscall.Statfs_t{}
-	if err = syscall.Statfs(mountPath, &fsStats); err != nil {
-		glog.Errorf("Failed to fsStats mount path %q, err: %v", mountPath, err)
+	if err = syscall.Statfs(path, &fsStats); err != nil {
+		glog.Errorf("Failed to fsStats mount path %q, err: %v", path, err)
 		return
 	}
 	return fsStats.Blocks, fsStats.Bavail, fsStats.Bsize, nil

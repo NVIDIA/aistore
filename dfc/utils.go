@@ -464,3 +464,58 @@ func parsebool(s string) (value bool, err error) {
 	value, err = strconv.ParseBool(s)
 	return
 }
+
+func fqn2fs(fqn string) (fs string) {
+	mountPath := fqn2mountPath(fqn)
+	if mountPath == "" {
+		return
+	}
+	return ctx.mountpaths.Available[mountPath].FileSystem
+}
+
+func fqn2mountPath(fqn string) string {
+	var (
+		max     int
+		longest string
+	)
+	for mountPath := range ctx.mountpaths.Available {
+		rel, err := filepath.Rel(mountPath, fqn)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			continue
+		}
+		if len(mountPath) > max {
+			max = len(mountPath)
+			longest = mountPath
+		}
+	}
+	return longest
+}
+
+func maxUtilDisks(disksMetricsMap map[string]simplekvs, disks StringSet) (maxutil float64) {
+	maxutil = -1
+	util := func(disk string) (u float64) {
+		if ioMetrics, ok := disksMetricsMap[disk]; ok {
+			if utilStr, ok := ioMetrics["%util"]; ok {
+				var err error
+				if u, err = strconv.ParseFloat(utilStr, 32); err == nil {
+					return
+				}
+			}
+		}
+		return
+	}
+	if len(disks) > 0 {
+		for disk := range disks {
+			if u := util(disk); u > maxutil {
+				maxutil = u
+			}
+		}
+		return
+	}
+	for disk := range disksMetricsMap {
+		if u := util(disk); u > maxutil {
+			maxutil = u
+		}
+	}
+	return
+}

@@ -185,13 +185,11 @@ func dfcinit() {
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
 		ctx.rg.add(newtargetkalive(t), xtargetkalive)
 
-		// `iostat` runner is required in some parts of the code.
-		// We need to ensure that it is installed and the version is
-		// high enough.
-		if err := CheckIostatVersion(); err != nil {
+		// iostat is required: ensure that it is installed and its version is right
+		if err := checkIostatVersion(); err != nil {
 			glog.Exit(err)
 		}
-		ctx.rg.add(NewIostatRunner(), xiostat)
+		ctx.rg.add(newIostatRunner(), xiostat)
 
 		ctx.rg.add(&atimerunner{
 			chstop:      make(chan struct{}, 4),

@@ -833,17 +833,6 @@ func (h *httprunner) broadcast(path string, query url.Values, method string, bod
 	return ch
 }
 
-func (h *httprunner) getXactionKindFromProperties(props string) (
-	string, error) {
-	switch props {
-	case XactionRebalance, XactionPrefetch:
-		return props, nil
-	}
-
-	err := fmt.Errorf("Invalid xaction in properties: %s", props)
-	return "", err
-}
-
 // ================================== Background =========================================
 //
 // Generally, DFC clusters can be deployed with an arbitrary numbers of DFC proxies.

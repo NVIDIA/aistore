@@ -5,7 +5,10 @@
  */
 package dfc
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // ActionMsg is a JSON-formatted control structures
 type ActionMsg struct {
@@ -241,3 +244,11 @@ const (
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
 )
+
+// query-able xactions
+func isXactionQueryable(kind string) (errstr string) {
+	if kind == XactionRebalance || kind == XactionPrefetch {
+		return
+	}
+	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, XactionRebalance, XactionPrefetch)
+}

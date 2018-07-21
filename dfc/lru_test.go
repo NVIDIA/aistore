@@ -7,6 +7,7 @@ import (
 	"container/heap"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -23,19 +24,6 @@ func (fis fileInfos) Less(i, j int) bool {
 
 func (fis fileInfos) Swap(i, j int) {
 	fis[i], fis[j] = fis[j], fis[i]
-}
-
-type MockThrottleChekcer struct {
-	UtilizationToReturn uint32
-	FSUsedPercentage    uint64
-}
-
-func (m *MockThrottleChekcer) getDiskUtilizationFromPath(mountPath string) (float32, bool) {
-	return float32(m.UtilizationToReturn), true
-}
-
-func (m *MockThrottleChekcer) getFSUsedPercentage(string) (uint64, bool) {
-	return m.FSUsedPercentage, true
 }
 
 func TestLRUBasic(t *testing.T) {
@@ -116,8 +104,6 @@ func TestLRUBasic(t *testing.T) {
 	}
 }
 
-const FILESYSTEM = "/tmp"
-
 func TestLRUThrottling(t *testing.T) {
 	oldLRULWM := ctx.config.LRU.LowWM
 	oldLRUHWM := ctx.config.LRU.HighWM
@@ -125,32 +111,48 @@ func TestLRUThrottling(t *testing.T) {
 	oldDiskHWM := ctx.config.Xaction.DiskUtilHighWM
 	oldAvailableMP := ctx.mountpaths.Available
 	oldStatsTime := ctx.config.Periodic.StatsTime
+	oldRg := ctx.rg
 
-	ctx.config.LRU.LowWM = 75
+	ctx.config.LRU.LowWM = 0
 	ctx.config.LRU.HighWM = 90
 	ctx.config.Xaction.DiskUtilLowWM = 10
 	ctx.config.Xaction.DiskUtilHighWM = 40
 	ctx.mountpaths.Available = make(map[string]*mountPath)
 	ctx.config.Periodic.StatsTime = -1 * time.Second
 
-	mp := &mountPath{Path: FILESYSTEM}
+	fs := fqn2fsAtStartup("/")
+	mp := &mountPath{Path: "/", FileSystem: fs}
 	ctx.mountpaths.Available[mp.Path] = mp
 
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM-10)
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM+10)
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilHighWM+10)
-	testHighDiskUtilization(t)
-	testLowDiskUtilization(t)
-	testHighDiskUtilizationShortDuration(t)
-	testHighDiskUtilizationLongDuration(t)
-	testIncreasingDiskUtilization(t)
-	testDecreasingDiskUtilization(t)
-	testMediumDiskUtilization(t)
-	testConstantDiskUtilization(t)
-	testMultipleLRUContexts(t)
-	testSlightlyIncreasedDiskUtilization(t)
-	testChangedDiskUtilizationBeforeStatsTime(t)
-	testChangedFSUsedPercentageBeforeDuration(t)
+	disks := fs2disks(fs)
+	riostat := newIostatRunner()
+	riostat.fsdisks = make(map[string]StringSet, len(ctx.mountpaths.Available))
+	riostat.fsdisks[fs] = disks
+	for disk := range disks {
+		riostat.Disk[disk] = make(simplekvs, 0)
+		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
+
+	}
+	ctx.rg = &rungroup{
+		runarr: make([]runner, 0, 4),
+		runmap: make(map[string]runner),
+	}
+	ctx.rg.add(riostat, xiostat)
+
+	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM-10, riostat)
+	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM+10, riostat)
+	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilHighWM+10, riostat)
+	testHighDiskUtilization(t, riostat)
+	testLowDiskUtilization(t, riostat)
+	testHighDiskUtilizationShortDuration(t, riostat)
+	testHighDiskUtilizationLongDuration(t, riostat)
+	testIncreasingDiskUtilization(t, riostat)
+	testDecreasingDiskUtilization(t, riostat)
+	testMediumDiskUtilization(t, riostat)
+	testConstantDiskUtilization(t, riostat)
+	testMultipleLRUContexts(t, riostat)
+	testChangedFSUsedPercentageBeforeCapCheck(t, riostat)
+	testChangedDiskUtilBeforeUtilCheck(t, riostat)
 
 	ctx.config.LRU.LowWM = oldLRULWM
 	ctx.config.LRU.HighWM = oldLRUHWM
@@ -158,34 +160,26 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.config.Xaction.DiskUtilHighWM = oldDiskHWM
 	ctx.mountpaths.Available = oldAvailableMP
 	ctx.config.Periodic.StatsTime = oldStatsTime
+	ctx.rg = oldRg
 }
 
-func testHighFSCapacityUsed(t *testing.T, diskUtilization uint32) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: diskUtilization,
-		FSUsedPercentage:    uint64(ctx.config.LRU.HighWM + 1),
+func testHighFSCapacityUsed(t *testing.T, diskUtil uint32, riostat *iostatrunner) {
+	curCapacity, _ := getFSUsedPercentage("/")
+	oldLRUHWM := ctx.config.LRU.HighWM
+	ctx.config.LRU.HighWM = uint32(curCapacity - 1)
+	lctx := newLruContext()
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
+			0, sleepDuration)
 	}
-	_, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if isThrottleRequired {
-		t.Errorf("No throttling required when FS used capacity [%d] is higher than High WM [%d].",
-			mockThrottleChecker.FSUsedPercentage, ctx.config.LRU.HighWM)
-	}
+	ctx.config.LRU.HighWM = oldLRUHWM
 }
 
-func testHighDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilHighWM + 10,
-	}
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+func testHighDiskUtilization(t *testing.T, riostat *iostatrunner) {
+	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
+	lctx := newLruContext()
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration != expectedDuration {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
@@ -193,46 +187,29 @@ func testHighDiskUtilization(t *testing.T) {
 	}
 }
 
-func testLowDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM - 10,
-	}
-	_, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if isThrottleRequired {
-		t.Errorf("Throttling is not required when disk utilization [%d] is lower than LowWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM)
+func testLowDiskUtilization(t *testing.T, riostat *iostatrunner) {
+	diskUtil := ctx.config.Xaction.DiskUtilLowWM - 10
+	lctx := newLruContext()
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
+			0, sleepDuration)
 	}
 }
 
-func testHighDiskUtilizationShortDuration(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilHighWM + 5,
-	}
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	if sleepDuration != InitialThrottleSleepDurationInMS*time.Millisecond {
+func testHighDiskUtilizationShortDuration(t *testing.T, riostat *iostatrunner) {
+	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 5
+	lctx := newLruContext()
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != initThrottleSleep {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			InitialThrottleSleepDurationInMS, sleepDuration)
+			initThrottleSleep, sleepDuration)
 	}
 
 	counter := 3
 	for i := 0; i < counter; i++ {
-		mockThrottleChecker.UtilizationToReturn += 5
-		sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-			"/tmp/test", -1*time.Second, mockThrottleChecker)
-		if !isThrottleRequired {
-			t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-				mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-		}
-
+		diskUtil += 5
+		sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 		expectedDuration := time.Duration(1<<uint(i+1)) * time.Millisecond
 		if sleepDuration != expectedDuration {
 			t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
@@ -241,33 +218,19 @@ func testHighDiskUtilizationShortDuration(t *testing.T) {
 	}
 }
 
-func testHighDiskUtilizationLongDuration(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilHighWM + 3,
-	}
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	if sleepDuration != InitialThrottleSleepDurationInMS*time.Millisecond {
+func testHighDiskUtilizationLongDuration(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 5
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != initThrottleSleep {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			InitialThrottleSleepDurationInMS, sleepDuration)
+			initThrottleSleep, sleepDuration)
 	}
 
 	counter := 9
 	for i := 0; i < counter; i++ {
-		mockThrottleChecker.UtilizationToReturn += 5
-		sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-			"/tmp/test", -1*time.Second, mockThrottleChecker)
-		if !isThrottleRequired {
-			t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-				mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-		}
-
+		diskUtil += 5
+		sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 		expectedDuration := time.Duration(1<<uint(i+1)) * time.Millisecond
 		if sleepDuration != expectedDuration {
 			t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
@@ -275,14 +238,8 @@ func testHighDiskUtilizationLongDuration(t *testing.T) {
 		}
 	}
 
-	mockThrottleChecker.UtilizationToReturn += 5
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+	diskUtil += 5
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
 	expectedDuration := 1 * time.Second
 	if sleepDuration != expectedDuration {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
@@ -290,150 +247,84 @@ func testHighDiskUtilizationLongDuration(t *testing.T) {
 	}
 }
 
-func testIncreasingDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM - 10,
-	}
-	_, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if isThrottleRequired {
-		t.Errorf("Throttling is not required when disk utilization [%d] is lower than LowWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM)
+func testIncreasingDiskUtilization(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	diskUtil := ctx.config.Xaction.DiskUtilLowWM - 10
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
+			0, sleepDuration)
 	}
 
-	mockThrottleChecker.UtilizationToReturn = ctx.config.Xaction.DiskUtilLowWM + 10
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 10
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
-		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms",
-			sleepDuration)
+		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
 	expectedDuration := sleepDuration * 2
-	mockThrottleChecker.UtilizationToReturn = ctx.config.Xaction.DiskUtilHighWM + 10
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	// For handling precision error
-	sleepDurationMSInt := int(sleepDuration.Nanoseconds()) / 1000000
-	expectedSleepDurationMSInt := int(expectedDuration.Nanoseconds()) / 1000000
-	if sleepDurationMSInt != expectedSleepDurationMSInt {
+	diskUtil = ctx.config.Xaction.DiskUtilHighWM + 10
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != expectedDuration {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedSleepDurationMSInt, sleepDurationMSInt)
+			expectedDuration, sleepDuration)
 	}
 }
 
-func testDecreasingDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilHighWM + 10,
-	}
-
+func testDecreasingDiskUtilization(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 	expectedDuration := 1 * time.Millisecond
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is higher than HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
 	if sleepDuration != expectedDuration {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
 			expectedDuration, sleepDuration)
 	}
 
-	mockThrottleChecker.UtilizationToReturn = ctx.config.Xaction.DiskUtilLowWM + 10
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 10
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
-		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms",
-			sleepDuration)
+		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
-	mockThrottleChecker.UtilizationToReturn = ctx.config.Xaction.DiskUtilLowWM - 10
-	_, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if isThrottleRequired {
+	diskUtil = ctx.config.Xaction.DiskUtilLowWM - 10
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != 0 {
 		t.Errorf("Throttling is not required when disk utilization [%d] is lower than LowWM [%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM)
+			diskUtil, ctx.config.Xaction.DiskUtilLowWM)
 	}
 }
 
-func testMediumDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM + 5,
-	}
-
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+func testMediumDiskUtilization(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 5
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
 			sleepDuration, expectedDuration, expectedDuration*2)
 	}
 
-	mockThrottleChecker.UtilizationToReturn += 5
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+	diskUtil += 5
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
-		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms",
-			sleepDuration)
+		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
 	expectedDuration = sleepDuration
-	mockThrottleChecker.UtilizationToReturn += 5
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+	diskUtil += 5
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
 			sleepDuration, expectedDuration, expectedDuration*2)
 	}
 }
 
-func testConstantDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM + 10,
-	}
+func testConstantDiskUtilization(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
 
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 10
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
@@ -441,163 +332,103 @@ func testConstantDiskUtilization(t *testing.T) {
 	}
 
 	expectedDuration = sleepDuration
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	if sleepDuration != expectedDuration {
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
 			expectedDuration, sleepDuration)
 	}
 }
 
-func testMultipleLRUContexts(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM + 10,
-	}
-
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
+func testMultipleLRUContexts(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 10
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
 			sleepDuration, expectedDuration, expectedDuration*2)
 	}
-
-	lruContext2 := newLruContext()
-	mockThrottleChecker2 := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM - 10,
-	}
-	_, isThrottleRequired = lruContext2.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker2)
-	if isThrottleRequired {
-		t.Errorf("Throttling is not required when disk utilization [%d] is lower than LowWM [%d].",
-			mockThrottleChecker2.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM)
-	}
-
-	mockThrottleChecker.UtilizationToReturn += 1
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
-		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms",
-			sleepDuration)
-	}
-}
-
-func testSlightlyIncreasedDiskUtilization(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM + 10,
-	}
-
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	expectedDuration := 1 * time.Millisecond
-	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
-		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
-			sleepDuration, expectedDuration, expectedDuration*2)
-	}
-
 	expectedDuration = sleepDuration
-	mockThrottleChecker.UtilizationToReturn += 1
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
+
+	lctx2 := newLruContext()
+	diskUtil = ctx.config.Xaction.DiskUtilLowWM - 10
+	sleepDuration = getSleepDuration(diskUtil, lctx2, riostat)
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
 	}
 
-	if sleepDuration != expectedDuration {
+	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 11
+	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
 			expectedDuration, sleepDuration)
 	}
+}
+
+func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	oldLRUHWM := ctx.config.LRU.HighWM
+	curCapacity, _ := getFSUsedPercentage("/")
+	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
+	ctx.config.LRU.HighWM = uint32(curCapacity - 2)
+	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+	}
+
+	ctx.config.LRU.HighWM = uint32(curCapacity + 10)
+	lctx.computeThrottle("/")
+	sleepDuration = lctx.throttle.sleep
+	if sleepDuration != initThrottleSleep {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", initThrottleSleep, sleepDuration)
+	}
+	ctx.config.LRU.HighWM = oldLRUHWM
+}
+
+func testChangedDiskUtilBeforeUtilCheck(t *testing.T, riostat *iostatrunner) {
+	lctx := newLruContext()
+	oldStatsTime := ctx.config.Periodic.StatsTime
+	ctx.config.Periodic.StatsTime = 10 * time.Minute
+	sleepDuration := getSleepDuration(0, lctx, riostat)
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+	}
+
+	for disk := range riostat.Disk {
+		riostat.Disk[disk]["%util"] = "99"
+	}
+
+	lctx.computeThrottle("/")
+	sleepDuration = lctx.throttle.sleep
+	if sleepDuration != 0 {
+		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+	}
+	ctx.config.Periodic.StatsTime = oldStatsTime
+}
+
+func getSleepDuration(diskUtil uint32, lctx *lructx, riostat *iostatrunner) time.Duration {
+	for disk := range riostat.Disk {
+		riostat.Disk[disk]["%util"] = strconv.Itoa(int(diskUtil))
+	}
+
+	lctx.throttle.nextCapCheck = time.Time{}
+	lctx.throttle.nextUtilCheck = time.Time{}
+
+	lctx.computeThrottle("/")
+	return lctx.throttle.sleep
 }
 
 func newLruContext() *lructx {
 	lruContext := &lructx{
 		xlru: new(xactLRU),
-		currentThrottleSleepInMS: 0,
+		throttle: struct {
+			sleep         time.Duration
+			nextUtilCheck time.Time
+			nextCapCheck  time.Time
+			prevUtilPct   float32
+			prevFSUsedPct uint64
+		}{sleep: 0},
+		fs: fqn2fsAtStartup("/"),
 	}
 	return lruContext
-}
-
-func testChangedDiskUtilizationBeforeStatsTime(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM + 10,
-	}
-
-	sleepDuration, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is above LowWM [%d] and below HighWM[%d].",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	expectedDuration := 1 * time.Millisecond
-	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
-		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
-			sleepDuration, expectedDuration, expectedDuration*2)
-	}
-
-	expectedDuration = sleepDuration
-	mockThrottleChecker.UtilizationToReturn = ctx.config.Xaction.DiskUtilHighWM + 5
-	oldStatsTime := ctx.config.Periodic.StatsTime
-	ctx.config.Periodic.StatsTime = 5 * time.Second
-	sleepDuration, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if !isThrottleRequired {
-		t.Errorf("Throttling is required when disk utilization [%d] is "+
-			"above LowWM [%d] and below HighWM[%d] and stats duration hasn't elapsed.",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
-
-	if sleepDuration != expectedDuration {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
-	}
-	ctx.config.Periodic.StatsTime = oldStatsTime
-}
-
-func testChangedFSUsedPercentageBeforeDuration(t *testing.T) {
-	lruContext := newLruContext()
-	mockThrottleChecker := &MockThrottleChekcer{
-		UtilizationToReturn: ctx.config.Xaction.DiskUtilLowWM + 10,
-		FSUsedPercentage:    uint64(ctx.config.LRU.HighWM + 1),
-	}
-	_, isThrottleRequired := lruContext.getSleepDurationForThrottle(
-		"/tmp/test", -1*time.Second, mockThrottleChecker)
-	if isThrottleRequired {
-		t.Errorf("No throttling required when FS used capacity [%d] is higher than High WM [%d].",
-			mockThrottleChecker.FSUsedPercentage, ctx.config.LRU.HighWM)
-	}
-
-	mockThrottleChecker.FSUsedPercentage = 0
-	mockThrottleChecker.UtilizationToReturn = 99
-	_, isThrottleRequired = lruContext.getSleepDurationForThrottle(
-		"/tmp/test", 5*time.Second, mockThrottleChecker)
-	if isThrottleRequired {
-		t.Errorf("No throttling is required when disk utilization [%d] is "+
-			"above LowWM [%d] and below HighWM[%d] and capacity update duration hasn't elapsed.",
-			mockThrottleChecker.UtilizationToReturn, ctx.config.Xaction.DiskUtilLowWM, ctx.config.Xaction.DiskUtilHighWM)
-	}
 }
