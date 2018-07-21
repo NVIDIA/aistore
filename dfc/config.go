@@ -26,9 +26,10 @@ const (
 	XattrXXHashVal  = "user.obj.dfchash"
 	XattrObjVersion = "user.obj.version"
 
-	ChecksumNone   = "none"
-	ChecksumXXHash = "xxhash"
-	ChecksumMD5    = "md5"
+	ChecksumNone    = "none"
+	ChecksumXXHash  = "xxhash"
+	ChecksumMD5     = "md5"
+	ChecksumInherit = "inherit"
 
 	VersionAll   = "all"
 	VersionCloud = "cloud"

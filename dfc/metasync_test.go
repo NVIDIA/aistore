@@ -132,10 +132,29 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
-	bucketmd.add("bucket1", true, BucketProps{CloudProvider: ProviderDfc, NextTierURL: "http://foo.com"})
-	bucketmd.add("bucket2", true, BucketProps{})
-	bucketmd.add("bucket3", false, BucketProps{CloudProvider: ProviderDfc})
-	bucketmd.add("bucket4", false, BucketProps{})
+	bucketmd.add("bucket1", true, BucketProps{
+		CloudProvider: ProviderDfc,
+		NextTierURL:   "http://foo.com",
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
+	bucketmd.add("bucket2", true, BucketProps{
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
+	bucketmd.add("bucket3", false, BucketProps{
+		CloudProvider: ProviderDfc,
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
+	bucketmd.add("bucket4", false, BucketProps{
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
 
 	clone := &bucketMD{}
 	bucketmd.deepcopy(clone)
@@ -535,9 +554,19 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add("bucket1", true, BucketProps{CloudProvider: ProviderDfc})
-	bucketmd.add("bucket2", true, BucketProps{CloudProvider: ProviderDfc,
-		NextTierURL: "http://localhost:8082"})
+	bucketmd.add("bucket1", true, BucketProps{
+		CloudProvider: ProviderDfc,
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
+	bucketmd.add("bucket2", true, BucketProps{
+		CloudProvider: ProviderDfc,
+		NextTierURL:   "http://localhost:8082",
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -554,7 +583,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
-	bucketmd.add("bucket3", true, BucketProps{})
+	bucketmd.add("bucket3", true, *NewBucketProps())
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -564,7 +593,13 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.sync(false, bucketmd)
 	match(t, exp, ch, 1)
 
-	bucketmd.add("bucket4", true, BucketProps{CloudProvider: ProviderDfc, NextTierURL: "http://foo.com"})
+	bucketmd.add("bucket4", true, BucketProps{
+		CloudProvider: ProviderDfc,
+		NextTierURL:   "http://foo.com",
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	})
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -1007,8 +1042,18 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chTarget
 		payload = <-chTarget
 
-		bucketmd.add("lb1", true, BucketProps{CloudProvider: ProviderDfc})
-		bucketmd.add("lb2", true, BucketProps{CloudProvider: ProviderAmazon})
+		bucketmd.add("lb1", true, BucketProps{
+			CloudProvider: ProviderDfc,
+			CksumConf: cksumconfig{
+				Checksum: ChecksumInherit,
+			},
+		})
+		bucketmd.add("lb2", true, BucketProps{
+			CloudProvider: ProviderAmazon,
+			CksumConf: cksumconfig{
+				Checksum: ChecksumInherit,
+			},
+		})
 		syncer.sync(true, bucketmd)
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
@@ -1069,7 +1114,12 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy2.bmdowner = &bmdowner{}
 		proxy2.bmdowner.put(newBucketMD())
 
-		bucketmd.add("lb3", true, BucketProps{CloudProvider: ProviderGoogle})
+		bucketmd.add("lb3", true, BucketProps{
+			CloudProvider: ProviderGoogle,
+			CksumConf: cksumconfig{
+				Checksum: ChecksumInherit,
+			},
+		})
 
 		c = func(n, o *Smap, m *ActionMsg, e string) {
 			noErr(e)
@@ -1202,13 +1252,18 @@ func TestMetaSyncReceive(t *testing.T) {
 		target2.bmdowner.put(newBucketMD())
 
 		bucketmd := newBucketMD()
-		bucketmd.add("lb1", true, BucketProps{})
+		bucketmd.add("lb1", true, *NewBucketProps())
 
 		syncer.sync(true, primary.smapowner.get(), bucketmd)
 		<-chTarget
 		<-chTarget
 
-		bucketmd.add("lb2", true, BucketProps{CloudProvider: ProviderDfc})
+		bucketmd.add("lb2", true, BucketProps{
+			CloudProvider: ProviderDfc,
+			CksumConf: cksumconfig{
+				Checksum: ChecksumInherit,
+			},
+		})
 		syncer.sync(false, &revspair{bucketmd, &ActionMsg{Action: "NB"}})
 		payload := <-chTarget
 		_, actMsg, _ := target2.extractbucketmd(payload)

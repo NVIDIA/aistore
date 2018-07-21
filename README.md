@@ -36,6 +36,8 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
 - [Multi-tiering](#multi-tiering)
+- [Bucket Level Configuration](#bucket-level-configuration)
+  * [Checksumming](#checksumming)
 - [Command-line Load Generator](#command-line-load-generator)
 - [Metrics with StatsD](#metrics-with-statsd)
 
@@ -541,6 +543,29 @@ Currently, the endpoints which support multi-tier policies are the following:
 
 * GET /v1/objects/bucket-name/object-name
 * PUT /v1/objects/bucket-name/object-name
+
+## Bucket Level Configuration
+
+### Checksumming
+
+Checksumming on bucket level is configured at the bucket level by setting
+bucket properties:
+
+* `cksum_config.checksum`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
+`"inherit"` indicates that the global checksumming configuration should be used.
+* `cksum_config.validate_checksum_cold_get`: `true` or `false` indicate
+whether to perform checksum validation during cold GET.
+* `cksum_config.validate_checksum_warm_get`: `true` or `false` indicate
+whether to perform checksum validation during warm GET.
+* `cksum_config.enable_read_range_checksum`: `true` or `false` indicate whether to perform checksum validation during byte serving.
+
+If the client specifies a hashing algorithm, then he should also explicitly provide the value for every other `cksum_config` setting,
+otherwise the default values for those setting will be applied.
+
+Example of setting bucket properties:
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum_config": {"checksum": "xxhash", "validate_checksum_cold_get": true, "validate_checksum_warm_get": false, "enable_read_range_checksum": false}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
 
 ## Command-line Load Generator
 

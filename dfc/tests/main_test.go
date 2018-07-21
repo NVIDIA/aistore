@@ -594,6 +594,13 @@ cleanup:
 }
 
 func TestHeadLocalBucket(t *testing.T) {
+	const (
+		validateColdGetTestSetting         = false
+		validateWarmGetTestSetting         = true
+		enableReadRangeChecksumTestSetting = false
+	)
+	var bucketProps dfc.BucketProps
+
 	err := client.CreateLocalBucket(proxyurl, TestLocalBucketName)
 	if err != nil {
 		t.Fatal(err)
@@ -603,12 +610,17 @@ func TestHeadLocalBucket(t *testing.T) {
 	}()
 
 	nextTierURL := "http://foo.com"
-	err = client.SetBucketProps(proxyurl, TestLocalBucketName, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierURL,
-		ReadPolicy:    dfc.RWPolicyNextTier,
-		WritePolicy:   dfc.RWPolicyNextTier,
-	})
+
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierURL
+	bucketProps.ReadPolicy = dfc.RWPolicyNextTier
+	bucketProps.WritePolicy = dfc.RWPolicyNextTier
+	bucketProps.CksumConf.Checksum = dfc.ChecksumXXHash
+	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
+	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
+	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
+
+	err = client.SetBucketProps(proxyurl, TestLocalBucketName, bucketProps)
 	checkFatal(err, t)
 
 	p, err := client.HeadBucket(proxyurl, TestLocalBucketName)
@@ -626,21 +638,44 @@ func TestHeadLocalBucket(t *testing.T) {
 	if p.NextTierURL != nextTierURL {
 		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", nextTierURL, p.NextTierURL)
 	}
-
+	if p.ChecksumType != dfc.ChecksumXXHash {
+		t.Errorf("Expected checksum type: %s, received checksum type: %s", dfc.ChecksumXXHash, p.ChecksumType)
+	}
+	if b, _ := strconv.ParseBool(p.ValidateColdGet); b != validateColdGetTestSetting {
+		t.Errorf("Expected cold GET validation setting: %t, received: %t", validateColdGetTestSetting, b)
+	}
+	if b, _ := strconv.ParseBool(p.ValidateWarmGet); b != validateWarmGetTestSetting {
+		t.Errorf("Expected warm GET validation setting: %t, received: %t", validateWarmGetTestSetting, b)
+	}
+	if b, _ := strconv.ParseBool(p.ValidateRange); b != enableReadRangeChecksumTestSetting {
+		t.Errorf("Expected byte range validation setting: %t, received: %t", enableReadRangeChecksumTestSetting, b)
+	}
 }
 
 func TestHeadCloudBucket(t *testing.T) {
+	const (
+		validateColdGetTestSetting         = true
+		validateWarmGetTestSetting         = true
+		enableReadRangeChecksumTestSetting = false
+	)
+	var bucketProps dfc.BucketProps
+
 	if !isCloudBucket(t, proxyurl, clibucket) {
 		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
 	}
 
 	nextTierURL := "http://foo.com"
-	err := client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderAmazon,
-		NextTierURL:   nextTierURL,
-		ReadPolicy:    dfc.RWPolicyCloud,
-		WritePolicy:   dfc.RWPolicyNextTier,
-	})
+
+	bucketProps.CloudProvider = dfc.ProviderAmazon
+	bucketProps.NextTierURL = nextTierURL
+	bucketProps.ReadPolicy = dfc.RWPolicyCloud
+	bucketProps.WritePolicy = dfc.RWPolicyNextTier
+	bucketProps.CksumConf.Checksum = dfc.ChecksumXXHash
+	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
+	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
+	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
+
+	err := client.SetBucketProps(proxyurl, clibucket, bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
@@ -665,6 +700,18 @@ func TestHeadCloudBucket(t *testing.T) {
 	}
 	if p.NextTierURL != nextTierURL {
 		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", nextTierURL, p.NextTierURL)
+	}
+	if p.ChecksumType != dfc.ChecksumXXHash {
+		t.Errorf("Expected checksum type: %s, received checksum type: %s", dfc.ChecksumXXHash, p.ChecksumType)
+	}
+	if b, _ := strconv.ParseBool(p.ValidateColdGet); b != validateColdGetTestSetting {
+		t.Errorf("Expected cold GET validation setting: %t, received: %t", validateColdGetTestSetting, b)
+	}
+	if b, _ := strconv.ParseBool(p.ValidateWarmGet); b != validateWarmGetTestSetting {
+		t.Errorf("Expected warm GET validation setting: %t, received: %t", validateWarmGetTestSetting, b)
+	}
+	if b, _ := strconv.ParseBool(p.ValidateRange); b != enableReadRangeChecksumTestSetting {
+		t.Errorf("Expected byte range validation setting: %t, received: %t", enableReadRangeChecksumTestSetting, b)
 	}
 }
 

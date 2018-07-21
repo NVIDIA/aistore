@@ -452,7 +452,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.Lock()
 		clone := p.bmdowner.get().clone()
-		if !clone.add(lbucket, true, BucketProps{}) {
+		if !clone.add(lbucket, true, *NewBucketProps()) {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
 			return
@@ -590,7 +590,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	props := &BucketProps{}
+	props := &BucketProps{} // every field has to have zero value
 	msg := ActionMsg{Value: props}
 	if p.readJSON(w, r, &msg) != nil {
 		return
@@ -614,8 +614,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	exists, oldProps := clone.get(bucket, isLocal)
 	if !exists {
 		assert(!isLocal)
-		clone.add(bucket, false, BucketProps{})
+		clone.add(bucket, false, *NewBucketProps())
 	}
+
 	oldProps.NextTierURL = props.NextTierURL
 	oldProps.CloudProvider = props.CloudProvider
 	if props.ReadPolicy != "" {
@@ -623,6 +624,17 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	if props.WritePolicy != "" {
 		oldProps.WritePolicy = props.WritePolicy
+	}
+	if rechecksumRequired(ctx.config.Cksum.Checksum, oldProps.CksumConf.Checksum, props.CksumConf.Checksum) {
+		go p.notifyTargetsRechecksum(bucket)
+	}
+	if props.CksumConf.Checksum != "" {
+		oldProps.CksumConf.Checksum = props.CksumConf.Checksum
+		if props.CksumConf.Checksum != ChecksumInherit {
+			oldProps.CksumConf.ValidateColdGet = props.CksumConf.ValidateColdGet
+			oldProps.CksumConf.ValidateWarmGet = props.CksumConf.ValidateWarmGet
+			oldProps.CksumConf.EnableReadRangeChecksum = props.CksumConf.EnableReadRangeChecksum
+		}
 	}
 
 	clone.set(bucket, isLocal, oldProps)
@@ -2273,7 +2285,43 @@ func validateBucketProps(props *BucketProps, isLocal bool) error {
 			props.WritePolicy = RWPolicyNextTier
 		}
 	}
+	if props.CksumConf.Checksum != "" && props.CksumConf.Checksum != ChecksumInherit &&
+		props.CksumConf.Checksum != ChecksumNone && props.CksumConf.Checksum != ChecksumXXHash {
+		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s", props.CksumConf.Checksum, ChecksumXXHash, ChecksumNone, ChecksumInherit)
+	}
 	return nil
+}
+
+func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketChecksumNew string) bool {
+	checksumOld := globalChecksum
+	if bucketChecksumOld != ChecksumInherit {
+		checksumOld = bucketChecksumOld
+	}
+	checksumNew := globalChecksum
+	if bucketChecksumNew != ChecksumInherit {
+		checksumNew = bucketChecksumNew
+	}
+	return checksumNew != ChecksumNone && checksumNew != checksumOld
+}
+
+func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
+	jsbytes, err := json.Marshal(ActionMsg{Action: ActRechecksum})
+	assert(err == nil, err)
+
+	res := p.broadcastTargets(
+		URLPath(Rversion, Rbuckets, bucket),
+		nil,
+		http.MethodPost,
+		jsbytes,
+		p.smapowner.get(),
+		ctx.config.Timeout.Default,
+	)
+
+	for r := range res {
+		if r.err != nil {
+			glog.Warningf("Target %s failed to re-checksum objects in bucket %s", r.si.DaemonID, bucket)
+		}
+	}
 }
 
 func ValidateCloudProvider(provider string, isLocal bool) error {

@@ -156,11 +156,15 @@ type InvalidCksumError struct {
 }
 
 type BucketProps struct {
-	CloudProvider string
-	Versioning    string
-	NextTierURL   string
-	ReadPolicy    string
-	WritePolicy   string
+	CloudProvider   string
+	Versioning      string
+	NextTierURL     string
+	ReadPolicy      string
+	WritePolicy     string
+	ChecksumType    string
+	ValidateColdGet string
+	ValidateWarmGet string
+	ValidateRange   string
 }
 
 type ObjectProps struct {
@@ -615,11 +619,15 @@ func HeadBucket(proxyURL, bucket string) (*BucketProps, error) {
 			bucket, r.StatusCode, string(b))
 	}
 	return &BucketProps{
-		CloudProvider: r.Header.Get(dfc.CloudProvider),
-		Versioning:    r.Header.Get(dfc.Versioning),
-		NextTierURL:   r.Header.Get(dfc.NextTierURL),
-		ReadPolicy:    r.Header.Get(dfc.ReadPolicy),
-		WritePolicy:   r.Header.Get(dfc.WritePolicy),
+		CloudProvider:   r.Header.Get(dfc.CloudProvider),
+		Versioning:      r.Header.Get(dfc.Versioning),
+		NextTierURL:     r.Header.Get(dfc.NextTierURL),
+		ReadPolicy:      r.Header.Get(dfc.ReadPolicy),
+		WritePolicy:     r.Header.Get(dfc.WritePolicy),
+		ChecksumType:    r.Header.Get(dfc.BucketChecksumType),
+		ValidateColdGet: r.Header.Get(dfc.BucketValidateColdGet),
+		ValidateWarmGet: r.Header.Get(dfc.BucketValidateWarmGet),
+		ValidateRange:   r.Header.Get(dfc.BucketValidateRange),
 	}, nil
 }
 

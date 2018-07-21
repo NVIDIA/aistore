@@ -360,7 +360,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 }
 
 func resetBucketProps(bucket string, t *testing.T) {
-	if err := client.SetBucketProps(proxyurl, bucket, dfc.BucketProps{}); err != nil {
+	if err := client.SetBucketProps(proxyurl, bucket, *dfc.NewBucketProps()); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
 }

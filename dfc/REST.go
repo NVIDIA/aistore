@@ -21,6 +21,7 @@ type ActionMsg struct {
 const (
 	ActShutdown    = "shutdown"
 	ActRebalance   = "rebalance"
+	ActRechecksum  = "rechecksum"
 	ActLRU         = "lru"
 	ActSyncLB      = "synclb"
 	ActCreateLB    = "createlb"
@@ -55,6 +56,10 @@ const (
 	NextTierURL           = "NextTierURL"           // URL of the next tier in a DFC multi-tier environment
 	ReadPolicy            = "ReadPolicy"            // Policy used for reading in a DFC multi-tier environment
 	WritePolicy           = "WritePolicy"           // Policy used for writing in a DFC multi-tier environment
+	BucketChecksumType    = "BucketChecksumType"    // Checksum type used for objects in the bucket
+	BucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
+	BucketValidateWarmGet = "BucketValidateWarmGet" // Warm get validation policy used for objects in the bucket
+	BucketValidateRange   = "BucketValidateRange"   // Byte range validation policy used for objects in the bucket
 	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation

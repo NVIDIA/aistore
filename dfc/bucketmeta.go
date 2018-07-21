@@ -18,10 +18,11 @@ const (
 )
 
 type BucketProps struct {
-	CloudProvider string `json:"cloud_provider,omitempty"`
-	NextTierURL   string `json:"next_tier_url,omitempty"`
-	ReadPolicy    string `json:"read_policy,omitempty"`
-	WritePolicy   string `json:"write_policy,omitempty"`
+	CloudProvider string      `json:"cloud_provider,omitempty"`
+	NextTierURL   string      `json:"next_tier_url,omitempty"`
+	ReadPolicy    string      `json:"read_policy,omitempty"`
+	WritePolicy   string      `json:"write_policy,omitempty"`
+	CksumConf     cksumconfig `json:"cksum_config"`
 }
 
 type bucketMD struct {
@@ -46,6 +47,14 @@ func (r *bmdowner) put(bucketmd *bucketMD) {
 func (r *bmdowner) get() (bucketmd *bucketMD) {
 	bucketmd = (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
 	return
+}
+
+func NewBucketProps() *BucketProps {
+	return &BucketProps{
+		CksumConf: cksumconfig{
+			Checksum: ChecksumInherit,
+		},
+	}
 }
 
 func newBucketMD() *bucketMD {
@@ -106,6 +115,15 @@ func (m *bucketMD) set(b string, local bool, p BucketProps) {
 func (m *bucketMD) islocal(bucket string) bool {
 	_, ok := m.LBmap[bucket]
 	return ok
+}
+
+func (m *bucketMD) propsAndChecksum(bucket string) (p BucketProps, checksum string, defined bool) {
+	var ok bool
+	ok, p = m.get(bucket, m.islocal(bucket))
+	if !ok || p.CksumConf.Checksum == ChecksumInherit {
+		return p, "", false
+	}
+	return p, p.CksumConf.Checksum, true
 }
 
 func (m *bucketMD) clone() *bucketMD {

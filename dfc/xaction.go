@@ -18,6 +18,8 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
+const timeStampFormat = "15:04:05.000000"
+
 type xactInterface interface {
 	getid() int64
 	getkind() string
@@ -56,6 +58,12 @@ type xactElection struct {
 	xactBase
 	proxyrunner *proxyrunner
 	vr          *VoteRecord
+}
+
+type xactRechecksum struct {
+	xactBase
+	targetrunner *targetrunner
+	bucket       string
 }
 
 //===================
@@ -152,6 +160,16 @@ func (q *xactInProgress) findL(by interface{}) (idx int, xact xactInterface) {
 	idx, xact = q.findU(by)
 	q.lock.Unlock()
 	return
+}
+
+func (q *xactInProgress) findUAll(kind string) []xactInterface {
+	xacts := make([]xactInterface, 0)
+	for _, xact := range q.xactinp {
+		if xact.getkind() == kind {
+			xacts = append(xacts, xact)
+		}
+	}
+	return xacts
 }
 
 func (q *xactInProgress) del(by interface{}) {
@@ -263,6 +281,27 @@ func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElec
 	return xele
 }
 
+func (q *xactInProgress) renewRechecksum(t *targetrunner, bucket string) *xactRechecksum {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	for _, xx := range q.findUAll(ActRechecksum) {
+		xrcksum := xx.(*xactRechecksum)
+		if xrcksum.bucket == bucket {
+			glog.Infof("%s already running for bucket %s, nothing to do", xrcksum.tostring(), bucket)
+			return nil
+		}
+	}
+	id := q.uniqueid()
+	xrcksum := &xactRechecksum{
+		xactBase:     *newxactBase(id, ActRechecksum),
+		targetrunner: t,
+		bucket:       bucket,
+	}
+	q.add(xrcksum)
+	return xrcksum
+}
+
 func (q *xactInProgress) abortAll() (sleep bool) {
 	q.lock.Lock()
 	for _, xact := range q.xactinp {
@@ -282,11 +321,11 @@ func (q *xactInProgress) abortAll() (sleep bool) {
 //===================
 func (xact *xactLRU) tostring() string {
 	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format("15:04:05.000000"))
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format(timeStampFormat))
 	}
 	d := xact.etime.Sub(xact.stime)
 	return fmt.Sprintf("xaction %s:%d %v finished %v (duration %v)", xact.kind, xact.id,
-		xact.stime.Format("15:04:05.000000"), xact.etime.Format("15:04:05.000000"), d)
+		xact.stime.Format(timeStampFormat), xact.etime.Format(timeStampFormat), d)
 }
 
 //===================
@@ -296,11 +335,11 @@ func (xact *xactLRU) tostring() string {
 //===================
 func (xact *xactRebalance) tostring() string {
 	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, xact.stime.Format("15:04:05.000000"))
+		return fmt.Sprintf("xaction %s:%d v%d started %v", xact.kind, xact.id, xact.curversion, xact.stime.Format(timeStampFormat))
 	}
 	d := xact.etime.Sub(xact.stime)
 	return fmt.Sprintf("xaction %s:%d v%d started %v finished %v (duration %v)",
-		xact.kind, xact.id, xact.curversion, xact.stime.Format("15:04:05.000000"), xact.etime.Format("15:04:05.000000"), d)
+		xact.kind, xact.id, xact.curversion, xact.stime.Format(timeStampFormat), xact.etime.Format(timeStampFormat), d)
 }
 
 func (xact *xactRebalance) abort() {
@@ -315,14 +354,33 @@ func (xact *xactRebalance) abort() {
 //==============
 func (xact *xactElection) tostring() string {
 	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format("15:04:05.000000"))
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format(timeStampFormat))
 	}
 	d := xact.etime.Sub(xact.stime)
 	return fmt.Sprintf("xaction %s:%d started %v finished %v (duration %v)", xact.kind, xact.id,
-		xact.stime.Format("15:04:05.000000"), xact.etime.Format("15:04:05.000000"), d)
+		xact.stime.Format(timeStampFormat), xact.etime.Format(timeStampFormat), d)
 }
 
 func (xact *xactElection) abort() {
+	xact.xactBase.abort()
+	glog.Infof("ABORT: " + xact.tostring())
+}
+
+//===================
+//
+// xactRechecksum
+//
+//===================
+func (xact *xactRechecksum) tostring() string {
+	if !xact.finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format(timeStampFormat))
+	}
+	d := xact.etime.Sub(xact.stime)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v (duration %v)", xact.kind, xact.id,
+		xact.stime.Format(timeStampFormat), xact.etime.Format(timeStampFormat), d)
+}
+
+func (xact *xactRechecksum) abort() {
 	xact.xactBase.abort()
 	glog.Infof("ABORT: " + xact.tostring())
 }
