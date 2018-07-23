@@ -914,10 +914,7 @@ func (t *targetrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	smap := t.smapowner.get()
-	if smap.ProxySI != nil && from == smap.ProxySI.DaemonID {
-		t.kalive.heardFrom(smap.ProxySI.DaemonID, false /* reset */)
-	}
+	t.kalive.heardFrom(from, false)
 }
 
 //  /Rversion/Rpush/bucket-name
