@@ -55,7 +55,7 @@ func getRandomFileName(basePath string) (string, error) {
 
 	files, err := file.Readdir(fshcMaxFileList)
 	if err == nil {
-		fmap := make(map[string]os.FileInfo, 0)
+		fmap := make(map[string]os.FileInfo, len(files))
 		for _, ff := range files {
 			fmap[ff.Name()] = ff
 		}

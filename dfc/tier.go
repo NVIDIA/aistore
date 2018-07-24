@@ -21,6 +21,7 @@ func (t *targetrunner) objectInNextTier(nextURL, bucket, objName string) (in boo
 		errstr = err.Error()
 		return
 	}
+
 	if r.StatusCode >= http.StatusBadRequest {
 		if r.StatusCode == http.StatusNotFound {
 			r.Body.Close()
@@ -35,9 +36,11 @@ func (t *targetrunner) objectInNextTier(nextURL, bucket, objName string) (in boo
 				"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, next tier URL: %s",
 				r.StatusCode, string(b), bucket, objName, nextURL)
 		}
+
 		r.Body.Close()
 		return
 	}
+
 	in = true
 	r.Body.Close()
 	return
@@ -62,7 +65,8 @@ func (t *targetrunner) getObjectNextTier(nextURL, bucket, objName, fqn string) (
 		}
 		errstr = fmt.Sprintf(
 			"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, next tier URL: %s",
-			r.StatusCode, string(b), bucket, objName, nextURL)
+			r.StatusCode, string(b), bucket, objName, nextURL,
+		)
 		r.Body.Close()
 		return
 	}
@@ -96,9 +100,11 @@ func (t *targetrunner) putObjectNextTier(nextURL, bucket, objName string, body i
 		} else {
 			errstr = fmt.Sprintf(
 				"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, next tier URL: %s",
-				resp.StatusCode, string(b), bucket, objName, nextURL)
+				resp.StatusCode, string(b), bucket, objName, nextURL,
+			)
 		}
 	}
+
 	resp.Body.Close()
 	return
 }

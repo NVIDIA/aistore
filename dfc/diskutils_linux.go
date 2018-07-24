@@ -27,7 +27,7 @@ const (
 func newIostatRunner() *iostatrunner {
 	return &iostatrunner{
 		chsts:       make(chan struct{}, 1),
-		Disk:        make(map[string]simplekvs, 0),
+		Disk:        make(map[string]simplekvs),
 		metricnames: make([]string, 0),
 	}
 }

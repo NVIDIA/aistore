@@ -219,15 +219,15 @@ func (m *Smap) deepcopy(dst *Smap) {
 
 func (m *Smap) merge(dst *Smap) {
 	for id, v := range m.Tmap {
-		if _, ok1 := dst.Tmap[id]; !ok1 {
-			if _, ok2 := dst.Pmap[id]; !ok2 {
+		if _, ok := dst.Tmap[id]; !ok {
+			if _, ok = dst.Pmap[id]; !ok {
 				dst.Tmap[id] = v
 			}
 		}
 	}
 	for id, v := range m.Pmap {
-		if _, ok1 := dst.Pmap[id]; !ok1 {
-			if _, ok2 := dst.Tmap[id]; !ok2 {
+		if _, ok := dst.Pmap[id]; !ok {
+			if _, ok = dst.Tmap[id]; !ok {
 				dst.Pmap[id] = v
 			}
 		}

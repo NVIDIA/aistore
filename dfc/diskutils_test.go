@@ -19,7 +19,7 @@ func TestGetFSUsedPercentage(t *testing.T) {
 	if !ok {
 		t.Error("Unable to retrieve FS used percentage!")
 	}
-	if percentage < 0 && percentage > 100 {
+	if percentage > 100 {
 		t.Errorf("Invalid FS used percentage [%d].", percentage)
 	}
 }

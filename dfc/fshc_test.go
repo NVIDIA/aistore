@@ -63,14 +63,14 @@ func TestFSCheckerMain(t *testing.T) {
 	}
 
 	// inaccessible mountpath
-	reads, writes, exists := fshc.testMountpath(
+	_, _, exists := fshc.testMountpath(
 		fsCheckerTmpDir+"/3/testfile", fsCheckerTmpDir+"/3", 4, 1024)
 	if exists {
 		t.Error("Testing non-existing mountpath must fail")
 	}
 
 	// healthy mountpath
-	reads, writes, exists = fshc.testMountpath(
+	reads, writes, exists := fshc.testMountpath(
 		fsCheckerTmpDir+"/2/testfile", fsCheckerTmpDir+"/2", 4, 1024)
 	if !exists {
 		t.Error("Testing existing mountpath must detect the mountpath is available")

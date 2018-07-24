@@ -178,7 +178,7 @@ func TestMetaSyncTransport(t *testing.T) {
 			syncer.run()
 		}(&wg)
 
-		t.Run(fmt.Sprintf("%s", tc.name), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			exp, act := tc.testf(t, primary, syncer)
 			if !reflect.DeepEqual(exp, act) {
 				t.Fatalf("exp = %+v, act = %+v", exp, act)

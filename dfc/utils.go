@@ -18,25 +18,22 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
 	maxAttrSize = 1024
-	// use extra algorithms to choose a local IPv4 if there are more than 1 available
-	guessTheBestIPv4 = false
 )
 
 // Local unicast IP info
 type localIPv4Info struct {
-	ipv4  string
-	mtu   int
-	speed int
+	ipv4 string
+	mtu  int
 }
 
 func assert(cond bool, args ...interface{}) {
@@ -125,7 +122,6 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 			for _, ifAddr := range ifAddrs {
 				if ipnet, ok := ifAddr.(*net.IPNet); ok && ipnet.IP.To4() != nil && ipnet.IP.String() == curr.ipv4 {
 					curr.mtu = intf.MTU
-					curr.speed = netifSpeed(intf.Name)
 					addrlist = append(addrlist, curr)
 					break
 				}
@@ -159,36 +155,10 @@ func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredIPv4s string) (ip
 	return "", "Configured IPv4 does not match any local one"
 }
 
-func guessIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string) {
-	glog.Warning("Looking for the fastest network interface")
-	// sort addresses in descendent order by interface speed
-	ifLess := func(i, j int) bool {
-		return addrlist[i].speed >= addrlist[j].speed
-	}
-	sort.Slice(addrlist, ifLess)
-
-	// Take the first IPv4 if it is faster than the others
-	if addrlist[0].speed != addrlist[1].speed {
-		glog.Warningf("Interface %s is the fastest - %dMbit\n",
-			addrlist[0].ipv4, addrlist[0].speed)
-		if addrlist[0].mtu <= 1500 {
-			glog.Warningf("IPv4 %s selected but MTU is low: %s\n", addrlist[0].mtu)
-		}
-		ipv4addr = addrlist[0].ipv4
-		return
-	}
-
-	errstr = fmt.Sprintf("Failed to select one IPv4 of %d available\n", len(addrlist))
-	return
-}
-
 // detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a deamon to listen on it
 func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string) {
 	if len(addrlist) == 1 {
 		msg := fmt.Sprintf("Found only one IPv4: %s, MTU %d", addrlist[0].ipv4, addrlist[0].mtu)
-		if addrlist[0].speed != 0 {
-			msg += fmt.Sprintf(", bandwidth %d", addrlist[0].speed)
-		}
 		glog.Info(msg)
 		if addrlist[0].mtu <= 1500 {
 			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrlist[0].ipv4, addrlist[0].mtu)
@@ -204,12 +174,6 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string)
 	// FIXME: temp hack - make sure to keep working on laptops with dockers
 	ipv4addr = addrlist[0].ipv4
 	return
-	/*
-		if guessTheBestIPv4 {
-			return guessIPv4(addrlist)
-		}
-		return "", "Failed to select network interface: more than one IPv4 available"
-	*/
 }
 
 // getipv4addr returns an IPv4 for proxy/target to listen on it.
@@ -279,23 +243,9 @@ func CreateFile(fname string) (file *os.File, err error) {
 	return
 }
 
-func ComputeMD5(reader io.Reader, buf []byte, md5 hash.Hash) (csum string, errstr string) {
+func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
 	var err error
-	if buf == nil {
-		_, err = io.Copy(md5.(io.Writer), reader)
-	} else {
-		_, err = io.CopyBuffer(md5.(io.Writer), reader, buf)
-	}
-	if err != nil {
-		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
-	}
-	hashInBytes := md5.Sum(nil)[:16]
-	csum = hex.EncodeToString(hashInBytes)
-	return csum, ""
-}
-
-func ComputeXXHash(reader io.Reader, buf []byte, xx hash.Hash64) (csum string, errstr string) {
-	var err error
+	var xx hash.Hash64 = xxhash.New64()
 	if buf == nil {
 		_, err = io.Copy(xx.(io.Writer), reader)
 	} else {

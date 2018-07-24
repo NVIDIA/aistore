@@ -203,5 +203,5 @@ func (a *AverageTracker) TimedOut(id string) bool {
 		return false
 	}
 
-	return int64(time.Now().Sub(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
+	return int64(time.Since(rec.last)/time.Millisecond) > int64(a.factor)*rec.avg()
 }

@@ -42,22 +42,6 @@ type workres struct {
 	totbytes int64
 }
 
-type reqError struct {
-	code    int
-	message string
-}
-
-func (err reqError) Error() string {
-	return err.message
-}
-
-func newReqError(msg string, code int) reqError {
-	return reqError{
-		code:    code,
-		message: msg,
-	}
-}
-
 func Test_download(t *testing.T) {
 	if err := client.Tcping(proxyurl); err != nil {
 		tlogf("%s: %v\n", proxyurl, err)
@@ -939,19 +923,6 @@ func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg, limit int) *df
 	}
 
 	return reslist
-}
-
-func emitError(r *http.Response, err error, errch chan error) {
-	if err == nil || errch == nil {
-		return
-	}
-
-	if r != nil {
-		errObj := newReqError(err.Error(), r.StatusCode)
-		errch <- errObj
-	} else {
-		errch <- err
-	}
 }
 
 // 1.	PUT file

@@ -454,16 +454,14 @@ existslocally:
 	if readRange {
 		size = length
 	}
+
 	slab := selectslab(size)
 	buf := slab.alloc()
 	defer slab.free(buf)
 
 	if cksumcfg.Checksum != ChecksumNone && returnRangeChecksum {
-		slab := selectslab(length)
-		buf := slab.alloc()
 		reader := io.NewSectionReader(file, offset, length)
-		xxhashval, errstr := ComputeXXHash(reader, buf, xxhash.New64())
-		slab.free(buf)
+		xxhashval, errstr := ComputeXXHash(reader, buf)
 		if errstr != "" {
 			s := fmt.Sprintf("Unable to compute checksum for byte range, offset:%d, length:%d from %s, err: %s", offset, length, fqn, errstr)
 			t.invalmsghdlr(w, r, s, http.StatusInternalServerError)
@@ -1323,6 +1321,9 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 	}
 
 	outbytes, err = json.Marshal(reslist)
+	if err != nil {
+		return nil, err.Error(), 0
+	}
 	return
 }
 
@@ -1381,7 +1382,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	// combine results into one long list
 	// real size of page is set in newFileWalk, so read it from any of results inside loop
 	pageSize := DefaultPageSize
-	allfinfos := make([]*BucketEntry, 0, 0)
+	allfinfos := make([]*BucketEntry, 0)
 	fileCount := 0
 	for r := range ch {
 		if r.err != nil {
@@ -1449,7 +1450,6 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	jsbytes, err := json.Marshal(bucketnames)
 	assert(err == nil, err)
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
-	return
 }
 
 func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (errstr string, ok bool) {
@@ -1665,7 +1665,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	return ci.processRegularFile(fqn, osfi)
 }
 
-// After putting a new version it updates xattr attrubutes for the object
+// After putting a new version it updates xattr attributes for the object
 // Local bucket:
 //  - if bucket versioning is enable("all" or "local") then the version is autoincremented
 // Cloud bucket:
@@ -1698,8 +1698,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			slab := selectslab(0) // unknown size
 			buf := slab.alloc()
 			if htype == ChecksumXXHash {
-				xx := xxhash.New64()
-				xxhashval, errstr = ComputeXXHash(file, buf, xx)
+				xxhashval, errstr = ComputeXXHash(file, buf)
 			} else {
 				errstr = fmt.Sprintf("Unsupported checksum type %s", htype)
 			}
@@ -2204,8 +2203,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if cksumcfg.Checksum != ChecksumNone {
 		assert(cksumcfg.Checksum == ChecksumXXHash)
 		buf := slab.alloc()
-		xx := xxhash.New64()
-		if xxhashval, errstr = ComputeXXHash(file, buf, xx); errstr != "" {
+		if xxhashval, errstr = ComputeXXHash(file, buf); errstr != "" {
 			slab.free(buf)
 			return errstr
 		}
@@ -3149,8 +3147,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	t.bmdowner.Unlock()
 
 	for bucket := range bucketmd.LBmap {
-		_, ok := newbucketmd.LBmap[bucket]
-		if !ok {
+		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
 			for mpath := range ctx.mountpaths.Available {
 				localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
@@ -3327,8 +3324,8 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 	}
 
 	slab := selectslab(slabSize)
-	buf, xx := slab.alloc(), xxhash.New64()
-	xxHashValue, errstr := ComputeXXHash(file, buf, xx)
+	buf := slab.alloc()
+	xxHashValue, errstr := ComputeXXHash(file, buf)
 	file.Close()
 	slab.free(buf)
 
