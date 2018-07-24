@@ -174,13 +174,9 @@ type versionconfig struct {
 }
 
 type fshcconf struct {
-	FSCheckTimeStr       string        `json:"fs_check_time"`
-	FSCheckTime          time.Duration `json:"-"` // omitempty
-	DisabledCheckTimeStr string        `json:"disabled_fs_check_time"`
-	DisabledCheckTime    time.Duration `json:"-"` // omitempty
-	Enabled              bool          `json:"fschecker_enabled"`
-	TestFileCount        int           `json:"fschecker_test_files"`  // the number of files to read and write during a test
-	ErrorLimit           int           `json:"fschecker_error_limit"` // thresholds of number of errors, exceeding any of them results in disabling a mountpath
+	Enabled       bool `json:"fschecker_enabled"`
+	TestFileCount int  `json:"fschecker_test_files"`  // the number of files to read and write during a test
+	ErrorLimit    int  `json:"fschecker_error_limit"` // thresholds of number of errors, exceeding any of them results in disabling a mountpath
 }
 
 type authconf struct {
@@ -321,12 +317,6 @@ func validateconf() (err error) {
 	}
 	if err := validateVersion(ctx.config.Ver.Versioning); err != nil {
 		return err
-	}
-	if ctx.config.FSChecker.FSCheckTime, err = time.ParseDuration(ctx.config.FSChecker.FSCheckTimeStr); err != nil {
-		return fmt.Errorf("Bad FSChecker fs_check_time format %s, err %v", ctx.config.FSChecker.FSCheckTimeStr, err)
-	}
-	if ctx.config.FSChecker.DisabledCheckTime, err = time.ParseDuration(ctx.config.FSChecker.DisabledCheckTimeStr); err != nil {
-		return fmt.Errorf("Bad FSChecker disabled_fs_check_time format %s, err %v", ctx.config.FSChecker.DisabledCheckTimeStr, err)
 	}
 	if ctx.config.Timeout.MaxKeepalive, err = time.ParseDuration(ctx.config.Timeout.MaxKeepaliveStr); err != nil {
 		return fmt.Errorf("Bad Timeout max_keepalive format %s, err %v", ctx.config.Timeout.MaxKeepaliveStr, err)

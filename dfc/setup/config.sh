@@ -80,8 +80,6 @@
 		}
 	},
 	"fschecker": {
-		"fs_check_time":         "0",
-		"disabled_fs_check_time": "0",
 		"fschecker_enabled":      true,
 		"fschecker_test_files":   4,
 		"fschecker_error_limit":  2
