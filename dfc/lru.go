@@ -59,14 +59,23 @@ func (t *targetrunner) runLRU() {
 	fschkwg := &sync.WaitGroup{}
 
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
-	for mpath := range ctx.mountpaths.Available {
+
+	// copy available mountpaths
+	ctx.mountpaths.RLock()
+	availablePaths := make(map[string]*mountPath, len(ctx.mountpaths.Available))
+	for mpath, mpathInfo := range ctx.mountpaths.Available {
+		availablePaths[mpath] = mpathInfo
+	}
+	ctx.mountpaths.RUnlock()
+
+	for mpath, mpathInfo := range availablePaths {
 		fschkwg.Add(1)
-		go t.oneLRU(mpath, makePathLocal(mpath), fschkwg, xlru)
+		go t.oneLRU(mpathInfo, makePathLocal(mpath), fschkwg, xlru)
 	}
 	fschkwg.Wait()
-	for mpath := range ctx.mountpaths.Available {
+	for mpath, mpathInfo := range availablePaths {
 		fschkwg.Add(1)
-		go t.oneLRU(mpath, makePathCloud(mpath), fschkwg, xlru)
+		go t.oneLRU(mpathInfo, makePathCloud(mpath), fschkwg, xlru)
 	}
 	fschkwg.Wait()
 
@@ -75,7 +84,7 @@ func (t *targetrunner) runLRU() {
 		rr := getstorstatsrunner()
 		rr.Lock()
 		rr.updateCapacity()
-		for mpath := range ctx.mountpaths.Available {
+		for mpath := range availablePaths {
 			fscapacity := rr.Capacity[mpath]
 			if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
 				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
@@ -91,7 +100,7 @@ func (t *targetrunner) runLRU() {
 }
 
 // TODO: local-buckets-first LRU policy
-func (t *targetrunner) oneLRU(mpath, bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
+func (t *targetrunner) oneLRU(mpathInfo *mountPath, bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
 	defer fschkwg.Done()
 	h := &fileInfoMinHeap{}
 	heap.Init(h)
@@ -104,13 +113,14 @@ func (t *targetrunner) oneLRU(mpath, bucketdir string, fschkwg *sync.WaitGroup, 
 
 	// init LRU context
 	var oldwork []*fileInfo
+
 	lctx := &lructx{
 		totsize: toevict,
 		xlru:    xlru,
 		heap:    h,
 		oldwork: oldwork,
 		t:       t,
-		fs:      ctx.mountpaths.Available[mpath].FileSystem,
+		fs:      mpathInfo.FileSystem,
 	}
 
 	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {

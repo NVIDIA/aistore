@@ -108,7 +108,7 @@ func (f *fsHealthChecker) mpathChecker(r *fsRunner) {
 }
 
 func (f *fsHealthChecker) init() {
-	f.mountpaths.Lock()
+	f.mountpaths.RLock()
 	for mp := range f.mountpaths.Available {
 		f.fsList[mp] = &fsRunner{
 			chStop: make(chan struct{}, 1),
@@ -123,7 +123,7 @@ func (f *fsHealthChecker) init() {
 			mpath:  mp,
 		}
 	}
-	f.mountpaths.Unlock()
+	f.mountpaths.RUnlock()
 
 	for _, r := range f.fsList {
 		go f.mpathChecker(r)

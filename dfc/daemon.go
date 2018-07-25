@@ -40,10 +40,14 @@ type (
 		proxyurl  string
 	}
 
+	// mountedFS holds all mountpaths for the target.
 	mountedFS struct {
-		sync.Mutex `json:"-"`
-		Available  map[string]*mountPath `json:"available"`
-		Disabled   map[string]*mountPath `json:"disabled"`
+		sync.RWMutex `json:"-"`
+		// Available mountpaths - mountpaths which are used to store the data.
+		Available map[string]*mountPath `json:"available"`
+		// Disabled mountpaths - paths which for some reason did not pass the
+		// health check and cannot be used for a moment.
+		Disabled map[string]*mountPath `json:"disabled"`
 	}
 
 	// daemon instance: proxy or storage target

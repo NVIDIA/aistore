@@ -415,30 +415,45 @@ func parsebool(s string) (value bool, err error) {
 	return
 }
 
-func fqn2fs(fqn string) (fs string) {
-	mountPath := fqn2mountPath(fqn)
-	if mountPath == "" {
-		return
-	}
-	return ctx.mountpaths.Available[mountPath].FileSystem
-}
-
-func fqn2mountPath(fqn string) string {
+func fqn2mpathInfo(fqn string) *mountPath {
 	var (
-		max     int
-		longest string
+		max    int
+		result *mountPath
 	)
-	for mountPath := range ctx.mountpaths.Available {
-		rel, err := filepath.Rel(mountPath, fqn)
+
+	ctx.mountpaths.RLock()
+	for mpath, mpathInfo := range ctx.mountpaths.Available {
+		rel, err := filepath.Rel(mpath, fqn)
 		if err != nil || strings.HasPrefix(rel, "..") {
 			continue
 		}
-		if len(mountPath) > max {
-			max = len(mountPath)
-			longest = mountPath
+		if len(mpath) > max {
+			max = len(mpath)
+			result = mpathInfo
 		}
 	}
-	return longest
+	ctx.mountpaths.RUnlock()
+	return result
+}
+
+func fqn2fs(fqn string) (fs string) {
+	mpathInfo := fqn2mpathInfo(fqn)
+	if mpathInfo == nil {
+		return
+	}
+
+	fs = mpathInfo.FileSystem
+	return
+}
+
+func fqn2mountPath(fqn string) (mpath string) {
+	mpathInfo := fqn2mpathInfo(fqn)
+	if mpathInfo == nil {
+		return
+	}
+
+	mpath = mpathInfo.Path
+	return
 }
 
 func maxUtilDisks(disksMetricsMap map[string]simplekvs, disks StringSet) (maxutil float64) {

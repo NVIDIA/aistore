@@ -495,8 +495,10 @@ func (r *storstatsrunner) init() {
 	// local filesystems and their cap-s
 	r.Capacity = make(map[string]*fscapacity)
 	r.fsmap = make(map[syscall.Fsid]string)
-	for mpath, mountpath := range ctx.mountpaths.Available {
-		mp1, ok := r.fsmap[mountpath.Fsid]
+
+	ctx.mountpaths.RLock()
+	for mpath, mpathInfo := range ctx.mountpaths.Available {
+		mp1, ok := r.fsmap[mpathInfo.Fsid]
 		if ok {
 			// the same filesystem: usage cannot be different..
 			assert(r.Capacity[mp1] != nil)
@@ -508,10 +510,11 @@ func (r *storstatsrunner) init() {
 			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
 			continue
 		}
-		r.fsmap[mountpath.Fsid] = mpath
+		r.fsmap[mpathInfo.Fsid] = mpath
 		r.Capacity[mpath] = &fscapacity{}
 		r.fillfscap(r.Capacity[mpath], statfs)
 	}
+	ctx.mountpaths.RUnlock()
 }
 
 func (r *storstatsrunner) add(name string, val int64) {
