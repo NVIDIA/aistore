@@ -11,7 +11,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -151,6 +150,11 @@ type ReqError struct {
 	message string
 }
 
+type InvalidCksumError struct {
+	ExpectedHash string
+	ActualHash   string
+}
+
 type BucketProps struct {
 	CloudProvider string
 	Versioning    string
@@ -177,10 +181,21 @@ func (err ReqError) Error() string {
 	return err.message
 }
 
+func (e InvalidCksumError) Error() string {
+	return fmt.Sprintf("Expected Hash: [%s] Actual Hash: [%s]", e.ExpectedHash, e.ActualHash)
+}
+
 func newReqError(msg string, code int) ReqError {
 	return ReqError{
 		code:    code,
 		message: msg,
+	}
+}
+
+func newInvalidCksumError(eHash string, aHash string) InvalidCksumError {
+	return InvalidCksumError{
+		ActualHash:   aHash,
+		ExpectedHash: eHash,
 	}
 }
 
@@ -296,8 +311,7 @@ func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
 	if v {
 		if hdhash != hash {
-			s := fmt.Sprintf("Header's hash %s doesn't match the file's %s \n", hdhash, hash)
-			err = errors.New(s)
+			err = newInvalidCksumError(hdhash, hash)
 			if errch != nil {
 				errch <- err
 			}

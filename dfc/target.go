@@ -37,6 +37,7 @@ const (
 	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
 	workfileprefix   = ".~~~."
 	doesnotexist     = "does not exist"
+	maxBytesInMem    = 256 * KiB
 )
 
 type mountPath struct {
@@ -421,7 +422,7 @@ existslocally:
 	if size == 0 {
 		glog.Warningf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
 	}
-	returnRangeChecksum := readRange && cksumcfg.EnableReadRangeChecksum
+	returnRangeChecksum := cksumcfg.Checksum != ChecksumNone && readRange && cksumcfg.EnableReadRangeChecksum
 	if !coldget && !returnRangeChecksum && cksumcfg.Checksum != ChecksumNone {
 		hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" && hashbinary != nil {
@@ -459,22 +460,29 @@ existslocally:
 	buf := slab.alloc()
 	defer slab.free(buf)
 
-	if cksumcfg.Checksum != ChecksumNone && returnRangeChecksum {
-		reader := io.NewSectionReader(file, offset, length)
-		xxhashval, errstr := ComputeXXHash(reader, buf)
+	var sgl *SGLIO
+	defer func() {
+		if sgl != nil {
+			sgl.Free()
+		}
+	}()
+	var rangeReader io.ReadSeeker = io.NewSectionReader(file, offset, length)
+	if returnRangeChecksum {
+		var cksum string
+		cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, length, offset, buf)
 		if errstr != "" {
-			s := fmt.Sprintf("Unable to compute checksum for byte range, offset:%d, length:%d from %s, err: %s", offset, length, fqn, errstr)
-			t.invalmsghdlr(w, r, s, http.StatusInternalServerError)
+			glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			return
+
 		}
 		w.Header().Add(HeaderDfcChecksumType, cksumcfg.Checksum)
-		w.Header().Add(HeaderDfcChecksumVal, xxhashval)
+		w.Header().Add(HeaderDfcChecksumVal, cksum)
 	}
 
 	var written int64
 	if readRange {
-		reader := io.NewSectionReader(file, offset, length)
-		written, err = io.CopyBuffer(w, reader, buf)
+		written, err = io.CopyBuffer(w, rangeReader, buf)
 	} else {
 		// copy
 		written, err = io.CopyBuffer(w, file, buf)
@@ -513,6 +521,37 @@ existslocally:
 
 	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
 }
+
+func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
+	cksum string, sgl *SGLIO, rangeReader io.ReadSeeker, errstr string) {
+	rangeReader = io.NewSectionReader(file, offset, length)
+	xx := xxhash.New64()
+	if length <= maxBytesInMem {
+		sgl = NewSGLIO(uint64(length))
+		_, err := ReceiveAndChecksum(sgl, rangeReader, buf, xx)
+		if err != nil {
+			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
+			t.fshc(err, fqn)
+			return
+		}
+		// overriding rangeReader here to read from the sgl
+		rangeReader = NewReader(sgl)
+	}
+
+	_, err := rangeReader.Seek(0, io.SeekStart)
+	if err != nil {
+		errstr = fmt.Sprintf("failed to seek file %s to beginning, err: %v", fqn, err)
+		t.fshc(err, fqn)
+		return
+	}
+
+	hashIn64 := xx.Sum64()
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
+	cksum = hex.EncodeToString(hashInBytes)
+	return
+}
+
 func (t *targetrunner) validateOffsetAndLength(r *http.Request) (
 	offset int64, length int64, readRange bool, errstr string) {
 	query := r.URL.Query()
