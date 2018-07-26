@@ -25,8 +25,8 @@ const (
 	xsignal          = "signal"
 	xproxystats      = "proxystats"
 	xstorstats       = "storstats"
-	xproxykalive     = "proxykalive"
-	xtargetkalive    = "targetkalive"
+	xproxykeepalive  = "proxykeepalive"
+	xtargetkeepalive = "targetkeepalive"
 	xiostat          = "iostat"
 	xatime           = "atime"
 	xmetasyncer      = "metasyncer"
@@ -219,14 +219,14 @@ func dfcinit() {
 		p.initSI()
 		ctx.rg.add(p, xproxy)
 		ctx.rg.add(&proxystatsrunner{}, xproxystats)
-		ctx.rg.add(newproxykalive(p), xproxykalive)
+		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
 		ctx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
 		t.initSI()
 		ctx.rg.add(t, xtarget)
 		ctx.rg.add(&storstatsrunner{}, xstorstats)
-		ctx.rg.add(newtargetkalive(t), xtargetkalive)
+		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 
 		// iostat is required: ensure that it is installed and its version is right
 		if err := checkIostatVersion(); err != nil {
@@ -300,9 +300,9 @@ func getproxystats() *proxyCoreStats {
 	return &rr.Core
 }
 
-func getproxykalive() *proxykalive {
-	r := ctx.rg.runmap[xproxykalive]
-	rr, ok := r.(*proxykalive)
+func getproxykeepalive() *proxyKeepaliveRunner {
+	r := ctx.rg.runmap[xproxykeepalive]
+	rr, ok := r.(*proxyKeepaliveRunner)
 	assert(ok)
 	return rr
 }
@@ -314,9 +314,9 @@ func gettarget() *targetrunner {
 	return rr
 }
 
-func gettargetkalive() *targetkalive {
-	r := ctx.rg.runmap[xtargetkalive]
-	rr, ok := r.(*targetkalive)
+func gettargetkeepalive() *targetKeepaliveRunner {
+	r := ctx.rg.runmap[xtargetkeepalive]
+	rr, ok := r.(*targetKeepaliveRunner)
 	assert(ok)
 	return rr
 }

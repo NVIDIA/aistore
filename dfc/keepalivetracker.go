@@ -37,7 +37,7 @@ func ValidKeepaliveType(t string) bool {
 }
 
 // NewKeepaliveTracker returns a keepalive tracker based on the parameters given.
-func NewKeepaliveTracker(c *keepaliveTrackerConf, statsdC *statsd.Client) KeepaliveTracker {
+func newKeepaliveTracker(c *keepaliveTrackerConf, statsdC *statsd.Client) KeepaliveTracker {
 	switch c.Name {
 	case heartbeatType:
 		return newHeartBeatTracker(c.Interval, statsdC)

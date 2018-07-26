@@ -116,7 +116,7 @@ type httprunner struct {
 	httpclient            *http.Client // http client for intra-cluster comm
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	statsif               statsif
-	kalive                kaliveif
+	keepalive             keepaliver
 	smapowner             *smapowner
 	bmdowner              *bmdowner
 	revProxy              *httputil.ReverseProxy
@@ -364,7 +364,7 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 	}
 
 	if sid != "unknown" {
-		h.kalive.heardFrom(sid, false /* reset */)
+		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
 	return callResult{si, outjson, err, errstr, newPrimaryURL, status}

@@ -102,7 +102,7 @@ type targetrunner struct {
 func (t *targetrunner) run() error {
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
-	t.httprunner.kalive = gettargetkalive()
+	t.httprunner.keepalive = gettargetkeepalive()
 	t.xactinp = newxactinp()        // extended actions
 	t.rtnamemap = newrtnamemap(128) // lock/unlock name
 
@@ -932,7 +932,7 @@ func (t *targetrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t.kalive.heardFrom(from, false)
+	t.keepalive.heardFrom(from, false)
 }
 
 //  /Rversion/Rpush/bucket-name
@@ -2482,7 +2482,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infoln("Sending register signal to target keepalive control channel")
 		}
-		gettargetkalive().kalive.controlCh <- controlSignal{msg: register}
+		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
 		return
 	}
 	if status, err := t.register(0); err != nil {
@@ -2499,7 +2499,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infoln("Sending unregister signal to target keepalive control channel")
 	}
-	gettargetkalive().kalive.controlCh <- controlSignal{msg: unregister}
+	gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
 }
 
 //====================== common for both cold GET and PUT ======================================

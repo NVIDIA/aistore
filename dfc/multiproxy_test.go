@@ -31,7 +31,7 @@ func newDiscoverServerPrimary() *proxyrunner {
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
-	p.kalive = newproxykalive(&p)
+	p.keepalive = newProxyKeepaliveRunner(&p)
 	return &p
 }
 

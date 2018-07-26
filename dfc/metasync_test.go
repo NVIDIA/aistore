@@ -85,7 +85,7 @@ func newPrimary() *proxyrunner {
 	ctx.config.Periodic.RetrySyncTime = time.Millisecond * 100
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
 	ctx.config.KeepaliveTracker.Proxy.IntervalStr = "as"
-	p.kalive = newproxykalive(&p)
+	p.keepalive = newProxyKeepaliveRunner(&p)
 
 	p.bmdowner = &bmdowner{}
 	p.bmdowner.put(newBucketMD())

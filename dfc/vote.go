@@ -548,7 +548,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 	// First: Check last keepalive timestamp. If the proxy was recently successfully reached,
 	// this will always vote no, as we believe the original proxy is still alive.
-	if !h.kalive.timedOut(currPrimaryID) {
+	if !h.keepalive.isTimeToPing(currPrimaryID) {
 		if glog.V(4) {
 			glog.Warningf("Primary %s is still alive", currPrimaryID)
 		}

@@ -63,7 +63,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 			if time.Since(pollstarted) > ctx.config.Rebalance.DestRetryTime {
 				break
 			}
-			time.Sleep(ctx.config.Timeout.CplaneOperation * pollRetryFactor * 2)
+			time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
 		}
 		if !ok {
 			glog.Errorf("Not starting rebalancing x-action: target %s appears to be offline", sid)
@@ -151,7 +151,7 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 			err := json.Unmarshal(res.outjson, status)
 			if err == nil {
 				if status.IsRebalancing {
-					time.Sleep(ctx.config.Timeout.CplaneOperation * pollRetryFactor * 2)
+					time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
 					count++
 				}
 			} else {

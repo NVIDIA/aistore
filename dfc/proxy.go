@@ -73,7 +73,7 @@ type proxyrunner struct {
 // start proxy runner
 func (p *proxyrunner) run() error {
 	p.httprunner.init(getproxystatsrunner(), true)
-	p.httprunner.kalive = getproxykalive()
+	p.httprunner.keepalive = getproxykeepalive()
 
 	p.xactinp = newxactinp()
 
@@ -720,7 +720,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	res := p.call(r, si, u, r.Method, nil)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.errstr)
-		p.kalive.onerr(res.err, res.status)
+		p.keepalive.onerr(res.err, res.status)
 	} else {
 		p.writeJSON(w, r, res.outjson, "getbucketnames")
 	}
@@ -743,7 +743,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 
 	res := p.call(r, dinfo, url, http.MethodPost, actionMsgBytes, ctx.config.Timeout.Default)
 	if res.err != nil {
-		p.kalive.onerr(res.err, res.status)
+		p.keepalive.onerr(res.err, res.status)
 	}
 
 	return &bucketResp{
@@ -1803,7 +1803,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 			return true
 		}
 
-		p.kalive.heardFrom(nsi.DaemonID, !keepalive /* reset */)
+		p.keepalive.heardFrom(nsi.DaemonID, !keepalive /* reset */)
 		return false
 	}
 	if osi != nil {
@@ -1946,7 +1946,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 						r,
 						fmt.Sprintf("%s (%s = %s) failed, err: %s", msg.Action, msg.Name, value, result.errstr),
 					)
-					p.kalive.onerr(err, result.status)
+					p.keepalive.onerr(err, result.status)
 				}
 			}
 		}
