@@ -313,18 +313,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	//       on the names, and (not that importantly) the unit is different (ms vs us).
 	delta := time.Since(started)
 	p.statsdC.Send("get",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-		statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  "latency",
-			Value: float64(delta / time.Millisecond),
-		},
-	)
-
+		metric{statsd.Counter, "count", 1},
+		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
 	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
 }
 
@@ -354,18 +344,8 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 
 	delta := time.Since(started)
 	p.statsdC.Send("put",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-		statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  "latency",
-			Value: float64(delta / time.Millisecond),
-		},
-	)
-
+		metric{statsd.Counter, "count", 1},
+		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
 	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta/1000))
 }
 
@@ -429,14 +409,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 
-	p.statsdC.Send("delete",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-	)
-
+	p.statsdC.Send("delete", metric{statsd.Counter, "count", 1})
 	p.statsif.add("numdelete", 1)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
@@ -535,18 +508,8 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 	if ok {
 		delta := time.Since(started)
 		p.statsdC.Send("list",
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-			statsd.Metric{
-				Type:  statsd.Timer,
-				Name:  "latency",
-				Value: float64(delta / time.Millisecond),
-			},
-		)
-
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
 		lat := int64(delta / 1000)
 		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
 
@@ -1132,14 +1095,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
 
-	p.statsdC.Send("rename",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-	)
-
+	p.statsdC.Send("rename", metric{statsd.Counter, "count", 1})
 	p.statsif.add("numrename", 1)
 
 	// NOTE:
@@ -1749,13 +1705,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsdC.Send("cluster_post",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-	)
+	p.statsdC.Send("cluster_post", metric{statsd.Counter, "count", 1})
 	p.statsif.add("numpost", 1)
 
 	p.smapowner.Lock()

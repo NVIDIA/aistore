@@ -79,25 +79,10 @@ func (hb *HeartBeatTracker) HeardFrom(id string, reset bool) {
 	if ok {
 		delta := t.Sub(last)
 		hb.statsdC.Send("keepalive.heartbeat."+id,
-			statsd.Metric{
-				Type:  statsd.Gauge,
-				Name:  "delta",
-				Value: int64(delta / time.Millisecond),
-			},
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-		)
+			metric{statsd.Gauge, "delta", int64(delta / time.Millisecond)},
+			metric{statsd.Counter, "count", 1})
 	} else {
-		hb.statsdC.Send("keepalive.heartbeat."+id,
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-		)
+		hb.statsdC.Send("keepalive.heartbeat."+id, metric{statsd.Counter, "count", 1})
 	}
 }
 
@@ -157,14 +142,7 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	if reset || !ok {
 		a.rec[id] = averageTrackerRecord{count: 0, totalMS: 0, last: time.Now()}
 		a.unlock()
-
-		a.statsdC.Send("keepalive.average."+id,
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "reset",
-				Value: 1,
-			},
-		)
+		a.statsdC.Send("keepalive.average."+id, metric{statsd.Counter, "reset", 1})
 		return
 	}
 
@@ -177,17 +155,8 @@ func (a *AverageTracker) HeardFrom(id string, reset bool) {
 	a.unlock()
 
 	a.statsdC.Send("keepalive.average."+id,
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "delta",
-			Value: int64(delta / time.Millisecond),
-		},
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-	)
+		metric{statsd.Counter, "delta", int64(delta / time.Millisecond)},
+		metric{statsd.Counter, "count", 1})
 }
 
 // TimedOut returns true if it has determined that is has not heard from the server.

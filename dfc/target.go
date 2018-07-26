@@ -507,18 +507,8 @@ existslocally:
 
 	delta := time.Since(started)
 	t.statsdC.Send("get",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "count",
-			Value: 1,
-		},
-		statsd.Metric{
-			Type:  statsd.Timer,
-			Name:  "latency",
-			Value: float64(delta / time.Millisecond),
-		},
-	)
-
+		metric{statsd.Counter, "count", 1},
+		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
 	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
 }
 
@@ -781,18 +771,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			delta := time.Since(started)
 			t.statsdC.Send("list",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency",
-					Value: float64(delta / time.Millisecond),
-				},
-			)
-
+				metric{statsd.Counter, "count", 1},
+				metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
 			lat := int64(delta / 1000)
 			t.statsif.addMany("numlist", int64(1), "listlatency", lat)
 			if glog.V(3) {
@@ -1274,43 +1254,15 @@ ret:
 	} else {
 		if vchanged {
 			t.statsdC.Send("get.cold",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "bytesloaded",
-					Value: props.size,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "vchanged",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "bytesvchanged",
-					Value: props.size,
-				},
-			)
-
+				metric{statsd.Counter, "count", 1},
+				metric{statsd.Counter, "bytesloaded", props.size},
+				metric{statsd.Counter, "vchanged", 1},
+				metric{statsd.Counter, "bytesvchanged", props.size})
 			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size, "bytesvchanged", props.size, "numvchanged", int64(1))
 		} else {
 			t.statsdC.Send("get.cold",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "bytesloaded",
-					Value: props.size,
-				},
-			)
-
+				metric{statsd.Counter, "count", 1},
+				metric{statsd.Counter, "bytesloaded", props.size})
 			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size)
 		}
 		t.rtnamemap.downgradelock(uname)
@@ -1785,18 +1737,8 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		if errstr == "" {
 			delta := time.Since(started)
 			t.statsdC.Send("put",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency",
-					Value: float64(delta / time.Millisecond),
-				},
-			)
-
+				metric{statsd.Counter, "count", 1},
+				metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
 			lat := int64(delta / 1000)
 			t.statsif.addMany("numput", int64(1), "putlatency", lat)
 			if glog.V(4) {
@@ -2009,18 +1951,8 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
 			t.statsdC.Send("rebalance.receive",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "files",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "bytes",
-					Value: size,
-				},
-			)
-
+				metric{statsd.Counter, "files", 1},
+				metric{statsd.Counter, "bytes", size})
 			t.statsif.addMany("numrecvfiles", int64(1), "numrecvbytes", size)
 		}
 	}
@@ -2047,14 +1979,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
 
-		t.statsdC.Send("delete",
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-		)
-
+		t.statsdC.Send("delete", metric{statsd.Counter, "count", 1})
 		t.statsif.add("numdelete", 1)
 	}
 
@@ -2075,18 +2000,8 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return err
 		} else if evict {
 			t.statsdC.Send("evict",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "files",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "bytes",
-					Value: finfo.Size(),
-				},
-			)
-
+				metric{statsd.Counter, "files", 1},
+				metric{statsd.Counter, "bytes", finfo.Size()})
 			t.statsif.addMany("filesevicted", int64(1), "bytesevicted", finfo.Size())
 		}
 	}
@@ -2139,13 +2054,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 		} else {
-			t.statsdC.Send("rename",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-			)
+			t.statsdC.Send("rename", metric{statsd.Counter, "count", 1})
 			t.statsif.add("numrename", 1)
 			if glog.V(3) {
 				glog.Infof("Renamed %s => %s", fqn, newfqn)
@@ -2307,17 +2216,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	response.Body.Close()
 	// stats
 	t.statsdC.Send("rebalance.send",
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "files",
-			Value: 1,
-		},
-		statsd.Metric{
-			Type:  statsd.Counter,
-			Name:  "bytes",
-			Value: size,
-		},
-	)
+		metric{statsd.Counter, "files", 1},
+		metric{statsd.Counter, "bytes", size})
 	t.statsif.addMany("numsentfiles", int64(1), "numsentbytes", size)
 	return ""
 }
@@ -2669,18 +2569,8 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
 
 				t.statsdC.Send("error.badchecksum.xxhash",
-					statsd.Metric{
-						Type:  statsd.Counter,
-						Name:  "count",
-						Value: 1,
-					},
-					statsd.Metric{
-						Type:  statsd.Counter,
-						Name:  "bytes",
-						Value: written,
-					},
-				)
-
+					metric{statsd.Counter, "count", 1},
+					metric{statsd.Counter, "bytes", written})
 				t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
 				return
 			}
@@ -2699,18 +2589,8 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				objname, ohval[:8], nhval[:8], fqn)
 
 			t.statsdC.Send("error.badchecksum.md5",
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "count",
-					Value: 1,
-				},
-				statsd.Metric{
-					Type:  statsd.Counter,
-					Name:  "bytes",
-					Value: written,
-				},
-			)
-
+				metric{statsd.Counter, "count", 1},
+				metric{statsd.Counter, "bytes", written})
 			t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
 			return
 		}
@@ -3048,15 +2928,8 @@ func (t *targetrunner) fshc(err error, filepath string) {
 
 	keyName := fqn2mountPath(filepath)
 	if keyName != "" {
-		t.statsdC.Send(keyName+".io.errors",
-			statsd.Metric{
-				Type:  statsd.Counter,
-				Name:  "count",
-				Value: 1,
-			},
-		)
+		t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
 	}
-
 	if ctx.config.FSChecker.Enabled {
 		getfshealthchecker().onerr(filepath)
 	}

@@ -16,9 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
-
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
 )
 
 const logsTotalSizeCheckTime = time.Hour * 3
@@ -28,6 +27,8 @@ const logsTotalSizeCheckTime = time.Hour * 3
 // types
 //
 //==============================
+type metric = statsd.Metric // type alias
+
 type fscapacity struct {
 	Used    uint64 `json:"used"`    // bytes
 	Avail   uint64 `json:"avail"`   // ditto
@@ -364,15 +365,10 @@ func (r *storstatsrunner) log() (runlru bool) {
 			lines = append(lines, dev+": "+string(b))
 		}
 
-		var stats []statsd.Metric
+		var stats []metric
 		for k, v := range iometrics {
-			stats = append(stats, statsd.Metric{
-				Type:  statsd.Gauge,
-				Name:  k,
-				Value: v,
-			})
+			stats = append(stats, metric{statsd.Gauge, k, v})
 		}
-
 		gettarget().statsdC.Send("iostat_"+dev, stats...)
 	}
 	riostat.RUnlock()
