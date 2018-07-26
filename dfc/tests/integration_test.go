@@ -303,28 +303,24 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	assertClusterState(&m)
 }
 
-func TestRegisterAndUnregisterTargetAndGetInParallel(t *testing.T) {
+func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	const (
-		num                 = 30000
-		otherTasksToTrigger = 2
-		filesize            = uint64(1024)
-		seed                = int64(111)
-		maxErrPct           = 5
+		num       = 10000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 5
 	)
 
 	var (
 		err error
 		m   = metadata{
-			t:                   t,
-			delay:               0 * time.Second,
-			otherTasksToTrigger: otherTasksToTrigger,
-			num:                 num,
-			numGetsEachFile:     5,
-			repFilenameCh:       make(chan repFile, num),
-			semaphore:           make(chan struct{}, 10), // 10 concurrent GET requests at a time
-			controlCh:           make(chan struct{}, otherTasksToTrigger),
-			wg:                  &sync.WaitGroup{},
-			bucket:              TestLocalBucketName,
+			t:             t,
+			delay:         0 * time.Second,
+			num:           num,
+			repFilenameCh: make(chan repFile, num),
+			semaphore:     make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:            &sync.WaitGroup{},
+			bucket:        TestLocalBucketName,
 		}
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
 		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
@@ -367,24 +363,22 @@ func TestRegisterAndUnregisterTargetAndGetInParallel(t *testing.T) {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
 
-	// Put some files
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
-	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
-	selectErr(errch, "put", t, false)
-	close(filenameCh)
+	// Do puts in parallel
+	m.wg.Add(1)
+	go func() {
+		// Put some files
+		tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+		putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+		selectErr(errch, "put", t, false)
+		close(filenameCh)
 
-	for f := range filenameCh {
-		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
-	}
-
-	// Do gets in parallel
-	m.wg.Add(m.num * m.numGetsEachFile)
-	doGetsInParallel(&m)
+		m.wg.Done()
+		tlogln("putting finished")
+	}()
 
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
-		<-m.controlCh
 		tlogf("trying to register target: %s\n", targets[0].directURL)
 		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
 		checkFatal(err, t)
@@ -395,7 +389,6 @@ func TestRegisterAndUnregisterTargetAndGetInParallel(t *testing.T) {
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
-		<-m.controlCh
 		tlogf("trying to unregister target: %s\n", targets[1].directURL)
 		err = client.UnregisterTarget(proxyurl, targets[1].sid)
 		checkFatal(err, t)
