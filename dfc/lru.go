@@ -312,15 +312,13 @@ func (h *fileInfoMinHeap) Pop() interface{} {
 
 func (lctx *lructx) computeThrottle(fqn string) {
 	now := time.Now()
-	mountPath := fqn2mountPath(fqn)
-	assert(mountPath != "", fmt.Sprintf("Unable to retrieve mountpath from %s", fqn))
 	usedFSPercentage := lctx.throttle.prevFSUsedPct
 	var ok bool
 	if now.After(lctx.throttle.nextCapCheck) {
 		usedFSPercentage, ok = getFSUsedPercentage(fqn)
 		lctx.throttle.nextCapCheck = now.Add(fsCapCheckDuration)
 		if !ok {
-			glog.Errorf("Unable to retrieve used capacity for mountpath %s", mountPath)
+			glog.Errorf("Unable to retrieve used capacity for fs %s", lctx.fs)
 			lctx.throttle.sleep = 0
 			return
 		}
@@ -340,7 +338,7 @@ func (lctx *lructx) computeThrottle(fqn string) {
 		lctx.throttle.nextUtilCheck = now.Add(ctx.config.Periodic.StatsTime)
 		if !ok {
 			curUtilPct = lctx.throttle.prevUtilPct
-			glog.Errorf("Unable to retrieve disk utilization for mountpath %s", mountPath)
+			glog.Errorf("Unable to retrieve disk utilization for fs %s", lctx.fs)
 		}
 	}
 
