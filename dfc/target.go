@@ -28,6 +28,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -39,13 +40,6 @@ const (
 	doesnotexist     = "does not exist"
 	maxBytesInMem    = 256 * KiB
 )
-
-type mountPath struct {
-	Path       string       `json:"path"` // clean
-	origPath   string       // As entered by the user, must be used for logging / returning errors
-	Fsid       syscall.Fsid `json:"fsid"`
-	FileSystem string       `json:"fileSystem"`
-}
 
 type allfinfos struct {
 	files        []*BucketEntry
@@ -999,9 +993,9 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 
 	wg := &sync.WaitGroup{}
 
-	avail := ctx.mountpaths.get()
-	ch := make(chan string, len(avail))
-	for _, mpathInfo := range avail {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	ch := make(chan string, len(availablePaths))
+	for _, mpathInfo := range availablePaths {
 		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
 		wg.Add(1)
 		go func(fromdir string, wg *sync.WaitGroup) {
@@ -1017,7 +1011,7 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 			return
 		}
 	}
-	for _, mpathInfo := range avail {
+	for _, mpathInfo := range availablePaths {
 		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
 		if err := os.RemoveAll(fromdir); err != nil {
 			glog.Errorf("Failed to remove dir %s", fromdir)
@@ -1327,8 +1321,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 		err        error
 	}
 
-	avail := ctx.mountpaths.get()
-	ch := make(chan *mresp, len(avail))
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	ch := make(chan *mresp, len(availablePaths))
 	wg := &sync.WaitGroup{}
 
 	// function to traverse one mountpoint
@@ -1358,7 +1352,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
 	islocal := t.bmdowner.get().islocal(bucket)
-	for _, mpathInfo := range avail {
+	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
 		var localDir string
 		if islocal {
@@ -2412,14 +2406,13 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			Disabled:  make([]string, 0),
 		}
 
-		ctx.mountpaths.RLock()
-		for _, mp := range ctx.mountpaths.Available {
+		availablePaths, disabledPaths := ctx.mountpaths.Mountpaths()
+		for _, mp := range availablePaths {
 			mpList.Available = append(mpList.Available, mp.Path)
 		}
-		for _, mp := range ctx.mountpaths.Disabled {
+		for _, mp := range disabledPaths {
 			mpList.Disabled = append(mpList.Disabled, mp.Path)
 		}
-		ctx.mountpaths.RUnlock()
 		jsbytes, err = json.Marshal(&mpList)
 		if err != nil {
 			s := fmt.Sprintf("Failed to marshal mountpaths: %v", err)
@@ -2630,8 +2623,8 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
 	}
 	ok := true
 	bucketmd := t.bmdowner.get()
-	avail := ctx.mountpaths.get()
-	for _, mpathInfo := range avail {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	for _, mpathInfo := range availablePaths {
 		if fn(makePathCloud(mpathInfo.Path) + "/") {
 			ok = len(objname) > 0 && t.fqn(bucket, objname, false) == fqn
 			break
@@ -2682,51 +2675,6 @@ func (t *targetrunner) isworkfile(workfqn string) (iswork, isold bool) {
 	return
 }
 
-// Terminology:
-// - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
-// - each mountpath is, simply, a local directory that is serviced by a local filesystem;
-// - there's a 1-to-1 relationship between a mountpath and a local filesystem
-//   (different mountpaths map onto different filesystems, and vise versa);
-// - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
-func (t *targetrunner) fspath2mpath() {
-	if len(ctx.config.FSpaths) == 0 {
-		// (usability) not to clutter the log with backtraces when starting up and validating config
-		glog.Errorln("FATAL: no fspaths - see README => Configuration and/or fspaths section in the config.sh")
-		os.Exit(1)
-	}
-	for fp := range ctx.config.FSpaths {
-		if len(fp) > 1 {
-			fp = strings.TrimSuffix(fp, "/")
-		}
-		if _, err := os.Stat(fp); err != nil {
-			glog.Errorf("FATAL: fspath %q %s, err: %v", fp, doesnotexist, err)
-			os.Exit(1)
-		}
-		statfs := syscall.Statfs_t{}
-		if err := syscall.Statfs(fp, &statfs); err != nil {
-			glog.Errorf("FATAL: cannot statfs fspath %q, err: %v", fp, err)
-			os.Exit(1)
-		}
-		fileSystem := fqn2fsAtStartup(fp)
-		if fileSystem == "" {
-			glog.Errorf("FATAL: cannot retrieve file system from fspath %q, err: %v", fp)
-			os.Exit(1)
-		}
-
-		cleanPath := filepath.Clean(fp)
-		mp := &mountPath{Path: cleanPath, origPath: fp, Fsid: statfs.Fsid, FileSystem: fileSystem}
-
-		ctx.mountpaths.Lock()
-		if _, ok := ctx.mountpaths.Available[mp.Path]; ok {
-			glog.Errorf("FATAL: invalid config: duplicated fspath %q", fp)
-			os.Exit(1)
-		}
-
-		ctx.mountpaths.Available[mp.Path] = mp
-		ctx.mountpaths.cloneAndUnlock()
-	}
-}
-
 // create local directories to test multiple fspaths
 func (t *targetrunner) testCachepathMounts() {
 	var instpath string
@@ -2747,38 +2695,9 @@ func (t *targetrunner) testCachepathMounts() {
 			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
 			os.Exit(1)
 		}
-		statfs := syscall.Statfs_t{}
-		if err := syscall.Statfs(mpath, &statfs); err != nil {
-			glog.Errorf("FATAL: cannot statfs mpath %q, err: %v", mpath, err)
-			os.Exit(1)
-		}
-		fileSystem := fqn2fsAtStartup(mpath)
-		if fileSystem == "" {
-			glog.Errorf("FATAL: cannot retrieve file system from fspath %q", mpath)
-			os.Exit(1)
-		}
-		mp := &mountPath{Path: mpath, Fsid: statfs.Fsid, FileSystem: fileSystem}
-		ctx.mountpaths.Lock()
-		_, ok := ctx.mountpaths.Available[mp.Path]
-		assert(!ok)
-		ctx.mountpaths.Available[mp.Path] = mp
-		ctx.mountpaths.cloneAndUnlock()
-	}
-}
 
-func (t *targetrunner) checkIfAllFSIDsAreUnique() {
-	avail := ctx.mountpaths.get()
-	fsmap := make(map[syscall.Fsid]string, len(ctx.mountpaths.Available))
-	for _, mpathInfo := range avail {
-		mp2, ok := fsmap[mpathInfo.Fsid]
-		if ok {
-			if !testingFSPpaths() {
-				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mpathInfo.Fsid, mpathInfo.origPath, mp2)
-				os.Exit(1)
-			}
-			continue
-		}
-		fsmap[mpathInfo.Fsid] = mpathInfo.Path
+		err := ctx.mountpaths.AddMountpath(mpath)
+		assert(err == nil, err)
 	}
 }
 
@@ -2807,9 +2726,11 @@ func (t *targetrunner) detectMpathChanges() {
 	// load old/prev and compare
 	var (
 		changed bool
-		old     = &mountedFS{}
+		old     = &fs.MountedFS{
+			Available: make(map[string]*fs.MountpathInfo),
+			Disabled:  make(map[string]*fs.MountpathInfo),
+		}
 	)
-	old.Available, old.Disabled = make(map[string]*mountPath), make(map[string]*mountPath)
 	if err := LocalLoad(mpathconfigfqn, old); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
@@ -2826,9 +2747,9 @@ func (t *targetrunner) detectMpathChanges() {
 	if changed {
 		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.DaemonID, mpathconfigfqn)
 		glog.Errorln("OLD: ====================")
-		glog.Errorln(old.pp())
+		glog.Errorln(old.Pprint())
 		glog.Errorln("NEW: ====================")
-		glog.Errorln(ctx.mountpaths.pp())
+		glog.Errorln(ctx.mountpaths.Pprint())
 	}
 	// persist
 	if err := LocalSave(mpathconfigfqn, ctx.mountpaths); err != nil {
@@ -2986,23 +2907,18 @@ func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx.mountpaths.Lock()
-	defer ctx.mountpaths.cloneAndUnlock()
-
-	if _, ok := ctx.mountpaths.Available[mp.Mountpath]; ok {
+	enabled, exists := ctx.mountpaths.EnableMountpath(mp.Mountpath)
+	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	if mpathInfo, ok := ctx.mountpaths.Disabled[mp.Mountpath]; ok {
-		glog.Infof("Reenabling mountpath %s", mp.Mountpath)
-		ctx.mountpaths.Available[mp.Mountpath] = mpathInfo
-		delete(ctx.mountpaths.Disabled, mp.Mountpath)
+	if !enabled && !exists {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mp.Mountpath), http.StatusNotFound)
 		return
 	}
 
-	t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mp.Mountpath),
-		http.StatusNotFound)
+	glog.Infof("Reenabled mountpath %s", mp.Mountpath)
 }
 
 func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
@@ -3057,11 +2973,11 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
-	avail := ctx.mountpaths.get()
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
-			for _, mpathInfo := range avail {
+			for _, mpathInfo := range availablePaths {
 				localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
 				if err := os.RemoveAll(localbucketfqn); err != nil {
 					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
@@ -3069,7 +2985,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 			}
 		}
 	}
-	for _, mpathInfo := range avail {
+	for _, mpathInfo := range availablePaths {
 		for bucket := range bucketmd.LBmap {
 			localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
 			if err := CreateDir(localbucketfqn); err != nil {

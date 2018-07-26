@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 const (
@@ -26,7 +27,7 @@ const (
 // failed mountpath is healthy. Once the mountpath is considered faulty the
 // mountpath is disabled and removed from the list of mountpaths utilized by DFC
 //
-// for mountpath definition, see fspath2mpath()
+// for mountpath definition, see fs/mountfs.go
 type fsHealthChecker struct {
 	namedrunner
 	chStop     chan struct{}
@@ -35,7 +36,7 @@ type fsHealthChecker struct {
 
 	// pointers to common data
 	config         *fshcconf
-	mountpaths     *mountedFS
+	mountpaths     *fs.MountedFS
 	fnMakeTempName func(string) string
 }
 
@@ -84,7 +85,7 @@ func getRandomFileName(basePath string) (string, error) {
 	return "", err
 }
 
-func newFSHealthChecker(mounts *mountedFS, conf *fshcconf,
+func newFSHealthChecker(mounts *fs.MountedFS, conf *fshcconf,
 	f func(string) string) *fsHealthChecker {
 	return &fsHealthChecker{
 		mountpaths:     mounts,
@@ -108,22 +109,21 @@ func (f *fsHealthChecker) mpathChecker(r *fsRunner) {
 }
 
 func (f *fsHealthChecker) init() {
-	f.mountpaths.RLock()
-	for mp := range f.mountpaths.Available {
-		f.fsList[mp] = &fsRunner{
+	availablePaths, disabledPaths := f.mountpaths.Mountpaths()
+	for _, mp := range availablePaths {
+		f.fsList[mp.Path] = &fsRunner{
 			chStop: make(chan struct{}, 1),
 			chFile: make(chan string),
-			mpath:  mp,
+			mpath:  mp.Path,
 		}
 	}
-	for mp := range f.mountpaths.Disabled {
-		f.fsList[mp] = &fsRunner{
+	for _, mp := range disabledPaths {
+		f.fsList[mp.Path] = &fsRunner{
 			chStop: make(chan struct{}, 1),
 			chFile: make(chan string),
-			mpath:  mp,
+			mpath:  mp.Path,
 		}
 	}
-	f.mountpaths.RUnlock()
 
 	for _, r := range f.fsList {
 		go f.mpathChecker(r)
@@ -181,11 +181,7 @@ func (f *fsHealthChecker) runMpathTest(mpath, filepath string) {
 
 	if !f.isTestPassed(mpath, readErrs, writeErrs, exists) {
 		glog.Errorf("Disabling mountpath %s...", mpath)
-		f.mountpaths.Lock()
-		mp := f.mountpaths.Available[mpath]
-		delete(f.mountpaths.Available, mpath)
-		f.mountpaths.Disabled[mpath] = mp
-		f.mountpaths.cloneAndUnlock()
+		f.mountpaths.DisableMountpath(mpath)
 	}
 }
 

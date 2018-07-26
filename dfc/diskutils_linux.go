@@ -47,15 +47,15 @@ type ChildBlockDevice struct {
 
 // iostat -cdxtm 10
 func (r *iostatrunner) run() error {
-	avail := ctx.mountpaths.get()
-	r.fsdisks = make(map[string]StringSet, len(ctx.mountpaths.Available))
-	for _, mountPath := range avail {
-		disks := fs2disks(mountPath.FileSystem)
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	r.fsdisks = make(map[string]StringSet, len(availablePaths))
+	for _, mpathInfo := range availablePaths {
+		disks := fs2disks(mpathInfo.FileSystem)
 		if len(disks) == 0 {
-			glog.Errorf("filesystem (%+v) - no disks?", mountPath)
+			glog.Errorf("filesystem (%+v) - no disks?", mpathInfo)
 			continue
 		}
-		r.fsdisks[mountPath.FileSystem] = disks
+		r.fsdisks[mpathInfo.FileSystem] = disks
 	}
 
 	refreshPeriod := int(ctx.config.Periodic.StatsTime / time.Second)
@@ -164,21 +164,6 @@ func (r *iostatrunner) maxUtilFS(fs string) (util float32, ok bool) {
 		return
 	}
 	return util, true
-}
-
-// NOTE: Since this invokes a shell command, it is slow.
-// Do not use this in code paths which are executed per object.
-// This method is used only at startup to store the file systems
-// for each mount path.
-func fqn2fsAtStartup(fqn string) (fs string) {
-	getFSCommand := fmt.Sprintf("df -P '%s' | awk 'END{print $1}'", fqn)
-	outputBytes, err := exec.Command("sh", "-c", getFSCommand).Output()
-	if err != nil || len(outputBytes) == 0 {
-		glog.Errorf("Unable to retrieve FS from fspath %s, err: %v", fqn, err)
-		return
-	}
-	fs = strings.TrimSpace(string(outputBytes))
-	return fs
 }
 
 // NOTE: Since this invokes a shell command, it is slow.

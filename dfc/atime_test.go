@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 func TestAtimerunnerStop(t *testing.T) {
@@ -245,7 +247,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -298,7 +300,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -343,7 +345,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -389,7 +391,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -436,7 +438,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -483,7 +485,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -525,18 +527,10 @@ func getTempFile(t *testing.T, prefix string) (*os.File, string) {
 	if err != nil {
 		t.Fatalf("Unable to create temp file.")
 	}
-	fileSystem := fqn2fsAtStartup(tempFile.Name())
-	if len(ctx.mountpaths.Available) == 0 {
-		ctx.mountpaths.Available = make(map[string]*mountPath)
-	}
 
+	fileSystem, _ := fs.Fqn2fsAtStartup(tempFile.Name())
 	tempRoot := "/tmp"
-	if _, ok := ctx.mountpaths.Available[tempRoot]; !ok {
-		mp := &mountPath{Path: tempRoot, FileSystem: fileSystem}
-		ctx.mountpaths.Available[mp.Path] = mp
-	}
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	ctx.mountpaths.AddMountpath(tempRoot)
 
 	return tempFile, fileSystem
 }

@@ -6,16 +6,13 @@
 package dfc
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"sync"
-	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 // runners
@@ -43,21 +40,10 @@ type (
 		proxyurl  string
 	}
 
-	// mountedFS holds all mountpaths for the target.
-	mountedFS struct {
-		sync.RWMutex
-		// Available mountpaths - mountpaths which are used to store the data.
-		Available map[string]*mountPath `json:"available"`
-		// Disabled mountpaths - mountpaths which for some reason did not pass
-		// the health check and cannot be used for a moment.
-		Disabled   map[string]*mountPath `json:"disabled"`
-		availCache unsafe.Pointer        // used for COW purposes
-	}
-
 	// daemon instance: proxy or storage target
 	daemon struct {
 		config     dfconfig
-		mountpaths mountedFS // for mountpath definition, see fspath2mpath()
+		mountpaths fs.MountedFS // for mountpath definition, see fs/mountfs.go
 		rg         *rungroup
 	}
 
@@ -106,41 +92,6 @@ var (
 	ctx     = &daemon{}
 	clivars = &cliVars{}
 )
-
-//====================
-//
-// mountpaths
-//
-//====================
-func (m *mountedFS) cloneAndUnlock() {
-	l, i := len(m.Available), 0
-	avail := make([]*mountPath, l, l)
-	for _, mountpath := range m.Available {
-		avail[i] = mountpath
-		i++
-	}
-	m.put(&avail)
-	m.RWMutex.Unlock()
-}
-
-func (m *mountedFS) Unlock() {
-	assert(false) // cloneAndUnlock enforcement
-}
-
-func (m *mountedFS) put(avail *[]*mountPath) {
-	atomic.StorePointer(&m.availCache, unsafe.Pointer(avail))
-}
-
-func (m *mountedFS) get() (avail []*mountPath) {
-	p := (*[]*mountPath)(atomic.LoadPointer(&m.availCache))
-	avail = *p
-	return
-}
-
-func (m *mountedFS) pp() string {
-	s, _ := json.MarshalIndent(m, "", "\t")
-	return fmt.Sprintln(string(s))
-}
 
 //====================
 //
@@ -242,22 +193,25 @@ func dfcinit() {
 			chSendAtime: make(chan accessTimeResponse),
 		}, xatime)
 
-		ctx.rg.add(
-			newFSHealthChecker(&ctx.mountpaths, &ctx.config.FSChecker, t.fqn2workfile),
-			xfshealthchecker)
-
-		// for mountpath definition, see fspath2mpath()
-		ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
-		ctx.mountpaths.Disabled = make(map[string]*mountPath, len(ctx.config.FSpaths))
+		// for mountpath definition, see fs/mountfs.go
 		if testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 			t.testCachepathMounts()
 		} else {
-			t.fspath2mpath()
-			t.checkIfAllFSIDsAreUnique()
+			fsPaths := make([]string, 0, len(ctx.config.FSpaths))
+			for path := range ctx.config.FSpaths {
+				fsPaths = append(fsPaths, path)
+			}
+
+			if err := ctx.mountpaths.Init(fsPaths); err != nil {
+				glog.Fatal(err)
+			}
 		}
-		ctx.mountpaths.Lock()
-		ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+
+		ctx.rg.add(
+			newFSHealthChecker(&ctx.mountpaths, &ctx.config.FSChecker, t.fqn2workfile),
+			xfshealthchecker,
+		)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }

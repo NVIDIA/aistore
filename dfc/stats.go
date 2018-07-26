@@ -492,8 +492,8 @@ func (r *storstatsrunner) init() {
 	r.Capacity = make(map[string]*fscapacity)
 	r.fsmap = make(map[syscall.Fsid]string)
 
-	avail := ctx.mountpaths.get()
-	for _, mpathInfo := range avail {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	for _, mpathInfo := range availablePaths {
 		mpath := mpathInfo.Path
 		mp1, ok := r.fsmap[mpathInfo.Fsid]
 		if ok {

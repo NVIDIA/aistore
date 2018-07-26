@@ -44,10 +44,6 @@ func (r *iostatrunner) diskUtilFromFQN(path string) (utilization float32, ok boo
 	return float32(-1), false
 }
 
-func fqn2fsAtStartup(fsPath string) (fileSystem string) {
-	return
-}
-
 func fs2disks(fileSystem string) (disks StringSet) {
 	return make(StringSet)
 }

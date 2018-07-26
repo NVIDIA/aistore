@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 func TestGetFSUsedPercentage(t *testing.T) {
@@ -30,12 +32,8 @@ func TestGetFSDiskUtil(t *testing.T) {
 	}
 
 	tempRoot := "/tmp"
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
-	fileSystem := fqn2fsAtStartup(tempRoot)
-	mp := &mountPath{Path: tempRoot, FileSystem: fileSystem}
-	ctx.mountpaths.Available[mp.Path] = mp
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, 1)
+	ctx.mountpaths.AddMountpath(tempRoot)
 
 	riostat := newIostatRunner()
 	go riostat.run()
@@ -54,8 +52,8 @@ func TestGetFSDiskUtil(t *testing.T) {
 
 func TestGetDiskFromFileSystem(t *testing.T) {
 	path := "/"
-	fileSystem := fqn2fsAtStartup(path)
-	if fileSystem == "" {
+	fileSystem, err := fs.Fqn2fsAtStartup(path)
+	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
 	disks := fs2disks(fileSystem)
@@ -64,8 +62,8 @@ func TestGetDiskFromFileSystem(t *testing.T) {
 	}
 
 	path = "/tmp"
-	fileSystem = fqn2fsAtStartup(path)
-	if fileSystem == "" {
+	fileSystem, err = fs.Fqn2fsAtStartup(path)
+	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
 	disks = fs2disks(fileSystem)
@@ -74,8 +72,8 @@ func TestGetDiskFromFileSystem(t *testing.T) {
 	}
 
 	path = "/home"
-	fileSystem = fqn2fsAtStartup(path)
-	if fileSystem == "" {
+	fileSystem, err = fs.Fqn2fsAtStartup(path)
+	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
 	disks = fs2disks(fileSystem)
@@ -84,8 +82,8 @@ func TestGetDiskFromFileSystem(t *testing.T) {
 	}
 
 	path = "asdasd"
-	fileSystem = fqn2fsAtStartup(path)
-	if fileSystem != "" {
+	fileSystem, err = fs.Fqn2fsAtStartup(path)
+	if err != nil {
 		t.Errorf("Invalid FS for path: [%s]", path)
 	}
 	disks = fs2disks(path)
@@ -182,82 +180,105 @@ func TestSearchValidMountPath(t *testing.T) {
 	oldMPs := setAvailableMountPaths("/")
 	longestPrefix := fqn2mountPath("/abc")
 	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
-	ctx.mountpaths.Available = oldMPs
+	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
 	oldMPs := setAvailableMountPaths("/")
 	longestPrefix := fqn2mountPath("xabc")
 	testAssert(t, longestPrefix == "", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
-	ctx.mountpaths.Available = oldMPs
+	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchWithNoMountPath(t *testing.T) {
 	oldMPs := setAvailableMountPaths("")
 	longestPrefix := fqn2mountPath("xabc")
 	testAssert(t, longestPrefix == "", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
-	ctx.mountpaths.Available = oldMPs
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
-	oldMPs := setAvailableMountPaths("/", "/x")
+	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
+	createDirs(dirs...)
+	defer removeDirs(dirs...)
+
+	oldMPs := setAvailableMountPaths("/tmp", "/tmp/x")
 	longestPrefix := fqn2mountPath("xabc")
 	testAssert(t, longestPrefix == "", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
-	longestPrefix = fqn2mountPath("/xabc")
-	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
-	longestPrefix = fqn2mountPath("/x/abc")
-	testAssert(t, longestPrefix == "/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/x")
-	ctx.mountpaths.Available = oldMPs
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	longestPrefix = fqn2mountPath("/tmp/xabc")
+	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
+	longestPrefix = fqn2mountPath("/tmp/x/abc")
+	testAssert(t, longestPrefix == "/tmp/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
+	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSimilarCases(t *testing.T) {
-	oldMPs := setAvailableMountPaths("/abc")
-	longestPrefix := fqn2mountPath("/abc")
-	testAssert(t, longestPrefix == "/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/abc")
-	longestPrefix = fqn2mountPath("/abc/")
-	testAssert(t, longestPrefix == "/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/abc")
+	dirs := []string{"/tmp/abc", "/tmp/abx"}
+	createDirs(dirs...)
+	defer removeDirs(dirs...)
+
+	oldMPs := setAvailableMountPaths("/tmp/abc")
+	longestPrefix := fqn2mountPath("/tmp/abc")
+	testAssert(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
+	longestPrefix = fqn2mountPath("/tmp/abc/")
+	testAssert(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 	longestPrefix = fqn2mountPath("/abx")
 	testAssert(t, longestPrefix == "", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
-	ctx.mountpaths.Available = oldMPs
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	setAvailableMountPaths(oldMPs...)
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	oldMPs := setAvailableMountPaths("/abc", "/")
-	longestPrefix := fqn2mountPath("/abc")
-	testAssert(t, longestPrefix == "/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/abc")
-	longestPrefix = fqn2mountPath("/abc/")
-	testAssert(t, longestPrefix == "/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/abc")
+	oldMPs := setAvailableMountPaths("/tmp", "/")
+	longestPrefix := fqn2mountPath("/tmp")
+	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
+	longestPrefix = fqn2mountPath("/tmp/")
+	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 	longestPrefix = fqn2mountPath("/abx")
 	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
-	ctx.mountpaths.Available = oldMPs
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	setAvailableMountPaths(oldMPs...)
 }
 
-func setAvailableMountPaths(paths ...string) map[string]*mountPath {
-	oldAvailableMPs := ctx.mountpaths.Available
-	ctx.mountpaths.Available = make(map[string]*mountPath, len(ctx.config.FSpaths))
+func setAvailableMountPaths(paths ...string) []string {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	oldPaths := make([]string, 0, len(availablePaths))
+	for _, mpathInfo := range availablePaths {
+		oldPaths = append(oldPaths, mpathInfo.Path)
+	}
+
+	for _, mpathInfo := range availablePaths {
+		ctx.mountpaths.RemoveMountpath(mpathInfo.Path)
+	}
+
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
-		fileSystem := fqn2fsAtStartup(path)
-		mp := &mountPath{Path: path, FileSystem: fileSystem}
-		ctx.mountpaths.Available[mp.Path] = mp
+
+		ctx.mountpaths.AddMountpath(path)
 	}
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
-	return oldAvailableMPs
+
+	return oldPaths
 }
 
 func testAssert(t *testing.T, condition bool, msg string, args ...interface{}) {
 	if !condition {
 		t.Errorf(fmt.Sprintf(msg, args...))
+	}
+}
+
+func createDirs(dirs ...string) error {
+	for _, dir := range dirs {
+		err := CreateDir(dir)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func removeDirs(dirs ...string) {
+	for _, dir := range dirs {
+		os.RemoveAll(dir)
 	}
 }

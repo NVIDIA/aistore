@@ -69,8 +69,8 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 func hrwMpath(bucket, objname string) (mpath string) {
 	var max uint64
 	name := uniquename(bucket, objname)
-	avail := ctx.mountpaths.get()
-	for _, mpathInfo := range avail {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	for _, mpathInfo := range availablePaths {
 		cs := xxhash.ChecksumString64S(mpathInfo.Path+":"+name, mLCG32)
 		if cs > max {
 			max = cs

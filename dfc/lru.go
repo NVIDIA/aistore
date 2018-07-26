@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/fs"
+
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
@@ -61,13 +63,13 @@ func (t *targetrunner) runLRU() {
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
 
 	// copy available mountpaths
-	avail := ctx.mountpaths.get()
-	for _, mpathInfo := range avail {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	for _, mpathInfo := range availablePaths {
 		fschkwg.Add(1)
 		go t.oneLRU(mpathInfo, makePathLocal(mpathInfo.Path), fschkwg, xlru)
 	}
 	fschkwg.Wait()
-	for _, mpathInfo := range avail {
+	for _, mpathInfo := range availablePaths {
 		fschkwg.Add(1)
 		go t.oneLRU(mpathInfo, makePathCloud(mpathInfo.Path), fschkwg, xlru)
 	}
@@ -78,7 +80,7 @@ func (t *targetrunner) runLRU() {
 		rr := getstorstatsrunner()
 		rr.Lock()
 		rr.updateCapacity()
-		for _, mpathInfo := range avail {
+		for _, mpathInfo := range availablePaths {
 			fscapacity := rr.Capacity[mpathInfo.Path]
 			if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
 				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
@@ -94,7 +96,7 @@ func (t *targetrunner) runLRU() {
 }
 
 // TODO: local-buckets-first LRU policy
-func (t *targetrunner) oneLRU(mpathInfo *mountPath, bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
+func (t *targetrunner) oneLRU(mpathInfo *fs.MountpathInfo, bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
 	defer fschkwg.Done()
 	h := &fileInfoMinHeap{}
 	heap.Init(h)

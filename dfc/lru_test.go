@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 type fileInfos []fileInfo
@@ -109,7 +111,6 @@ func TestLRUThrottling(t *testing.T) {
 	oldLRUHWM := ctx.config.LRU.HighWM
 	oldDiskLWM := ctx.config.Xaction.DiskUtilLowWM
 	oldDiskHWM := ctx.config.Xaction.DiskUtilHighWM
-	oldAvailableMP := ctx.mountpaths.Available
 	oldStatsTime := ctx.config.Periodic.StatsTime
 	oldRg := ctx.rg
 
@@ -117,19 +118,15 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.config.LRU.HighWM = 90
 	ctx.config.Xaction.DiskUtilLowWM = 10
 	ctx.config.Xaction.DiskUtilHighWM = 40
-	ctx.mountpaths.Available = make(map[string]*mountPath)
 	ctx.config.Periodic.StatsTime = -1 * time.Second
 
-	fs := fqn2fsAtStartup("/")
-	mp := &mountPath{Path: "/", FileSystem: fs}
-	ctx.mountpaths.Available[mp.Path] = mp
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
+	ctx.mountpaths.AddMountpath("/")
+	fileSystem := ctx.mountpaths.Available["/"].FileSystem
 
-	disks := fs2disks(fs)
+	disks := fs2disks(fileSystem)
 	riostat := newIostatRunner()
 	riostat.fsdisks = make(map[string]StringSet, len(ctx.mountpaths.Available))
-	riostat.fsdisks[fs] = disks
+	riostat.fsdisks[fileSystem] = disks
 	for disk := range disks {
 		riostat.Disk[disk] = make(simplekvs, 0)
 		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
@@ -160,12 +157,8 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.config.LRU.HighWM = oldLRUHWM
 	ctx.config.Xaction.DiskUtilLowWM = oldDiskLWM
 	ctx.config.Xaction.DiskUtilHighWM = oldDiskHWM
-	ctx.mountpaths.Available = oldAvailableMP
 	ctx.config.Periodic.StatsTime = oldStatsTime
 	ctx.rg = oldRg
-
-	ctx.mountpaths.Lock()
-	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 }
 
 func testHighFSCapacityUsed(t *testing.T, diskUtil uint32, riostat *iostatrunner) {
@@ -424,6 +417,7 @@ func getSleepDuration(diskUtil uint32, lctx *lructx, riostat *iostatrunner) time
 }
 
 func newLruContext() *lructx {
+	fileSystem, _ := fs.Fqn2fsAtStartup("/")
 	lruContext := &lructx{
 		xlru: new(xactLRU),
 		throttle: struct {
@@ -433,7 +427,7 @@ func newLruContext() *lructx {
 			prevUtilPct   float32
 			prevFSUsedPct uint64
 		}{sleep: 0},
-		fs: fqn2fsAtStartup("/"),
+		fs: fileSystem,
 	}
 	return lruContext
 }

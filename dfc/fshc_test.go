@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 const (
@@ -18,21 +20,21 @@ func testTmpFileName(fname string) string {
 	return fname + "-tmp"
 }
 
-func testCheckerMountPaths() *mountedFS {
+func testCheckerMountPaths() *fs.MountedFS {
 	CreateDir(fsCheckerTmpDir)
 	CreateDir(fsCheckerTmpDir + "/1")
 	CreateDir(fsCheckerTmpDir + "/2")
 
-	avail := make(map[string]*mountPath)
-	unavail := make(map[string]*mountPath)
+	avail := make(map[string]*fs.MountpathInfo)
+	unavail := make(map[string]*fs.MountpathInfo)
 
 	for i := 1; i < 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		avail[name] = &mountPath{Path: name}
+		avail[name] = &fs.MountpathInfo{Path: name}
 	}
-	unavail[fsCheckerTmpDir+"/4"] = &mountPath{Path: fsCheckerTmpDir + "/4"}
+	unavail[fsCheckerTmpDir+"/4"] = &fs.MountpathInfo{Path: fsCheckerTmpDir + "/4"}
 
-	return &mountedFS{
+	return &fs.MountedFS{
 		Available: avail,
 		Disabled:  unavail,
 	}
