@@ -167,11 +167,17 @@ func (m *Smap) addProxy(psi *daemonInfo) {
 }
 
 func (m *Smap) delTarget(sid string) {
+	if m.getTarget(sid) == nil {
+		assert(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
+	}
 	delete(m.Tmap, sid)
 	m.Version++
 }
 
 func (m *Smap) delProxy(pid string) {
+	if m.getProxy(pid) == nil {
+		assert(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
+	}
 	delete(m.Pmap, pid)
 	m.Version++
 }
