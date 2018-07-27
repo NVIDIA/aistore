@@ -1306,44 +1306,45 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 
 		return false
 	}
-	urls := make(map[string]int64)
-	for _, d := range smap.Tmap {
-		if !inList(d.DaemonID, idsToIgnore) {
-			urls[d.DirectURL] = 0
+
+	checkAwaitingDaemon := func(smap dfc.Smap, idsToIgnore []string) (string, string, bool) {
+		for _, d := range smap.Pmap {
+			if !inList(d.DaemonID, idsToIgnore) {
+				return d.DaemonID, d.DirectURL, true
+			}
 		}
-	}
-	for _, d := range smap.Pmap {
-		if !inList(d.DaemonID, idsToIgnore) {
-			urls[d.DirectURL] = 0
+		for _, d := range smap.Tmap {
+			if !inList(d.DaemonID, idsToIgnore) {
+				return d.DaemonID, d.DirectURL, true
+			}
 		}
+
+		return "", "", false
 	}
 
-	for len(urls) > 0 {
-		var u string
-		for u = range urls {
+	for {
+		sid, url, exists := checkAwaitingDaemon(smap, idsToIgnore)
+		if !exists {
 			break
 		}
-		smap, err := GetClusterMap(u)
+
+		daemonSmap, err := GetClusterMap(url)
 		if err != nil && !dfc.IsErrConnectionRefused(err) {
 			return err
 		}
-		urls[u] = smap.Version
-		if err == nil && smap.Version > prevVersion {
-			delete(urls, u)
+
+		if err == nil && daemonSmap.Version > prevVersion {
+			idsToIgnore = append(idsToIgnore, sid)
+			smap = daemonSmap // update smap for newer version
 			continue
 		}
 
 		if time.Now().After(timeout) {
-			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, u, smap.Version)
+			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
 		}
-		if len(urls) > 0 {
-			fmt.Printf("wait-for-Smap-synced (> v%d): ", prevVersion)
-			for k, smapV := range urls {
-				fmt.Printf("%s(v%d) ", k, smapV)
-			}
-			fmt.Printf("\n")
-			time.Sleep(time.Second)
-		}
+
+		fmt.Printf("wait for Smap to be synced (> v%d) with url: %s\n", prevVersion, url)
+		time.Sleep(time.Second)
 	}
 	return nil
 }

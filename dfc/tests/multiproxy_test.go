@@ -169,10 +169,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	// re-construct the command line to start the original proxy but add the current primary proxy to the args
 	// example: cmd = /Users/lid/go/bin/dfc
 	//          args = -config=/Users/lid/.dfc/dfc0.json -role=proxy -ntargets=3 -proxyurl=http://10.112.76.36:8082
-	err = restore(httpclient, oldPrimaryURL, cmd, args, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(cmd, args, false, "proxy (prev primary)")
 
 	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
 	if err != nil {
@@ -207,6 +204,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	var (
 		targetURL       string
 		targetPort      string
+		targetID        string
 		origTargetCount = len(smap.Tmap)
 		origProxyCount  = len(smap.Pmap)
 	)
@@ -214,10 +212,11 @@ func primaryAndTargetCrash(t *testing.T) {
 	for _, v := range smap.Tmap {
 		targetURL = v.DirectURL
 		targetPort = v.DaemonPort
+		targetID = v.DaemonID
 		break
 	}
 
-	tlogf("Killing target: %s - %s\n", targetURL, targetPort)
+	tlogf("Killing target: %s - %s\n", targetURL, targetID)
 	tcmd, targs, err := kill(httpclient, targetURL, targetPort)
 	if err != nil {
 		t.Fatal(err)
@@ -233,15 +232,8 @@ func primaryAndTargetCrash(t *testing.T) {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
 
-	err = restore(httpclient, targetURL, tcmd, targs, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = restore(httpclient, oldPrimaryURL, cmd, args, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(tcmd, targs, false, "target")
+	restore(cmd, args, false, "proxy (prev primary)")
 
 	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
 	if err != nil {
@@ -285,10 +277,7 @@ func proxyCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = restore(httpclient, secondURL, secondCmd, secondArgs, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(secondCmd, secondArgs, false, "proxy")
 
 	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount)
 	if err != nil {
@@ -348,18 +337,13 @@ func primaryAndProxyCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = restore(httpclient, oldPrimaryURL, cmd, args, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(cmd, args, true, "proxy (prev primary)")
+
 	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = restore(httpclient, secondURL, secondCmd, secondArgs, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(secondCmd, secondArgs, false, "proxy")
 
 	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount)
 	if err != nil {
@@ -405,10 +389,7 @@ func targetRejoin(t *testing.T) {
 		t.Fatalf("Killed target was not removed from the Smap: %v", id)
 	}
 
-	err = restore(httpclient, url, cmd, args, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(cmd, args, false, "target")
 
 	smap, err = waitForPrimaryProxy("to synchronize on 'target rejoined'", smap.Version, testing.Verbose())
 	if err != nil {
@@ -435,10 +416,7 @@ func crashAndFastRestore(t *testing.T) {
 
 	// quick crash and recover
 	time.Sleep(2 * time.Second)
-	err = restore(httpclient, url, cmd, args, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(cmd, args, true, "proxy (primary)")
 	tlogf("The %s is currently restarting\n", id)
 
 	// Note: using (version - 1) because the primary will restart with its old version,
@@ -469,7 +447,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 		errch:          errch,
 	}
 
-	go runMockTarget(mocktgt, stopch, &smap)
+	go runMockTarget(t, mocktgt, stopch, &smap)
 
 	smap, err = waitForPrimaryProxy("to synchronize on 'new mock target'", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
 	if err != nil {
@@ -489,10 +467,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = restore(httpclient, oldPrimaryURL, cmd, args, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(cmd, args, true, "proxy (prev primary)")
 
 	// check if the previous primary proxy has not yet rejoined the cluster
 	// it should be waiting for the mock target to return voteInProgress=false
@@ -620,10 +595,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, nextProxyID)
 	}
 
-	err = restore(httpclient, primaryProxyURL, cmd, args, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	restore(cmd, args, false, "proxy (prev primary)")
 
 	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
 	if err != nil {
@@ -819,10 +791,7 @@ loop:
 			ch <- nextProxyURL
 		}
 
-		err = restore(httpclient, primaryProxyURL, cmd, args, false)
-		if err != nil {
-			t.Fatal(err)
-		}
+		restore(cmd, args, false, "proxy (prev primary)")
 
 		_, err = waitForPrimaryProxy("to synchronize on 'primary restored'", smap.Version, testing.Verbose())
 		if err != nil {
@@ -948,13 +917,11 @@ func kill(httpclient *http.Client, url, port string) (string, []string, error) {
 	return cmd, args, err
 }
 
-func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary bool) error {
-	// note: when starting a process, it has a stderr pipe, not the standard fd = 2,
-	//       when glog.Errorf() is called, it returned EPIPE, which causes the process to die,
-	//       didn't find out why.
-	//       as a work around, start the background process without logging to stderr.
-	//       may be all dfc process should be deployed with this option.
-	//       only needs to add the option once.
+func restore(cmd string, args []string, asPrimary bool, tag string) {
+	tlogf("Restoring %s: %s %+v\n", tag, cmd, args)
+	// FIXME: when starting a process, it has a stderr pipe, not the standard fd = 2,
+	//        when glog.Errorf() is called, it returned EPIPE, which causes the process to die,
+	//        didn't find out why.
 	var found bool
 	for _, v := range args {
 		if strings.Contains(v, "stderrthreshold") {
@@ -979,13 +946,10 @@ func restore(httpclient *http.Client, url, cmd string, args []string, asPrimary 
 	go func() {
 		time.Sleep(time.Millisecond)
 		err := cmdStart.Run()
-		if err != nil && !strings.HasPrefix(err.Error(), "signal:") {
-			// Don't print signal errors, because they're generally created by this test.
+		if err != nil && !strings.HasPrefix(err.Error(), "signal: killed") {
 			fmt.Printf("Error running command %v %+v: %v (%v)\n", cmd, args, err, stderr.String())
 		}
 	}()
-
-	return nil
 }
 
 // getPID uses 'lsof' to find the pid of the dfc process listening on a port
@@ -1108,6 +1072,7 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 		fmt.Printf("Waiting for the cluster %s [Smap version > %d]\n", reason, origVersion)
 	}
 
+	var loopCnt int = 0
 	for {
 		smap, err := client.GetClusterMap(proxyurl)
 		if err != nil && !dfc.IsErrConnectionRefused(err) {
@@ -1118,8 +1083,15 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 			(totalProxies == 0 || len(smap.Pmap) == totalProxies)
 		if !doCheckSMap {
 			d := time.Since(timeStart)
+			expectedTargets, expectedProxies := totalTargets, totalProxies
+			if totalTargets == 0 {
+				expectedTargets = len(smap.Tmap)
+			}
+			if totalProxies == 0 {
+				expectedProxies = len(smap.Pmap)
+			}
 			tlogf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
-				proxyurl, len(smap.Tmap), totalTargets, len(smap.Pmap), totalProxies, d.Truncate(time.Second))
+				proxyurl, len(smap.Tmap), expectedTargets, len(smap.Pmap), expectedProxies, d.Truncate(time.Second))
 		}
 
 		// if the primary's map changed to the state we want, wait for the map get populated
@@ -1156,7 +1128,8 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 		}
 
 		lastVersion = smap.Version
-		time.Sleep(time.Second * 5)
+		loopCnt++
+		time.Sleep(time.Second * time.Duration(loopCnt)) // sleep longer every loop
 	}
 
 	return dfc.Smap{}, fmt.Errorf("Timed out waiting for the cluster to stabilize")
@@ -1172,7 +1145,7 @@ type targetMocker interface {
 	votehdlr(w http.ResponseWriter, r *http.Request)
 }
 
-func runMockTarget(mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
+func runMockTarget(t *testing.T, mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rbuckets+"/", mocktgt.filehdlr)
@@ -1181,11 +1154,20 @@ func runMockTarget(mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rdaemon+"/", mocktgt.daemonhdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rvote+"/", mocktgt.votehdlr)
 	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rhealth, func(w http.ResponseWriter, r *http.Request) {})
-	s := &http.Server{Addr: ":" + mockTargetPort, Handler: mux}
 
-	registerMockTarget(mocktgt, smap)
+	ip := ""
+	for _, v := range smap.Tmap {
+		ip = v.NodeIPAddr
+		break
+	}
 
+	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
 	go s.ListenAndServe()
+
+	err := registerMockTarget(mocktgt, smap)
+	if err != nil {
+		t.Fatalf("failed to start http server for mock target: %v", err)
+	}
 
 	<-stopch
 	unregisterMockTarget(mocktgt)

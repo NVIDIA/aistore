@@ -1990,7 +1990,7 @@ func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r 
 	if smap == nil || !smap.isValid() {
 		if p.startedup(0) != 0 { // must be starting up
 			smap = p.smapowner.get()
-			assert(smap.isValid())
+			assert(smap.isValid(), smap.pp())
 		} else {
 			s := fmt.Sprintf("%s is starting up: cannot execute '%v' yet...", p.si.DaemonID, action)
 			p.invalmsghdlr(w, r, s)

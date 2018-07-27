@@ -196,6 +196,9 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 
 	newprimary, oldprimary := vr.Candidate, vr.Primary
 
+	h.smapowner.Lock()
+	defer h.smapowner.Unlock()
+
 	smap := h.smapowner.get()
 	isproxy := smap.getProxy(h.si.DaemonID) != nil
 	psi := smap.getProxy(newprimary)
@@ -204,19 +207,16 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 		h.invalmsghdlr(w, r, s)
 		return
 	}
-	h.smapowner.Lock()
 	clone := smap.clone()
 	clone.ProxySI = psi
 	if oldprimary != "" {
 		clone.delProxy(oldprimary)
 	}
 	if s := h.smapowner.persist(clone, isproxy /*saveSmap*/); s != "" {
-		h.smapowner.Unlock()
 		h.invalmsghdlr(w, r, s)
 		return
 	}
 	h.smapowner.put(clone)
-	h.smapowner.Unlock()
 	glog.Infof("resulting %s", clone.pp())
 }
 

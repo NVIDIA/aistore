@@ -264,7 +264,7 @@ func (r *proxykalive) pingAllOthers() (stopped bool) {
 					stoppedCh <- struct{}{}
 				}
 				if !ok {
-					toRemoveCh <- sid
+					toRemoveCh <- si.DaemonID
 				}
 				wg.Done()
 			}(si)
@@ -360,7 +360,7 @@ func (r *proxykalive) retry(si *daemonInfo, url string) (ok, stopped bool) {
 			}
 		}
 	}
-	glog.Warningf("keepalive failed after polling again, removing from smap")
+	glog.Warningf("keepalive timed out, removing %s from Smap", si.DaemonID)
 	return false, false
 }
 
