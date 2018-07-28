@@ -6,11 +6,14 @@
 package dfc
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
@@ -42,12 +45,13 @@ type (
 
 	// mountedFS holds all mountpaths for the target.
 	mountedFS struct {
-		sync.RWMutex `json:"-"`
+		sync.RWMutex
 		// Available mountpaths - mountpaths which are used to store the data.
 		Available map[string]*mountPath `json:"available"`
-		// Disabled mountpaths - paths which for some reason did not pass the
-		// health check and cannot be used for a moment.
-		Disabled map[string]*mountPath `json:"disabled"`
+		// Disabled mountpaths - mountpaths which for some reason did not pass
+		// the health check and cannot be used for a moment.
+		Disabled   map[string]*mountPath `json:"disabled"`
+		availCache unsafe.Pointer        // used for COW purposes
 	}
 
 	// daemon instance: proxy or storage target
@@ -102,6 +106,41 @@ var (
 	ctx     = &daemon{}
 	clivars = &cliVars{}
 )
+
+//====================
+//
+// mountpaths
+//
+//====================
+func (m *mountedFS) cloneAndUnlock() {
+	l, i := len(m.Available), 0
+	avail := make([]*mountPath, l, l)
+	for _, mountpath := range m.Available {
+		avail[i] = mountpath
+		i++
+	}
+	m.put(&avail)
+	m.RWMutex.Unlock()
+}
+
+func (m *mountedFS) Unlock() {
+	assert(false) // cloneAndUnlock enforcement
+}
+
+func (m *mountedFS) put(avail *[]*mountPath) {
+	atomic.StorePointer(&m.availCache, unsafe.Pointer(avail))
+}
+
+func (m *mountedFS) get() (avail []*mountPath) {
+	p := (*[]*mountPath)(atomic.LoadPointer(&m.availCache))
+	avail = *p
+	return
+}
+
+func (m *mountedFS) pp() string {
+	s, _ := json.MarshalIndent(m, "", "\t")
+	return fmt.Sprintln(string(s))
+}
 
 //====================
 //
@@ -217,6 +256,8 @@ func dfcinit() {
 			t.fspath2mpath()
 			t.checkIfAllFSIDsAreUnique()
 		}
+		ctx.mountpaths.Lock()
+		ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }

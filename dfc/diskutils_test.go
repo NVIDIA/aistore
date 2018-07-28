@@ -34,6 +34,8 @@ func TestGetFSDiskUtil(t *testing.T) {
 	fileSystem := fqn2fsAtStartup(tempRoot)
 	mp := &mountPath{Path: tempRoot, FileSystem: fileSystem}
 	ctx.mountpaths.Available[mp.Path] = mp
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 
 	riostat := newIostatRunner()
 	go riostat.run()
@@ -195,6 +197,8 @@ func TestSearchWithNoMountPath(t *testing.T) {
 	longestPrefix := fqn2mountPath("xabc")
 	testAssert(t, longestPrefix == "", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
 	ctx.mountpaths.Available = oldMPs
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
@@ -206,6 +210,8 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 	longestPrefix = fqn2mountPath("/x/abc")
 	testAssert(t, longestPrefix == "/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/x")
 	ctx.mountpaths.Available = oldMPs
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 }
 
 func TestSimilarCases(t *testing.T) {
@@ -217,6 +223,8 @@ func TestSimilarCases(t *testing.T) {
 	longestPrefix = fqn2mountPath("/abx")
 	testAssert(t, longestPrefix == "", "Actual: [%s]. Expected: [%s]", longestPrefix, "")
 	ctx.mountpaths.Available = oldMPs
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
@@ -228,6 +236,8 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 	longestPrefix = fqn2mountPath("/abx")
 	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	ctx.mountpaths.Available = oldMPs
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 }
 
 func setAvailableMountPaths(paths ...string) map[string]*mountPath {
@@ -241,6 +251,8 @@ func setAvailableMountPaths(paths ...string) map[string]*mountPath {
 		mp := &mountPath{Path: path, FileSystem: fileSystem}
 		ctx.mountpaths.Available[mp.Path] = mp
 	}
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 	return oldAvailableMPs
 }
 

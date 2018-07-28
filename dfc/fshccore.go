@@ -185,7 +185,7 @@ func (f *fsHealthChecker) runMpathTest(mpath, filepath string) {
 		mp := f.mountpaths.Available[mpath]
 		delete(f.mountpaths.Available, mpath)
 		f.mountpaths.Disabled[mpath] = mp
-		f.mountpaths.Unlock()
+		f.mountpaths.cloneAndUnlock()
 	}
 }
 

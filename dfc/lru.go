@@ -61,21 +61,15 @@ func (t *targetrunner) runLRU() {
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
 
 	// copy available mountpaths
-	ctx.mountpaths.RLock()
-	availablePaths := make(map[string]*mountPath, len(ctx.mountpaths.Available))
-	for mpath, mpathInfo := range ctx.mountpaths.Available {
-		availablePaths[mpath] = mpathInfo
-	}
-	ctx.mountpaths.RUnlock()
-
-	for mpath, mpathInfo := range availablePaths {
+	avail := ctx.mountpaths.get()
+	for _, mpathInfo := range avail {
 		fschkwg.Add(1)
-		go t.oneLRU(mpathInfo, makePathLocal(mpath), fschkwg, xlru)
+		go t.oneLRU(mpathInfo, makePathLocal(mpathInfo.Path), fschkwg, xlru)
 	}
 	fschkwg.Wait()
-	for mpath, mpathInfo := range availablePaths {
+	for _, mpathInfo := range avail {
 		fschkwg.Add(1)
-		go t.oneLRU(mpathInfo, makePathCloud(mpath), fschkwg, xlru)
+		go t.oneLRU(mpathInfo, makePathCloud(mpathInfo.Path), fschkwg, xlru)
 	}
 	fschkwg.Wait()
 
@@ -84,11 +78,11 @@ func (t *targetrunner) runLRU() {
 		rr := getstorstatsrunner()
 		rr.Lock()
 		rr.updateCapacity()
-		for mpath := range availablePaths {
-			fscapacity := rr.Capacity[mpath]
+		for _, mpathInfo := range avail {
+			fscapacity := rr.Capacity[mpathInfo.Path]
 			if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
 				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
-					mpath, ctx.config.LRU.LowWM, fscapacity.Usedpct)
+					mpathInfo.Path, ctx.config.LRU.LowWM, fscapacity.Usedpct)
 			}
 		}
 		rr.Unlock()

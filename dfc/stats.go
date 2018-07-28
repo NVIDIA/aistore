@@ -492,8 +492,9 @@ func (r *storstatsrunner) init() {
 	r.Capacity = make(map[string]*fscapacity)
 	r.fsmap = make(map[syscall.Fsid]string)
 
-	ctx.mountpaths.RLock()
-	for mpath, mpathInfo := range ctx.mountpaths.Available {
+	avail := ctx.mountpaths.get()
+	for _, mpathInfo := range avail {
+		mpath := mpathInfo.Path
 		mp1, ok := r.fsmap[mpathInfo.Fsid]
 		if ok {
 			// the same filesystem: usage cannot be different..
@@ -510,7 +511,6 @@ func (r *storstatsrunner) init() {
 		r.Capacity[mpath] = &fscapacity{}
 		r.fillfscap(r.Capacity[mpath], statfs)
 	}
-	ctx.mountpaths.RUnlock()
 }
 
 func (r *storstatsrunner) add(name string, val int64) {

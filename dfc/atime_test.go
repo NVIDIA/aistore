@@ -535,6 +535,8 @@ func getTempFile(t *testing.T, prefix string) (*os.File, string) {
 		mp := &mountPath{Path: tempRoot, FileSystem: fileSystem}
 		ctx.mountpaths.Available[mp.Path] = mp
 	}
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 
 	return tempFile, fileSystem
 }

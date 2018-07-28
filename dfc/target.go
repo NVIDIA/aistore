@@ -999,16 +999,10 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 
 	wg := &sync.WaitGroup{}
 
-	ctx.mountpaths.RLock()
-	availablePaths := make([]string, 0, len(ctx.mountpaths.Available))
-	for mpath := range ctx.mountpaths.Available {
-		availablePaths = append(availablePaths, mpath)
-	}
-	ctx.mountpaths.RUnlock()
-
-	ch := make(chan string, len(availablePaths))
-	for _, mpath := range availablePaths {
-		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
+	avail := ctx.mountpaths.get()
+	ch := make(chan string, len(avail))
+	for _, mpathInfo := range avail {
+		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
 		wg.Add(1)
 		go func(fromdir string, wg *sync.WaitGroup) {
 			time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
@@ -1023,8 +1017,8 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 			return
 		}
 	}
-	for _, mpath := range availablePaths {
-		fromdir := filepath.Join(makePathLocal(mpath), bucketFrom)
+	for _, mpathInfo := range avail {
+		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
 		if err := os.RemoveAll(fromdir); err != nil {
 			glog.Errorf("Failed to remove dir %s", fromdir)
 		}
@@ -1333,8 +1327,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 		err        error
 	}
 
-	ctx.mountpaths.RLock()
-	ch := make(chan *mresp, len(ctx.mountpaths.Available))
+	avail := ctx.mountpaths.get()
+	ch := make(chan *mresp, len(avail))
 	wg := &sync.WaitGroup{}
 
 	// function to traverse one mountpoint
@@ -1364,19 +1358,17 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
 	islocal := t.bmdowner.get().islocal(bucket)
-	for mpath := range ctx.mountpaths.Available {
+	for _, mpathInfo := range avail {
 		wg.Add(1)
 		var localDir string
 		if islocal {
-			localDir = filepath.Join(makePathLocal(mpath), bucket)
+			localDir = filepath.Join(makePathLocal(mpathInfo.Path), bucket)
 		} else {
-			localDir = filepath.Join(makePathCloud(mpath), bucket)
+			localDir = filepath.Join(makePathCloud(mpathInfo.Path), bucket)
 		}
 
 		go walkMpath(localDir)
 	}
-	ctx.mountpaths.RUnlock()
-
 	wg.Wait()
 	close(ch)
 
@@ -2638,19 +2630,18 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
 	}
 	ok := true
 	bucketmd := t.bmdowner.get()
-	ctx.mountpaths.RLock()
-	for mpath := range ctx.mountpaths.Available {
-		if fn(makePathCloud(mpath) + "/") {
+	avail := ctx.mountpaths.get()
+	for _, mpathInfo := range avail {
+		if fn(makePathCloud(mpathInfo.Path) + "/") {
 			ok = len(objname) > 0 && t.fqn(bucket, objname, false) == fqn
 			break
 		}
-		if fn(makePathLocal(mpath) + "/") {
+		if fn(makePathLocal(mpathInfo.Path) + "/") {
 			islocal := bucketmd.islocal(bucket)
 			ok = islocal && len(objname) > 0 && t.fqn(bucket, objname, true) == fqn
 			break
 		}
 	}
-	ctx.mountpaths.RUnlock()
 	if !ok {
 		errstr = fmt.Sprintf("Cannot convert %q => %s/%s - localbuckets or device mount paths changed?", fqn, bucket, objname)
 	}
@@ -2732,7 +2723,7 @@ func (t *targetrunner) fspath2mpath() {
 		}
 
 		ctx.mountpaths.Available[mp.Path] = mp
-		ctx.mountpaths.Unlock()
+		ctx.mountpaths.cloneAndUnlock()
 	}
 }
 
@@ -2771,25 +2762,24 @@ func (t *targetrunner) testCachepathMounts() {
 		_, ok := ctx.mountpaths.Available[mp.Path]
 		assert(!ok)
 		ctx.mountpaths.Available[mp.Path] = mp
-		ctx.mountpaths.Unlock()
+		ctx.mountpaths.cloneAndUnlock()
 	}
 }
 
 func (t *targetrunner) checkIfAllFSIDsAreUnique() {
-	ctx.mountpaths.RLock()
+	avail := ctx.mountpaths.get()
 	fsmap := make(map[syscall.Fsid]string, len(ctx.mountpaths.Available))
-	for _, mountpath := range ctx.mountpaths.Available {
-		mp2, ok := fsmap[mountpath.Fsid]
+	for _, mpathInfo := range avail {
+		mp2, ok := fsmap[mpathInfo.Fsid]
 		if ok {
 			if !testingFSPpaths() {
-				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mountpath.Fsid, mountpath.origPath, mp2)
+				glog.Errorf("FATAL: duplicate FSID %v: mpath1 %q, mpath2 %q", mpathInfo.Fsid, mpathInfo.origPath, mp2)
 				os.Exit(1)
 			}
 			continue
 		}
-		fsmap[mountpath.Fsid] = mountpath.Path
+		fsmap[mpathInfo.Fsid] = mpathInfo.Path
 	}
-	ctx.mountpaths.RUnlock()
 }
 
 func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath string) string) {
@@ -2797,8 +2787,6 @@ func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath stri
 		glog.Errorf("FATAL: empty basename for the %s buckets directory", s)
 		os.Exit(1)
 	}
-
-	ctx.mountpaths.RLock()
 	for mpath := range ctx.mountpaths.Available {
 		dir := f(mpath)
 		if _, ok := ctx.mountpaths.Available[dir]; ok {
@@ -2810,12 +2798,9 @@ func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath stri
 			os.Exit(1)
 		}
 	}
-	ctx.mountpaths.RUnlock()
 }
 
 func (t *targetrunner) detectMpathChanges() {
-	ctx.mountpaths.RLock()
-
 	// mpath config dir
 	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
 
@@ -2839,22 +2824,16 @@ func (t *targetrunner) detectMpathChanges() {
 		}
 	}
 	if changed {
-		glog.Errorf("Detected change in the mpath configuration at %s", mpathconfigfqn)
-		if b, err := json.MarshalIndent(old, "", "\t"); err == nil {
-			glog.Errorln("OLD: ====================")
-			glog.Errorln(string(b))
-		}
-		if b, err := json.MarshalIndent(ctx.mountpaths, "", "\t"); err == nil {
-			glog.Errorln("NEW: ====================")
-			glog.Errorln(string(b))
-		}
+		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.DaemonID, mpathconfigfqn)
+		glog.Errorln("OLD: ====================")
+		glog.Errorln(old.pp())
+		glog.Errorln("NEW: ====================")
+		glog.Errorln(ctx.mountpaths.pp())
 	}
 	// persist
 	if err := LocalSave(mpathconfigfqn, ctx.mountpaths); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
-
-	ctx.mountpaths.RUnlock()
 }
 
 // versioningConfigured returns true if versioning for a given bucket is enabled
@@ -3008,7 +2987,7 @@ func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx.mountpaths.Lock()
-	defer ctx.mountpaths.Unlock()
+	defer ctx.mountpaths.cloneAndUnlock()
 
 	if _, ok := ctx.mountpaths.Available[mp.Mountpath]; ok {
 		w.WriteHeader(http.StatusNoContent)
@@ -3078,28 +3057,26 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
-	ctx.mountpaths.RLock()
+	avail := ctx.mountpaths.get()
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
-			for mpath := range ctx.mountpaths.Available {
-				localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
+			for _, mpathInfo := range avail {
+				localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
 				if err := os.RemoveAll(localbucketfqn); err != nil {
 					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
 				}
 			}
 		}
 	}
-
-	for mpath := range ctx.mountpaths.Available {
+	for _, mpathInfo := range avail {
 		for bucket := range bucketmd.LBmap {
-			localbucketfqn := filepath.Join(makePathLocal(mpath), bucket)
+			localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
 			if err := CreateDir(localbucketfqn); err != nil {
 				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
 			}
 		}
 	}
-	ctx.mountpaths.RUnlock()
 	return
 }
 

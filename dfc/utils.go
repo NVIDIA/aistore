@@ -421,18 +421,17 @@ func fqn2mpathInfo(fqn string) *mountPath {
 		result *mountPath
 	)
 
-	ctx.mountpaths.RLock()
-	for mpath, mpathInfo := range ctx.mountpaths.Available {
-		rel, err := filepath.Rel(mpath, fqn)
+	avail := ctx.mountpaths.get()
+	for _, mpathInfo := range avail {
+		rel, err := filepath.Rel(mpathInfo.Path, fqn)
 		if err != nil || strings.HasPrefix(rel, "..") {
 			continue
 		}
-		if len(mpath) > max {
-			max = len(mpath)
+		if len(mpathInfo.Path) > max {
+			max = len(mpathInfo.Path)
 			result = mpathInfo
 		}
 	}
-	ctx.mountpaths.RUnlock()
 	return result
 }
 

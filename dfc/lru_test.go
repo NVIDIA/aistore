@@ -123,6 +123,8 @@ func TestLRUThrottling(t *testing.T) {
 	fs := fqn2fsAtStartup("/")
 	mp := &mountPath{Path: "/", FileSystem: fs}
 	ctx.mountpaths.Available[mp.Path] = mp
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 
 	disks := fs2disks(fs)
 	riostat := newIostatRunner()
@@ -161,6 +163,9 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.mountpaths.Available = oldAvailableMP
 	ctx.config.Periodic.StatsTime = oldStatsTime
 	ctx.rg = oldRg
+
+	ctx.mountpaths.Lock()
+	ctx.mountpaths.cloneAndUnlock() // available mpaths => ro slice
 }
 
 func testHighFSCapacityUsed(t *testing.T, diskUtil uint32, riostat *iostatrunner) {

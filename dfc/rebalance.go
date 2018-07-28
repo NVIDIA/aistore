@@ -89,20 +89,19 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	glog.Infoln(xreb.tostring())
 	wg := &sync.WaitGroup{}
 
-	ctx.mountpaths.RLock()
+	avail := ctx.mountpaths.get()
 	allr := make([]*xrebpathrunner, 0, len(ctx.mountpaths.Available)*2)
-	for mpath := range ctx.mountpaths.Available {
-		rc := &xrebpathrunner{t: t, mpathplus: makePathCloud(mpath), xreb: xreb, wg: wg, newsmap: newsmap}
+	for _, mpathInfo := range avail {
+		rc := &xrebpathrunner{t: t, mpathplus: makePathCloud(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
 		go rc.oneRebalance()
 		allr = append(allr, rc)
 
-		rl := &xrebpathrunner{t: t, mpathplus: makePathLocal(mpath), xreb: xreb, wg: wg, newsmap: newsmap}
+		rl := &xrebpathrunner{t: t, mpathplus: makePathLocal(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
 		go rl.oneRebalance()
 		allr = append(allr, rl)
 	}
-	ctx.mountpaths.RUnlock()
 	wg.Wait()
 	if pmarker != "" {
 		var aborted bool
