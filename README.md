@@ -41,12 +41,19 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 
 ## Prerequisites
 
-* Linux or Mac
-* Go 1.8 or later
+* Linux (with sysstat and attr packages)
+* [Go 1.9 or later](https://golang.org/dl/)
 * Optionally, extended attributes (xattrs)
 * Optionally, Amazon (AWS) or Google Cloud (GCP) account
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not always be enabled in the OS kernel (configurations) - the fact that can be easily found out by running setfattr (Linux) or xattr (macOS) command as shown in this [single-host local deployment script](dfc/setup/deploy.sh).
+Some Linux distributions do not include sysstat and/or attr packages - to install, use 'apt-get' (Debian), 'yum' (RPM), or other applicable package management tool, e.g.:
+
+```shell
+$ apt-get install sysstat
+$ apt-get install attr
+```
+
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not always be enabled in the OS kernel configurations - the fact that can be easily found out by running setfattr (Linux) or xattr (macOS) command as shown in this [single-host local deployment script](dfc/setup/deploy.sh).
 
 If this is the case - that is, if you happen not to have xattrs handy, you can configure DFC not to use them at all (section **Configuration** below).
 
@@ -79,32 +86,34 @@ When these two are set, DFC will act as a reverse proxy for your outgoing HTTP r
 If you've already installed Go and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
 
 ```shell
+$ cd $GOPATH/src
 $ go get -u -v github.com/NVIDIA/dfcpub/dfc
-$ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
+$ cd github.com/NVIDIA/dfcpub/dfc
 $ dep ensure
 $ make deploy
-$ go test ./tests -v -run=down -numfiles=2 -bucket=<your bucket name>
+$ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
 ```
 
-The 1st and 3rd commands will install the DFC source code and all its versioned dependencies
-under your configured $GOPATH.
+The 'go get' command will install the DFC source code and all its versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 
-The 4th - deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)). If you want to enable optional DFC authentication server(AuthN) execute instead:
+The `make deploy` command deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)). If you'd want to enable optional DFC authentication server, execute instead:
 
 ```shell
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 
 ```
-For more details about AuthN server please see [AuthN documentation](./authn/README.md)
+For information about AuthN server, please see [AuthN documentation](./authn/README.md)
 
-Finally, for the last 4th command to work, you'll need to have a name - the name of a bucket.
-The bucket could be an AWS or GCP based one, or a DFC-own so-called "local bucket".
+Finally, for the last command in the sequence above to work, you'll need to have a name - the bucket name.
+The bucket could be an Amazon or GCP based one, **or** a DFC-own *local bucket*.
 
-Assuming the bucket exists, the 'go test' command above will download 2 (two) objects. Similarly:
+Assuming the bucket exists, the `go test` command above will download two objects.
+
+Similarly, assuming there's a bucket called "myS3bucket", the following command:
 
 
 ```shell
-$ go test ./tests -v -run=download -args -numfiles=100 -match='a\d+' -bucket=myS3bucket
+$ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
 downloads up to 100 objects from the bucket called myS3bucket, whereby names of those objects
@@ -119,22 +128,27 @@ Regular installation enables filesystem health checker(FSHC). It can be disabled
 
 ### A few tips
 
-The following sequence downloads 100 objects from the bucket called "myS3bucket":
+The following sequence downloads up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
 
 ```shell
-$ go test -v -run=down -bucket=myS3bucket
-```
-
-and then finds the corresponding cached objects in the local bucket and cloud buckets, respectively:
-
-```shell
+$ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc/tests
+$ BUCKET=myS3bucket go test -v -run=down
 $ find /tmp/dfc -type f | grep local
 $ find /tmp/dfc -type f | grep cloud
 ```
 
-This, of course, assumes that all DFC daemons are local and non-containerized (don't forget to run 'make deploy' to make it happen) - and that the "test_fspaths" section in their respective configurations (see [DFC configuration](dfc/setup/config.sh)) points to the /tmp/dfc.
+This, of course, assumes that all DFC daemons are local and non-containerized (don't forget to run `make deploy` to make it happen) - and that the "test_fspaths" sections in their respective configurations point to the /tmp/dfc.
 
-Further, to locate all the logs, run:
+To show all existing buckets, run:
+
+```shell
+$ cd $GOPATH/src/github.com/NVIDIA/dfcpub
+$ go test ./dfc/tests -v -run=bucketnames
+```
+
+Note that the output will include both local and Cloud bucket names.
+
+Further, to locate DFC logs, run:
 
 ```shell
 $ find $LOGDIR -type f | grep log
