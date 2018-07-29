@@ -23,6 +23,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [Configuration](#configuration)
   * [Disabling extended attributes](#disabling-extended-attributes)
   * [Enabling HTTPS](#enabling-https)
+  * [Filesystem Health Checker](#filesystem-health-checker)
 - [REST Operations](#rest-operations)
 - [List Bucket](#list-bucket)
 - [Cache Rebalancing](#cache-rebalancing)
@@ -83,7 +84,7 @@ When these two are set, DFC will act as a reverse proxy for your outgoing HTTP r
 
 ### Regular installation
 
-If you've already installed Go and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
+If you've already installed [Go](https://golang.org/dl/) and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
 
 ```shell
 $ cd $GOPATH/src
@@ -94,7 +95,7 @@ $ make deploy
 $ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
 ```
 
-The 'go get' command will install the DFC source code and all its versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
+The `go get` command will install the DFC source code and all its versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 
 The `make deploy` command deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)). If you'd want to enable optional DFC authentication server, execute instead:
 
@@ -123,8 +124,6 @@ For more testing commands and command line options, please refer to the correspo
 [README](dfc/tests/README.md) and/or the [test sources](dfc/tests/).
 
 For other useful commands, see the [Makefile](dfc/Makefile).
-
-Regular installation enables filesystem health checker(FSHC). It can be disabled via configuration. When enabled, FSHC performs I/O error triggered checks on all the local filesystems utilized by a given DFC target. Please see [FSHC readme](./fshc.md) for details.
 
 ### A few tips
 
@@ -204,6 +203,15 @@ To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "
 ### Enabling HTTPS
 
 To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify "server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key files respectively (see [DFC configuration](dfc/setup/config.sh)).
+
+### Filesystem Health Checker
+
+Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fschecker" of the [configuration](dfc/setup/config.sh).
+
+When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
+
+Please see [FSHC readme](./fshc.md) for further details.
+
 
 ## REST Operations
 
