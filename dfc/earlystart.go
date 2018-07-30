@@ -121,8 +121,16 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 	f := func() {
 		// get Smap
 		var res callResult
+		var args = callArgs{
+			request: nil,
+			si:      p.si,
+			url:     url,
+			method:  http.MethodGet,
+			injson:  nil,
+			timeout: noTimeout,
+		}
 		for i := 0; i < maxRetrySeconds; i++ {
-			res = p.call(nil, p.si, url, http.MethodGet, nil)
+			res = p.call(args)
 			if res.err != nil {
 				if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, url)

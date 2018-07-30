@@ -62,12 +62,6 @@
   version = "v1.15.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/bradfitz/gomemcache"
-  packages = ["memcache"]
-  revision = "bc664df9673713a0ccf26e3b55a673ec7301088b"
-
-[[projects]]
   name = "github.com/dgrijalva/jwt-go"
   packages = ["."]
   revision = "06ea1031745cb8b3dab3f6a236daf2b0aa468b7e"
@@ -104,18 +98,6 @@
   revision = "0b12d6b5"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/tatsuhiro-t/go-nghttp2"
-  packages = ["."]
-  revision = "4742878d9c9052d786a7b0cd3589bc50e031e20b"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/tatsuhiro-t/spdy"
-  packages = ["."]
-  revision = "3e25f173236051630d530d15e13439bef3191fbf"
-
-[[projects]]
   name = "go.opencensus.io"
   packages = [
     ".",
@@ -147,8 +129,7 @@
     "http2/hpack",
     "idna",
     "internal/timeseries",
-    "trace",
-    "websocket"
+    "trace"
   ]
   revision = "c4299a1a0d8524c11563db160fbf9bddbceadb21"
 
@@ -264,6 +245,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1c6a7f74c4d4ce60455026268b485765f0f7642cd87a8802ec7b3251615c25fa"
+  inputs-digest = "64d8645b6fe963a03e1954672940de590caec78f6584b774216b675fd8b3468b"
   solver-name = "gps-cdcl"
   solver-version = 1

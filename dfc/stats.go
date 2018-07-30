@@ -365,9 +365,11 @@ func (r *storstatsrunner) log() (runlru bool) {
 			lines = append(lines, dev+": "+string(b))
 		}
 
-		var stats []metric
+		stats := make([]metric, len(iometrics))
+		idx := 0
 		for k, v := range iometrics {
-			stats = append(stats, metric{statsd.Gauge, k, v})
+			stats[idx] = metric{statsd.Gauge, k, v}
+			idx++
 		}
 		gettarget().statsdC.Send("iostat_"+dev, stats...)
 	}
@@ -415,7 +417,7 @@ func (r *storstatsrunner) removeLogs(maxtotal uint64) {
 	for _, logtype := range logtypes {
 		var (
 			tot   = int64(0)
-			infos = []os.FileInfo{}
+			infos = make([]os.FileInfo, 0, len(logfinfos))
 		)
 		for _, logfi := range logfinfos {
 			if logfi.IsDir() {

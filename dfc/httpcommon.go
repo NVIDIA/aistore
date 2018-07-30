@@ -39,6 +39,7 @@ const ( // => Transport.MaxIdleConnsPerHost
 	targetMaxIdleConnsPer = 4
 	proxyMaxIdleConnsPer  = 8
 	initialBucketListSize = 512
+	noTimeout             = time.Duration(-1)
 )
 
 type objectProps struct {
@@ -266,8 +267,7 @@ func (h *httprunner) stop(err error) {
 
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
 // optionally, sends a json-encoded body to the callee
-func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method string, injson []byte,
-	timeout ...time.Duration) callResult {
+func (h *httprunner) call(args callArgs) callResult {
 	var (
 		request       *http.Request
 		response      *http.Response
@@ -279,41 +279,41 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		status        int
 	)
 
-	if si != nil {
-		sid = si.DaemonID
+	if args.si != nil {
+		sid = args.si.DaemonID
 	}
 
-	if len(injson) == 0 {
-		request, err = http.NewRequest(method, url, nil)
+	if len(args.injson) == 0 {
+		request, err = http.NewRequest(args.method, args.url, nil)
 		if glog.V(4) { // super-verbose
-			glog.Infof("%s %s", method, url)
+			glog.Infof("%s %s", args.method, args.url)
 		}
 	} else {
-		request, err = http.NewRequest(method, url, bytes.NewBuffer(injson))
+		request, err = http.NewRequest(args.method, args.url, bytes.NewBuffer(args.injson))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
 		if glog.V(4) { // super-verbose
-			l := len(injson)
+			l := len(args.injson)
 			if l > 16 {
 				l = 16
 			}
-			glog.Infof("%s %s %s...}", method, url, string(injson[:l]))
+			glog.Infof("%s %s %s...}", args.method, args.url, string(args.injson[:l]))
 		}
 	}
 
 	if err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", method, url, err)
-		return callResult{si, outjson, err, errstr, "", status}
+		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", args.method, args.url, err)
+		return callResult{args.si, outjson, err, errstr, "", status}
 	}
 
-	copyHeaders(rOrig, request)
-	if len(timeout) > 0 {
-		if timeout[0] != 0 {
-			contextwith, cancel := context.WithTimeout(context.Background(), timeout[0])
+	copyHeaders(args.request, request)
+	if args.timeout != noTimeout {
+		if args.timeout != 0 {
+			contextwith, cancel := context.WithTimeout(context.Background(), args.timeout)
 			defer cancel()
 			newrequest := request.WithContext(contextwith)
-			copyHeaders(rOrig, newrequest)
+			copyHeaders(args.request, newrequest)
 			response, err = h.httpclient.Do(newrequest) // timeout => context.deadlineExceededError
 		} else { // zero timeout means the client wants no timeout
 			response, err = h.httpclientLongTimeout.Do(request)
@@ -323,27 +323,27 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 	}
 	if err != nil {
 		if response != nil && response.StatusCode > 0 {
-			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, method, url, response.Status, err)
+			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, args.method, args.url, response.Status, err)
 			status = response.StatusCode
-			return callResult{si, outjson, err, errstr, "", status}
+			return callResult{args.si, outjson, err, errstr, "", status}
 		}
 
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, method, url, err)
-		return callResult{si, outjson, err, errstr, "", status}
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, args.method, args.url, err)
+		return callResult{args.si, outjson, err, errstr, "", status}
 	}
 
 	newPrimaryURL = response.Header.Get(HeaderPrimaryProxyURL)
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, method, url, err)
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, args.method, args.url, err)
 		if err == io.EOF {
 			trailer := response.Trailer.Get("Error")
 			if trailer != "" {
-				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, method, url, err, trailer)
+				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, args.method, args.url, err, trailer)
 			}
 		}
 
 		response.Body.Close()
-		return callResult{si, outjson, err, errstr, newPrimaryURL, status}
+		return callResult{args.si, outjson, err, errstr, newPrimaryURL, status}
 	}
 	response.Body.Close()
 
@@ -352,14 +352,14 @@ func (h *httprunner) call(rOrig *http.Request, si *daemonInfo, url, method strin
 		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
 		errstr = err.Error()
 		status = response.StatusCode
-		return callResult{si, outjson, err, errstr, newPrimaryURL, status}
+		return callResult{args.si, outjson, err, errstr, newPrimaryURL, status}
 	}
 
 	if sid != "unknown" {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{si, outjson, err, errstr, newPrimaryURL, status}
+	return callResult{args.si, outjson, err, errstr, newPrimaryURL, status}
 }
 
 //=============================
@@ -371,9 +371,9 @@ func (h *httprunner) restAPIItems(unescapedpath string, maxsplit int) []string {
 	escaped := html.EscapeString(unescapedpath)
 	split := strings.SplitN(escaped, "/", maxsplit)
 	apitems := make([]string, 0, len(split))
-	for i := 0; i < len(split); i++ {
-		if split[i] != "" { // omit empty
-			apitems = append(apitems, split[i])
+	for _, item := range split {
+		if item != "" { // omit empty
+			apitems = append(apitems, item)
 		}
 	}
 	return apitems
@@ -794,30 +794,44 @@ func URLPath(segments ...string) string {
 
 // broadcast sends a http call to all servers in parallel, wait until all calls are returned
 // note: 'u' has only the path and query part, host portion will be set by this function.
-func (h *httprunner) broadcast(path string, query url.Values, method string, body []byte,
-	servers []*daemonInfo, timeout ...time.Duration) chan callResult {
-	var (
-		ch = make(chan callResult, len(servers))
-		wg = &sync.WaitGroup{}
-	)
+func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
+	serverCount := 0
+	for _, serverMap := range bcastArgs.servers {
+		serverCount += len(serverMap)
+	}
+	ch := make(chan callResult, serverCount)
+	wg := &sync.WaitGroup{}
 
-	for _, s := range servers {
-		wg.Add(1)
-		go func(di *daemonInfo, wg *sync.WaitGroup) {
-			defer wg.Done()
-
-			var u url.URL
-			if ctx.config.Net.HTTP.UseHTTPS {
-				u.Scheme = "https"
-			} else {
-				u.Scheme = "http"
+	for _, serverMap := range bcastArgs.servers {
+		for sid, serverInfo := range serverMap {
+			if _, ignore := bcastArgs.serversToIgnore[sid]; ignore {
+				continue
 			}
-			u.Host = di.NodeIPAddr + ":" + di.DaemonPort
-			u.Path = path
-			u.RawQuery = query.Encode() // golang handles query == nil
-			res := h.call(nil, di, u.String(), method, body, timeout...)
-			ch <- res
-		}(s, wg)
+
+			wg.Add(1)
+			go func(di *daemonInfo) {
+				var u url.URL
+				if ctx.config.Net.HTTP.UseHTTPS {
+					u.Scheme = "https"
+				} else {
+					u.Scheme = "http"
+				}
+				u.Host = di.NodeIPAddr + ":" + di.DaemonPort
+				u.Path = bcastArgs.path
+				u.RawQuery = bcastArgs.query.Encode() // golang handles query == nil
+				args := callArgs{
+					request: nil,
+					si:      di,
+					url:     u.String(),
+					method:  bcastArgs.method,
+					injson:  bcastArgs.injson,
+					timeout: bcastArgs.timeout,
+				}
+				res := h.call(args)
+				ch <- res
+				wg.Done()
+			}(serverInfo)
+		}
 	}
 
 	wg.Wait()
@@ -900,12 +914,21 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 		return
 	}
 	regurl := f(url, isproxy, timeout, extra)
+
+	callArgs := callArgs{
+		request: nil,
+		si:      psi,
+		url:     regurl,
+		method:  http.MethodPost,
+		injson:  info,
+		timeout: noTimeout,
+	}
+	if timeout > 0 {
+		callArgs.timeout = timeout
+	}
 	for rcount := 0; rcount < 2; rcount++ {
-		if timeout > 0 {
-			res = h.call(nil, psi, regurl, http.MethodPost, info, timeout)
-		} else {
-			res = h.call(nil, psi, regurl, http.MethodPost, info)
-		}
+		callArgs.url = regurl
+		res = h.call(callArgs)
 		if res.err == nil {
 			return
 		}

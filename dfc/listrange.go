@@ -88,7 +88,7 @@ func (t *targetrunner) getListFromRange(ct context.Context, bucket, prefix, rege
 		return nil, err
 	}
 
-	objs := make([]string, 0)
+	objs := make([]string, 0, len(fullbucketlist.Entries))
 	re, err := regexp.Compile(regex)
 	if err != nil {
 		return nil, fmt.Errorf("Could not compile regex: %v", err)
@@ -136,7 +136,7 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 		return
 	}
 	bucket := apitems[0]
-	objs := make([]string, 0)
+	objs := make([]string, 0, len(listMsg.Objnames))
 	for _, obj := range listMsg.Objnames {
 		si, errstr := HrwTarget(bucket, obj, t.smapowner.get())
 		if errstr != "" {
@@ -498,7 +498,7 @@ func parseListMsg(jsmap map[string]interface{}) (pm *ListMsg, errstr string) {
 		return pm, s + "No objnames field"
 	}
 	if objnames, ok := v.([]interface{}); ok {
-		pm.Objnames = make([]string, 0)
+		pm.Objnames = make([]string, 0, len(objnames))
 		for _, obj := range objnames {
 			objname, ok := obj.(string)
 			if !ok {

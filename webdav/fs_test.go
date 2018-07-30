@@ -302,14 +302,14 @@ func readTestRoot(t *testing.T) []string {
 		t.Fatalf("%s exists but not a directory", rootDir)
 	}
 
-	var files []string
 	fis, err := ioutil.ReadDir(rootDir)
 	if err != nil {
 		t.Fatalf("Failed to read test directory, err = %v", err)
 	}
 
-	for _, file := range fis {
-		files = append(files, file.Name())
+	files := make([]string, len(fis))
+	for idx, file := range fis {
+		files[idx] = file.Name()
 	}
 
 	return files

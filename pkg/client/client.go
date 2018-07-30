@@ -903,7 +903,7 @@ func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]strin
 		return nil, err
 	}
 
-	var objs []string
+	objs := make([]string, 0, len(data.Entries))
 	for _, obj := range data.Entries {
 		// Skip directories
 		if obj.Name[len(obj.Name)-1] != '/' {

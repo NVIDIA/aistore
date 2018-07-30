@@ -59,12 +59,7 @@ func (p *proxyServer) listBuckets(local bool) ([]string, error) {
 		return nil, err
 	}
 
-	var buckets []string
-	for _, b := range bns.Local {
-		buckets = append(buckets, b)
-	}
-
-	return buckets, nil
+	return bns.Local, nil
 }
 
 // doesObjectExists checks whether a resource exists by querying DFC.

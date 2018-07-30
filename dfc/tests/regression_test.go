@@ -984,7 +984,7 @@ func TestDeleteList(t *testing.T) {
 		prefix = ListRangeStr + "/tstf-"
 		wg     = &sync.WaitGroup{}
 		errch  = make(chan error, numfiles)
-		files  = make([]string, 0)
+		files  = make([]string, 0, numfiles)
 	)
 	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 

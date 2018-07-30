@@ -529,12 +529,20 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 	jsbytes, err := json.Marshal(&msg)
 	assert(err == nil, err)
 
-	res := h.call(nil, nextPrimaryProxy, url, http.MethodPut, jsbytes)
+	args := callArgs{
+		request: nil,
+		si:      nextPrimaryProxy,
+		url:     url,
+		method:  http.MethodPut,
+		injson:  jsbytes,
+		timeout: noTimeout,
+	}
+	res := h.call(args)
 	if res.err != nil {
 		if IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(time.Second)
-				res = h.call(nil, nextPrimaryProxy, url, http.MethodPut, jsbytes)
+				res = h.call(args)
 				if res.err == nil {
 					break
 				}
@@ -572,7 +580,15 @@ func (h *httprunner) voteOnProxy(daemonID, currPrimaryID string) (bool, error) {
 // pingWithTimeout sends a http get to the server, returns true if the call returns in time;
 // otherwise return false to indicate the server is not reachable.
 func (p *proxyrunner) pingWithTimeout(url string, timeout time.Duration) (bool, error) {
-	res := p.call(nil, nil, url, http.MethodGet, nil, timeout)
+	args := callArgs{
+		request: nil,
+		si:      nil,
+		url:     url,
+		method:  http.MethodGet,
+		injson:  nil,
+		timeout: timeout,
+	}
+	res := p.call(args)
 	if res.err == nil {
 		return true, nil
 	}

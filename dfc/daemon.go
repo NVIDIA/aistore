@@ -8,6 +8,8 @@ package dfc
 import (
 	"flag"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -76,6 +78,27 @@ type (
 		errstr        string
 		newPrimaryURL string
 		status        int
+	}
+
+	// callArgs contains arguments for a server call
+	callArgs struct {
+		request *http.Request
+		url     string
+		method  string
+		injson  []byte
+		timeout time.Duration
+		si      *daemonInfo
+	}
+
+	// bcastCallArgs contains arguments for a broadcast server call
+	bcastCallArgs struct {
+		path            string
+		query           url.Values
+		method          string
+		injson          []byte
+		timeout         time.Duration
+		servers         []map[string]*daemonInfo
+		serversToIgnore map[string]struct{}
 	}
 )
 
@@ -161,8 +184,8 @@ func dfcinit() {
 
 	// init daemon
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 4),
-		runmap: make(map[string]runner),
+		runarr: make([]runner, 0, 8),
+		runmap: make(map[string]runner, 8),
 	}
 	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 	if clivars.role == xproxy {

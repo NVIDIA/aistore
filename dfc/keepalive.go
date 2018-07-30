@@ -239,7 +239,15 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool) {
 	url := to.DirectURL + URLPath(Rversion, Rhealth) + "?" + URLParamFromID + "=" + pkr.p.si.DaemonID
 	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
 	t := time.Now()
-	res := pkr.p.call(nil, to, url, http.MethodGet, nil, timeout)
+	args := callArgs{
+		request: nil,
+		si:      to,
+		url:     url,
+		method:  http.MethodGet,
+		injson:  nil,
+		timeout: timeout,
+	}
+	res := pkr.p.call(args)
 	pkr.updateTimeoutForDaemon(to.DaemonID, time.Since(t))
 
 	if res.err == nil {
@@ -263,7 +271,15 @@ func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, url string) (ok, stopped 
 		select {
 		case <-ticker.C:
 			t := time.Now()
-			res := pkr.p.call(nil, si, url, http.MethodGet, nil, timeout)
+			args := callArgs{
+				request: nil,
+				si:      si,
+				url:     url,
+				method:  http.MethodGet,
+				injson:  nil,
+				timeout: timeout,
+			}
+			res := pkr.p.call(args)
 			timeout = pkr.updateTimeoutForDaemon(si.DaemonID, time.Since(t))
 			if res.err == nil {
 				return true, false

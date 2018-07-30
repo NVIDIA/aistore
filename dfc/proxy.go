@@ -162,7 +162,15 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 
 func (p *proxyrunner) unregister() (int, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.Proxy.PrimaryURL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
-	res := p.call(nil, nil, url, http.MethodDelete, nil)
+	args := callArgs{
+		request: nil,
+		si:      nil,
+		url:     url,
+		method:  http.MethodDelete,
+		injson:  nil,
+		timeout: noTimeout,
+	}
+	res := p.call(args)
 	return res.status, res.err
 }
 
@@ -717,7 +725,15 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	}
 
 	u := si.DirectURL + URLPath(Rversion, Rbuckets, bucketspec)
-	res := p.call(r, si, u, r.Method, nil)
+	args := callArgs{
+		request: r,
+		si:      si,
+		url:     u,
+		method:  r.Method,
+		injson:  nil,
+		timeout: noTimeout,
+	}
+	res := p.call(args)
 	if res.err != nil {
 		p.invalmsghdlr(w, r, res.errstr)
 		p.keepalive.onerr(res.err, res.status)
@@ -741,7 +757,15 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 		}, err
 	}
 
-	res := p.call(r, dinfo, url, http.MethodPost, actionMsgBytes, ctx.config.Timeout.Default)
+	args := callArgs{
+		request: r,
+		si:      dinfo,
+		url:     url,
+		method:  http.MethodPost,
+		injson:  actionMsgBytes,
+		timeout: ctx.config.Timeout.Default,
+	}
+	res := p.call(args)
 	if res.err != nil {
 		p.keepalive.onerr(res.err, res.status)
 	}
@@ -1146,7 +1170,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	var (
 		q       = url.Values{}
 		results chan callResult
-		timeOut []time.Duration
+		timeout time.Duration
 	)
 
 	if islocal {
@@ -1156,7 +1180,9 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	}
 
 	if wait {
-		timeOut = append(timeOut, 0)
+		timeout = time.Duration(0)
+	} else {
+		timeout = noTimeout
 	}
 
 	smap := p.smapowner.get()
@@ -1166,7 +1192,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		method,
 		jsonbytes,
 		smap,
-		timeOut...,
+		timeout,
 	)
 
 	for result := range results {
@@ -1728,7 +1754,15 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				glog.Infof("register target %s (num targets before %d)", nsi.DaemonID, smap.countTargets())
 			}
 			u := nsi.DirectURL + URLPath(Rversion, Rdaemon, Rregister)
-			res := p.call(nil, &nsi, u, http.MethodPost, nil, ProxyPingTimeout)
+			args := callArgs{
+				request: nil,
+				si:      &nsi,
+				url:     u,
+				method:  http.MethodPost,
+				injson:  nil,
+				timeout: ProxyPingTimeout,
+			}
+			res := p.call(args)
 			if res.err != nil {
 				p.smapowner.Unlock()
 				errstr := fmt.Sprintf("Failed to register target %s: %v, %s", nsi.DaemonID, res.err, res.errstr)
@@ -1874,7 +1908,15 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("unregistered target {%s} (num targets %d)", sid, clone.countTargets())
 		}
 		u := osi.DirectURL + URLPath(Rversion, Rdaemon)
-		res := p.call(nil, osi, u, http.MethodDelete, nil, ProxyPingTimeout)
+		args := callArgs{
+			request: nil,
+			si:      osi,
+			url:     u,
+			method:  http.MethodDelete,
+			injson:  nil,
+			timeout: ProxyPingTimeout,
+		}
+		res := p.call(args)
 		if res.err != nil {
 			glog.Warningf("The target %s that is being unregistered failed to respond back: %v, %s",
 				osi.DaemonID, res.err, res.errstr)
@@ -1937,6 +1979,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				http.MethodPut,
 				msgbytes,
 				p.smapowner.get(),
+				noTimeout,
 			)
 
 			for result := range results {
@@ -1961,6 +2004,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			http.MethodPut,
 			msgbytes,
 			p.smapowner.get(),
+			noTimeout,
 		)
 
 		time.Sleep(time.Second)
@@ -2163,33 +2207,34 @@ func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (er
 
 // broadcastCluster sends a message ([]byte) to all proxies and targets belongs to a smap
 func (p *proxyrunner) broadcastCluster(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout ...time.Duration) chan callResult {
+	smap *Smap, timeout time.Duration) chan callResult {
 
-	var servers []*daemonInfo
-	for _, s := range smap.Tmap {
-		servers = append(servers, s)
+	bcastArgs := bcastCallArgs{
+		path:            path,
+		query:           query,
+		method:          method,
+		injson:          body,
+		timeout:         timeout,
+		servers:         []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
+		serversToIgnore: map[string]struct{}{p.si.DaemonID: {}},
 	}
-
-	for _, s := range smap.Pmap {
-		// Don't broadcast to self
-		if s.DaemonID != p.si.DaemonID {
-			servers = append(servers, s)
-		}
-	}
-
-	return p.broadcast(path, query, method, body, servers, timeout...)
+	return p.broadcast(bcastArgs)
 }
 
 // broadcastTargets sends a message ([]byte) to all targets belongs to a smap
 func (p *proxyrunner) broadcastTargets(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout ...time.Duration) chan callResult {
+	smap *Smap, timeout time.Duration) chan callResult {
 
-	var servers []*daemonInfo
-	for _, s := range smap.Tmap {
-		servers = append(servers, s)
+	bcastArgs := bcastCallArgs{
+		path:            path,
+		query:           query,
+		method:          method,
+		injson:          body,
+		timeout:         timeout,
+		servers:         []map[string]*daemonInfo{smap.Tmap},
+		serversToIgnore: nil,
 	}
-
-	return p.broadcast(path, query, method, body, servers, timeout...)
+	return p.broadcast(bcastArgs)
 }
 
 func validateBucketProps(props *BucketProps, isLocal bool) error {

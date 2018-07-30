@@ -44,8 +44,17 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		url += from
 		pollstarted, ok := time.Now(), false
 		timeout := ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor
+		callArgs := callArgs{
+			request: nil,
+			si:      si,
+			url:     url,
+			method:  http.MethodGet,
+			injson:  nil,
+			timeout: timeout,
+		}
 		for {
-			res := t.call(nil, si, url, http.MethodGet, nil, timeout)
+			callArgs.timeout = timeout
+			res := t.call(callArgs)
 			if res.err == nil {
 				ok = true
 				break
@@ -135,11 +144,19 @@ func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
 				continue
 			}
 			url := si.DirectURL + URLPath(Rversion, Rhealth)
-			res := t.call(nil, si, url, http.MethodGet, nil)
+			args := callArgs{
+				request: nil,
+				si:      si,
+				url:     url,
+				method:  http.MethodGet,
+				injson:  nil,
+				timeout: noTimeout,
+			}
+			res := t.call(args)
 			// retry once
 			if res.err == context.DeadlineExceeded {
-				res = t.call(nil, si, url, http.MethodGet, nil,
-					ctx.config.Timeout.CplaneOperation*keepaliveTimeoutFactor*2)
+				args.timeout = ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor * 2
+				res = t.call(args)
 			}
 
 			if res.err != nil {

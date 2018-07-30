@@ -194,10 +194,9 @@ func TestMetaSyncTransport(t *testing.T) {
 // sorting is to make result checking easier as sync calls to different servers run in paraller so
 // the calls are received in random order.
 func collectResult(n int, ch <-chan transportData) []transportData {
-	var msgs []transportData
-
+	msgs := make([]transportData, n)
 	for i := 0; i < n; i++ {
-		msgs = append(msgs, <-ch)
+		msgs[i] = <-ch
 	}
 
 	sort.Sort(msgSortHelper(msgs))

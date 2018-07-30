@@ -93,10 +93,9 @@ func TestLRUBasic(t *testing.T) {
 			heap.Push(h, &tc[i])
 		}
 
-		var act fileInfos
+		act := make(fileInfos, len(tc))
 		for i := 0; i < len(tc); i++ {
-			fi := heap.Pop(h).(*fileInfo)
-			act = append(act, *fi)
+			act[i] = *heap.Pop(h).(*fileInfo)
 		}
 
 		sort.Sort(tc)

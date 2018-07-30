@@ -221,7 +221,15 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 func (t *targetrunner) unregister() (int, error) {
 	url, si := t.getPrimaryURLAndSI()
 	url += URLPath(Rversion, Rcluster, Rdaemon, t.si.DaemonID)
-	res := t.call(nil, si, url, http.MethodDelete, nil)
+	args := callArgs{
+		request: nil,
+		si:      si,
+		url:     url,
+		method:  http.MethodDelete,
+		injson:  nil,
+		timeout: noTimeout,
+	}
+	res := t.call(args)
 	return res.status, res.err
 }
 
@@ -1413,8 +1421,12 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 }
 
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
-	bucketnames := &BucketNames{Cloud: make([]string, 0), Local: make([]string, 0, 64)}
 	bucketmd := t.bmdowner.get()
+
+	bucketnames := &BucketNames{
+		Local: make([]string, 0, len(bucketmd.LBmap)),
+		Cloud: make([]string, 0, 64),
+	}
 	for bucket := range bucketmd.LBmap {
 		bucketnames.Local = append(bucketnames.Local, bucket)
 	}
@@ -3093,7 +3105,7 @@ func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 
 // broadcastNeighbors sends a message ([]byte) to all neighboring targets belongs to a smap
 func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout ...time.Duration) chan callResult {
+	smap *Smap, timeout time.Duration) chan callResult {
 
 	if len(smap.Tmap) < 2 {
 		// no neighbor, returns empty channel, so caller doesnt have to check channel is nil
@@ -3102,14 +3114,16 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 		return ch
 	}
 
-	var servers []*daemonInfo
-	for _, s := range smap.Tmap {
-		if s.DaemonID != t.si.DaemonID {
-			servers = append(servers, s)
-		}
+	bcastArgs := bcastCallArgs{
+		path:            path,
+		query:           query,
+		method:          method,
+		injson:          body,
+		timeout:         timeout,
+		servers:         []map[string]*daemonInfo{smap.Tmap},
+		serversToIgnore: map[string]struct{}{t.si.DaemonID: {}},
 	}
-
-	return t.broadcast(path, query, method, body, servers, timeout...)
+	return t.broadcast(bcastArgs)
 }
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {

@@ -223,16 +223,12 @@ func checkIostatVersion() error {
 		return fmt.Errorf("[iostat] Error: unexpected version format: %v", vss)
 	}
 
-	version := []int64{}
-	for _, vs := range vss {
-		v, err := strconv.ParseInt(vs, 10, 64)
-		if err != nil {
-			return fmt.Errorf("[iostat] Error: failed to parse version %v", vss)
-		}
-		version = append(version, v)
+	version, err := strconv.ParseInt(vss[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("[iostat] Error: failed to parse version %v, error %v", vss, err)
 	}
 
-	if version[0] < iostatMinVersion {
+	if version < iostatMinVersion {
 		return fmt.Errorf("[iostat] Error: version %v is too old. At least %v version is required", version, iostatMinVersion)
 	}
 

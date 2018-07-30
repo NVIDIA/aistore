@@ -319,8 +319,8 @@ func (y *metasyncer) doSync(revsvec []interface{}) {
 
 func (y *metasyncer) handlePending() {
 	var (
-		jsbytes []byte
-		err     error
+		body []byte
+		err  error
 	)
 
 	smap := y.p.smapowner.get()
@@ -337,28 +337,25 @@ func (y *metasyncer) handlePending() {
 
 	payload := make(simplekvs)
 	for _, revs := range y.synced.copies {
-		jsbytes, err = revs.marshal()
+		body, err = revs.marshal()
 		assert(err == nil, err)
 		tag := revs.tag()
-		payload[tag] = string(jsbytes)
+		payload[tag] = string(body)
 	}
 
-	jsbytes, err = json.Marshal(payload)
+	body, err = json.Marshal(payload)
 	assert(err == nil, err)
 
-	var servers []*daemonInfo
-	for _, s := range y.pending.diamonds {
-		servers = append(servers, s)
+	bcastArgs := bcastCallArgs{
+		path:            URLPath(Rversion, Rdaemon, Rmetasync),
+		query:           nil,
+		method:          http.MethodPut,
+		injson:          body,
+		timeout:         ctx.config.Timeout.CplaneOperation,
+		servers:         []map[string]*daemonInfo{y.pending.diamonds},
+		serversToIgnore: nil,
 	}
-
-	res := y.p.broadcast(
-		URLPath(Rversion, Rdaemon, Rmetasync),
-		nil, // query
-		http.MethodPut,
-		jsbytes,
-		servers,
-		ctx.config.Timeout.CplaneOperation,
-	)
+	res := y.p.broadcast(bcastArgs)
 
 	for r := range res {
 		if r.err != nil {
@@ -370,13 +367,16 @@ func (y *metasyncer) handlePending() {
 }
 
 func (y *metasyncer) handleRefused(urlPath string, body []byte) {
-	var servers []*daemonInfo
-	for _, s := range y.pending.refused {
-		servers = append(servers, s)
+	bcastArgs := bcastCallArgs{
+		path:            urlPath,
+		query:           nil,
+		method:          http.MethodPut,
+		injson:          body,
+		timeout:         ctx.config.Timeout.CplaneOperation,
+		servers:         []map[string]*daemonInfo{y.pending.refused},
+		serversToIgnore: nil,
 	}
-
-	res := y.p.broadcast(urlPath, nil, http.MethodPut, body,
-		servers, ctx.config.Timeout.CplaneOperation)
+	res := y.p.broadcast(bcastArgs)
 
 	for r := range res {
 		if r.err != nil {

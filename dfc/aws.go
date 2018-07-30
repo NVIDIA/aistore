@@ -296,12 +296,12 @@ func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, er
 		errstr = fmt.Sprintf("Failed to list all buckets, err: %v", err)
 		return
 	}
-	buckets = make([]string, 0, 16)
-	for _, bkt := range result.Buckets {
+	buckets = make([]string, len(result.Buckets))
+	for idx, bkt := range result.Buckets {
 		if glog.V(4) {
 			glog.Infof("%s: created %v", aws.StringValue(bkt.Name), *bkt.CreationDate)
 		}
-		buckets = append(buckets, aws.StringValue(bkt.Name))
+		buckets[idx] = aws.StringValue(bkt.Name)
 	}
 	return
 }

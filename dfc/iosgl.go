@@ -123,9 +123,7 @@ func (z *SGLIO) Size() int64 { return z.woff }
 
 func (z *SGLIO) grow(tosize int64) {
 	for z.Cap() < tosize {
-		l := len(z.sgl)
-		z.sgl = append(z.sgl, nil)
-		z.sgl[l] = z.slab.alloc() // FIXME: OOM
+		z.sgl = append(z.sgl, z.slab.alloc()) // FIXME: OOM
 	}
 }
 
