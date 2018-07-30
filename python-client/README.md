@@ -83,6 +83,7 @@ Class | Method | HTTP request | Description
 *ClusterApi* | [**unregister_target**](docs/ClusterApi.md#unregister_target) | **DELETE** /cluster/daemon/{daemonId} | Unregister the storage target
 *DaemonApi* | [**get**](docs/DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
 *DaemonApi* | [**perform_operation**](docs/DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
+*DaemonApi* | [**perform_operation_0**](docs/DaemonApi.md#perform_operation_0) | **PUT** /daemon/mountpaths/ | Enable a filesystem on a DFC target
 *ObjectApi* | [**delete**](docs/ObjectApi.md#delete) | **DELETE** /objects/{bucket-name}/{object-name} | Delete object
 *ObjectApi* | [**get**](docs/ObjectApi.md#get) | **GET** /objects/{bucket-name}/{object-name} | Get object
 *ObjectApi* | [**get_properties**](docs/ObjectApi.md#get_properties) | **HEAD** /objects/{bucket-name}/{object-name} | Query object properties
@@ -118,6 +119,7 @@ Class | Method | HTTP request | Description
  - [DaemonCoreStatistics](docs/DaemonCoreStatistics.md)
  - [DaemonInfo](docs/DaemonInfo.md)
  - [FileSystemCapacity](docs/FileSystemCapacity.md)
+ - [FileSystemRequest](docs/FileSystemRequest.md)
  - [GetProps](docs/GetProps.md)
  - [GetWhat](docs/GetWhat.md)
  - [Headers](docs/Headers.md)

@@ -51,6 +51,7 @@ from openapi_client.models.daemon_configuration_version_config import DaemonConf
 from openapi_client.models.daemon_core_statistics import DaemonCoreStatistics
 from openapi_client.models.daemon_info import DaemonInfo
 from openapi_client.models.file_system_capacity import FileSystemCapacity
+from openapi_client.models.file_system_request import FileSystemRequest
 from openapi_client.models.get_props import GetProps
 from openapi_client.models.get_what import GetWhat
 from openapi_client.models.headers import Headers

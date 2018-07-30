@@ -6,6 +6,7 @@ Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**get**](DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
 [**perform_operation**](DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
+[**perform_operation_0**](DaemonApi.md#perform_operation_0) | **PUT** /daemon/mountpaths/ | Enable a filesystem on a DFC target
 
 
 # **get**
@@ -83,6 +84,51 @@ except ApiException as e:
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **input_parameters** | [**InputParameters**](InputParameters.md)|  | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: text/plain
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **perform_operation_0**
+> perform_operation_0(file_system_request)
+
+Enable a filesystem on a DFC target
+
+### Example
+```python
+from __future__ import print_function
+import time
+import openapi_client
+from openapi_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = openapi_client.DaemonApi()
+file_system_request = openapi_client.FileSystemRequest() # FileSystemRequest | 
+
+try:
+    # Enable a filesystem on a DFC target
+    api_instance.perform_operation_0(file_system_request)
+except ApiException as e:
+    print("Exception when calling DaemonApi->perform_operation_0: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **file_system_request** | [**FileSystemRequest**](FileSystemRequest.md)|  | 
 
 ### Return type
 

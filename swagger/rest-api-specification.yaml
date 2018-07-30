@@ -606,6 +606,29 @@ paths:
             text/plain:
               schema:
                 type: string
+  /daemon/mountpaths/:
+    put:
+      summary: Enable a filesystem on a DFC target
+      operationId: performOperation
+      tags:
+        - Daemon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileSystemRequest'
+      responses:
+        '200':
+          description: Operation on DFC daemon triggered successfully
+        '204':
+          description: Return status if the filesystem was already enabled
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
 components:
   schemas:
     InputParameters:
@@ -808,6 +831,7 @@ components:
         - config
         - stats
         - xaction
+        - mountpaths
     GetProps:
       type: string
       enum:
@@ -921,6 +945,11 @@ components:
         usedpct:
           type: integer
           format: int32
+    FileSystemRequest:
+      type: object
+      properties:
+        mountpath:
+          type: string
     TargetStatistics:
       type: object
       properties:

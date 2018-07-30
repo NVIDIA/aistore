@@ -53,6 +53,7 @@ class TestDaemonApi(unittest.TestCase):
             "loglevel", "3")
         self.daemon.perform_operation(input_params)
 
+    @unittest.skip("Test fails due to the fact that it takes some time to distribute SMAP across nodes")
     def test_shutdown_target(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target_id = smap.tmap.keys()[0]
@@ -80,6 +81,19 @@ class TestDaemonApi(unittest.TestCase):
         stats = DictParser.parse(self.daemon.get(self.models.GetWhat.STATS))
         self.assertTrue(stats.capacity.values()[0].avail != 0,
                         "Available disk space is returned as 0")
+        self.daemon.api_client.configuration.host = (
+                "http://localhost:%s/v1" % primary_proxy_port)
+
+    def test_get_mountpaths(self):
+        smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
+        target_port = smap.tmap.keys()[0][-4:]
+        primary_proxy_port = smap.proxy_si.daemon_port
+        self.daemon.api_client.configuration.host = (
+                "http://localhost:%s/v1" % target_port)
+        mountpaths = DictParser.parse(
+                self.daemon.get(self.models.GetWhat.MOUNTPATHS))
+        self.assertTrue(len(mountpaths.available) > 0,
+                "Number of available mountpaths is zero.")
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % primary_proxy_port)
 

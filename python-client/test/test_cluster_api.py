@@ -143,6 +143,15 @@ class TestClusterApi(unittest.TestCase):
         self.assertTrue(len(stats.target.keys()) != 0,
                         "No targets retrieved while querying for stats")
 
+    def test_get_all_mountpaths(self):
+        mountpaths = DictParser.parse(
+                self.cluster.get(what=self.models.GetWhat.MOUNTPATHS))
+        for target in mountpaths.targets:
+            self.assertTrue(len(mountpaths.targets[target].available) > 0,
+                    "Number of available mountpaths on target %s is zero."
+                    % target)
+
+
 class DictParser(dict):
     __getattr__= dict.__getitem__
 
