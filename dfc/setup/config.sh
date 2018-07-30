@@ -73,7 +73,6 @@
 		"http": {
 			"max_num_targets":    16,
 			"use_https":          ${USE_HTTPS},
-			"use_http2":          false,
 			"use_as_proxy":       false,
 			"server_certificate": "server.crt",
 			"server_key":         "server.key"

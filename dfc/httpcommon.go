@@ -31,7 +31,8 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
-	"github.com/hkwi/h2c"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 const ( // => Transport.MaxIdleConnsPerHost
@@ -123,9 +124,6 @@ type httprunner struct {
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
-	if h.mux == nil {
-		h.mux = http.NewServeMux()
-	}
 	h.mux.HandleFunc(path, handler)
 	if !strings.HasSuffix(path, "/") {
 		h.mux.HandleFunc(path+"/", handler)
@@ -162,6 +160,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		}
 	}
 
+	h.mux = http.NewServeMux()
 	h.smapowner = &smapowner{}
 	h.bmdowner = &bmdowner{}
 }
@@ -225,18 +224,10 @@ func (h *httprunner) run() error {
 	// a wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
-	var handler http.Handler = h.mux
 	addr := ":" + ctx.config.Net.L4.Port
 
-	if ctx.config.Net.HTTP.UseHTTP2 && !ctx.config.Net.HTTP.UseHTTPS {
-		handler = h2c.Server{Handler: handler}
-	}
 	if ctx.config.Net.HTTP.UseHTTPS {
-		h.h = &http.Server{Addr: addr, Handler: handler, ErrorLog: h.glogger}
-
-		if !ctx.config.Net.HTTP.UseHTTP2 {
-			h.h.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
-		}
+		h.h = &http.Server{Addr: addr, Handler: h.mux, ErrorLog: h.glogger}
 		if err := h.h.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated %s with err: %v", h.name, err)
@@ -244,7 +235,9 @@ func (h *httprunner) run() error {
 			}
 		}
 	} else {
-		h.h = &http.Server{Addr: addr, Handler: handler, ErrorLog: h.glogger}
+		// Support for h2c is transparent using h2c.NewHandler, which implements a lightweight
+		// wrapper around h.mux.ServeHTTP to check for an h2c connection.
+		h.h = &http.Server{Addr: addr, Handler: h2c.NewHandler(h.mux, &http2.Server{}), ErrorLog: h.glogger}
 		if err := h.h.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated %s with err: %v", h.name, err)
@@ -252,7 +245,6 @@ func (h *httprunner) run() error {
 			}
 		}
 	}
-
 	return nil
 }
 
