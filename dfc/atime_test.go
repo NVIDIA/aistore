@@ -247,7 +247,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
+	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -300,7 +300,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
+	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -345,7 +345,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
+	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -391,7 +391,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
+	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -438,7 +438,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
+	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -485,7 +485,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		runmap: make(map[string]runner),
 	}
 
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, len(ctx.config.FSpaths))
+	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
 		tempFile.Close()
@@ -547,4 +547,14 @@ func newAtimeRunner() *atimerunner {
 	}
 
 	return atimer
+}
+
+func cleanMountpaths() {
+	availableMountpaths, disabledMountpaths := ctx.mountpaths.Mountpaths()
+	for _, mpathInfo := range availableMountpaths {
+		ctx.mountpaths.RemoveMountpath(mpathInfo.Path)
+	}
+	for _, mpathInfo := range disabledMountpaths {
+		ctx.mountpaths.RemoveMountpath(mpathInfo.Path)
+	}
 }

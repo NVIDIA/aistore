@@ -24,20 +24,18 @@ func testCheckerMountPaths() *fs.MountedFS {
 	CreateDir(fsCheckerTmpDir)
 	CreateDir(fsCheckerTmpDir + "/1")
 	CreateDir(fsCheckerTmpDir + "/2")
+	CreateDir(fsCheckerTmpDir + "/3")
+	CreateDir(fsCheckerTmpDir + "/4")
 
-	avail := make(map[string]*fs.MountpathInfo)
-	unavail := make(map[string]*fs.MountpathInfo)
-
-	for i := 1; i < 4; i++ {
+	mountedFS := &fs.MountedFS{}
+	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		avail[name] = &fs.MountpathInfo{Path: name}
+		mountedFS.AddMountpath(name)
 	}
-	unavail[fsCheckerTmpDir+"/4"] = &fs.MountpathInfo{Path: fsCheckerTmpDir + "/4"}
 
-	return &fs.MountedFS{
-		Available: avail,
-		Disabled:  unavail,
-	}
+	os.RemoveAll(fsCheckerTmpDir + "/3") // one folder is deleted
+	mountedFS.DisableMountpath(fsCheckerTmpDir + "/4")
+	return mountedFS
 }
 
 func testCheckerConfig() *fshcconf {
@@ -59,9 +57,10 @@ func TestFSCheckerMain(t *testing.T) {
 	}
 
 	// intial state = 2 availble FSes - must pass
-	if len(fshc.mountpaths.Available) != 3 || len(fshc.mountpaths.Disabled) != 1 {
+	availablePaths, disabledPaths := fshc.mountpaths.Mountpaths()
+	if len(availablePaths) != 3 || len(disabledPaths) != 1 {
 		t.Errorf("Invalid number of mountpaths at start: %v - %v",
-			fshc.mountpaths.Available, fshc.mountpaths.Disabled)
+			availablePaths, disabledPaths)
 	}
 
 	// inaccessible mountpath
@@ -84,14 +83,16 @@ func TestFSCheckerMain(t *testing.T) {
 	// failed mountpath must be disabled
 	failedMpath := fsCheckerTmpDir + "/3"
 	fshc.runMpathTest(failedMpath, failedMpath+"/dir/testfile")
-	if len(fshc.mountpaths.Available) != 2 || len(fshc.mountpaths.Disabled) != 2 {
+
+	availablePaths, disabledPaths = fshc.mountpaths.Mountpaths()
+	if len(availablePaths) != 2 || len(disabledPaths) != 2 {
 		t.Errorf("Failed mountpath %s must be detected: %v - %v",
-			failedMpath, fshc.mountpaths.Available, fshc.mountpaths.Disabled)
+			failedMpath, availablePaths, disabledPaths)
 	}
-	if len(fshc.mountpaths.Disabled) == 1 {
-		if _, ok := fshc.mountpaths.Disabled[failedMpath]; !ok {
+	if len(disabledPaths) == 1 {
+		if _, exists := disabledPaths[failedMpath]; !exists {
 			t.Errorf("Incorrect mountpath was disabled. Failed one: %s, disabled: %v",
-				failedMpath, fshc.mountpaths.Disabled)
+				failedMpath, disabledPaths)
 		}
 	}
 

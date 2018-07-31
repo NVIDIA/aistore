@@ -17,7 +17,7 @@ type MountpathInfo struct {
 	FileSystem string       `json:"fileSystem"`
 }
 
-func NewMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
+func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	cleanPath := filepath.Clean(path)
 	return &MountpathInfo{
 		Path:       cleanPath,

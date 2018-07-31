@@ -6,7 +6,6 @@
 package fs
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,14 +26,12 @@ import (
 
 // MountedFS holds all mountpaths for the target.
 type MountedFS struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 	// Available mountpaths - mountpaths which are used to store the data.
-	Available      map[string]*MountpathInfo `json:"available"`
-	availableCache unsafe.Pointer            // used for COW purposes
+	available unsafe.Pointer
 	// Disabled mountpaths - mountpaths which for some reason did not pass
 	// the health check and cannot be used for a moment.
-	Disabled      map[string]*MountpathInfo `json:"disabled"`
-	disabledCache unsafe.Pointer            // used for COW purposes
+	disabled unsafe.Pointer
 }
 
 // Init prepares and adds provided mountpaths. Also validates the mountpaths
@@ -69,21 +66,17 @@ func (mfs *MountedFS) AddMountpath(mpath string) error {
 		return fmt.Errorf("cannot get filesystem: %v", err)
 	}
 
-	mp := NewMountpath(mpath, statfs.Fsid, fs)
+	mp := newMountpath(mpath, statfs.Fsid, fs)
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	if _, ok := mfs.Available[mp.Path]; ok {
+	availablePaths, disabledPaths := mfs.mountpathsCopy()
+	if _, ok := availablePaths[mp.Path]; ok {
 		return fmt.Errorf("tried to add already registered mountpath: %v", mp.Path)
 	}
 
-	if mfs.Available == nil {
-		mfs.Available = make(map[string]*MountpathInfo)
-	}
-
-	mfs.Available[mp.Path] = mp
-	mfs.recalcCache()
-
+	availablePaths[mp.Path] = mp
+	mfs.updatePaths(availablePaths, disabledPaths)
 	return nil
 }
 
@@ -94,21 +87,23 @@ func (mfs *MountedFS) RemoveMountpath(mpath string) error {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
-	if _, ok := mfs.Available[mpath]; !ok {
-		if _, ok := mfs.Disabled[mpath]; !ok {
+	availablePaths, disabledPaths := mfs.mountpathsCopy()
+	if _, ok := availablePaths[mpath]; !ok {
+		if _, ok := disabledPaths[mpath]; !ok {
 			return fmt.Errorf("tried to remove nonexisting mountpath: %v", mpath)
 		}
 
-		delete(mfs.Disabled, mpath)
+		delete(disabledPaths, mpath)
+		mfs.updatePaths(availablePaths, disabledPaths)
 		return nil
 	}
 
-	delete(mfs.Available, mpath)
-	if len(mfs.Available) == 0 {
+	delete(availablePaths, mpath)
+	if len(availablePaths) == 0 {
 		glog.Errorf("removed last available mountpath: %s", mpath)
 	}
 
-	mfs.recalcCache()
+	mfs.updatePaths(availablePaths, disabledPaths)
 	return nil
 }
 
@@ -116,22 +111,19 @@ func (mfs *MountedFS) RemoveMountpath(mpath string) error {
 // true if mountpath has been moved from disabled to available and exists is
 // set to true if such mountpath even exists.
 func (mfs *MountedFS) EnableMountpath(mpath string) (enabled, exists bool) {
-	mpath = filepath.Clean(mpath)
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
-	if _, ok := mfs.Available[mpath]; ok {
+
+	mpath = filepath.Clean(mpath)
+	availablePaths, disabledPaths := mfs.mountpathsCopy()
+	if _, ok := availablePaths[mpath]; ok {
 		return false, true
 	}
 
-	if _, ok := mfs.Disabled[mpath]; ok {
-		mpathInfo := mfs.Disabled[mpath]
-		if mfs.Available == nil {
-			mfs.Available = make(map[string]*MountpathInfo)
-		}
-
-		mfs.Available[mpath] = mpathInfo
-		delete(mfs.Disabled, mpath)
-		mfs.recalcCache()
+	if _, ok := disabledPaths[mpath]; ok {
+		availablePaths[mpath] = disabledPaths[mpath]
+		delete(disabledPaths, mpath)
+		mfs.updatePaths(availablePaths, disabledPaths)
 		return true, true
 	}
 
@@ -142,21 +134,19 @@ func (mfs *MountedFS) EnableMountpath(mpath string) (enabled, exists bool) {
 // mountpath has been moved from available to disabled and exists is set to
 // true if such mountpath even exists.
 func (mfs *MountedFS) DisableMountpath(mpath string) (disabled, exists bool) {
-	mpath = filepath.Clean(mpath)
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
-	if mpathInfo, ok := mfs.Available[mpath]; ok {
-		if mfs.Disabled == nil {
-			mfs.Disabled = make(map[string]*MountpathInfo)
-		}
 
-		mfs.Disabled[mpath] = mpathInfo
-		delete(mfs.Available, mpath)
-		mfs.recalcCache()
+	mpath = filepath.Clean(mpath)
+	availablePaths, disabledPaths := mfs.mountpathsCopy()
+	if mpathInfo, ok := availablePaths[mpath]; ok {
+		disabledPaths[mpath] = mpathInfo
+		delete(availablePaths, mpath)
+		mfs.updatePaths(availablePaths, disabledPaths)
 		return true, true
 	}
 
-	if _, ok := mfs.Disabled[mpath]; ok {
+	if _, ok := disabledPaths[mpath]; ok {
 		return false, true
 	}
 
@@ -164,67 +154,62 @@ func (mfs *MountedFS) DisableMountpath(mpath string) (disabled, exists bool) {
 }
 
 // Mountpaths returns both available and disabled mountpaths.
-func (mfs *MountedFS) Mountpaths() (avail []*MountpathInfo, disabled []*MountpathInfo) {
-	return mfs.avail(), mfs.disabled()
-}
-
-// Pprint returns pretty printed string of current MountedFS structure.
-func (mfs *MountedFS) Pprint() string {
-	mfs.mu.RLock()
-	s, _ := json.MarshalIndent(mfs, "", "\t")
-	mfs.mu.RUnlock()
-	return fmt.Sprintln(string(s))
-}
-
-func (mfs *MountedFS) avail() []*MountpathInfo {
-	return *(*[]*MountpathInfo)(atomic.LoadPointer(&mfs.availableCache))
-}
-
-func (mfs *MountedFS) disabled() []*MountpathInfo {
-	return *(*[]*MountpathInfo)(atomic.LoadPointer(&mfs.disabledCache))
-}
-
-// NOTE: This method should be used under mu.Lock
-func (mfs *MountedFS) recalcCache() {
-	l, i := len(mfs.Available), 0
-	avail := make([]*MountpathInfo, l, l)
-	for _, mpathInfo := range mfs.Available {
-		avail[i] = mpathInfo
-		i++
+func (mfs *MountedFS) Mountpaths() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
+	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
+	disabled := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.disabled))
+	if available == nil {
+		tmp := make(map[string]*MountpathInfo, 0)
+		available = &tmp
 	}
 
-	atomic.StorePointer(&mfs.availableCache, unsafe.Pointer(&avail))
-
-	l, i = len(mfs.Disabled), 0
-	disabled := make([]*MountpathInfo, l, l)
-	for _, mpathInfo := range mfs.Disabled {
-		disabled[i] = mpathInfo
-		i++
+	if disabled == nil {
+		tmp := make(map[string]*MountpathInfo, 0)
+		disabled = &tmp
 	}
 
-	atomic.StorePointer(&mfs.disabledCache, unsafe.Pointer(&disabled))
+	return *available, *disabled
+}
+
+func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo) {
+	atomic.StorePointer(&mfs.available, unsafe.Pointer(&available))
+	atomic.StorePointer(&mfs.disabled, unsafe.Pointer(&disabled))
 }
 
 func (mfs *MountedFS) checkFsidDuplicates() error {
-	mfs.mu.RLock()
-	defer mfs.mu.RUnlock()
-
-	fsmap := make(map[syscall.Fsid]string, len(mfs.Available)+len(mfs.Disabled))
-	for _, mpath := range mfs.Available {
-		mpathInfo, ok := fsmap[mpath.Fsid]
+	availablePaths, disabledPaths := mfs.Mountpaths()
+	fsmap := make(map[syscall.Fsid]string, len(availablePaths)+len(disabledPaths))
+	for _, mpathInfo := range availablePaths {
+		mpath, ok := fsmap[mpathInfo.Fsid]
 		if ok {
-			return fmt.Errorf("duplicate FSID %v: mpath1 %q, mpath2 %q", mpath.Fsid, mpath.OrigPath, mpathInfo)
+			return fmt.Errorf("duplicate FSID %v: mpath1 %q, mpath2 %q", mpathInfo.Fsid, mpathInfo.OrigPath, mpath)
 		}
-		fsmap[mpath.Fsid] = mpath.Path
+		fsmap[mpathInfo.Fsid] = mpathInfo.Path
 	}
 
-	for _, mpath := range mfs.Disabled {
-		mpathInfo, ok := fsmap[mpath.Fsid]
+	for _, mpathInfo := range disabledPaths {
+		mpath, ok := fsmap[mpathInfo.Fsid]
 		if ok {
-			return fmt.Errorf("duplicate FSID %v: mpath1 %q, mpath2 %q", mpath.Fsid, mpath.OrigPath, mpathInfo)
+			return fmt.Errorf("duplicate FSID %v: mpath1 %q, mpath2 %q", mpathInfo.Fsid, mpathInfo.OrigPath, mpath)
 		}
-		fsmap[mpath.Fsid] = mpath.Path
+		fsmap[mpathInfo.Fsid] = mpathInfo.Path
 	}
 
 	return nil
+}
+
+// mountpathsCopy returns shallow copy of current mountpaths
+func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
+	available, disabled := mfs.Mountpaths()
+	availableCopy := make(map[string]*MountpathInfo, len(available))
+	disabledCopy := make(map[string]*MountpathInfo, len(available))
+
+	for mpath, mpathInfo := range available {
+		availableCopy[mpath] = mpathInfo
+	}
+
+	for mpath, mpathInfo := range disabled {
+		disabledCopy[mpath] = mpathInfo
+	}
+
+	return availableCopy, disabledCopy
 }

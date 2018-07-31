@@ -2718,10 +2718,11 @@ func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath stri
 		glog.Errorf("FATAL: empty basename for the %s buckets directory", s)
 		os.Exit(1)
 	}
-	for mpath := range ctx.mountpaths.Available {
-		dir := f(mpath)
-		if _, ok := ctx.mountpaths.Available[dir]; ok {
-			glog.Errorf("FATAL: local namespace partitioning conflict: %s vs %s", mpath, dir)
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	for _, mpathInfo := range availablePaths {
+		dir := f(mpathInfo.Path)
+		if _, exists := availablePaths[dir]; exists {
+			glog.Errorf("FATAL: local namespace partitioning conflict: %s vs %s", mpathInfo.Path, dir)
 			os.Exit(1)
 		}
 		if err := CreateDir(dir); err != nil {
@@ -2735,36 +2736,49 @@ func (t *targetrunner) detectMpathChanges() {
 	// mpath config dir
 	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
 
+	type MFS struct {
+		Available map[string]*fs.MountpathInfo `json:"available"`
+		Disabled  map[string]*fs.MountpathInfo `json:"disabled"`
+	}
+
 	// load old/prev and compare
 	var (
 		changed bool
-		old     = &fs.MountedFS{
-			Available: make(map[string]*fs.MountpathInfo),
-			Disabled:  make(map[string]*fs.MountpathInfo),
-		}
+		oldfs   = &MFS{}
+		newfs   = &MFS{}
 	)
-	if err := LocalLoad(mpathconfigfqn, old); err != nil {
+
+	newfs.Available, newfs.Disabled = ctx.mountpaths.Mountpaths()
+
+	if err := LocalLoad(mpathconfigfqn, oldfs); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
-	} else if len(old.Available) != len(ctx.mountpaths.Available) {
+	} else if len(oldfs.Available) != len(newfs.Available) || len(oldfs.Disabled) != len(oldfs.Disabled) {
 		changed = true
 	} else {
-		for k := range old.Available {
-			if _, ok := ctx.mountpaths.Available[k]; !ok {
+		for _, mpathInfo := range oldfs.Available {
+			if _, exists := newfs.Available[mpathInfo.Path]; !exists {
 				changed = true
+				break
 			}
 		}
 	}
+
 	if changed {
+		s, _ := json.MarshalIndent(oldfs, "", "\t")
+		oldfsPprint := fmt.Sprintln(string(s))
+		s, _ = json.MarshalIndent(newfs, "", "\t")
+		newfsPprint := fmt.Sprintln(string(s))
+
 		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.DaemonID, mpathconfigfqn)
 		glog.Errorln("OLD: ====================")
-		glog.Errorln(old.Pprint())
+		glog.Errorln(oldfsPprint)
 		glog.Errorln("NEW: ====================")
-		glog.Errorln(ctx.mountpaths.Pprint())
+		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := LocalSave(mpathconfigfqn, ctx.mountpaths); err != nil {
+	if err := LocalSave(mpathconfigfqn, newfs); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }

@@ -120,11 +120,12 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.config.Periodic.StatsTime = -1 * time.Second
 
 	ctx.mountpaths.AddMountpath("/")
-	fileSystem := ctx.mountpaths.Available["/"].FileSystem
+	available, _ := ctx.mountpaths.Mountpaths()
+	fileSystem := available["/"].FileSystem
 
 	disks := fs2disks(fileSystem)
 	riostat := newIostatRunner()
-	riostat.fsdisks = make(map[string]StringSet, len(ctx.mountpaths.Available))
+	riostat.fsdisks = make(map[string]StringSet, len(available))
 	riostat.fsdisks[fileSystem] = disks
 	for disk := range disks {
 		riostat.Disk[disk] = make(simplekvs, 0)

@@ -32,7 +32,6 @@ func TestGetFSDiskUtil(t *testing.T) {
 	}
 
 	tempRoot := "/tmp"
-	ctx.mountpaths.Available = make(map[string]*fs.MountpathInfo, 1)
 	ctx.mountpaths.AddMountpath(tempRoot)
 
 	riostat := newIostatRunner()
