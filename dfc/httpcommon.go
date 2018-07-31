@@ -181,7 +181,7 @@ func (h *httprunner) initSI() {
 	if id != "" {
 		h.si.DaemonID = id
 	} else {
-		cs := xxhash.ChecksumString32S(ipaddr, mLCG32)
+		cs := xxhash.ChecksumString32S(ipaddr+":"+ctx.config.Net.L4.Port, mLCG32)
 		h.si.DaemonID = strconv.Itoa(int(cs & 0xfffff))
 		if testingFSPpaths() {
 			h.si.DaemonID += ":" + ctx.config.Net.L4.Port

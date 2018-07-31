@@ -142,7 +142,7 @@ To show all existing buckets, run:
 
 ```shell
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub
-$ go test ./dfc/tests -v -run=bucketnames
+$ BUCKET=x go test ./dfc/tests -v -run=bucketnames
 ```
 
 Note that the output will include both local and Cloud bucket names.
