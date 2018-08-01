@@ -84,6 +84,15 @@ type recksumctx struct {
 	t       *targetrunner
 }
 
+type targetState struct {
+	sync.Mutex
+	disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
+}
+
+type MountpathDispatcher interface {
+	DisableMountpath(path string, why string) (disabled, exists bool)
+}
+
 //===========================================================================
 //
 // target runner
@@ -99,6 +108,7 @@ type targetrunner struct {
 	statsdC        statsd.Client
 	authn          *authManager
 	clusterStarted int64
+	state          targetState
 }
 
 // start target runner
@@ -178,6 +188,8 @@ func (t *targetrunner) run() error {
 	if err != nil {
 		glog.Info("Failed to connect to statd, running without statsd")
 	}
+
+	getfshealthchecker().SetDispatcher(t)
 
 	return t.httprunner.run()
 }
@@ -3067,10 +3079,17 @@ func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request, m
 	getiostatrunner().updateFSDisks()
 	t.runRebalance(t.smapowner.get(), "")
 	glog.Infof("Reenabled mountpath %s", mountpath)
+
+	avail, _ := ctx.mountpaths.Mountpaths()
+	if len(avail) == 1 {
+		if err := t.enable(); err != nil {
+			glog.Errorf("The mountpath was enabled but registering target failed: %v", err)
+		}
+	}
 }
 
 func (t *targetrunner) disableMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := ctx.mountpaths.DisableMountpath(mountpath)
+	enabled, exists := t.DisableMountpath(mountpath, "client request")
 	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -3080,9 +3099,6 @@ func (t *targetrunner) disableMountpath(w http.ResponseWriter, r *http.Request, 
 		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
 		return
 	}
-
-	getiostatrunner().updateFSDisks()
-	glog.Infof("Disabled mountpath %s", mountpath)
 }
 
 func (t *targetrunner) addMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3096,6 +3112,13 @@ func (t *targetrunner) addMountpath(w http.ResponseWriter, r *http.Request, moun
 	getiostatrunner().updateFSDisks()
 	t.runRebalance(t.smapowner.get(), "")
 	glog.Infof("Added mountpath %s", mountpath)
+
+	avail, _ := ctx.mountpaths.Mountpaths()
+	if len(avail) == 1 {
+		if err := t.enable(); err != nil {
+			glog.Errorf("The mountpath was added but registering target failed: %v", err)
+		}
+	}
 }
 
 func (t *targetrunner) removeMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3108,6 +3131,13 @@ func (t *targetrunner) removeMountpath(w http.ResponseWriter, r *http.Request, m
 	getfshealthchecker().RequestRemoveMountpath(mountpath)
 	getiostatrunner().updateFSDisks()
 	glog.Infof("Removed mountpath %s", mountpath)
+
+	avail, _ := ctx.mountpaths.Mountpaths()
+	if len(avail) == 0 {
+		if err := t.disable(); err != nil {
+			glog.Errorf("The last mountpath was removed but unregistering target failed: %v", err)
+		}
+	}
 }
 
 func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
@@ -3222,9 +3252,9 @@ func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
-			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si))
+			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si.DaemonID))
 		} else {
-			infoln = append(infoln, fmt.Sprintf("target: %s", si))
+			infoln = append(infoln, fmt.Sprintf("target: %s", si.DaemonID))
 		}
 		if oldlen == 0 {
 			continue
@@ -3452,6 +3482,109 @@ func (t *targetrunner) oneRechecksumBucket(bucketdir string, xrcksum *xactRechec
 	if err := filepath.Walk(bucketdir, rcksctx.walkFunc); err != nil {
 		glog.Errorf("failed to traverse %q, error: %v", bucketdir, err)
 	}
+}
+
+// unregisters the target and marks it as disabled by an internal event
+func (t *targetrunner) disable() error {
+	var (
+		status int
+		eunreg error
+	)
+
+	t.state.Lock()
+	defer t.state.Unlock()
+
+	if t.state.disabled {
+		return nil
+	}
+
+	glog.Info("Disabling the target")
+	for i := 0; i < maxRetrySeconds; i++ {
+		if status, eunreg = t.unregister(); eunreg != nil {
+			if IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
+				glog.Errorf("Target %s: retrying unregistration...", t.si.DaemonID)
+				time.Sleep(time.Second)
+				continue
+			}
+		}
+		break
+	}
+
+	if status >= http.StatusBadRequest || eunreg != nil {
+		// do not update state on error
+		if eunreg == nil {
+			eunreg = fmt.Errorf("Error unregistering target, http error code: %d", status)
+		}
+		return eunreg
+	}
+
+	t.state.disabled = true
+	glog.Info("Target has been disabled")
+	return nil
+}
+
+// registers the target again if it was disabled by and internal event
+func (t *targetrunner) enable() error {
+	var (
+		status int
+		ereg   error
+	)
+
+	t.state.Lock()
+	defer t.state.Unlock()
+
+	if !t.state.disabled {
+		return nil
+	}
+
+	glog.Info("Enabling the target")
+	for i := 0; i < maxRetrySeconds; i++ {
+		if status, ereg = t.register(0); ereg != nil {
+			if IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
+				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
+				time.Sleep(time.Second)
+				continue
+			}
+		}
+		break
+	}
+
+	if status >= http.StatusBadRequest || ereg != nil {
+		// do not update state on error
+		if ereg == nil {
+			ereg = fmt.Errorf("Error registering target, http error code: %d", status)
+		}
+		return ereg
+	}
+
+	t.state.disabled = false
+	glog.Info("Target has been enabled")
+	return nil
+}
+
+func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled, exists bool) {
+	// TODO: notify an admin that the mountpath is gone
+	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
+	disabled, exists = ctx.mountpaths.DisableMountpath(mountpath)
+	if !disabled || !exists {
+		return disabled, exists
+	}
+
+	getiostatrunner().updateFSDisks()
+	glog.Infof("Disabled mountpath %s", mountpath)
+
+	avail, _ := ctx.mountpaths.Mountpaths()
+	if len(avail) > 0 {
+		return disabled, exists
+	}
+
+	glog.Warningf("The last available mountpath was disabled. Unregistering the target")
+	if err := t.disable(); err != nil {
+		glog.Errorf("Failed to unregister target %s, error: %v",
+			t.si.DaemonID, err)
+	}
+
+	return disabled, exists
 }
 
 func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) error {

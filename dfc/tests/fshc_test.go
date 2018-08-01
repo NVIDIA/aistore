@@ -360,3 +360,44 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		t.Errorf("Enabling non-existing mountpath should return not-found error, got: %v", err)
 	}
 }
+
+func TestFSCheckerTargetDisable(t *testing.T) {
+	smap, err := client.GetClusterMap(proxyurl)
+	checkFatal(err, t)
+
+	proxyCnt := len(smap.Pmap)
+	targetCnt := len(smap.Tmap)
+	if targetCnt < 2 {
+		t.Skip("The number of targets must be at least 2")
+	}
+
+	tgtURL := ""
+	for _, tinfo := range smap.Tmap {
+		tgtURL = tinfo.DirectURL
+		break
+	}
+
+	oldMpaths, err := client.TargetMountpaths(tgtURL)
+	checkFatal(err, t)
+	if len(oldMpaths.Available) == 0 {
+		t.Fatalf("Target %s does not have availalble mountpaths", tgtURL)
+	}
+
+	tlogf("Removing all mountpaths from target: %s\n", tgtURL)
+	for _, mpath := range oldMpaths.Available {
+		err = client.DisableTargetMountpath(tgtURL, mpath)
+		checkFatal(err, t)
+	}
+
+	smap, err = waitForPrimaryProxy("all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
+	checkFatal(err, t)
+
+	tlogf("Restoring target %s mountpaths\n", tgtURL)
+	for _, mpath := range oldMpaths.Available {
+		err = client.EnableTargetMountpath(tgtURL, mpath)
+		checkFatal(err, t)
+	}
+
+	smap, err = waitForPrimaryProxy("all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
+	checkFatal(err, t)
+}

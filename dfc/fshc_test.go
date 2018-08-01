@@ -45,6 +45,22 @@ func testCheckerConfig() *fshcconf {
 	}
 }
 
+type MockFSDispatcher struct {
+	faultyPath    string
+	faultDetected bool
+}
+
+func newMockFSDispatcher(mpathToFail string) *MockFSDispatcher {
+	return &MockFSDispatcher{
+		faultyPath: mpathToFail,
+	}
+}
+
+func (d *MockFSDispatcher) DisableMountpath(path, why string) (disabled, exists bool) {
+	d.faultDetected = path == d.faultyPath
+	return d.faultDetected, true
+}
+
 func testCheckerCleanup() {
 	os.RemoveAll(fsCheckerTmpDir)
 }
@@ -82,18 +98,12 @@ func TestFSCheckerMain(t *testing.T) {
 
 	// failed mountpath must be disabled
 	failedMpath := fsCheckerTmpDir + "/3"
+	dispatcher := newMockFSDispatcher(failedMpath)
+	fshc.SetDispatcher(dispatcher)
 	fshc.runMpathTest(failedMpath, failedMpath+"/dir/testfile")
 
-	availablePaths, disabledPaths = fshc.mountpaths.Mountpaths()
-	if len(availablePaths) != 2 || len(disabledPaths) != 2 {
-		t.Errorf("Failed mountpath %s must be detected: %v - %v",
-			failedMpath, availablePaths, disabledPaths)
-	}
-	if len(disabledPaths) == 1 {
-		if _, exists := disabledPaths[failedMpath]; !exists {
-			t.Errorf("Incorrect mountpath was disabled. Failed one: %s, disabled: %v",
-				failedMpath, disabledPaths)
-		}
+	if !dispatcher.faultDetected {
+		t.Errorf("Faulty mountpath %s was not detected", failedMpath)
 	}
 
 	// decision making function
@@ -113,7 +123,7 @@ func TestFSCheckerMain(t *testing.T) {
 
 	for _, tst := range testList {
 		fmt.Printf("Test: %s.\n", tst.title)
-		res := fshc.isTestPassed("/tmp", tst.readErrs, tst.writeErrs, tst.avail)
+		res, _ := fshc.isTestPassed("/tmp", tst.readErrs, tst.writeErrs, tst.avail)
 		if res == tst.result {
 			fmt.Printf("    PASSED\n")
 		} else {

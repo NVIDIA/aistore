@@ -6,6 +6,7 @@
 package dfc
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -40,6 +41,9 @@ type fsHealthChecker struct {
 	config         *fshcconf
 	mountpaths     *fs.MountedFS
 	fnMakeTempName func(string) string
+
+	// listener is notified in case of a mountpath is disabled
+	dispatcher MountpathDispatcher
 }
 
 type mountpathChecker struct {
@@ -116,6 +120,10 @@ func newFSHealthChecker(mounts *fs.MountedFS, conf *fshcconf,
 		requestCh:      make(chan fshcRequest),
 		mpathCheckers:  make(map[string]*mountpathChecker),
 	}
+}
+
+func (f *fsHealthChecker) SetDispatcher(dispatcher MountpathDispatcher) {
+	f.dispatcher = dispatcher
 }
 
 func (f *fsHealthChecker) runMountpathChecker(r *mountpathChecker) {
@@ -221,25 +229,36 @@ func (f *fsHealthChecker) addMountpath(mpath string) {
 }
 
 func (f *fsHealthChecker) isTestPassed(mpath string, readErrors,
-	writeErrors int, available bool) bool {
+	writeErrors int, available bool) (passed bool, whyFailed string) {
 	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
 		readErrors, f.config.ErrorLimit, fshcFileSize,
 		writeErrors, f.config.ErrorLimit)
 	if !available {
-		return false
+		return false, "Mountpath is unavailable"
 	}
 
-	return readErrors < f.config.ErrorLimit && writeErrors < f.config.ErrorLimit
+	passed = readErrors < f.config.ErrorLimit && writeErrors < f.config.ErrorLimit
+	if !passed {
+		whyFailed = fmt.Sprintf("Too many errors: %d read error(s), %d write error(s)", readErrors, writeErrors)
+	}
+
+	return passed, whyFailed
 }
 
 func (f *fsHealthChecker) runMpathTest(mpath, filepath string) {
 	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath,
 		f.config.TestFileCount, fshcFileSize)
 
-	if !f.isTestPassed(mpath, readErrs, writeErrs, exists) {
+	if passed, why := f.isTestPassed(mpath, readErrs, writeErrs, exists); !passed {
 		glog.Errorf("Disabling mountpath %s...", mpath)
-		f.mountpaths.DisableMountpath(mpath)
+
+		if f.dispatcher != nil {
+			disabled, exists := f.dispatcher.DisableMountpath(mpath, why)
+			if !disabled && exists {
+				glog.Errorf("Failed to disable mountpath: %s", mpath)
+			}
+		}
 	}
 }
 
