@@ -1792,13 +1792,19 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 		p.registerToSmap(isproxy, &nsi, nonelectable)
 		smap := p.smapowner.get()
-		pair := &revspair{smap, msg}
+		smapPair := &revspair{smap, msg}
 
 		if errstr := p.smapowner.persist(smap, true); errstr != "" {
 			glog.Errorln(errstr)
 		}
 		p.smapowner.Unlock()
-		p.metasyncer.sync(false, pair)
+		tokens := p.authn.revokedTokenList()
+		if len(tokens.Tokens) == 0 {
+			p.metasyncer.sync(false, smapPair)
+		} else {
+			tokenPair := &revspair{tokens, msg}
+			p.metasyncer.sync(false, smapPair, tokenPair)
+		}
 	}(isproxy, nonelectable)
 }
 
@@ -2070,21 +2076,9 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	p.authn.updateRevokedList(tokenList)
 
 	if p.smapowner.get().isPrimary(p.si) {
-		url := URLPath(Rversion, Rtokens)
-		jsonList, err := json.Marshal(tokenList)
-		if err != nil {
-			glog.Errorf("Failed to marshal token list: %v", err)
-			return
-		}
-		go func() {
-			ch := p.broadcastCluster(url, nil, http.MethodDelete, jsonList, p.smapowner.get(),
-				ctx.config.Timeout.CplaneOperation)
-			for r := range ch {
-				if r.err != nil {
-					glog.Errorf("Failed to broadcast token revoke request: %v", r.err)
-				}
-			}
-		}()
+		msg := &ActionMsg{Action: ActRevokeToken}
+		pair := &revspair{p.authn.revokedTokenList(), msg}
+		p.metasyncer.sync(false, pair)
 	}
 }
 
@@ -2180,6 +2174,13 @@ func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, errstr)
 		}
 	}
+
+	revokedTokens, errstr := p.extractRevokedTokenList(payload)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	p.authn.updateRevokedList(revokedTokens)
 }
 
 func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (errstr string) {

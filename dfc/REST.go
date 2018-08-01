@@ -38,6 +38,7 @@ const (
 	ActUnregTarget = "unregtarget"
 	ActUnregProxy  = "unregproxy"
 	ActNewPrimary  = "newprimary"
+	ActRevokeToken = "revoketoken"
 )
 
 // Cloud Provider enum

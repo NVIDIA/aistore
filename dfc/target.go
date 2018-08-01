@@ -2977,6 +2977,13 @@ func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 		}
 	}
+
+	revokedTokens, errstr := t.extractRevokedTokenList(payload)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	t.authn.updateRevokedList(revokedTokens)
 }
 
 // FIXME: use the message

@@ -787,6 +787,39 @@ func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, 
 	return
 }
 
+func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, string) {
+	bytes, ok := payload[tokentag]
+	if !ok {
+		return nil, ""
+	}
+
+	msg := ActionMsg{}
+	if _, ok := payload[tokentag+actiontag]; ok {
+		msgvalue := payload[tokentag+actiontag]
+		if err := json.Unmarshal([]byte(msgvalue), &msg); err != nil {
+			errstr := fmt.Sprintf(
+				"Failed to unmarshal action message, value (%+v, %T), err: %v",
+				msgvalue, msgvalue, err)
+			return nil, errstr
+		}
+	}
+
+	tokenList := &TokenList{}
+	if err := json.Unmarshal([]byte(bytes), tokenList); err != nil {
+		return nil, fmt.Sprintf(
+			"Failed to unmarshal blocked token list, value (%+v, %T), err: %v",
+			bytes, bytes, err)
+	}
+
+	s := ""
+	if msg.Action != "" {
+		s = ", action " + msg.Action
+	}
+	glog.Infof("received TokenList ntokens %d%s", len(tokenList.Tokens), s)
+
+	return tokenList, ""
+}
+
 // URLPath returns a HTTP URL path by joining all segments with "/"
 func URLPath(segments ...string) string {
 	return path.Join("/", path.Join(segments...))

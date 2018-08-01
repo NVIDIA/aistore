@@ -18,6 +18,7 @@ import (
 const (
 	smaptag     = "smaptag"
 	bucketmdtag = "bucketmdtag" //
+	tokentag    = "tokentag"    //
 	actiontag   = "-action"     // to make a pair (revs, action)
 )
 

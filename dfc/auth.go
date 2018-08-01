@@ -27,6 +27,7 @@ package dfc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -222,4 +223,35 @@ func (a *authManager) extractTokenData(token string) (*authRec, error) {
 	}
 
 	return auth, nil
+}
+
+func (a *authManager) revokedTokenList() *TokenList {
+	a.Lock()
+	tlist := &TokenList{Tokens: make([]string, len(a.revokedTokens))}
+
+	idx := 0
+	for token := range a.revokedTokens {
+		tlist.Tokens[idx] = token
+		idx++
+	}
+
+	a.Unlock()
+	return tlist
+}
+
+var _ revs = &TokenList{}
+
+func (t *TokenList) tag() string {
+	return tokentag
+}
+
+// token list does not need versioning
+// receivers do not overwrite their token lists - they add received tokens
+// to their internal lists
+func (t *TokenList) version() int64 {
+	return 0
+}
+
+func (t *TokenList) marshal() ([]byte, error) {
+	return json.Marshal(t)
 }
