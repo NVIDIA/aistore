@@ -47,17 +47,7 @@ type ChildBlockDevice struct {
 
 // iostat -cdxtm 10
 func (r *iostatrunner) run() error {
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	r.fsdisks = make(map[string]StringSet, len(availablePaths))
-	for _, mpathInfo := range availablePaths {
-		disks := fs2disks(mpathInfo.FileSystem)
-		if len(disks) == 0 {
-			glog.Errorf("filesystem (%+v) - no disks?", mpathInfo)
-			continue
-		}
-		r.fsdisks[mpathInfo.FileSystem] = disks
-	}
-
+	r.updateFSDisks()
 	refreshPeriod := int(ctx.config.Periodic.StatsTime / time.Second)
 	cmd := exec.Command("iostat", "-cdxtm", strconv.Itoa(refreshPeriod))
 	stdout, err := cmd.StdoutPipe()
@@ -141,6 +131,21 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 		}
 	}
 	return false
+}
+
+func (r *iostatrunner) updateFSDisks() {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	r.Lock()
+	r.fsdisks = make(map[string]StringSet, len(availablePaths))
+	for _, mpathInfo := range availablePaths {
+		disks := fs2disks(mpathInfo.FileSystem)
+		if len(disks) == 0 {
+			glog.Errorf("filesystem (%+v) - no disks?", mpathInfo)
+			continue
+		}
+		r.fsdisks[mpathInfo.FileSystem] = disks
+	}
+	r.Unlock()
 }
 
 func (r *iostatrunner) diskUtilFromFQN(fqn string) (util float32, ok bool) {

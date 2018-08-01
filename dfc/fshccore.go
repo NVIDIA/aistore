@@ -30,9 +30,10 @@ const (
 // for mountpath definition, see fs/mountfs.go
 type fsHealthChecker struct {
 	namedrunner
-	chStop     chan struct{}
-	chFileList chan string
-	fsList     map[string]*fsRunner
+	controlCh     chan struct{}
+	fileListCh    chan string
+	requestCh     chan fshcRequest
+	mpathCheckers map[string]*mountpathChecker
 
 	// pointers to common data
 	config         *fshcconf
@@ -40,11 +41,21 @@ type fsHealthChecker struct {
 	fnMakeTempName func(string) string
 }
 
-type fsRunner struct {
-	chStop chan struct{}
-	chFile chan string
-	mpath  string
+type mountpathChecker struct {
+	controlCh chan struct{}
+	fileCh    chan string
+	mpath     string
 }
+
+type fshcRequest struct {
+	ty   string
+	body interface{}
+}
+
+const (
+	fshcRequestAddMountpath    = "fshc_addmountpath"
+	fshcRequestRemoveMountpath = "fshc_removemountpath"
+)
 
 // gets a base directory and looks for a random file inside it.
 // Returns an error if any directory cannot be read
@@ -85,24 +96,32 @@ func getRandomFileName(basePath string) (string, error) {
 	return "", err
 }
 
+func newMountpathChecker(mpath string) *mountpathChecker {
+	return &mountpathChecker{
+		controlCh: make(chan struct{}, 1),
+		fileCh:    make(chan string),
+		mpath:     mpath,
+	}
+}
+
 func newFSHealthChecker(mounts *fs.MountedFS, conf *fshcconf,
 	f func(string) string) *fsHealthChecker {
 	return &fsHealthChecker{
 		mountpaths:     mounts,
 		fnMakeTempName: f,
-		chStop:         make(chan struct{}, 4),
-		chFileList:     make(chan string, 32),
 		config:         conf,
-		fsList:         make(map[string]*fsRunner),
+		controlCh:      make(chan struct{}, 4),
+		fileListCh:     make(chan string, 32),
+		mpathCheckers:  make(map[string]*mountpathChecker),
 	}
 }
 
-func (f *fsHealthChecker) mpathChecker(r *fsRunner) {
+func (f *fsHealthChecker) runMountpathChecker(r *mountpathChecker) {
 	for {
 		select {
-		case filename := <-r.chFile:
+		case filename := <-r.fileCh:
 			f.runMpathTest(r.mpath, filename)
-		case <-r.chStop:
+		case <-r.controlCh:
 			return
 		}
 	}
@@ -110,23 +129,12 @@ func (f *fsHealthChecker) mpathChecker(r *fsRunner) {
 
 func (f *fsHealthChecker) init() {
 	availablePaths, disabledPaths := f.mountpaths.Mountpaths()
-	for _, mp := range availablePaths {
-		f.fsList[mp.Path] = &fsRunner{
-			chStop: make(chan struct{}, 1),
-			chFile: make(chan string),
-			mpath:  mp.Path,
-		}
-	}
-	for _, mp := range disabledPaths {
-		f.fsList[mp.Path] = &fsRunner{
-			chStop: make(chan struct{}, 1),
-			chFile: make(chan string),
-			mpath:  mp.Path,
-		}
+	for mpath := range availablePaths {
+		f.addMountpath(mpath)
 	}
 
-	for _, r := range f.fsList {
-		go f.mpathChecker(r)
+	for mpath := range disabledPaths {
+		f.addMountpath(mpath)
 	}
 }
 
@@ -135,7 +143,7 @@ func (f *fsHealthChecker) onerr(fqn string) {
 		return
 	}
 
-	f.chFileList <- fqn
+	f.fileListCh <- fqn
 }
 
 func (f *fsHealthChecker) run() error {
@@ -144,9 +152,26 @@ func (f *fsHealthChecker) run() error {
 
 	for {
 		select {
-		case filepath := <-f.chFileList:
+		case filepath := <-f.fileListCh:
 			f.checkFile(filepath)
-		case <-f.chStop:
+		case request := <-f.requestCh:
+			switch request.ty {
+			case fshcRequestAddMountpath:
+				mpath, ok := request.body.(string)
+				if !ok {
+					glog.Errorf("invalid request passed to fsHealthChecker: %v", request)
+					break
+				}
+				f.addMountpath(mpath)
+			case fshcRequestRemoveMountpath:
+				mpath, ok := request.body.(string)
+				if !ok {
+					glog.Errorf("invalid request passed to fsHealthChecker: %v", request)
+					break
+				}
+				f.removeMountpath(mpath)
+			}
+		case <-f.controlCh:
 			return nil
 		}
 	}
@@ -154,12 +179,43 @@ func (f *fsHealthChecker) run() error {
 
 func (f *fsHealthChecker) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", f.name, err)
-	for _, r := range f.fsList {
-		r.chStop <- struct{}{}
+	for _, r := range f.mpathCheckers {
+		r.controlCh <- struct{}{}
 	}
 
-	f.chStop <- struct{}{}
-	close(f.chStop)
+	f.controlCh <- struct{}{}
+	close(f.controlCh)
+}
+
+func (f *fsHealthChecker) RequestAddMountpath(mpath string) {
+	f.requestCh <- fshcRequest{
+		ty:   fshcRequestAddMountpath,
+		body: mpath,
+	}
+}
+
+func (f *fsHealthChecker) RequestRemoveMountpath(mpath string) {
+	f.requestCh <- fshcRequest{
+		ty:   fshcRequestRemoveMountpath,
+		body: mpath,
+	}
+}
+
+func (f *fsHealthChecker) removeMountpath(mpath string) {
+	mpathChecker, ok := f.mpathCheckers[mpath]
+	if !ok {
+		glog.Error("wanted to remove mountpath which was not registered")
+		return
+	}
+
+	delete(f.mpathCheckers, mpath)
+	mpathChecker.controlCh <- struct{}{} // stop mpathChecker
+}
+
+func (f *fsHealthChecker) addMountpath(mpath string) {
+	mpathChecker := newMountpathChecker(mpath)
+	f.mpathCheckers[mpath] = mpathChecker
+	go f.runMountpathChecker(mpathChecker)
 }
 
 func (f *fsHealthChecker) isTestPassed(mpath string, readErrors,
@@ -192,14 +248,14 @@ func (f *fsHealthChecker) checkFile(filepath string) {
 		return
 	}
 
-	r, ok := f.fsList[mpath]
+	r, ok := f.mpathCheckers[mpath]
 	if !ok {
 		glog.Errorf("Invalid mountpath %s for file %s", mpath, filepath)
 		return
 	}
 
 	select {
-	case r.chFile <- filepath:
+	case r.fileCh <- filepath:
 		// do nothing - queue is empty
 	default:
 		glog.Warningf("Mountpath %s test is running already", mpath)

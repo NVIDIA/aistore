@@ -310,9 +310,22 @@ func (r *proxystatsrunner) addL(name string, val int64) {
 // storstatsrunner
 //
 //================
+func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
+	return &fscapacity{
+		Used:    (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize),
+		Avail:   statfs.Bavail * uint64(statfs.Bsize),
+		Usedpct: uint32((statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks),
+	}
+}
+
 func (r *storstatsrunner) run() error {
 	r.init()
 	return r.runcommon(r)
+}
+
+func (r *storstatsrunner) init() {
+	r.Disk = make(map[string]simplekvs, 8)
+	r.updateCapacity()
 }
 
 func (r *storstatsrunner) log() (runlru bool) {
@@ -343,9 +356,8 @@ func (r *storstatsrunner) log() (runlru bool) {
 	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRU.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
-		for _, mpath := range r.fsmap {
-			fscapacity := r.Capacity[mpath]
-			b, err := json.Marshal(fscapacity)
+		for mpath, fsCapacity := range r.Capacity {
+			b, err := json.Marshal(fsCapacity)
 			if err == nil {
 				lines = append(lines, mpath+": "+string(b))
 			}
@@ -468,52 +480,24 @@ func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []o
 }
 
 func (r *storstatsrunner) updateCapacity() (runlru bool) {
-	for _, mpath := range r.fsmap {
+	availableMountpaths, _ := ctx.mountpaths.Mountpaths()
+	capacities := make(map[string]*fscapacity, len(availableMountpaths))
+
+	for mpath := range availableMountpaths {
 		statfs := &syscall.Statfs_t{}
 		if err := syscall.Statfs(mpath, statfs); err != nil {
 			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
 			continue
 		}
-		fscapacity := r.Capacity[mpath]
-		r.fillfscap(fscapacity, statfs)
-		if fscapacity.Usedpct >= ctx.config.LRU.HighWM {
+		fsCap := newFSCapacity(statfs)
+		capacities[mpath] = fsCap
+		if fsCap.Usedpct >= ctx.config.LRU.HighWM {
 			runlru = true
 		}
 	}
+
+	r.Capacity = capacities
 	return
-}
-
-func (r *storstatsrunner) fillfscap(fscapacity *fscapacity, statfs *syscall.Statfs_t) {
-	fscapacity.Used = (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize)
-	fscapacity.Avail = statfs.Bavail * uint64(statfs.Bsize)
-	fscapacity.Usedpct = uint32((statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks)
-}
-
-func (r *storstatsrunner) init() {
-	r.Disk = make(map[string]simplekvs, 8)
-	// local filesystems and their cap-s
-	r.Capacity = make(map[string]*fscapacity)
-	r.fsmap = make(map[syscall.Fsid]string)
-
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	for _, mpathInfo := range availablePaths {
-		mpath := mpathInfo.Path
-		mp1, ok := r.fsmap[mpathInfo.Fsid]
-		if ok {
-			// the same filesystem: usage cannot be different..
-			assert(r.Capacity[mp1] != nil)
-			r.Capacity[mpath] = r.Capacity[mp1]
-			continue
-		}
-		statfs := &syscall.Statfs_t{}
-		if err := syscall.Statfs(mpath, statfs); err != nil {
-			glog.Errorf("Failed to statfs mp %q, err: %v", mpath, err)
-			continue
-		}
-		r.fsmap[mpathInfo.Fsid] = mpath
-		r.Capacity[mpath] = &fscapacity{}
-		r.fillfscap(r.Capacity[mpath], statfs)
-	}
 }
 
 func (r *storstatsrunner) add(name string, val int64) {

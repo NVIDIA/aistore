@@ -2463,17 +2463,20 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		allXactionDetails := t.getXactionsByType(kind)
 		jsbytes = xactionStatsRetriever.getStats(allXactionDetails)
 	case GetWhatMountpaths:
-		mpList := MountpathList{
-			Available: make([]string, 0),
-			Disabled:  make([]string, 0),
-		}
-
+		mpList := MountpathList{}
 		availablePaths, disabledPaths := ctx.mountpaths.Mountpaths()
-		for _, mp := range availablePaths {
-			mpList.Available = append(mpList.Available, mp.Path)
+		mpList.Available = make([]string, len(availablePaths))
+		mpList.Disabled = make([]string, len(disabledPaths))
+
+		idx := 0
+		for mpath := range availablePaths {
+			mpList.Available[idx] = mpath
+			idx++
 		}
-		for _, mp := range disabledPaths {
-			mpList.Disabled = append(mpList.Disabled, mp.Path)
+		idx = 0
+		for mpath := range disabledPaths {
+			mpList.Disabled[idx] = mpath
+			idx++
 		}
 		jsbytes, err = json.Marshal(&mpList)
 		if err != nil {

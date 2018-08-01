@@ -1231,13 +1231,8 @@ func TargetMountpaths(targetUrl string) (*dfc.MountpathList, error) {
 		return nil, fmt.Errorf("Failed to read response body, err = %v", err)
 	}
 
-	mp := &dfc.MountpathList{
-		Available: make([]string, 0),
-		Disabled:  make([]string, 0),
-	}
-
+	mp := &dfc.MountpathList{}
 	err = json.Unmarshal(b, mp)
-
 	return mp, err
 }
 
