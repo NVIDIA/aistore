@@ -30,54 +30,162 @@ type xrebpathrunner struct {
 	aborted   bool
 }
 
+// pingTarget pings target to check if it is running. After DestRetryTime it
+// assumes that target is dead. Returns true if target is healthy and running,
+// false otherwise.
+func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadline time.Duration) bool {
+	url := si.DirectURL + URLPath(Rversion, Rhealth) + "?" + URLParamFromID + "=" + t.si.DaemonID
+	pollstarted, ok := time.Now(), false
+	callArgs := callArgs{
+		request: nil,
+		si:      si,
+		url:     url,
+		method:  http.MethodGet,
+		injson:  nil,
+		timeout: timeout,
+	}
+
+	for {
+		res := t.call(callArgs)
+		if res.err == nil {
+			ok = true
+			break
+		}
+
+		if res.status > 0 {
+			glog.Infof("%s is offline with status %d, err: %v", si.DirectURL, res.status, res.err)
+		} else {
+			glog.Infof("%s is offline, err: %v", si.DirectURL, res.err)
+		}
+		callArgs.timeout = time.Duration(float64(callArgs.timeout)*1.5 + 0.5)
+		if callArgs.timeout > ctx.config.Timeout.MaxKeepalive {
+			callArgs.timeout = ctx.config.Timeout.MaxKeepalive
+		}
+		if time.Since(pollstarted) > deadline {
+			break
+		}
+		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+	}
+
+	return ok
+}
+
+// waitForRebalanceFinish waits for the other target to complete the current
+// rebalancing operation.
+func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion int64) {
+	// Phase 1: Call and check if smap is at least our version.
+	url := fmt.Sprintf("%s?%s=%s", si.DirectURL+URLPath(Rversion, Rdaemon), URLParamWhat, GetWhatSmap)
+	args := callArgs{
+		request: nil,
+		si:      si,
+		url:     url,
+		method:  http.MethodGet,
+		injson:  nil,
+		timeout: noTimeout,
+	}
+
+	for {
+		res := t.call(args)
+		// retry once
+		if res.err == context.DeadlineExceeded {
+			args.timeout = ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor * 2
+			res = t.call(args)
+		}
+
+		if res.err != nil {
+			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.DirectURL, res.err)
+			return
+		}
+
+		tsmap := &Smap{}
+		err := json.Unmarshal(res.outjson, tsmap)
+		if err != nil {
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", url, err, string(res.outjson))
+			return
+		}
+
+		if tsmap.version() >= rebalanceVersion {
+			break
+		}
+
+		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+	}
+
+	// Phase 2: Wait to ensure any rebalancing on neighbor has kicked
+	// in.
+	time.Sleep(10 * time.Second)
+
+	// Phase 3: Call neighbor and check if is rebalancing and wait
+	// until it is not.
+	url = si.DirectURL + URLPath(Rversion, Rhealth)
+	args = callArgs{
+		request: nil,
+		si:      si,
+		url:     url,
+		method:  http.MethodGet,
+		injson:  nil,
+		timeout: noTimeout,
+	}
+
+	for {
+		res := t.call(args)
+		if res.err != nil {
+			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.DirectURL, res.err)
+			break
+		}
+
+		status := &thealthstatus{}
+		err := json.Unmarshal(res.outjson, status)
+		if err != nil {
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", url, err, string(res.outjson))
+			break
+		}
+
+		if !status.IsRebalancing {
+			break
+		}
+
+		glog.Infof("waiting for rebalance: %v", si.DirectURL)
+		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+	}
+}
+
 func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
+	neighborCnt := len(newsmap.Tmap) - 1
+
 	//
 	// first, check whether all the Smap-ed targets are up and running
 	//
 	glog.Infof("rebalance: Smap ver %d, newtargetid=%s", newsmap.version(), newtargetid)
-	from := "?" + URLParamFromID + "=" + t.si.DaemonID
-	for sid, si := range newsmap.Tmap {
-		if sid == t.si.DaemonID {
+
+	wg := &sync.WaitGroup{}
+	wg.Add(neighborCnt)
+	cancelCh := make(chan string, neighborCnt)
+
+	for _, si := range newsmap.Tmap {
+		if si.DaemonID == t.si.DaemonID {
 			continue
 		}
-		url := si.DirectURL + URLPath(Rversion, Rhealth)
-		url += from
-		pollstarted, ok := time.Now(), false
-		timeout := ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor
-		callArgs := callArgs{
-			request: nil,
-			si:      si,
-			url:     url,
-			method:  http.MethodGet,
-			injson:  nil,
-			timeout: timeout,
-		}
-		for {
-			callArgs.timeout = timeout
-			res := t.call(callArgs)
-			if res.err == nil {
-				ok = true
-				break
-			}
 
-			if res.status > 0 {
-				glog.Infof("%s is offline with status %d, err: %v", sid, res.status, res.err)
-			} else {
-				glog.Infof("%s is offline, err: %v", sid, res.err)
+		go func(si *daemonInfo) {
+			ok := t.pingTarget(
+				si,
+				ctx.config.Timeout.CplaneOperation*keepaliveTimeoutFactor,
+				ctx.config.Rebalance.DestRetryTime,
+			)
+			if !ok {
+				cancelCh <- si.DirectURL
 			}
-			timeout = time.Duration(float64(timeout)*1.5 + 0.5)
-			if timeout > ctx.config.Timeout.MaxKeepalive {
-				timeout = ctx.config.Timeout.Default
-			}
-			if time.Since(pollstarted) > ctx.config.Rebalance.DestRetryTime {
-				break
-			}
-			time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
-		}
-		if !ok {
-			glog.Errorf("Not starting rebalancing x-action: target %s appears to be offline", sid)
-			return
-		}
+			wg.Done()
+		}(si)
+	}
+	wg.Wait()
+
+	close(cancelCh)
+	if len(cancelCh) > 0 {
+		sid := <-cancelCh
+		glog.Errorf("Not starting rebalancing x-action: target %s appears to be offline", sid)
+		return
 	}
 
 	// find and abort in-progress x-action if exists and if its smap version is lower
@@ -96,7 +204,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	}
 
 	glog.Infoln(xreb.tostring())
-	wg := &sync.WaitGroup{}
+	wg = &sync.WaitGroup{}
 
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	allr := make([]*xrebpathrunner, 0, len(availablePaths)*2)
@@ -135,54 +243,22 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	t.xactinp.del(xreb.id)
 }
 
-func (t *targetrunner) pollRebalancingDone(newsmap *Smap) {
-	for {
-		time.Sleep(time.Minute) // FIXME: must be smarter
-		count := 0
-		for sid, si := range newsmap.Tmap {
-			if sid == t.si.DaemonID {
-				continue
-			}
-			url := si.DirectURL + URLPath(Rversion, Rhealth)
-			args := callArgs{
-				request: nil,
-				si:      si,
-				url:     url,
-				method:  http.MethodGet,
-				injson:  nil,
-				timeout: noTimeout,
-			}
-			res := t.call(args)
-			// retry once
-			if res.err == context.DeadlineExceeded {
-				args.timeout = ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor * 2
-				res = t.call(args)
-			}
+func (t *targetrunner) pollRebalancingDone(newSmap *Smap) {
+	wg := &sync.WaitGroup{}
+	wg.Add(len(newSmap.Tmap) - 1)
 
-			if res.err != nil {
-				glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", sid, res.err)
-				continue
-			}
+	for _, si := range newSmap.Tmap {
+		if si.DaemonID == t.si.DaemonID {
+			continue
+		}
 
-			status := &thealthstatus{}
-			err := json.Unmarshal(res.outjson, status)
-			if err == nil {
-				if status.IsRebalancing {
-					time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
-					count++
-				}
-			} else {
-				glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]",
-					url, err, string(res.outjson))
-			}
-		}
-		if glog.V(4) {
-			glog.Infof("in-progress count=%d (targets)", count)
-		}
-		if count == 0 {
-			break
-		}
+		go func(si *daemonInfo) {
+			t.waitForRebalanceFinish(si, newSmap.version())
+			wg.Done()
+		}(si)
 	}
+
+	wg.Wait()
 }
 
 //=========================

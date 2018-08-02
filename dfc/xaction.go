@@ -191,8 +191,11 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 		}
 	}
 	id := q.uniqueid()
-	xreb := &xactRebalance{xactBase: *newxactBase(id, ActRebalance), curversion: curversion}
-	xreb.targetrunner = t
+	xreb := &xactRebalance{
+		xactBase:     *newxactBase(id, ActRebalance),
+		curversion:   curversion,
+		targetrunner: t,
+	}
 	q.add(xreb)
 	q.lock.Unlock()
 	return xreb
