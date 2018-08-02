@@ -404,6 +404,117 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	assertClusterState(&m)
 }
 
+func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	const (
+		num       = 10000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 1,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *dfc.SGLIO
+	)
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targets := extractTargetsInfo(m.smap)
+
+	// Create local bucket
+	exists, err := client.DoesLocalBucketExist(proxyurl, clibucket)
+	checkFatal(err, t)
+	if !exists {
+		err = client.CreateLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}()
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	// Unregister target 0
+	err = client.UnregisterTarget(proxyurl, targets[0].sid)
+	checkFatal(err, t)
+	n := len(getClusterMap(t).Tmap)
+	if n != m.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+
+	// Put some files
+	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	tlogln("putting finished")
+
+	// Register target 0 in parallel
+	m.wg.Add(1)
+	go func() {
+		tlogf("trying to register target: %s\n", targets[0].directURL)
+		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
+		checkFatal(err, t)
+		m.wg.Done()
+		tlogf("registered target %s again\n", targets[0].directURL)
+	}()
+
+	// Unregister target 1 in parallel
+	m.wg.Add(1)
+	go func() {
+		tlogf("trying to unregister target: %s\n", targets[1].directURL)
+		err = client.UnregisterTarget(proxyurl, targets[1].sid)
+		checkFatal(err, t)
+		m.wg.Done()
+		tlogf("unregistered target %s\n", targets[1].directURL)
+	}()
+
+	// Wait for everything to end
+	m.wg.Wait()
+
+	// Register target 1 to bring cluster to original state
+	doReregisterTarget(targets[1].sid, targets[1].directURL, &m)
+	tlogln("reregistering complete")
+
+	waitForRebalanceToComplete(t)
+
+	m.wg.Add(num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	resultsBeforeAfter(&m, num, maxErrPct)
+	assertClusterState(&m)
+}
+
 func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	const (
 		unregisterTargetCount = 2

@@ -1294,7 +1294,7 @@ OUTER:
 }
 
 func waitProgressBar(prefix string, wait time.Duration) {
-	const tickerStep = time.Second * 5
+	const tickerStep = time.Second * 1
 
 	ticker := time.NewTicker(tickerStep)
 	tlogf(prefix)
