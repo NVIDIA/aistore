@@ -543,12 +543,6 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.LRU.CapacityUpdTime, ctx.config.LRU.CapacityUpdTimeStr = v, value
 		}
-	case "startup_delay_time":
-		if v, err := time.ParseDuration(value); err != nil {
-			errstr = fmt.Sprintf("Failed to parse startup_delay_time, err: %v", err)
-		} else {
-			ctx.config.Rebalance.StartupDelayTime, ctx.config.Rebalance.StartupDelayTimeStr = v, value
-		}
 	case "dest_retry_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse dest_retry_time, err: %v", err)

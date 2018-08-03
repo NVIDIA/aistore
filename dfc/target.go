@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -89,13 +90,14 @@ type recksumctx struct {
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif       cloudif // multi-cloud vendor support
-	xactinp       *xactInProgress
-	uxprocess     *uxprocess
-	rtnamemap     *rtnamemap
-	prefetchQueue chan filesWithDeadline
-	statsdC       statsd.Client
-	authn         *authManager
+	cloudif        cloudif // multi-cloud vendor support
+	xactinp        *xactInProgress
+	uxprocess      *uxprocess
+	rtnamemap      *rtnamemap
+	prefetchQueue  chan filesWithDeadline
+	statsdC        statsd.Client
+	authn          *authManager
+	clusterStarted int64
 }
 
 // start target runner
@@ -128,6 +130,8 @@ func (t *targetrunner) run() error {
 		glog.Errorf("Target %s is terminating", t.si.DaemonID)
 		return ereg
 	}
+
+	go t.pollClusterStarted()
 
 	t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
 	t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
@@ -3083,10 +3087,10 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 
 func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
 	var (
-		newtargetid  string
-		existentialQ bool
+		newtargetid                    string
+		existentialQ, aborted, running bool
+		s                              string
 	)
-	var s string
 	if oldsmap.version() > 0 {
 		s = fmt.Sprintf(" (prev non-local %d)", oldsmap.version())
 	}
@@ -3131,7 +3135,7 @@ func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 	}
 	if !newsmap.isPresent(t.si, false) {
 		// FIXME: investigate further
-		s := fmt.Sprintf("Warning: received Smap without self '%s': %s", t.si.DaemonID, newsmap.pp())
+		s = fmt.Sprintf("Warning: received Smap without self '%s': %s", t.si.DaemonID, newsmap.pp())
 		glog.Errorln(s)
 	}
 
@@ -3158,22 +3162,63 @@ func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errs
 		glog.Infoln("auto-rebalancing disabled")
 		return
 	}
-	uptime := time.Since(t.starttime())
-	if uptime < ctx.config.Rebalance.StartupDelayTime && t.si.DaemonID != newtargetid {
-		glog.Infof("not auto-rebalancing: uptime %v < %v", uptime, ctx.config.Rebalance.StartupDelayTime)
-		aborted, running := t.xactinp.isAbortedOrRunningRebalance()
-		if aborted && !running {
-			f := func() {
-				time.Sleep(ctx.config.Rebalance.StartupDelayTime - uptime)
-				t.runRebalance(t.smapowner.get(), "")
-			}
-			go runRebalanceOnce.Do(f) // only once at startup
-		}
+	if atomic.LoadInt64(&t.clusterStarted) != 0 {
+		go t.runRebalance(newsmap, newtargetid) // auto-rebalancing xaction
 		return
 	}
-	// xaction
-	go t.runRebalance(newsmap, newtargetid)
+	aborted, running = t.xactinp.isAbortedOrRunningRebalance()
+	if !aborted || running {
+		glog.Infof("the cluster is starting up, rebalancing=(aborted=%t, running=%t)", aborted, running)
+		return
+	}
+	// resume
+	f := func() {
+		glog.Infoln("waiting for cluster startup to resume rebalance...")
+		for {
+			time.Sleep(time.Second)
+			if atomic.LoadInt64(&t.clusterStarted) != 0 {
+				break
+			}
+		}
+		glog.Infoln("resuming rebalance...")
+		t.runRebalance(t.smapowner.get(), "")
+	}
+	go runRebalanceOnce.Do(f) // only once at startup
 	return
+}
+
+func (t *targetrunner) pollClusterStarted() {
+	for {
+		time.Sleep(time.Second)
+		smap := t.smapowner.get()
+		if smap == nil || !smap.isValid() {
+			continue
+		}
+		psi := smap.ProxySI
+		args := callArgs{
+			request: nil,
+			si:      psi,
+			url:     psi.DirectURL + URLPath(Rversion, Rhealth),
+			method:  http.MethodGet,
+			injson:  nil,
+			timeout: noTimeout,
+		}
+		res := t.call(args)
+		if res.err != nil {
+			continue
+		}
+		proxystats := &proxyCoreStats{}
+		err := json.Unmarshal(res.outjson, proxystats)
+		if err != nil {
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.DirectURL, err, string(res.outjson))
+			continue
+		}
+		if proxystats.Uptime != 0 {
+			break
+		}
+	}
+	atomic.StoreInt64(&t.clusterStarted, 1)
+	glog.Infoln("cluster started up")
 }
 
 // broadcastNeighbors sends a message ([]byte) to all neighboring targets belongs to a smap

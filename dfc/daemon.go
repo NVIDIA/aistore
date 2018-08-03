@@ -272,11 +272,6 @@ func getproxystatsrunner() *proxystatsrunner {
 	return rr
 }
 
-func getproxystats() *proxyCoreStats {
-	rr := getproxystatsrunner()
-	return &rr.Core
-}
-
 func getproxykeepalive() *proxyKeepaliveRunner {
 	r := ctx.rg.runmap[xproxykeepalive]
 	rr, ok := r.(*proxyKeepaliveRunner)

@@ -129,11 +129,9 @@ type lruconfig struct {
 }
 
 type rebalanceconf struct {
-	StartupDelayTimeStr string        `json:"startup_delay_time"`
-	StartupDelayTime    time.Duration `json:"-"` // omitempty
-	DestRetryTimeStr    string        `json:"dest_retry_time"`
-	DestRetryTime       time.Duration `json:"-"` //
-	Enabled             bool          `json:"rebalancing_enabled"`
+	DestRetryTimeStr string        `json:"dest_retry_time"`
+	DestRetryTime    time.Duration `json:"-"` //
+	Enabled          bool          `json:"rebalancing_enabled"`
 }
 
 type testfspathconf struct {
@@ -294,9 +292,6 @@ func validateconf() (err error) {
 	}
 	if ctx.config.LRU.CapacityUpdTime, err = time.ParseDuration(ctx.config.LRU.CapacityUpdTimeStr); err != nil {
 		return fmt.Errorf("Bad capacity_upd_time format %s, err: %v", ctx.config.LRU.CapacityUpdTimeStr, err)
-	}
-	if ctx.config.Rebalance.StartupDelayTime, err = time.ParseDuration(ctx.config.Rebalance.StartupDelayTimeStr); err != nil {
-		return fmt.Errorf("Bad startup_delay_time format %s, err: %v", ctx.config.Rebalance.StartupDelayTimeStr, err)
 	}
 	if ctx.config.Rebalance.DestRetryTime, err = time.ParseDuration(ctx.config.Rebalance.DestRetryTimeStr); err != nil {
 		return fmt.Errorf("Bad dest_retry_time format %s, err: %v", ctx.config.Rebalance.DestRetryTimeStr, err)

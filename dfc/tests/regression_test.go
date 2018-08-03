@@ -58,13 +58,12 @@ var (
 	LowWaterMark     = uint32(60)
 	UpdTime          = time.Second * 20
 	configRegression = map[string]string{
-		"stats_time":         fmt.Sprintf("%v", UpdTime),
-		"dont_evict_time":    fmt.Sprintf("%v", UpdTime),
-		"capacity_upd_time":  fmt.Sprintf("%v", UpdTime),
-		"startup_delay_time": fmt.Sprintf("%v", UpdTime),
-		"lowwm":              fmt.Sprintf("%d", LowWaterMark),
-		"highwm":             fmt.Sprintf("%d", HighWaterMark),
-		"lru_enabled":        "true",
+		"stats_time":        fmt.Sprintf("%v", UpdTime),
+		"dont_evict_time":   fmt.Sprintf("%v", UpdTime),
+		"capacity_upd_time": fmt.Sprintf("%v", UpdTime),
+		"lowwm":             fmt.Sprintf("%d", LowWaterMark),
+		"highwm":            fmt.Sprintf("%d", HighWaterMark),
+		"lru_enabled":       "true",
 	}
 	httpclient = &http.Client{}
 )
@@ -584,11 +583,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 1. config
 	//
-	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
-	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
 	defer func() {
-		setConfig("startup_delay_time", orebconfig["startup_delay_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-
 		if created {
 			if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
 				t.Errorf("Failed to delete local bucket: %v", err)
@@ -599,11 +594,6 @@ func TestRebalance(t *testing.T) {
 	//
 	// cluster-wide reduce startup_delay_time
 	//
-	startupdelaytimestr := "20s"
-	setConfig("startup_delay_time", startupdelaytimestr, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t) // NOTE: 1 second
-	if t.Failed() {
-		return
-	}
 	waitProgressBar("Rebalance: ", time.Second*10)
 
 	//
@@ -727,7 +717,6 @@ func TestGetClusterStats(t *testing.T) {
 func TestConfig(t *testing.T) {
 	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
-	orebconfig := oconfig["rebalance_conf"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
@@ -736,7 +725,6 @@ func TestConfig(t *testing.T) {
 
 	nconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
-	nrebconfig := nconfig["rebalance_conf"].(map[string]interface{})
 	nperiodic := nconfig["periodic"].(map[string]interface{})
 
 	if nperiodic["stats_time"] != configRegression["stats_time"] {
@@ -759,13 +747,6 @@ func TestConfig(t *testing.T) {
 	} else {
 		o := olruconfig["capacity_upd_time"].(string)
 		setConfig("capacity_upd_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-	}
-	if nrebconfig["startup_delay_time"] != configRegression["startup_delay_time"] {
-		t.Errorf("StartupDelayTime was not set properly: %v, should be: %v",
-			nrebconfig["startup_delay_time"], configRegression["startup_delay_time"])
-	} else {
-		o := orebconfig["startup_delay_time"].(string)
-		setConfig("startup_delay_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)

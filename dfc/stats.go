@@ -58,6 +58,7 @@ type proxyCoreStats struct {
 	Getlatency  int64 `json:"getlatency"`  // microseconds
 	Putlatency  int64 `json:"putlatency"`  // ---/---
 	Listlatency int64 `json:"listlatency"` // ---/---
+	Uptime      int64 `json:"uptime"`      // proxy or cluster uptime: microseconds
 	Numerr      int64 `json:"numerr"`
 	// omitempty
 	ngets  int64

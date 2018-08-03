@@ -424,10 +424,17 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 
 // GET /Rversion/Rhealth
 func (p *proxyrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
-	proxycorestats := getproxystats()
-	jsbytes, err := json.Marshal(proxycorestats)
+	rr := getproxystatsrunner()
+	rr.Lock()
+	rr.Core.Uptime = int64(time.Since(p.starttime) / time.Microsecond)
+	if p.startedup(0) == 0 {
+		rr.Core.Uptime = 0
+	}
+	jsbytes, err := json.Marshal(rr.Core)
+	rr.Unlock()
+
 	assert(err == nil, err)
-	p.writeJSON(w, r, jsbytes, "targetcorestats")
+	p.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -1676,10 +1683,10 @@ func (p *proxyrunner) invokeHttpGetClusterStats(
 	out := &ClusterStatsRaw{}
 	out.Target = targetStats
 	rr := getproxystatsrunner()
-	rr.Lock()
+	rr.RLock()
 	out.Proxy = &rr.Core
 	jsbytes, err := json.Marshal(out)
-	rr.Unlock()
+	rr.RUnlock()
 	assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterStats")
 	return ok

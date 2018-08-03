@@ -42,7 +42,6 @@
 	    "disk_util_high_wm":     80
 	},
 	"rebalance_conf": {
-		"startup_delay_time":	"3m",
 		"dest_retry_time":	"2m",
 		"rebalancing_enabled": 	true
 	},

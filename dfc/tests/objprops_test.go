@@ -406,22 +406,17 @@ func propsMainTest(t *testing.T, versioning string) {
 	var (
 		chkVersion    = true
 		isLocalBucket = false
-		rbdelay       = "1s" // default startup_delay_time is 10m
 	)
 	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
 	versionCfg := config["version_config"].(map[string]interface{})
-	rebalanceCfg := config["rebalance_conf"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
-	oldRBDelay := rebalanceCfg["startup_delay_time"].(string)
 	if oldChkVersion != chkVersion {
 		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
 	if oldVersioning != versioning {
 		setConfig("versioning", versioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 	}
-	setConfig("startup_delay_time", rbdelay, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-
 	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 
 	defer func() {
@@ -432,10 +427,6 @@ func propsMainTest(t *testing.T, versioning string) {
 		if oldVersioning != versioning {
 			setConfig("versioning", oldVersioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		}
-		if oldRBDelay != "" {
-			setConfig("startup_delay_time", oldRBDelay, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-		}
-
 		if created {
 			if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
 				t.Errorf("Failed to delete local bucket: %v", err)
