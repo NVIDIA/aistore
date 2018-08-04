@@ -6,6 +6,7 @@
 package dfc_test
 
 import (
+	"math/rand"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -441,12 +442,14 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	targets := extractTargetsInfo(m.smap)
 
 	// Create local bucket
-	exists, err := client.DoesLocalBucketExist(proxyurl, clibucket)
+	exists, err := client.DoesLocalBucketExist(proxyurl, m.bucket)
 	checkFatal(err, t)
-	if !exists {
-		err = client.CreateLocalBucket(proxyurl, m.bucket)
+	if exists {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
 		checkFatal(err, t)
 	}
+	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	checkFatal(err, t)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
@@ -681,8 +684,9 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 
 func checkFatal(err error, t *testing.T) {
 	if err != nil {
+		tlogf("FATAL: %v\n", err)
 		debug.PrintStack()
-		t.Fatalf("error: %v", err)
+		t.Fatalf("FATAL: %v", err)
 	}
 }
 
@@ -714,4 +718,80 @@ func assertClusterState(m *metadata) {
 			proxyCount, m.originalProxyCount,
 		)
 	}
+}
+
+func TestForwardCP(t *testing.T) {
+	const (
+		num      = 10000
+		filesize = uint64(128)
+		seed     = int64(555)
+	)
+	var (
+		err    error
+		random = rand.New(rand.NewSource(seed))
+		m      = metadata{
+			t:               t,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          client.FastRandomFilename(random, 13),
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *dfc.SGLIO
+	)
+
+	// Step 1.
+	saveClusterState(&m)
+	if m.originalProxyCount < 2 {
+		t.Fatalf("Must have 2 or more proxies in the cluster, have only %d", m.originalProxyCount)
+	}
+
+	// Step 2.
+	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.DirectURL
+	nextProxyID, nextProxyURL, err := chooseNextProxy(&m.smap)
+	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
+	checkFatal(err, t)
+	tlogf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
+
+	if usingSG {
+		sgl = dfc.NewSGLIO(filesize)
+		defer sgl.Free()
+	}
+
+	// Step 3.
+	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	// Step 4. in parallel: run GETs and designate a new primary=nextProxyID
+	m.wg.Add(num*m.numGetsEachFile + 1)
+	doGetsInParallel(&m)
+
+	go func() {
+		setPrimaryTo(t, m.smap, nextProxyURL, nextProxyID, nextProxyURL)
+		m.wg.Done()
+	}()
+
+	m.wg.Wait()
+	if m.numGetErrsBefore+m.numGetErrsAfter > 0 {
+		t.Fatalf("Unexpected: GET errors before %d and after %d", m.numGetErrsBefore, m.numGetErrsAfter)
+	}
+
+	// Step 5. destroy local bucket via original primary which is not primary at this point
+	err = client.DestroyLocalBucket(origURL, m.bucket)
+	checkFatal(err, t)
+	tlogf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
+
+	// Step 6. restore original primary
+	// m.smap, err = client.GetClusterMap(proxyurl)
+	// checkFatal(err, m.t)
+	// setPrimaryTo(t, m.smap, nextProxyURL, origID, origURL)
 }

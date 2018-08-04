@@ -1351,7 +1351,7 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 			return fmt.Errorf("timed out waiting for sync-ed Smap version > %d from %s (v%d)", prevVersion, url, smap.Version)
 		}
 
-		fmt.Printf("wait for Smap to be synced (> v%d) with url: %s\n", prevVersion, url)
+		fmt.Printf("wait for Smap > v%d: %s\n", prevVersion, url)
 		time.Sleep(time.Second)
 	}
 	return nil

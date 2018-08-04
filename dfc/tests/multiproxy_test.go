@@ -784,6 +784,35 @@ loop:
 	client.DestroyLocalBucket(proxyurl, localBucketName)
 }
 
+// smap 	- current Smap
+// directURL	- DirectURL of the proxy that we send the request to
+//           	  (not necessarily the current primary)
+// toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
+func setPrimaryTo(t *testing.T, smap dfc.Smap, directURL, toID, toURL string) {
+	if directURL == "" {
+		directURL = smap.ProxySI.DirectURL
+	}
+	url := fmt.Sprintf("%s/%s/%s/%s/%s", directURL, dfc.Rversion, dfc.Rcluster, dfc.Rproxy, toID)
+	// http://host:8081/v1/cluster/proxy/15205:8080
+	tlogf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
+	req, err := http.NewRequest(http.MethodPut, url, nil)
+	checkFatal(err, t)
+
+	r, err := httpclient.Do(req)
+	checkFatal(err, t)
+	r.Body.Close()
+
+	smap, err = waitForPrimaryProxy("to designate new primary ID="+toID, smap.Version, testing.Verbose())
+	checkFatal(err, t)
+	if smap.ProxySI.DaemonID != toID {
+		t.Fatalf("Expected primary=%s, got %s", toID, smap.ProxySI.DaemonID)
+	}
+	if err = checkPmapVersions(); err != nil {
+		t.Fatal(err)
+	}
+	proxyurl = toURL
+}
+
 func chooseNextProxy(smap *dfc.Smap) (proxyid, proxyurl string, err error) {
 	pi, errstr := dfc.HrwProxy(smap, smap.ProxySI.DaemonID)
 	if errstr != "" {
@@ -1231,24 +1260,5 @@ func primarySetToOriginal(t *testing.T) {
 		return
 	}
 
-	url := fmt.Sprintf("%s/%s/%s/%s/%s", proxyurl, dfc.Rversion, dfc.Rcluster, dfc.Rproxy, origID)
-	// http://192.168.176.128:8081/v1/cluster/proxy/15205:8080
-	tlogf("Executing set-primary-proxy=%s on the current primary=%s\n", origID, currID)
-	tlogf("URL=%s\n", url)
-	req, err := http.NewRequest(http.MethodPut, url, nil)
-	checkFatal(err, t)
-
-	r, err := httpclient.Do(req)
-	checkFatal(err, t)
-
-	defer r.Body.Close()
-	proxyurl = origURL
-	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose())
-	checkFatal(err, t)
-	if smap.ProxySI.DaemonID != origID {
-		t.Errorf("Expected primary %s, received: %s", origID, smap.ProxySI.DaemonID)
-	}
-	if err = checkPmapVersions(); err != nil {
-		t.Error(err)
-	}
+	setPrimaryTo(t, smap, "", origID, origURL)
 }

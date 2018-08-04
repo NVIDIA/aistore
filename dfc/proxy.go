@@ -7,11 +7,14 @@
 package dfc
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"path/filepath"
 	"sort"
@@ -68,6 +71,11 @@ type proxyrunner struct {
 	authn      *authManager
 	startedUp  int64
 	metasyncer *metasyncer
+	rproxy     struct {
+		cloud *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
+		p     *httputil.ReverseProxy // requests that modify cluster-level metadata => current primary gateway
+		u     string                 // URL of the current primary
+	}
 }
 
 // start proxy runner
@@ -97,6 +105,13 @@ func (p *proxyrunner) run() error {
 	p.authn = &authManager{
 		tokens:        make(map[string]*authRec),
 		revokedTokens: make(map[string]bool),
+	}
+
+	if ctx.config.Net.HTTP.UseAsProxy {
+		p.rproxy.cloud = &httputil.ReverseProxy{
+			Director:  func(r *http.Request) {},
+			Transport: p.createTransport(0, 0),
+		}
 	}
 
 	//
@@ -209,11 +224,11 @@ func (p *proxyrunner) stop(err error) {
 	p.httprunner.stop(err)
 }
 
-//===========================================================================================
+//==================================
 //
-// http handlers: data and metadata
+// http /bucket and /object handlers
 //
-//===========================================================================================
+//==================================
 
 // verb /Rversion/Rbuckets/
 func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
@@ -311,7 +326,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error())
 			return
 		}
-		p.revProxy.ServeHTTP(w, req)
+		p.rproxy.cloud.ServeHTTP(w, req)
 	} else {
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
@@ -370,6 +385,9 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActDestroyLB:
+		if p.forwardCP(w, r, &msg, bucket, nil) {
+			return
+		}
 		bucketmd := p.bmdowner.get()
 		if !bucketmd.islocal(bucket) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not appear to be local", bucket))
@@ -454,7 +472,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case ActCreateLB:
-		if !p.checkPrimaryProxy("create local bucket", w, r) {
+		if p.forwardCP(w, r, &msg, lbucket, nil) {
 			return
 		}
 		p.bmdowner.Lock()
@@ -474,7 +492,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		pair := &revspair{clone, &msg}
 		p.metasyncer.sync(true, pair)
 	case ActRenameLB:
-		if !p.checkPrimaryProxy("rename local bucket", w, r) {
+		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
 		bucketFrom, bucketTo := lbucket, msg.Name
@@ -503,7 +521,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
 	case ActSyncLB:
-		if !p.checkPrimaryProxy("synchronize local buckets", w, r) {
+		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
 		p.metasyncer.sync(false, p.bmdowner.get())
@@ -679,11 +697,44 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
-//====================================================================================
+//============================
 //
 // supporting methods and misc
 //
-//====================================================================================
+//============================
+// forward control plane request to the current primary proxy
+// return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
+func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *ActionMsg, s string, body []byte) (forf bool) {
+	smap := p.smapowner.get()
+	if smap == nil || !smap.isValid() {
+		s := fmt.Sprintf("%s must be starting up: cannot execute %s:%s", p.si.DaemonID, msg.Action, s)
+		p.invalmsghdlr(w, r, s)
+		return true
+	}
+	if smap.isPrimary(p.si) {
+		return
+	}
+	if body == nil {
+		var err error
+		body, err = json.Marshal(msg)
+		assert(err == nil, err)
+	}
+	if p.rproxy.u != smap.ProxySI.DirectURL {
+		p.rproxy.u = smap.ProxySI.DirectURL
+		uparsed, err := url.Parse(smap.ProxySI.DirectURL)
+		assert(err == nil, err)
+		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
+		p.rproxy.p.Transport = p.createTransport(proxyMaxIdleConnsPer, 0)
+	}
+	if len(body) > 0 {
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		r.ContentLength = int64(len(body)) // directly setting content-length
+	}
+	glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si.DaemonID, msg.Action, s, smap.ProxySI.DaemonID)
+	p.rproxy.p.ServeHTTP(w, r)
+	return true
+}
+
 func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props BucketProps,
 	msg *ActionMsg, method string) bool {
 	smap4bcast := p.smapowner.get()
@@ -1232,11 +1283,88 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	}
 }
 
-//===========================
+//============
 //
-// control plane
+// AuthN stuff
 //
-//===========================
+//============
+func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
+	tokenList := &TokenList{}
+	apitems := p.restAPIItems(r.URL.Path, 5)
+	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
+		return
+	}
+
+	if err := p.readJSON(w, r, tokenList); err != nil {
+		s := fmt.Sprintf("Invalid token list: %v", err)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	p.authn.updateRevokedList(tokenList)
+
+	if p.smapowner.get().isPrimary(p.si) {
+		msg := &ActionMsg{Action: ActRevokeToken}
+		pair := &revspair{p.authn.revokedTokenList(), msg}
+		p.metasyncer.sync(false, pair)
+	}
+}
+
+// Read a token from request header and validates it
+// Header format:
+//		'Authorization: Bearer <token>'
+func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
+	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(s) != 2 || s[0] != tokenStart {
+		return nil, fmt.Errorf("Invalid request")
+	}
+
+	if p.authn == nil {
+		return nil, fmt.Errorf("Invalid credentials")
+	}
+
+	auth, err := p.authn.validateToken(s[1])
+	if err != nil {
+		glog.Errorf("Invalid token: %v", err)
+		return nil, fmt.Errorf("Invalid token")
+	}
+
+	return auth, nil
+}
+
+// A wrapper to check any request before delegating the request to real handler
+// If authentication is disabled, it does nothing.
+// If authentication is enabled, it looks for token in request header and
+// makes sure that it is valid
+func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
+	wrappedFunc := func(w http.ResponseWriter, r *http.Request) {
+		var (
+			auth *authRec
+			err  error
+		)
+
+		if ctx.config.Auth.Enabled {
+			if auth, err = p.validateToken(r); err != nil {
+				glog.Error(err)
+				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
+				return
+			}
+			if glog.V(3) {
+				glog.Infof("Logged as %s", auth.userID)
+			}
+		}
+
+		h.ServeHTTP(w, r)
+	}
+
+	return wrappedFunc
+}
+
+//======================
+//
+// http /daemon handlers
+//
+//======================
 
 // "/"+Rversion+"/"+Rdaemon
 func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
@@ -1453,10 +1581,12 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 
 	msg := &ActionMsg{Action: ActNewPrimary}
 	pair := &revspair{clone, msg}
+	bucketmd := p.bmdowner.get()
 	if glog.V(3) {
 		glog.Infof("Distributing Smap v%d with the newly elected primary %s = self", clone.version(), p.si.DaemonID)
+		glog.Infof("Distributing bucket-metadata v%d as well", bucketmd.version())
 	}
-	p.metasyncer.sync(true, pair)
+	p.metasyncer.sync(true, pair, bucketmd)
 	return
 }
 
@@ -1466,19 +1596,20 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	proxyid := apitems[1]
-	if !p.checkPrimaryProxy("designate new primary proxy '"+proxyid+"'", w, r) {
+	s := "designate new primary proxy '" + proxyid + "'"
+	if p.forwardCP(w, r, &ActionMsg{}, s, nil) {
 		return
 	}
-	if proxyid == p.si.DaemonID {
-		glog.Warningf("Request to set primary = %s = self: nothing to do", proxyid)
-		return
-	}
-
 	smap := p.smapowner.get()
 	psi, ok := smap.Pmap[proxyid]
 	if !ok {
 		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
 		p.invalmsghdlr(w, r, s)
+		return
+	}
+	if proxyid == p.si.DaemonID {
+		assert(p.si.DaemonID == smap.ProxySI.DaemonID) // must be forwardCP-ed
+		glog.Warningf("Request to set primary = %s = self: nothing to do", proxyid)
 		return
 	}
 
@@ -1495,7 +1626,6 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		smap,
 		ctx.config.Timeout.CplaneOperation,
 	)
-
 	for result := range results {
 		if result.err != nil {
 			s := fmt.Sprintf("Failed to set primary %s: err %v from %s in the prepare phase", proxyid, result.err, result.si.DaemonID)
@@ -1538,6 +1668,12 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+//=======================
+//
+// http /cluster handlers
+//
+//=======================
+
 // handler for: "/"+Rversion+"/"+Rcluster
 func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -1566,7 +1702,8 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handler for DFC to be used as an HTTP proxy
+// handler for DFC when utilized as a reverse proxy to handle unmodified requests
+// (not to confuse with p.rproxy)
 func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if baseURL == gcsURL && r.Method == http.MethodGet {
@@ -1581,7 +1718,7 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	p.httprunner.revProxy.ServeHTTP(w, r)
+	p.rproxy.cloud.ServeHTTP(w, r)
 }
 
 // gets target info
@@ -1718,9 +1855,13 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		keepalive, register   bool
 		isproxy, nonelectable bool
 		msg                   *ActionMsg
+		s                     string
 	)
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
+		return
+	}
+	if p.readJSON(w, r, &nsi) != nil {
 		return
 	}
 	if len(apitems) > 0 {
@@ -1738,10 +1879,14 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if p.readJSON(w, r, &nsi) != nil {
-		return
+	s = fmt.Sprintf("register %s (isproxy=%t, keepalive=%t)", nsi.DaemonID, isproxy, keepalive)
+	msg = &ActionMsg{Action: ActRegTarget}
+	if isproxy {
+		msg = &ActionMsg{Action: ActRegProxy}
 	}
-	if !p.checkPrimaryProxy(fmt.Sprintf("register %s (isproxy=%t, keepalive=%t)", nsi.DaemonID, isproxy, keepalive), w, r) {
+	body, err := json.Marshal(nsi)
+	assert(err == nil, err)
+	if p.forwardCP(w, r, msg, s, body) {
 		return
 	}
 	if net.ParseIP(nsi.NodeIPAddr) == nil {
@@ -1761,7 +1906,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			p.smapowner.Unlock()
 			return
 		}
-		msg = &ActionMsg{Action: ActRegProxy}
 	} else {
 		osi := smap.getTarget(nsi.DaemonID)
 		if !p.addOrUpdateNode(&nsi, osi, keepalive, "target") {
@@ -1789,7 +1933,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		msg = &ActionMsg{Action: ActRegTarget}
 	}
 	if p.startedup(0) == 0 { // see clusterStartup()
 		p.registerToSmap(isproxy, &nsi, nonelectable)
@@ -1880,9 +2023,6 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 
 // unregisters a target/proxy
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	if !p.checkPrimaryProxy("unregister target/proxy", w, r) {
-		return
-	}
 	apitems := p.restAPIItems(r.URL.Path, 6)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
 		return
@@ -1899,9 +2039,14 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		psi     *daemonInfo
 		sid     = apitems[1]
 	)
+	msg = &ActionMsg{Action: ActUnregTarget}
 	if sid == Rproxy {
+		msg = &ActionMsg{Action: ActUnregProxy}
 		isproxy = true
 		sid = apitems[2]
+	}
+	if p.forwardCP(w, r, msg, sid, nil) {
+		return
 	}
 
 	p.smapowner.Lock()
@@ -1920,7 +2065,6 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infof("unregistered proxy {%s} (num proxies %d)", sid, clone.countProxies())
 		}
-		msg = &ActionMsg{Action: ActUnregProxy}
 	} else {
 		osi = clone.getTarget(sid)
 		if osi == nil {
@@ -1946,7 +2090,6 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			glog.Warningf("The target %s that is being unregistered failed to respond back: %v, %s",
 				osi.DaemonID, res.err, res.errstr)
 		}
-		msg = &ActionMsg{Action: ActUnregTarget}
 	}
 	if p.startedup(0) == 0 { // see clusterStartup()
 		p.smapowner.put(clone)
@@ -1974,24 +2117,30 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
+	var (
+		apitems []string
+		msg     ActionMsg
+	)
+	apitems = p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
 		return
 	}
-	// cluster-wide: designate a new primary proxy (administratively)
+	// cluster-wide: designate a new primary proxy administratively
 	if len(apitems) > 0 && apitems[0] == Rproxy {
 		p.httpclusetprimaryproxy(w, r)
 		return
 	}
-
-	var msg ActionMsg
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
+	if p.forwardCP(w, r, &msg, "", nil) {
+		return
+	}
+
 	switch msg.Action {
 	case ActSetConfig:
 		if value, ok := msg.Value.(string); !ok {
-			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
+			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T)", msg.Value, msg.Value))
 		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
@@ -2036,9 +2185,6 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
 	case ActRebalance:
-		if !p.checkPrimaryProxy("initiate rebalance", w, r) {
-			return
-		}
 		pair := &revspair{p.smapowner.get(), &msg}
 		p.metasyncer.sync(false, pair)
 
@@ -2050,107 +2196,9 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 
 //========================
 //
-// delayed broadcasts
+// broadcasts: Rx and Tx
 //
 //========================
-
-func (p *proxyrunner) checkPrimaryProxy(action string, w http.ResponseWriter, r *http.Request) bool {
-	smap := p.smapowner.get()
-	if smap == nil || !smap.isValid() {
-		if p.startedup(0) != 0 { // must be starting up
-			smap = p.smapowner.get()
-			assert(smap.isValid(), smap.pp())
-		} else {
-			s := fmt.Sprintf("%s is starting up: cannot execute '%v' yet...", p.si.DaemonID, action)
-			p.invalmsghdlr(w, r, s)
-			return false
-		}
-	}
-	if smap.isPrimary(p.si) {
-		return true
-	}
-	s := fmt.Sprintf("%s is non-primary: cannot execute '%v'", p.si.DaemonID, action)
-	if smap.ProxySI != nil {
-		w.Header().Add(HeaderPrimaryProxyURL, smap.ProxySI.DirectURL)
-		w.Header().Add(HeaderPrimaryProxyID, smap.ProxySI.DaemonID)
-		s = fmt.Sprintf("%s, %s=%s", s, HeaderPrimaryProxyURL, smap.ProxySI.DirectURL)
-	}
-	p.invalmsghdlr(w, r, s)
-	return false
-}
-
-func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
-	tokenList := &TokenList{}
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
-		return
-	}
-
-	if err := p.readJSON(w, r, tokenList); err != nil {
-		s := fmt.Sprintf("Invalid token list: %v", err)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-
-	p.authn.updateRevokedList(tokenList)
-
-	if p.smapowner.get().isPrimary(p.si) {
-		msg := &ActionMsg{Action: ActRevokeToken}
-		pair := &revspair{p.authn.revokedTokenList(), msg}
-		p.metasyncer.sync(false, pair)
-	}
-}
-
-// Read a token from request header and validates it
-// Header format:
-//		'Authorization: Bearer <token>'
-func (p *proxyrunner) validateToken(r *http.Request) (*authRec, error) {
-	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
-	if len(s) != 2 || s[0] != tokenStart {
-		return nil, fmt.Errorf("Invalid request")
-	}
-
-	if p.authn == nil {
-		return nil, fmt.Errorf("Invalid credentials")
-	}
-
-	auth, err := p.authn.validateToken(s[1])
-	if err != nil {
-		glog.Errorf("Invalid token: %v", err)
-		return nil, fmt.Errorf("Invalid token")
-	}
-
-	return auth, nil
-}
-
-// A wrapper to check any request before delegating the request to real handler
-// If authentication is disabled, it does nothing.
-// If authentication is enabled, it looks for token in request header and
-// makes sure that it is valid
-func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
-	wrappedFunc := func(w http.ResponseWriter, r *http.Request) {
-		var (
-			auth *authRec
-			err  error
-		)
-
-		if ctx.config.Auth.Enabled {
-			if auth, err = p.validateToken(r); err != nil {
-				glog.Error(err)
-				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
-				return
-			}
-			if glog.V(3) {
-				glog.Infof("Logged as %s", auth.userID)
-			}
-		}
-
-		h.ServeHTTP(w, r)
-	}
-
-	return wrappedFunc
-}
-
 func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 	if p.smapowner.get().isPrimary(p.si) {
 		_, xx := p.xactinp.findL(ActElection)

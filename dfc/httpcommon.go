@@ -17,7 +17,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"path"
@@ -121,7 +120,6 @@ type httprunner struct {
 	keepalive             keepaliver
 	smapowner             *smapowner
 	bmdowner              *bmdowner
-	revProxy              *httputil.ReverseProxy
 }
 
 func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -153,13 +151,6 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
 	h.httpclientLongTimeout =
 		&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
-
-	if isproxy && ctx.config.Net.HTTP.UseAsProxy {
-		h.revProxy = &httputil.ReverseProxy{
-			Director:  func(r *http.Request) {},
-			Transport: h.createTransport(proxyMaxIdleConnsPer, numDaemons),
-		}
-	}
 
 	h.mux = http.NewServeMux()
 	h.smapowner = &smapowner{}
