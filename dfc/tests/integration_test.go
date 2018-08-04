@@ -7,7 +7,10 @@ package dfc_test
 
 import (
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -480,8 +483,6 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
 
-	tlogln("putting finished")
-
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
@@ -580,6 +581,168 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 
 	m.wg.Wait()
 	assertClusterState(&m)
+}
+
+func TestRenameEmptyLocalBucket(t *testing.T) {
+	const (
+		newTestLocalBucketName = TestLocalBucketName + "_new"
+	)
+	var (
+		err error
+		m   = metadata{
+			t:      t,
+			wg:     &sync.WaitGroup{},
+			bucket: TestLocalBucketName,
+		}
+	)
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	checkFatal(err, t)
+
+	// Rename it
+	err = client.RenameLocalBucket(proxyurl, m.bucket, newTestLocalBucketName)
+	checkFatal(err, t)
+
+	// Destroy renamed local bucket
+	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
+	checkFatal(err, t)
+}
+
+func TestRenameNonEmptyLocalBucket(t *testing.T) {
+	const (
+		newTestLocalBucketName = TestLocalBucketName + "_new"
+		num                    = 1000
+		filesize               = uint64(1024)
+		seed                   = int64(111)
+		maxErrPct              = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	checkFatal(err, t)
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Put some files
+	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	tlogln("putting finished")
+
+	// Rename it
+	oldLocalBucketName := m.bucket
+	m.bucket = newTestLocalBucketName
+	err = client.RenameLocalBucket(proxyurl, oldLocalBucketName, m.bucket)
+	checkFatal(err, t)
+
+	// Gets on renamed local bucket
+	m.wg.Add(num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+	resultsBeforeAfter(&m, num, maxErrPct)
+
+	// Destroy renamed local bucket
+	err = client.DestroyLocalBucket(proxyurl, m.bucket)
+	checkFatal(err, t)
+}
+
+func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
+	const (
+		newTestLocalBucketName = TestLocalBucketName + "_new"
+	)
+	var (
+		err error
+		m   = metadata{
+			t:      t,
+			wg:     &sync.WaitGroup{},
+			bucket: TestLocalBucketName,
+		}
+	)
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	localBucketDir := ""
+	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
+		if localBucketDir != "" {
+			return filepath.SkipDir
+		}
+		if strings.Contains(path, "local") {
+			localBucketDir = path
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	filepath.Walk(rootDir, fsWalkFunc)
+	bucketFQN := filepath.Join(localBucketDir, m.bucket)
+	newBucketFQN := filepath.Join(localBucketDir, newTestLocalBucketName)
+
+	// Create local bucket
+	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	checkFatal(err, t)
+	if _, err := os.Stat(bucketFQN); os.IsNotExist(err) {
+		t.Fatalf("local bucket folder was not created")
+	}
+
+	// Rename local bucket
+	err = client.RenameLocalBucket(proxyurl, m.bucket, newTestLocalBucketName)
+	checkFatal(err, t)
+	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
+		t.Fatalf("local bucket folder was not deleted")
+	}
+
+	if _, err := os.Stat(newBucketFQN); os.IsNotExist(err) {
+		t.Fatalf("new local bucket folder was not created")
+	}
+
+	// Destroy renamed local bucket
+	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
+	checkFatal(err, t)
+	if _, err := os.Stat(newBucketFQN); !os.IsNotExist(err) {
+		t.Fatalf("new local bucket folder was not deleted")
+	}
 }
 
 // see above - the T1/2/3 timeline and details

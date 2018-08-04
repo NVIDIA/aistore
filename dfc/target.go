@@ -1043,8 +1043,15 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	ch := make(chan string, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
-		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
+		// Create directory for new local bucket
+		toDir := filepath.Join(makePathLocal(mpathInfo.Path), bucketTo)
+		if err := CreateDir(toDir); err != nil {
+			ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
+			continue
+		}
+
 		wg.Add(1)
+		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
 		go func(fromdir string, wg *sync.WaitGroup) {
 			time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
 			ch <- t.renameOne(fromdir, bucketFrom, bucketTo)
@@ -3067,6 +3074,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	t.bmdowner.Unlock()
 
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	// Remove buckets which don't exist in newbucketmd
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
@@ -3078,11 +3086,15 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 			}
 		}
 	}
-	for _, mpathInfo := range availablePaths {
-		for bucket := range bucketmd.LBmap {
-			localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
-			if err := CreateDir(localbucketfqn); err != nil {
-				glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
+
+	// Create buckets which don't exist in (old)bucketmd
+	for bucket := range newbucketmd.LBmap {
+		if _, ok := bucketmd.LBmap[bucket]; !ok {
+			for _, mpathInfo := range availablePaths {
+				localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
+				if err := CreateDir(localbucketfqn); err != nil {
+					glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
+				}
 			}
 		}
 	}
