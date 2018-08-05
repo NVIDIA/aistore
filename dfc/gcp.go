@@ -19,6 +19,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -383,10 +384,10 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	gcpObj := client.Bucket(bucket).Object(objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
-	slab := selectslab(0)
-	buf := slab.alloc()
+	slab := iosgl.SelectSlab(0)
+	buf := slab.Alloc()
 	written, err := io.CopyBuffer(wc, file, buf)
-	slab.free(buf)
+	slab.Free(buf)
 	if err != nil {
 		errstr = fmt.Sprintf("PUT %s/%s: failed to copy, err: %v", bucket, objname, err)
 		return

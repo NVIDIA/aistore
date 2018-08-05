@@ -60,22 +60,6 @@ func MinU64(a, b uint64) uint64 {
 	return b
 }
 
-// MinI64 returns min value of a and b for int64 types
-func MinI64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func divCeil(a, b int64) int64 {
-	d, r := a/b, a%b
-	if r > 0 {
-		return d + 1
-	}
-	return d
-}
-
 func copyStruct(dst interface{}, src interface{}) {
 	x := reflect.ValueOf(src)
 	if x.Kind() == reflect.Ptr {

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
@@ -78,7 +79,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	var (
 		filenameCh = make(chan string, num)
 		errch      = make(chan error, num)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 		targets    = make(map[string]struct{})
 	)
 
@@ -89,7 +90,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -159,7 +160,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	var (
 		fileNameCh = make(chan string, numberOfFiles)
 		errorCh    = make(chan error, numberOfFiles)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 		bucketName = clibucket
 		targets    = make(map[string]struct{})
 	)
@@ -176,7 +177,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(fileSize)
+		sgl = iosgl.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -247,7 +248,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		num        = 2
 		filenameCh = make(chan string, num)
 		errch      = make(chan error, 100)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 		filesize   = uint64(1024)
 		seed       = int64(111)
 		fqn        string
@@ -262,7 +263,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -351,10 +352,10 @@ func TestListObjects(t *testing.T) {
 		errch           = make(chan error, numFiles*5)
 		filesput        = make(chan string, numfiles)
 		dir             = DeleteDir
-		sgl      *dfc.SGLIO
+		sgl      *iosgl.SGL
 	)
 	if usingSG {
-		sgl = dfc.NewSGLIO(fileSize)
+		sgl = iosgl.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 	tlogf("Create a list of %d objects", numFiles)
@@ -447,7 +448,7 @@ func TestRenameObjects(t *testing.T) {
 		errch     = make(chan error, numPuts)
 		basenames = make([]string, 0, numPuts) // basenames
 		bnewnames = make([]string, 0, numPuts) // new basenames
-		sgl       *dfc.SGLIO
+		sgl       *iosgl.SGL
 	)
 
 	err = client.CreateLocalBucket(proxyurl, RenameLocalBucketName)
@@ -486,7 +487,7 @@ func TestRenameObjects(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(1024 * 1024)
+		sgl = iosgl.NewSGL(1024 * 1024)
 		defer sgl.Free()
 	}
 
@@ -565,7 +566,7 @@ func TestRebalance(t *testing.T) {
 		filesput        = make(chan string, numPuts)
 		errch           = make(chan error, 100)
 		wg              = &sync.WaitGroup{}
-		sgl             *dfc.SGLIO
+		sgl             *iosgl.SGL
 		filesize        = uint64(1024 * 128)
 	)
 	filesSentOrig := make(map[string]int64)
@@ -616,7 +617,7 @@ func TestRebalance(t *testing.T) {
 	// step 3. put random files => (cluster - 1)
 	//
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
@@ -1218,13 +1219,13 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
-		sgl      *dfc.SGLIO
+		sgl      *iosgl.SGL
 		filesize = uint64(1024)
 		bucket   = rtd.bucket
 	)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 

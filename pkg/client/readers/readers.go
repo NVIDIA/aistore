@@ -17,7 +17,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
 )
@@ -49,9 +49,9 @@ func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (strin
 		hash string
 		h    *xxhash.XXHash64
 	)
-	blk, handle := dfc.AllocFromSlab(int64(1048576))
+	blk, s := iosgl.AllocFromSlab(int64(1048576))
 	blkSize := int64(len(blk))
-	defer dfc.FreeToSlab(blk, handle)
+	defer iosgl.FreeToSlab(blk, s)
 
 	if withHash {
 		h = xxhash.New64()
@@ -316,7 +316,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (client.Reader, error) {
 }
 
 type sgReader struct {
-	*dfc.Reader
+	*iosgl.Reader
 	xxHash string
 }
 
@@ -333,20 +333,20 @@ func (r *sgReader) XXHash() string {
 }
 
 // NewSGReader returns a new sgReader
-func NewSGReader(sgl *dfc.SGLIO, size int64, withHash bool) (client.Reader, error) {
+func NewSGReader(sgl *iosgl.SGL, size int64, withHash bool) (client.Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash, err := populateData(sgl, size, withHash, rnd)
 	if err != nil {
 		return nil, err
 	}
 
-	return &sgReader{dfc.NewReader(sgl), hash}, nil
+	return &sgReader{iosgl.NewReader(sgl), hash}, nil
 }
 
 // ParamReader is used to pass in parameters when creating a new reader
 type ParamReader struct {
 	Type       string     // file | sg | inmem | rand
-	SGL        *dfc.SGLIO // When Type == sg
+	SGL        *iosgl.SGL // When Type == sg
 	Path, Name string     // When Type == file; path and name of file to be created (if not already existing)
 	Size       int64
 }

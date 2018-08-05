@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
@@ -32,7 +33,7 @@ func TestPutFile(t *testing.T) {
 
 func TestPutSG(t *testing.T) {
 	size := 10
-	sgl := dfc.NewSGLIO(uint64(size))
+	sgl := iosgl.NewSGL(uint64(size))
 	defer sgl.Free()
 	err := putSG(sgl, int64(size), false /* withHash */)
 	if err != nil {
@@ -75,7 +76,7 @@ func putRand(size int64, withHash bool) error {
 	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
-func putSG(sgl *dfc.SGLIO, size int64, withHash bool) error {
+func putSG(sgl *iosgl.SGL, size int64, withHash bool) error {
 	sgl.Reset()
 	r, err := readers.NewSGReader(sgl, size, true /* withHash */)
 	if err != nil {
@@ -114,7 +115,7 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := dfc.NewSGLIO(1024 * 1024)
+	sgl := iosgl.NewSGL(1024 * 1024)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -153,7 +154,7 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := dfc.NewSGLIO(1024 * 1024)
+	sgl := iosgl.NewSGL(1024 * 1024)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -199,7 +200,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := dfc.NewSGLIO(1024 * 1024)
+		sgl := iosgl.NewSGL(1024 * 1024)
 		defer sgl.Free()
 
 		for pb.Next() {

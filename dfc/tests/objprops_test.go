@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 
 	"github.com/NVIDIA/dfcpub/dfc"
@@ -318,11 +319,11 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		numPuts    = objCountToTest
 		bucket     = clibucket
 		versionDir = "versionid"
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 	)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 

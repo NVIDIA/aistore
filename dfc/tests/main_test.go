@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
@@ -203,7 +204,7 @@ func Test_putdeleteRange(t *testing.T) {
 		numFiles     = 100
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
 	)
-	var sgl *dfc.SGLIO
+	var sgl *iosgl.SGL
 
 	if err := dfc.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
@@ -214,7 +215,7 @@ func Test_putdeleteRange(t *testing.T) {
 	filesize := uint64(16 * 1024)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -351,7 +352,7 @@ func Test_putdelete(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	var sgl *dfc.SGLIO
+	var sgl *iosgl.SGL
 	if err := dfc.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
@@ -362,7 +363,7 @@ func Test_putdelete(t *testing.T) {
 	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -523,7 +524,7 @@ func Test_coldgetmd5(t *testing.T) {
 		bucket    = clibucket
 		totalsize = numPuts * largefilesize
 		filesize  = uint64(largefilesize * 1024 * 1024)
-		sgl       *dfc.SGLIO
+		sgl       *iosgl.SGL
 	)
 
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
@@ -541,7 +542,7 @@ func Test_coldgetmd5(t *testing.T) {
 	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -985,7 +986,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		seed                   = baseseed + 111
 		errorChannel           = make(chan error, numFiles*5)
 		fileNameChannel        = make(chan string, numfiles)
-		sgl             *dfc.SGLIO
+		sgl             *iosgl.SGL
 		fqn             string
 		fileName        string
 		oldFileInfo     os.FileInfo
@@ -1000,7 +1001,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(fileSize)
+		sgl = iosgl.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1126,7 +1127,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		numFiles        = 3
 		fileNameChannel = make(chan string, numFiles)
 		errorChannel    = make(chan error, 100)
-		sgl             *dfc.SGLIO
+		sgl             *iosgl.SGL
 		fileSize        = uint64(1024)
 		seed            = int64(111)
 		bucketName      = TestLocalBucketName
@@ -1143,7 +1144,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(fileSize)
+		sgl = iosgl.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1240,7 +1241,7 @@ func TestRangeRead(t *testing.T) {
 		numFiles        = 1
 		fileNameChannel = make(chan string, numFiles)
 		errorChannel    = make(chan error, numFiles)
-		sgl             *dfc.SGLIO
+		sgl             *iosgl.SGL
 		fileSize        = uint64(1024)
 		seed            = int64(131)
 		bucketName      = clibucket
@@ -1248,7 +1249,7 @@ func TestRangeRead(t *testing.T) {
 	)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(fileSize)
+		sgl = iosgl.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1418,7 +1419,7 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 		numPuts     = 5
 		filesize    = uint64(largefilesize * 1024 * 1024)
-		sgl         *dfc.SGLIO
+		sgl         *iosgl.SGL
 		totalio     = numPuts * largefilesize
 	)
 
@@ -1435,7 +1436,7 @@ func Test_checksum(t *testing.T) {
 	ochksum := cksumconfig["checksum"].(string)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 

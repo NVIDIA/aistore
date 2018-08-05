@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -100,7 +101,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	}
 }
 
-func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *dfc.SGLIO) {
+func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *iosgl.SGL) {
 	var (
 		seed     = baseseed + 300
 		filesize = uint64(64 * 1024)
@@ -160,7 +161,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 func TestFSCheckerDetection(t *testing.T) {
 	var (
 		err      error
-		sgl      *dfc.SGLIO
+		sgl      *iosgl.SGL
 		seed     = baseseed + 300
 		numObjs  = 100
 		filesize = uint64(64 * 1024)
@@ -217,7 +218,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 

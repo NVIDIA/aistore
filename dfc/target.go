@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -473,11 +474,11 @@ existslocally:
 		size = length
 	}
 
-	slab := selectslab(size)
-	buf := slab.alloc()
-	defer slab.free(buf)
+	slab := iosgl.SelectSlab(size)
+	buf := slab.Alloc()
+	defer slab.Free(buf)
 
-	var sgl *SGLIO
+	var sgl *iosgl.SGL
 	defer func() {
 		if sgl != nil {
 			sgl.Free()
@@ -530,11 +531,11 @@ existslocally:
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
-	cksum string, sgl *SGLIO, rangeReader io.ReadSeeker, errstr string) {
+	cksum string, sgl *iosgl.SGL, rangeReader io.ReadSeeker, errstr string) {
 	rangeReader = io.NewSectionReader(file, offset, length)
 	xx := xxhash.New64()
 	if length <= maxBytesInMem {
-		sgl = NewSGLIO(uint64(length))
+		sgl = iosgl.NewSGL(uint64(length))
 		_, err := ReceiveAndChecksum(sgl, rangeReader, buf, xx)
 		if err != nil {
 			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
@@ -542,7 +543,7 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offse
 			return
 		}
 		// overriding rangeReader here to read from the sgl
-		rangeReader = NewReader(sgl)
+		rangeReader = iosgl.NewReader(sgl)
 	}
 
 	_, err := rangeReader.Seek(0, io.SeekStart)
@@ -1720,7 +1721,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		hdhobj, nhobj              cksumvalue
 		xxhashval                  string
 		htype, hval, nhtype, nhval string
-		sgl                        *SGLIO
+		sgl                        *iosgl.SGL
 		started                    time.Time
 	)
 	started = time.Now()
@@ -1741,8 +1742,8 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		file, err = os.Open(fqn)
 		// exists - compute checksum and compare with the caller's
 		if err == nil {
-			slab := selectslab(0) // unknown size
-			buf := slab.alloc()
+			slab := iosgl.SelectSlab(0)
+			buf := slab.Alloc()
 			if htype == ChecksumXXHash {
 				xxhashval, errstr = ComputeXXHash(file, buf)
 			} else {
@@ -1752,7 +1753,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			if errstr != "" {
 				glog.Warningf("Warning: Bad checksum: %s: %v", fqn, errstr)
 			}
-			slab.free(buf)
+			slab.Free(buf)
 			// not a critical error
 			if err = file.Close(); err != nil {
 				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
@@ -1797,12 +1798,12 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	return
 }
 
-func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, objname, putfqn, fqn string, objprops *objectProps) {
-	slab := selectslab(sgl.Size())
-	buf := slab.alloc()
+func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {
+	slab := iosgl.SelectSlab(sgl.Size())
+	buf := slab.Alloc()
 	defer func() {
 		sgl.Free()
-		slab.free(buf)
+		slab.Free(buf)
 	}()
 	// sgl => fqn sequence
 	file, err := CreateFile(putfqn)
@@ -1811,7 +1812,7 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *SGLIO, bucket, o
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
 		return
 	}
-	reader := NewReader(sgl)
+	reader := iosgl.NewReader(sgl)
 	written, err := io.CopyBuffer(file, reader, buf)
 	if err != nil {
 		t.fshc(err, putfqn)
@@ -2205,15 +2206,15 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, XattrObjVersion, errstr)
 	}
 
-	slab := selectslab(size)
+	slab := iosgl.SelectSlab(size)
 	if cksumcfg.Checksum != ChecksumNone {
 		assert(cksumcfg.Checksum == ChecksumXXHash)
-		buf := slab.alloc()
+		buf := slab.Alloc()
 		if xxhashval, errstr = ComputeXXHash(file, buf); errstr != "" {
-			slab.free(buf)
+			slab.Free(buf)
 			return errstr
 		}
-		slab.free(buf)
+		slab.Free(buf)
 	}
 	_, err = file.Seek(0, 0)
 	if err != nil {
@@ -2568,7 +2569,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 //
 //==============================================================================================
 func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalue,
-	reader io.Reader) (sgl *SGLIO, nhobj cksumvalue, written int64, errstr string) {
+	reader io.Reader) (sgl *iosgl.SGL, nhobj cksumvalue, written int64, errstr string) {
 	var (
 		err                  error
 		file                 *os.File
@@ -2589,10 +2590,10 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		return
 	}
 	filewriter = file
-	slab := selectslab(0)
-	buf := slab.alloc()
+	slab := iosgl.SelectSlab(0)
+	buf := slab.Alloc()
 	defer func() { // free & cleanup on err
-		slab.free(buf)
+		slab.Free(buf)
 		if errstr == "" {
 			return
 		}
@@ -3286,11 +3287,11 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 		return false, errstr
 	}
 
-	slab := selectslab(slabSize)
-	buf := slab.alloc()
+	slab := iosgl.SelectSlab(slabSize)
+	buf := slab.Alloc()
 	xxHashValue, errstr := ComputeXXHash(file, buf)
 	file.Close()
-	slab.free(buf)
+	slab.Free(buf)
 
 	if errstr != "" {
 		errstr := fmt.Sprintf("Unable to compute xxHash, err: %s", errstr)
@@ -3363,10 +3364,10 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 		// hash already there, no need to compute a new one
 		return nil
 	}
-	slab := selectslab(0)
-	buf := slab.alloc()
+	slab := iosgl.SelectSlab(0)
+	buf := slab.Alloc()
 	xxHashVal, errstr := ComputeXXHash(file, buf)
-	slab.free(buf)
+	slab.Free(buf)
 	if errstr != "" {
 		glog.Warningf("failed to calculate cash on %s, error: %v", fqn, errstr)
 		return errors.New(errstr)

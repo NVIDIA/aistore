@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
@@ -86,13 +87,13 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	var (
 		nGet = int(float32(numworkers) * ratio)
 		nPut = numworkers - nGet
-		sgls = make([]*dfc.SGLIO, numworkers, numworkers)
+		sgls = make([]*iosgl.SGL, numworkers, numworkers)
 	)
 
 	// Get the workers started
 	if usingSG {
 		for i := 0; i < numworkers; i++ {
-			sgls[i] = dfc.NewSGLIO(uint64(filesize))
+			sgls[i] = iosgl.NewSGL(uint64(filesize))
 		}
 		defer func() {
 			for _, sgl := range sgls {
@@ -105,7 +106,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			wg.Add(1)
 			go func(i int) {
-				var sgl *dfc.SGLIO
+				var sgl *iosgl.SGL
 				if usingSG {
 					sgl = sgls[i]
 				}
@@ -179,7 +180,7 @@ func getRandomFiles(seed int64, numGets int, bucket, prefix string, t *testing.T
 
 func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket string,
 	t *testing.T, errch chan error, filesput chan string,
-	dir, keystr string, silent bool, sgl *dfc.SGLIO) {
+	dir, keystr string, silent bool, sgl *iosgl.SGL) {
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	for _, fname := range objList {
@@ -230,7 +231,7 @@ func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket st
 
 func putRandomFiles(seed int64, fileSize uint64, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
-	dir, keystr string, silent bool, sgl *dfc.SGLIO) {
+	dir, keystr string, silent bool, sgl *iosgl.SGL) {
 	if wg != nil {
 		defer wg.Done()
 	}

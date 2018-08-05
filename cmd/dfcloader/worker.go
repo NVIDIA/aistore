@@ -10,16 +10,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 func doPut(wo *workOrder) {
-	var sgl *dfc.SGLIO
+	var sgl *iosgl.SGL
 	if runParams.usingSG {
-		sgl = dfc.NewSGLIO(uint64(wo.size))
+		sgl = iosgl.NewSGL(uint64(wo.size))
 		defer sgl.Free()
 	}
 

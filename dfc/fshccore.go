@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/iosgl"
 )
 
 const (
@@ -263,7 +264,7 @@ func (f *fsHealthChecker) checkFile(filepath string) {
 }
 
 // reads the entire file content
-func (f *fsHealthChecker) tryReadFile(fqn string, sgl *SGLIO) error {
+func (f *fsHealthChecker) tryReadFile(fqn string, sgl *iosgl.SGL) error {
 	stat, err := os.Stat(fqn)
 	if err != nil {
 		return err
@@ -274,9 +275,9 @@ func (f *fsHealthChecker) tryReadFile(fqn string, sgl *SGLIO) error {
 	}
 	defer file.Close()
 
-	slab := selectslab(sgl.Size())
-	buf := slab.alloc()
-	defer slab.free(buf)
+	slab := iosgl.SelectSlab(sgl.Size())
+	buf := slab.Alloc()
+	defer slab.Free(buf)
 
 	written, err := io.CopyBuffer(ioutil.Discard, file, buf)
 	if err == nil && written < stat.Size() {
@@ -287,7 +288,7 @@ func (f *fsHealthChecker) tryReadFile(fqn string, sgl *SGLIO) error {
 }
 
 // creates a random file in a random directory inside a mountpath
-func (f *fsHealthChecker) tryWriteFile(mountpath string, fileSize int, sgl *SGLIO) error {
+func (f *fsHealthChecker) tryWriteFile(mountpath string, fileSize int, sgl *iosgl.SGL) error {
 	tmpdir, err := ioutil.TempDir(mountpath, fshcNameTemplate)
 	if err != nil {
 		glog.Errorf("Failed to create temporary directory: %v", err)
@@ -306,10 +307,10 @@ func (f *fsHealthChecker) tryWriteFile(mountpath string, fileSize int, sgl *SGLI
 		return err
 	}
 
-	slab := selectslab(sgl.Size())
-	buf := slab.alloc()
+	slab := iosgl.SelectSlab(sgl.Size())
+	buf := slab.Alloc()
 	defer func() {
-		slab.free(buf)
+		slab.Free(buf)
 		if err := tmpfile.Close(); err != nil {
 			glog.Errorf("Failed to close tempory file %s: %v", tmpfile.Name(), err)
 		}
@@ -352,7 +353,7 @@ func (f *fsHealthChecker) testMountpath(filepath, mountpath string,
 		return 0, 0, false
 	}
 
-	sgl := NewSGLIO(0)
+	sgl := iosgl.NewSGL(0)
 	defer sgl.Free()
 
 	totalReads, totalWrites := 0, 0

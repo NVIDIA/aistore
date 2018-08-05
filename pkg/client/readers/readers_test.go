@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
@@ -235,7 +235,7 @@ func TestSGReader(t *testing.T) {
 	{
 		// Basic read
 		size := int64(1024)
-		sgl := dfc.NewSGLIO(uint64(size))
+		sgl := iosgl.NewSGL(uint64(size))
 		defer sgl.Free()
 
 		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
@@ -267,7 +267,7 @@ func TestSGReader(t *testing.T) {
 
 	{
 		size := int64(1024)
-		sgl := dfc.NewSGLIO(uint64(size))
+		sgl := iosgl.NewSGL(uint64(size))
 		defer sgl.Free()
 
 		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
@@ -315,7 +315,7 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	sgl := dfc.NewSGLIO(1024 * 1024)
+	sgl := iosgl.NewSGL(1024 * 1024)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -363,7 +363,7 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	sgl := dfc.NewSGLIO(1024 * 1024)
+	sgl := iosgl.NewSGL(1024 * 1024)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {

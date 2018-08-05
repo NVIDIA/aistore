@@ -16,6 +16,7 @@ import (
 	"runtime/debug"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -78,7 +79,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		// during which GET errors can occur - see the timeline comment below
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 	)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -109,7 +110,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -178,7 +179,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 	)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -213,7 +214,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -328,7 +329,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 	)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -352,7 +353,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -431,7 +432,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 	)
 
 	// Initialize metadata
@@ -457,7 +458,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	}()
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -740,7 +741,7 @@ func TestForwardCP(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *dfc.SGLIO
+		sgl        *iosgl.SGL
 	)
 
 	// Step 1.
@@ -757,7 +758,7 @@ func TestForwardCP(t *testing.T) {
 	tlogf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
 
 	if usingSG {
-		sgl = dfc.NewSGLIO(filesize)
+		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
