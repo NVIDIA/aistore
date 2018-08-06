@@ -19,6 +19,8 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
+const NeighborRebalanceStartDelay = 10 * time.Second
+
 var runRebalanceOnce = &sync.Once{}
 
 type xrebpathrunner struct {
@@ -112,7 +114,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 	}
 
 	// Phase 2: Wait to ensure any rebalancing on neighbor has kicked in.
-	time.Sleep(10 * time.Second)
+	time.Sleep(NeighborRebalanceStartDelay)
 
 	// Phase 3: Call thy neighbor to check whether it is rebalancing and wait until it is not.
 	url = si.DirectURL + URLPath(Rversion, Rhealth)

@@ -1265,6 +1265,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 //========
 
 func waitForRebalanceToComplete(t *testing.T) {
+	time.Sleep(dfc.NeighborRebalanceStartDelay)
 OUTER:
 	for {
 		// Wait before querying so the rebalance statistics are populated.

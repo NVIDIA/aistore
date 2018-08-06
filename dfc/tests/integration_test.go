@@ -23,6 +23,8 @@ import (
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
+const rebalanceObjectDistributionTestCoef = 0.3
+
 type repFile struct {
 	repetitions int
 	filename    string
@@ -511,6 +513,197 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	resultsBeforeAfter(&m, num, maxErrPct)
 	assertClusterState(&m)
+}
+
+func TestPutDuringRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	const (
+		num       = 10000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 1,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	// Init. metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targets := extractTargetsInfo(m.smap)
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}()
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Unregister a target
+	tlogf("Trying to unregister target: %s\n", targets[0].directURL)
+	err = client.UnregisterTarget(proxyurl, targets[0].sid)
+	checkFatal(err, t)
+	n := len(getClusterMap(t).Tmap)
+	if n != m.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+
+	// Start putting files and register target in parallel
+	m.wg.Add(1)
+	go func() {
+		// sleep some time to wait for PUT operations to begin
+		time.Sleep(3 * time.Second)
+		tlogf("Trying to register target: %s\n", targets[0].directURL)
+		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
+		checkFatal(err, t)
+		m.wg.Done()
+		tlogf("Target %s is registered again.\n", targets[0].directURL)
+	}()
+
+	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+	tlogf("Putting finished.\n")
+
+	// Wait for everything to finish
+	m.wg.Wait()
+	waitForRebalanceToComplete(t)
+
+	// main check - try to read all objects
+	m.wg.Add(num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	checkObjectDistribution(t, &m)
+
+	assertClusterState(&m)
+}
+
+func TestGetDuringRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	const (
+		num       = 10000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 0
+	)
+
+	var (
+		md = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 1,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		mdAfterRebalance = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 1,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10),
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		err        error
+		filenameCh = make(chan string, md.num)
+		errch      = make(chan error, md.num)
+		sgl        *iosgl.SGL
+	)
+
+	// Init. metadata
+	saveClusterState(&md)
+	if md.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", md.originalTargetCount)
+	}
+	targets := extractTargetsInfo(md.smap)
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, md.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, md.bucket)
+		checkFatal(err, t)
+	}()
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Unregister a target
+	err = client.UnregisterTarget(proxyurl, targets[0].sid)
+	checkFatal(err, t)
+	n := len(getClusterMap(t).Tmap)
+	if n != md.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
+	}
+
+	// Start putting files into bucket
+	tlogf("Putting %d files into bucket %s...\n", num, md.bucket)
+	putRandomFiles(seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+	for f := range filenameCh {
+		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
+		mdAfterRebalance.repFilenameCh <- repFile{repetitions: mdAfterRebalance.numGetsEachFile, filename: f}
+	}
+	tlogf("Putting finished.\n")
+
+	// Start getting files and register target in parallel
+	md.wg.Add(num * md.numGetsEachFile)
+	doGetsInParallel(&md)
+
+	tlogf("Trying to register target: %s\n", targets[0].directURL)
+	err = client.RegisterTarget(targets[0].sid, targets[0].directURL, md.smap)
+	checkFatal(err, t)
+
+	// wait for everything to finish
+	waitForRebalanceToComplete(t)
+	md.wg.Wait()
+
+	// read files once again
+	mdAfterRebalance.wg.Add(num * mdAfterRebalance.numGetsEachFile)
+	doGetsInParallel(&mdAfterRebalance)
+	mdAfterRebalance.wg.Wait()
+	resultsBeforeAfter(&mdAfterRebalance, num, maxErrPct)
+
+	assertClusterState(&md)
 }
 
 func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
@@ -1084,6 +1277,28 @@ func createFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
 	}
 	err = client.CreateLocalBucket(proxyurl, bucketFQN)
 	checkFatal(err, t)
+}
+
+func checkObjectDistribution(t *testing.T, m *metadata) {
+	var (
+		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
+		targetObjectCount = make(map[string]int64)
+	)
+	tlogf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
+	bucketList, err := client.ListBucket(proxyurl, m.bucket, &dfc.GetMsg{GetProps: dfc.GetTargetURL}, 0)
+	checkFatal(err, t)
+	for _, obj := range bucketList.Entries {
+		targetObjectCount[obj.TargetURL] += 1
+	}
+	if len(targetObjectCount) != m.originalTargetCount {
+		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",
+			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bucket)
+	}
+	for targetURL, objCount := range targetObjectCount {
+		if objCount < requiredCount {
+			t.Fatalf("Rebalance error, target %s didn't receive required number of objects\n", targetURL)
+		}
+	}
 }
 
 func TestForwardCP(t *testing.T) {
