@@ -4,10 +4,57 @@ All URIs are relative to *http://localhost:8080/v1*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
+[**create_mountpath**](DaemonApi.md#create_mountpath) | **PUT** /daemon/mountpaths/ | Create mountpath on target
 [**get**](DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
+[**modify_mountpath**](DaemonApi.md#modify_mountpath) | **POST** /daemon/mountpaths/ | Perform operations on mountpath such as disable and enable
 [**perform_operation**](DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
-[**perform_operation_0**](DaemonApi.md#perform_operation_0) | **PUT** /daemon/mountpaths/ | Enable a filesystem on a DFC target
+[**remove_mounpath**](DaemonApi.md#remove_mounpath) | **DELETE** /daemon/mountpaths/ | Remove mountpath from target
 
+
+# **create_mountpath**
+> create_mountpath(input_parameters)
+
+Create mountpath on target
+
+### Example
+```python
+from __future__ import print_function
+import time
+import openapi_client
+from openapi_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = openapi_client.DaemonApi()
+input_parameters = openapi_client.InputParameters() # InputParameters | 
+
+try:
+    # Create mountpath on target
+    api_instance.create_mountpath(input_parameters)
+except ApiException as e:
+    print("Exception when calling DaemonApi->create_mountpath: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **input_parameters** | [**InputParameters**](InputParameters.md)|  | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: text/plain
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **get**
 > object get(what)
@@ -52,6 +99,51 @@ No authorization required
 
  - **Content-Type**: Not defined
  - **Accept**: application/jsontext/plain
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **modify_mountpath**
+> modify_mountpath(input_parameters)
+
+Perform operations on mountpath such as disable and enable
+
+### Example
+```python
+from __future__ import print_function
+import time
+import openapi_client
+from openapi_client.rest import ApiException
+from pprint import pprint
+
+# create an instance of the API class
+api_instance = openapi_client.DaemonApi()
+input_parameters = openapi_client.InputParameters() # InputParameters | 
+
+try:
+    # Perform operations on mountpath such as disable and enable
+    api_instance.modify_mountpath(input_parameters)
+except ApiException as e:
+    print("Exception when calling DaemonApi->modify_mountpath: %s\n" % e)
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **input_parameters** | [**InputParameters**](InputParameters.md)|  | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+ - **Content-Type**: application/json
+ - **Accept**: text/plain
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
@@ -100,10 +192,10 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-# **perform_operation_0**
-> perform_operation_0(file_system_request)
+# **remove_mounpath**
+> remove_mounpath(input_parameters)
 
-Enable a filesystem on a DFC target
+Remove mountpath from target
 
 ### Example
 ```python
@@ -115,20 +207,20 @@ from pprint import pprint
 
 # create an instance of the API class
 api_instance = openapi_client.DaemonApi()
-file_system_request = openapi_client.FileSystemRequest() # FileSystemRequest | 
+input_parameters = openapi_client.InputParameters() # InputParameters | 
 
 try:
-    # Enable a filesystem on a DFC target
-    api_instance.perform_operation_0(file_system_request)
+    # Remove mountpath from target
+    api_instance.remove_mounpath(input_parameters)
 except ApiException as e:
-    print("Exception when calling DaemonApi->perform_operation_0: %s\n" % e)
+    print("Exception when calling DaemonApi->remove_mounpath: %s\n" % e)
 ```
 
 ### Parameters
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **file_system_request** | [**FileSystemRequest**](FileSystemRequest.md)|  | 
+ **input_parameters** | [**InputParameters**](InputParameters.md)|  | 
 
 ### Return type
 

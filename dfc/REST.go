@@ -40,6 +40,12 @@ const (
 	ActUnregProxy  = "unregproxy"
 	ActNewPrimary  = "newprimary"
 	ActRevokeToken = "revoketoken"
+
+	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
+	ActMountpathEnable  = "enable"
+	ActMountpathDisable = "disable"
+	ActMountpathAdd     = "add"
+	ActMountpathRemove  = "remove"
 )
 
 // Cloud Provider enum
@@ -134,11 +140,6 @@ type SmapVoteMsg struct {
 type MountpathList struct {
 	Available []string `json:"available"`
 	Disabled  []string `json:"disabled"`
-}
-
-// MountpathReq is used in requests to make disabled mountpath an available one
-type MountpathReq struct {
-	Mountpath string `json:"mountpath"`
 }
 
 //===================

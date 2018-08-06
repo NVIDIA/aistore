@@ -1238,23 +1238,42 @@ func TargetMountpaths(targetUrl string) (*dfc.MountpathList, error) {
 
 func EnableTargetMountpath(daemonUrl, mpath string) error {
 	url := daemonUrl + dfc.URLPath(dfc.Rversion, dfc.Rdaemon, dfc.Rmountpaths)
-	reqBody := dfc.MountpathReq{mpath}
-	msg, err := json.Marshal(reqBody)
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActMountpathEnable, Value: mpath})
 	if err != nil {
 		return err
 	}
 
-	req, _ := http.NewRequest("PUT", url, bytes.NewReader(msg))
-	resp, err := client.Do(req)
+	return HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
+}
 
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
+func DisableTargetMountpath(daemonUrl, mpath string) error {
+	url := daemonUrl + dfc.URLPath(dfc.Rversion, dfc.Rdaemon, dfc.Rmountpaths)
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActMountpathDisable, Value: mpath})
+	if err != nil {
+		return err
+	}
 
-	_, _, err = readResponse(resp, ioutil.Discard, err, daemonUrl, false /* validate */)
-	return err
+	return HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
+}
+
+func AddTargetMountpath(daemonUrl, mpath string) error {
+	url := daemonUrl + dfc.URLPath(dfc.Rversion, dfc.Rdaemon, dfc.Rmountpaths)
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActMountpathAdd, Value: mpath})
+	if err != nil {
+		return err
+	}
+
+	return HTTPRequest(http.MethodPut, url, bytes.NewBuffer(msg))
+}
+
+func RemoveTargetMountpath(daemonUrl, mpath string) error {
+	url := daemonUrl + dfc.URLPath(dfc.Rversion, dfc.Rdaemon, dfc.Rmountpaths)
+	msg, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActMountpathRemove, Value: mpath})
+	if err != nil {
+		return err
+	}
+
+	return HTTPRequest(http.MethodDelete, url, bytes.NewBuffer(msg))
 }
 
 func UnregisterTarget(proxyURL, sid string) error {

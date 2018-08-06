@@ -2349,7 +2349,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			t.receiveMeta(w, r)
 			return
 		case Rmountpaths:
-			t.enableMountpath(w, r)
+			t.handleMountpathReq(w, r)
 			return
 		default:
 		}
@@ -2538,34 +2538,55 @@ func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 	return allXactionDetails
 }
 
-// management interface to register (unregistered) self
+// register target
+// enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+	apiItems := t.restAPIItems(r.URL.Path, 5)
+	if apiItems = t.checkRestAPI(w, r, apiItems, 1, Rversion, Rdaemon); apiItems == nil {
 		return
 	}
-	if len(apitems) > 0 && apitems[0] == Rregister {
+
+	switch apiItems[0] {
+	case Rregister:
+		if status, err := t.register(0); err != nil {
+			s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
+			t.invalmsghdlr(w, r, s)
+			return
+		}
+		if glog.V(3) {
+			glog.Infof("Registered self %s", t.si.DaemonID)
+		}
+
 		if glog.V(3) {
 			glog.Infoln("Sending register signal to target keepalive control channel")
 		}
 		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
 		return
-	}
-	if status, err := t.register(0); err != nil {
-		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
-		t.invalmsghdlr(w, r, s)
+	case Rmountpaths:
+		t.handleMountpathReq(w, r)
 		return
-	}
-	if glog.V(3) {
-		glog.Infof("Registered self %s", t.si.DaemonID)
+	default:
+		t.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
+		return
 	}
 }
 
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	if glog.V(3) {
-		glog.Infoln("Sending unregister signal to target keepalive control channel")
+	apiItems := t.restAPIItems(r.URL.Path, 5)
+	if apiItems = t.checkRestAPI(w, r, apiItems, 1, Rversion, Rdaemon); apiItems == nil {
+		return
 	}
-	gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
+
+	if len(apiItems) > 0 {
+		switch apiItems[0] {
+		case Rmountpaths:
+			t.handleMountpathReq(w, r)
+			return
+		default:
+			t.invalmsghdlr(w, r, "unrecognized path in /daemon DELETE")
+			return
+		}
+	}
 }
 
 //====================== common for both cold GET and PUT ======================================
@@ -2990,28 +3011,94 @@ func makePathCloud(basePath string) string {
 	return filepath.Join(basePath, ctx.config.CloudBuckets)
 }
 
-func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request) {
-	mp := MountpathReq{}
-	if t.readJSON(w, r, &mp) != nil {
+func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
+	msg := ActionMsg{}
+	if t.readJSON(w, r, &msg) != nil {
+		t.invalmsghdlr(w, r, "Invalid mountpath request")
 		return
 	}
-	if mp.Mountpath == "" {
+
+	mountpath, ok := msg.Value.(string)
+	if !ok {
+		t.invalmsghdlr(w, r, "Invalid value in request")
+		return
+	}
+
+	if mountpath == "" {
 		t.invalmsghdlr(w, r, "Mountpath is not defined")
 		return
 	}
 
-	enabled, exists := ctx.mountpaths.EnableMountpath(mp.Mountpath)
+	switch msg.Action {
+	case ActMountpathEnable:
+		t.enableMountpath(w, r, mountpath)
+	case ActMountpathDisable:
+		t.disableMountpath(w, r, mountpath)
+	case ActMountpathAdd:
+		t.addMountpath(w, r, mountpath)
+	case ActMountpathRemove:
+		t.removeMountpath(w, r, mountpath)
+	default:
+		t.invalmsghdlr(w, r, "Invalid action in request")
+	}
+}
+
+func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
+	enabled, exists := ctx.mountpaths.EnableMountpath(mountpath)
 	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	if !enabled && !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mp.Mountpath), http.StatusNotFound)
+		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
 		return
 	}
 
-	glog.Infof("Reenabled mountpath %s", mp.Mountpath)
+	getiostatrunner().updateFSDisks()
+	t.runRebalance(t.smapowner.get(), "")
+	glog.Infof("Reenabled mountpath %s", mountpath)
+}
+
+func (t *targetrunner) disableMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
+	enabled, exists := ctx.mountpaths.DisableMountpath(mountpath)
+	if !enabled && exists {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if !enabled && !exists {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
+		return
+	}
+
+	getiostatrunner().updateFSDisks()
+	glog.Infof("Disabled mountpath %s", mountpath)
+}
+
+func (t *targetrunner) addMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
+	err := ctx.mountpaths.AddMountpath(mountpath)
+	if err != nil {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
+		return
+	}
+
+	getfshealthchecker().RequestAddMountpath(mountpath)
+	getiostatrunner().updateFSDisks()
+	t.runRebalance(t.smapowner.get(), "")
+	glog.Infof("Added mountpath %s", mountpath)
+}
+
+func (t *targetrunner) removeMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
+	err := ctx.mountpaths.RemoveMountpath(mountpath)
+	if err != nil {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
+		return
+	}
+
+	getfshealthchecker().RequestRemoveMountpath(mountpath)
+	getiostatrunner().updateFSDisks()
+	glog.Infof("Removed mountpath %s", mountpath)
 }
 
 func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {

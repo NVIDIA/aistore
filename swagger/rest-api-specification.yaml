@@ -607,9 +607,9 @@ paths:
               schema:
                 type: string
   /daemon/mountpaths/:
-    put:
-      summary: Enable a filesystem on a DFC target
-      operationId: performOperation
+    post:
+      summary: Perform operations on mountpath such as disable and enable
+      operationId: modifyMountpath
       tags:
         - Daemon
       requestBody:
@@ -617,12 +617,52 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FileSystemRequest'
+              $ref: '#/components/schemas/InputParameters'
       responses:
         '200':
           description: Operation on DFC daemon triggered successfully
         '204':
-          description: Return status if the filesystem was already enabled
+          description: Return status if the filesystem was already enabled or disabled
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    put:
+      summary: Create mountpath on target
+      operationId: createMountpath
+      tags:
+        - Daemon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Operation on DFC daemon triggered successfully
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    delete:
+      summary: Remove mountpath from target
+      operationId: removeMounpath
+      tags:
+        - Daemon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InputParameters'
+      responses:
+        '200':
+          description: Operation on DFC daemon triggered successfully
         default:
           description: An unexpected error was encountered
           content:
@@ -659,6 +699,10 @@ components:
         - shutdown
         - rebalance
         - listobjects
+        - enable
+        - disable
+        - remove
+        - add
     ListParameters:
       properties:
         deadline:
@@ -945,11 +989,6 @@ components:
         usedpct:
           type: integer
           format: int32
-    FileSystemRequest:
-      type: object
-      properties:
-        mountpath:
-          type: string
     TargetStatistics:
       type: object
       properties:

@@ -113,6 +113,7 @@ func newFSHealthChecker(mounts *fs.MountedFS, conf *fshcconf,
 		config:         conf,
 		controlCh:      make(chan struct{}, 4),
 		fileListCh:     make(chan string, 32),
+		requestCh:      make(chan fshcRequest),
 		mpathCheckers:  make(map[string]*mountpathChecker),
 	}
 }

@@ -446,14 +446,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	targets := extractTargetsInfo(m.smap)
 
 	// Create local bucket
-	exists, err := client.DoesLocalBucketExist(proxyurl, m.bucket)
-	checkFatal(err, t)
-	if exists {
-		err = client.DestroyLocalBucket(proxyurl, m.bucket)
-		checkFatal(err, t)
-	}
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
@@ -745,6 +738,204 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	}
 }
 
+func TestAddAndRemoveMountpath(t *testing.T) {
+	const (
+		num       = 5000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targets := extractTargetsInfo(m.smap)
+
+	// Remove all mountpaths for one target
+	oldMountpaths, err := client.TargetMountpaths(targets[0].directURL)
+	checkFatal(err, t)
+
+	for _, mpath := range oldMountpaths.Available {
+		err = client.RemoveTargetMountpath(targets[0].directURL, mpath)
+		checkFatal(err, t)
+	}
+
+	// Check if mountpaths were actually removed
+	mountpaths, err := client.TargetMountpaths(targets[0].directURL)
+	checkFatal(err, t)
+
+	if len(mountpaths.Available) != 0 {
+		t.Fatalf("Target should not have any paths available")
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}()
+
+	// Add target mountpath again
+	for _, mpath := range oldMountpaths.Available {
+		err = client.AddTargetMountpath(targets[0].directURL, mpath)
+		checkFatal(err, t)
+	}
+
+	// Check if mountpaths were actually added
+	mountpaths, err = client.TargetMountpaths(targets[0].directURL)
+	checkFatal(err, t)
+
+	if len(mountpaths.Available) != len(oldMountpaths.Available) {
+		t.Fatalf("Target should have old mountpath available restored")
+	}
+
+	// Put and read random files
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	m.wg.Add(m.num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+	resultsBeforeAfter(&m, num, maxErrPct)
+}
+
+func TestDisableAndEnableMountpath(t *testing.T) {
+	const (
+		num       = 5000
+		filesize  = uint64(1024)
+		seed      = int64(111)
+		maxErrPct = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targets := extractTargetsInfo(m.smap)
+
+	// Remove all mountpaths for one target
+	oldMountpaths, err := client.TargetMountpaths(targets[0].directURL)
+	checkFatal(err, t)
+
+	for _, mpath := range oldMountpaths.Available {
+		err = client.DisableTargetMountpath(targets[0].directURL, mpath)
+		checkFatal(err, t)
+	}
+
+	// Check if mountpaths were actually disabled
+	mountpaths, err := client.TargetMountpaths(targets[0].directURL)
+	checkFatal(err, t)
+
+	if len(mountpaths.Available) != 0 {
+		t.Fatalf("Target should not have any paths available")
+	}
+
+	if len(mountpaths.Disabled) != len(oldMountpaths.Available) {
+		t.Fatalf("Not all mountpaths were added to disabled paths")
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}()
+
+	// Add target mountpath again
+	for _, mpath := range oldMountpaths.Available {
+		err = client.EnableTargetMountpath(targets[0].directURL, mpath)
+		checkFatal(err, t)
+	}
+
+	// Check if mountpaths were actually enabled
+	mountpaths, err = client.TargetMountpaths(targets[0].directURL)
+	checkFatal(err, t)
+
+	if len(mountpaths.Available) != len(oldMountpaths.Available) {
+		t.Fatalf("Target should have old mountpath available restored")
+	}
+
+	if len(mountpaths.Disabled) != 0 {
+		t.Fatalf("Not all disabled mountpaths were enabled")
+	}
+
+	// Put and read random files
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	m.wg.Add(m.num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+	resultsBeforeAfter(&m, num, maxErrPct)
+}
+
 // see above - the T1/2/3 timeline and details
 func resultsBeforeAfter(m *metadata, num, maxErrPct int) {
 	tlogf("Errors before and after time=T3 (re-registered target gets the updated local bucket map): %d and %d, respectively\n",
@@ -882,6 +1073,17 @@ func assertClusterState(m *metadata) {
 			proxyCount, m.originalProxyCount,
 		)
 	}
+}
+
+func createFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
+	exists, err := client.DoesLocalBucketExist(proxyurl, bucketFQN)
+	checkFatal(err, t)
+	if exists {
+		err = client.DestroyLocalBucket(proxyurl, bucketFQN)
+		checkFatal(err, t)
+	}
+	err = client.CreateLocalBucket(proxyurl, bucketFQN)
+	checkFatal(err, t)
 }
 
 func TestForwardCP(t *testing.T) {

@@ -39,6 +39,10 @@ class Actions(object):
     SHUTDOWN = "shutdown"
     REBALANCE = "rebalance"
     LISTOBJECTS = "listobjects"
+    ENABLE = "enable"
+    DISABLE = "disable"
+    REMOVE = "remove"
+    ADD = "add"
 
     """
     Attributes:
