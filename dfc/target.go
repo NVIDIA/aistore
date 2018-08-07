@@ -2542,50 +2542,59 @@ func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 // enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	apiItems := t.restAPIItems(r.URL.Path, 5)
-	if apiItems = t.checkRestAPI(w, r, apiItems, 1, Rversion, Rdaemon); apiItems == nil {
+	if apiItems = t.checkRestAPI(w, r, apiItems, 0, Rversion, Rdaemon); apiItems == nil {
 		return
 	}
 
-	switch apiItems[0] {
-	case Rregister:
-		if status, err := t.register(0); err != nil {
-			s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
-			t.invalmsghdlr(w, r, s)
+	if len(apiItems) > 0 {
+		switch apiItems[0] {
+		case Rregister:
+			if glog.V(3) {
+				glog.Infoln("Sending register signal to target keepalive control channel")
+			}
+			gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
+			return
+		case Rmountpaths:
+			t.handleMountpathReq(w, r)
+			return
+		default:
+			t.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
 			return
 		}
-		if glog.V(3) {
-			glog.Infof("Registered self %s", t.si.DaemonID)
-		}
+	}
 
-		if glog.V(3) {
-			glog.Infoln("Sending register signal to target keepalive control channel")
-		}
-		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
+	if status, err := t.register(0); err != nil {
+		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
+		t.invalmsghdlr(w, r, s)
 		return
-	case Rmountpaths:
-		t.handleMountpathReq(w, r)
-		return
-	default:
-		t.invalmsghdlr(w, r, "unrecognized path in /daemon POST")
-		return
+	}
+
+	if glog.V(3) {
+		glog.Infof("Registered self %s", t.si.DaemonID)
 	}
 }
 
+// unregister
+// remove mountpath
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	apiItems := t.restAPIItems(r.URL.Path, 5)
 	if apiItems = t.checkRestAPI(w, r, apiItems, 1, Rversion, Rdaemon); apiItems == nil {
 		return
 	}
 
-	if len(apiItems) > 0 {
-		switch apiItems[0] {
-		case Rmountpaths:
-			t.handleMountpathReq(w, r)
-			return
-		default:
-			t.invalmsghdlr(w, r, "unrecognized path in /daemon DELETE")
-			return
+	switch apiItems[0] {
+	case Rmountpaths:
+		t.handleMountpathReq(w, r)
+		return
+	case Runregister:
+		if glog.V(3) {
+			glog.Infoln("Sending unregister signal to target keepalive control channel")
 		}
+		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
+		return
+	default:
+		t.invalmsghdlr(w, r, "unrecognized path in /daemon DELETE")
+		return
 	}
 }
 

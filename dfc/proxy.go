@@ -2076,7 +2076,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infof("unregistered target {%s} (num targets %d)", sid, clone.countTargets())
 		}
-		u := osi.DirectURL + URLPath(Rversion, Rdaemon)
+		u := osi.DirectURL + URLPath(Rversion, Rdaemon, Runregister)
 		args := callArgs{
 			request: nil,
 			si:      osi,

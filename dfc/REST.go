@@ -232,6 +232,7 @@ const (
 	Rpush       = "push"
 	Rkeepalive  = "keepalive"
 	Rregister   = "register"
+	Runregister = "unregister"
 	Rhealth     = "health"
 	Rvote       = "vote"
 	Rproxy      = "proxy"
