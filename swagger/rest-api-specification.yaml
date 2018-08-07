@@ -622,7 +622,9 @@ paths:
         '200':
           description: Operation on DFC daemon triggered successfully
         '204':
-          description: Return status if the filesystem was already enabled or disabled
+          description: Return status if the mountpath was already enabled or disabled
+        '404':
+          description: Return status if the mountpath was not found
         default:
           description: An unexpected error was encountered
           content:

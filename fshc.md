@@ -43,9 +43,12 @@ curl -i -X PUT -H 'Content-Type: application/json' \
 
 | Operation | HTTP Action | Example |
 |---|---|---|
-| List target's filesystems (target only) | GET /v1/daemon?what=mountpaths | curl -X GET http://localhost:8084/v1/daemon?what=mountpaths |
-| List all targets' filesystems (proxy only) | GET /v1/cluster?what=mountpaths | curl -X GET http://localhost:8080/v1/cluster?what=mountpaths |
-| Enable a filesystem (target only) | PUT {"mountpath": "/dfc/test"} /v1/daemon/mountpaths | curl -X PUT http://localhost::8084/v1/daemon/mountpaths -H 'Content-Type: application/json' -d '{"mountpath": "/dfc/test"}'<sup>[1](#ft1)</sup> |
+| List target's filesystems (target only) | GET /v1/daemon?what=mountpaths | `curl -X GET http://localhost:8084/v1/daemon?what=mountpaths` |
+| List all targets' filesystems (proxy only) | GET /v1/cluster?what=mountpaths | `curl -X GET http://localhost:8080/v1/cluster?what=mountpaths` |
+| Disable mountpath in target | POST {"action": "disable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "disable", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths`<sup>[1](#ft1)</sup> |
+| Enable mountpath in target | POST {"action": "enable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "enable", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths`<sup>[1](#ft1)</sup> |
+| Add mountpath in target | PUT {"action": "add", "value": "/new/mountpath"} /v1/daemon/mountpaths | `curl -X PUT -L -H 'Content-Type: application/json' -d '{"action": "add", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
+| Remove mountpath from target | DELETE {"action": "remove", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "remove", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
 
-<a name="ft1">1</a>: The request returns an HTTP status code 204 if the filesystem is already enabled
+<a name="ft1">1</a>: The request returns an HTTP status code 204 if the mountpath is already enabled/disabled or 404 if mountpath was not found.
 
