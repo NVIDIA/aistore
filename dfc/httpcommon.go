@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/OneOfOne/xxhash"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -168,7 +169,7 @@ func (h *httprunner) initSI() {
 
 	daemonID := os.Getenv("DFCDAEMONID")
 	if daemonID == "" {
-		cs := xxhash.ChecksumString32S(ipAddr+":"+ctx.config.Net.L4.Port, mLCG32)
+		cs := xxhash.ChecksumString32S(ipAddr+":"+ctx.config.Net.L4.Port, constants.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if testingFSPpaths() {
 			daemonID += ":" + ctx.config.Net.L4.Port

@@ -8,10 +8,10 @@ package dfc
 import (
 	"fmt"
 
+	"github.com/NVIDIA/dfcpub/constants"
+	"github.com/NVIDIA/dfcpub/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
-
-const mLCG32 = 1103515245
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
@@ -25,9 +25,10 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr strin
 		return
 	}
 	name := uniquename(bucket, objname)
+	digest := xxhash.ChecksumString64S(name, constants.MLCG32)
 	var max uint64
-	for id, sinfo := range smap.Tmap {
-		cs := xxhash.ChecksumString64S(id+":"+name, mLCG32)
+	for _, sinfo := range smap.Tmap {
+		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
 		if cs > max {
 			max = cs
 			si = sinfo
@@ -54,9 +55,8 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 			skipped++
 			continue
 		}
-		cs := xxhash.ChecksumString64S(id, mLCG32)
-		if cs > max {
-			max = cs
+		if sinfo.idDigest > max {
+			max = sinfo.idDigest
 			pi = sinfo
 		}
 	}
@@ -69,9 +69,10 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 func hrwMpath(bucket, objname string) (mpath string) {
 	var max uint64
 	name := uniquename(bucket, objname)
+	digest := xxhash.ChecksumString64S(name, constants.MLCG32)
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	for _, mpathInfo := range availablePaths {
-		cs := xxhash.ChecksumString64S(mpathInfo.Path+":"+name, mLCG32)
+		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs > max {
 			max = cs
 			mpath = mpathInfo.Path

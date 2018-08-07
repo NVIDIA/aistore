@@ -810,7 +810,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		matchSMap := func(a, b *Smap) {
-			if !reflect.DeepEqual(a, b) {
+			if !a.equals(*b) {
 				t.Fatal("SMap mismatch", a, b)
 			}
 		}

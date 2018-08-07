@@ -23,9 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -814,7 +816,8 @@ func setPrimaryTo(t *testing.T, smap dfc.Smap, directURL, toID, toURL string) {
 }
 
 func chooseNextProxy(smap *dfc.Smap) (proxyid, proxyurl string, err error) {
-	pi, errstr := dfc.HrwProxy(smap, smap.ProxySI.DaemonID)
+	pid, errstr := hrwProxyTest(smap, smap.ProxySI.DaemonID)
+	pi := smap.Pmap[pid]
 	if errstr != "" {
 		return "", "", fmt.Errorf("%s", errstr)
 	}
@@ -1261,4 +1264,38 @@ func primarySetToOriginal(t *testing.T) {
 	}
 
 	setPrimaryTo(t, smap, "", origID, origURL)
+}
+
+// This is duplicated in the tests because the `idDigest` of `daemonInfo` is not
+// exported. As a result of this, dfc.HrwProxy will not return the correct
+// proxy since the `idDigest` will be initialized to 0. To avoid this, we
+// compute the checksum directly in this method.
+func hrwProxyTest(smap *dfc.Smap, idToSkip string) (pi string, errstr string) {
+	if len(smap.Pmap) == 0 {
+		errstr = "DFC cluster map is empty: no proxies"
+		return
+	}
+	var (
+		max     uint64
+		skipped int
+	)
+	for id, sinfo := range smap.Pmap {
+		if id == idToSkip {
+			skipped++
+			continue
+		}
+		if _, ok := smap.NonElects[id]; ok {
+			skipped++
+			continue
+		}
+		cs := xxhash.ChecksumString64S(sinfo.DaemonID, constants.MLCG32)
+		if cs > max {
+			max = cs
+			pi = id
+		}
+	}
+	if pi == "" {
+		errstr = fmt.Sprintf("Cannot HRW-select proxy: current count=%d, skipped=%d", len(smap.Pmap), skipped)
+	}
+	return
 }

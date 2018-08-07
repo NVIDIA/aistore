@@ -8,6 +8,9 @@ package fs
 import (
 	"path/filepath"
 	"syscall"
+
+	"github.com/NVIDIA/dfcpub/constants"
+	"github.com/OneOfOne/xxhash"
 )
 
 type MountpathInfo struct {
@@ -15,6 +18,7 @@ type MountpathInfo struct {
 	OrigPath   string // As entered by the user, must be used for logging / returning errors
 	Fsid       syscall.Fsid
 	FileSystem string
+	PathDigest uint64
 }
 
 func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
@@ -24,5 +28,6 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 		OrigPath:   path,
 		Fsid:       fsid,
 		FileSystem: fs,
+		PathDigest: xxhash.ChecksumString64S(cleanPath, constants.MLCG32),
 	}
 }

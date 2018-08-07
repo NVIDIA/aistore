@@ -15,6 +15,8 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/constants"
+	"github.com/OneOfOne/xxhash"
 )
 
 // ============================= Background ==================================
@@ -33,6 +35,7 @@ type daemonInfo struct {
 	DaemonPort string `json:"daemon_port"`
 	DaemonID   string `json:"daemon_id"`
 	DirectURL  string `json:"direct_url"`
+	idDigest   uint64
 }
 
 // Smap aka cluster map
@@ -55,14 +58,31 @@ func newDaemonInfo(id, proto, ipAddr, port string) *daemonInfo {
 		NodeIPAddr: ipAddr,
 		DaemonPort: port,
 		DirectURL:  proto + "://" + ipAddr + ":" + port,
+		idDigest:   xxhash.ChecksumString64S(id, constants.MLCG32),
 	}
 }
 
-func (di daemonInfo) equals(other daemonInfo) bool {
-	return reflect.DeepEqual(di, other)
+func (d *daemonInfo) String() string {
+	return fmt.Sprintf("[NodeIPAddr:%s, DaemonPort:%s, DaemonID:%s, DirectURL:%s, idDigest:%d]",
+		d.NodeIPAddr, d.DaemonPort, d.DaemonID, d.DirectURL, d.idDigest)
+}
+
+func (a daemonInfo) equals(b daemonInfo) bool {
+	return a.DaemonID == b.DaemonID && a.DirectURL == b.DirectURL &&
+		a.DaemonPort == b.DaemonPort && a.NodeIPAddr == b.NodeIPAddr
 }
 
 func (r *smapowner) put(smap *Smap) {
+	for _, sinfo := range smap.Tmap {
+		if sinfo.idDigest == 0 {
+			sinfo.idDigest = xxhash.ChecksumString64S(sinfo.DaemonID, constants.MLCG32)
+		}
+	}
+	for _, sinfo := range smap.Pmap {
+		if sinfo.idDigest == 0 {
+			sinfo.idDigest = xxhash.ChecksumString64S(sinfo.DaemonID, constants.MLCG32)
+		}
+	}
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
 }
 
@@ -252,6 +272,26 @@ func (m *Smap) merge(dst *Smap) {
 			}
 		}
 	}
+}
+
+func (a Smap) equals(b Smap) bool {
+	return a.Version == b.Version && a.ProxySI.equals(*b.ProxySI) &&
+		reflect.DeepEqual(a.NonElects, b.NonElects) && areDaemonMapsEqual(a.Tmap, b.Tmap) &&
+		areDaemonMapsEqual(a.Pmap, b.Pmap)
+}
+
+func areDaemonMapsEqual(a, b map[string]*daemonInfo) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for id, aInfo := range a {
+		if bInfo, ok := b[id]; !ok {
+			return false
+		} else if !aInfo.equals(*bInfo) {
+			return false
+		}
+	}
+	return true
 }
 
 //
