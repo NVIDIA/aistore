@@ -2806,12 +2806,7 @@ func (t *targetrunner) testCachepathMounts() {
 		instpath = ctx.config.TestFSP.Root
 	}
 	for i := 0; i < ctx.config.TestFSP.Count; i++ {
-		var mpath string
-		if testingFSPpaths() {
-			mpath = filepath.Join(instpath, strconv.Itoa(i+1))
-		} else {
-			mpath = instpath[0 : len(instpath)-1]
-		}
+		mpath := filepath.Join(instpath, strconv.Itoa(i+1))
 		if err := CreateDir(mpath); err != nil {
 			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
 			os.Exit(1)

@@ -238,6 +238,8 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 }
 
 func setAvailableMountPaths(paths ...string) []string {
+	ctx.mountpaths.DisableFsIDCheck()
+
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	oldPaths := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {

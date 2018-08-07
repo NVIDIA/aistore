@@ -46,6 +46,7 @@ func TestAtimerunnerStop(t *testing.T) {
 
 func TestAtimerunnerTouch(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
+	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
 	go atimer.run()
 
@@ -79,6 +80,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
+	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
 	go atimer.run()
 

@@ -5,7 +5,7 @@ import (
 )
 
 func TestAddNonExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/nonexistingpath")
 	if err == nil {
 		t.Error("adding non-existing mountpath succeded")
@@ -15,7 +15,7 @@ func TestAddNonExistingMountpath(t *testing.T) {
 }
 
 func TestAddExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -25,7 +25,7 @@ func TestAddExistingMountpath(t *testing.T) {
 }
 
 func TestAddAlreadyAddedMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -42,7 +42,7 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 }
 
 func TestRemoveNonExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.RemoveMountpath("/nonexistingpath")
 	if err == nil {
 		t.Error("removing non-existing mountpath succeded")
@@ -52,7 +52,7 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -67,7 +67,7 @@ func TestRemoveExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveDisabledMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -85,7 +85,7 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 }
 
 func TestDisableNonExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	disabled, exists := mfs.DisableMountpath("/tmp")
 	if disabled || exists {
 		t.Error("disabling was successful or mountpath exists")
@@ -95,7 +95,7 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 }
 
 func TestDisableExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -110,7 +110,7 @@ func TestDisableExistingMountpath(t *testing.T) {
 }
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -130,7 +130,7 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableNonExistingMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	enabled, exists := mfs.EnableMountpath("/tmp")
 	if enabled || exists {
 		t.Error("enabling was successful or mountpath exists")
@@ -140,7 +140,7 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 }
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -155,7 +155,7 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -175,7 +175,7 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -201,17 +201,34 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 	assertMountpathCount(t, mfs, 1, 0)
 }
 
-func TestAddAndDisableMultipleMountpath(t *testing.T) {
-	mfs := &MountedFS{}
+func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
+	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
 	}
 
 	err = mfs.AddMountpath("/")
+	if err == nil {
+		t.Error("adding path with same FSID was successful")
+	}
+
+	assertMountpathCount(t, mfs, 1, 0)
+}
+
+func TestAddAndDisableMultipleMountpath(t *testing.T) {
+	mfs := NewMountedFS()
+	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
 	}
+
+	err = mfs.AddMountpath("/dev/null") // /dev/null has different fsid
+	if err != nil {
+		t.Error("adding existing mountpath failed")
+	}
+
+	assertMountpathCount(t, mfs, 2, 0)
 
 	disabled, exists := mfs.DisableMountpath("/tmp")
 	if !disabled || !exists {

@@ -45,7 +45,7 @@ type (
 	// daemon instance: proxy or storage target
 	daemon struct {
 		config     dfconfig
-		mountpaths fs.MountedFS // for mountpath definition, see fs/mountfs.go
+		mountpaths *fs.MountedFS // for mountpath definition, see fs/mountfs.go
 		rg         *rungroup
 	}
 
@@ -183,6 +183,7 @@ func dfcinit() {
 	}
 
 	// init daemon
+	ctx.mountpaths = fs.NewMountedFS()
 	ctx.rg = &rungroup{
 		runarr: make([]runner, 0, 8),
 		runmap: make(map[string]runner, 8),
@@ -219,6 +220,7 @@ func dfcinit() {
 		// for mountpath definition, see fs/mountfs.go
 		if testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
+			ctx.mountpaths.DisableFsIDCheck()
 			t.testCachepathMounts()
 		} else {
 			fsPaths := make([]string, 0, len(ctx.config.FSpaths))
@@ -232,7 +234,7 @@ func dfcinit() {
 		}
 
 		ctx.rg.add(
-			newFSHealthChecker(&ctx.mountpaths, &ctx.config.FSChecker, t.fqn2workfile),
+			newFSHealthChecker(ctx.mountpaths, &ctx.config.FSChecker, t.fqn2workfile),
 			xfshealthchecker,
 		)
 	}

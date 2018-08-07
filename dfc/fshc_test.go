@@ -27,7 +27,8 @@ func testCheckerMountPaths() *fs.MountedFS {
 	CreateDir(fsCheckerTmpDir + "/3")
 	CreateDir(fsCheckerTmpDir + "/4")
 
-	mountedFS := &fs.MountedFS{}
+	mountedFS := fs.NewMountedFS()
+	mountedFS.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
 		mountedFS.AddMountpath(name)
