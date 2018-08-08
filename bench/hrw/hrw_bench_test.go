@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
 package hrw_bench
 
 import (
@@ -47,6 +50,9 @@ func BenchmarkHRW(b *testing.B) {
 }
 
 func TestEqualDistribution(t *testing.T) {
+	// Comment this out when measuring metrics.
+	t.Skipf("Not running this while running all tests.")
+
 	hashFs := []hashFuncs{
 		{name: "hrwXXHash", hashF: hrwXXHash},
 		{name: "hrwXXHashWithAppend", hashF: hrwXXHashWithAppend},
