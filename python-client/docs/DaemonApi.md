@@ -8,7 +8,7 @@ Method | HTTP request | Description
 [**get**](DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
 [**modify_mountpath**](DaemonApi.md#modify_mountpath) | **POST** /daemon/mountpaths/ | Perform operations on mountpath such as disable and enable
 [**perform_operation**](DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
-[**remove_mounpath**](DaemonApi.md#remove_mounpath) | **DELETE** /daemon/mountpaths/ | Remove mountpath from target
+[**remove_mountpath**](DaemonApi.md#remove_mountpath) | **DELETE** /daemon/mountpaths/ | Remove mountpath from target
 
 
 # **create_mountpath**
@@ -192,8 +192,8 @@ No authorization required
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
-# **remove_mounpath**
-> remove_mounpath(input_parameters)
+# **remove_mountpath**
+> remove_mountpath(input_parameters)
 
 Remove mountpath from target
 
@@ -211,9 +211,9 @@ input_parameters = openapi_client.InputParameters() # InputParameters |
 
 try:
     # Remove mountpath from target
-    api_instance.remove_mounpath(input_parameters)
+    api_instance.remove_mountpath(input_parameters)
 except ApiException as e:
-    print("Exception when calling DaemonApi->remove_mounpath: %s\n" % e)
+    print("Exception when calling DaemonApi->remove_mountpath: %s\n" % e)
 ```
 
 ### Parameters

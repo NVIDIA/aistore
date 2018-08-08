@@ -417,12 +417,12 @@ class DaemonApi(object):
             _request_timeout=params.get('_request_timeout'),
             collection_formats=collection_formats)
 
-    def remove_mounpath(self, input_parameters, **kwargs):  # noqa: E501
+    def remove_mountpath(self, input_parameters, **kwargs):  # noqa: E501
         """Remove mountpath from target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async=True
-        >>> thread = api.remove_mounpath(input_parameters, async=True)
+        >>> thread = api.remove_mountpath(input_parameters, async=True)
         >>> result = thread.get()
 
         :param async bool
@@ -433,17 +433,17 @@ class DaemonApi(object):
         """
         kwargs['_return_http_data_only'] = True
         if kwargs.get('async'):
-            return self.remove_mounpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
+            return self.remove_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
         else:
-            (data) = self.remove_mounpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
+            (data) = self.remove_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
             return data
 
-    def remove_mounpath_with_http_info(self, input_parameters, **kwargs):  # noqa: E501
+    def remove_mountpath_with_http_info(self, input_parameters, **kwargs):  # noqa: E501
         """Remove mountpath from target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async=True
-        >>> thread = api.remove_mounpath_with_http_info(input_parameters, async=True)
+        >>> thread = api.remove_mountpath_with_http_info(input_parameters, async=True)
         >>> result = thread.get()
 
         :param async bool
@@ -464,14 +464,14 @@ class DaemonApi(object):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
-                    " to method remove_mounpath" % key
+                    " to method remove_mountpath" % key
                 )
             params[key] = val
         del params['kwargs']
         # verify the required parameter 'input_parameters' is set
         if ('input_parameters' not in params or
                 params['input_parameters'] is None):
-            raise ValueError("Missing the required parameter `input_parameters` when calling `remove_mounpath`")  # noqa: E501
+            raise ValueError("Missing the required parameter `input_parameters` when calling `remove_mountpath`")  # noqa: E501
 
         collection_formats = {}
 

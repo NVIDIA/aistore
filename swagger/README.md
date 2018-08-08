@@ -15,15 +15,14 @@
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
 
 4. Install required Python packages using `pip` and requirement files located in `python-client` directory:
-
-   ```
-   pip install -r python-client/requirements.txt
-   pip install -r python-client/test-requirements.txt
-   ```
-
+    ```
+    pip install -r python-client/requirements.txt
+    pip install -r python-client/test-requirements.txt
+    ```
    If you don't wish to install these packages system wide for a particular user, consider using a [virtual environment](https://pypi.org/project/virtualenv/).
 
-5. Run tests by running the following commands:
-    ```
-    BUCKET=<bucket_name> python -m unittest discover python-client/
-    ```
+## How to run tests?
+Run tests by running the following command:
+ ```
+ BUCKET=<bucket_name> python -m unittest discover python-client/
+ ```

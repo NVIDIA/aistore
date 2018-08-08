@@ -653,7 +653,7 @@ paths:
                 type: string
     delete:
       summary: Remove mountpath from target
-      operationId: removeMounpath
+      operationId: removeMountpath
       tags:
         - Daemon
       requestBody:

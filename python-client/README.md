@@ -85,7 +85,7 @@ Class | Method | HTTP request | Description
 *DaemonApi* | [**get**](docs/DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
 *DaemonApi* | [**modify_mountpath**](docs/DaemonApi.md#modify_mountpath) | **POST** /daemon/mountpaths/ | Perform operations on mountpath such as disable and enable
 *DaemonApi* | [**perform_operation**](docs/DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
-*DaemonApi* | [**remove_mounpath**](docs/DaemonApi.md#remove_mounpath) | **DELETE** /daemon/mountpaths/ | Remove mountpath from target
+*DaemonApi* | [**remove_mountpath**](docs/DaemonApi.md#remove_mountpath) | **DELETE** /daemon/mountpaths/ | Remove mountpath from target
 *ObjectApi* | [**delete**](docs/ObjectApi.md#delete) | **DELETE** /objects/{bucket-name}/{object-name} | Delete object
 *ObjectApi* | [**get**](docs/ObjectApi.md#get) | **GET** /objects/{bucket-name}/{object-name} | Get object
 *ObjectApi* | [**get_properties**](docs/ObjectApi.md#get_properties) | **HEAD** /objects/{bucket-name}/{object-name} | Query object properties
