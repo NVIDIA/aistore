@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -32,7 +31,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
-	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
 )
@@ -79,11 +77,6 @@ type renamectx struct {
 	bucketFrom string
 	bucketTo   string
 	t          *targetrunner
-}
-
-type recksumctx struct {
-	xrcksum *xactRechecksum
-	t       *targetrunner
 }
 
 type targetState struct {
@@ -3394,51 +3387,6 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 	return string(hashbinary) == xxHashValue, ""
 }
 
-// runRechecksumBucket traverses all objects
-func (t *targetrunner) runRechecksumBucket(bucket string) {
-	// check if re-checksumming of a given bucket is currently being performed
-	xrcksum := t.xactinp.renewRechecksum(t, bucket)
-	if xrcksum == nil {
-		return
-	}
-
-	// re-checksum every object in a given bucket
-	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum.tostring(), bucket)
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mpathInfo *fs.MountpathInfo) {
-			t.oneRechecksumBucket(makePathLocal(mpathInfo.Path), xrcksum)
-			wg.Done()
-		}(mpathInfo)
-	}
-	wg.Wait()
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mpathInfo *fs.MountpathInfo) {
-			t.oneRechecksumBucket(makePathCloud(mpathInfo.Path), xrcksum)
-			wg.Done()
-		}(mpathInfo)
-	}
-	wg.Wait()
-
-	// finish up
-	xrcksum.etime = time.Now()
-	glog.Infoln(xrcksum.tostring())
-	t.xactinp.del(xrcksum.id)
-}
-
-func (t *targetrunner) oneRechecksumBucket(bucketdir string, xrcksum *xactRechecksum) {
-	rcksctx := &recksumctx{
-		xrcksum: xrcksum,
-		t:       t,
-	}
-	if err := filepath.Walk(bucketdir, rcksctx.walkFunc); err != nil {
-		glog.Errorf("failed to traverse %q, error: %v", bucketdir, err)
-	}
-}
-
 // unregisters the target and marks it as disabled by an internal event
 func (t *targetrunner) disable() error {
 	var (
@@ -3522,36 +3470,4 @@ func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled,
 	// TODO: notify an admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
 	return disableMountpath(mountpath)
-}
-
-func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		glog.Errorf("rechecksum walk function callback invoked with error: %v", err)
-		return err
-	}
-	if osfi.IsDir() {
-		return nil
-	}
-	file, err := os.Open(fqn)
-	if err != nil {
-		glog.Warningf("failed to open %q, error: %v", fqn)
-		return err
-	}
-	defer file.Close()
-	if xxHash, errstr := Getxattr(fqn, XattrXXHashVal); xxHash != nil && errstr != "" {
-		// hash already there, no need to compute a new one
-		return nil
-	}
-	slab := iosgl.SelectSlab(0)
-	buf := slab.Alloc()
-	xxHashVal, errstr := ComputeXXHash(file, buf)
-	slab.Free(buf)
-	if errstr != "" {
-		glog.Warningf("failed to calculate cash on %s, error: %v", fqn, errstr)
-		return errors.New(errstr)
-	}
-	if errstr = Setxattr(fqn, XattrXXHashVal, []byte(xxHashVal)); errstr != "" {
-		return errors.New(errstr)
-	}
-	return nil
 }

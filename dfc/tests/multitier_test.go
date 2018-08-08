@@ -57,15 +57,17 @@ func TestGetObjectInNextTier(t *testing.T) {
 	checkFatal(err, t)
 	defer deleteLocalBucket(TestLocalBucketName, t)
 
-	err = client.SetBucketProps(proxyurl, TestLocalBucketName, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMockForLocalBucket.URL})
+	bucketProps := dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
+	err = client.SetBucketProps(proxyurl, TestLocalBucketName, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(TestLocalBucketName, t)
 
-	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMockForCloudBucket.URL})
+	bucketProps = dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
+	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
@@ -120,9 +122,10 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	err = client.Evict(proxyurl, clibucket, object)
 	checkFatal(err, t)
 
-	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMock.URL})
+	bucketProps := dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMock.URL
+	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
@@ -169,9 +172,10 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	err = client.Evict(proxyurl, clibucket, object)
 	checkFatal(err, t)
 
-	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMock.URL})
+	bucketProps := dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMock.URL
+	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
@@ -234,16 +238,18 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	checkFatal(err, t)
 	defer deleteLocalBucket(TestLocalBucketName, t)
 
-	err = client.SetBucketProps(proxyurl, TestLocalBucketName, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMockForLocalBucket.URL})
+	bucketProps := dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
+	err = client.SetBucketProps(proxyurl, TestLocalBucketName, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(TestLocalBucketName, t)
 
-	err = client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMockForCloudBucket.URL,
-		WritePolicy:   dfc.RWPolicyNextTier})
+	bucketProps = dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
+	bucketProps.WritePolicy = dfc.RWPolicyNextTier
+	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
@@ -293,11 +299,12 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	err := client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMock.URL,
-		ReadPolicy:    dfc.RWPolicyCloud,
-		WritePolicy:   dfc.RWPolicyNextTier})
+	bucketProps := dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMock.URL
+	bucketProps.ReadPolicy = dfc.RWPolicyCloud
+	bucketProps.WritePolicy = dfc.RWPolicyNextTier
+	err := client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
@@ -339,10 +346,11 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	err := client.SetBucketProps(proxyurl, clibucket, dfc.BucketProps{
-		CloudProvider: dfc.ProviderDfc,
-		NextTierURL:   nextTierMock.URL,
-		WritePolicy:   dfc.RWPolicyCloud})
+	bucketProps := dfc.NewBucketProps()
+	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.NextTierURL = nextTierMock.URL
+	bucketProps.WritePolicy = dfc.RWPolicyCloud
+	err := client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
