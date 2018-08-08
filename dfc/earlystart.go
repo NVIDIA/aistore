@@ -116,24 +116,28 @@ func (p *proxyrunner) bootstrap() {
 
 // no change of mind when on the "secondary" track
 func (p *proxyrunner) secondaryStartup(getSmapURL string) {
-	url := fmt.Sprintf("%s/%s/%s?%s=%s", getSmapURL, Rversion, Rdaemon, URLParamWhat, GetWhatSmap)
+	query := url.Values{}
+	query.Add(URLParamWhat, GetWhatSmap)
+	req := reqArgs{
+		method: http.MethodGet,
+		base:   getSmapURL,
+		path:   URLPath(Rversion, Rdaemon),
+		query:  query,
+	}
 
 	f := func() {
 		// get Smap
 		var res callResult
 		var args = callArgs{
-			request: nil,
 			si:      p.si,
-			url:     url,
-			method:  http.MethodGet,
-			injson:  nil,
+			req:     req,
 			timeout: noTimeout,
 		}
 		for i := 0; i < maxRetrySeconds; i++ {
 			res = p.call(args)
 			if res.err != nil {
 				if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
-					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, url)
+					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, getSmapURL)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -141,7 +145,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			break
 		}
 		if res.err != nil {
-			s := fmt.Sprintf("Error getting Smap from primary %s: %v", url, res.err)
+			s := fmt.Sprintf("Error getting Smap from primary %s: %v", getSmapURL, res.err)
 			glog.Fatalf("FATAL: %s", s)
 		}
 		smap := &Smap{}

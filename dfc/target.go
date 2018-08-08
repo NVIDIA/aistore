@@ -217,10 +217,10 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 		res         callResult
 	)
 	if timeout == 0 {
-		res = t.join(false, "")
+		res = t.join(false, nil)
 	} else { // keepalive
 		url, psi := t.getPrimaryURLAndSI()
-		res = t.registerToURL(url, psi, timeout, false, "")
+		res = t.registerToURL(url, psi, timeout, false, nil)
 	}
 	if res.err != nil {
 		return res.status, res.err
@@ -243,14 +243,12 @@ func (t *targetrunner) register(timeout time.Duration) (int, error) {
 }
 
 func (t *targetrunner) unregister() (int, error) {
-	url, si := t.getPrimaryURLAndSI()
-	url += URLPath(Rversion, Rcluster, Rdaemon, t.si.DaemonID)
 	args := callArgs{
-		request: nil,
-		si:      si,
-		url:     url,
-		method:  http.MethodDelete,
-		injson:  nil,
+		si: t.smapowner.get().ProxySI,
+		req: reqArgs{
+			method: http.MethodDelete,
+			path:   URLPath(Rversion, Rcluster, Rdaemon, t.si.DaemonID),
+		},
 		timeout: noTimeout,
 	}
 	res := t.call(args)
@@ -3304,11 +3302,11 @@ func (t *targetrunner) pollClusterStarted() {
 		}
 		psi := smap.ProxySI
 		args := callArgs{
-			request: nil,
-			si:      psi,
-			url:     psi.DirectURL + URLPath(Rversion, Rhealth),
-			method:  http.MethodGet,
-			injson:  nil,
+			si: psi,
+			req: reqArgs{
+				method: http.MethodGet,
+				path:   URLPath(Rversion, Rhealth),
+			},
 			timeout: noTimeout,
 		}
 		res := t.call(args)
@@ -3341,10 +3339,12 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 	}
 
 	bcastArgs := bcastCallArgs{
-		path:            path,
-		query:           query,
-		method:          method,
-		injson:          body,
+		req: reqArgs{
+			method: method,
+			path:   path,
+			query:  query,
+			body:   body,
+		},
 		timeout:         timeout,
 		servers:         []map[string]*daemonInfo{smap.Tmap},
 		serversToIgnore: map[string]struct{}{t.si.DaemonID: {}},

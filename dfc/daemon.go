@@ -8,8 +8,6 @@ package dfc
 import (
 	"flag"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -68,37 +66,6 @@ type (
 		stop(error)
 		setname(string)
 		getName() string
-	}
-
-	// callResult contains data returned by a server to server call
-	callResult struct {
-		si            *daemonInfo
-		outjson       []byte
-		err           error
-		errstr        string
-		newPrimaryURL string
-		status        int
-	}
-
-	// callArgs contains arguments for a server call
-	callArgs struct {
-		request *http.Request
-		url     string
-		method  string
-		injson  []byte
-		timeout time.Duration
-		si      *daemonInfo
-	}
-
-	// bcastCallArgs contains arguments for a broadcast server call
-	bcastCallArgs struct {
-		path            string
-		query           url.Values
-		method          string
-		injson          []byte
-		timeout         time.Duration
-		servers         []map[string]*daemonInfo
-		serversToIgnore map[string]struct{}
 	}
 )
 

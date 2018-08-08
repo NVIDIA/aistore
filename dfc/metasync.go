@@ -348,10 +348,11 @@ func (y *metasyncer) handlePending() {
 	assert(err == nil, err)
 
 	bcastArgs := bcastCallArgs{
-		path:            URLPath(Rversion, Rdaemon, Rmetasync),
-		query:           nil,
-		method:          http.MethodPut,
-		injson:          body,
+		req: reqArgs{
+			method: http.MethodPut,
+			path:   URLPath(Rversion, Rdaemon, Rmetasync),
+			body:   body,
+		},
 		timeout:         ctx.config.Timeout.CplaneOperation,
 		servers:         []map[string]*daemonInfo{y.pending.diamonds},
 		serversToIgnore: nil,
@@ -369,10 +370,11 @@ func (y *metasyncer) handlePending() {
 
 func (y *metasyncer) handleRefused(urlPath string, body []byte) {
 	bcastArgs := bcastCallArgs{
-		path:            urlPath,
-		query:           nil,
-		method:          http.MethodPut,
-		injson:          body,
+		req: reqArgs{
+			method: http.MethodPut,
+			path:   urlPath,
+			body:   body,
+		},
 		timeout:         ctx.config.Timeout.CplaneOperation,
 		servers:         []map[string]*daemonInfo{y.pending.refused},
 		serversToIgnore: nil,

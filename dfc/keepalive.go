@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -236,17 +237,20 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 }
 
 func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool) {
-	url := to.DirectURL + URLPath(Rversion, Rhealth) + "?" + URLParamFromID + "=" + pkr.p.si.DaemonID
+	query := url.Values{}
+	query.Add(URLParamFromID, pkr.p.si.DaemonID)
+
 	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
-	t := time.Now()
 	args := callArgs{
-		request: nil,
-		si:      to,
-		url:     url,
-		method:  http.MethodGet,
-		injson:  nil,
+		si: to,
+		req: reqArgs{
+			method: http.MethodGet,
+			path:   URLPath(Rversion, Rhealth),
+			query:  query,
+		},
 		timeout: timeout,
 	}
+	t := time.Now()
 	res := pkr.p.call(args)
 	pkr.updateTimeoutForDaemon(to.DaemonID, time.Since(t))
 
@@ -254,10 +258,10 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool) {
 		return true, false
 	}
 	glog.Warningf("initial keepalive failed, err: %v, status: %d, polling again", res.err, res.status)
-	return pkr.retry(to, url)
+	return pkr.retry(to, args)
 }
 
-func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, url string) (ok, stopped bool) {
+func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, args callArgs) (ok, stopped bool) {
 	var (
 		i       int
 		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.DaemonID).timeout)
@@ -271,14 +275,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, url string) (ok, stopped 
 		select {
 		case <-ticker.C:
 			t := time.Now()
-			args := callArgs{
-				request: nil,
-				si:      si,
-				url:     url,
-				method:  http.MethodGet,
-				injson:  nil,
-				timeout: timeout,
-			}
+			args.timeout = timeout
 			res := pkr.p.call(args)
 			timeout = pkr.updateTimeoutForDaemon(si.DaemonID, time.Since(t))
 			if res.err == nil {

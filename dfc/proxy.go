@@ -164,25 +164,27 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 	}
 	if timeout == 0 {
 		if ctx.config.Proxy.NonElectable {
-			res = p.join(true, URLParamNonElectable+"=true")
+			query := url.Values{}
+			query.Add(URLParamNonElectable, "true")
+			res = p.join(true, query)
 		} else {
-			res = p.join(true, "")
+			res = p.join(true, nil)
 		}
 	} else { // keepalive
 		url, psi := p.getPrimaryURLAndSI()
-		res = p.registerToURL(url, psi, timeout, true, "")
+		res = p.registerToURL(url, psi, timeout, true, nil)
 	}
 	return res.status, res.err
 }
 
 func (p *proxyrunner) unregister() (int, error) {
-	url := fmt.Sprintf("%s/%s/%s/%s/%s/%s", ctx.config.Proxy.PrimaryURL, Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID)
+	smap := p.smapowner.get()
 	args := callArgs{
-		request: nil,
-		si:      nil,
-		url:     url,
-		method:  http.MethodDelete,
-		injson:  nil,
+		si: smap.ProxySI,
+		req: reqArgs{
+			method: http.MethodDelete,
+			path:   URLPath(Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID),
+		},
 		timeout: noTimeout,
 	}
 	res := p.call(args)
@@ -794,13 +796,13 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		break
 	}
 
-	u := si.DirectURL + URLPath(Rversion, Rbuckets, bucketspec)
 	args := callArgs{
-		request: r,
-		si:      si,
-		url:     u,
-		method:  r.Method,
-		injson:  nil,
+		si: si,
+		req: reqArgs{
+			method: r.Method,
+			header: r.Header,
+			path:   URLPath(Rversion, Rbuckets, bucketspec),
+		},
 		timeout: noTimeout,
 	}
 	res := p.call(args)
@@ -815,9 +817,6 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
 	getMsg *GetMsg, islocal bool, cached bool) (*bucketResp, error) {
-	url := fmt.Sprintf("%s/%s/%s/%s?%s=%v&%s=%v", dinfo.DirectURL, Rversion,
-		Rbuckets, bucket, URLParamLocal, islocal, URLParamCached, cached)
-
 	actionMsgBytes, err := json.Marshal(ActionMsg{Action: ActListObjects, Value: getMsg})
 	if err != nil {
 		return &bucketResp{
@@ -827,12 +826,23 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 		}, err
 	}
 
+	var header http.Header
+	if r != nil {
+		header = r.Header
+	}
+
+	query := url.Values{}
+	query.Add(URLParamLocal, strconv.FormatBool(islocal))
+	query.Add(URLParamCached, strconv.FormatBool(cached))
 	args := callArgs{
-		request: r,
-		si:      dinfo,
-		url:     url,
-		method:  http.MethodPost,
-		injson:  actionMsgBytes,
+		si: dinfo,
+		req: reqArgs{
+			method: http.MethodPost,
+			header: header,
+			path:   URLPath(Rversion, Rbuckets, bucket),
+			query:  query,
+			body:   actionMsgBytes,
+		},
 		timeout: ctx.config.Timeout.Default,
 	}
 	res := p.call(args)
@@ -1916,13 +1926,12 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 			if glog.V(3) {
 				glog.Infof("register target %s (num targets before %d)", nsi.DaemonID, smap.countTargets())
 			}
-			u := nsi.DirectURL + URLPath(Rversion, Rdaemon, Rregister)
 			args := callArgs{
-				request: nil,
-				si:      &nsi,
-				url:     u,
-				method:  http.MethodPost,
-				injson:  nil,
+				si: &nsi,
+				req: reqArgs{
+					method: http.MethodPost,
+					path:   URLPath(Rversion, Rdaemon, Rregister),
+				},
 				timeout: ProxyPingTimeout,
 			}
 			res := p.call(args)
@@ -2076,13 +2085,12 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		if glog.V(3) {
 			glog.Infof("unregistered target {%s} (num targets %d)", sid, clone.countTargets())
 		}
-		u := osi.DirectURL + URLPath(Rversion, Rdaemon, Runregister)
 		args := callArgs{
-			request: nil,
-			si:      osi,
-			url:     u,
-			method:  http.MethodDelete,
-			injson:  nil,
+			si: osi,
+			req: reqArgs{
+				method: http.MethodDelete,
+				path:   URLPath(Rversion, Rdaemon, Runregister),
+			},
 			timeout: ProxyPingTimeout,
 		}
 		res := p.call(args)
@@ -2278,10 +2286,12 @@ func (p *proxyrunner) broadcastCluster(path string, query url.Values, method str
 	smap *Smap, timeout time.Duration) chan callResult {
 
 	bcastArgs := bcastCallArgs{
-		path:            path,
-		query:           query,
-		method:          method,
-		injson:          body,
+		req: reqArgs{
+			method: method,
+			path:   path,
+			query:  query,
+			body:   body,
+		},
 		timeout:         timeout,
 		servers:         []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
 		serversToIgnore: map[string]struct{}{p.si.DaemonID: {}},
@@ -2294,10 +2304,12 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 	smap *Smap, timeout time.Duration) chan callResult {
 
 	bcastArgs := bcastCallArgs{
-		path:            path,
-		query:           query,
-		method:          method,
-		injson:          body,
+		req: reqArgs{
+			method: method,
+			path:   path,
+			query:  query,
+			body:   body,
+		},
 		timeout:         timeout,
 		servers:         []map[string]*daemonInfo{smap.Tmap},
 		serversToIgnore: nil,

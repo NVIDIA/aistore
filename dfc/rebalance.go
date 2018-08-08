@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,14 +37,17 @@ type xrebpathrunner struct {
 // assumes that target is dead. Returns true if target is healthy and running,
 // false otherwise.
 func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadline time.Duration) bool {
-	url := si.DirectURL + URLPath(Rversion, Rhealth) + "?" + URLParamFromID + "=" + t.si.DaemonID
+	query := url.Values{}
+	query.Add(URLParamFromID, t.si.DaemonID)
+
 	pollstarted, ok := time.Now(), false
 	callArgs := callArgs{
-		request: nil,
-		si:      si,
-		url:     url,
-		method:  http.MethodGet,
-		injson:  nil,
+		si: si,
+		req: reqArgs{
+			method: http.MethodGet,
+			path:   URLPath(Rversion, Rhealth),
+			query:  query,
+		},
 		timeout: timeout,
 	}
 
@@ -76,13 +80,15 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 // rebalancing operation.
 func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion int64) {
 	// Phase 1: Call and check if smap is at least our version.
-	url := fmt.Sprintf("%s?%s=%s", si.DirectURL+URLPath(Rversion, Rdaemon), URLParamWhat, GetWhatSmap)
+	query := url.Values{}
+	query.Add(URLParamWhat, GetWhatSmap)
 	args := callArgs{
-		request: nil,
-		si:      si,
-		url:     url,
-		method:  http.MethodGet,
-		injson:  nil,
+		si: si,
+		req: reqArgs{
+			method: http.MethodGet,
+			path:   URLPath(Rversion, Rdaemon),
+			query:  query,
+		},
 		timeout: noTimeout,
 	}
 
@@ -102,7 +108,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		tsmap := &Smap{}
 		err := json.Unmarshal(res.outjson, tsmap)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", url, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal response, err: %v [%v]", err, string(res.outjson))
 			return
 		}
 
@@ -117,13 +123,12 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 	time.Sleep(NeighborRebalanceStartDelay)
 
 	// Phase 3: Call thy neighbor to check whether it is rebalancing and wait until it is not.
-	url = si.DirectURL + URLPath(Rversion, Rhealth)
 	args = callArgs{
-		request: nil,
-		si:      si,
-		url:     url,
-		method:  http.MethodGet,
-		injson:  nil,
+		si: si,
+		req: reqArgs{
+			method: http.MethodGet,
+			path:   URLPath(Rversion, Rhealth),
+		},
 		timeout: noTimeout,
 	}
 
@@ -137,7 +142,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		status := &thealthstatus{}
 		err := json.Unmarshal(res.outjson, status)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", url, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.DirectURL, err, string(res.outjson))
 			break
 		}
 

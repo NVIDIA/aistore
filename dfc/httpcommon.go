@@ -42,11 +42,47 @@ const ( // => Transport.MaxIdleConnsPerHost
 	noTimeout             = time.Duration(-1)
 )
 
-type objectProps struct {
-	version string
-	size    int64
-	nhobj   cksumvalue
-}
+type (
+	objectProps struct {
+		version string
+		size    int64
+		nhobj   cksumvalue
+	}
+
+	// callResult contains data returned by a server to server call
+	callResult struct {
+		si      *daemonInfo
+		outjson []byte
+		err     error
+		errstr  string
+		status  int
+	}
+
+	// reqArgs contains information about the http request which we want to send
+	reqArgs struct {
+		method string      // GET, POST, ...
+		header http.Header // request headers
+		base   string      // base URL: http://xyz.abc
+		path   string      // path URL: /x/y/z
+		query  url.Values  // query: ?x=y&y=z
+		body   []byte      // body for POST, PUT, ...
+	}
+
+	// callArgs contains arguments for a server call
+	callArgs struct {
+		req     reqArgs
+		timeout time.Duration
+		si      *daemonInfo
+	}
+
+	// bcastCallArgs contains arguments for a broadcast server call
+	bcastCallArgs struct {
+		req             reqArgs
+		timeout         time.Duration
+		servers         []map[string]*daemonInfo
+		serversToIgnore map[string]struct{}
+	}
+)
 
 //===========
 //
@@ -65,6 +101,19 @@ type cloudif interface {
 	deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int)
 }
 
+func (u reqArgs) url() string {
+	url := strings.TrimSuffix(u.base, "/")
+	if !strings.HasPrefix(u.path, "/") {
+		url += "/"
+	}
+	url += u.path
+	query := u.query.Encode()
+	if query != "" {
+		url += "?" + query
+	}
+	return url
+}
+
 //===========
 //
 // generic bad-request http handler
@@ -79,13 +128,11 @@ func invalhdlr(w http.ResponseWriter, r *http.Request) {
 
 // Copies headers from original request(from client) to
 // a new one(inter-cluster call)
-func copyHeaders(rOrig, rNew *http.Request) {
-	if rOrig == nil || rNew == nil {
-		return
-	}
-
-	for key, value := range rOrig.Header {
-		rNew.Header[key] = value
+func copyHeaders(src http.Header, dst *http.Header) {
+	for k, values := range src {
+		for _, v := range values {
+			dst.Add(k, v)
+		}
 	}
 }
 
@@ -251,52 +298,57 @@ func (h *httprunner) stop(err error) {
 // optionally, sends a json-encoded body to the callee
 func (h *httprunner) call(args callArgs) callResult {
 	var (
-		request       *http.Request
-		response      *http.Response
-		sid           = "unknown"
-		outjson       []byte
-		err           error
-		errstr        string
-		newPrimaryURL string
-		status        int
+		request  *http.Request
+		response *http.Response
+		sid      = "unknown"
+		outjson  []byte
+		err      error
+		errstr   string
+		status   int
 	)
 
 	if args.si != nil {
 		sid = args.si.DaemonID
 	}
 
-	if len(args.injson) == 0 {
-		request, err = http.NewRequest(args.method, args.url, nil)
+	assert(args.si != nil || args.req.base != "") // either we have si or base
+	if args.req.base == "" && args.si != nil {
+		args.req.base = args.si.DirectURL
+	}
+
+	url := args.req.url()
+	if len(args.req.body) == 0 {
+		request, err = http.NewRequest(args.req.method, url, nil)
 		if glog.V(4) { // super-verbose
-			glog.Infof("%s %s", args.method, args.url)
+			glog.Infof("%s %s", args.req.method, url)
 		}
 	} else {
-		request, err = http.NewRequest(args.method, args.url, bytes.NewBuffer(args.injson))
+		request, err = http.NewRequest(args.req.method, url, bytes.NewBuffer(args.req.body))
 		if err == nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
 		if glog.V(4) { // super-verbose
-			l := len(args.injson)
+			l := len(args.req.body)
 			if l > 16 {
 				l = 16
 			}
-			glog.Infof("%s %s %s...}", args.method, args.url, string(args.injson[:l]))
+			glog.Infof("%s %s %s...}", args.req.method, url, string(args.req.body[:l]))
 		}
 	}
 
 	if err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", args.method, args.url, err)
-		return callResult{args.si, outjson, err, errstr, "", status}
+		errstr = fmt.Sprintf("Unexpected failure to create http request %s %s, err: %v", args.req.method, url, err)
+		return callResult{args.si, outjson, err, errstr, status}
 	}
 
-	copyHeaders(args.request, request)
+	copyHeaders(args.req.header, &request.Header)
 	if args.timeout != noTimeout {
 		if args.timeout != 0 {
 			contextwith, cancel := context.WithTimeout(context.Background(), args.timeout)
 			defer cancel()
-			newrequest := request.WithContext(contextwith)
-			copyHeaders(args.request, newrequest)
-			response, err = h.httpclient.Do(newrequest) // timeout => context.deadlineExceededError
+			newRequest := request.WithContext(contextwith)
+			copyHeaders(args.req.header, &newRequest.Header)
+			response, err = h.httpclient.Do(newRequest) // timeout => context.deadlineExceededError
 		} else { // zero timeout means the client wants no timeout
 			response, err = h.httpclientLongTimeout.Do(request)
 		}
@@ -305,27 +357,26 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 	if err != nil {
 		if response != nil && response.StatusCode > 0 {
-			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, args.method, args.url, response.Status, err)
+			errstr = fmt.Sprintf("Failed to http-call %s (%s %s): status %s, err %v", sid, args.req.method, url, response.Status, err)
 			status = response.StatusCode
-			return callResult{args.si, outjson, err, errstr, "", status}
+			return callResult{args.si, outjson, err, errstr, status}
 		}
 
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, args.method, args.url, err)
-		return callResult{args.si, outjson, err, errstr, "", status}
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err %v", sid, args.req.method, url, err)
+		return callResult{args.si, outjson, err, errstr, status}
 	}
 
-	newPrimaryURL = response.Header.Get(HeaderPrimaryProxyURL)
 	if outjson, err = ioutil.ReadAll(response.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, args.method, args.url, err)
+		errstr = fmt.Sprintf("Failed to http-call %s (%s %s): read response err: %v", sid, args.req.method, url, err)
 		if err == io.EOF {
 			trailer := response.Trailer.Get("Error")
 			if trailer != "" {
-				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, args.method, args.url, err, trailer)
+				errstr = fmt.Sprintf("Failed to http-call %s (%s %s): err: %v, trailer: %s", sid, args.req.method, url, err, trailer)
 			}
 		}
 
 		response.Body.Close()
-		return callResult{args.si, outjson, err, errstr, newPrimaryURL, status}
+		return callResult{args.si, outjson, err, errstr, status}
 	}
 	response.Body.Close()
 
@@ -334,14 +385,14 @@ func (h *httprunner) call(args callArgs) callResult {
 		err = fmt.Errorf("%s, status code: %d", outjson, response.StatusCode)
 		errstr = err.Error()
 		status = response.StatusCode
-		return callResult{args.si, outjson, err, errstr, newPrimaryURL, status}
+		return callResult{args.si, outjson, err, errstr, status}
 	}
 
 	if sid != "unknown" {
 		h.keepalive.heardFrom(sid, false /* reset */)
 	}
 
-	return callResult{args.si, outjson, err, errstr, newPrimaryURL, status}
+	return callResult{args.si, outjson, err, errstr, status}
 }
 
 //=============================
@@ -819,21 +870,9 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 
 			wg.Add(1)
 			go func(di *daemonInfo) {
-				var u url.URL
-				if ctx.config.Net.HTTP.UseHTTPS {
-					u.Scheme = "https"
-				} else {
-					u.Scheme = "http"
-				}
-				u.Host = di.NodeIPAddr + ":" + di.DaemonPort
-				u.Path = bcastArgs.path
-				u.RawQuery = bcastArgs.query.Encode() // golang handles query == nil
 				args := callArgs{
-					request: nil,
 					si:      di,
-					url:     u.String(),
-					method:  bcastArgs.method,
-					injson:  bcastArgs.injson,
+					req:     bcastArgs.req,
 					timeout: bcastArgs.timeout,
 				}
 				res := h.call(args)
@@ -878,15 +917,15 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 // - but only if those are defined and different from the previously tried.
 //
 // ================================== Background =========================================
-func (h *httprunner) join(isproxy bool, extra string) (res callResult) {
+func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	url, psi := h.getPrimaryURLAndSI()
-	res = h.registerToURL(url, psi, 0, isproxy, extra)
+	res = h.registerToURL(url, psi, 0, isproxy, query)
 	if res.err == nil {
 		return
 	}
 	if ctx.config.Proxy.DiscoveryURL != "" && ctx.config.Proxy.DiscoveryURL != url {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.DiscoveryURL)
-		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, 0, isproxy, extra)
+		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, 0, isproxy, query)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -895,7 +934,7 @@ func (h *httprunner) join(isproxy bool, extra string) (res callResult) {
 	if ctx.config.Proxy.OriginalURL != "" && ctx.config.Proxy.OriginalURL != url &&
 		ctx.config.Proxy.OriginalURL != ctx.config.Proxy.DiscoveryURL {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.OriginalURL)
-		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, 0, isproxy, extra)
+		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, 0, isproxy, query)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -904,52 +943,41 @@ func (h *httprunner) join(isproxy bool, extra string) (res callResult) {
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, extra string) (res callResult) {
+func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, query url.Values) (res callResult) {
 	info, err := json.Marshal(h.si)
 	assert(err == nil, err)
 
-	f := func(inurl string, isproxy bool, timeout time.Duration, extra string) (outurl string) {
-		if isproxy {
-			outurl = inurl + URLPath(Rversion, Rcluster, Rproxy)
-		} else {
-			outurl = inurl + URLPath(Rversion, Rcluster)
-		}
-		if timeout > 0 { // keepalive
-			outurl += URLPath(Rkeepalive)
-		}
-		if extra != "" {
-			outurl += "?" + extra
-		}
-		return
+	path := URLPath(Rversion, Rcluster)
+	if isproxy {
+		path += URLPath(Rproxy)
 	}
-	regurl := f(url, isproxy, timeout, extra)
+	if timeout > 0 { // keepalive
+		path += URLPath(Rkeepalive)
+	}
 
 	callArgs := callArgs{
-		request: nil,
-		si:      psi,
-		url:     regurl,
-		method:  http.MethodPost,
-		injson:  info,
+		si: psi,
+		req: reqArgs{
+			method: http.MethodPost,
+			base:   url,
+			path:   path,
+			query:  query,
+			body:   info,
+		},
 		timeout: noTimeout,
 	}
 	if timeout > 0 {
 		callArgs.timeout = timeout
 	}
 	for rcount := 0; rcount < 2; rcount++ {
-		callArgs.url = regurl
 		res = h.call(callArgs)
 		if res.err == nil {
 			return
 		}
-		if res.newPrimaryURL != "" {
-			glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, regurl, res.err, url)
-			regurl = f(res.newPrimaryURL, isproxy, timeout, extra)
-			continue
-		}
 		if IsErrConnectionRefused(res.err) {
-			glog.Errorf("%s: (register => %s: connection refused)", h.si.DaemonID, regurl)
+			glog.Errorf("%s: (register => %s: connection refused)", h.si.DaemonID, path)
 		} else {
-			glog.Errorf("%s: (register => %s: %v)", h.si.DaemonID, regurl, res.err)
+			glog.Errorf("%s: (register => %s: %v)", h.si.DaemonID, path, res.err)
 		}
 		break
 	}

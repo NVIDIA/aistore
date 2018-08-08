@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const httpProto = "http"
+
 type (
 	discoverServerHandler func(sv int64, lv int64) *httptest.Server
 
@@ -27,7 +29,7 @@ type (
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
-	p.si = newDaemonInfo("primary", ctx.config.Net.HTTP.Proto, "", "")
+	p.si = newDaemonInfo("primary", httpProto, "", "")
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
@@ -245,7 +247,7 @@ func TestDiscoverServers(t *testing.T) {
 		for _, s := range tc.servers {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			ip, port := getServerIPAndPort(ts.URL)
-			daemon := newDaemonInfo(s.id, ctx.config.Net.HTTP.Proto, ip, port)
+			daemon := newDaemonInfo(s.id, httpProto, ip, port)
 			if s.isProxy {
 				discoverSmap.addProxy(daemon)
 			} else {

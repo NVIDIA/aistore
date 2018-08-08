@@ -69,8 +69,6 @@ const (
 	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation
-	HeaderPrimaryProxyURL = "PrimaryProxyURL"       // URL of Primary Proxy
-	HeaderPrimaryProxyID  = "PrimaryProxyID"        // ID of Primary Proxy
 	Size                  = "Size"                  // Size of object in bytes
 	Version               = "Version"               // Object version number
 )
