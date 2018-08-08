@@ -130,8 +130,6 @@ type iostatrunner struct {
 	fsdisks     map[string]StringSet
 }
 
-type StringSet map[string]struct{}
-
 type (
 	XactionStatsRetriever interface {
 		getStats([]XactionDetails) []byte

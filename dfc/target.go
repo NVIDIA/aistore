@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -2840,40 +2841,44 @@ func (t *targetrunner) detectMpathChanges() {
 	// mpath config dir
 	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
 
-	type MFS struct {
-		Available map[string]*fs.MountpathInfo `json:"available"`
-		Disabled  map[string]*fs.MountpathInfo `json:"disabled"`
+	type mfs struct {
+		Available StringSet `json:"available"`
+		Disabled  StringSet `json:"disabled"`
 	}
 
 	// load old/prev and compare
 	var (
-		changed bool
-		oldfs   = &MFS{}
-		newfs   = &MFS{}
+		oldfs = mfs{}
+		newfs = mfs{
+			Available: make(StringSet),
+			Disabled:  make(StringSet),
+		}
 	)
 
-	newfs.Available, newfs.Disabled = ctx.mountpaths.Mountpaths()
+	availablePaths, disabledPath := ctx.mountpaths.Mountpaths()
+	for mpath := range availablePaths {
+		newfs.Available[mpath] = struct{}{}
+	}
+	for mpath := range disabledPath {
+		newfs.Disabled[mpath] = struct{}{}
+	}
 
-	if err := LocalLoad(mpathconfigfqn, oldfs); err != nil {
+	if err := LocalLoad(mpathconfigfqn, &oldfs); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
-	} else if len(oldfs.Available) != len(newfs.Available) || len(oldfs.Disabled) != len(oldfs.Disabled) {
-		changed = true
-	} else {
-		for _, mpathInfo := range oldfs.Available {
-			if _, exists := newfs.Available[mpathInfo.Path]; !exists {
-				changed = true
-				break
-			}
-		}
+		return
 	}
 
-	if changed {
-		s, _ := json.MarshalIndent(oldfs, "", "\t")
-		oldfsPprint := fmt.Sprintln(string(s))
-		s, _ = json.MarshalIndent(newfs, "", "\t")
-		newfsPprint := fmt.Sprintln(string(s))
+	if !reflect.DeepEqual(oldfs, newfs) {
+		oldfsPprint := fmt.Sprintf(
+			"available: %v\ndisabled: %v",
+			oldfs.Available.String(), oldfs.Disabled.String(),
+		)
+		newfsPprint := fmt.Sprintf(
+			"available: %v\ndisabled: %v",
+			newfs.Available.String(), newfs.Disabled.String(),
+		)
 
 		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.DaemonID, mpathconfigfqn)
 		glog.Errorln("OLD: ====================")

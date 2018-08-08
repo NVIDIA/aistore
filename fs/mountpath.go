@@ -11,10 +11,10 @@ import (
 )
 
 type MountpathInfo struct {
-	Path       string       `json:"path"` // clean
-	OrigPath   string       `json:"-"`    // As entered by the user, must be used for logging / returning errors
-	Fsid       syscall.Fsid `json:"fsid"`
-	FileSystem string       `json:"fileSystem"`
+	Path       string // Cleaned OrigPath
+	OrigPath   string // As entered by the user, must be used for logging / returning errors
+	Fsid       syscall.Fsid
+	FileSystem string
 }
 
 func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {

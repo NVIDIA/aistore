@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -35,6 +36,19 @@ const (
 type localIPv4Info struct {
 	ipv4 string
 	mtu  int
+}
+
+type StringSet map[string]struct{}
+
+func (ss StringSet) String() string {
+	keys := make([]string, len(ss))
+	idx := 0
+	for key := range ss {
+		keys[idx] = key
+		idx++
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
 }
 
 func assert(cond bool, args ...interface{}) {
