@@ -3052,44 +3052,20 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 
 	switch msg.Action {
 	case ActMountpathEnable:
-		t.enableMountpath(w, r, mountpath)
+		t.handleEnableMountpathReq(w, r, mountpath)
 	case ActMountpathDisable:
-		t.disableMountpath(w, r, mountpath)
+		t.handleDisableMountpathReq(w, r, mountpath)
 	case ActMountpathAdd:
-		t.addMountpath(w, r, mountpath)
+		t.handleAddMountpathReq(w, r, mountpath)
 	case ActMountpathRemove:
-		t.removeMountpath(w, r, mountpath)
+		t.handleRemoveMountpathReq(w, r, mountpath)
 	default:
 		t.invalmsghdlr(w, r, "Invalid action in request")
 	}
 }
 
-func (t *targetrunner) enableMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := ctx.mountpaths.EnableMountpath(mountpath)
-	if !enabled && exists {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	if !enabled && !exists {
-		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
-		return
-	}
-
-	getiostatrunner().updateFSDisks()
-	t.runRebalance(t.smapowner.get(), "")
-	glog.Infof("Reenabled mountpath %s", mountpath)
-
-	avail, _ := ctx.mountpaths.Mountpaths()
-	if len(avail) == 1 {
-		if err := t.enable(); err != nil {
-			glog.Errorf("The mountpath was enabled but registering target failed: %v", err)
-		}
-	}
-}
-
-func (t *targetrunner) disableMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := t.DisableMountpath(mountpath, "client request")
+func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	enabled, exists := enableMountpath(mountpath)
 	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -3101,42 +3077,32 @@ func (t *targetrunner) disableMountpath(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-func (t *targetrunner) addMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := ctx.mountpaths.AddMountpath(mountpath)
+func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	enabled, exists := disableMountpath(mountpath)
+	if !enabled && exists {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if !enabled && !exists {
+		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
+		return
+	}
+}
+
+func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	err := addMountpath(mountpath)
 	if err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
 		return
 	}
-
-	getfshealthchecker().RequestAddMountpath(mountpath)
-	getiostatrunner().updateFSDisks()
-	t.runRebalance(t.smapowner.get(), "")
-	glog.Infof("Added mountpath %s", mountpath)
-
-	avail, _ := ctx.mountpaths.Mountpaths()
-	if len(avail) == 1 {
-		if err := t.enable(); err != nil {
-			glog.Errorf("The mountpath was added but registering target failed: %v", err)
-		}
-	}
 }
 
-func (t *targetrunner) removeMountpath(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := ctx.mountpaths.RemoveMountpath(mountpath)
+func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
+	err := removeMountpath(mountpath)
 	if err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
 		return
-	}
-
-	getfshealthchecker().RequestRemoveMountpath(mountpath)
-	getiostatrunner().updateFSDisks()
-	glog.Infof("Removed mountpath %s", mountpath)
-
-	avail, _ := ctx.mountpaths.Mountpaths()
-	if len(avail) == 0 {
-		if err := t.disable(); err != nil {
-			glog.Errorf("The last mountpath was removed but unregistering target failed: %v", err)
-		}
 	}
 }
 
@@ -3562,29 +3528,11 @@ func (t *targetrunner) enable() error {
 	return nil
 }
 
+// DisableMountpath implements MountpathDispatcher interface
 func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled, exists bool) {
 	// TODO: notify an admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
-	disabled, exists = ctx.mountpaths.DisableMountpath(mountpath)
-	if !disabled || !exists {
-		return disabled, exists
-	}
-
-	getiostatrunner().updateFSDisks()
-	glog.Infof("Disabled mountpath %s", mountpath)
-
-	avail, _ := ctx.mountpaths.Mountpaths()
-	if len(avail) > 0 {
-		return disabled, exists
-	}
-
-	glog.Warningf("The last available mountpath was disabled. Unregistering the target")
-	if err := t.disable(); err != nil {
-		glog.Errorf("Failed to unregister target %s, error: %v",
-			t.si.DaemonID, err)
-	}
-
-	return disabled, exists
+	return disableMountpath(mountpath)
 }
 
 func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) error {
