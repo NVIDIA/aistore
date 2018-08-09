@@ -29,28 +29,16 @@ type fileInfo struct {
 type fileInfoMinHeap []*fileInfo
 
 type lructx struct {
-	cursize  int64
-	totsize  int64
-	newest   time.Time
-	xlru     *xactLRU
-	heap     *fileInfoMinHeap
-	oldwork  []*fileInfo
-	t        *targetrunner
-	fs       string
-	throttle struct {
-		sleep         time.Duration
-		nextUtilCheck time.Time
-		nextCapCheck  time.Time
-		prevUtilPct   float32
-		prevFSUsedPct uint64
-	}
+	cursize int64
+	totsize int64
+	newest  time.Time
+	xlru    *xactLRU
+	heap    *fileInfoMinHeap
+	oldwork []*fileInfo
+	t       *targetrunner
+	fs      string
+	thrctx  throttleContext
 }
-
-const (
-	initThrottleSleep  = time.Millisecond
-	maxThrottleSleep   = time.Second
-	fsCapCheckDuration = time.Second * 10
-)
 
 func (t *targetrunner) runLRU() {
 	// FIXME: if LRU config has changed we need to force new LRU transaction
@@ -153,13 +141,8 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		}
 	}
 
-	lctx.computeThrottle(fqn)
-	if lctx.throttle.sleep > 0 {
-		if glog.V(4) {
-			glog.Infof("%s: sleeping %v", fqn, lctx.throttle.sleep)
-		}
-		time.Sleep(lctx.throttle.sleep)
-	}
+	lctx.thrctx.throttle(lctx.newLRUThrottleParams(fqn))
+
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {
 		glog.Infof("Warning (LRU race?): %s "+doesnotexist, fqn)
@@ -233,6 +216,14 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
+func (lctx *lructx) newLRUThrottleParams(fqn string) *throttleParams {
+	return &throttleParams{
+		throttle: onDiskUtil | onFSUsed,
+		fs:       lctx.fs,
+		fqn:      fqn,
+	}
+}
+
 func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) error {
 	h := lctx.heap
 	var (
@@ -304,58 +295,4 @@ func (h *fileInfoMinHeap) Pop() interface{} {
 	fi := old[n-1]
 	*h = old[0 : n-1]
 	return fi
-}
-
-func (lctx *lructx) computeThrottle(fqn string) {
-	now := time.Now()
-	usedFSPercentage := lctx.throttle.prevFSUsedPct
-	var ok bool
-	if now.After(lctx.throttle.nextCapCheck) {
-		usedFSPercentage, ok = getFSUsedPercentage(fqn)
-		lctx.throttle.nextCapCheck = now.Add(fsCapCheckDuration)
-		if !ok {
-			glog.Errorf("Unable to retrieve used capacity for fs %s", lctx.fs)
-			lctx.throttle.sleep = 0
-			return
-		}
-		lctx.throttle.prevFSUsedPct = usedFSPercentage
-	}
-
-	if usedFSPercentage >= uint64(ctx.config.LRU.HighWM) {
-		lctx.throttle.sleep = 0
-		return
-	}
-
-	riostat := getiostatrunner()
-	// update disk utilization at the frequency of iostatrunner i.e. once in StatsTime
-	curUtilPct := lctx.throttle.prevUtilPct
-	if now.After(lctx.throttle.nextUtilCheck) {
-		curUtilPct, ok = riostat.maxUtilFS(lctx.fs)
-		lctx.throttle.nextUtilCheck = now.Add(ctx.config.Periodic.StatsTime)
-		if !ok {
-			curUtilPct = lctx.throttle.prevUtilPct
-			glog.Errorf("Unable to retrieve disk utilization for fs %s", lctx.fs)
-		}
-	}
-
-	if curUtilPct > float32(ctx.config.Xaction.DiskUtilHighWM) {
-		if lctx.throttle.sleep < initThrottleSleep {
-			lctx.throttle.sleep = initThrottleSleep
-		} else {
-			lctx.throttle.sleep *= 2
-		}
-	} else if curUtilPct < float32(ctx.config.Xaction.DiskUtilLowWM) {
-		lctx.throttle.sleep = 0
-	} else {
-		if lctx.throttle.sleep < initThrottleSleep {
-			lctx.throttle.sleep = initThrottleSleep
-		}
-		multiplier := (curUtilPct - float32(ctx.config.Xaction.DiskUtilLowWM)) /
-			float32(ctx.config.Xaction.DiskUtilHighWM-ctx.config.Xaction.DiskUtilLowWM)
-		lctx.throttle.sleep = lctx.throttle.sleep + time.Duration(float32(lctx.throttle.sleep)*multiplier)
-	}
-	if lctx.throttle.sleep > maxThrottleSleep {
-		lctx.throttle.sleep = maxThrottleSleep
-	}
-	lctx.throttle.prevUtilPct = curUtilPct
 }
