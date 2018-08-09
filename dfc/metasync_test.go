@@ -75,7 +75,7 @@ func getServerIPAndPort(u string) (string, string) {
 func newPrimary() *proxyrunner {
 	p := proxyrunner{}
 	p.smapowner = &smapowner{}
-	p.si = &daemonInfo{DaemonID: "primary", DirectURL: "do not care"}
+	p.si = newDaemonInfo("primary", ctx.config.Net.HTTP.Proto, "", "")
 	smap := newSmap()
 	smap.addProxy(p.si)
 	smap.ProxySI = p.si
@@ -402,12 +402,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	})
 
 	clone := primary.smapowner.get().clone()
-	clone.Pmap[id] = &daemonInfo{
-		DaemonID:   id,
-		DirectURL:  "http://" + s.Addr,
-		NodeIPAddr: ip,
-		DaemonPort: port,
-	}
+	clone.Pmap[id] = newDaemonInfo(id, ctx.config.Net.HTTP.Proto, ip, port)
 	primary.smapowner.put(clone)
 
 	// function shared by the two cases: short delay and long delay
@@ -695,13 +690,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		id := "t"
 		ip, port := getServerIPAndPort(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(
-			&daemonInfo{
-				DaemonID:   id,
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			})
+		clone.addTarget(newDaemonInfo(id, ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 		syncer.sync(true, clone)
 		time.Sleep(time.Millisecond * 300)
@@ -889,14 +878,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port := getServerIPAndPort(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addProxy(
-			&daemonInfo{
-				DaemonID:   "proxy1",
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			},
-		)
+		clone.addProxy(newDaemonInfo("proxy1", ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 
 		proxy1 := proxyrunner{}
@@ -948,13 +930,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		ip, port = getServerIPAndPort(s.URL)
 
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(
-			&daemonInfo{
-				DaemonID:   "target1",
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			})
+		clone.addTarget(newDaemonInfo("target1", ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 
 		target1 := targetrunner{}
@@ -993,13 +969,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port = getServerIPAndPort(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(
-			&daemonInfo{
-				DaemonID:   "target2",
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			})
+		clone.addTarget(newDaemonInfo("target2", ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 
 		target2 := targetrunner{}
@@ -1099,13 +1069,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port = getServerIPAndPort(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addProxy(
-			&daemonInfo{
-				DaemonID:   "proxy2",
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			})
+		clone.addProxy(newDaemonInfo("proxy2", ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 
 		proxy2 := proxyrunner{}
@@ -1213,13 +1177,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port := getServerIPAndPort(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(
-			&daemonInfo{
-				DaemonID:   "target1",
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			})
+		clone.addTarget(newDaemonInfo("target1", ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 
 		target1 := targetrunner{}
@@ -1236,13 +1194,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		ip, port = getServerIPAndPort(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(
-			&daemonInfo{
-				DaemonID:   "target2",
-				DirectURL:  s.URL,
-				NodeIPAddr: ip,
-				DaemonPort: port,
-			})
+		clone.addTarget(newDaemonInfo("target2", ctx.config.Net.HTTP.Proto, ip, port))
 		primary.smapowner.put(clone)
 
 		target2 := targetrunner{}

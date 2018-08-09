@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -34,7 +35,7 @@ type daemonInfo struct {
 	DirectURL  string `json:"direct_url"`
 }
 
-// Cluster Map aka Smap
+// Smap aka cluster map
 type Smap struct {
 	Tmap      map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
 	Pmap      map[string]*daemonInfo `json:"pmap"` // proxyID -> proxyInfo
@@ -46,6 +47,19 @@ type Smap struct {
 type smapowner struct {
 	sync.Mutex
 	smap unsafe.Pointer
+}
+
+func newDaemonInfo(id, proto, ipAddr, port string) *daemonInfo {
+	return &daemonInfo{
+		DaemonID:   id,
+		NodeIPAddr: ipAddr,
+		DaemonPort: port,
+		DirectURL:  proto + "://" + ipAddr + ":" + port,
+	}
+}
+
+func (di daemonInfo) equals(other daemonInfo) bool {
+	return reflect.DeepEqual(di, other)
 }
 
 func (r *smapowner) put(smap *Smap) {

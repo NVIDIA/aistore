@@ -27,7 +27,7 @@ type (
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
-	p.si = &daemonInfo{DaemonID: "primary"}
+	p.si = newDaemonInfo("primary", ctx.config.Net.HTTP.Proto, "", "")
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
@@ -245,10 +245,11 @@ func TestDiscoverServers(t *testing.T) {
 		for _, s := range tc.servers {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			ip, port := getServerIPAndPort(ts.URL)
+			daemon := newDaemonInfo(s.id, ctx.config.Net.HTTP.Proto, ip, port)
 			if s.isProxy {
-				discoverSmap.addProxy(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
+				discoverSmap.addProxy(daemon)
 			} else {
-				discoverSmap.addTarget(&daemonInfo{DaemonID: s.id, NodeIPAddr: ip, DaemonPort: port})
+				discoverSmap.addTarget(daemon)
 			}
 		}
 		primary.smapowner.put(discoverSmap)

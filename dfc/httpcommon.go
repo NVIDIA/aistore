@@ -161,31 +161,21 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 // Note: Sadly httprunner has become the sharing point where common code for
 //       proxyrunner and targetrunner exist.
 func (h *httprunner) initSI() {
-	ipaddr, errstr := getipv4addr()
+	ipAddr, errstr := getipv4addr()
 	if errstr != "" {
 		glog.Fatalf("FATAL: %s", errstr)
 	}
 
-	h.si = &daemonInfo{}
-	h.si.NodeIPAddr = ipaddr
-	h.si.DaemonPort = ctx.config.Net.L4.Port
-	id := os.Getenv("DFCDAEMONID")
-	if id != "" {
-		h.si.DaemonID = id
-	} else {
-		cs := xxhash.ChecksumString32S(ipaddr+":"+ctx.config.Net.L4.Port, mLCG32)
-		h.si.DaemonID = strconv.Itoa(int(cs & 0xfffff))
+	daemonID := os.Getenv("DFCDAEMONID")
+	if daemonID == "" {
+		cs := xxhash.ChecksumString32S(ipAddr+":"+ctx.config.Net.L4.Port, mLCG32)
+		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if testingFSPpaths() {
-			h.si.DaemonID += ":" + ctx.config.Net.L4.Port
+			daemonID += ":" + ctx.config.Net.L4.Port
 		}
 	}
 
-	proto := "http"
-	if ctx.config.Net.HTTP.UseHTTPS {
-		proto = "https"
-	}
-
-	h.si.DirectURL = proto + "://" + h.si.NodeIPAddr + ":" + h.si.DaemonPort
+	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.Proto, ipAddr, ctx.config.Net.L4.Port)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
@@ -735,10 +725,10 @@ func (h *httprunner) extractSmap(payload simplekvs) (newsmap, oldsmap *Smap, msg
 
 	// partial restore of the old smap - keeping only the respective DaemonIDs and version
 	for sid := range tmapif {
-		oldsmap.Tmap[sid] = &daemonInfo{}
+		oldsmap.Tmap[sid] = newDaemonInfo(sid, ctx.config.Net.HTTP.Proto, "", "")
 	}
 	for pid := range pmapif {
-		oldsmap.Pmap[pid] = &daemonInfo{}
+		oldsmap.Pmap[pid] = newDaemonInfo(pid, ctx.config.Net.HTTP.Proto, "", "")
 	}
 	oldsmap.Version = int64(versionf)
 	return

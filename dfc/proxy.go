@@ -2000,7 +2000,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 			return true
 		}
 
-		if osi.NodeIPAddr != nsi.NodeIPAddr || osi.DaemonPort != nsi.DaemonPort {
+		if !osi.equals(*nsi) {
 			glog.Warningf("register/keepalive %s %s: info changed - renewing", kind, nsi.DaemonID)
 			return true
 		}
@@ -2012,7 +2012,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 		if p.startedup(0) == 0 {
 			return true
 		}
-		if osi.NodeIPAddr == nsi.NodeIPAddr && osi.DaemonPort == nsi.DaemonPort && osi.DirectURL == nsi.DirectURL {
+		if osi.equals(*nsi) {
 			glog.Infof("register %s %s: already done", kind, nsi.DaemonID)
 			return false
 		}
