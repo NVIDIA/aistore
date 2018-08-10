@@ -195,7 +195,10 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 
 	// find and abort in-progress x-action if exists and if its smap version is lower
 	// start new x-action unless the one for the current version is already in progress
-	xreb := t.xactinp.renewRebalance(newsmap.Version, t)
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	runnersCnt := len(availablePaths) * 2
+
+	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnersCnt)
 	if xreb == nil {
 		return
 	}
@@ -211,8 +214,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	glog.Infoln(xreb.tostring())
 	wg = &sync.WaitGroup{}
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	allr := make([]*xrebpathrunner, 0, len(availablePaths)*2)
+	allr := make([]*xrebpathrunner, 0, runnersCnt)
 	for _, mpathInfo := range availablePaths {
 		rc := &xrebpathrunner{t: t, mpathplus: makePathCloud(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
@@ -281,23 +283,14 @@ func (rcl *xrebpathrunner) oneRebalance() {
 			glog.Errorf("Failed to traverse %s, err: %v", rcl.mpathplus, err)
 		}
 	}
+	rcl.xreb.confirmCh <- struct{}{}
 	rcl.wg.Done()
 }
 
 // the walking callback is execited by the LRU xaction
 // (notice the receiver)
 func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) error {
-	if err != nil {
-		glog.Errorf("rebwalkf invoked with err: %v", err)
-		return err
-	}
-	if osfi.Mode().IsDir() {
-		return nil
-	}
-	if iswork, _ := rcl.t.isworkfile(fqn); iswork {
-		return nil
-	}
-	// abort?
+	// Check if we should abort
 	select {
 	case <-rcl.xreb.abrt:
 		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rcl.xreb.tostring(), rcl.mpathplus)
@@ -307,6 +300,25 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 		return err
 	default:
 		break
+	}
+
+	// Skip working files
+	if iswork, _ := rcl.t.isworkfile(fqn); iswork {
+		return nil
+	}
+	if err != nil {
+		// If we are traversing non-existing file we should not care
+		if os.IsNotExist(err) {
+			glog.Errorf("rebwalkf attempted to read a file that was deleted, file: %s", fqn)
+			return nil
+		}
+		// Otherwise we care
+		glog.Errorf("rebwalkf invoked with err: %v", err)
+		return err
+	}
+	// Skip dirs
+	if osfi.Mode().IsDir() {
+		return nil
 	}
 	// rebalance maybe
 	bucket, objname, errstr := rcl.t.fqn2bckobj(fqn)

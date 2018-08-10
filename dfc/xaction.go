@@ -47,6 +47,8 @@ type xactRebalance struct {
 	xactBase
 	curversion   int64
 	targetrunner *targetrunner
+	runnersCnt   int
+	confirmCh    chan struct{}
 }
 
 type xactLRU struct {
@@ -189,7 +191,7 @@ func (q *xactInProgress) del(by interface{}) {
 	q.lock.Unlock()
 }
 
-func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xactRebalance {
+func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runnersCnt int) *xactRebalance {
 	q.lock.Lock()
 	_, xx := q.findU(ActRebalance)
 	if xx != nil {
@@ -206,6 +208,10 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 				return nil
 			}
 			xreb.abort()
+			for i := 0; i < xreb.runnersCnt; i++ {
+				<-xreb.confirmCh
+			}
+			close(xreb.confirmCh)
 		}
 	}
 	id := q.uniqueid()
@@ -213,6 +219,8 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner) *xact
 		xactBase:     *newxactBase(id, ActRebalance),
 		curversion:   curversion,
 		targetrunner: t,
+		runnersCnt:   runnersCnt,
+		confirmCh:    make(chan struct{}, runnersCnt),
 	}
 	q.add(xreb)
 	q.lock.Unlock()
