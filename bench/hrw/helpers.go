@@ -6,9 +6,7 @@ package hrw_bench
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
-	"testing"
 
 	"github.com/OneOfOne/xxhash"
 )
@@ -18,6 +16,9 @@ type hashFuncs struct {
 	hashF     func(string, []node) int
 	countObjs []int
 }
+
+const objNameLen = 50
+const fqnMaxLen = 128
 
 // Duplicated on purpose to avoid dependency on any DFC code.
 func randFileName(src *rand.Rand, nameLen int) string {
@@ -45,6 +46,12 @@ func randFileName(src *rand.Rand, nameLen int) string {
 	return string(b)
 }
 
+func similarFileName(bucketName string, objNum int) string {
+	paddedLen := objNameLen - len(strconv.Itoa(objNum)) - len("set-")
+	objectName := fmt.Sprintf("set-%0*d", paddedLen, objNum)
+	return bucketName + "/" + objectName
+}
+
 // Duplicated on purpose to avoid dependency on any DFC code.
 func randNodeId(randGen *rand.Rand) string {
 	randIp := ""
@@ -58,7 +65,7 @@ func randNodeId(randGen *rand.Rand) string {
 	return nodeId + ":" + randPort
 }
 
-func getRandNodeIds(numNodes int, randGen *rand.Rand) []node {
+func randNodeIds(numNodes int, randGen *rand.Rand) []node {
 	nodes := make([]node, numNodes)
 	for i := 0; i < numNodes; i++ {
 		id := randNodeId(randGen)
@@ -72,24 +79,6 @@ func getRandNodeIds(numNodes int, randGen *rand.Rand) []node {
 		}
 	}
 	return nodes
-}
-
-func writeOutputToFile(t *testing.T, hashFunc hashFuncs, numNodes int) {
-	counts := fmt.Sprintf("%v", hashFunc.countObjs)
-	countsStr := fmt.Sprintf("%s/%d %s\n", hashFunc.name, numNodes, counts[1:len(counts)-1])
-	fmt.Printf(countsStr)
-	fileName := fmt.Sprintf("nodes-%d.log", numNodes)
-	f, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		t.Errorf("Unable to open file to dump output. Values: [%s]", countsStr)
-		return
-	}
-	defer f.Close()
-	_, err = f.WriteString(countsStr)
-	if err != nil {
-		t.Errorf("Unable to write output to file. Values: [%s]", countsStr)
-		return
-	}
 }
 
 func get3DSlice(numRoutines, numFuncs, numNodes int) [][][]int {
