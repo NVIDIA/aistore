@@ -2508,6 +2508,9 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, s)
 			return
 		}
+	case GetWhatDaemonInfo:
+		jsbytes, err = json.Marshal(t.si)
+		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Unexpected GET request, what: [%s]", getWhat)
 		t.invalmsghdlr(w, r, s)

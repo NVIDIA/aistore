@@ -1426,6 +1426,10 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err := json.Marshal(msg)
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget")
+	case GetWhatDaemonInfo:
+		jsbytes, err := json.Marshal(p.si)
+		assert(err == nil, err)
+		p.writeJSON(w, r, jsbytes, "httpdaeget")
 	default:
 		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
 		p.invalmsghdlr(w, r, s)
@@ -2019,6 +2023,10 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 		}
 
 		if !osi.equals(*nsi) {
+			if p.detectDaemonDuplicate(osi, nsi) {
+				glog.Errorf("Daemon %s tried to register/keepalive with a duplicate ID %s", nsi.DirectURL, nsi.DaemonID)
+				return false
+			}
 			glog.Warningf("register/keepalive %s %s: info changed - renewing", kind, nsi.DaemonID)
 			return true
 		}
@@ -2396,6 +2404,32 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 			glog.Warningf("Target %s failed to re-checksum objects in bucket %s", r.si.DaemonID, bucket)
 		}
 	}
+}
+
+// detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
+// and is equal to nsi
+func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bool {
+	query := url.Values{}
+	query.Add(URLParamWhat, GetWhatDaemonInfo)
+	args := callArgs{
+		si: osi,
+		req: reqArgs{
+			method: http.MethodGet,
+			path:   URLPath(Rversion, Rdaemon),
+			query:  query,
+		},
+		timeout: ctx.config.Timeout.CplaneOperation,
+	}
+	res := p.call(args)
+	if res.err != nil || res.outjson == nil || len(res.outjson) == 0 {
+		// error getting response from osi
+		return false
+	}
+	si := &daemonInfo{}
+	if err := json.Unmarshal(res.outjson, si); err != nil {
+		assert(false, err)
+	}
+	return !nsi.equals(*si)
 }
 
 func ValidateCloudProvider(provider string, isLocal bool) error {

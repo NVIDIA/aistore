@@ -155,6 +155,7 @@ const (
 	GetWhatXaction    = "xaction"
 	GetWhatSmapVote   = "smapvote"
 	GetWhatMountpaths = "mountpaths"
+	GetWhatDaemonInfo = "daemoninfo"
 )
 
 // GetMsg.GetSort enum
