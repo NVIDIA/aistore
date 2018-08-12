@@ -166,6 +166,7 @@ func (t *targetrunner) run() error {
 	t.authn = &authManager{
 		tokens:        make(map[string]*authRec),
 		revokedTokens: make(map[string]bool),
+		version:       1,
 	}
 
 	//

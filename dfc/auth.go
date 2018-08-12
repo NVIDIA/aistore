@@ -48,7 +48,8 @@ const (
 type (
 	// TokenList is a list of tokens pushed by authn
 	TokenList struct {
-		Tokens []string `json:"tokens"`
+		Tokens  []string `json:"tokens"`
+		Version int64    `json:"version"`
 	}
 
 	authRec struct {
@@ -67,6 +68,7 @@ type (
 		// list of invalid tokens(revoked or of deleted users)
 		// Authn sends these tokens to primary for broadcasting
 		revokedTokens map[string]bool
+		version       int64
 	}
 )
 
@@ -163,6 +165,18 @@ func (a *authManager) updateRevokedList(tokens *TokenList) {
 	}
 
 	a.Lock()
+	if tokens.Version == 0 {
+		// a user manually revoked a token
+		a.version++
+	} else if tokens.Version > a.version {
+		a.version = tokens.Version
+	} else {
+		glog.Errorf("Current token list v%d is greater than received v%d",
+			a.version, tokens.Version)
+		a.Unlock()
+		return
+	}
+
 	for _, token := range tokens.Tokens {
 		a.revokedTokens[token] = true
 		delete(a.tokens, token)
@@ -227,7 +241,10 @@ func (a *authManager) extractTokenData(token string) (*authRec, error) {
 
 func (a *authManager) revokedTokenList() *TokenList {
 	a.Lock()
-	tlist := &TokenList{Tokens: make([]string, len(a.revokedTokens))}
+	tlist := &TokenList{
+		Tokens:  make([]string, len(a.revokedTokens)),
+		Version: a.version,
+	}
 
 	idx := 0
 	for token := range a.revokedTokens {
@@ -252,7 +269,7 @@ func (t *TokenList) tag() string {
 // as a revs:
 // token list doesn't need versioning: receivers keep adding received tokens to their internal lists
 func (t *TokenList) version() int64 {
-	return 0
+	return t.Version
 }
 
 func (t *TokenList) marshal() ([]byte, error) {

@@ -106,6 +106,7 @@ func (p *proxyrunner) run() error {
 	p.authn = &authManager{
 		tokens:        make(map[string]*authRec),
 		revokedTokens: make(map[string]bool),
+		version:       1,
 	}
 
 	if ctx.config.Net.HTTP.UseAsProxy {
@@ -1304,6 +1305,11 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	msg := &ActionMsg{Action: ActRevokeToken}
+	if p.forwardCP(w, r, msg, "revoke token", nil) {
+		return
+	}
+
 	if err := p.readJSON(w, r, tokenList); err != nil {
 		s := fmt.Sprintf("Invalid token list: %v", err)
 		p.invalmsghdlr(w, r, s)
@@ -1313,7 +1319,6 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	p.authn.updateRevokedList(tokenList)
 
 	if p.smapowner.get().isPrimary(p.si) {
-		msg := &ActionMsg{Action: ActRevokeToken}
 		p.metasyncer.sync(false, p.authn.revokedTokenList(), msg)
 	}
 }

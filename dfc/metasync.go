@@ -245,9 +245,6 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 	newcnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
 	for tag, revs := range y.last {
-		if revs.version() == 0 {
-			continue // versionless means no-CoW
-		}
 		jsbytes, err = revs.marshal()
 		assert(err == nil, err)
 		if cowcopy, ok := y.lastclone[tag]; ok {
@@ -277,8 +274,6 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		}
 		// vs the last sync-ed: enforcing non-decremental versioning on the wire
 		switch lversion := y.lversion(tag); {
-		case lversion == 0:
-			// proceed to support a) first sync, b) versionless sync
 		case lversion == revs.version():
 			if newcnt == 0 {
 				glog.Errorf("%s duplicated - already sync-ed or pending", s)
@@ -305,9 +300,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		y.last[tag] = revs
 		jsbytes, err = revs.marshal()
 		assert(err == nil, err)
-		if revs.version() != 0 {
-			y.lastclone[tag] = string(jsbytes)
-		}
+		y.lastclone[tag] = string(jsbytes)
 		jsmsg, err = json.Marshal(msg)
 		assert(err == nil, err)
 
