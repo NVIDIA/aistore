@@ -139,13 +139,16 @@ func (r *smapowner) persist(newsmap *Smap, saveSmap bool) (errstr string) {
 
 func newSmap() (smap *Smap) {
 	smap = &Smap{}
-	smap.init(8, 8)
+	smap.init(8, 8, 0)
 	return
 }
 
-func (m *Smap) init(tsize, psize int) {
+func (m *Smap) init(tsize, psize, elsize int) {
 	m.Tmap = make(map[string]*daemonInfo, tsize)
 	m.Pmap = make(map[string]*daemonInfo, psize)
+	if elsize > 0 {
+		m.NonElects = make(simplekvs, elsize)
+	}
 }
 
 func (m *Smap) pp() string {
@@ -187,15 +190,13 @@ func (m *Smap) containsID(id string) bool {
 }
 
 func (m *Smap) addTarget(tsi *daemonInfo) {
-	psi := m.getProxy(tsi.DaemonID)
-	assert(psi == nil, "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
+	assert(!m.containsID(tsi.DaemonID), "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
 	m.Tmap[tsi.DaemonID] = tsi
 	m.Version++
 }
 
 func (m *Smap) addProxy(psi *daemonInfo) {
-	tsi := m.getTarget(psi.DaemonID)
-	assert(tsi == nil, "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
+	assert(!m.containsID(psi.DaemonID), "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
 	m.Pmap[psi.DaemonID] = psi
 	m.Version++
 }
@@ -248,12 +249,15 @@ func (m *Smap) clone() *Smap {
 
 func (m *Smap) deepcopy(dst *Smap) {
 	copyStruct(dst, m)
-	dst.init(len(m.Tmap), len(m.Pmap))
+	dst.init(len(m.Tmap), len(m.Pmap), len(m.NonElects))
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
 	}
 	for id, v := range m.Pmap {
 		dst.Pmap[id] = v
+	}
+	for id, v := range m.NonElects {
+		dst.NonElects[id] = v
 	}
 }
 

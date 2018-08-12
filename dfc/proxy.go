@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -410,8 +411,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.put(clone)
 		p.bmdowner.Unlock()
-		pair := &revspair{clone, &msg}
-		p.metasyncer.sync(true, pair)
+		p.metasyncer.sync(true, clone, &msg)
 	case ActDelete, ActEvict:
 		p.actionlistrange(w, r, &msg)
 	default:
@@ -491,8 +491,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.put(clone)
 		p.bmdowner.Unlock()
-		pair := &revspair{clone, &msg}
-		p.metasyncer.sync(true, pair)
+		p.metasyncer.sync(true, clone, &msg)
 	case ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
@@ -526,7 +525,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
-		p.metasyncer.sync(false, p.bmdowner.get())
+		p.metasyncer.sync(false, p.bmdowner.get(), &msg)
 	case ActPrefetch:
 		p.actionlistrange(w, r, &msg)
 	case ActListObjects:
@@ -670,7 +669,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	p.metasyncer.sync(true, clone)
+	p.metasyncer.sync(true, clone, &msg)
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -771,7 +770,7 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *buck
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	p.metasyncer.sync(true, clone)
+	p.metasyncer.sync(true, clone, msg)
 	return true
 }
 
@@ -1315,8 +1314,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 
 	if p.smapowner.get().isPrimary(p.si) {
 		msg := &ActionMsg{Action: ActRevokeToken}
-		pair := &revspair{p.authn.revokedTokenList(), msg}
-		p.metasyncer.sync(false, pair)
+		p.metasyncer.sync(false, p.authn.revokedTokenList(), msg)
 	}
 }
 
@@ -1590,13 +1588,12 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	p.smapowner.Unlock()
 
 	msg := &ActionMsg{Action: ActNewPrimary}
-	pair := &revspair{clone, msg}
 	bucketmd := p.bmdowner.get()
 	if glog.V(3) {
 		glog.Infof("Distributing Smap v%d with the newly elected primary %s = self", clone.version(), p.si.DaemonID)
 		glog.Infof("Distributing bucket-metadata v%d as well", bucketmd.version())
 	}
-	p.metasyncer.sync(true, pair, bucketmd)
+	p.metasyncer.sync(true, clone, msg, bucketmd, msg)
 	return
 }
 
@@ -1648,6 +1645,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	p.smapowner.Lock()
 	clone := p.smapowner.get().clone()
 	clone.ProxySI = psi
+	p.metasyncer.becomeNonPrimary()
 	if s := p.smapowner.persist(clone, true); s != "" {
 		glog.Errorf("Failed to save Smap locally after having transitioned to non-primary:\n%s", s)
 	}
@@ -1963,40 +1961,46 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 		p.registerToSmap(isproxy, &nsi, nonelectable)
 		smap := p.smapowner.get()
-		smapPair := &revspair{smap, msg}
 
 		if errstr := p.smapowner.persist(smap, true); errstr != "" {
 			glog.Errorln(errstr)
 		}
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
+		msg.Action = path.Join(msg.Action, nsi.DaemonID)
 		if len(tokens.Tokens) == 0 {
-			p.metasyncer.sync(false, smapPair)
+			p.metasyncer.sync(false, smap, msg)
 		} else {
-			tokenPair := &revspair{tokens, msg}
-			p.metasyncer.sync(false, smapPair, tokenPair)
+			p.metasyncer.sync(false, smap, msg, tokens, msg)
 		}
 	}(isproxy, nonelectable)
 }
 
 func (p *proxyrunner) registerToSmap(isproxy bool, nsi *daemonInfo, nonelectable bool) {
 	clone := p.smapowner.get().clone()
+	id := nsi.DaemonID
 	if isproxy {
+		if clone.getProxy(id) != nil { // update if need be - see addOrUpdateNode()
+			clone.delProxy(id)
+		}
 		clone.addProxy(nsi)
 		if nonelectable {
 			if clone.NonElects == nil {
 				clone.NonElects = make(simplekvs)
-				clone.NonElects[nsi.DaemonID] = ""
 			}
-			glog.Infof("Note: proxy %s won't be electable", nsi.DaemonID)
+			clone.NonElects[id] = ""
+			glog.Infof("Note: proxy %s won't be electable", id)
 		}
 		if glog.V(3) {
-			glog.Infof("joined proxy %s (num proxies %d)", nsi.DaemonID, clone.countProxies())
+			glog.Infof("joined proxy %s (num proxies %d)", id, clone.countProxies())
 		}
 	} else {
+		if clone.getTarget(id) != nil { // ditto
+			clone.delTarget(id)
+		}
 		clone.addTarget(nsi)
 		if glog.V(3) {
-			glog.Infof("joined target %s (num targets %d)", nsi.DaemonID, clone.countTargets())
+			glog.Infof("joined target %s (num targets %d)", id, clone.countTargets())
 		}
 	}
 	p.smapowner.put(clone)
@@ -2116,8 +2120,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pair := &revspair{clone, msg}
-	p.metasyncer.sync(true, pair)
+	p.metasyncer.sync(true, clone, msg)
 }
 
 // '{"action": "shutdown"}' /v1/cluster => (proxy) =>
@@ -2193,8 +2196,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
 	case ActRebalance:
-		pair := &revspair{p.smapowner.get(), &msg}
-		p.metasyncer.sync(false, pair)
+		p.metasyncer.sync(false, p.smapowner.get(), &msg)
 
 	default:
 		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
@@ -2208,6 +2210,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 //
 //========================
 func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
+	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
 	if p.smapowner.get().isPrimary(p.si) {
 		_, xx := p.xactinp.findL(ActElection)
 		vote := xx != nil
@@ -2221,7 +2224,7 @@ func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newsmap, _, _, errstr := p.extractSmap(payload)
+	newsmap, _, errstr := p.extractSmap(payload)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -2292,9 +2295,8 @@ func (p *proxyrunner) broadcastCluster(path string, query url.Values, method str
 			query:  query,
 			body:   body,
 		},
-		timeout:         timeout,
-		servers:         []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
-		serversToIgnore: map[string]struct{}{p.si.DaemonID: {}},
+		timeout: timeout,
+		servers: []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
 	}
 	return p.broadcast(bcastArgs)
 }
@@ -2310,9 +2312,8 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 			query:  query,
 			body:   body,
 		},
-		timeout:         timeout,
-		servers:         []map[string]*daemonInfo{smap.Tmap},
-		serversToIgnore: nil,
+		timeout: timeout,
+		servers: []map[string]*daemonInfo{smap.Tmap},
 	}
 	return p.broadcast(bcastArgs)
 }

@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -3110,14 +3111,14 @@ func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newsmap, oldsmap, actionsmap, errstr := t.extractSmap(payload)
+	newsmap, actionsmap, errstr := t.extractSmap(payload)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
 
 	if newsmap != nil {
-		errstr = t.receiveSmap(newsmap, oldsmap, actionsmap)
+		errstr = t.receiveSmap(newsmap, actionsmap)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		}
@@ -3191,83 +3192,47 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (e
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap, oldsmap *Smap, msg *ActionMsg) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap *Smap, msg *ActionMsg) (errstr string) {
 	var (
-		newtargetid                    string
+		newtargetid, s                 string
 		existentialQ, aborted, running bool
-		s                              string
+		pid                            = newsmap.ProxySI.DaemonID
 	)
-	if oldsmap.version() > 0 {
-		s = fmt.Sprintf(" (prev non-local %d)", oldsmap.version())
+	action, id := path.Split(msg.Action)
+	if action != "" {
+		newtargetid = id
 	}
 	if msg.Action != "" {
 		s = ", action " + msg.Action
 	}
-	glog.Infof("receive Smap: version %d%s, ntargets %d, primary %s%s",
-		newsmap.version(), s, newsmap.countTargets(), newsmap.ProxySI.DaemonID, s)
-	newlen := len(newsmap.Tmap)
-	oldlen := len(oldsmap.Tmap)
-
-	// check whether this target is present in the new Smap
-	// rebalance? (nothing to rebalance if the new map is a strict subset of the old)
-	// assign proxysi
-	// log
-	infoln := make([]string, 0, newlen)
+	glog.Infof("receive Smap: v%d, ntargets %d, primary %s%s", newsmap.version(), newsmap.countTargets(), pid, s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
-			infoln = append(infoln, fmt.Sprintf("target: %s <= self", si.DaemonID))
+			glog.Infof("target: %s <= self", si.DaemonID)
 		} else {
-			infoln = append(infoln, fmt.Sprintf("target: %s", si.DaemonID))
-		}
-		if oldlen == 0 {
-			continue
-		}
-		if _, ok := oldsmap.Tmap[id]; !ok {
-			if newtargetid != "" {
-				glog.Warningf("More than one new target (%s, %s) in the new Smap?", newtargetid, id)
-			}
-			newtargetid = id
+			glog.Infof("target: %s", si.DaemonID)
 		}
 	}
 	if !existentialQ {
 		errstr = fmt.Sprintf("Not finding self %s in the new %s", t.si.DaemonID, newsmap.pp())
 		return
 	}
-
-	errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */)
-	if errstr != "" {
+	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 		return
-	}
-	if !newsmap.isPresent(t.si, false) {
-		// FIXME: investigate further
-		s = fmt.Sprintf("Warning: received Smap without self '%s': %s", t.si.DaemonID, newsmap.pp())
-		glog.Errorln(s)
-	}
-
-	for _, ln := range infoln {
-		glog.Infoln(ln)
 	}
 	if msg.Action == ActRebalance {
 		go t.runRebalance(newsmap, newtargetid)
-		return
-	}
-	if oldlen == 0 {
-		return
-	}
-	if newtargetid == "" {
-		if newlen != oldlen {
-			assert(newlen < oldlen)
-			glog.Infoln("nothing to rebalance: new Smap is a strict subset of the old")
-		} else {
-			glog.Infof("nothing to rebalance: num (%d) and IDs of the targets did not change", newlen)
-		}
 		return
 	}
 	if !ctx.config.Rebalance.Enabled {
 		glog.Infoln("auto-rebalancing disabled")
 		return
 	}
+	if newtargetid == "" {
+		return
+	}
+	glog.Infof("receiveSmap: newtargetid=%s", newtargetid)
 	if atomic.LoadInt64(&t.clusterStarted) != 0 {
 		go t.runRebalance(newsmap, newtargetid) // auto-rebalancing xaction
 		return
@@ -3345,9 +3310,8 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 			query:  query,
 			body:   body,
 		},
-		timeout:         timeout,
-		servers:         []map[string]*daemonInfo{smap.Tmap},
-		serversToIgnore: map[string]struct{}{t.si.DaemonID: {}},
+		timeout: timeout,
+		servers: []map[string]*daemonInfo{smap.Tmap},
 	}
 	return t.broadcast(bcastArgs)
 }

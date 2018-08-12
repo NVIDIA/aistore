@@ -245,9 +245,12 @@ func (t *TokenList) tag() string {
 	return tokentag
 }
 
-// token list does not need versioning
-// receivers do not overwrite their token lists - they add received tokens
-// to their internal lists
+//
+// metasync interface impl-s
+//
+
+// as a revs:
+// token list doesn't need versioning: receivers keep adding received tokens to their internal lists
 func (t *TokenList) version() int64 {
 	return 0
 }

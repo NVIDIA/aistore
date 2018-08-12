@@ -374,33 +374,33 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	m.wg.Add(1)
 	go func() {
 		// Put some files
-		tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+		tlogf("PUT %d files into bucket %s...\n", num, m.bucket)
 		putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 		selectErr(errch, "put", t, false)
 		close(filenameCh)
 
 		m.wg.Done()
-		tlogln("putting finished")
+		tlogln("PUT done")
 	}()
 
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
-		tlogf("trying to register target: %s\n", targets[0].directURL)
+		tlogf("Registering target: %s\n", targets[0].directURL)
 		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
 		checkFatal(err, t)
 		m.wg.Done()
-		tlogf("registered target %s again\n", targets[0].directURL)
+		tlogf("Registered target %s again\n", targets[0].directURL)
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
-		tlogf("trying to unregister target: %s\n", targets[1].directURL)
+		tlogf("Unregistering target: %s\n", targets[1].directURL)
 		err = client.UnregisterTarget(proxyurl, targets[1].sid)
 		checkFatal(err, t)
 		m.wg.Done()
-		tlogf("unregistered target %s\n", targets[1].directURL)
+		tlogf("Unregistered target %s\n", targets[1].directURL)
 	}()
 
 	// Wait for everything to end

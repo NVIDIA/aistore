@@ -537,7 +537,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 	if res.err != nil {
 		if IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
-				time.Sleep(time.Second)
+				time.Sleep(ctx.config.Timeout.CplaneOperation)
 				res = h.call(args)
 				if res.err == nil {
 					break

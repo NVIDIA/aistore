@@ -138,7 +138,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			if res.err != nil {
 				if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, getSmapURL)
-					time.Sleep(time.Second)
+					time.Sleep(ctx.config.Timeout.CplaneOperation)
 					continue
 				}
 			}
@@ -188,6 +188,10 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 // 		 that was previously discovered/merged
 // 	- (iiii) discover cluster-wide metadata, and resolve remaining conflicts
 func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
+	const (
+		metaction1 = "early-start-have-registrations"
+		metaction2 = "primary-started-up"
+	)
 	// (i) initialize empty Smap
 	assert(p.smapowner.get() == nil)
 	p.smapowner.Lock()
@@ -222,7 +226,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	smap = p.smapowner.get()
 	if haveRegistratons {
 		glog.Infof("%s: merged local Smap (%d/%d)", p.si.DaemonID, smap.countTargets(), smap.countProxies())
-		p.metasyncer.sync(true, smap, p.bmdowner.get())
+		p.metasyncer.sync(true, smap, metaction1, p.bmdowner.get(), metaction1)
 	} else {
 		glog.Infof("%s: no registrations yet", p.si.DaemonID)
 	}
@@ -240,7 +244,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	if s := p.smapowner.persist(p.smapowner.get(), true); s != "" {
 		glog.Fatalf("FATAL: %s", s)
 	}
-	p.metasyncer.sync(false, smap, p.bmdowner.get())
+	p.metasyncer.sync(false, smap, metaction2, p.bmdowner.get(), metaction2)
 	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d",
 		p.si.DaemonID, smap.version(), smap.countTargets())
 	p.startedup(1) // started up as primary
@@ -362,14 +366,14 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 				if svm.Smap.ProxySI != nil {
 					s = " of the current one " + svm.Smap.ProxySI.DaemonID
 				}
-				glog.Errorf("Warning: '%s' is starting up as primary(?) during reelection%s", p.si.DaemonID, s)
+				glog.Warningf("Warning: '%s' is starting up as primary(?) during reelection%s", p.si.DaemonID, s)
 				maxVersionSmap, maxVerBucketMD = nil, nil // zero-out as unusable
 				keeptrying = true
-				time.Sleep(time.Second)
+				time.Sleep(ctx.config.Timeout.CplaneOperation)
 				break
 			}
 		}
-		time.Sleep(time.Second)
+		time.Sleep(ctx.config.Timeout.CplaneOperation)
 	}
 	return maxVersionSmap, maxVerBucketMD
 }
@@ -378,7 +382,7 @@ func (p *proxyrunner) registerWithRetry() error {
 	if status, err := p.register(0); err != nil {
 		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Errorf("%s: retrying...", p.si.DaemonID)
-			time.Sleep(time.Second)
+			time.Sleep(ctx.config.Timeout.CplaneOperation)
 			if _, err = p.register(0); err != nil {
 				glog.Errorf("%s failed the 2nd attempt to register, err: %v", p.si.DaemonID, err)
 				return err

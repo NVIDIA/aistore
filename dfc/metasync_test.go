@@ -20,7 +20,7 @@ import (
 )
 
 type (
-	// syncf is the sync function this test uses to control what to do when a meta sync call
+	// syncf is the sync function this test uses to control what to do when a metasync call
 	// is received, for example, accepts or rejects the request.
 	syncf func(w http.ResponseWriter, r *http.Request, cnt int) (int, error)
 
@@ -32,7 +32,7 @@ type (
 		failCnt []int
 	}
 
-	// transportData records information about meta sync calls including called for which server, how many
+	// transportData records information about metasync calls including called for which server, how many
 	// times it is called.
 	transportData struct {
 		isProxy bool
@@ -125,6 +125,7 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 	} else {
 		clone.Tmap[id] = &di
 	}
+	clone.Version++
 	primary.smapowner.put(clone)
 
 	return ts
@@ -170,8 +171,8 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	}
 }
 
-// TestMetaSyncTransport is the driver for meta sync transport tests.
-// for each test case, it creates a primary proxy, starts the meta sync instance, run the test case,
+// TestMetaSyncTransport is the driver for metasync transport tests.
+// for each test case, it creates a primary proxy, starts the metasync instance, run the test case,
 // verifies the result, and stop the syncer.
 func TestMetaSyncTransport(t *testing.T) {
 	tcs := []struct {
@@ -259,7 +260,7 @@ func syncOnce(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpo
 		defer s.Close()
 	}
 
-	syncer.sync(true, primary.smapowner.get())
+	syncer.sync(true, primary.smapowner.get(), "")
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p2", 1},
@@ -283,7 +284,7 @@ func syncOnceWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 		defer s.Close()
 	}
 
-	syncer.sync(true, primary.smapowner.get())
+	syncer.sync(true, primary.smapowner.get(), "")
 	if len(ch) != len(servers) {
 		t.Fatalf("sync call wait returned before sync is completed")
 	}
@@ -309,7 +310,7 @@ func syncOnceNoWait(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]t
 		defer s.Close()
 	}
 
-	syncer.sync(false, primary.smapowner.get())
+	syncer.sync(false, primary.smapowner.get(), "")
 	if len(ch) == len(servers) {
 		t.Fatalf("sync call no wait returned after sync is completed")
 	}
@@ -336,7 +337,7 @@ func retry(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportD
 		defer s.Close()
 	}
 
-	syncer.sync(true, primary.smapowner.get())
+	syncer.sync(true, primary.smapowner.get(), "")
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p1", 2},
@@ -363,9 +364,9 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 		defer s.Close()
 	}
 
-	syncer.sync(true, primary.smapowner.get())
-	syncer.sync(false, primary.smapowner.get())
-	syncer.sync(true, primary.smapowner.get())
+	syncer.sync(true, primary.smapowner.get(), "")
+	syncer.sync(false, primary.smapowner.get(), "")
+	syncer.sync(true, primary.smapowner.get(), "")
 	return []transportData{
 		{true, "p1", 1},
 		{true, "p1", 2},
@@ -382,11 +383,10 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 	}, collectResult(len(servers)*3, ch)
 }
 
-// refused tests the connection refused handling by meta syncer.
-// it tells metasyncer to sync before starting the server to cause a connection refused error
-// it has two test cases: one wih a short delay to let metasyncer handles it immediately,
-// the other one has a longer delay before starting the server, metasyncer fail the direct handling of
-// connection refused error and falls back to the retry route
+// refused tests the connection-refused scenario
+// it has two test cases: one wih a short delay to let metasyncer handle it immediately,
+// the other with a longer delay so that metasyncer times out
+// retrying connection-refused errors and falls back to the retry-pending "route"
 func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
 		ch   = make(chan transportData, 2) // note: use 2 to avoid unbuffered channel, http handler can return
@@ -403,11 +403,11 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 
 	clone := primary.smapowner.get().clone()
 	clone.Pmap[id] = newDaemonInfo(id, httpProto, ip, port)
+	clone.Version++
 	primary.smapowner.put(clone)
 
-	// function shared by the two cases: short delay and long delay
-	// starts the proxy server, wait for a sync call
-	f := func() {
+	// function shared between the two cases: start proxy, wait for a sync call
+	f := func(n int) {
 		var wg sync.WaitGroup
 
 		wg.Add(1)
@@ -421,16 +421,19 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 		wg.Wait()
 	}
 
-	// testcase #1: short delay, metasync handles this directly
-	syncer.sync(false, primary.smapowner.get())
+	// testcase #1: short delay
+	syncer.sync(false, primary.smapowner.get(), "")
 	time.Sleep(time.Millisecond)
 	// sync will return even though the sync actually failed, and there is no error return
-	f()
+	f(1)
 
-	// testcase #2: with delay, metasync tries and falls through pending handling (retry)
-	syncer.sync(false, primary.smapowner.get())
+	// testcase #2: long delay
+	clone = primary.smapowner.get().clone()
+	clone.Version++
+	primary.smapowner.put(clone)
+	syncer.sync(false, primary.smapowner.get(), "")
 	time.Sleep(time.Second * 2)
-	f()
+	f(2)
 
 	// only cares if the sync call comes, no need to verify the id and cnt as we are the one
 	// filling those in above
@@ -438,7 +441,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	return exp, exp
 }
 
-// TestMetaSyncData is the driver for meta sync data tests.
+// TestMetaSyncData is the driver for metasync data tests.
 func TestMetaSyncData(t *testing.T) {
 	// data stores the data comes from the http sync call and an error
 	type data struct {
@@ -446,7 +449,7 @@ func TestMetaSyncData(t *testing.T) {
 		err     error
 	}
 
-	// newDataServer simulates a proxt or a target for meta sync's data tests
+	// newDataServer simulates a proxt or a target for metasync's data tests
 	newServer := func(primary *proxyrunner, s *metaSyncServer, ch chan<- data) *httptest.Server {
 		cnt := 0
 		id := s.id
@@ -478,6 +481,7 @@ func TestMetaSyncData(t *testing.T) {
 		} else {
 			clone.Tmap[id] = &di
 		}
+		clone.Version++
 		primary.smapowner.put(clone)
 
 		return ts
@@ -545,7 +549,7 @@ func TestMetaSyncData(t *testing.T) {
 	exp[smaptag+actiontag] = string(emptyActionMsg)
 	expRetry[smaptag+actiontag] = string(emptyActionMsg)
 
-	syncer.sync(false, smap)
+	syncer.sync(false, smap, "")
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
@@ -572,12 +576,13 @@ func TestMetaSyncData(t *testing.T) {
 	exp[bucketmdtag+actiontag] = string(emptyActionMsg)
 	expRetry[bucketmdtag+actiontag] = string(emptyActionMsg)
 
-	syncer.sync(false, bucketmd)
+	syncer.sync(false, bucketmd, "")
 	match(t, exp, ch, 1)
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
+	bucketmd = bucketmd.clone()
 	bucketmd.add("bucket3", true, *NewBucketProps())
 	b, err = bucketmd.marshal()
 	if err != nil {
@@ -585,9 +590,13 @@ func TestMetaSyncData(t *testing.T) {
 	}
 
 	exp[bucketmdtag] = string(b)
-	syncer.sync(false, bucketmd)
-	match(t, exp, ch, 1)
+	syncer.sync(false, bucketmd, "")
 
+	return
+
+	match(t, exp, ch, 2)
+
+	bucketmd = bucketmd.clone()
 	bucketmd.add("bucket4", true, BucketProps{
 		CloudProvider: ProviderDfc,
 		NextTierURL:   "http://foo.com",
@@ -602,19 +611,12 @@ func TestMetaSyncData(t *testing.T) {
 
 	bucketmdString := string(b)
 	exp[bucketmdtag] = bucketmdString
-	syncer.sync(false, bucketmd)
+	syncer.sync(false, bucketmd, "")
 	match(t, exp, ch, 2)
 
 	// sync smap
 	delete(exp, bucketmdtag)
 	delete(exp, bucketmdtag+actiontag)
-
-	b, err = json.Marshal(&ActionMsg{"", "", primary.smapowner.get()})
-	if err != nil {
-		t.Fatal("Failed to marshal smap, err =", err)
-	}
-
-	exp[smaptag+actiontag] = string(b)
 
 	proxy = newServer(primary, &metaSyncServer{"another proxy", true, nil, nil}, ch)
 	defer proxy.Close()
@@ -625,47 +627,44 @@ func TestMetaSyncData(t *testing.T) {
 	}
 
 	exp[smaptag] = string(b)
+	exp[smaptag+actiontag] = string(emptyActionMsg)
 
-	syncer.sync(false, primary.smapowner.get())
+	syncer.sync(false, primary.smapowner.get(), "")
 	match(t, exp, ch, 3)
 
 	// sync smap pair
-	msgSMap := &ActionMsg{"who cares", "whatever", primary.smapowner.get()}
+	msgSMap := &ActionMsg{Action: "msg8"}
 	b, err = json.Marshal(msgSMap)
 	if err != nil {
 		t.Fatal("Failed to marshal action message, err =", err)
 	}
 
 	exp[smaptag+actiontag] = string(b)
-	// note: action message's value has to be nil for smap
-	msgSMap.Value = nil
-	syncer.sync(false, &revspair{primary.smapowner.get(), msgSMap})
-	match(t, exp, ch, 3)
-
-	// sync smap pair and bucketmd pair
-	msgBMD := &ActionMsg{"who cares", "whatever", "send me back"}
-	b, err = json.Marshal(msgBMD)
+	clone := primary.smapowner.get().clone()
+	clone.Version++
+	primary.smapowner.put(clone)
+	b, err = primary.smapowner.get().marshal()
 	if err != nil {
-		t.Fatal("Failed to marshal action message, err =", err)
+		t.Fatal("Failed to marshal smap, err =", err)
 	}
+	exp[smaptag] = string(b)
 
-	exp[bucketmdtag] = bucketmdString
-	exp[bucketmdtag+actiontag] = string(b)
-	// note: 'Value' field was modified by the last call to sync()
-	msgSMap.Value = nil
-	syncer.sync(true, &revspair{primary.smapowner.get(), msgSMap}, &revspair{bucketmd, msgBMD})
-	match(t, exp, ch, 3)
+	syncer.sync(false, primary.smapowner.get(), msgSMap)
+	match(t, exp, ch, 2)
 
-	// bucketmd pair
-	delete(exp, smaptag)
-	syncer.sync(true, &revspair{bucketmd, msgBMD})
-	match(t, exp, ch, 3)
+	// NOTE: will cause an error "duplicated - already sync-ed or pending" - expected
+	msgBMD := &ActionMsg{Action: "msg-duplicated"}
+	msgSMap = msgBMD
+	delete(exp, bucketmdtag)
+	delete(exp, bucketmdtag+actiontag)
+	syncer.sync(true, primary.smapowner.get(), msgSMap, bucketmd, msgBMD)
+	match(t, exp, ch, 1)
 
 	syncer.stop(nil)
 	wg.Wait()
 }
 
-// TestMetaSyncMembership tests meta sync's logic when accessing proxy's smap directly
+// TestMetaSyncMembership tests metasync's logic when accessing proxy's smap directly
 func TestMetaSyncMembership(t *testing.T) {
 	{
 		// pending server dropped without sync
@@ -692,7 +691,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		clone := primary.smapowner.get().clone()
 		clone.addTarget(newDaemonInfo(id, httpProto, ip, port))
 		primary.smapowner.put(clone)
-		syncer.sync(true, clone)
+		syncer.sync(true, clone, "")
 		time.Sleep(time.Millisecond * 300)
 
 		clone = primary.smapowner.get().clone()
@@ -710,57 +709,58 @@ func TestMetaSyncMembership(t *testing.T) {
 		wg.Wait()
 	}
 
+	primary := newPrimary()
+	syncer := newmetasyncer(primary)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		syncer.run()
+	}(&wg)
+
+	ch := make(chan struct{}, 10)
+	f := func(w http.ResponseWriter, r *http.Request) {
+		ch <- struct{}{}
+	}
+
 	{
-		// sync before smap sync (no previous sync saved in meta syncer)
-		primary := newPrimary()
-		syncer := newmetasyncer(primary)
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func(wg *sync.WaitGroup) {
-			defer wg.Done()
-			syncer.run()
-		}(&wg)
-
-		ch := make(chan struct{}, 10)
-		f := func(w http.ResponseWriter, r *http.Request) {
-			ch <- struct{}{}
-		}
-
+		// sync before smap sync (no previous sync saved in metasyncer)
 		s1 := httptest.NewServer(http.HandlerFunc(f))
 		defer s1.Close()
 
-		id := "t1"
+		id := "t1111"
 		ip, port := getServerIPAndPort(s1.URL)
 		di := daemonInfo{DaemonID: id, DirectURL: s1.URL, NodeIPAddr: ip, DaemonPort: port}
 		clone := primary.smapowner.get().clone()
 		clone.addTarget(&di)
 		primary.smapowner.put(clone)
-		syncer.sync(true, primary.bmdowner.get())
+		syncer.sync(true, primary.bmdowner.get(), "")
 		<-ch
 
-		// sync smap so meta syncer has a smap
-		syncer.sync(true, clone)
+		// sync smap so metasyncer has a smap
+		syncer.sync(true, clone, "")
 		<-ch
+	}
 
+	{
 		// add a new target but new smap is not synced
-		// meta syncer picks up the new target directly from primary's smap
-		// and meta syncer will also add the new target to pending to sync all previously synced data
+		// metasyncer picks up the new target directly from primary's smap
+		// and metasyncer will also add the new target to pending to sync all previously synced data
 		// that's why the extra channel read
 		s2 := httptest.NewServer(http.HandlerFunc(f))
 		defer s2.Close()
 
-		id = "t2"
-		ip, port = getServerIPAndPort(s2.URL)
-		di = daemonInfo{DaemonID: id, DirectURL: s2.URL, NodeIPAddr: ip, DaemonPort: port}
-		clone = primary.smapowner.get().clone()
+		id := "t22222"
+		ip, port := getServerIPAndPort(s2.URL)
+		di := daemonInfo{DaemonID: id, DirectURL: s2.URL, NodeIPAddr: ip, DaemonPort: port}
+		clone := primary.smapowner.get().clone()
 		clone.addTarget(&di)
 		primary.smapowner.put(clone)
 
-		syncer.sync(true, primary.bmdowner.get())
+		syncer.sync(true, primary.bmdowner.get(), "")
 		<-ch // target 1
 		<-ch // target 2
-		<-ch // all previously synced data to target 2
 		if len(ch) != 0 {
 			t.Fatal("Too many sync calls received")
 		}
@@ -803,37 +803,9 @@ func TestMetaSyncReceive(t *testing.T) {
 			}
 		}
 
-		emptySMap := func(m *Smap) {
-			if m.Tmap != nil || m.Pmap != nil || m.ProxySI != nil || m.Version != 0 {
-				t.Fatal("Expecting empty smap", m)
-			}
-		}
-
 		matchSMap := func(a, b *Smap) {
 			if !a.equals(*b) {
 				t.Fatal("SMap mismatch", a, b)
-			}
-		}
-
-		// matchPrevSMap matches two smap partially
-		// previous version of the smap is only partially extracted from a sync call
-		matchPrevSMap := func(a, b *Smap) {
-			if a.Version != b.Version {
-				t.Fatal("Previous smap's version mismatch", a.Version, b.Version)
-			}
-
-			for _, v := range a.Pmap {
-				_, ok := b.Pmap[v.DaemonID]
-				if !ok {
-					t.Fatal("Missing proxy", v.DaemonID)
-				}
-			}
-
-			for _, v := range a.Tmap {
-				_, ok := b.Tmap[v.DaemonID]
-				if !ok {
-					t.Fatal("Missing target", v.DaemonID)
-				}
 			}
 		}
 
@@ -866,7 +838,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			chProxy <- d
 		}
 
-		// note: only difference is the channel, hard to share the code, but only a few lines
+		// the only difference is the channel
 		chTarget := make(chan map[string]string, 10)
 		fTarget := func(w http.ResponseWriter, r *http.Request) {
 			d := make(map[string]string)
@@ -888,42 +860,41 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy1.bmdowner.put(newBucketMD())
 
 		// empty payload
-		newSMap, oldSMap, actMsg, errStr := proxy1.extractSmap(make(map[string]string))
-		if newSMap != nil || oldSMap != nil || actMsg != nil || errStr != "" {
+		newSMap, actMsg, errStr := proxy1.extractSmap(make(map[string]string))
+		if newSMap != nil || actMsg != nil || errStr != "" {
 			t.Fatal("Extract smap from empty payload returned data")
 		}
 
-		syncer.sync(true, primary.smapowner.get())
+		syncer.sync(true, primary.smapowner.get(), "")
 		payload := <-chProxy
 
-		newSMap, oldSMap, actMsg, errStr = proxy1.extractSmap(payload)
+		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
-		emptySMap(oldSMap)
 		matchSMap(primary.smapowner.get(), newSMap)
 		proxy1.smapowner.put(newSMap)
 
 		// same version of smap received
-		newSMap, oldSMap, actMsg, errStr = proxy1.extractSmap(payload)
+		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
-		emptySMap(oldSMap)
 		nilSMap(newSMap)
+
+		return
 
 		// older version of smap received
 		clone = proxy1.smapowner.get().clone()
 		clone.Version++
 		proxy1.smapowner.put(clone)
-		_, _, _, errStr = proxy1.extractSmap(payload)
+		_, _, errStr = proxy1.extractSmap(payload)
 		hasErr(errStr)
 		clone.Version--
 		proxy1.smapowner.put(clone)
 
 		var am ActionMsg
-		y := &ActionMsg{"", "", primary.smapowner.get()}
+		y := &ActionMsg{Action: ""}
 		b, _ := json.Marshal(y)
 		json.Unmarshal(b, &am)
-		prevSMap := primary.smapowner.get()
 
 		s = httptest.NewServer(http.HandlerFunc(fTarget))
 		defer s.Close()
@@ -939,31 +910,29 @@ func TestMetaSyncReceive(t *testing.T) {
 		target1.bmdowner = &bmdowner{}
 		target1.bmdowner.put(newBucketMD())
 
-		c := func(n, o *Smap, m *ActionMsg, e string) {
+		c := func(n *Smap, m *ActionMsg, e string) {
 			noErr(e)
 			matchActionMsg(&am, m)
-			matchPrevSMap(prevSMap, o)
 			matchSMap(primary.smapowner.get(), n)
 		}
 
-		syncer.sync(true, primary.smapowner.get())
+		syncer.sync(true, primary.smapowner.get(), "")
 		payload = <-chProxy
-		newSMap, oldSMap, actMsg, errStr = proxy1.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		payload = <-chTarget
-		newSMap, oldSMap, actMsg, errStr = target1.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = target1.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
-		// note: this extra call is not necessary by meta syncer
-		// it picked up the target as it is new added target, but there is no other meta needs to be synced
+		// this extra call is not necessary
+		// it is new added target, but there is no other meta needs to be synced
 		// (smap is the only one and it is already synced)
 		payload = <-chTarget
 
-		y = &ActionMsg{"", "", primary.smapowner.get()}
+		y = &ActionMsg{Action: ""}
 		b, _ = json.Marshal(y)
 		json.Unmarshal(b, &am)
-		prevSMap = primary.smapowner.get()
 
 		s = httptest.NewServer(http.HandlerFunc(fTarget))
 		defer s.Close()
@@ -978,18 +947,18 @@ func TestMetaSyncReceive(t *testing.T) {
 		target2.bmdowner = &bmdowner{}
 		target2.bmdowner.put(newBucketMD())
 
-		syncer.sync(true, primary.smapowner.get())
+		syncer.sync(true, primary.smapowner.get(), "")
 		payload = <-chProxy
-		newSMap, oldSMap, actMsg, errStr = proxy1.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		payload = <-chTarget
-		newSMap, oldSMap, actMsg, errStr = target1.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = target1.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		payload = <-chTarget
-		newSMap, oldSMap, actMsg, errStr = target2.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = target2.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		// same as above, extra sync caused by newly added target
 		payload = <-chTarget
@@ -1002,7 +971,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		bucketmd := newBucketMD()
-		syncer.sync(true, bucketmd)
+		syncer.sync(true, bucketmd, "")
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy1.extractbucketmd(make(simplekvs))
 		if lb != nil || actMsg != nil || errStr != "" {
@@ -1024,7 +993,7 @@ func TestMetaSyncReceive(t *testing.T) {
 				Checksum: ChecksumInherit,
 			},
 		})
-		syncer.sync(true, bucketmd)
+		syncer.sync(true, bucketmd, "")
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		noErr(errStr)
@@ -1050,8 +1019,8 @@ func TestMetaSyncReceive(t *testing.T) {
 		p1bmd.Version--
 		proxy1.bmdowner.put(p1bmd)
 
-		am1 := ActionMsg{"Action", "Name", "Expecting this back"}
-		syncer.sync(true, &revspair{bucketmd, &am1})
+		am1 := ActionMsg{Action: "Action"}
+		syncer.sync(true, bucketmd, &am1)
 		payload = <-chTarget
 		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		matchActionMsg(&am1, actMsg)
@@ -1059,10 +1028,9 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chProxy
 		payload = <-chTarget
 
-		y = &ActionMsg{"New proxy", "", primary.smapowner.get()}
+		y = &ActionMsg{Action: "New proxy"}
 		b, _ = json.Marshal(y)
 		json.Unmarshal(b, &am)
-		prevSMap = primary.smapowner.get()
 
 		// new smap and new bucketmd pairs
 		s = httptest.NewServer(http.HandlerFunc(fProxy))
@@ -1085,10 +1053,9 @@ func TestMetaSyncReceive(t *testing.T) {
 			},
 		})
 
-		c = func(n, o *Smap, m *ActionMsg, e string) {
+		c = func(n *Smap, m *ActionMsg, e string) {
 			noErr(e)
 			matchActionMsg(&am, m)
-			matchPrevSMap(prevSMap, o)
 			matchSMap(primary.smapowner.get(), n)
 		}
 
@@ -1098,47 +1065,39 @@ func TestMetaSyncReceive(t *testing.T) {
 			matchBMD(bucketmd, lb)
 		}
 
-		syncer.sync(true, &revspair{bucketmd, &am1}, &revspair{primary.smapowner.get(), &ActionMsg{"New proxy", "", nil}})
+		syncer.sync(true, bucketmd, &am1, primary.smapowner.get(), &ActionMsg{Action: "New proxy"})
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy2.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
-		newSMap, oldSMap, actMsg, errStr = proxy2.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = proxy2.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		payload = <-chTarget
 		lb, actMsg, errStr = target2.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
-		newSMap, oldSMap, actMsg, errStr = target2.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = target2.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
-		newSMap, oldSMap, actMsg, errStr = proxy1.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = proxy1.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
 		payload = <-chTarget
 		lb, actMsg, errStr = target1.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
-		newSMap, oldSMap, actMsg, errStr = target1.extractSmap(payload)
-		c(newSMap, oldSMap, actMsg, errStr)
+		newSMap, actMsg, errStr = target1.extractSmap(payload)
+		c(newSMap, actMsg, errStr)
 
-		// this is the extra send to the newly added proxy.
-		// FIXME: meta sync has a bug here i believe unless it is by design.
-		//        the previous sync has bucketmd and an action message, meta sync only saves the bucketmd but not
-		//        the action message, so on this extra send, it picks up only the bucketmd.
-		//        not a big deal for this case, but for retry case, retry proxy/target will not receive the
-		//        action message but only receives the bucketmd.
-		//        same for smap, no old smap is picked up during retry or for newly added servers
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy2.extractbucketmd(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
 		matchBMD(bucketmd, lb)
-		newSMap, oldSMap, actMsg, errStr = proxy2.extractSmap(payload)
+		newSMap, actMsg, errStr = proxy2.extractSmap(payload)
 		noErr(errStr)
 		emptyActionMsg(actMsg)
-		emptySMap(oldSMap)
 		matchSMap(primary.smapowner.get(), newSMap)
 
 		syncer.stop(nil)
@@ -1146,7 +1105,7 @@ func TestMetaSyncReceive(t *testing.T) {
 	}
 
 	{
-		// this is to prove that meta sync doesn't store action message
+		// this is to prove that metasync doesn't store action message
 		// in this case, two targets, after a sync call of lb with action message,
 		// if one of them fails for once and receives the sync successfully on retry,
 		// one of them will receive the sync data with the original action message,
@@ -1206,7 +1165,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		bucketmd := newBucketMD()
 		bucketmd.add("lb1", true, *NewBucketProps())
 
-		syncer.sync(true, primary.smapowner.get(), bucketmd)
+		syncer.sync(true, primary.smapowner.get(), "", bucketmd, "")
 		<-chTarget
 		<-chTarget
 
@@ -1216,7 +1175,7 @@ func TestMetaSyncReceive(t *testing.T) {
 				Checksum: ChecksumInherit,
 			},
 		})
-		syncer.sync(false, &revspair{bucketmd, &ActionMsg{Action: "NB"}})
+		syncer.sync(false, bucketmd, &ActionMsg{Action: "NB"})
 		payload := <-chTarget
 		_, actMsg, _ := target2.extractbucketmd(payload)
 		if actMsg.Action == "" {

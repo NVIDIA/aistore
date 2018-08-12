@@ -7,7 +7,6 @@
 package dfc
 
 import (
-	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -213,13 +212,17 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 		return false
 	}
 	clone := newSmap.clone()
+	metaction := "keepalive: removing ["
 	for sid := range toRemoveCh {
 		if clone.getProxy(sid) != nil {
 			clone.delProxy(sid)
+			metaction += " proxy " + sid
 		} else {
 			clone.delTarget(sid)
+			metaction += " target " + sid
 		}
 	}
+	metaction += " ]"
 
 	pkr.p.smapowner.put(clone)
 	if errstr := pkr.p.smapowner.persist(clone, true); errstr != "" {
@@ -227,12 +230,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	}
 	pkr.p.smapowner.Unlock()
 
-	pkr.p.metasyncer.sync(true, &revspair{
-		revs: clone,
-		msg: &ActionMsg{
-			Action: fmt.Sprintf("keepalive: removing non-responding daemons"),
-		},
-	})
+	pkr.p.metasyncer.sync(true, clone, metaction)
 	return
 }
 

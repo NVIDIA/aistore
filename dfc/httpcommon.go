@@ -707,11 +707,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	h.statsif.add("numerr", 1)
 }
 
-func (h *httprunner) extractSmap(payload simplekvs) (newsmap, oldsmap *Smap, msg *ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
-	newsmap, oldsmap, msg = &Smap{}, &Smap{}, &ActionMsg{}
+	newsmap, msg = &Smap{}, &ActionMsg{}
 	smapvalue := payload[smaptag]
 	msgvalue := ""
 	if err := json.Unmarshal([]byte(smapvalue), newsmap); err != nil {
@@ -755,34 +755,6 @@ func (h *httprunner) extractSmap(payload simplekvs) (newsmap, oldsmap *Smap, msg
 		s = ", action " + msg.Action
 	}
 	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newsmap.version(), localsmap.version(), newsmap.countTargets(), s)
-
-	if msgvalue == "" || msg.Value == nil {
-		// synchronize with no action message and no old smap
-		return
-	}
-	// old smap
-	v1, ok1 := msg.Value.(map[string]interface{})
-	assert(ok1, fmt.Sprintf("msg (%+v, %T), msg.Value (%+v, %T)", msg, msg, msg.Value, msg.Value))
-	v2, ok2 := v1["tmap"]
-	assert(ok2)
-	tmapif, ok3 := v2.(map[string]interface{})
-	assert(ok3)
-	v4, ok4 := v1["pmap"]
-	assert(ok4)
-	pmapif, ok5 := v4.(map[string]interface{})
-	assert(ok5)
-	versionf := v1["version"].(float64)
-
-	oldsmap.init(len(tmapif), len(pmapif))
-
-	// partial restore of the old smap - keeping only the respective DaemonIDs and version
-	for sid := range tmapif {
-		oldsmap.Tmap[sid] = newDaemonInfo(sid, ctx.config.Net.HTTP.Proto, "", "")
-	}
-	for pid := range pmapif {
-		oldsmap.Pmap[pid] = newDaemonInfo(pid, ctx.config.Net.HTTP.Proto, "", "")
-	}
-	oldsmap.Version = int64(versionf)
 	return
 }
 
@@ -864,10 +836,9 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 
 	for _, serverMap := range bcastArgs.servers {
 		for sid, serverInfo := range serverMap {
-			if _, ignore := bcastArgs.serversToIgnore[sid]; ignore {
+			if sid == h.si.DaemonID {
 				continue
 			}
-
 			wg.Add(1)
 			go func(di *daemonInfo) {
 				args := callArgs{
