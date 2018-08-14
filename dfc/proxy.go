@@ -1483,13 +1483,13 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: not a string"))
 			return
 		}
-		switch msg.Name {
-		case "loglevel", "stats_time", "vmodule":
-			if errstr := p.setconfig(msg.Name, value); errstr != "" {
-				p.invalmsghdlr(w, r, errstr)
-			}
-		default:
-			glog.Warningf("Invalid setconfig request: proxy does not support (updating) '%s'", msg.Name)
+		if errstr := p.setconfig(msg.Name, value); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+		} else {
+			// NOTE: "loglevel", "stats_time", "vmodule" are supported by both proxies and targets;
+			// other knobs are being set so that all proxies remain in-sync in the case when
+			// the primary broadcasts the change to all nodes...
+			glog.Infof("setconfig %s=%s", msg.Name, value)
 		}
 	case ActShutdown:
 		q := r.URL.Query()
@@ -2155,6 +2155,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
+			glog.Infof("setconfig %s=%s", msg.Name, value)
 			msgbytes, err := json.Marshal(msg) // same message -> all targets and proxies
 			assert(err == nil, err)
 

@@ -2379,13 +2379,16 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
 		} else if errstr := t.setconfig(msg.Name, value); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
-		} else if msg.Name == "lru_enabled" && value == "false" {
-			_, lruxact := t.xactinp.findU(ActLRU)
-			if lruxact != nil {
-				if glog.V(3) {
-					glog.Infof("Aborting LRU due to lru_enabled config change")
+		} else {
+			glog.Infof("setconfig %s=%s", msg.Name, value)
+			if msg.Name == "lru_enabled" && value == "false" {
+				_, lruxact := t.xactinp.findU(ActLRU)
+				if lruxact != nil {
+					if glog.V(3) {
+						glog.Infof("Aborting LRU due to lru_enabled config change")
+					}
+					lruxact.abort()
 				}
-				lruxact.abort()
 			}
 		}
 	case ActShutdown:
