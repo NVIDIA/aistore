@@ -129,7 +129,7 @@ func (t *targetrunner) run() error {
 	t.smapowner.put(smap)
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
-		if status, ereg = t.register(0); ereg != nil {
+		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 				time.Sleep(time.Second)
@@ -213,16 +213,16 @@ func (t *targetrunner) stop(err error) {
 }
 
 // target registration with proxy
-func (t *targetrunner) register(timeout time.Duration) (int, error) {
+func (t *targetrunner) register(keepalive bool, timeout time.Duration) (int, error) {
 	var (
 		newbucketmd bucketMD
 		res         callResult
 	)
-	if timeout == 0 {
+	if !keepalive {
 		res = t.join(false, nil)
 	} else { // keepalive
 		url, psi := t.getPrimaryURLAndSI()
-		res = t.registerToURL(url, psi, timeout, false, nil)
+		res = t.registerToURL(url, psi, timeout, false, nil, keepalive)
 	}
 	if res.err != nil {
 		return res.status, res.err
@@ -251,7 +251,7 @@ func (t *targetrunner) unregister() (int, error) {
 			method: http.MethodDelete,
 			path:   URLPath(Rversion, Rcluster, Rdaemon, t.si.DaemonID),
 		},
-		timeout: noTimeout,
+		timeout: defaultTimeout,
 	}
 	res := t.call(args)
 	return res.status, res.err
@@ -2582,7 +2582,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if status, err := t.register(0); err != nil {
+	if status, err := t.register(false, defaultTimeout); err != nil {
 		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
@@ -3279,7 +3279,7 @@ func (t *targetrunner) pollClusterStarted() {
 				method: http.MethodGet,
 				path:   URLPath(Rversion, Rhealth),
 			},
-			timeout: noTimeout,
+			timeout: defaultTimeout,
 		}
 		res := t.call(args)
 		if res.err != nil {
@@ -3476,7 +3476,7 @@ func (t *targetrunner) enable() error {
 
 	glog.Info("Enabling the target")
 	for i := 0; i < maxRetrySeconds; i++ {
-		if status, ereg = t.register(0); ereg != nil {
+		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 				time.Sleep(time.Second)

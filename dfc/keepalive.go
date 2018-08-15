@@ -36,7 +36,7 @@ var (
 )
 
 type registerer interface {
-	register(t time.Duration) (int, error)
+	register(keepalive bool, t time.Duration) (int, error)
 }
 
 type keepaliver interface {
@@ -335,7 +335,7 @@ func (k *keepalive) run() error {
 func (k *keepalive) register(r registerer, primaryProxyID string) (stopped bool) {
 	timeout := time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
 	now := time.Now()
-	s, err := r.register(timeout)
+	s, err := r.register(true, timeout)
 	timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
 	if err == nil {
 		return
@@ -350,7 +350,7 @@ func (k *keepalive) register(r registerer, primaryProxyID string) (stopped bool)
 		case <-ticker.C:
 			i++
 			now = time.Now()
-			s, err = r.register(timeout)
+			s, err = r.register(true, timeout)
 			timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
 			if err == nil {
 				glog.Infof(

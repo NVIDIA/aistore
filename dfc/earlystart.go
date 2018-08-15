@@ -131,7 +131,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		var args = callArgs{
 			si:      p.si,
 			req:     req,
-			timeout: noTimeout,
+			timeout: defaultTimeout,
 		}
 		for i := 0; i < maxRetrySeconds; i++ {
 			res = p.call(args)
@@ -379,11 +379,11 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 }
 
 func (p *proxyrunner) registerWithRetry() error {
-	if status, err := p.register(0); err != nil {
+	if status, err := p.register(false, defaultTimeout); err != nil {
 		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Errorf("%s: retrying...", p.si.DaemonID)
 			time.Sleep(ctx.config.Timeout.CplaneOperation)
-			if _, err = p.register(0); err != nil {
+			if _, err = p.register(false, defaultTimeout); err != nil {
 				glog.Errorf("%s failed the 2nd attempt to register, err: %v", p.si.DaemonID, err)
 				return err
 			}

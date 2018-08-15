@@ -156,7 +156,7 @@ func (p *proxyrunner) run() error {
 	return p.httprunner.run()
 }
 
-func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
+func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status int, err error) {
 	var (
 		res  callResult
 		smap = p.smapowner.get()
@@ -164,7 +164,7 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 	if smap != nil && smap.isPrimary(p.si) {
 		return
 	}
-	if timeout == 0 {
+	if !keepalive {
 		if ctx.config.Proxy.NonElectable {
 			query := url.Values{}
 			query.Add(URLParamNonElectable, "true")
@@ -174,7 +174,7 @@ func (p *proxyrunner) register(timeout time.Duration) (status int, err error) {
 		}
 	} else { // keepalive
 		url, psi := p.getPrimaryURLAndSI()
-		res = p.registerToURL(url, psi, timeout, true, nil)
+		res = p.registerToURL(url, psi, timeout, true, nil, keepalive)
 	}
 	return res.status, res.err
 }
@@ -187,7 +187,7 @@ func (p *proxyrunner) unregister() (int, error) {
 			method: http.MethodDelete,
 			path:   URLPath(Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID),
 		},
-		timeout: noTimeout,
+		timeout: defaultTimeout,
 	}
 	res := p.call(args)
 	return res.status, res.err
@@ -803,7 +803,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 			header: r.Header,
 			path:   URLPath(Rversion, Rbuckets, bucketspec),
 		},
-		timeout: noTimeout,
+		timeout: defaultTimeout,
 	}
 	res := p.call(args)
 	if res.err != nil {
@@ -843,7 +843,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 			query:  query,
 			body:   actionMsgBytes,
 		},
-		timeout: ctx.config.Timeout.Default,
+		timeout: defaultTimeout,
 	}
 	res := p.call(args)
 	if res.err != nil {
@@ -1260,9 +1260,9 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	}
 
 	if wait {
-		timeout = time.Duration(0)
+		timeout = longTimeout
 	} else {
-		timeout = noTimeout
+		timeout = defaultTimeout
 	}
 
 	smap := p.smapowner.get()
@@ -1793,8 +1793,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 	return ok
 }
 
-func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (
-	map[string]json.RawMessage, bool) {
+func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, bool) {
 	results := p.broadcastTargets(
 		URLPath(Rversion, Rdaemon),
 		r.URL.Query(),
@@ -2178,7 +2177,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				http.MethodPut,
 				msgbytes,
 				p.smapowner.get(),
-				noTimeout,
+				defaultTimeout,
 			)
 
 			for result := range results {
@@ -2203,7 +2202,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			http.MethodPut,
 			msgbytes,
 			p.smapowner.get(),
-			noTimeout,
+			defaultTimeout,
 		)
 
 		time.Sleep(time.Second)

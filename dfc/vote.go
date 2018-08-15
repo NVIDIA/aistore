@@ -531,7 +531,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 			path:   URLPath(Rversion, Rvote, Rvoteinit),
 			body:   body,
 		},
-		timeout: noTimeout,
+		timeout: defaultTimeout,
 	}
 	res := h.call(args)
 	if res.err != nil {

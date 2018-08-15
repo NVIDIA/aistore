@@ -89,7 +89,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 			path:   URLPath(Rversion, Rdaemon),
 			query:  query,
 		},
-		timeout: noTimeout,
+		timeout: defaultTimeout,
 	}
 
 	for {
@@ -129,7 +129,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 			method: http.MethodGet,
 			path:   URLPath(Rversion, Rhealth),
 		},
-		timeout: noTimeout,
+		timeout: defaultTimeout,
 	}
 
 	for {

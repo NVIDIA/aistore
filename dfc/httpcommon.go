@@ -35,11 +35,13 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
-const ( // => Transport.MaxIdleConnsPerHost
+const ( // to compute MaxIdleConnsPerHost and MaxIdleConns
 	targetMaxIdleConnsPer = 4
 	proxyMaxIdleConnsPer  = 8
-	initialBucketListSize = 512
-	noTimeout             = time.Duration(-1)
+)
+const ( //  h.call(timeout)
+	defaultTimeout = time.Duration(-1)
+	longTimeout    = time.Duration(0)
 )
 
 type (
@@ -89,6 +91,8 @@ type (
 // interfaces
 //
 //===========
+const initialBucketListSize = 512
+
 type cloudif interface {
 	listbucket(ctx context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
 	headbucket(ctx context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int)
@@ -195,10 +199,10 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		numDaemons = 4
 	}
 
-	h.httpclient =
-		&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.Default}
-	h.httpclientLongTimeout =
-		&http.Client{Transport: h.createTransport(perhost, numDaemons), Timeout: ctx.config.Timeout.DefaultLong}
+	h.httpclient = &http.Client{Transport: h.createTransport(perhost, numDaemons),
+		Timeout: ctx.config.Timeout.Default} // defaultTimeout
+	h.httpclientLongTimeout = &http.Client{Transport: h.createTransport(perhost, numDaemons),
+		Timeout: ctx.config.Timeout.DefaultLong} // longTimeout
 
 	h.mux = http.NewServeMux()
 	h.smapowner = &smapowner{}
@@ -342,18 +346,21 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	copyHeaders(args.req.header, &request.Header)
-	if args.timeout != noTimeout {
-		if args.timeout != 0 {
-			contextwith, cancel := context.WithTimeout(context.Background(), args.timeout)
-			defer cancel()
-			newRequest := request.WithContext(contextwith)
-			copyHeaders(args.req.header, &newRequest.Header)
-			response, err = h.httpclient.Do(newRequest) // timeout => context.deadlineExceededError
-		} else { // zero timeout means the client wants no timeout
-			response, err = h.httpclientLongTimeout.Do(request)
-		}
-	} else {
+	switch args.timeout {
+	case defaultTimeout:
 		response, err = h.httpclient.Do(request)
+	case longTimeout:
+		response, err = h.httpclientLongTimeout.Do(request)
+	default:
+		contextwith, cancel := context.WithTimeout(context.Background(), args.timeout)
+		defer cancel() // timeout => context.deadlineExceededError
+		newRequest := request.WithContext(contextwith)
+		copyHeaders(args.req.header, &newRequest.Header)
+		if args.timeout > h.httpclient.Timeout {
+			response, err = h.httpclientLongTimeout.Do(newRequest)
+		} else {
+			response, err = h.httpclient.Do(newRequest)
+		}
 	}
 	if err != nil {
 		if response != nil && response.StatusCode > 0 {
@@ -890,13 +897,13 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 // ================================== Background =========================================
 func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	url, psi := h.getPrimaryURLAndSI()
-	res = h.registerToURL(url, psi, 0, isproxy, query)
+	res = h.registerToURL(url, psi, defaultTimeout, isproxy, query, false)
 	if res.err == nil {
 		return
 	}
 	if ctx.config.Proxy.DiscoveryURL != "" && ctx.config.Proxy.DiscoveryURL != url {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.DiscoveryURL)
-		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, 0, isproxy, query)
+		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, defaultTimeout, isproxy, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -905,7 +912,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	if ctx.config.Proxy.OriginalURL != "" && ctx.config.Proxy.OriginalURL != url &&
 		ctx.config.Proxy.OriginalURL != ctx.config.Proxy.DiscoveryURL {
 		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.OriginalURL)
-		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, 0, isproxy, query)
+		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, defaultTimeout, isproxy, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -914,7 +921,8 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, query url.Values) (res callResult) {
+func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, query url.Values,
+	keepalive bool) (res callResult) {
 	info, err := json.Marshal(h.si)
 	assert(err == nil, err)
 
@@ -922,7 +930,7 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 	if isproxy {
 		path += URLPath(Rproxy)
 	}
-	if timeout > 0 { // keepalive
+	if keepalive {
 		path += URLPath(Rkeepalive)
 	}
 
@@ -935,10 +943,7 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 			query:  query,
 			body:   info,
 		},
-		timeout: noTimeout,
-	}
-	if timeout > 0 {
-		callArgs.timeout = timeout
+		timeout: timeout,
 	}
 	for rcount := 0; rcount < 2; rcount++ {
 		res = h.call(callArgs)
