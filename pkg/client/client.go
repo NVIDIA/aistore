@@ -817,7 +817,7 @@ func waitForLocalBucket(url, name string) error {
 	for _, s := range smap.Tmap {
 	loop_bucket:
 		for {
-			exists, err := DoesLocalBucketExist(s.DirectURL, name)
+			exists, err := DoesLocalBucketExist(s.PublicNet.DirectURL, name)
 			if err != nil {
 				return err
 			}
@@ -827,7 +827,7 @@ func waitForLocalBucket(url, name string) error {
 			}
 
 			if time.Now().After(to) {
-				return fmt.Errorf("wait for local bucket timed out, target = %s", s.DirectURL)
+				return fmt.Errorf("wait for local bucket timed out, target = %s", s.PublicNet.DirectURL)
 			}
 
 			time.Sleep(time.Second)
@@ -848,7 +848,7 @@ func waitForNoLocalBucket(url, name string) error {
 	for _, s := range smap.Tmap {
 	loop_bucket:
 		for {
-			exists, err := DoesLocalBucketExist(s.DirectURL, name)
+			exists, err := DoesLocalBucketExist(s.PublicNet.DirectURL, name)
 			if err != nil {
 				return err
 			}
@@ -858,7 +858,7 @@ func waitForNoLocalBucket(url, name string) error {
 			}
 
 			if time.Now().After(to) {
-				return fmt.Errorf("timed out waiting for local bucket %s being removed, target %s", name, s.DirectURL)
+				return fmt.Errorf("timed out waiting for local bucket %s being removed, target %s", name, s.PublicNet.DirectURL)
 			}
 
 			time.Sleep(time.Second)
@@ -1108,7 +1108,7 @@ func GetPrimaryProxy(url string) (string, error) {
 		return "", err
 	}
 
-	return smap.ProxySI.DirectURL, nil
+	return smap.ProxySI.PublicNet.DirectURL, nil
 }
 
 // HTTPRequest sends one HTTP request and checks result
@@ -1332,12 +1332,12 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 	checkAwaitingDaemon := func(smap dfc.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
 			if !inList(d.DaemonID, idsToIgnore) {
-				return d.DaemonID, d.DirectURL, true
+				return d.DaemonID, d.PublicNet.DirectURL, true
 			}
 		}
 		for _, d := range smap.Tmap {
 			if !inList(d.DaemonID, idsToIgnore) {
-				return d.DaemonID, d.DirectURL, true
+				return d.DaemonID, d.PublicNet.DirectURL, true
 			}
 		}
 

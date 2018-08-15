@@ -183,14 +183,14 @@ func TestFSCheckerDetection(t *testing.T) {
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
 		tlogf("Target: %s\n", target)
-		lst, err := client.TargetMountpaths(tinfo.DirectURL)
+		lst, err := client.TargetMountpaths(tinfo.PublicNet.DirectURL)
 		checkFatal(err, t)
 		tlogf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
-			mpList[fqn] = tinfo.DirectURL
+			mpList[fqn] = tinfo.PublicNet.DirectURL
 		}
-		allMps[tinfo.DirectURL] = lst
+		allMps[tinfo.PublicNet.DirectURL] = lst
 
 		origAvail += len(lst.Available)
 	}
@@ -323,14 +323,14 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	origOff := 0
 	for target, tinfo := range smap.Tmap {
 		tlogf("Target: %s\n", target)
-		lst, err := client.TargetMountpaths(tinfo.DirectURL)
+		lst, err := client.TargetMountpaths(tinfo.PublicNet.DirectURL)
 		checkFatal(err, t)
 		tlogf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
-			mpList[fqn] = tinfo.DirectURL
+			mpList[fqn] = tinfo.PublicNet.DirectURL
 		}
-		allMps[tinfo.DirectURL] = lst
+		allMps[tinfo.PublicNet.DirectURL] = lst
 
 		origAvail += len(lst.Available)
 		origOff += len(lst.Disabled)
@@ -373,7 +373,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	tgtURL := ""
 	for _, tinfo := range smap.Tmap {
-		tgtURL = tinfo.DirectURL
+		tgtURL = tinfo.PublicNet.DirectURL
 		break
 	}
 

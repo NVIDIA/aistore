@@ -45,6 +45,7 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
+			base:   si.InternalNet.DirectURL,
 			path:   URLPath(Rversion, Rhealth),
 			query:  query,
 		},
@@ -59,9 +60,9 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 		}
 
 		if res.status > 0 {
-			glog.Infof("%s is offline with status %d, err: %v", si.DirectURL, res.status, res.err)
+			glog.Infof("%s is offline with status %d, err: %v", si.PublicNet.DirectURL, res.status, res.err)
 		} else {
-			glog.Infof("%s is offline, err: %v", si.DirectURL, res.err)
+			glog.Infof("%s is offline, err: %v", si.PublicNet.DirectURL, res.err)
 		}
 		callArgs.timeout = time.Duration(float64(callArgs.timeout)*1.5 + 0.5)
 		if callArgs.timeout > ctx.config.Timeout.MaxKeepalive {
@@ -101,7 +102,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		}
 
 		if res.err != nil {
-			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.DirectURL, res.err)
+			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.PublicNet.DirectURL, res.err)
 			return
 		}
 
@@ -127,6 +128,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
+			base:   si.InternalNet.DirectURL,
 			path:   URLPath(Rversion, Rhealth),
 		},
 		timeout: defaultTimeout,
@@ -135,14 +137,14 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 	for {
 		res := t.call(args)
 		if res.err != nil {
-			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.DirectURL, res.err)
+			glog.Errorf("Failed to call %s, err: %v - assuming down/unavailable", si.PublicNet.DirectURL, res.err)
 			break
 		}
 
 		status := &thealthstatus{}
 		err := json.Unmarshal(res.outjson, status)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.DirectURL, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.PublicNet.DirectURL, err, string(res.outjson))
 			break
 		}
 
@@ -150,7 +152,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 			break
 		}
 
-		glog.Infof("waiting for rebalance: %v", si.DirectURL)
+		glog.Infof("waiting for rebalance: %v", si.PublicNet.DirectURL)
 		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
 	}
 }
@@ -179,7 +181,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 				ctx.config.Rebalance.DestRetryTime,
 			)
 			if !ok {
-				cancelCh <- si.DirectURL
+				cancelCh <- si.PublicNet.DirectURL
 			}
 			wg.Done()
 		}(si)

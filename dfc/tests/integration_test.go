@@ -1188,7 +1188,7 @@ func doGetsInParallel(m *metadata) {
 func extractTargetsInfo(smap dfc.Smap) []targetInfo {
 	var targets []targetInfo
 	for sid, daemon := range smap.Tmap {
-		targets = append(targets, targetInfo{sid: sid, directURL: daemon.DirectURL})
+		targets = append(targets, targetInfo{sid: sid, directURL: daemon.PublicNet.DirectURL})
 	}
 	return targets
 }
@@ -1331,7 +1331,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 2.
-	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.DirectURL
+	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, err := chooseNextProxy(&m.smap)
 	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
 	checkFatal(err, t)

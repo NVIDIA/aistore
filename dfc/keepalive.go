@@ -243,6 +243,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool) {
 		si: to,
 		req: reqArgs{
 			method: http.MethodGet,
+			base:   to.InternalNet.DirectURL,
 			path:   URLPath(Rversion, Rhealth),
 			query:  query,
 		},

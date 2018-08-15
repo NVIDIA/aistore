@@ -64,7 +64,7 @@ type (
 //
 //==========
 
-// "/"+Rversion+"/"+Rvote+"/"
+// [METHOD] /Rversion/Rvote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
@@ -82,7 +82,7 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// "/"+Rversion+"/"+Rvote+"/"
+// [METHOD] /Rversion/Rvote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
@@ -176,7 +176,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT "/"+Rversion+"/"+Rvote+"/"+Rvoteres
+// PUT /Rversion/Rvote/Rvoteres
 func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
 	apitems := h.restAPIItems(r.URL.Path, 5)
 	if apitems = h.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
@@ -220,7 +220,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	glog.Infof("resulting %s", clone.pp())
 }
 
-// PUT "/"+Rversion+"/"+Rvote+"/"+Rvoteinit
+// PUT /Rversion/Rvote/Rvoteinit
 func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
@@ -305,21 +305,22 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *daemonInfo) {
 
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *daemonInfo, xele *xactElection) {
 	// First, ping current proxy with a short timeout: (Primary? State)
+	primaryURL := curPrimary.PublicNet.DirectURL
 	proxyup, err := p.pingWithTimeout(curPrimary, ctx.config.Timeout.ProxyPing)
 	if proxyup {
 		// Move back to Idle state
-		glog.Infof("current primary %s is up: moving back to idle", curPrimary.DirectURL)
+		glog.Infof("current primary %s is up: moving back to idle", primaryURL)
 		return
 	}
 	if err != nil {
-		glog.Warningf("Error when pinging primary %s: %v", curPrimary.DirectURL, err)
+		glog.Warningf("Error when pinging primary %s: %v", primaryURL, err)
 	}
-	glog.Infof("%v: primary proxy %v is confirmed down\n", p.si.DaemonID, curPrimary.DirectURL)
+	glog.Infof("%v: primary proxy %v is confirmed down\n", p.si.DaemonID, primaryURL)
 	glog.Infoln("Moving to election state phase 1")
 	// Begin Election State
 	elected, votingErrors := p.electAmongProxies(vr)
 	if !elected {
-		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", curPrimary.DirectURL)
+		glog.Errorf("Election phase 1 (prepare) failed: primary remains %s, moving back to idle", primaryURL)
 		return
 	}
 	glog.Infoln("Moving to election state phase 2 (commit)")
@@ -395,6 +396,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		jsbytes,
 		smap,
 		ctx.config.Timeout.CplaneOperation,
+		true,
 	)
 
 	for r := range res {
@@ -437,6 +439,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 		jsbytes,
 		smap,
 		ctx.config.Timeout.CplaneOperation,
+		true,
 	)
 
 	errors := make(map[string]bool)
@@ -445,7 +448,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 			glog.Warningf(
 				"Broadcast committing result for %s(%s) failed: %v",
 				r.si.DaemonID,
-				r.si.DirectURL,
+				r.si.PublicNet.DirectURL,
 				r.err,
 			)
 			errors[r.si.DaemonID] = true
@@ -456,7 +459,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 
 func (p *proxyrunner) onPrimaryProxyFailure() {
 	smap := p.smapowner.get()
-	glog.Infof("%v: primary proxy (%v @ %v) has failed\n", p.si.DaemonID, smap.ProxySI.DaemonID, smap.ProxySI.DirectURL)
+	glog.Infof("%v: primary proxy (%v @ %v) has failed\n", p.si.DaemonID, smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DirectURL)
 	if smap.countProxies() <= 1 {
 		glog.Warningf("No other proxies to elect")
 		return
@@ -468,7 +471,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 	}
 
 	if glog.V(4) {
-		glog.Infof("Primary proxy %s failure detected {url: %s}", smap.ProxySI.DaemonID, smap.ProxySI.DirectURL)
+		glog.Infof("Primary proxy %s failure detected {url: %s}", smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DirectURL)
 	}
 	if nextPrimaryProxy.DaemonID == p.si.DaemonID {
 		// If this proxy is the next primary proxy candidate, it starts the election directly.
@@ -496,7 +499,7 @@ func (p *proxyrunner) onPrimaryProxyFailure() {
 
 func (t *targetrunner) onPrimaryProxyFailure() {
 	smap := t.smapowner.get()
-	glog.Infof("%v: primary proxy (%v @ %v) failed\n", t.si.DaemonID, smap.ProxySI.DaemonID, smap.ProxySI.DirectURL)
+	glog.Infof("%v: primary proxy (%v @ %v) failed\n", t.si.DaemonID, smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DirectURL)
 
 	nextPrimaryProxy, errstr := HrwProxy(smap, smap.ProxySI.DaemonID)
 	if errstr != "" {
@@ -528,6 +531,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 		si: nextPrimaryProxy,
 		req: reqArgs{
 			method: http.MethodPut,
+			base:   nextPrimaryProxy.InternalNet.DirectURL,
 			path:   URLPath(Rversion, Rvote, Rvoteinit),
 			body:   body,
 		},
@@ -580,6 +584,7 @@ func (p *proxyrunner) pingWithTimeout(si *daemonInfo, timeout time.Duration) (bo
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
+			base:   si.InternalNet.DirectURL,
 			path:   URLPath(Rversion, Rhealth),
 		},
 		timeout: timeout,

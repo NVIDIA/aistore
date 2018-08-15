@@ -172,14 +172,23 @@ func (t *targetrunner) run() error {
 	//
 	// REST API: register storage target's handler(s) and start listening
 	//
-	t.httprunner.registerhdlr(URLPath(Rversion, Rbuckets)+"/", t.bucketHandler)
-	t.httprunner.registerhdlr(URLPath(Rversion, Robjects)+"/", t.objectHandler)
-	t.httprunner.registerhdlr(URLPath(Rversion, Rdaemon), t.daemonHandler)
-	t.httprunner.registerhdlr(URLPath(Rversion, Rpush)+"/", t.pushHandler)
-	t.httprunner.registerhdlr(URLPath(Rversion, Rhealth), t.httpHealth)
-	t.httprunner.registerhdlr(URLPath(Rversion, Rvote)+"/", t.voteHandler)
-	t.httprunner.registerhdlr(URLPath(Rversion, Rtokens), t.tokenHandler)
-	t.httprunner.registerhdlr("/", invalhdlr)
+
+	// Public network
+	t.registerPublicNetHandler(URLPath(Rversion, Rbuckets)+"/", t.bucketHandler)
+	t.registerPublicNetHandler(URLPath(Rversion, Robjects)+"/", t.objectHandler)
+	t.registerPublicNetHandler(URLPath(Rversion, Rdaemon), t.daemonHandler)
+	t.registerPublicNetHandler(URLPath(Rversion, Rpush)+"/", t.pushHandler)
+	t.registerPublicNetHandler(URLPath(Rversion, Rtokens), t.tokenHandler)
+	t.registerPublicNetHandler("/", invalhdlr)
+
+	// Internal network
+	t.registerInternalNetHandler(URLPath(Rversion, Rmetasync), t.metasyncHandler)
+	t.registerInternalNetHandler(URLPath(Rversion, Rhealth), t.healthHandler)
+	t.registerInternalNetHandler(URLPath(Rversion, Rvote), t.voteHandler)
+	if ctx.config.Net.UseIntra {
+		t.registerInternalNetHandler("/", invalhdlr)
+	}
+
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
 	pid := int64(os.Getpid())
@@ -202,7 +211,7 @@ func (t *targetrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.name, err)
 	sleep := t.xactinp.abortAll()
 	t.rtnamemap.stop()
-	if t.httprunner.h != nil {
+	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
 
@@ -972,8 +981,61 @@ func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// [METHOD] /Rversion/Rmetasync
+func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut:
+		t.metasyncHandlerPut(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+// PUT /Rversion/Rmetasync
+func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
+	var payload = make(simplekvs)
+	if err := t.readJSON(w, r, &payload); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	newsmap, actionsmap, errstr := t.extractSmap(payload)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newsmap != nil {
+		errstr = t.receiveSmap(newsmap, actionsmap)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+	}
+
+	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newbucketmd != nil {
+		if errstr = t.receiveBucketMD(newbucketmd, actionlb); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+	}
+
+	revokedTokens, errstr := t.extractRevokedTokenList(payload)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	t.authn.updateRevokedList(revokedTokens)
+}
+
 // GET /Rversion/Rhealth
-func (t *targetrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
+func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	from := query.Get(URLParamFromID)
 
@@ -1147,7 +1209,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		glog.Infof("getFromNeighbor: found %s/%s at %s", bucket, objname, neighsi.DaemonID)
 	}
 
-	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.DirectURL, r.URL.Path, URLParamLocal, islocal)
+	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
 	//
 	// http request
 	//
@@ -1477,7 +1539,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 	if strings.Contains(msg.GetProps, GetTargetURL) {
 		for _, e := range bucketList.Entries {
-			e.TargetURL = t.si.DirectURL
+			e.TargetURL = t.si.PublicNet.DirectURL
 		}
 	}
 
@@ -2207,7 +2269,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		newbucket = bucket
 	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	url := destsi.DirectURL + "/" + Rversion + "/" + Robjects + "/"
+	url := destsi.PublicNet.DirectURL + "/" + Rversion + "/" + Robjects + "/"
 	url += newbucket + "/" + newobjname
 	url += fmt.Sprintf("?%s=%s&%s=%s", URLParamFromID, fromid, URLParamToID, toid)
 	islocal := t.bmdowner.get().islocal(bucket)
@@ -2357,9 +2419,6 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
 			glog.Infof("%s: %s v%d done", t.si.DaemonID, Rsyncsmap, newsmap.version())
-			return
-		case Rmetasync:
-			t.receiveMeta(w, r)
 			return
 		case Rmountpaths:
 			t.handleMountpathReq(w, r)
@@ -3112,45 +3171,6 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (t *targetrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
-	var payload = make(simplekvs)
-	if t.readJSON(w, r, &payload) != nil {
-		return
-	}
-
-	newsmap, actionsmap, errstr := t.extractSmap(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	if newsmap != nil {
-		errstr = t.receiveSmap(newsmap, actionsmap)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		}
-	}
-
-	newbucketmd, actionlb, errstr := t.extractbucketmd(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	if newbucketmd != nil {
-		if errstr = t.receiveBucketMD(newbucketmd, actionlb); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		}
-	}
-
-	revokedTokens, errstr := t.extractRevokedTokenList(payload)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
-	t.authn.updateRevokedList(revokedTokens)
-}
-
 // FIXME: use the message
 func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (errstr string) {
 	if msg.Action == "" {
@@ -3277,6 +3297,7 @@ func (t *targetrunner) pollClusterStarted() {
 			si: psi,
 			req: reqArgs{
 				method: http.MethodGet,
+				base:   psi.InternalNet.DirectURL,
 				path:   URLPath(Rversion, Rhealth),
 			},
 			timeout: defaultTimeout,
@@ -3288,7 +3309,7 @@ func (t *targetrunner) pollClusterStarted() {
 		proxystats := &proxyCoreStats{}
 		err := json.Unmarshal(res.outjson, proxystats)
 		if err != nil {
-			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.DirectURL, err, string(res.outjson))
+			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.PublicNet.DirectURL, err, string(res.outjson))
 			continue
 		}
 		if proxystats.Uptime != 0 {

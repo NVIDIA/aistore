@@ -43,7 +43,7 @@ func (p *proxyrunner) bootstrap() {
 		if smap.countTargets() > 0 || smap.countProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
 			q.Add(URLParamWhat, GetWhatSmapVote)
-			res := p.broadcastCluster(URLPath(Rversion, Rdaemon), q, http.MethodGet, nil, smap, tout)
+			res := p.broadcastCluster(URLPath(Rversion, Rdaemon), q, http.MethodGet, nil, smap, tout, false)
 			for re := range res {
 				if re.err != nil {
 					continue
@@ -84,7 +84,7 @@ func (p *proxyrunner) bootstrap() {
 				found.version(), found.ProxySI.DaemonID, smap.version(), smap.ProxySI.DaemonID)
 			smap = found
 		}
-		getSmapURL = smap.ProxySI.DirectURL
+		getSmapURL = smap.ProxySI.PublicNet.DirectURL
 		smap.Pmap[p.si.DaemonID] = p.si
 		guessAmPrimary = smap.isPrimary(p.si)
 		// environment is a clue, not a prescription: discovered Smap outweighs
@@ -105,7 +105,7 @@ func (p *proxyrunner) bootstrap() {
 	// step 3: join as a non-primary, or
 	// 	   keep starting up as a primary
 	if !guessAmPrimary {
-		assert(getSmapURL != p.si.DirectURL, getSmapURL)
+		assert(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
 		glog.Infof("%s: starting up as non-primary, joining => %s", p.si.DaemonID, getSmapURL)
 		p.secondaryStartup(getSmapURL)
 		return
@@ -206,8 +206,8 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 
 	smap := p.smapowner.get()
 	if !smap.isPrimary(p.si) {
-		glog.Infof("%s: change of mind #1, registering with %s", p.si.DaemonID, smap.ProxySI.DirectURL)
-		p.secondaryStartup(smap.ProxySI.DirectURL)
+		glog.Infof("%s: change of mind #1, registering with %s", p.si.DaemonID, smap.ProxySI.PublicNet.DirectURL)
+		p.secondaryStartup(smap.ProxySI.PublicNet.DirectURL)
 		return
 	}
 	// (iii) merge with the previously discovered/merged - but only if there were new registrations
@@ -236,8 +236,8 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	smap = p.smapowner.get()
 
 	if !smap.isPrimary(p.si) {
-		glog.Infof("%s: change of mind #2, registering with %s", p.si.DaemonID, smap.ProxySI.DirectURL)
-		p.secondaryStartup(smap.ProxySI.DirectURL)
+		glog.Infof("%s: change of mind #2, registering with %s", p.si.DaemonID, smap.ProxySI.PublicNet.DirectURL)
+		p.secondaryStartup(smap.ProxySI.PublicNet.DirectURL)
 		return
 	}
 
@@ -330,7 +330,7 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 	)
 	q.Add(URLParamWhat, GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
-		res := p.broadcastCluster(URLPath(Rversion, Rdaemon), q, http.MethodGet, nil, bcastSmap, tout)
+		res := p.broadcastCluster(URLPath(Rversion, Rdaemon), q, http.MethodGet, nil, bcastSmap, tout, false)
 		keeptrying = false
 		for re := range res {
 			if re.err != nil {

@@ -8,8 +8,10 @@ package dfc
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -29,13 +31,18 @@ import (
 // Version check followed by the modification is protected by the same lock
 // ============================= Background ==================================
 
-// each DFC daemon - storage target or proxy/gateway - is represented by:
-type daemonInfo struct {
+type NetInfo struct {
 	NodeIPAddr string `json:"node_ip_addr"`
 	DaemonPort string `json:"daemon_port"`
-	DaemonID   string `json:"daemon_id"`
 	DirectURL  string `json:"direct_url"`
-	idDigest   uint64
+}
+
+// each DFC daemon - storage eway - is represented by:
+type daemonInfo struct {
+	DaemonID    string  `json:"daemon_id"`
+	PublicNet   NetInfo `json:"public_net"`
+	InternalNet NetInfo `json:"internal_net"`
+	idDigest    uint64
 }
 
 // Smap aka cluster map
@@ -52,24 +59,38 @@ type smapowner struct {
 	smap unsafe.Pointer
 }
 
-func newDaemonInfo(id, proto, ipAddr, port string) *daemonInfo {
+func newDaemonInfo(id, proto string, publicAddr, internalAddr *net.TCPAddr) *daemonInfo {
+	publicNet := NetInfo{
+		NodeIPAddr: publicAddr.IP.String(),
+		DaemonPort: strconv.Itoa(publicAddr.Port),
+		DirectURL:  proto + "://" + publicAddr.String(),
+	}
+	internalNet := publicNet
+	if len(internalAddr.IP) > 0 {
+		internalNet = NetInfo{
+			NodeIPAddr: internalAddr.IP.String(),
+			DaemonPort: strconv.Itoa(internalAddr.Port),
+			DirectURL:  proto + "://" + internalAddr.String(),
+		}
+	}
+
 	return &daemonInfo{
-		DaemonID:   id,
-		NodeIPAddr: ipAddr,
-		DaemonPort: port,
-		DirectURL:  proto + "://" + ipAddr + ":" + port,
-		idDigest:   xxhash.ChecksumString64S(id, constants.MLCG32),
+		DaemonID:    id,
+		PublicNet:   publicNet,
+		InternalNet: internalNet,
+		idDigest:    xxhash.ChecksumString64S(id, constants.MLCG32),
 	}
 }
 
 func (d *daemonInfo) String() string {
-	return fmt.Sprintf("[NodeIPAddr:%s, DaemonPort:%s, DaemonID:%s, DirectURL:%s, idDigest:%d]",
-		d.NodeIPAddr, d.DaemonPort, d.DaemonID, d.DirectURL, d.idDigest)
+	f := "[\n\tDaemonID: %s,\n\tPublicNet: %s,\n\tInternalNet: %s,\n\tidDigest: %d]"
+	return fmt.Sprintf(f, d.DaemonID, d.PublicNet.DirectURL, d.InternalNet.DirectURL, d.idDigest)
 }
 
-func (a *daemonInfo) equals(b *daemonInfo) bool {
-	return a.DaemonID == b.DaemonID && a.DirectURL == b.DirectURL &&
-		a.DaemonPort == b.DaemonPort && a.NodeIPAddr == b.NodeIPAddr
+func (a *daemonInfo) Equals(b *daemonInfo) bool {
+	return (a.DaemonID == b.DaemonID &&
+		reflect.DeepEqual(a.PublicNet, b.PublicNet) &&
+		reflect.DeepEqual(a.InternalNet, b.InternalNet))
 }
 
 func (r *smapowner) put(smap *Smap) {
@@ -121,7 +142,7 @@ func (r *smapowner) synchronize(newsmap *Smap, saveSmap, lesserVersionIsErr bool
 
 func (r *smapowner) persist(newsmap *Smap, saveSmap bool) (errstr string) {
 	origURL := ctx.config.Proxy.PrimaryURL
-	ctx.config.Proxy.PrimaryURL = newsmap.ProxySI.DirectURL
+	ctx.config.Proxy.PrimaryURL = newsmap.ProxySI.PublicNet.DirectURL
 	if err := LocalSave(clivars.conffile, ctx.config); err != nil {
 		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.conffile, err)
 		ctx.config.Proxy.PrimaryURL = origURL
@@ -278,8 +299,8 @@ func (m *Smap) merge(dst *Smap) {
 	}
 }
 
-func (a *Smap) equals(b *Smap) bool {
-	return a.Version == b.Version && a.ProxySI.equals(b.ProxySI) &&
+func (a *Smap) Equals(b *Smap) bool {
+	return a.Version == b.Version && a.ProxySI.Equals(b.ProxySI) &&
 		reflect.DeepEqual(a.NonElects, b.NonElects) && areDaemonMapsEqual(a.Tmap, b.Tmap) &&
 		areDaemonMapsEqual(a.Pmap, b.Pmap)
 }
@@ -291,7 +312,7 @@ func areDaemonMapsEqual(a, b map[string]*daemonInfo) bool {
 	for id, aInfo := range a {
 		if bInfo, ok := b[id]; !ok {
 			return false
-		} else if !aInfo.equals(bInfo) {
+		} else if !aInfo.Equals(bInfo) {
 			return false
 		}
 	}

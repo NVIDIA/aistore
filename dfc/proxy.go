@@ -119,27 +119,42 @@ func (p *proxyrunner) run() error {
 	//
 	// REST API: register proxy handlers and start listening
 	//
+
+	// Public network
 	if ctx.config.Auth.Enabled {
-		p.httprunner.registerhdlr(URLPath(Rversion, Rbuckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
-		p.httprunner.registerhdlr(URLPath(Rversion, Robjects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
+		p.registerPublicNetHandler(URLPath(Rversion, Rbuckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
+		p.registerPublicNetHandler(URLPath(Rversion, Robjects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
 	} else {
-		p.httprunner.registerhdlr(URLPath(Rversion, Rbuckets)+"/", p.bucketHandler)
-		p.httprunner.registerhdlr(URLPath(Rversion, Robjects)+"/", p.objectHandler)
+		p.registerPublicNetHandler(URLPath(Rversion, Rbuckets)+"/", p.bucketHandler)
+		p.registerPublicNetHandler(URLPath(Rversion, Robjects)+"/", p.objectHandler)
 	}
 
-	p.httprunner.registerhdlr(URLPath(Rversion, Rdaemon), p.daemonHandler)
-	p.httprunner.registerhdlr(URLPath(Rversion, Rcluster), p.clusterHandler)
-	p.httprunner.registerhdlr(URLPath(Rversion, Rhealth), p.httpHealth)
-	p.httprunner.registerhdlr(URLPath(Rversion, Rvote)+"/", p.voteHandler)
-	p.httprunner.registerhdlr(URLPath(Rversion, Rtokens), p.tokenHandler)
+	p.registerPublicNetHandler(URLPath(Rversion, Rdaemon), p.daemonHandler)
+	p.registerPublicNetHandler(URLPath(Rversion, Rcluster), p.clusterHandler)
+	p.registerPublicNetHandler(URLPath(Rversion, Rtokens), p.tokenHandler)
 
 	if ctx.config.Net.HTTP.UseAsProxy {
-		p.httprunner.registerhdlr("/", p.reverseProxyHandler)
+		p.registerPublicNetHandler("/", p.reverseProxyHandler)
 	} else {
-		p.httprunner.registerhdlr("/", invalhdlr)
+		p.registerPublicNetHandler("/", invalhdlr)
 	}
 
-	glog.Infof("%s: listening on :%s", p.si.DaemonID, p.si.DaemonPort)
+	// Internal network
+	p.registerInternalNetHandler(URLPath(Rversion, Rmetasync), p.metasyncHandler)
+	p.registerInternalNetHandler(URLPath(Rversion, Rhealth), p.healthHandler)
+	p.registerInternalNetHandler(URLPath(Rversion, Rvote), p.voteHandler)
+	if ctx.config.Net.UseIntra {
+		if ctx.config.Net.HTTP.UseAsProxy {
+			p.registerInternalNetHandler("/", p.reverseProxyHandler)
+		} else {
+			p.registerInternalNetHandler("/", invalhdlr)
+		}
+	}
+
+	glog.Infof("%s: [public net] listening on: %s", p.si.DaemonID, p.si.PublicNet.DirectURL)
+	if p.si.PublicNet.DirectURL != p.si.InternalNet.DirectURL {
+		glog.Infof("%s: [internal net] listening on: %s", p.si.DaemonID, p.si.InternalNet.DirectURL)
+	}
 	p.starttime = time.Now()
 
 	// Note: hard coding statsd's IP and port for two reasons:
@@ -217,7 +232,7 @@ func (p *proxyrunner) stop(err error) {
 		}
 	}
 
-	if p.httprunner.h != nil && !isPrimary {
+	if p.publicServer.s != nil && !isPrimary {
 		_, unregerr := p.unregister()
 		if unregerr != nil {
 			glog.Warningf("Failed to unregister when terminating: %v", unregerr)
@@ -317,9 +332,9 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var redirecturl string
 	islocal := p.bmdowner.get().islocal(bucket)
 	if r.URL.RawQuery != "" {
-		redirecturl = fmt.Sprintf("%s%s?%s&%s=%t", si.DirectURL, r.URL.Path, r.URL.RawQuery, URLParamLocal, islocal)
+		redirecturl = fmt.Sprintf("%s%s?%s&%s=%t", si.PublicNet.DirectURL, r.URL.Path, r.URL.RawQuery, URLParamLocal, islocal)
 	} else {
-		redirecturl = fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, islocal)
+		redirecturl = fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
 	}
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
@@ -362,7 +377,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t&%s=%s", si.DirectURL, r.URL.Path, URLParamLocal,
+	redirecturl := fmt.Sprintf("%s%s?%s=%t&%s=%s", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal,
 		p.bmdowner.get().islocal(bucket), URLParamDaemonID, p.httprunner.si.DaemonID)
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
@@ -433,7 +448,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := si.DirectURL + r.URL.Path
+	redirecturl := si.PublicNet.DirectURL + r.URL.Path
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
@@ -443,8 +458,72 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
+// [METHOD] /Rversion/Rmetasync
+func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPut:
+		p.metasyncHandlerPut(w, r)
+	default:
+		invalhdlr(w, r)
+	}
+}
+
+// PUT /Rversion/Rmetasync
+func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
+	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
+	if p.smapowner.get().isPrimary(p.si) {
+		_, xx := p.xactinp.findL(ActElection)
+		vote := xx != nil
+		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si.DaemonID, vote)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+	var payload = make(simplekvs)
+	if err := p.readJSON(w, r, &payload); err != nil {
+		p.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	newsmap, _, errstr := p.extractSmap(payload)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if newsmap != nil {
+		errstr = p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */)
+		if errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+			return
+		}
+		if !newsmap.isPresent(p.si, true) {
+			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si.DaemonID, newsmap.pp())
+			glog.Errorln(s)
+		}
+	}
+
+	newbucketmd, actionlb, errstr := p.extractbucketmd(payload)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	if newbucketmd != nil {
+		if errstr = p.receiveBucketMD(newbucketmd, actionlb); errstr != "" {
+			p.invalmsghdlr(w, r, errstr)
+			return
+		}
+	}
+
+	revokedTokens, errstr := p.extractRevokedTokenList(payload)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	p.authn.updateRevokedList(revokedTokens)
+}
+
 // GET /Rversion/Rhealth
-func (p *proxyrunner) httpHealth(w http.ResponseWriter, r *http.Request) {
+func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
 	rr.Lock()
 	rr.Core.Uptime = int64(time.Since(p.starttime) / time.Microsecond)
@@ -599,7 +678,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	for _, si = range smap.Tmap {
 		break
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bmdowner.get().islocal(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, p.bmdowner.get().islocal(bucket))
 	if glog.V(3) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
@@ -689,7 +768,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if errstr != "" {
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.DirectURL, r.URL.Path, URLParamLocal, p.bmdowner.get().islocal(bucket))
+	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, p.bmdowner.get().islocal(bucket))
 	if checkCached {
 		redirecturl += fmt.Sprintf("&%s=true", URLParamCheckCached)
 	}
@@ -721,9 +800,9 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *Act
 		body, err = json.Marshal(msg)
 		assert(err == nil, err)
 	}
-	if p.rproxy.u != smap.ProxySI.DirectURL {
-		p.rproxy.u = smap.ProxySI.DirectURL
-		uparsed, err := url.Parse(smap.ProxySI.DirectURL)
+	if p.rproxy.u != smap.ProxySI.PublicNet.DirectURL {
+		p.rproxy.u = smap.ProxySI.PublicNet.DirectURL
+		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
 		assert(err == nil, err)
 		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
 		p.rproxy.p.Transport = p.createTransport(proxyMaxIdleConnsPer, 0)
@@ -1123,7 +1202,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 				err = errors.New(errStr)
 				return
 			}
-			e.TargetURL = si.DirectURL
+			e.TargetURL = si.PublicNet.DirectURL
 		}
 	}
 	if strings.Contains(msg.GetProps, GetPropsAtime) ||
@@ -1194,7 +1273,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := si.DirectURL + r.URL.Path
+	redirecturl := si.PublicNet.DirectURL + r.URL.Path
 	if glog.V(3) {
 		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
@@ -1468,9 +1547,6 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			}
 			glog.Infof("%s: %s v%d done", p.si.DaemonID, Rsyncsmap, newsmap.version())
 			return
-		case Rmetasync:
-			p.receiveMeta(w, r)
-			return
 		default:
 		}
 	}
@@ -1641,6 +1717,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		nil, // body
 		smap,
 		ctx.config.Timeout.CplaneOperation,
+		false,
 	)
 	for result := range results {
 		if result.err != nil {
@@ -1670,6 +1747,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		nil, // body
 		p.smapowner.get(),
 		ctx.config.Timeout.CplaneOperation,
+		false,
 	)
 
 	// FIXME: retry
@@ -1905,8 +1983,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if p.forwardCP(w, r, msg, s, body) {
 		return
 	}
-	if net.ParseIP(nsi.NodeIPAddr) == nil {
-		s := fmt.Sprintf("register target %s: invalid IP address %v", nsi.DaemonID, nsi.NodeIPAddr)
+	if net.ParseIP(nsi.PublicNet.NodeIPAddr) == nil {
+		s := fmt.Sprintf("register target %s: invalid IP address %v", nsi.DaemonID, nsi.PublicNet.NodeIPAddr)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2021,9 +2099,9 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 			return true
 		}
 
-		if !osi.equals(nsi) {
+		if !osi.Equals(nsi) {
 			if p.detectDaemonDuplicate(osi, nsi) {
-				glog.Errorf("Daemon %s tried to register/keepalive with a duplicate ID %s", nsi.DirectURL, nsi.DaemonID)
+				glog.Errorf("Daemon %s tried to register/keepalive with a duplicate ID %s", nsi.PublicNet.DirectURL, nsi.DaemonID)
 				return false
 			}
 			glog.Warningf("register/keepalive %s %s: info changed - renewing", kind, nsi.DaemonID)
@@ -2037,7 +2115,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 		if p.startedup(0) == 0 {
 			return true
 		}
-		if osi.equals(nsi) {
+		if osi.Equals(nsi) {
 			glog.Infof("register %s %s: already done", kind, nsi.DaemonID)
 			return false
 		}
@@ -2178,6 +2256,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				msgbytes,
 				p.smapowner.get(),
 				defaultTimeout,
+				false,
 			)
 
 			for result := range results {
@@ -2203,6 +2282,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			msgbytes,
 			p.smapowner.get(),
 			defaultTimeout,
+			false,
 		)
 
 		time.Sleep(time.Second)
@@ -2222,58 +2302,6 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveMeta(w http.ResponseWriter, r *http.Request) {
-	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
-	if p.smapowner.get().isPrimary(p.si) {
-		_, xx := p.xactinp.findL(ActElection)
-		vote := xx != nil
-		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si.DaemonID, vote)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
-	var payload = make(simplekvs)
-
-	if p.readJSON(w, r, &payload) != nil {
-		return
-	}
-
-	newsmap, _, errstr := p.extractSmap(payload)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-
-	if newsmap != nil {
-		errstr = p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */)
-		if errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
-			return
-		}
-		if !newsmap.isPresent(p.si, true) {
-			s := fmt.Sprintf("Warning: not finding self '%s' in the received %s", p.si.DaemonID, newsmap.pp())
-			glog.Errorln(s)
-		}
-	}
-
-	newbucketmd, actionlb, errstr := p.extractbucketmd(payload)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	if newbucketmd != nil {
-		if errstr = p.receiveBucketMD(newbucketmd, actionlb); errstr != "" {
-			p.invalmsghdlr(w, r, errstr)
-		}
-	}
-
-	revokedTokens, errstr := p.extractRevokedTokenList(payload)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	p.authn.updateRevokedList(revokedTokens)
-}
-
 func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (errstr string) {
 	if msg.Action == "" {
 		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
@@ -2299,7 +2327,7 @@ func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (er
 
 // broadcastCluster sends a message ([]byte) to all proxies and targets belongs to a smap
 func (p *proxyrunner) broadcastCluster(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout time.Duration) chan callResult {
+	smap *Smap, timeout time.Duration, internal bool) chan callResult {
 
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
@@ -2308,8 +2336,9 @@ func (p *proxyrunner) broadcastCluster(path string, query url.Values, method str
 			query:  query,
 			body:   body,
 		},
-		timeout: timeout,
-		servers: []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
+		internal: internal,
+		timeout:  timeout,
+		servers:  []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
 	}
 	return p.broadcast(bcastArgs)
 }
@@ -2428,7 +2457,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 	if err := json.Unmarshal(res.outjson, si); err != nil {
 		assert(false, err)
 	}
-	return !nsi.equals(si)
+	return !nsi.Equals(si)
 }
 
 func ValidateCloudProvider(provider string, isLocal bool) error {

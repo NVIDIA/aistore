@@ -32,6 +32,7 @@ isCommandAvailable "df" "--version"
 export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 USE_HTTPS=false
 PORT=${PORT:-8080}
+PORT_INTRA=${PORT_INTRA:-9080}
 PROXYURL="http://localhost:$PORT"
 if $USE_HTTPS; then
 	PROXYURL="https://localhost:$PORT"
@@ -144,6 +145,7 @@ do
 	LOGDIR="$LOGROOT/$c/log"
 	source $DIR/config.sh
 	((PORT++))
+	((PORT_INTRA++))
 done
 
 # conf file for authn

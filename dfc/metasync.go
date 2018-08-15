@@ -311,7 +311,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 	assert(err == nil, err)
 
 	// step 3: b-cast
-	urlPath := URLPath(Rversion, Rdaemon, Rmetasync)
+	urlPath := URLPath(Rversion, Rmetasync)
 	res := y.p.broadcastCluster(
 		urlPath,
 		nil, // query
@@ -319,6 +319,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		jsbytes,
 		smap,
 		ctx.config.Timeout.CplaneOperation,
+		true,
 	)
 
 	// step 4: count failures and fill-in refused
@@ -382,8 +383,9 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused map[stri
 			path:   urlPath,
 			body:   body,
 		},
-		timeout: ctx.config.Timeout.CplaneOperation,
-		servers: []map[string]*daemonInfo{refused},
+		internal: true,
+		timeout:  ctx.config.Timeout.CplaneOperation,
+		servers:  []map[string]*daemonInfo{refused},
 	}
 	res := y.p.broadcast(bcastArgs)
 
@@ -467,11 +469,12 @@ func (y *metasyncer) handlePending() (cnt int) {
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,
-			path:   URLPath(Rversion, Rdaemon, Rmetasync),
+			path:   URLPath(Rversion, Rmetasync),
 			body:   body,
 		},
-		timeout: ctx.config.Timeout.CplaneOperation,
-		servers: []map[string]*daemonInfo{pending},
+		internal: true,
+		timeout:  ctx.config.Timeout.CplaneOperation,
+		servers:  []map[string]*daemonInfo{pending},
 	}
 	res := y.p.broadcast(bcastArgs)
 	for r := range res {

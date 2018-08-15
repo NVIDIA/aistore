@@ -80,6 +80,7 @@ type (
 	// bcastCallArgs contains arguments for a broadcast server call
 	bcastCallArgs struct {
 		req             reqArgs
+		internal        bool // specifies if the call is the internal communication
 		timeout         time.Duration
 		servers         []map[string]*daemonInfo
 		serversToIgnore map[string]struct{}
@@ -125,7 +126,7 @@ func (u reqArgs) url() string {
 //===========
 func invalhdlr(w http.ResponseWriter, r *http.Request) {
 	s := http.StatusText(http.StatusBadRequest)
-	s += ": " + r.Method + " " + r.URL.Path + " from " + r.RemoteAddr
+	s += ": " + r.Method + " " + r.Host + "" + r.URL.Path + " from " + r.RemoteAddr
 	glog.Errorln(s)
 	http.Error(w, s, http.StatusBadRequest)
 }
@@ -160,10 +161,15 @@ func (r *glogwriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+type netServer struct {
+	s   *http.Server
+	mux *http.ServeMux
+}
+
 type httprunner struct {
 	namedrunner
-	mux                   *http.ServeMux
-	h                     *http.Server
+	publicServer          *netServer
+	internalServer        *netServer
 	glogger               *log.Logger
 	si                    *daemonInfo
 	httpclient            *http.Client // http client for intra-cluster comm
@@ -174,10 +180,49 @@ type httprunner struct {
 	bmdowner              *bmdowner
 }
 
-func (h *httprunner) registerhdlr(path string, handler func(http.ResponseWriter, *http.Request)) {
-	h.mux.HandleFunc(path, handler)
+func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
+	if ctx.config.Net.HTTP.UseHTTPS {
+		server.s = &http.Server{Addr: addr, Handler: server.mux, ErrorLog: logger}
+		if err := server.s.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
+			if err != http.ErrServerClosed {
+				glog.Errorf("Terminated server with err: %v", err)
+				return err
+			}
+		}
+	} else {
+		// Support for h2c is transparent using h2c.NewHandler, which implements a lightweight
+		// wrapper around server.mux.ServeHTTP to check for an h2c connection.
+		server.s = &http.Server{Addr: addr, Handler: h2c.NewHandler(server.mux, &http2.Server{}), ErrorLog: logger}
+		if err := server.s.ListenAndServe(); err != nil {
+			if err != http.ErrServerClosed {
+				glog.Errorf("Terminated server with err: %v", err)
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (server *netServer) shutdown() {
+	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
+	if err := server.s.Shutdown(contextwith); err != nil {
+		glog.Infof("Stopped server, err: %v", err)
+	}
+	cancel()
+}
+
+func (h *httprunner) registerPublicNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+	h.publicServer.mux.HandleFunc(path, handler)
 	if !strings.HasSuffix(path, "/") {
-		h.mux.HandleFunc(path+"/", handler)
+		h.publicServer.mux.HandleFunc(path+"/", handler)
+	}
+}
+
+func (h *httprunner) registerInternalNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+	h.internalServer.mux.HandleFunc(path, handler)
+	if !strings.HasSuffix(path, "/") {
+		h.internalServer.mux.HandleFunc(path+"/", handler)
 	}
 }
 
@@ -199,12 +244,24 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 		numDaemons = 4
 	}
 
-	h.httpclient = &http.Client{Transport: h.createTransport(perhost, numDaemons),
-		Timeout: ctx.config.Timeout.Default} // defaultTimeout
-	h.httpclientLongTimeout = &http.Client{Transport: h.createTransport(perhost, numDaemons),
-		Timeout: ctx.config.Timeout.DefaultLong} // longTimeout
+	h.httpclient = &http.Client{
+		Transport: h.createTransport(perhost, numDaemons),
+		Timeout:   ctx.config.Timeout.Default, // defaultTimeout
+	}
+	h.httpclientLongTimeout = &http.Client{
+		Transport: h.createTransport(perhost, numDaemons),
+		Timeout:   ctx.config.Timeout.DefaultLong, // longTimeout
+	}
+	h.publicServer = &netServer{
+		mux: http.NewServeMux(),
+	}
+	h.internalServer = h.publicServer // by default internal net is same as public
+	if ctx.config.Net.UseIntra {
+		h.internalServer = &netServer{
+			mux: http.NewServeMux(),
+		}
+	}
 
-	h.mux = http.NewServeMux()
 	h.smapowner = &smapowner{}
 	h.bmdowner = &bmdowner{}
 }
@@ -213,21 +270,49 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 // Note: Sadly httprunner has become the sharing point where common code for
 //       proxyrunner and targetrunner exist.
 func (h *httprunner) initSI() {
-	ipAddr, errstr := getipv4addr()
-	if errstr != "" {
-		glog.Fatalf("FATAL: %s", errstr)
+	allowLoopback, err := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
+	if err != nil {
+		allowLoopback = false
+	}
+
+	addrList, err := getLocalIPv4List(allowLoopback)
+	if err != nil {
+		glog.Fatalf("FATAL: %v", err)
+	}
+
+	ipAddr, err := getipv4addr(addrList, ctx.config.Net.IPv4)
+	if err != nil {
+		glog.Fatalf("Failed to get public network address: %v", err)
+	}
+	glog.Infof("Configured PUBLIC NETWORK address: [%s:%d] (out of: %s)\n", ipAddr, ctx.config.Net.L4.Port, ctx.config.Net.IPv4)
+	ipAddrIntra := net.IP{}
+	if ctx.config.Net.UseIntra {
+		ipAddrIntra, err = getipv4addr(addrList, ctx.config.Net.IPv4Intra)
+		if err != nil {
+			glog.Fatalf("Failed to get internal network address: %v", err)
+		}
+		glog.Infof("Configured INTERNAL NETWORK address: [%s:%d] (out of: %s)\n", ipAddrIntra, ctx.config.Net.L4.PortIntra, ctx.config.Net.IPv4Intra)
+	}
+
+	publicAddr := &net.TCPAddr{
+		IP:   ipAddr,
+		Port: ctx.config.Net.L4.Port,
+	}
+	internalAddr := &net.TCPAddr{
+		IP:   ipAddrIntra,
+		Port: ctx.config.Net.L4.PortIntra,
 	}
 
 	daemonID := os.Getenv("DFCDAEMONID")
 	if daemonID == "" {
-		cs := xxhash.ChecksumString32S(ipAddr+":"+ctx.config.Net.L4.Port, constants.MLCG32)
+		cs := xxhash.ChecksumString32S(publicAddr.String(), constants.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if testingFSPpaths() {
-			daemonID += ":" + ctx.config.Net.L4.Port
+			daemonID += ":" + ctx.config.Net.L4.PortStr
 		}
 	}
 
-	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.Proto, ipAddr, ctx.config.Net.L4.Port)
+	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.Proto, publicAddr, internalAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
@@ -258,44 +343,51 @@ func (h *httprunner) run() error {
 	// a wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
-	addr := ":" + ctx.config.Net.L4.Port
 
-	if ctx.config.Net.HTTP.UseHTTPS {
-		h.h = &http.Server{Addr: addr, Handler: h.mux, ErrorLog: h.glogger}
-		if err := h.h.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated %s with err: %v", h.name, err)
-				return err
-			}
-		}
-	} else {
-		// Support for h2c is transparent using h2c.NewHandler, which implements a lightweight
-		// wrapper around h.mux.ServeHTTP to check for an h2c connection.
-		h.h = &http.Server{Addr: addr, Handler: h2c.NewHandler(h.mux, &http2.Server{}), ErrorLog: h.glogger}
-		if err := h.h.ListenAndServe(); err != nil {
-			if err != http.ErrServerClosed {
-				glog.Errorf("Terminated %s with err: %v", h.name, err)
-				return err
-			}
-		}
+	if ctx.config.Net.UseIntra {
+		controlCh := make(chan error, 2)
+		go func() {
+			addr := h.si.InternalNet.NodeIPAddr + ":" + h.si.InternalNet.DaemonPort
+			controlCh <- h.internalServer.listenAndServe(addr, h.glogger)
+		}()
+
+		go func() {
+			addr := h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
+			controlCh <- h.publicServer.listenAndServe(addr, h.glogger)
+		}()
+
+		return <-controlCh
 	}
-	return nil
+
+	// When only public net is configured just listen all addresses/interfaces
+	addr := ":" + h.si.PublicNet.DaemonPort
+	return h.publicServer.listenAndServe(addr, h.glogger)
 }
 
 // stop gracefully
 func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.name, err)
 
-	if h.h == nil {
+	if h.publicServer.s == nil {
 		return
 	}
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
 
-	err = h.h.Shutdown(contextwith)
-	if err != nil {
-		glog.Infof("Stopped %s, err: %v", h.name, err)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		h.publicServer.shutdown()
+		wg.Done()
+	}()
+
+	if ctx.config.Net.UseIntra {
+		wg.Add(1)
+		go func() {
+			h.internalServer.shutdown()
+			wg.Done()
+		}()
 	}
-	cancel()
+
+	wg.Wait()
 }
 
 // intra-cluster IPC, control plane; calls (via http) another target or a proxy
@@ -317,7 +409,7 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	assert(args.si != nil || args.req.base != "") // either we have si or base
 	if args.req.base == "" && args.si != nil {
-		args.req.base = args.si.DirectURL
+		args.req.base = args.si.PublicNet.DirectURL
 	}
 
 	url := args.req.url()
@@ -832,7 +924,7 @@ func URLPath(segments ...string) string {
 }
 
 // broadcast sends a http call to all servers in parallel, wait until all calls are returned
-// note: 'u' has only the path and query part, host portion will be set by this function.
+// NOTE: 'u' has only the path and query part, host portion will be set by this function.
 func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 	serverCount := 0
 	for _, serverMap := range bcastArgs.servers {
@@ -853,6 +945,11 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 					req:     bcastArgs.req,
 					timeout: bcastArgs.timeout,
 				}
+				args.req.base = ""
+				if bcastArgs.internal {
+					args.req.base = di.InternalNet.DirectURL
+				}
+
 				res := h.call(args)
 				ch <- res
 				wg.Done()
@@ -971,7 +1068,7 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
 		return
 	}
 	if smap.ProxySI.DaemonID != "" {
-		url, proxysi = smap.ProxySI.DirectURL, smap.ProxySI
+		url, proxysi = smap.ProxySI.PublicNet.DirectURL, smap.ProxySI
 		return
 	}
 	url, proxysi = ctx.config.Proxy.PrimaryURL, smap.ProxySI

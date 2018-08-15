@@ -608,7 +608,7 @@ func TestRebalance(t *testing.T) {
 	for sid = range smap.Tmap {
 		break
 	}
-	targetDirectURL = smap.Tmap[sid].DirectURL
+	targetDirectURL = smap.Tmap[sid].PublicNet.DirectURL
 
 	err := client.UnregisterTarget(proxyurl, sid)
 	checkFatal(err, t)
@@ -686,7 +686,7 @@ func TestGetClusterStats(t *testing.T) {
 	stats := getClusterStats(httpclient, t)
 
 	for k, v := range stats.Target {
-		tdstats := getDaemonStats(httpclient, t, smap.Tmap[k].DirectURL)
+		tdstats := getDaemonStats(httpclient, t, smap.Tmap[k].PublicNet.DirectURL)
 		tdcapstats := tdstats["capacity"].(map[string]interface{})
 		dcapstats := v.Capacity
 		for fspath, fstats := range dcapstats {
@@ -805,7 +805,7 @@ func TestLRU(t *testing.T) {
 	bytesEvictedOrig := make(map[string]int64)
 	filesEvictedOrig := make(map[string]int64)
 	for k, di := range smap.Tmap {
-		cfg := getConfig(di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
+		cfg := getConfig(di.PublicNet.DirectURL+RestAPIDaemonSuffix, httpclient, t)
 		lrucfg := cfg["lru_config"].(map[string]interface{})
 		lwms[k] = lrucfg["lowwm"]
 		hwms[k] = lrucfg["highwm"]
@@ -848,8 +848,8 @@ func TestLRU(t *testing.T) {
 		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
 		for k, di := range smap.Tmap {
-			setConfig("highwm", fmt.Sprint(hwms[k]), di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
-			setConfig("lowwm", fmt.Sprint(lwms[k]), di.DirectURL+RestAPIDaemonSuffix, httpclient, t)
+			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+RestAPIDaemonSuffix, httpclient, t)
+			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+RestAPIDaemonSuffix, httpclient, t)
 		}
 	}()
 	//
@@ -917,7 +917,7 @@ func TestPrefetchList(t *testing.T) {
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(t)
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
 		if err != nil {
@@ -947,7 +947,7 @@ func TestPrefetchList(t *testing.T) {
 
 	// 5. Ensure that all the prefetches occurred.
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
 		if err != nil {
@@ -1024,7 +1024,7 @@ func TestPrefetchRange(t *testing.T) {
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(t)
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
 		if err != nil {
@@ -1080,7 +1080,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 5. Ensure that all the prefetches occurred.
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.DirectURL)
+		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["numprefetch"].(json.Number).Int64()
 		if err != nil {

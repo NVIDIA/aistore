@@ -88,7 +88,7 @@ func copyStruct(dst interface{}, src interface{}) {
 }
 
 // getLocalIPv4List returns a list of local unicast IPv4 with MTU
-func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
+func getLocalIPv4List(allowLoopback bool) (addrlist []*localIPv4Info, err error) {
 	addrlist = make([]*localIPv4Info, 0)
 	addrs, e := net.InterfaceAddrs()
 	if e != nil {
@@ -103,7 +103,7 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 
 	for _, addr := range addrs {
 		curr := &localIPv4Info{}
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+		if ipnet, ok := addr.(*net.IPNet); ok && (!ipnet.IP.IsLoopback() || allowLoopback) {
 			if ipnet.IP.To4() != nil {
 				curr.ipv4 = ipnet.IP.String()
 			}
@@ -131,39 +131,48 @@ func getLocalIPv4List() (addrlist []*localIPv4Info, err error) {
 		}
 	}
 
+	if len(addrlist) == 0 {
+		return addrlist, fmt.Errorf("The host does not have any IPv4 addresses")
+	}
+
 	return addrlist, nil
 }
 
 // selectConfiguredIPv4 returns the first IPv4 from a preconfigured IPv4 list that
 // matches any local unicast IPv4
-func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredIPv4s string) (ipv4addr string, errstr string) {
-	glog.Infof("Selecting one of the configured IPv4 addresses: %s...\n", configuredIPv4s)
+func selectConfiguredIPv4(addrlist []*localIPv4Info, configuredList []string) (ipv4addr string, err error) {
+	glog.Infof("Selecting one of the configured IPv4 addresses: %s...\n", configuredList)
 	localList := ""
-	configuredList := strings.Split(configuredIPv4s, ",")
+
 	for _, localaddr := range addrlist {
 		localList += " " + localaddr.ipv4
 		for _, ipv4 := range configuredList {
 			if localaddr.ipv4 == strings.TrimSpace(ipv4) {
 				glog.Warningf("Selected IPv4 %s from the configuration file\n", ipv4)
-				return ipv4, ""
+				return ipv4, nil
 			}
 		}
 	}
 
-	glog.Errorf("Configured IPv4 does not match any local one.\nLocal IPv4 list:%s\n", localList)
-	return "", "Configured IPv4 does not match any local one"
+	glog.Errorf("Configured IPv4 does not match any local one.\nLocal IPv4 list:%s; Configured ip: %s\n", localList, configuredList)
+	return "", fmt.Errorf("Configured IPv4 does not match any local one")
 }
 
 // detectLocalIPv4 takes a list of local IPv4s and returns the best fit for a deamon to listen on it
-func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string) {
-	if len(addrlist) == 1 {
+func detectLocalIPv4(addrlist []*localIPv4Info) (ip net.IP, err error) {
+	if len(addrlist) == 0 {
+		return nil, fmt.Errorf("No addresses to choose from")
+	} else if len(addrlist) == 1 {
 		msg := fmt.Sprintf("Found only one IPv4: %s, MTU %d", addrlist[0].ipv4, addrlist[0].mtu)
 		glog.Info(msg)
 		if addrlist[0].mtu <= 1500 {
 			glog.Warningf("IPv4 %s MTU size is small: %d\n", addrlist[0].ipv4, addrlist[0].mtu)
 		}
-		ipv4addr = addrlist[0].ipv4
-		return
+		ip = net.ParseIP(addrlist[0].ipv4)
+		if ip == nil {
+			return nil, fmt.Errorf("Failed to parse IP address: %s", addrlist[0].ipv4)
+		}
+		return ip, nil
 	}
 
 	glog.Warningf("Warning: %d IPv4s available", len(addrlist))
@@ -171,29 +180,32 @@ func detectLocalIPv4(addrlist []*localIPv4Info) (ipv4addr string, errstr string)
 		glog.Warningf("    %#v\n", *intf)
 	}
 	// FIXME: temp hack - make sure to keep working on laptops with dockers
-	ipv4addr = addrlist[0].ipv4
-	return
+	ip = net.ParseIP(addrlist[0].ipv4)
+	if ip == nil {
+		return nil, fmt.Errorf("Failed to parse IP address: %s", addrlist[0].ipv4)
+	}
+	return ip, nil
 }
 
 // getipv4addr returns an IPv4 for proxy/target to listen on it.
 // 1. If there is an IPv4 in config - it tries to use it
 // 2. If config does not contain IPv4 - it chooses one of local IPv4s
-func getipv4addr() (ipv4addr string, errstr string) {
-	addrlist, err := getLocalIPv4List()
+func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, err error) {
+	if configuredIPv4s == "" {
+		return detectLocalIPv4(addrList)
+	}
+
+	configuredList := strings.Split(configuredIPv4s, ",")
+	selectedIPv4, err := selectConfiguredIPv4(addrList, configuredList)
 	if err != nil {
-		errstr = err.Error()
-		return
-	}
-	if len(addrlist) == 0 {
-		errstr = "The host does not have any IPv4 addresses"
-		return
+		return nil, err
 	}
 
-	if ctx.config.Net.IPv4 != "" {
-		return selectConfiguredIPv4(addrlist, ctx.config.Net.IPv4)
+	ip = net.ParseIP(selectedIPv4)
+	if ip == nil {
+		return nil, fmt.Errorf("Failed to parse ip %s", selectedIPv4)
 	}
-
-	return detectLocalIPv4(addrlist)
+	return ip, nil
 }
 
 func CreateDir(dirname string) (err error) {
@@ -481,4 +493,17 @@ func maxUtilDisks(disksMetricsMap map[string]simplekvs, disks StringSet) (maxuti
 		}
 	}
 	return
+}
+
+func parsePort(p string) (int, error) {
+	port, err := strconv.Atoi(p)
+	if err != nil {
+		return 0, err
+	}
+
+	if port <= 0 || port >= (1<<16) {
+		return 0, fmt.Errorf("port number (%d) should be between 1 and 65535", port)
+	}
+
+	return port, nil
 }

@@ -141,14 +141,19 @@ type testfspathconf struct {
 }
 
 type netconfig struct {
-	IPv4 string  `json:"ipv4"`
-	L4   l4cnf   `json:"l4"`
-	HTTP httpcnf `json:"http"`
+	IPv4      string  `json:"ipv4"`
+	IPv4Intra string  `json:"ipv4_intra"`
+	UseIntra  bool    `json:"-"`
+	L4        l4cnf   `json:"l4"`
+	HTTP      httpcnf `json:"http"`
 }
 
 type l4cnf struct {
-	Proto string `json:"proto"` // tcp, udp
-	Port  string `json:"port"`  // listening port
+	Proto        string `json:"proto"` // tcp, udp
+	PortStr      string `json:"port"`  // listening port
+	Port         int    `json:"-"`
+	PortIntraStr string `json:"port_intra"` // listening port for intra network
+	PortIntra    int    `json:"-"`
 }
 
 type httpcnf struct {
@@ -246,10 +251,17 @@ func initconfigparam() error {
 		ctx.config.Net.HTTP.Proto = "https"
 	}
 
+	differentIPs := ctx.config.Net.IPv4 != ctx.config.Net.IPv4Intra
+	differentPorts := ctx.config.Net.L4.Port != ctx.config.Net.L4.PortIntra
+	ctx.config.Net.UseIntra = false
+	if ctx.config.Net.IPv4Intra != "" && ctx.config.Net.L4.PortIntra != 0 && (differentIPs || differentPorts) {
+		ctx.config.Net.UseIntra = true
+	}
+
 	if build != "" {
 		glog.Infof("Build:  %s", build) // git rev-parse --short HEAD
 	}
-	glog.Infof("Logdir: %q Proto: %s Port: %s Verbosity: %s",
+	glog.Infof("Logdir: %q Proto: %s Port: %d Verbosity: %s",
 		ctx.config.Log.Dir, ctx.config.Net.L4.Proto, ctx.config.Net.L4.Port, ctx.config.Log.Level)
 	glog.Infof("Config: %q Role: %s StatsTime: %v", clivars.conffile, clivars.role, ctx.config.Periodic.StatsTime)
 	return err
@@ -353,6 +365,41 @@ func validateconf() (err error) {
 
 	if !ValidKeepaliveType(ctx.config.KeepaliveTracker.Target.Name) {
 		return fmt.Errorf("bad target keepalive tracker type %s", ctx.config.KeepaliveTracker.Target.Name)
+	}
+
+	// NETWORK
+
+	// Parse ports
+	if ctx.config.Net.L4.Port, err = parsePort(ctx.config.Net.L4.PortStr); err != nil {
+		return fmt.Errorf("Bad public port specified: %v", err)
+	}
+
+	ctx.config.Net.L4.PortIntra = 0
+	if ctx.config.Net.L4.PortIntraStr != "" {
+		if ctx.config.Net.L4.PortIntra, err = parsePort(ctx.config.Net.L4.PortIntraStr); err != nil {
+			return fmt.Errorf("Bad internal port specified: %v", err)
+		}
+	}
+
+	ctx.config.Net.IPv4 = strings.Replace(ctx.config.Net.IPv4, " ", "", -1)
+	ctx.config.Net.IPv4Intra = strings.Replace(ctx.config.Net.IPv4Intra, " ", "", -1)
+
+	// Check if public and internal addresses doesn't overlap
+	if ctx.config.Net.IPv4Intra != "" {
+		publicAddrs := strings.Split(ctx.config.Net.IPv4, ",")
+		for _, addr := range publicAddrs {
+			addr = strings.TrimSpace(addr)
+			if addr == "" {
+				continue
+			}
+
+			if strings.Contains(ctx.config.Net.IPv4Intra, addr) {
+				return fmt.Errorf(
+					"Public and internal addresses overlap: %s (public: %s; internal %s)",
+					addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4Intra,
+				)
+			}
+		}
 	}
 
 	return nil

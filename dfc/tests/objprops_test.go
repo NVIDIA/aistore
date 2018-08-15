@@ -223,7 +223,7 @@ func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg 
 	)
 	for sid, daemon := range smap.Tmap {
 		removedSid = sid
-		removedTargetDirectURL = daemon.DirectURL
+		removedTargetDirectURL = daemon.PublicNet.DirectURL
 		break
 	}
 

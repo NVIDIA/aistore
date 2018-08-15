@@ -7,9 +7,9 @@ package dfc
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -64,18 +64,18 @@ func (m msgSortHelper) Less(i, j int) bool {
 	return m[i].cnt < m[j].cnt
 }
 
-// getServerIPAndPort takes a string in format of "http://ip:port" and returns its ip and port
-func getServerIPAndPort(u string) (string, string) {
+// serverTCPAddr takes a string in format of "http://ip:port" and returns its ip and port
+func serverTCPAddr(u string) *net.TCPAddr {
 	s := strings.TrimPrefix(u, "http://")
-	items := strings.Split(s, ":")
-	return items[0], items[1]
+	addr, _ := net.ResolveTCPAddr("tcp", s)
+	return addr
 }
 
 // newPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newPrimary() *proxyrunner {
 	p := proxyrunner{}
 	p.smapowner = &smapowner{}
-	p.si = newDaemonInfo("primary", httpProto, "", "")
+	p.si = newDaemonInfo("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{})
 	smap := newSmap()
 	smap.addProxy(p.si)
 	smap.ProxySI = p.si
@@ -117,13 +117,13 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 	// creates the test proxy/target server and add to primary proxy's smap
 	ts := httptest.NewServer(http.HandlerFunc(f))
-	ip, port := getServerIPAndPort(ts.URL)
-	di := daemonInfo{DaemonID: id, DirectURL: ts.URL, NodeIPAddr: ip, DaemonPort: port}
+	addrInfo := serverTCPAddr(ts.URL)
+	di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
 	clone := primary.smapowner.get().clone()
 	if s.isProxy {
-		clone.Pmap[id] = &di
+		clone.Pmap[id] = di
 	} else {
-		clone.Tmap[id] = &di
+		clone.Tmap[id] = di
 	}
 	clone.Version++
 	primary.smapowner.put(clone)
@@ -389,20 +389,22 @@ func multipleSync(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]tra
 // retrying connection-refused errors and falls back to the retry-pending "route"
 func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transportData, []transportData) {
 	var (
-		ch   = make(chan transportData, 2) // note: use 2 to avoid unbuffered channel, http handler can return
-		id   = "p"
-		port = "53538" // the lucky port
-		ip   = "localhost"
-		s    = &http.Server{Addr: ip + ":" + port}
+		ch       = make(chan transportData, 2) // note: use 2 to avoid unbuffered channel, http handler can return
+		id       = "p"
+		addrInfo = &net.TCPAddr{
+			IP:   net.ParseIP("127.0.0.1"),
+			Port: 53538, // the lucky port
+		}
+		s = &http.Server{Addr: addrInfo.String()}
 	)
 
-	// handler for /v1/daemon/metasync
-	http.HandleFunc(path.Join("/", Rversion, Rdaemon, Rmetasync), func(w http.ResponseWriter, r *http.Request) {
+	// handler for /v1/metasync
+	http.HandleFunc(URLPath(Rversion, Rmetasync), func(w http.ResponseWriter, r *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 
 	clone := primary.smapowner.get().clone()
-	clone.Pmap[id] = newDaemonInfo(id, httpProto, ip, port)
+	clone.Pmap[id] = newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
 	clone.Version++
 	primary.smapowner.put(clone)
 
@@ -473,13 +475,13 @@ func TestMetaSyncData(t *testing.T) {
 
 		// creates the test proxy/target server and add to primary proxy's smap
 		ts := httptest.NewServer(http.HandlerFunc(f))
-		ip, port := getServerIPAndPort(ts.URL)
-		di := daemonInfo{DaemonID: id, DirectURL: ts.URL, NodeIPAddr: ip, DaemonPort: port}
+		addrInfo := serverTCPAddr(ts.URL)
+		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
 		clone := primary.smapowner.get().clone()
 		if s.isProxy {
-			clone.Pmap[id] = &di
+			clone.Pmap[id] = di
 		} else {
-			clone.Tmap[id] = &di
+			clone.Tmap[id] = di
 		}
 		clone.Version++
 		primary.smapowner.put(clone)
@@ -687,9 +689,9 @@ func TestMetaSyncMembership(t *testing.T) {
 		defer s.Close()
 
 		id := "t"
-		ip, port := getServerIPAndPort(s.URL)
+		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo(id, httpProto, ip, port))
+		clone.addTarget(newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 		syncer.sync(true, clone, "")
 		time.Sleep(time.Millisecond * 300)
@@ -730,10 +732,10 @@ func TestMetaSyncMembership(t *testing.T) {
 		defer s1.Close()
 
 		id := "t1111"
-		ip, port := getServerIPAndPort(s1.URL)
-		di := daemonInfo{DaemonID: id, DirectURL: s1.URL, NodeIPAddr: ip, DaemonPort: port}
+		addrInfo := serverTCPAddr(s1.URL)
+		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(&di)
+		clone.addTarget(di)
 		primary.smapowner.put(clone)
 		syncer.sync(true, primary.bmdowner.get(), "")
 		<-ch
@@ -752,10 +754,10 @@ func TestMetaSyncMembership(t *testing.T) {
 		defer s2.Close()
 
 		id := "t22222"
-		ip, port := getServerIPAndPort(s2.URL)
-		di := daemonInfo{DaemonID: id, DirectURL: s2.URL, NodeIPAddr: ip, DaemonPort: port}
+		addrInfo := serverTCPAddr(s2.URL)
+		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(&di)
+		clone.addTarget(di)
 		primary.smapowner.put(clone)
 
 		syncer.sync(true, primary.bmdowner.get(), "")
@@ -804,7 +806,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		matchSMap := func(a, b *Smap) {
-			if !a.equals(b) {
+			if !a.Equals(b) {
 				t.Fatal("SMap mismatch", a, b)
 			}
 		}
@@ -848,9 +850,9 @@ func TestMetaSyncReceive(t *testing.T) {
 
 		s := httptest.NewServer(http.HandlerFunc(fProxy))
 		defer s.Close()
-		ip, port := getServerIPAndPort(s.URL)
+		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addProxy(newDaemonInfo("proxy1", httpProto, ip, port))
+		clone.addProxy(newDaemonInfo("proxy1", httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		proxy1 := proxyrunner{}
@@ -898,10 +900,10 @@ func TestMetaSyncReceive(t *testing.T) {
 
 		s = httptest.NewServer(http.HandlerFunc(fTarget))
 		defer s.Close()
-		ip, port = getServerIPAndPort(s.URL)
+		addrInfo = serverTCPAddr(s.URL)
 
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target1", httpProto, ip, port))
+		clone.addTarget(newDaemonInfo("target1", httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target1 := targetrunner{}
@@ -936,9 +938,9 @@ func TestMetaSyncReceive(t *testing.T) {
 
 		s = httptest.NewServer(http.HandlerFunc(fTarget))
 		defer s.Close()
-		ip, port = getServerIPAndPort(s.URL)
+		addrInfo = serverTCPAddr(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target2", httpProto, ip, port))
+		clone.addTarget(newDaemonInfo("target2", httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target2 := targetrunner{}
@@ -1035,9 +1037,9 @@ func TestMetaSyncReceive(t *testing.T) {
 		// new smap and new bucketmd pairs
 		s = httptest.NewServer(http.HandlerFunc(fProxy))
 		defer s.Close()
-		ip, port = getServerIPAndPort(s.URL)
+		addrInfo = serverTCPAddr(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addProxy(newDaemonInfo("proxy2", httpProto, ip, port))
+		clone.addProxy(newDaemonInfo("proxy2", httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		proxy2 := proxyrunner{}
@@ -1134,9 +1136,9 @@ func TestMetaSyncReceive(t *testing.T) {
 			chTarget <- d
 		}))
 		defer s.Close()
-		ip, port := getServerIPAndPort(s.URL)
+		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target1", httpProto, ip, port))
+		clone.addTarget(newDaemonInfo("target1", httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target1 := targetrunner{}
@@ -1151,9 +1153,9 @@ func TestMetaSyncReceive(t *testing.T) {
 			chTarget <- d
 		}))
 		defer s.Close()
-		ip, port = getServerIPAndPort(s.URL)
+		addrInfo = serverTCPAddr(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target2", httpProto, ip, port))
+		clone.addTarget(newDaemonInfo("target2", httpProto, addrInfo, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target2 := targetrunner{}

@@ -6,6 +6,7 @@ package dfc
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +30,7 @@ type (
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
-	p.si = newDaemonInfo("primary", httpProto, "", "")
+	p.si = newDaemonInfo("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{})
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
@@ -246,8 +247,8 @@ func TestDiscoverServers(t *testing.T) {
 		discoverSmap := newSmap()
 		for _, s := range tc.servers {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
-			ip, port := getServerIPAndPort(ts.URL)
-			daemon := newDaemonInfo(s.id, httpProto, ip, port)
+			addrInfo := serverTCPAddr(ts.URL)
+			daemon := newDaemonInfo(s.id, httpProto, addrInfo, &net.TCPAddr{})
 			if s.isProxy {
 				discoverSmap.addProxy(daemon)
 			} else {

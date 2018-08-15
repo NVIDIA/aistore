@@ -71,8 +71,8 @@ func (p *proxy) comparePrimaryURL(url string) error {
 		return err
 	}
 
-	if smap.ProxySI.DirectURL != p.URL {
-		p.URL = smap.ProxySI.DirectURL
+	if smap.ProxySI.PublicNet.DirectURL != p.URL {
+		p.URL = smap.ProxySI.PublicNet.DirectURL
 		p.Smap = &smap
 		p.saveSmap()
 	}
@@ -90,19 +90,19 @@ func (p *proxy) detectPrimary() error {
 	}
 
 	for _, pinfo := range p.Smap.Pmap {
-		err := p.comparePrimaryURL(pinfo.DirectURL)
+		err := p.comparePrimaryURL(pinfo.PublicNet.DirectURL)
 		if err == nil {
 			return nil
 		}
-		glog.Errorf("Failed to get cluster map from [%s]: %v", pinfo.DirectURL, err)
+		glog.Errorf("Failed to get cluster map from [%s]: %v", pinfo.PublicNet.DirectURL, err)
 	}
 
 	for _, tinfo := range p.Smap.Tmap {
-		err := p.comparePrimaryURL(tinfo.DirectURL)
+		err := p.comparePrimaryURL(tinfo.PublicNet.DirectURL)
 		if err == nil {
 			return nil
 		}
-		glog.Errorf("Failed to get cluster map from [%s]: %v", tinfo.DirectURL, err)
+		glog.Errorf("Failed to get cluster map from [%s]: %v", tinfo.PublicNet.DirectURL, err)
 	}
 
 	return fmt.Errorf("No node has responded. Using primary URL from the config")

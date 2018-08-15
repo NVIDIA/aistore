@@ -56,7 +56,7 @@
 		"versioning":                   "all"
 	},
 	"fspaths": {
-	    $FSPATHS
+		$FSPATHS
 	},
 	"test_fspaths": {
 		"root":			"/tmp/dfc/",
@@ -64,10 +64,12 @@
 		"instance":		$c
 	},
 	"netconfig": {
-		"ipv4": "$IPV4LIST",
+		"ipv4":       "${IPV4LIST}",
+		"ipv4_intra": "${IPV4LIST_INTRA}",
 		"l4": {
-			"proto": 	"tcp",
-			"port":		"${PORT}"
+			"proto":      "tcp",
+			"port":       "${PORT}",
+			"port_intra": "${PORT_INTRA}"
 		},
 		"http": {
 			"max_num_targets":    16,
