@@ -2021,7 +2021,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 			return true
 		}
 
-		if !osi.equals(*nsi) {
+		if !osi.equals(nsi) {
 			if p.detectDaemonDuplicate(osi, nsi) {
 				glog.Errorf("Daemon %s tried to register/keepalive with a duplicate ID %s", nsi.DirectURL, nsi.DaemonID)
 				return false
@@ -2037,7 +2037,7 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 		if p.startedup(0) == 0 {
 			return true
 		}
-		if osi.equals(*nsi) {
+		if osi.equals(nsi) {
 			glog.Infof("register %s %s: already done", kind, nsi.DaemonID)
 			return false
 		}
@@ -2428,7 +2428,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 	if err := json.Unmarshal(res.outjson, si); err != nil {
 		assert(false, err)
 	}
-	return !nsi.equals(*si)
+	return !nsi.equals(si)
 }
 
 func ValidateCloudProvider(provider string, isLocal bool) error {

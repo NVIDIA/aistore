@@ -804,7 +804,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		matchSMap := func(a, b *Smap) {
-			if !a.equals(*b) {
+			if !a.equals(b) {
 				t.Fatal("SMap mismatch", a, b)
 			}
 		}

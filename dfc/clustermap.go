@@ -67,7 +67,7 @@ func (d *daemonInfo) String() string {
 		d.NodeIPAddr, d.DaemonPort, d.DaemonID, d.DirectURL, d.idDigest)
 }
 
-func (a daemonInfo) equals(b daemonInfo) bool {
+func (a *daemonInfo) equals(b *daemonInfo) bool {
 	return a.DaemonID == b.DaemonID && a.DirectURL == b.DirectURL &&
 		a.DaemonPort == b.DaemonPort && a.NodeIPAddr == b.NodeIPAddr
 }
@@ -278,8 +278,8 @@ func (m *Smap) merge(dst *Smap) {
 	}
 }
 
-func (a Smap) equals(b Smap) bool {
-	return a.Version == b.Version && a.ProxySI.equals(*b.ProxySI) &&
+func (a *Smap) equals(b *Smap) bool {
+	return a.Version == b.Version && a.ProxySI.equals(b.ProxySI) &&
 		reflect.DeepEqual(a.NonElects, b.NonElects) && areDaemonMapsEqual(a.Tmap, b.Tmap) &&
 		areDaemonMapsEqual(a.Pmap, b.Pmap)
 }
@@ -291,7 +291,7 @@ func areDaemonMapsEqual(a, b map[string]*daemonInfo) bool {
 	for id, aInfo := range a {
 		if bInfo, ok := b[id]; !ok {
 			return false
-		} else if !aInfo.equals(*bInfo) {
+		} else if !aInfo.equals(bInfo) {
 			return false
 		}
 	}
