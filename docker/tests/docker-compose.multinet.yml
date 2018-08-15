@@ -1,0 +1,27 @@
+version: '3'
+services:
+  dfcproxy:
+    networks:
+        public:
+        internal:
+  dfctarget:
+    networks:
+        public:
+        internal:
+networks:
+  public:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        -
+          subnet: ${PUB_SUBNET}
+  internal:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        -
+          subnet: ${INT_SUBNET}
+
+
