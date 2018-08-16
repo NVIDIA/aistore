@@ -549,7 +549,7 @@ existslocally:
 	t.statsdC.Send("get",
 		metric{statsd.Counter, "count", 1},
 		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
+	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta/time.Microsecond))
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
@@ -813,7 +813,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			t.statsdC.Send("list",
 				metric{statsd.Counter, "count", 1},
 				metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-			lat := int64(delta / 1000)
+			lat := int64(delta / time.Microsecond)
 			t.statsif.addMany("numlist", int64(1), "listlatency", lat)
 			if glog.V(3) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, lat)
@@ -1867,7 +1867,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			t.statsdC.Send("put",
 				metric{statsd.Counter, "count", 1},
 				metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-			lat := int64(delta / 1000)
+			lat := int64(delta / time.Microsecond)
 			t.statsif.addMany("numput", int64(1), "putlatency", lat)
 			if glog.V(4) {
 				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, lat)

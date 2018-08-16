@@ -123,7 +123,7 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	if smap == nil || !smap.isValid() {
 		return
 	}
-	if stopped = tkr.register(tkr.t, smap.ProxySI.DaemonID); stopped {
+	if stopped = tkr.register(tkr.t, tkr.t.statsif, smap.ProxySI.DaemonID); stopped {
 		if smap = tkr.t.smapowner.get(); smap != nil && smap.isValid() {
 			tkr.t.onPrimaryProxyFailure()
 		}
@@ -143,7 +143,7 @@ func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
 		return
 	}
 
-	if stopped = pkr.register(pkr.p, smap.ProxySI.DaemonID); stopped {
+	if stopped = pkr.register(pkr.p, pkr.p.statsif, smap.ProxySI.DaemonID); stopped {
 		pkr.p.onPrimaryProxyFailure()
 	}
 	return
@@ -162,8 +162,10 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	var (
 		smap       = pkr.p.smapowner.get()
 		wg         = &sync.WaitGroup{}
-		stoppedCh  = make(chan struct{}, smap.countProxies()+smap.countTargets())
-		toRemoveCh = make(chan string, smap.countProxies()+smap.countTargets())
+		daemonCnt  = smap.countProxies() + smap.countTargets()
+		stoppedCh  = make(chan struct{}, daemonCnt)
+		toRemoveCh = make(chan string, daemonCnt)
+		latencyCh  = make(chan time.Duration, daemonCnt)
 	)
 	for _, daemons := range []map[string]*daemonInfo{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
@@ -180,12 +182,15 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 					wg.Done()
 					return
 				}
-				ok, s := pkr.ping(si)
+				ok, s, lat := pkr.ping(si)
 				if s {
 					stoppedCh <- struct{}{}
 				}
 				if !ok {
 					toRemoveCh <- si.DaemonID
+				}
+				if lat != defaultTimeout {
+					latencyCh <- lat
 				}
 				wg.Done()
 			}(si)
@@ -194,6 +199,9 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	wg.Wait()
 	close(stoppedCh)
 	close(toRemoveCh)
+	close(latencyCh)
+
+	pkr.statsMinMaxLat(latencyCh)
 
 	pkr.p.smapowner.Lock()
 	newSmap := pkr.p.smapowner.get()
@@ -234,7 +242,26 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	return
 }
 
-func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool) {
+// min & max keepalive stats
+func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
+	min, max := time.Duration(time.Hour), time.Duration(0)
+	for lat := range latencyCh {
+		if min > lat && lat != 0 {
+			min = lat
+		}
+		if max < lat {
+			max = lat
+		}
+	}
+	if min != time.Duration(time.Hour) {
+		pkr.p.statsif.add("kalivemin", int64(min/time.Microsecond))
+	}
+	if max != 0 {
+		pkr.p.statsif.add("kalivemax", int64(max/time.Microsecond))
+	}
+}
+
+func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta time.Duration) {
 	query := url.Values{}
 	query.Add(URLParamFromID, pkr.p.si.DaemonID)
 
@@ -251,13 +278,16 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool) {
 	}
 	t := time.Now()
 	res := pkr.p.call(args)
-	pkr.updateTimeoutForDaemon(to.DaemonID, time.Since(t))
+	delta = time.Since(t)
+	pkr.updateTimeoutForDaemon(to.DaemonID, delta)
+	pkr.p.statsif.add("kalive", int64(delta/time.Microsecond))
 
 	if res.err == nil {
-		return true, false
+		return true, false, delta
 	}
 	glog.Warningf("initial keepalive failed, err: %v, status: %d, polling again", res.err, res.status)
-	return pkr.retry(to, args)
+	ok, stopped = pkr.retry(to, args)
+	return ok, stopped, defaultTimeout
 }
 
 func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, args callArgs) (ok, stopped bool) {
@@ -333,11 +363,13 @@ func (k *keepalive) run() error {
 }
 
 // register is called by non-primary proxies and targets to send a keepalive to the primary proxy.
-func (k *keepalive) register(r registerer, primaryProxyID string) (stopped bool) {
+func (k *keepalive) register(r registerer, statsif statsif, primaryProxyID string) (stopped bool) {
 	timeout := time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
 	now := time.Now()
 	s, err := r.register(true, timeout)
-	timeout = k.updateTimeoutForDaemon(primaryProxyID, time.Since(now))
+	delta := time.Since(now)
+	statsif.add("kalive", int64(delta/time.Microsecond))
+	timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
 	if err == nil {
 		return
 	}

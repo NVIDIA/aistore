@@ -357,7 +357,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	p.statsdC.Send("get",
 		metric{statsd.Counter, "count", 1},
 		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta/1000))
+	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta/time.Microsecond))
 }
 
 // PUT "/"+Rversion+"/"+Robjects
@@ -388,7 +388,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	p.statsdC.Send("put",
 		metric{statsd.Counter, "count", 1},
 		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta/1000))
+	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta/time.Microsecond))
 }
 
 // DELETE { action } /Rversion/Rbuckets
@@ -624,7 +624,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 		p.statsdC.Send("list",
 			metric{statsd.Counter, "count", 1},
 			metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-		lat := int64(delta / 1000)
+		lat := int64(delta / time.Microsecond)
 		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
 
 		if glog.V(3) {

@@ -58,13 +58,17 @@ type proxyCoreStats struct {
 	Getlatency  int64 `json:"getlatency"`  // microseconds
 	Putlatency  int64 `json:"putlatency"`  // ---/---
 	Listlatency int64 `json:"listlatency"` // ---/---
+	Kalivemin   int64 `json:"kalivemin"`   // ---/---
+	Kalivemax   int64 `json:"kalivemax"`   // ---/---
+	Kalive      int64 `json:"kalive"`      // ---/---
 	Uptime      int64 `json:"uptime"`      // proxy or cluster uptime: microseconds
 	Numerr      int64 `json:"numerr"`
 	// omitempty
-	ngets  int64
-	nputs  int64
-	nlists int64
-	logged bool
+	ngets                 int64
+	nputs                 int64
+	nlists                int64
+	nkcalls, nkmin, nkmax int64
+	logged                bool
 }
 
 type targetCoreStats struct {
@@ -88,18 +92,19 @@ type targetCoreStats struct {
 type statsrunner struct {
 	sync.RWMutex
 	namedrunner
-	chsts chan struct{}
+	chsts     chan struct{}
+	starttime time.Time
 }
 
 type proxystatsrunner struct {
-	statsrunner `json:"-"`
-	Core        proxyCoreStats `json:"core"`
+	statsrunner
+	Core proxyCoreStats `json:"core"`
 }
 
 type storstatsrunner struct {
-	statsrunner `json:"-"`
-	Core        targetCoreStats        `json:"core"`
-	Capacity    map[string]*fscapacity `json:"capacity"`
+	statsrunner
+	Core     targetCoreStats        `json:"core"`
+	Capacity map[string]*fscapacity `json:"capacity"`
 	// iostat
 	CPUidle string               `json:"cpuidle"`
 	Disk    map[string]simplekvs `json:"disk"`
@@ -179,6 +184,7 @@ type (
 //==================
 func (r *statsrunner) runcommon(logger statslogger) error {
 	r.chsts = make(chan struct{}, 4)
+	r.starttime = time.Now()
 
 	glog.Infof("Starting %s", r.name)
 	ticker := time.NewTicker(ctx.config.Periodic.StatsTime)
@@ -235,9 +241,20 @@ func (r *proxystatsrunner) log() (runlru bool) {
 	if r.Core.nlists > 0 {
 		r.Core.Listlatency /= r.Core.nlists
 	}
+	if r.Core.nkcalls > 0 {
+		r.Core.Kalive /= r.Core.nkcalls
+	}
+	if r.Core.nkmin > 0 {
+		r.Core.Kalivemin /= r.Core.nkmin
+	}
+	if r.Core.nkmax > 0 {
+		r.Core.Kalivemax /= r.Core.nkmax
+	}
 	b, err := json.Marshal(r.Core)
 	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.Kalivemin, r.Core.Kalivemax, r.Core.Kalive = 0, 0, 0
 	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
+	r.Core.nkcalls, r.Core.nkmin, r.Core.nkmax = 0, 0, 0
 	r.Unlock()
 
 	if err == nil {
@@ -269,8 +286,12 @@ func (r *proxystatsrunner) addMany(nameval ...interface{}) {
 }
 
 func (r *proxystatsrunner) addL(name string, val int64) {
-	var v *int64
 	s := &r.Core
+	s.addL(name, val)
+}
+
+func (s *proxyCoreStats) addL(name string, val int64) {
+	var v *int64
 	switch name {
 	case "numget":
 		v = &s.Numget
@@ -293,13 +314,21 @@ func (r *proxystatsrunner) addL(name string, val int64) {
 	case "listlatency":
 		v = &s.Listlatency
 		s.nlists++
+	case "kalive":
+		v = &s.Kalive
+		s.nkcalls++
+	case "kalivemax":
+		v = &s.Kalivemax
+		s.nkmax++
+	case "kalivemin":
+		v = &s.Kalivemin
+		s.nkmin++
 	case "numerr":
 		v = &s.Numerr
 	default:
 		assert(false, "Invalid stats name "+name)
 	}
 	*v += val
-	// FIXME: This causes a race between this line and the 'logged = true' line in log().
 	s.logged = false
 }
 
@@ -343,10 +372,22 @@ func (r *storstatsrunner) log() (runlru bool) {
 	if r.Core.nlists > 0 {
 		r.Core.Listlatency /= r.Core.nlists
 	}
+	if r.Core.nkcalls > 0 {
+		r.Core.Kalive /= r.Core.nkcalls
+	}
+	if r.Core.nkmin > 0 {
+		r.Core.Kalivemin /= r.Core.nkmin
+	}
+	if r.Core.nkmax > 0 {
+		r.Core.Kalivemax /= r.Core.nkmax
+	}
+	r.Core.Uptime = int64(time.Since(r.starttime) / time.Microsecond)
 
 	b, err := json.Marshal(r.Core)
 	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.Kalivemin, r.Core.Kalivemax, r.Core.Kalive = 0, 0, 0
 	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
+	r.Core.nkcalls, r.Core.nkmin, r.Core.nkmax = 0, 0, 0
 	if err == nil {
 		lines = append(lines, string(b))
 	}
@@ -521,33 +562,19 @@ func (r *storstatsrunner) addMany(nameval ...interface{}) {
 }
 
 func (r *storstatsrunner) addL(name string, val int64) {
-	var v *int64
 	s := &r.Core
+	s.addL(name, val)
+}
+
+func (s *targetCoreStats) addL(name string, val int64) {
+	var v *int64
 	switch name {
 	// common
-	case "numget":
-		v = &s.Numget
-	case "numput":
-		v = &s.Numput
-	case "numpost":
-		v = &s.Numpost
-	case "numdelete":
-		v = &s.Numdelete
-	case "numrename":
-		v = &s.Numrename
-	case "numlist":
-		v = &s.Numlist
-	case "getlatency":
-		v = &s.Getlatency
-		s.ngets++
-	case "putlatency":
-		v = &s.Putlatency
-		s.nputs++
-	case "listlatency":
-		v = &s.Listlatency
-		s.nlists++
-	case "numerr":
-		v = &s.Numerr
+	case "numget", "numput", "numpost", "numdelete", "numrename", "numlist",
+		"getlatency", "putlatency", "listlatency",
+		"kalive", "kalivemin", "kalivemax", "numerr":
+		s.proxyCoreStats.addL(name, val)
+		return
 	// target only
 	case "numcoldget":
 		v = &s.Numcoldget
