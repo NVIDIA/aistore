@@ -231,18 +231,11 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 	var (
 		jsbytes, jsmsg []byte
 		err            error
-		shift          int
 		refused        map[string]*daemonInfo
 		payload        = make(simplekvs)
 		smap           = y.p.smapowner.get()
 	)
-	del := func(j int) {
-		l := len(pairs)
-		copy(pairs[j:], pairs[j+1:])
-		pairs = pairs[:l-1]
-		shift++
-	}
-	newcnt := y.countNewMembers(smap)
+	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
 	for tag, revs := range y.last {
 		jsbytes, err = revs.marshal()
@@ -255,10 +248,11 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 			}
 		}
 	}
-	for i := range pairs {
+
+	pairsToSend := pairs[:0] // share original slice
+OUTER:
+	for _, pair := range pairs {
 		var (
-			j              = i - shift
-			pair           = pairs[j]
 			revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
 			s              = fmt.Sprintf("%s, action=%s, version=%d", tag, msg.Action, revs.version())
 		)
@@ -269,32 +263,29 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 				assert(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
 			} else if revs.version() < v {
 				glog.Warningf("Warning: %s: using newer Smap v%d to broadcast", s, v)
-
 			}
 		}
 		// vs the last sync-ed: enforcing non-decremental versioning on the wire
 		switch lversion := y.lversion(tag); {
 		case lversion == revs.version():
-			if newcnt == 0 {
+			if newCnt == 0 {
 				glog.Errorf("%s duplicated - already sync-ed or pending", s)
-				del(j)
-				break
+				continue OUTER
 			}
-			glog.Infof("%s duplicated - proceeding to sync %d new member(s)", s, newcnt)
+			glog.Infof("%s duplicated - proceeding to sync %d new member(s)", s, newCnt)
 		case lversion > revs.version():
 			glog.Errorf("skipping %s: < current v%d", s, lversion)
-			del(j)
+			continue OUTER
 		}
+
+		pairsToSend = append(pairsToSend, pair)
 	}
-	if len(pairs) == 0 {
+	if len(pairsToSend) == 0 {
 		return
 	}
 	// step 2: build payload and update last sync-ed
-	for i := range pairs {
-		var (
-			pair           = pairs[i]
-			revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
-		)
+	for _, pair := range pairsToSend {
+		var revs, msg, tag = pair.revs, pair.msg, pair.revs.tag()
 		glog.Infof("dosync: %s, action=%s, version=%d", tag, msg.Action, revs.version())
 
 		y.last[tag] = revs
@@ -325,7 +316,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 	// step 4: count failures and fill-in refused
 	for r := range res {
 		if r.err == nil {
-			y.syncDone(r.si.DaemonID, pairs)
+			y.syncDone(r.si.DaemonID, pairsToSend)
 			continue
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
@@ -350,7 +341,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 			y.becomeNonPrimary()
 			return
 		}
-		y.handleRefused(urlPath, jsbytes, refused, pairs)
+		y.handleRefused(urlPath, jsbytes, refused, pairsToSend)
 	}
 	// step 6: housekeep and return new pending
 	smap = y.p.smapowner.get()
