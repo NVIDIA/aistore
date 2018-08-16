@@ -30,6 +30,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/constants"
+	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -174,10 +175,11 @@ type httprunner struct {
 	si                    *daemonInfo
 	httpclient            *http.Client // http client for intra-cluster comm
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
-	statsif               statsif
 	keepalive             keepaliver
 	smapowner             *smapowner
 	bmdowner              *bmdowner
+	statsif               statsif
+	statsdC               statsd.Client
 }
 
 func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
@@ -368,6 +370,7 @@ func (h *httprunner) run() error {
 func (h *httprunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", h.name, err)
 
+	h.statsdC.Close()
 	if h.publicServer.s == nil {
 		return
 	}
@@ -1072,5 +1075,17 @@ func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
 		return
 	}
 	url, proxysi = ctx.config.Proxy.PrimaryURL, smap.ProxySI
+	return
+}
+
+//
+// StatsD client using 8125 (default) StatsD port - https://github.com/etsy/statsd
+//
+func (h *httprunner) initStatsD(daemonStr string) (err error) {
+	suffix := strings.Replace(h.si.DaemonID, ":", "_", -1)
+	h.statsdC, err = statsd.New("localhost", 8125, daemonStr+"."+suffix)
+	if err != nil {
+		glog.Infoln("Failed to connect to StatsD daemon")
+	}
 	return
 }

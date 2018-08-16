@@ -113,11 +113,10 @@ func (g *rungroup) run() error {
 	for _, r := range g.runarr {
 		r.stop(err)
 	}
-	glog.Flush()
 	for i := 0; i < cap(g.errch)-1; i++ {
 		<-g.errch
-		glog.Flush()
 	}
+	glog.Flush()
 	g.stpch <- nil
 	return err
 }
@@ -156,6 +155,8 @@ func dfcinit() {
 		runmap: make(map[string]runner, 8),
 	}
 	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
+	// NOTE: proxy and, respectively, target terminations are executed in the same
+	//       exact order as the initializations below
 	if clivars.role == xproxy {
 		p := &proxyrunner{}
 		p.initSI()

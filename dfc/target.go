@@ -107,7 +107,6 @@ type targetrunner struct {
 	uxprocess      *uxprocess
 	rtnamemap      *rtnamemap
 	prefetchQueue  chan filesWithDeadline
-	statsdC        statsd.Client
 	authn          *authManager
 	clusterStarted int64
 	state          targetState
@@ -194,12 +193,9 @@ func (t *targetrunner) run() error {
 	pid := int64(os.Getpid())
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
 
-	var err error
-	t.statsdC, err = statsd.New("localhost", 8125,
-		fmt.Sprintf("dfctarget.%s", strings.Replace(t.si.DaemonID, ":", "_", -1)))
-	if err != nil {
-		glog.Info("Failed to connect to statd, running without statsd")
-	}
+	_ = t.initStatsD("dfctarget")
+	sr := getstorstatsrunner()
+	sr.Core.statsdC = &t.statsdC
 
 	getfshealthchecker().SetDispatcher(t)
 
@@ -546,10 +542,7 @@ existslocally:
 	}
 
 	delta := time.Since(started)
-	t.statsdC.Send("get",
-		metric{statsd.Counter, "count", 1},
-		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta/time.Microsecond))
+	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta))
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
@@ -810,13 +803,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		tag, ok := t.listbucket(w, r, lbucket, &msg)
 		if ok {
 			delta := time.Since(started)
-			t.statsdC.Send("list",
-				metric{statsd.Counter, "count", 1},
-				metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-			lat := int64(delta / time.Microsecond)
-			t.statsif.addMany("numlist", int64(1), "listlatency", lat)
+			t.statsif.addMany("numlist", int64(1), "listlatency", int64(delta))
 			if glog.V(3) {
-				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, lat)
+				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
 		}
 	case ActRechecksum:
@@ -1375,16 +1364,8 @@ ret:
 		t.rtnamemap.unlockname(uname, true)
 	} else {
 		if vchanged {
-			t.statsdC.Send("get.cold",
-				metric{statsd.Counter, "count", 1},
-				metric{statsd.Counter, "bytesloaded", props.size},
-				metric{statsd.Counter, "vchanged", 1},
-				metric{statsd.Counter, "bytesvchanged", props.size})
 			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size, "bytesvchanged", props.size, "numvchanged", int64(1))
 		} else {
-			t.statsdC.Send("get.cold",
-				metric{statsd.Counter, "count", 1},
-				metric{statsd.Counter, "bytesloaded", props.size})
 			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size)
 		}
 		t.rtnamemap.downgradelock(uname)
@@ -1864,13 +1845,9 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 		if errstr == "" {
 			delta := time.Since(started)
-			t.statsdC.Send("put",
-				metric{statsd.Counter, "count", 1},
-				metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-			lat := int64(delta / time.Microsecond)
-			t.statsif.addMany("numput", int64(1), "putlatency", lat)
+			t.statsif.addMany("numput", int64(1), "putlatency", int64(delta))
 			if glog.V(4) {
-				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, lat)
+				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 			}
 		}
 		return
@@ -2078,9 +2055,6 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
-			t.statsdC.Send("rebalance.receive",
-				metric{statsd.Counter, "files", 1},
-				metric{statsd.Counter, "bytes", size})
 			t.statsif.addMany("numrecvfiles", int64(1), "numrecvbytes", size)
 		}
 	}
@@ -2107,7 +2081,6 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
 
-		t.statsdC.Send("delete", metric{statsd.Counter, "count", 1})
 		t.statsif.add("numdelete", 1)
 	}
 
@@ -2127,9 +2100,6 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		if err := os.Remove(fqn); err != nil {
 			return err
 		} else if evict {
-			t.statsdC.Send("evict",
-				metric{statsd.Counter, "files", 1},
-				metric{statsd.Counter, "bytes", finfo.Size()})
 			t.statsif.addMany("filesevicted", int64(1), "bytesevicted", finfo.Size())
 		}
 	}
@@ -2182,7 +2152,6 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 		} else {
-			t.statsdC.Send("rename", metric{statsd.Counter, "count", 1})
 			t.statsif.add("numrename", 1)
 			if glog.V(3) {
 				glog.Infof("Renamed %s => %s", fqn, newfqn)
@@ -2346,9 +2315,6 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	response.Body.Close()
 	// stats
-	t.statsdC.Send("rebalance.send",
-		metric{statsd.Counter, "files", 1},
-		metric{statsd.Counter, "bytes", size})
 	t.statsif.addMany("numsentfiles", int64(1), "numsentbytes", size)
 	return ""
 }
@@ -2740,9 +2706,6 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
 
-				t.statsdC.Send("error.badchecksum.xxhash",
-					metric{statsd.Counter, "count", 1},
-					metric{statsd.Counter, "bytes", written})
 				t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
 				return
 			}
@@ -2760,9 +2723,6 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
 				objname, ohval[:8], nhval[:8], fqn)
 
-			t.statsdC.Send("error.badchecksum.md5",
-				metric{statsd.Counter, "count", 1},
-				metric{statsd.Counter, "bytes", written})
 			t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
 			return
 		}
@@ -3028,6 +2988,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 
 	keyName := fqn2mountPath(filepath)
 	if keyName != "" {
+		// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 		t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
 	}
 	if ctx.config.FSChecker.Enabled {

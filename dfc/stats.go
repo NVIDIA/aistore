@@ -47,7 +47,6 @@ type statsif interface {
 	addMany(nameval ...interface{})
 }
 
-// TODO: use static map[string]int64
 type proxyCoreStats struct {
 	Numget      int64 `json:"numget"`
 	Numput      int64 `json:"numput"`
@@ -64,6 +63,7 @@ type proxyCoreStats struct {
 	Uptime      int64 `json:"uptime"`      // proxy or cluster uptime: microseconds
 	Numerr      int64 `json:"numerr"`
 	// omitempty
+	statsdC               *statsd.Client
 	ngets                 int64
 	nputs                 int64
 	nlists                int64
@@ -299,21 +299,36 @@ func (s *proxyCoreStats) addL(name string, val int64) {
 		v = &s.Numput
 	case "numpost":
 		v = &s.Numpost
+		s.statsdC.Send("cluster_post", metric{statsd.Counter, "count", val})
 	case "numdelete":
 		v = &s.Numdelete
+		s.statsdC.Send("delete", metric{statsd.Counter, "count", val})
 	case "numrename":
 		v = &s.Numrename
+		s.statsdC.Send("rename", metric{statsd.Counter, "count", val})
 	case "numlist":
 		v = &s.Numlist
 	case "getlatency":
 		v = &s.Getlatency
 		s.ngets++
+		s.statsdC.Send("get",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
 	case "putlatency":
 		v = &s.Putlatency
 		s.nputs++
+		s.statsdC.Send("put",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
 	case "listlatency":
 		v = &s.Listlatency
 		s.nlists++
+		s.statsdC.Send("list",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
 	case "kalive":
 		v = &s.Kalive
 		s.nkcalls++
@@ -580,18 +595,27 @@ func (s *targetCoreStats) addL(name string, val int64) {
 		v = &s.Numcoldget
 	case "bytesloaded":
 		v = &s.Bytesloaded
+		s.statsdC.Send("get.cold",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Counter, "bytesloaded", val})
 	case "bytesevicted":
 		v = &s.Bytesevicted
+		s.statsdC.Send("evict", metric{statsd.Counter, "bytes", val})
 	case "filesevicted":
 		v = &s.Filesevicted
+		s.statsdC.Send("evict", metric{statsd.Counter, "files", val})
 	case "numsentfiles":
 		v = &s.Numsentfiles
+		s.statsdC.Send("rebalance.send", metric{statsd.Counter, "files", val})
 	case "numsentbytes":
 		v = &s.Numsentbytes
+		s.statsdC.Send("rebalance.send", metric{statsd.Counter, "bytes", val})
 	case "numrecvfiles":
 		v = &s.Numrecvfiles
+		s.statsdC.Send("rebalance.receive", metric{statsd.Counter, "files", val})
 	case "numrecvbytes":
 		v = &s.Numrecvbytes
+		s.statsdC.Send("rebalance.receive", metric{statsd.Counter, "bytes", val})
 	case "numprefetch":
 		v = &s.Numprefetch
 	case "bytesprefetched":
@@ -600,10 +624,15 @@ func (s *targetCoreStats) addL(name string, val int64) {
 		v = &s.Numvchanged
 	case "bytesvchanged":
 		v = &s.Bytesvchanged
+		s.statsdC.Send("get.cold",
+			metric{statsd.Counter, "vchanged", 1},
+			metric{statsd.Counter, "bytesvchanged", val})
 	case "numbadchecksum":
 		v = &s.Numbadchecksum
+		s.statsdC.Send("error.badchecksum", metric{statsd.Counter, "count", val})
 	case "bytesbadchecksum":
 		v = &s.Bytesbadchecksum
+		s.statsdC.Send("error.badchecksum", metric{statsd.Counter, "bytes", val})
 	default:
 		assert(false, "Invalid stats name "+name)
 	}

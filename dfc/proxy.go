@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
 )
 
 const tokenStart = "Bearer"
@@ -68,7 +67,6 @@ type proxyrunner struct {
 	httprunner
 	starttime  time.Time
 	xactinp    *xactInProgress
-	statsdC    statsd.Client
 	authn      *authManager
 	startedUp  int64
 	metasyncer *metasyncer
@@ -157,16 +155,9 @@ func (p *proxyrunner) run() error {
 	}
 	p.starttime = time.Now()
 
-	// Note: hard coding statsd's IP and port for two reasons:
-	// 1. it is well known, conflicts are unlikely, less config is better
-	// 2. if do need configuable, will make a separate change, easier to manage
-	// Potentially there is a race here, &p.statsdC is given to call stats tracker already
-	var err error
-	p.statsdC, err = statsd.New("localhost", 8125,
-		fmt.Sprintf("dfcproxy.%s", strings.Replace(p.si.DaemonID, ":", "_", -1)))
-	if err != nil {
-		glog.Info("Failed to connect to statd, running without statsd")
-	}
+	_ = p.initStatsD("dfcproxy")
+	sr := getproxystatsrunner()
+	sr.Core.statsdC = &p.statsdC
 
 	return p.httprunner.run()
 }
@@ -239,7 +230,6 @@ func (p *proxyrunner) stop(err error) {
 		}
 	}
 
-	p.statsdC.Close()
 	p.httprunner.stop(err)
 }
 
@@ -350,14 +340,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
 
-	// Note: ideally, would prefer to call statsd in statsif.add(), but it doesn't have type support,
-	//       the name schema is different(statd doesn't need dup 'numget', it is get.count), statsif's dependency
-	//       on the names, and (not that importantly) the unit is different (ms vs us).
 	delta := time.Since(started)
-	p.statsdC.Send("get",
-		metric{statsd.Counter, "count", 1},
-		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta/time.Microsecond))
+	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta))
 }
 
 // PUT "/"+Rversion+"/"+Robjects
@@ -385,10 +369,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	delta := time.Since(started)
-	p.statsdC.Send("put",
-		metric{statsd.Counter, "count", 1},
-		metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta/time.Microsecond))
+	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta))
 }
 
 // DELETE { action } /Rversion/Rbuckets
@@ -453,7 +434,6 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 
-	p.statsdC.Send("delete", metric{statsd.Counter, "count", 1})
 	p.statsif.add("numdelete", 1)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
@@ -621,13 +601,9 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
-		p.statsdC.Send("list",
-			metric{statsd.Counter, "count", 1},
-			metric{statsd.Timer, "latency", float64(delta / time.Millisecond)})
-		lat := int64(delta / time.Microsecond)
-		p.statsif.addMany("numlist", int64(1), "listlatency", lat)
-
+		p.statsif.addMany("numlist", int64(1), "listlatency", int64(delta))
 		if glog.V(3) {
+			lat := int64(delta / time.Microsecond)
 			if pagemarker != "" {
 				glog.Infof("LIST: %s, page %s, %d µs", lbucket, pagemarker, lat)
 			} else {
@@ -1278,7 +1254,6 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
 
-	p.statsdC.Send("rename", metric{statsd.Counter, "count", 1})
 	p.statsif.add("numrename", 1)
 
 	// NOTE:
@@ -1989,7 +1964,6 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsdC.Send("cluster_post", metric{statsd.Counter, "count", 1})
 	p.statsif.add("numpost", 1)
 
 	p.smapowner.Lock()
