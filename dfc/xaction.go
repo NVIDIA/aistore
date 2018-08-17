@@ -48,7 +48,14 @@ type xactRebalance struct {
 	xactBase
 	curversion   int64
 	targetrunner *targetrunner
-	runnersCnt   int
+	runnerCnt    int
+	confirmCh    chan struct{}
+}
+
+type xactLocalRebalance struct {
+	xactBase
+	targetRunner *targetrunner
+	runnerCnt    int
 	confirmCh    chan struct{}
 }
 
@@ -192,9 +199,9 @@ func (q *xactInProgress) del(by interface{}) {
 	q.lock.Unlock()
 }
 
-func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runnersCnt int) *xactRebalance {
+func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runnerCnt int) *xactRebalance {
 	q.lock.Lock()
-	_, xx := q.findU(api.ActRebalance)
+	_, xx := q.findU(api.ActGlobalReb)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
@@ -209,7 +216,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runne
 				return nil
 			}
 			xreb.abort()
-			for i := 0; i < xreb.runnersCnt; i++ {
+			for i := 0; i < xreb.runnerCnt; i++ {
 				<-xreb.confirmCh
 			}
 			close(xreb.confirmCh)
@@ -217,11 +224,11 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runne
 	}
 	id := q.uniqueid()
 	xreb := &xactRebalance{
-		xactBase:     *newxactBase(id, api.ActRebalance),
+		xactBase:     *newxactBase(id, api.ActGlobalReb),
 		curversion:   curversion,
 		targetrunner: t,
-		runnersCnt:   runnersCnt,
-		confirmCh:    make(chan struct{}, runnersCnt),
+		runnerCnt:    runnerCnt,
+		confirmCh:    make(chan struct{}, runnerCnt),
 	}
 	q.add(xreb)
 	q.lock.Unlock()
@@ -242,7 +249,7 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 	}
 
 	q.lock.Lock()
-	_, xx := q.findU(api.ActRebalance)
+	_, xx := q.findU(api.ActGlobalReb)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
@@ -251,6 +258,31 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 	}
 	q.lock.Unlock()
 	return
+}
+
+func (q *xactInProgress) renewLocalRebalance(t *targetrunner, runnerCnt int) *xactLocalRebalance {
+	q.lock.Lock()
+	_, xx := q.findU(api.ActLocalReb)
+	if xx != nil {
+		xLocalReb := xx.(*xactLocalRebalance)
+		if !xLocalReb.finished() {
+			xLocalReb.abort()
+			for i := 0; i < xLocalReb.runnerCnt; i++ {
+				<-xLocalReb.confirmCh
+			}
+			close(xLocalReb.confirmCh)
+		}
+	}
+	id := q.uniqueid()
+	xLocalReb := &xactLocalRebalance{
+		xactBase:     *newxactBase(id, api.ActLocalReb),
+		targetRunner: t,
+		runnerCnt:    runnerCnt,
+		confirmCh:    make(chan struct{}, runnerCnt),
+	}
+	q.add(xLocalReb)
+	q.lock.Unlock()
+	return xLocalReb
 }
 
 func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
@@ -352,6 +384,25 @@ func (xact *xactRebalance) tostring() string {
 }
 
 func (xact *xactRebalance) abort() {
+	xact.xactBase.abort()
+	glog.Infof("ABORT: " + xact.tostring())
+}
+
+//===================
+//
+// xactLocalRebalance
+//
+//===================
+func (xact *xactLocalRebalance) tostring() string {
+	if !xact.finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, xact.stime.Format(timeStampFormat))
+	}
+	d := xact.etime.Sub(xact.stime)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v (duration %v)",
+		xact.kind, xact.id, xact.stime.Format(timeStampFormat), xact.etime.Format(timeStampFormat), d)
+}
+
+func (xact *xactLocalRebalance) abort() {
 	xact.xactBase.abort()
 	glog.Infof("ABORT: " + xact.tostring())
 }

@@ -45,8 +45,8 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
 	for _, r := range g.runners {
 		r.reqEnableMountpath(mpath)
 	}
-	g.t.runRebalance(g.t.smapowner.get(), "")
 	glog.Infof("Re-enabled mountpath %s", mpath)
+	go g.t.runLocalRebalance()
 
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	if len(availablePaths) == 1 {
@@ -89,10 +89,19 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 		return
 	}
 
+	err = g.t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
+	if err != nil {
+		return
+	}
+	err = g.t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
+	if err != nil {
+		return
+	}
+
 	for _, r := range g.runners {
 		r.reqAddMountpath(mpath)
 	}
-	g.t.runRebalance(g.t.smapowner.get(), "")
+	go g.t.runLocalRebalance()
 
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	if len(availablePaths) > 1 {

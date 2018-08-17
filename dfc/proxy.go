@@ -2283,7 +2283,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
-	case api.ActRebalance:
+	case api.ActGlobalReb:
 		p.metasyncer.sync(false, p.smapowner.get(), &msg)
 
 	default:

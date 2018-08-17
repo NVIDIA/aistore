@@ -136,6 +136,7 @@ func (mfs *MountedFS) RemoveMountpath(mpath string) error {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
+	mpath = filepath.Clean(mpath)
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
 	if mp, exists = availablePaths[mpath]; !exists {
 		if mp, exists = disabledPaths[mpath]; !exists {

@@ -275,12 +275,11 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 }
 
 func (t *targetrunner) lruEvict(fqn string) error {
-	bucket, objname, errstr := t.fqn2bckobj(fqn)
-	if errstr != "" {
-		glog.Errorln(errstr)
-		glog.Errorf("Evicting %q anyway...", fqn)
-		if err := os.Remove(fqn); err != nil {
-			return err
+	bucket, objname, err := t.fqn2bckobj(fqn)
+	if err != nil {
+		glog.Errorf("Evicting %q with error: %v", fqn, err)
+		if e := os.Remove(fqn); e != nil {
+			return fmt.Errorf("nested error: %v and %v", err, e)
 		}
 		glog.Infof("LRU: removed %q", fqn)
 		return nil

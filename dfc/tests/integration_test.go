@@ -6,6 +6,7 @@
 package dfc_test
 
 import (
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1024,6 +1025,168 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	m.wg.Add(m.num * m.numGetsEachFile)
 	doGetsInParallel(&m)
 	m.wg.Wait()
+	resultsBeforeAfter(&m, num, maxErrPct)
+}
+
+func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	const (
+		num          = 5000
+		filesize     = uint64(1024)
+		seed         = int64(111)
+		maxErrPct    = 0
+		newMountpath = "/tmp/dfc"
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targets := extractTargetsInfo(m.smap)
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}()
+
+	// Put random files
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	// Add new mountpath to target
+	err = client.AddTargetMountpath(targets[0].directURL, newMountpath)
+	checkFatal(err, t)
+
+	waitForRebalanceToComplete(t)
+
+	// Read files after rebalance
+	m.wg.Add(m.num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	// Remove new mountpath from target
+	err = client.RemoveTargetMountpath(targets[0].directURL, newMountpath)
+	checkFatal(err, t)
+
+	resultsBeforeAfter(&m, num, maxErrPct)
+}
+
+func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	const (
+		num          = 10000
+		filesize     = uint64(1024)
+		seed         = int64(111)
+		maxErrPct    = 0
+		newMountpath = "/tmp/dfc/mountpath"
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 5,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 1 {
+		t.Fatalf("Must have 1 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+	targets := extractTargetsInfo(m.smap)
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, m.bucket)
+		checkFatal(err, t)
+	}()
+
+	// Put random files
+	putRandomFiles(seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	// Add new mountpath to all targets
+	for idx, target := range targets {
+		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
+		dfc.CreateDir(mountpath)
+		err = client.AddTargetMountpath(target.directURL, mountpath)
+		checkFatal(err, t)
+	}
+
+	waitForRebalanceToComplete(t)
+
+	// Read after rebalance
+	m.wg.Add(m.num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	// Remove new mountpath from all targets
+	for idx, target := range targets {
+		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
+		os.RemoveAll(mountpath)
+		err = client.RemoveTargetMountpath(target.directURL, mountpath)
+		checkFatal(err, t)
+	}
+
 	resultsBeforeAfter(&m, num, maxErrPct)
 }
 

@@ -18,7 +18,8 @@ type ActionMsg struct {
 // ActionMsg.Action enum
 const (
 	ActShutdown    = "shutdown"
-	ActRebalance   = "rebalance"
+	ActGlobalReb   = "rebalance"      // global rebalance between targets
+	ActLocalReb    = "localrebalance" // local rebalance on single target
 	ActRechecksum  = "rechecksum"
 	ActLRU         = "lru"
 	ActSyncLB      = "synclb"
@@ -244,7 +245,7 @@ const (
 
 const (
 	// Used by various Xaction APIs
-	XactionRebalance = ActRebalance
+	XactionRebalance = ActGlobalReb
 	XactionPrefetch  = ActPrefetch
 
 	// Denote the status of an Xaction

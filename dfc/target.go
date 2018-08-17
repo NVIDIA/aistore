@@ -155,8 +155,16 @@ func (t *targetrunner) run() error {
 
 	go t.pollClusterStarted()
 
-	t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
-	t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
+	err := t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
+	if err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
+	err = t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
+	if err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
 	t.detectMpathChanges()
 
 	// cloud provider
@@ -1224,13 +1232,13 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if iswork, _ := renctx.t.isworkfile(fqn); iswork { // FIXME: work files indicate work in progress..
 		return nil
 	}
-	bucket, objname, errstr := renctx.t.fqn2bckobj(fqn)
-	if errstr == "" {
+	bucket, objname, err := renctx.t.fqn2bckobj(fqn)
+	if err == nil {
 		if bucket != renctx.bucketFrom {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
-	if errstr = renctx.t.renameobject(bucket, objname, renctx.bucketTo, objname); errstr != "" {
+	if errstr := renctx.t.renameobject(bucket, objname, renctx.bucketTo, objname); errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil
@@ -1838,9 +1846,9 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if iswork, _ := ci.t.isworkfile(fqn); iswork {
 		return nil
 	}
-	_, _, errstr := ci.t.fqn2bckobj(fqn)
-	if errstr != "" {
-		glog.Errorln(errstr)
+	_, _, err = ci.t.fqn2bckobj(fqn)
+	if err != nil {
+		glog.Error(err)
 		return nil
 	}
 
@@ -2772,7 +2780,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	)
 
 	// try to override cksum config with bucket-level config
-	if bucket, _, errs := t.fqn2bckobj(fqn); errs == "" {
+	if bucket, _, err := t.fqn2bckobj(fqn); err == nil {
 		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 			cksumcfg = &bucketProps.CksumConf
 		}
@@ -2914,34 +2922,33 @@ func (t *targetrunner) fqn(bucket, objname string, islocal bool) string {
 }
 
 // the opposite
-func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objname, errstr string) {
-	fn := func(path string) bool {
-		if strings.HasPrefix(fqn, path) {
-			rempath := fqn[len(path):]
-			items := strings.SplitN(rempath, "/", 2)
-			bucket, objname = items[0], items[1]
-			return true
-		}
-		return false
+func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error) {
+	var isLocal bool
+
+	_, bucket, objName, isLocal, err = splitFQN(fqn)
+	if err != nil {
+		return
 	}
-	ok := true
+
 	bucketmd := t.bmdowner.get()
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	for _, mpathInfo := range availablePaths {
-		if fn(makePathCloud(mpathInfo.Path) + "/") {
-			ok = len(objname) > 0 && t.fqn(bucket, objname, false) == fqn
-			break
-		}
-		if fn(makePathLocal(mpathInfo.Path) + "/") {
-			islocal := bucketmd.islocal(bucket)
-			ok = islocal && len(objname) > 0 && t.fqn(bucket, objname, true) == fqn
-			break
-		}
+	if t.fqn(bucket, objName, isLocal) != fqn || bucketmd.islocal(bucket) != isLocal {
+		err = fmt.Errorf("Cannot convert %q => %s/%s - localbuckets or device mountpaths changed?", fqn, bucket, objName)
+		return
 	}
-	if !ok {
-		errstr = fmt.Sprintf("Cannot convert %q => %s/%s - localbuckets or device mount paths changed?", fqn, bucket, objname)
-	}
+
 	return
+}
+
+// changedMountpath checks if the mountpath for provided fqn has changed. This
+// situation can happen when new mountpath is added or mountpath is moved from
+// disabled to enabled.
+func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
+	_, bucket, objName, isLocal, err := splitFQN(fqn)
+	if err != nil {
+		return false, "", err
+	}
+	newFQN := t.fqn(bucket, objName, isLocal)
+	return fqn != newFQN, newFQN, nil
 }
 
 func (t *targetrunner) fqn2workfile(fqn string) (workfqn string) {
@@ -2999,23 +3006,21 @@ func (t *targetrunner) testCachepathMounts() {
 	}
 }
 
-func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath string) string) {
+func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath string) string) error {
 	if basename == "" {
-		glog.Errorf("FATAL: empty basename for the %s buckets directory", s)
-		os.Exit(1)
+		return fmt.Errorf("empty basename for the %s buckets directory - update your config", s)
 	}
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	for _, mpathInfo := range availablePaths {
 		dir := f(mpathInfo.Path)
 		if _, exists := availablePaths[dir]; exists {
-			glog.Errorf("FATAL: local namespace partitioning conflict: %s vs %s", mpathInfo.Path, dir)
-			os.Exit(1)
+			return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo.Path, dir)
 		}
 		if err := CreateDir(dir); err != nil {
-			glog.Errorf("FATAL: cannot create %s buckets dir %q, err: %v", s, dir, err)
-			os.Exit(1)
+			return fmt.Errorf("cannot create %s buckets dir %q, err: %v", s, dir, err)
 		}
 	}
+	return nil
 }
 
 func (t *targetrunner) detectMpathChanges() {
@@ -3364,7 +3369,7 @@ func (t *targetrunner) receiveSmap(newsmap *Smap, msg *api.ActionMsg) (errstr st
 	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 		return
 	}
-	if msg.Action == api.ActRebalance {
+	if msg.Action == api.ActGlobalReb {
 		go t.runRebalance(newsmap, newtargetid)
 		return
 	}

@@ -34,6 +34,171 @@ type xrebpathrunner struct {
 	aborted   bool
 }
 
+type localRebPathRunner struct {
+	t       *targetrunner
+	mpath   string
+	xreb    *xactLocalRebalance
+	aborted bool
+}
+
+func (rcl *xrebpathrunner) oneRebalance() {
+	if err := filepath.Walk(rcl.mpathplus, rcl.rebwalkf); err != nil {
+		s := err.Error()
+		if strings.Contains(s, "xaction") {
+			glog.Infof("Stopping %s traversal due to: %s", rcl.mpathplus, s)
+		} else {
+			glog.Errorf("Failed to traverse %s, err: %v", rcl.mpathplus, err)
+		}
+	}
+	rcl.xreb.confirmCh <- struct{}{}
+	rcl.wg.Done()
+}
+
+// the walking callback is execited by the LRU xaction
+// (notice the receiver)
+func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) error {
+	// Check if we should abort
+	select {
+	case <-rcl.xreb.abrt:
+		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rcl.xreb.tostring(), rcl.mpathplus)
+		glog.Infoln(err)
+		glog.Flush()
+		rcl.aborted = true
+		return err
+	default:
+		break
+	}
+
+	// Skip working files
+	if iswork, _ := rcl.t.isworkfile(fqn); iswork {
+		return nil
+	}
+	if err != nil {
+		// If we are traversing non-existing file we should not care
+		if os.IsNotExist(err) {
+			glog.Errorf("rebwalkf attempted to read a file that was deleted, file: %s", fqn)
+			return nil
+		}
+		// Otherwise we care
+		glog.Errorf("rebwalkf invoked with err: %v", err)
+		return err
+	}
+	// Skip dirs
+	if osfi.Mode().IsDir() {
+		return nil
+	}
+	// rebalance maybe
+	bucket, objname, err := rcl.t.fqn2bckobj(fqn)
+	if err != nil {
+		// It may happen that local rebalance have not yet moved this particular
+		// file and we got and error in fqn2bckobj. Since we might need still
+		// move the file to another target we need to check if mountpath has
+		// changed and prevent from the skipping it.
+		if changed, _, e := rcl.t.changedMountpath(fqn); e != nil || !changed {
+			glog.Warningf("%v - skipping...", err)
+			return nil
+		}
+	}
+	si, errstr := HrwTarget(bucket, objname, rcl.newsmap)
+	if errstr != "" {
+		return fmt.Errorf(errstr)
+	}
+	if si.DaemonID == rcl.t.si.DaemonID {
+		return nil
+	}
+
+	// do rebalance
+	if glog.V(4) {
+		glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si.DaemonID, si.DaemonID)
+	}
+	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", ""); errstr != "" {
+		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
+	} else {
+		// FIXME: TODO: delay the removal or (even) rely on the LRU
+		if err := os.Remove(fqn); err != nil {
+			glog.Errorf("Failed to delete %s after it has been moved, err: %v", fqn, err)
+		}
+	}
+	return nil
+}
+
+// LOCAL REBALANCE
+
+func (rb *localRebPathRunner) run() {
+	if err := filepath.Walk(rb.mpath, rb.walk); err != nil {
+		s := err.Error()
+		if strings.Contains(s, "xaction") {
+			glog.Infof("Stopping %s traversal due to: %s", rb.mpath, s)
+		} else {
+			glog.Errorf("Failed to traverse %s, err: %v", rb.mpath, err)
+		}
+	}
+
+	rb.xreb.confirmCh <- struct{}{}
+}
+
+func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) error {
+	// Check if we should abort
+	select {
+	case <-rb.xreb.abrt:
+		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rb.xreb.tostring(), rb.mpath)
+		glog.Infoln(err)
+		glog.Flush()
+		rb.aborted = true
+		return err
+	default:
+		break
+	}
+
+	// Skip working files
+	if iswork, _ := rb.t.isworkfile(fqn); iswork {
+		return nil
+	}
+	if err != nil {
+		// If we are traversing non-existing file we should not care
+		if os.IsNotExist(err) {
+			glog.Errorf("rebwalkf attempted to read a file that was deleted, file: %s", fqn)
+			return nil
+		}
+		// Otherwise we care
+		glog.Errorf("rebwalkf invoked with err: %v", err)
+		return err
+	}
+	// Skip dirs
+	if fileInfo.IsDir() {
+		return nil
+	}
+
+	// Check if we need to move files around
+	changed, newFQN, err := rb.t.changedMountpath(fqn)
+	if err != nil {
+		glog.Warningf("%v - skipping...", err)
+		return nil
+	}
+	if !changed {
+		return nil
+	}
+
+	// Do local rebalance
+	// FIXME: When there is GET already on this file, we will still try to move it.
+	// The fix would be creating a copy and ensuring that the old will be cleaned
+	// by LRU.
+	if glog.V(4) {
+		glog.Infof("%s => %s", fqn, newFQN)
+	}
+	dir := filepath.Dir(newFQN)
+	if err := CreateDir(dir); err != nil {
+		glog.Errorf("Failed to create dir: %s", dir)
+		return nil
+	}
+	if err := os.Rename(fqn, newFQN); err != nil {
+		glog.Errorf("Failed to rename %s to %s, err %v", fqn, newFQN, err)
+		return nil
+	}
+
+	return nil
+}
+
 // pingTarget pings target to check if it is running. After DestRetryTime it
 // assumes that target is dead. Returns true if target is healthy and running,
 // false otherwise.
@@ -199,9 +364,9 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	// find and abort in-progress x-action if exists and if its smap version is lower
 	// start new x-action unless the one for the current version is already in progress
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	runnersCnt := len(availablePaths) * 2
+	runnerCnt := len(availablePaths) * 2
 
-	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnersCnt)
+	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnerCnt)
 	if xreb == nil {
 		return
 	}
@@ -217,7 +382,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	glog.Infoln(xreb.tostring())
 	wg = &sync.WaitGroup{}
 
-	allr := make([]*xrebpathrunner, 0, runnersCnt)
+	allr := make([]*xrebpathrunner, 0, runnerCnt)
 	for _, mpathInfo := range availablePaths {
 		rc := &xrebpathrunner{t: t, mpathplus: makePathCloud(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
@@ -271,83 +436,31 @@ func (t *targetrunner) pollRebalancingDone(newSmap *Smap) {
 	wg.Wait()
 }
 
-//=========================
-//
-// rebalance-runner methods
-//
-//=========================
+func (t *targetrunner) runLocalRebalance() {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	runnerCnt := len(availablePaths) * 2
+	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 
-func (rcl *xrebpathrunner) oneRebalance() {
-	if err := filepath.Walk(rcl.mpathplus, rcl.rebwalkf); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping %s traversal due to: %s", rcl.mpathplus, s)
-		} else {
-			glog.Errorf("Failed to traverse %s, err: %v", rcl.mpathplus, err)
-		}
-	}
-	rcl.xreb.confirmCh <- struct{}{}
-	rcl.wg.Done()
-}
+	wg := &sync.WaitGroup{}
+	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
+	for _, mpathInfo := range availablePaths {
+		runner := &localRebPathRunner{t: t, mpath: makePathCloud(mpathInfo.Path), xreb: xreb}
+		wg.Add(1)
+		go func(runner *localRebPathRunner) {
+			runner.run()
+			wg.Done()
+		}(runner)
 
-// the walking callback is execited by the LRU xaction
-// (notice the receiver)
-func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) error {
-	// Check if we should abort
-	select {
-	case <-rcl.xreb.abrt:
-		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rcl.xreb.tostring(), rcl.mpathplus)
-		glog.Infoln(err)
-		glog.Flush()
-		rcl.aborted = true
-		return err
-	default:
-		break
+		runner = &localRebPathRunner{t: t, mpath: makePathLocal(mpathInfo.Path), xreb: xreb}
+		wg.Add(1)
+		go func(runner *localRebPathRunner) {
+			runner.run()
+			wg.Done()
+		}(runner)
 	}
+	wg.Wait()
 
-	// Skip working files
-	if iswork, _ := rcl.t.isworkfile(fqn); iswork {
-		return nil
-	}
-	if err != nil {
-		// If we are traversing non-existing file we should not care
-		if os.IsNotExist(err) {
-			glog.Errorf("rebwalkf attempted to read a file that was deleted, file: %s", fqn)
-			return nil
-		}
-		// Otherwise we care
-		glog.Errorf("rebwalkf invoked with err: %v", err)
-		return err
-	}
-	// Skip dirs
-	if osfi.Mode().IsDir() {
-		return nil
-	}
-	// rebalance maybe
-	bucket, objname, errstr := rcl.t.fqn2bckobj(fqn)
-	if errstr != "" {
-		glog.Warningf("%s - skipping...", errstr)
-		return nil
-	}
-	si, errstr := HrwTarget(bucket, objname, rcl.newsmap)
-	if errstr != "" {
-		return fmt.Errorf(errstr)
-	}
-	if si.DaemonID == rcl.t.si.DaemonID {
-		return nil
-	}
-
-	// do rebalance
-	if glog.V(4) {
-		glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si.DaemonID, si.DaemonID)
-	}
-	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", ""); errstr != "" {
-		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
-	} else {
-		// FIXME: TODO: delay the removal or (even) rely on the LRU
-		if err := os.Remove(fqn); err != nil {
-			glog.Errorf("Failed to delete %s after it has been moved, err: %v", fqn, err)
-		}
-	}
-	return nil
+	xreb.etime = time.Now()
+	glog.Infoln(xreb.tostring())
+	t.xactinp.del(xreb.id)
 }

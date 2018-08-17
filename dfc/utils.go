@@ -462,6 +462,49 @@ func fqn2mountPath(fqn string) (mpath string) {
 	return
 }
 
+func splitFQN(fqn string) (mpath, bucket, objName string, isLocal bool, err error) {
+	var bucketType string
+	path := fqn
+
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	found := false
+OUTER:
+	for mpath = range availablePaths {
+		for _, bucketType = range []string{"local", "cloud"} {
+			prefix := filepath.Join(mpath, bucketType) + string(filepath.Separator)
+			if strings.HasPrefix(path, prefix) {
+				path = strings.TrimPrefix(path, prefix)
+				found = true
+				break OUTER
+			}
+		}
+	}
+
+	if !found {
+		err = fmt.Errorf("fqn: %s does not belong to any mountpath", fqn)
+		return
+	}
+
+	items := strings.SplitN(path, "/", 2)
+	// It must contain at least: bucket/objName
+	if len(items) < 2 {
+		err = fmt.Errorf("fqn: %s is not valid", fqn)
+		return
+	}
+	bucket, objName = items[0], items[1]
+	if len(objName) == 0 {
+		err = fmt.Errorf("fqn: %s has empty object name", fqn)
+		return
+	}
+	if len(bucket) == 0 {
+		err = fmt.Errorf("fqn: %s has empty bucket name", fqn)
+		return
+	}
+
+	isLocal = bucketType == "local"
+	return
+}
+
 func maxUtilDisks(disksMetricsMap map[string]simplekvs, disks StringSet) (maxutil float64) {
 	maxutil = -1
 	util := func(disk string) (u float64) {
