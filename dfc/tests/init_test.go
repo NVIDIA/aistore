@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
@@ -102,6 +103,10 @@ func init() {
 	usingSG = readerType == readers.ReaderTypeSG
 	usingFile = readerType == readers.ReaderTypeFile
 	checkMemory()
+
+	if util.DockerRunning() && proxyurl == ProxyURL {
+		proxyurl = "http://172.50.0.2:8080"
+	}
 }
 
 func checkMemory() {

@@ -24,7 +24,7 @@ Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in in
 
 Be sure that the credentials file is located outside of the script directory. The script copies credentials from provided location to its working directory.
 
-Passing `-a` enables AWS instead GCP even if AWS crededentials file is invalid or empty.
+Passing `-a` enables AWS instead GCP even if AWS credentials file is invalid or empty.
 
 To deploy a cluster in 'silent' mode use the following options (if any of them is not set, then the script switches to interactive mode and asks for details):
 
@@ -42,9 +42,20 @@ Example:
 ```
 The command deploys a cluster with 3 proxies, 3 targets and 2 local directories in testing mode.
 
+### Stop and restart a cluster
+
+Running the same command that you used to deploy a cluster stops the running cluster and deploy a new one from scratch. It results in a fresh cluster with all containers and networks rebuilt.
+
+To stop the cluster, run the same script with only one argument **stop**:
+```
+./deploy_docker.sh stop
+```
+
+This command stops all running containers, removes stopped and dead ones, and removes docker networks used by a cluster.
+
 ## Extra configuration
 
-It is possible that default settings do not work in specific cases, e.g, you want to deploy more than 9 proxies and targets in total, or default networks cannot be used by DFC container. To fix this you can tune up variables in [deployment script](docker/tests/deploy_docker.sh).
+It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by DFC container. To fix this you can tune up variables in [deployment script](docker/tests/deploy_docker.sh).
 
 Useful script variables:
 
@@ -55,6 +66,20 @@ Useful script variables:
 | PORT | 8080 | HTTP port for public API |
 | PORT_INTRA | 9080 | HTTP port for internal API (for multiple networks case) |
 | TESTFSPATHROOT | /tmp/dfc/ | the base directory for directories used in testing mode(option `-l` is set). All testing directories are located inside TESTFSPATHROOT and have short names 0, 1, 2 etc. |
+
+## Running tests in docker environment
+
+Tests are started in the same way as it is done for regular cluster:
+
+```
+BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h
+```
+
+Tests detect docker cluster and use primary URL "http://172.50.0.2:8080" (see PUB_NET variable). If PUB_NET or PORT variable is changed or original primary is stopped or deleted then tests require extra argument that points to an existing proxy, preferably the current primary one:
+
+```
+BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h --args -url=http://172.51.0.7:8080
+```
 
 ## Limitations
 

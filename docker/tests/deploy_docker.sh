@@ -97,6 +97,8 @@ PROXYURL="http://${PUB_NET}.2:${PORT}"
 echo "Public network: ${PUB_SUBNET}"
 echo "Internal network: ${INT_SUBNET}"
 echo "Network type: ${network}"
+export PUB_SUBNET=$PUB_SUBNET
+export INT_SUBNET=$INT_SUBNET
 
 SERVICENAME="dfc"
 LOGDIR="/tmp/dfc/log"
@@ -114,6 +116,16 @@ CONFFILE_COLLECTD="collectd.conf"
 ###################################
 TESTFSPATHROOT="/tmp/dfc/"
 
+comp_base="docker-compose"
+composer_file="${comp_base}.singlenet.yml"
+if [ "$network" = "multi" ]; then
+    composer_file="${composer_file} -f ${comp_base}.multinet.yml"
+fi
+if [ "$1" = "stop" ]; then
+	echo Stoping running  cluster..
+	docker-compose -f ${composer_file} down
+	exit 0;
+fi
 
 if [ "$TARGET_CNT" -eq 0 ]; then
     echo Enter number of cache servers:
@@ -201,15 +213,7 @@ CONFFILE="dfc.json"
 c=0
 source $DIR/../../dfc/setup/config.sh
 
-comp_base="docker-compose"
-composer_file="${comp_base}.singlenet.yml"
-if [ "$network" = "multi" ]; then
-    composer_file="${composer_file} -f ${comp_base}.multinet.yml"
-fi
-
 export TARGET_CNT=$TARGET_CNT
-export PUB_SUBNET=$PUB_SUBNET
-export INT_SUBNET=$INT_SUBNET
 
 echo Stoping running  cluster..
 docker-compose -f ${composer_file} down
@@ -221,7 +225,7 @@ echo Starting cluster ..
 docker-compose -f ${composer_file} up -d --scale dfctarget=$TARGET_CNT --scale dfcproxy=$PROXY_CNT --no-recreate
 sleep 3
 
-rm CONFFILE CONFFILE_STATSD CONFFILE_COLLECTD
+rm $CONFFILE $CONFFILE_STATSD $CONFFILE_COLLECTD
 docker ps
 
 echo done

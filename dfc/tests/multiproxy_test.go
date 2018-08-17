@@ -22,6 +22,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
@@ -112,6 +113,17 @@ func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 		}
 	}
 
+	if util.DockerRunning() {
+		pCnt, tCnt := util.NumberOfRunningContainers()
+		if pCnt != len(smapAfter.Pmap) {
+			t.Fatalf("Some proxy conatiners crashed: expected %d, found %d containers", len(smapAfter.Pmap), pCnt)
+		}
+		if tCnt != len(smapAfter.Tmap) {
+			t.Fatalf("Some target conatiners crashed: expected %d, found %d containers", len(smapAfter.Tmap), tCnt)
+		}
+		return
+	}
+
 	// no proxy/target died (or not restored)
 	for _, b := range smapBefore.Tmap {
 		_, err := getPID(b.PublicNet.DaemonPort)
@@ -139,7 +151,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	oldPrimaryID := smap.ProxySI.DaemonID
 	tlogf("New primary: %s --> %s\nKilling primary: %s --> %s\n",
 		newPrimaryID, newPrimaryURL, oldPrimaryURL, smap.ProxySI.PublicNet.DaemonPort)
-	cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	// cmd and args are the original command line of how the proxy is started
 	// example: cmd = /Users/lid/go/bin/dfc, args = -config=/Users/lid/.dfc/dfc0.json -role=proxy -ntargets=3
 	checkFatal(err, t)
@@ -173,13 +185,17 @@ func primaryCrashElectRestart(t *testing.T) {
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
 // line proxy becomes the new primary, restore the target and proxy, restore original primary.
 func primaryAndTargetCrash(t *testing.T) {
+	if util.DockerRunning() {
+		t.Skip("Skipped because setting new primary URL in command line for docker is not supported")
+	}
+
 	smap := getClusterMap(t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	checkFatal(err, t)
 
 	oldPrimaryURL := smap.ProxySI.PublicNet.DirectURL
 	tlogf("Killing proxy %s - %s\n", oldPrimaryURL, smap.ProxySI.DaemonID)
-	cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
 	// Select a random target
@@ -199,7 +215,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	}
 
 	tlogf("Killing target: %s - %s\n", targetURL, targetID)
-	tcmd, targs, err := kill(targetPort)
+	tcmd, targs, err := kill(targetID, targetPort)
 	checkFatal(err, t)
 
 	proxyurl = newPrimaryURL
@@ -216,7 +232,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	checkFatal(err, t)
 
-	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount, origTargetCount)
 	checkFatal(err, t)
 }
 
@@ -246,7 +262,7 @@ func proxyCrash(t *testing.T) {
 	}
 
 	tlogf("Killing non-primary proxy: %s - %s\n", secondURL, secondID)
-	secondCmd, secondArgs, err := kill(secondPort)
+	secondCmd, secondArgs, err := kill(secondID, secondPort)
 	checkFatal(err, t)
 
 	smap, err = waitForPrimaryProxy("to propagate new Smap", smap.Version, testing.Verbose(), origProxyCount-1)
@@ -272,7 +288,7 @@ func primaryAndProxyCrash(t *testing.T) {
 
 	oldPrimaryURL, oldPrimaryID := smap.ProxySI.PublicNet.DirectURL, smap.ProxySI.DaemonID
 	tlogf("Killing primary proxy: %s - %s\n", oldPrimaryURL, oldPrimaryID)
-	cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
 	var (
@@ -296,7 +312,7 @@ func primaryAndProxyCrash(t *testing.T) {
 	}
 
 	tlogf("Killing non-primary proxy: %s - %s\n", secondURL, secondID)
-	secondCmd, secondArgs, err := kill(secondPort)
+	secondCmd, secondArgs, err := kill(secondID, secondPort)
 	checkFatal(err, t)
 
 	proxyurl = newPrimaryURL
@@ -341,7 +357,7 @@ func targetRejoin(t *testing.T) {
 		break
 	}
 
-	cmd, args, err := kill(port)
+	cmd, args, err := kill(id, port)
 	smap, err = waitForPrimaryProxy("to synchronize on 'target crashed'", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 
@@ -367,7 +383,7 @@ func crashAndFastRestore(t *testing.T) {
 	id := smap.ProxySI.DaemonID
 	tlogf("The current primary %s, Smap version %d\n", id, smap.Version)
 
-	cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
 	// quick crash and recover
@@ -389,6 +405,10 @@ func crashAndFastRestore(t *testing.T) {
 }
 
 func joinWhileVoteInProgress(t *testing.T) {
+	if util.DockerRunning() {
+		t.Skip("Skipping because mocking is not supported for docker cluster")
+	}
+
 	smap := getClusterMap(t)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	oldTargetCnt := len(smap.Tmap)
@@ -408,7 +428,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	checkFatal(err, t)
 
 	oldPrimaryID := smap.ProxySI.DaemonID
-	cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
 	proxyurl = newPrimaryURL
@@ -510,7 +530,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 	nextProxyID, nextProxyURL, err := chooseNextProxy(&smap)
 	checkFatal(err, t)
 
-	cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
 	proxyurl = nextProxyURL
@@ -693,7 +713,7 @@ loop:
 		_, nextProxyURL, err := chooseNextProxy(&smap)
 		checkFatal(err, t)
 
-		cmd, args, err := kill(smap.ProxySI.PublicNet.DaemonPort)
+		cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 		checkFatal(err, t)
 
 		// let the workers go to the dying primary for a little while longer to generate errored requests
@@ -820,7 +840,13 @@ func chooseNextProxy(smap *dfc.Smap) (proxyid, proxyurl string, err error) {
 	return pi.DaemonID, pi.PublicNet.DirectURL, nil
 }
 
-func kill(port string) (string, []string, error) {
+func kill(daemonID, port string) (string, []string, error) {
+	if util.DockerRunning() {
+		tlogf("Stopping container %s\n", daemonID)
+		err := util.StopContainer(daemonID)
+		return daemonID, nil, err
+	}
+
 	pid, cmd, args, errpid := getProcess(port)
 	if errpid != nil {
 		return "", nil, errpid
@@ -859,6 +885,10 @@ func kill(port string) (string, []string, error) {
 }
 
 func restore(cmd string, args []string, asPrimary bool, tag string) error {
+	if util.DockerRunning() {
+		tlogf("Restarting %s container %s\n", tag, cmd)
+		return util.RestartContainer(cmd)
+	}
 	tlogf("Restoring %s: %s %+v\n", tag, cmd, args)
 
 	ncmd := exec.Command(cmd, args...)
