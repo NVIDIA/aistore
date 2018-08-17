@@ -12,40 +12,69 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
+// ================================ Summary ===============================================
+//
+// The atime (access time) module implements an atimerunner - a long running task with the
+// purpose of updating object (file) access times.
+//
+// The atimerunner API exposed to the rest of the code includes the following operations:
+//   * run   - to initiate the work of the receiving atimerunner
+//   * stop  - to stop the receiving atimerunner
+//   * touch - to request an access time update for a given file
+//   * atime - to request the most recent access time of a given file
+//
+// All other operations are private to the atimerunner and used only internally!
+//
+// atimerunner will accumulate object access times in its access time map (in memory) and
+// periodically flush the data to the disk. Access times get flushed to the disk when the
+// number of stored access times has reached a certain flush threshold and when:
+//   * disk utilization is low, or
+//   * access time map is filled over a certain point (watermark)
+// This way, the atimerunner will impact the datapath as little as possible.
+// As such, atimerunner can be thought of as an extension of the LRU, or any alternative
+// caching mechanism that can be implemented in the future.
+//
+// The reason behind the existence of this module is the 'noatime' mounting option;
+// if a file system has been mounted with this option, reading accesses to the
+// file system will no longer result in an update to the atime information associated
+// with the file, which eliminates the need to make writes to the file system for files
+// that are simply being read, resulting in noticeable performance improvements.
+// Inside DFC cluster, this option is always set, so DFC implements its own access time
+// updating.
+//
+// Requests for object access times are read from a filename channel and corresponding
+// responses will be written to an accessTimeResponse (see definition below) channel.
+//
+// ================================ Summary ===============================================
+
 const (
 	chfqnSize                = 1024
-	atimeCacheFlushThreshold = 4 * 1024 // number of items before which we do not preform any flushing
+	atimeCacheFlushThreshold = 4 * 1024
 	atimeSyncTime            = time.Minute * 3
 	atimeLWM                 = 60
 	atimeHWM                 = 80
 )
+
+// atimemap maps filesystems to file-atime key-value pairs.
+type atimemap struct {
+	fsToFilesMap map[string]map[string]time.Time
+}
+
+type atimerunner struct {
+	namedrunner
+	chfqn       chan string             // FIXME: consider { fqn, xxhash }
+	chstop      chan struct{}           // Control channel for stopping
+	atimemap    *atimemap               // Access time map
+	chGetAtime  chan string             // Requests for file access times
+	chSendAtime chan accessTimeResponse // Returned file access times
+}
 
 type accessTimeResponse struct {
 	accessTime time.Time
 	ok         bool
 }
 
-type atimemap struct {
-	fsToFilesMap map[string]map[string]time.Time
-}
-
-// atimerunner's responsibilities include updating object/file access
-// times and making sure that those background updates are not impacting
-// datapath (or rather, impacting the datapath as little as possible).
-// As such, atimerunner can be thought of as an extension of the LRU (lru.go)
-// or any alternative caching mechanisms that can be added in the future.
-// Access times get flushed when the system idle - otherwise, they get
-// accumulated up to a certain point (aka watermark) and get synced to disk
-// anyway.
-type atimerunner struct {
-	namedrunner
-	chfqn       chan string // FIXME: consider { fqn, xxhash }
-	chstop      chan struct{}
-	atimemap    *atimemap
-	chGetAtime  chan string             // Process request to get atime of an fqn
-	chSendAtime chan accessTimeResponse // Return access time of an fqn
-}
-
+// run initiates the work of the receiving atimerunner
 func (r *atimerunner) run() error {
 	glog.Infof("Starting %s", r.name)
 	ticker := time.NewTicker(atimeSyncTime)
@@ -70,6 +99,7 @@ loop:
 	return nil
 }
 
+// stop aborts the receiving atimerunner
 func (r *atimerunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 	var v struct{}
@@ -77,21 +107,21 @@ func (r *atimerunner) stop(err error) {
 	close(r.chstop)
 }
 
-// touch sends update request of access time for fqn to atimerunner.
+// touch requests an access time update for a given file
 func (r *atimerunner) touch(fqn string) {
 	if ctx.config.LRU.LRUEnabled {
 		r.chfqn <- fqn
 	}
 }
 
+// atime requests the most recent access time of a given file
 func (r *atimerunner) atime(fqn string) {
 	r.chGetAtime <- fqn
 }
 
-// getNumberItemsToFlush estimates the number of timestamps that must
-// be flushed from the atime map - by taking into account the max
-// utilitization of the corresponding local filesystem
-// (or, more exactly, the corresponding local filesystem's disks)
+// getNumberItemsToFlush estimates the number of timestamps that must be flushed
+// the atime map, by taking into account the max utilitization of the corresponding
+// local filesystem (or, more exactly, the corresponding local filesystem's disks).
 func (r *atimerunner) getNumberItemsToFlush(fileSystem string) (n int) {
 	if !ctx.config.LRU.LRUEnabled {
 		return
