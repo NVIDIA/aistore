@@ -683,16 +683,16 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketmd := p.bmdowner.get()
-	isLocal := bucketmd.islocal(bucket)
+	p.bmdowner.Lock()
+	clone := p.bmdowner.get().clone()
+	isLocal := clone.islocal(bucket)
 
 	if err := validateBucketProps(props, isLocal); err != nil {
+		p.bmdowner.Unlock()
 		p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	p.bmdowner.Lock()
-	clone := bucketmd.clone()
 	exists, oldProps := clone.get(bucket, isLocal)
 	if !exists {
 		assert(!isLocal)
