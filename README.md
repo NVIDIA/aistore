@@ -24,6 +24,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
   * [Disabling extended attributes](#disabling-extended-attributes)
   * [Enabling HTTPS](#enabling-https)
   * [Filesystem Health Checker](#filesystem-health-checker)
+- [Performance tuning](#performance-tuning)
 - [REST Operations](#rest-operations)
 - [List Bucket](#list-bucket)
 - [Cache Rebalancing](#cache-rebalancing)
@@ -214,6 +215,41 @@ When enabled, FSHC gets notified on every I/O error upon which it performs exten
 
 Please see [FSHC readme](./fshc.md) for further details.
 
+
+## Performance tuning
+
+DFC utilizes local filesystems, which means that under pressure a DFC target will have a significant number of open files. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
+
+```
+root             hard    nofile          10240
+ubuntu           hard    nofile          1048576
+ubuntu           soft    nofile          1048576
+```
+
+Generally, configuring a DFC cluster to perform under load is a vast topic that would be outside the scope of this README. The usual checklist includes (but is not limited to):
+
+1. Setting MTU = 9000 (aka Jumbo frames)
+
+2. Following instruction guidelines for the Linux distribution that you deploy, e.g.:
+    - [Ubuntu Performance Tuning](https://wiki.mikejung.biz/Ubuntu_Performance_Tuning)
+    - [Red Hat Enterprise Linux 7 Performance Tuning](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf)
+
+3. Tuning TCP stack - in part, increasing the TCP send and receive buffer sizes:
+
+```shell
+$ sysctl -a | grep -i wmem
+$ sysctl -a | grep -i ipv4
+```
+
+And more.
+
+Virtualization overhead may require a separate investigation. It is strongly recommended that a (virtualized) DFC storage node (whether it's a gateway or a target) would have a direct and non-shared access to the (CPU, disk, memory and network) resources of its bare-metal host. Ensure that DFC VMs do not get swapped out when idle.
+
+DFC storage node, in particular, needs to have a physical resource in its entirety: RAM, CPU, network and storage. The underlying hypervisor must "resort" to the remaining minimum that is absolutely required.
+
+And, of course, make sure to use PCI passthrough for all local hard drives given to DFC.
+
+Finally, to ease troubleshooting, consider the usual and familiar load generators such as `fio` and `iperf`, and observability tools: `iostat`, `mpstat`, `sar`, `top`, and more. For instance, `fio` and `iperf` may appear to be almost indispensable in terms of validating and then tuning performances of local storages and clustered networks, respectively. Goes without saying that it does make sense to do this type of basic checking-and-validating prior to running DFC under stressful workloads.
 
 ## REST Operations
 
