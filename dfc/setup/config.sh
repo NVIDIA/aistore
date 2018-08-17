@@ -1,4 +1,4 @@
-	cat > $CONFFILE <<EOL
+cat > $CONFFILE <<EOL
 {
 	"confdir":                	"$CONFDIR",
 	"cloudprovider":		"${CLDPROVIDER}",
@@ -104,15 +104,14 @@
 }
 EOL
 
-	cat > $CONFFILE_STATSD <<EOL
+cat > $CONFFILE_STATSD <<EOL
 {
-	graphitePort: 2003,
-	graphiteHost: "${GRAPHITE_SERVER}",
-	port: 8125
+	graphitePort: ${GRAPHITE_PORT},
+	graphiteHost: "${GRAPHITE_SERVER}"
 }
 EOL
 
-	cat > $CONFFILE_COLLECTD <<EOL
+cat > $CONFFILE_COLLECTD <<EOL
 LoadPlugin df
 LoadPlugin cpu
 LoadPlugin disk
@@ -123,35 +122,35 @@ LoadPlugin processes
 LoadPlugin write_graphite
 
 <Plugin syslog>
-        LogLevel info
+	LogLevel info
 </Plugin>
 
 <Plugin df>
-        FSType rootfs
-        FSType sysfs
-        FSType proc
-        FSType devtmpfs
-        FSType devpts
-        FSType tmpfs
-        FSType fusectl
-        FSType cgroup
-        IgnoreSelected true
-        ValuesPercentage True
+	FSType rootfs
+	FSType sysfs
+	FSType proc
+	FSType devtmpfs
+	FSType devpts
+	FSType tmpfs
+	FSType fusectl
+	FSType cgroup
+	IgnoreSelected true
+	ValuesPercentage True
 </Plugin>
 
 <Plugin write_graphite>
-        <Node "graphiting">
+	<Node "graphiting">
 		Host "${GRAPHITE_SERVER}"
-                Port "2003"
-                Protocol "tcp"
-                LogSendErrors true
-                StoreRates true
-                AlwaysAppendDS false
-                EscapeCharacter "_"
-        </Node>
+		Port "${GRAPHITE_PORT}"
+		Protocol "tcp"
+		LogSendErrors true
+		StoreRates true
+		AlwaysAppendDS false
+		EscapeCharacter "_"
+	</Node>
 </Plugin>
 
 <Include "/etc/collectd/collectd.conf.d">
-        Filter "*.conf"
+	Filter "*.conf"
 </Include>
 EOL

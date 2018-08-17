@@ -1,11 +1,13 @@
 #!/bin/bash
 
+GRAPHITE_PORT=2003
 GRAPHITE_SERVER="52.41.234.112"
 usage() {
     echo "Usage: $0 [-e dev|prod|k8s] -a <aws.env> [-s]"
     echo "   -a : aws.env - AWS credentials"
     echo "   -e : dev|prod - deployment environment (default is dev[elopment])"
     echo "   -g : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
+    echo "   -p : port of graphite server (default is $GRAPHITE_PORT)"
     echo "   -s : scale the targets: add new targets to an already running cluster, or stop a given number of already running"
     echo
     exit 1;
@@ -13,7 +15,7 @@ usage() {
 environment="dev";
 aws_env="";
 os="ubuntu"
-while getopts "e:a:o:s:" OPTION
+while getopts "a:e:g:p:s:" OPTION
 do
     case $OPTION in
     a)
@@ -26,6 +28,10 @@ do
 
     g)
         GRAPHITE_SERVER=${OPTARG}
+        ;;
+
+    p)
+        GRAPHITE_PORT=${OPTARG}
         ;;
 
     s)

@@ -129,6 +129,7 @@ fi
 mkdir -p $CONFDIR
 
 # Not really used for local testing but to keep config.sh quiet
+GRAPHITE_PORT=2003
 GRAPHITE_SERVER="127.0.0.1"
 CONFFILE_COLLECTD=$CONFDIR/collectd.conf
 CONFFILE_STATSD=$CONFDIR/statsd.conf
