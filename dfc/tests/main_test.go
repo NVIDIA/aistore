@@ -94,7 +94,7 @@ func Test_download(t *testing.T) {
 
 	num := getMatchingKeys(match, clibucket, keynameChans, filesCreated, t)
 
-	t.Logf("Expecting to get %d keys\n", num)
+	t.Logf("Expecting to get %d objects\n", num)
 
 	// Close the channels after the reading is done
 	for i := 0; i < numworkers; i++ {
@@ -114,10 +114,10 @@ func Test_download(t *testing.T) {
 		sumtotbytes += res.totbytes
 		sumtotfiles += res.totfiles
 		t.Logf("Worker #%d: %d files, size %.2f MB (%d B)",
-			i, res.totfiles, float64(res.totbytes/1000/1000), res.totbytes)
+			i, res.totfiles, float64(res.totbytes)/1000/1000, res.totbytes)
 	}
-	t.Logf("\nSummary: %d workers, %d files, total size %.2f MB (%d B)",
-		numworkers, sumtotfiles, float64(sumtotbytes/1000/1000), sumtotbytes)
+	t.Logf("\nSummary: %d workers, %d objects, total size %.2f MB (%d B)",
+		numworkers, sumtotfiles, float64(sumtotbytes)/1000/1000, sumtotbytes)
 
 	if sumtotfiles != num {
 		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", num, sumtotfiles)
@@ -963,7 +963,7 @@ func getMatchingKeys(regexmatch, bucket string, keynameChans []chan string, outp
 
 func testListBucket(t *testing.T, bucket string, msg *dfc.GetMsg, limit int) *dfc.BucketList {
 	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/" + bucket
-	tlogf("LIST %q (Number of objects: %d)\n", url, limit)
+	tlogf("LIST bucket %s (%s)\n", bucket, url)
 	reslist, err := client.ListBucket(proxyurl, bucket, msg, limit)
 	if err != nil {
 		t.Errorf("List bucket %s failed, err = %v", bucket, err)
