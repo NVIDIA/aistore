@@ -66,7 +66,6 @@ func wrapHandler(h http.HandlerFunc, wraps ...func(http.HandlerFunc) http.Handle
 type proxyrunner struct {
 	httprunner
 	starttime  time.Time
-	xactinp    *xactInProgress
 	authn      *authManager
 	startedUp  int64
 	metasyncer *metasyncer
@@ -83,8 +82,6 @@ type proxyrunner struct {
 func (p *proxyrunner) run() error {
 	p.httprunner.init(getproxystatsrunner(), true)
 	p.httprunner.keepalive = getproxykeepalive()
-
-	p.xactinp = newxactinp()
 
 	bucketmdfull := filepath.Join(ctx.config.Confdir, bucketmdbase)
 	bucketmd := newBucketMD()
@@ -324,6 +321,17 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
+	var (
+		redirecturl string
+		mdinfo      MetadataVersionInfo
+		mdinfobytes []byte
+		bucketmd    = p.bmdowner.get()
+		islocal     = bucketmd.islocal(bucket)
+	)
+	mdinfo.SmapVersion = p.smapowner.get().version()
+	mdinfo.BucketMDVersion = bucketmd.version()
+	mdinfobytes, err := json.Marshal(mdinfo)
+	assert(err == nil, err)
 
 	if ctx.config.Net.HTTP.RevProxy == RevProxyTarget {
 		if glog.V(4) {
@@ -331,13 +339,12 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.reverseDP(w, r, si)
 	} else {
-		var redirecturl string
-		islocal := p.bmdowner.get().islocal(bucket)
 		if r.URL.RawQuery != "" {
 			redirecturl = fmt.Sprintf("%s%s?%s&%s=%t", si.PublicNet.DirectURL, r.URL.Path, r.URL.RawQuery, URLParamLocal, islocal)
 		} else {
 			redirecturl = fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
 		}
+		redirecturl = fmt.Sprintf("%s&%s=%s", redirecturl, URLParamMetaVersions, mdinfobytes)
 		if glog.V(4) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 		}
@@ -922,6 +929,13 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 	query := url.Values{}
 	query.Add(URLParamLocal, strconv.FormatBool(islocal))
 	query.Add(URLParamCached, strconv.FormatBool(cached))
+
+	var mdinfo MetadataVersionInfo
+	mdinfo.SmapVersion = p.smapowner.get().version()
+	mdinfo.BucketMDVersion = p.bmdowner.get().version()
+	mdinfobytes, err := json.Marshal(mdinfo)
+	query.Add(URLParamMetaVersions, string(mdinfobytes))
+
 	args := callArgs{
 		si: dinfo,
 		req: reqArgs{
@@ -1481,11 +1495,15 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(URLParamWhat)
 	switch getWhat {
-	case GetWhatConfig:
-		jsbytes, err := json.Marshal(ctx.config)
-		assert(err == nil)
-		p.writeJSON(w, r, jsbytes, "httpdaeget")
-
+	case GetWhatConfig, GetWhatBucketMeta, GetWhatSmapVote, GetWhatDaemonInfo:
+		p.httprunner.httpdaeget(w, r)
+	case GetWhatStats:
+		rst := getproxystatsrunner()
+		rst.RLock()
+		jsbytes, err := json.Marshal(rst)
+		rst.RUnlock()
+		assert(err == nil, err)
+		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case GetWhatSmap:
 		smap := p.smapowner.get()
 		for smap == nil || !smap.isValid() {
@@ -1500,26 +1518,9 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 		jsbytes, err := json.Marshal(smap)
 		assert(err == nil, err)
-		p.writeJSON(w, r, jsbytes, "httpdaeget")
-
-	case GetWhatSmapVote:
-		_, xx := p.xactinp.findL(ActElection)
-		vote := xx != nil
-		msg := SmapVoteMsg{
-			VoteInProgress: vote,
-			Smap:           p.smapowner.get(),
-			BucketMD:       p.bmdowner.get(),
-		}
-		jsbytes, err := json.Marshal(msg)
-		assert(err == nil, err)
-		p.writeJSON(w, r, jsbytes, "httpdaeget")
-	case GetWhatDaemonInfo:
-		jsbytes, err := json.Marshal(p.si)
-		assert(err == nil, err)
-		p.writeJSON(w, r, jsbytes, "httpdaeget")
+		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	default:
-		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
-		p.invalmsghdlr(w, r, s)
+		p.httprunner.httpdaeget(w, r)
 	}
 }
 

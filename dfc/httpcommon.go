@@ -178,6 +178,7 @@ type httprunner struct {
 	keepalive             keepaliver
 	smapowner             *smapowner
 	bmdowner              *bmdowner
+	xactinp               *xactInProgress
 	statsif               statsif
 	statsdC               statsd.Client
 }
@@ -266,6 +267,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 
 	h.smapowner = &smapowner{}
 	h.bmdowner = &bmdowner{}
+	h.xactinp = newxactinp() // extended actions
 }
 
 // initSI initialize a daemon's identification (never changes once it is set)
@@ -293,7 +295,8 @@ func (h *httprunner) initSI() {
 		if err != nil {
 			glog.Fatalf("Failed to get internal network address: %v", err)
 		}
-		glog.Infof("Configured INTERNAL NETWORK address: [%s:%d] (out of: %s)\n", ipAddrIntra, ctx.config.Net.L4.PortIntra, ctx.config.Net.IPv4Intra)
+		glog.Infof("Configured INTERNAL NETWORK address: [%s:%d] (out of: %s)\n",
+			ipAddrIntra, ctx.config.Net.L4.PortIntra, ctx.config.Net.IPv4Intra)
 	}
 
 	publicAddr := &net.TCPAddr{
@@ -393,8 +396,13 @@ func (h *httprunner) stop(err error) {
 	wg.Wait()
 }
 
-// intra-cluster IPC, control plane; calls (via http) another target or a proxy
-// optionally, sends a json-encoded body to the callee
+//=================================
+//
+// intra-cluster IPC, control plane
+//
+//=================================
+// call another target or a proxy
+// optionally, include a json-encoded body
 func (h *httprunner) call(args callArgs) callResult {
 	var (
 		request  *http.Request
@@ -495,6 +503,45 @@ func (h *httprunner) call(args callArgs) callResult {
 	}
 
 	return callResult{args.si, outjson, err, errstr, status}
+}
+
+// broadcast sends a http call to all servers in parallel, wait until all calls are returned
+// NOTE: 'u' has only the path and query part, host portion will be set by this function.
+func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
+	serverCount := 0
+	for _, serverMap := range bcastArgs.servers {
+		serverCount += len(serverMap)
+	}
+	ch := make(chan callResult, serverCount)
+	wg := &sync.WaitGroup{}
+
+	for _, serverMap := range bcastArgs.servers {
+		for sid, serverInfo := range serverMap {
+			if sid == h.si.DaemonID {
+				continue
+			}
+			wg.Add(1)
+			go func(di *daemonInfo) {
+				args := callArgs{
+					si:      di,
+					req:     bcastArgs.req,
+					timeout: bcastArgs.timeout,
+				}
+				args.req.base = ""
+				if bcastArgs.internal {
+					args.req.base = di.InternalNet.DirectURL
+				}
+
+				res := h.call(args)
+				ch <- res
+				wg.Done()
+			}(serverInfo)
+		}
+	}
+
+	wg.Wait()
+	close(ch)
+	return ch
 }
 
 //=============================
@@ -627,11 +674,44 @@ func (h *httprunner) validatebckname(w http.ResponseWriter, r *http.Request, buc
 	return true
 }
 
-//=================
+//=========================
 //
-// commong set config
+// common http req handlers
 //
-//=================
+//==========================
+func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
+	var (
+		jsbytes []byte
+		err     error
+		getWhat = r.URL.Query().Get(URLParamWhat)
+	)
+	switch getWhat {
+	case GetWhatConfig:
+		jsbytes, err = json.Marshal(ctx.config)
+		assert(err == nil, err)
+	case GetWhatSmap:
+		jsbytes, err = json.Marshal(h.smapowner.get())
+		assert(err == nil, err)
+	case GetWhatBucketMeta:
+		jsbytes, err = json.Marshal(h.bmdowner.get())
+		assert(err == nil, err)
+	case GetWhatSmapVote:
+		_, xx := h.xactinp.findL(ActElection)
+		vote := xx != nil
+		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
+		jsbytes, err = json.Marshal(msg)
+		assert(err == nil, err)
+	case GetWhatDaemonInfo:
+		jsbytes, err = json.Marshal(h.si)
+		assert(err == nil, err)
+	default:
+		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
+		h.invalmsghdlr(w, r, s)
+		return
+	}
+	h.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
+}
+
 func (h *httprunner) setconfig(name, value string) (errstr string) {
 	lm, hm := ctx.config.LRU.LowWM, ctx.config.LRU.HighWM
 	checkwm := false
@@ -809,6 +889,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	h.statsif.add("numerr", 1)
 }
 
+//=====================
+//
+// metasync Rx handlers
+//
+//=====================
 func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
@@ -924,45 +1009,6 @@ func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, str
 // URLPath returns a HTTP URL path by joining all segments with "/"
 func URLPath(segments ...string) string {
 	return path.Join("/", path.Join(segments...))
-}
-
-// broadcast sends a http call to all servers in parallel, wait until all calls are returned
-// NOTE: 'u' has only the path and query part, host portion will be set by this function.
-func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
-	serverCount := 0
-	for _, serverMap := range bcastArgs.servers {
-		serverCount += len(serverMap)
-	}
-	ch := make(chan callResult, serverCount)
-	wg := &sync.WaitGroup{}
-
-	for _, serverMap := range bcastArgs.servers {
-		for sid, serverInfo := range serverMap {
-			if sid == h.si.DaemonID {
-				continue
-			}
-			wg.Add(1)
-			go func(di *daemonInfo) {
-				args := callArgs{
-					si:      di,
-					req:     bcastArgs.req,
-					timeout: bcastArgs.timeout,
-				}
-				args.req.base = ""
-				if bcastArgs.internal {
-					args.req.base = di.InternalNet.DirectURL
-				}
-
-				res := h.call(args)
-				ch <- res
-				wg.Done()
-			}(serverInfo)
-		}
-	}
-
-	wg.Wait()
-	close(ch)
-	return ch
 }
 
 // ================================== Background =========================================

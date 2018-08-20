@@ -88,9 +88,10 @@ const (
 	URLParamCheckCached      = "check_cached"  // true: check if object is cached in DFC
 	URLParamOffset           = "offset"        // Offset from where the object should be read
 	URLParamLength           = "length"        // the total number of bytes that need to be read from the offset
-	URLParamWhat             = "what"          // "config" | "stats" | "xaction" ...
+	URLParamWhat             = "what"          // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
 	URLParamProps            = "props"         // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
 	URLParamNonElectable     = "non_electable" // true: proxy is non-electable for the primary role
+	URLParamMetaVersions     = "meta_versions" // cluster-wide metadata version info (json)
 )
 
 // TODO: sort and some props are TBD
@@ -140,6 +141,11 @@ type MountpathList struct {
 	Disabled  []string `json:"disabled"`
 }
 
+type MetadataVersionInfo struct {
+	SmapVersion     int64
+	BucketMDVersion int64
+}
+
 //===================
 //
 // RESTful GET
@@ -148,9 +154,9 @@ type MountpathList struct {
 
 // URLParamWhat enum
 const (
-	GetWhatFile       = "file" // { "what": "file" } is implied by default and can be omitted
 	GetWhatConfig     = "config"
 	GetWhatSmap       = "smap"
+	GetWhatBucketMeta = "bucketmd"
 	GetWhatStats      = "stats"
 	GetWhatXaction    = "xaction"
 	GetWhatSmapVote   = "smapvote"

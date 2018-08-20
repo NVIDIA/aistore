@@ -103,7 +103,6 @@ type MountpathDispatcher interface {
 type targetrunner struct {
 	httprunner
 	cloudif        cloudif // multi-cloud vendor support
-	xactinp        *xactInProgress
 	uxprocess      *uxprocess
 	rtnamemap      *rtnamemap
 	prefetchQueue  chan filesWithDeadline
@@ -117,7 +116,7 @@ func (t *targetrunner) run() error {
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.keepalive = gettargetkeepalive()
-	t.xactinp = newxactinp()        // extended actions
+
 	t.rtnamemap = newrtnamemap(128) // lock/unlock name
 
 	bucketmd := newBucketMD()
@@ -1009,7 +1008,7 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	}
 
 	if newbucketmd != nil {
-		if errstr = t.receiveBucketMD(newbucketmd, actionlb); errstr != "" {
+		if errstr = t.receiveBucketMD(newbucketmd, actionlb, "receive"); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -2331,15 +2330,70 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 }
 
 func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request, islocal bool) (errstr string, errcode int) {
-	proxylocalstr := r.URL.Query().Get(URLParamLocal)
+	var (
+		q             = r.URL.Query()
+		proxylocalstr = q.Get(URLParamLocal)
+		bucketmd      = t.bmdowner.get()
+		mdinfo        MetadataVersionInfo
+	)
+
 	if proxylocal, err := parsebool(proxylocalstr); err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, URLParamLocal, proxylocalstr)
 		errcode = http.StatusInternalServerError
 	} else if proxylocalstr != "" && islocal != proxylocal {
 		errstr = fmt.Sprintf("islocalbucket(%s) mismatch: %t (proxy) != %t (target %s)", bucket, proxylocal, islocal, t.si.DaemonID)
 		errcode = http.StatusInternalServerError
+
+		if s := q.Get(URLParamMetaVersions); s != "" {
+			err := json.Unmarshal([]byte(s), &mdinfo)
+			if err != nil {
+				glog.Errorf("Unexpected: failed to unmarshal %s mdinfo, err: %v", s, err)
+			} else if mdinfo.BucketMDVersion < bucketmd.version() {
+				glog.Errorf("bucket-metadata v%d > v%d (primary)", bucketmd.version(), mdinfo.BucketMDVersion)
+				// fix-up
+			} else if mdinfo.BucketMDVersion > bucketmd.version() {
+				glog.Errorf("Warning: bucket-metadata v%d < v%d (primary) - updating...", bucketmd.version(), mdinfo.BucketMDVersion)
+				t.bmdVersionFixup()
+				islocal := t.bmdowner.get().islocal(bucket)
+				if islocal == proxylocal {
+					glog.Infof("Success: updated bucket-metadata to v%d - resolved 'islocal' mismatch", bucketmd.version())
+					errstr, errcode = "", 0
+				}
+			}
+		}
 	}
 	return
+}
+
+func (t *targetrunner) bmdVersionFixup() {
+	smap := t.smapowner.get()
+	psi := smap.ProxySI
+	q := url.Values{}
+	q.Add(URLParamWhat, GetWhatBucketMeta)
+	args := callArgs{
+		si: psi,
+		req: reqArgs{
+			method: http.MethodGet,
+			base:   psi.InternalNet.DirectURL,
+			path:   URLPath(Rversion, Rdaemon),
+			query:  q,
+		},
+		timeout: ctx.config.Timeout.CplaneOperation,
+	}
+	res := t.call(args)
+	if res.err != nil {
+		glog.Errorf("Failed to get-what=%s, err: %v", GetWhatBucketMeta, res.err)
+		return
+	}
+	newbucketmd := &bucketMD{}
+	err := json.Unmarshal(res.outjson, newbucketmd)
+	if err != nil {
+		glog.Errorf("Unexpected: failed to unmarshal get-what=%s response from %s, err: %v [%v]",
+			GetWhatBucketMeta, psi.InternalNet.DirectURL, err, string(res.outjson))
+		return
+	}
+	var msg = ActionMsg{Action: "get-what=" + GetWhatBucketMeta}
+	t.receiveBucketMD(newbucketmd, &msg, "fixup")
 }
 
 //===========================
@@ -2474,43 +2528,27 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
-		return
-	}
 	getWhat := r.URL.Query().Get(URLParamWhat)
-	var (
-		jsbytes []byte
-		err     error
-	)
 	switch getWhat {
-	case GetWhatConfig:
-		jsbytes, err = json.Marshal(ctx.config)
-		assert(err == nil, err)
-	case GetWhatSmap:
-		jsbytes, err = json.Marshal(t.smapowner.get())
-		assert(err == nil, err)
-	case GetWhatSmapVote:
-		_, xx := t.xactinp.findL(ActElection)
-		vote := xx != nil
-		msg := SmapVoteMsg{VoteInProgress: vote, Smap: t.smapowner.get(), BucketMD: t.bmdowner.get()}
-		jsbytes, err = json.Marshal(msg)
-		assert(err == nil, err)
+	case GetWhatConfig, GetWhatSmap, GetWhatBucketMeta, GetWhatSmapVote, GetWhatDaemonInfo:
+		t.httprunner.httpdaeget(w, r)
 	case GetWhatStats:
 		rst := getstorstatsrunner()
 		rst.RLock()
-		jsbytes, err = json.Marshal(rst)
+		jsbytes, err := json.Marshal(rst)
 		rst.RUnlock()
 		assert(err == nil, err)
+		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case GetWhatXaction:
 		kind := r.URL.Query().Get(URLParamProps)
 		if errstr := isXactionQueryable(kind); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		xactionStatsRetriever := t.getXactionStatsRetriever(kind)
+		xactionStatsRetriever := t.getXactionStatsRetriever(kind) // FIXME
 		allXactionDetails := t.getXactionsByType(kind)
-		jsbytes = xactionStatsRetriever.getStats(allXactionDetails)
+		jsbytes := xactionStatsRetriever.getStats(allXactionDetails)
+		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case GetWhatMountpaths:
 		mpList := MountpathList{}
 		availablePaths, disabledPaths := ctx.mountpaths.Mountpaths()
@@ -2527,21 +2565,16 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			mpList.Disabled[idx] = mpath
 			idx++
 		}
-		jsbytes, err = json.Marshal(&mpList)
+		jsbytes, err := json.Marshal(&mpList)
 		if err != nil {
 			s := fmt.Sprintf("Failed to marshal mountpaths: %v", err)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
-	case GetWhatDaemonInfo:
-		jsbytes, err = json.Marshal(t.si)
-		assert(err == nil, err)
+		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	default:
-		s := fmt.Sprintf("Unexpected GET request, what: [%s]", getWhat)
-		t.invalmsghdlr(w, r, s)
-		return
+		t.httprunner.httpdaeget(w, r)
 	}
-	t.writeJSON(w, r, jsbytes, "httpdaeget")
 }
 
 func (t *targetrunner) getXactionStatsRetriever(kind string) XactionStatsRetriever {
@@ -3133,11 +3166,11 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (errstr string) {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg, tag string) (errstr string) {
 	if msg.Action == "" {
-		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
+		glog.Infof("%s bucket-metadata: version %d", tag, newbucketmd.version())
 	} else {
-		glog.Infof("receive bucket-metadata: version %d, action %s", newbucketmd.version(), msg.Action)
+		glog.Infof("%s bucket-metadata: version %d, action %s", tag, newbucketmd.version(), msg.Action)
 	}
 	t.bmdowner.Lock()
 	bucketmd := t.bmdowner.get()

@@ -49,11 +49,6 @@ func Test_download(t *testing.T) {
 		os.Exit(1)
 	}
 
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
-	if !isCloud {
-		t.Skip("Download test is for cloud buckets only")
-	}
-
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
 	resultChans := make([]chan workres, numworkers)
