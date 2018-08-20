@@ -71,9 +71,11 @@ type proxyrunner struct {
 	startedUp  int64
 	metasyncer *metasyncer
 	rproxy     struct {
-		cloud *httputil.ReverseProxy // unmodified GET requests => storage.googleapis.com
-		p     *httputil.ReverseProxy // requests that modify cluster-level metadata => current primary gateway
-		u     string                 // URL of the current primary
+		sync.Mutex
+		cloud *httputil.ReverseProxy            // unmodified GET requests => storage.googleapis.com
+		p     *httputil.ReverseProxy            // requests that modify cluster-level metadata => current primary gateway
+		u     string                            // URL of the current primary
+		tmap  map[string]*httputil.ReverseProxy // map of reverse proxies keyed by target DaemonIDs
 	}
 }
 
@@ -107,7 +109,7 @@ func (p *proxyrunner) run() error {
 		version:       1,
 	}
 
-	if ctx.config.Net.HTTP.UseAsProxy {
+	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 		p.rproxy.cloud = &httputil.ReverseProxy{
 			Director:  func(r *http.Request) {},
 			Transport: p.createTransport(0, 0),
@@ -131,7 +133,7 @@ func (p *proxyrunner) run() error {
 	p.registerPublicNetHandler(URLPath(Rversion, Rcluster), p.clusterHandler)
 	p.registerPublicNetHandler(URLPath(Rversion, Rtokens), p.tokenHandler)
 
-	if ctx.config.Net.HTTP.UseAsProxy {
+	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
 	} else {
 		p.registerPublicNetHandler("/", invalhdlr)
@@ -142,7 +144,7 @@ func (p *proxyrunner) run() error {
 	p.registerInternalNetHandler(URLPath(Rversion, Rhealth), p.healthHandler)
 	p.registerInternalNetHandler(URLPath(Rversion, Rvote), p.voteHandler)
 	if ctx.config.Net.UseIntra {
-		if ctx.config.Net.HTTP.UseAsProxy {
+		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 			p.registerInternalNetHandler("/", p.reverseProxyHandler)
 		} else {
 			p.registerInternalNetHandler("/", invalhdlr)
@@ -152,6 +154,9 @@ func (p *proxyrunner) run() error {
 	glog.Infof("%s: [public net] listening on: %s", p.si.DaemonID, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.InternalNet.DirectURL {
 		glog.Infof("%s: [internal net] listening on: %s", p.si.DaemonID, p.si.InternalNet.DirectURL)
+	}
+	if ctx.config.Net.HTTP.RevProxy != "" {
+		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", ctx.config.Net.HTTP.RevProxy)
 	}
 	p.starttime = time.Now()
 
@@ -319,27 +324,34 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	var redirecturl string
-	islocal := p.bmdowner.get().islocal(bucket)
-	if r.URL.RawQuery != "" {
-		redirecturl = fmt.Sprintf("%s%s?%s&%s=%t", si.PublicNet.DirectURL, r.URL.Path, r.URL.RawQuery, URLParamLocal, islocal)
-	} else {
-		redirecturl = fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
-	}
-	if glog.V(4) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
-	}
-	if ctx.config.Net.HTTP.UseAsProxy {
-		req, err := http.NewRequest(http.MethodGet, redirecturl, r.Body)
-		if err != nil {
-			p.invalmsghdlr(w, r, err.Error())
-			return
-		}
-		p.rproxy.cloud.ServeHTTP(w, req)
-	} else {
-		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
-	}
 
+	if ctx.config.Net.HTTP.RevProxy == RevProxyTarget {
+		if glog.V(4) {
+			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objname, si.DaemonID)
+		}
+		p.reverseDP(w, r, si)
+	} else {
+		var redirecturl string
+		islocal := p.bmdowner.get().islocal(bucket)
+		if r.URL.RawQuery != "" {
+			redirecturl = fmt.Sprintf("%s%s?%s&%s=%t", si.PublicNet.DirectURL, r.URL.Path, r.URL.RawQuery, URLParamLocal, islocal)
+		} else {
+			redirecturl = fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
+		}
+		if glog.V(4) {
+			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
+		}
+		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
+			req, err := http.NewRequest(http.MethodGet, redirecturl, r.Body)
+			if err != nil {
+				p.invalmsghdlr(w, r, err.Error())
+				return
+			}
+			p.rproxy.cloud.ServeHTTP(w, req)
+		} else {
+			http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
+		}
+	}
 	delta := time.Since(started)
 	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta))
 }
@@ -776,6 +788,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *Act
 		body, err = json.Marshal(msg)
 		assert(err == nil, err)
 	}
+	p.rproxy.Lock()
 	if p.rproxy.u != smap.ProxySI.PublicNet.DirectURL {
 		p.rproxy.u = smap.ProxySI.PublicNet.DirectURL
 		uparsed, err := url.Parse(smap.ProxySI.PublicNet.DirectURL)
@@ -783,6 +796,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *Act
 		p.rproxy.p = httputil.NewSingleHostReverseProxy(uparsed)
 		p.rproxy.p.Transport = p.createTransport(proxyMaxIdleConnsPer, 0)
 	}
+	p.rproxy.Unlock()
 	if len(body) > 0 {
 		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		r.ContentLength = int64(len(body)) // directly setting content-length
@@ -790,6 +804,25 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *Act
 	glog.Infof("%s: forwarding '%s:%s' to the primary %s", p.si.DaemonID, msg.Action, s, smap.ProxySI.DaemonID)
 	p.rproxy.p.ServeHTTP(w, r)
 	return true
+}
+
+// reverse-proxy GET object request
+func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *daemonInfo) {
+	p.rproxy.Lock()
+	if p.rproxy.tmap == nil {
+		smap := p.smapowner.get()
+		p.rproxy.tmap = make(map[string]*httputil.ReverseProxy, smap.countTargets())
+	}
+	rproxy, ok := p.rproxy.tmap[tsi.DaemonID]
+	if !ok || rproxy == nil {
+		uparsed, err := url.Parse(tsi.PublicNet.DirectURL)
+		assert(err == nil, err)
+		rproxy = httputil.NewSingleHostReverseProxy(uparsed)
+		rproxy.Transport = p.createTransport(targetMaxIdleConnsPer, 0)
+		p.rproxy.tmap[tsi.DaemonID] = rproxy
+	}
+	p.rproxy.Unlock()
+	rproxy.ServeHTTP(w, r)
 }
 
 func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props BucketProps,

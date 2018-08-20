@@ -314,7 +314,7 @@ func (h *httprunner) initSI() {
 		}
 	}
 
-	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.Proto, publicAddr, internalAddr)
+	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.proto, publicAddr, internalAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {

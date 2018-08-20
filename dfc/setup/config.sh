@@ -72,11 +72,11 @@ cat > $CONFFILE <<EOL
 			"port_intra": "${PORT_INTRA}"
 		},
 		"http": {
-			"max_num_targets":    16,
-			"use_https":          ${USE_HTTPS},
-			"use_as_proxy":       false,
-			"server_certificate": "server.crt",
-			"server_key":         "server.key"
+			"rproxy":		"",
+			"server_certificate":	"server.crt",
+			"server_key":		"server.key",
+			"max_num_targets":	16,
+			"use_https":		${USE_HTTPS}
 		}
 	},
 	"fschecker": {

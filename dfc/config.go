@@ -21,7 +21,7 @@ const (
 	GiB = 1024 * MiB
 )
 
-// checksums: xattr, http header, and config
+// checksums: xattr, http header, and config; versioning
 const (
 	XattrXXHashVal  = "user.obj.dfchash"
 	XattrObjVersion = "user.obj.version"
@@ -43,6 +43,11 @@ const (
 	mpname       = "mpaths"          // base name to persist ctx.mountpaths
 	smapname     = "smap.json"
 	rebinpname   = ".rebalancing"
+)
+
+const (
+	RevProxyCloud  = "cloud"
+	RevProxyTarget = "target"
 )
 
 //==============================
@@ -157,12 +162,12 @@ type l4cnf struct {
 }
 
 type httpcnf struct {
-	MaxNumTargets int    `json:"max_num_targets"` // estimated max num targets (to count idle conns)
-	UseHTTPS      bool   `json:"use_https"`       // use HTTPS instead of HTTP
-	Proto         string `json:"-"`
-	UseAsProxy    bool   `json:"use_as_proxy"`       // use DFC as an HTTP proxy
+	proto         string // http or https
+	RevProxy      string `json:"rproxy"`             // RevProxy* enum
 	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
 	Key           string `json:"server_key"`         // HTTPS: openssl key
+	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
+	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
 }
 
 type cksumconfig struct {
@@ -246,9 +251,9 @@ func initconfigparam() error {
 	}
 
 	// Set helpers
-	ctx.config.Net.HTTP.Proto = "http"
+	ctx.config.Net.HTTP.proto = "http"
 	if ctx.config.Net.HTTP.UseHTTPS {
-		ctx.config.Net.HTTP.Proto = "https"
+		ctx.config.Net.HTTP.proto = "https"
 	}
 
 	differentIPs := ctx.config.Net.IPv4 != ctx.config.Net.IPv4Intra
@@ -402,6 +407,12 @@ func validateconf() (err error) {
 		}
 	}
 
+	if ctx.config.Net.HTTP.RevProxy != "" {
+		if ctx.config.Net.HTTP.RevProxy != RevProxyCloud && ctx.config.Net.HTTP.RevProxy != RevProxyTarget {
+			return fmt.Errorf("Invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
+				ctx.config.Net.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
+		}
+	}
 	return nil
 }
 
