@@ -37,12 +37,8 @@ type LsBlk struct {
 }
 
 type BlockDevice struct {
-	Name              string             `json:"name"`
-	ChildBlockDevices []ChildBlockDevice `json:"children"`
-}
-
-type ChildBlockDevice struct {
-	Name string `json:"name"`
+	Name         string        `json:"name"`
+	BlockDevices []BlockDevice `json:"children"`
 }
 
 // iostat -cdxtm 10
@@ -187,6 +183,34 @@ func fs2disks(fs string) (disks StringSet) {
 	return
 }
 
+func childMatches(devList []BlockDevice, device string) bool {
+	for _, dev := range devList {
+		if dev.Name == device {
+			return true
+		}
+
+		if len(dev.BlockDevices) != 0 && childMatches(dev.BlockDevices, device) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func findDevDisks(devList []BlockDevice, device string, disks StringSet) {
+	for _, bd := range devList {
+		if bd.Name == device {
+			disks[bd.Name] = struct{}{}
+			continue
+		}
+		if len(bd.BlockDevices) != 0 {
+			if childMatches(bd.BlockDevices, device) {
+				disks[bd.Name] = struct{}{}
+			}
+		}
+	}
+}
+
 func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks StringSet) {
 	disks = make(StringSet)
 	device := strings.TrimPrefix(fs, "/dev/")
@@ -196,16 +220,13 @@ func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks StringSet) {
 		glog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
 		return
 	}
-	for _, blockDevice := range lsBlkOutput.BlockDevices {
-		for _, child := range blockDevice.ChildBlockDevices {
-			if child.Name == device {
-				if _, ok := disks[blockDevice.Name]; !ok {
-					disks[blockDevice.Name] = struct{}{}
-				}
-			}
-		}
+
+	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
+	if glog.V(3) {
+		glog.Info("Device: %s, disk list: %v\n", device, disks)
 	}
-	return
+
+	return disks
 }
 
 // checkIostatVersion determines whether iostat command is present and

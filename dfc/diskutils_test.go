@@ -283,3 +283,60 @@ func removeDirs(dirs ...string) {
 		os.RemoveAll(dir)
 	}
 }
+
+func TestLsblk(t *testing.T) {
+	out := []byte(`{
+		   "blockdevices": [
+				{"name": "xvda", "size": "8G", "type": "disk", "mountpoint": null,
+					"children": [
+						{"name": "xvda1", "size": "8G", "type": "part", "mountpoint": "/"}
+					]
+				},
+				{"name": "xvdf", "size": "1.8T", "type": "disk", "mountpoint": null},
+				{"name": "xvdh", "size": "1.8T", "type": "disk", "mountpoint": null},
+				{"name": "xvdi", "size": "1.8T", "type": "disk", "mountpoint": null},
+				{"name": "xvdl", "size": "100G", "type": "disk", "mountpoint": "/dfc/xvdl"},
+				{"name": "xvdy", "mountpoint": null, "fstype": "linux_raid_member",
+					"children": [
+						{"name": "md2", "mountpoint": "/dfc/3", "fstype": "xfs"}
+					]
+				},
+				{"name": "xvdz", "mountpoint": null, "fstype": "linux_raid_member",
+					"children": [
+						{"name": "md2", "mountpoint": "/dfc/3", "fstype": "xfs"}
+					]
+				}
+			]
+		}
+	`)
+
+	type test struct {
+		desc      string
+		dev       string
+		diskCnt   int
+		diskNames []string
+	}
+	testSets := []test{
+		{"Single disk (no children)", "/dev/xvdi", 1, []string{"xvdi"}},
+		{"Single disk (with children)", "/dev/xvda1", 1, []string{"xvda"}},
+		{"Invalid device", "/dev/xvda7", 0, []string{}},
+		{"Device with 2 disks", "/dev/md2", 2, []string{"xvdz", "xvdy"}},
+	}
+
+	for _, tst := range testSets {
+		t.Log(tst.desc)
+		disks := lsblkOutput2disks(out, tst.dev)
+		if len(disks) != tst.diskCnt {
+			t.Errorf("Expected %d disk(s) for %s but found %d (%v)",
+				tst.diskCnt, tst.dev, len(disks), disks)
+		}
+		if tst.diskCnt != 0 {
+			for _, disk := range tst.diskNames {
+				if _, ok := disks[disk]; !ok {
+					t.Errorf("Disk %s is not detected for device %s (disk list %v)",
+						disk, tst.dev, disks)
+				}
+			}
+		}
+	}
+}
