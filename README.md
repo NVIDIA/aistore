@@ -21,11 +21,13 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [Helpful Links: Go](#helpful-links-go)
 - [Helpful Links: AWS](#helpful-links-aws)
 - [Configuration](#configuration)
+  * [Managing filesystems](#managing-filesystems)
   * [Disabling extended attributes](#disabling-extended-attributes)
   * [Enabling HTTPS](#enabling-https)
   * [Filesystem Health Checker](#filesystem-health-checker)
 - [Performance tuning](#performance-tuning)
 - [REST Operations](#rest-operations)
+  * [Querying information](#querying-information)
 - [List Bucket](#list-bucket)
 - [Cache Rebalancing](#cache-rebalancing)
 - [List/Range Operations](#listrange-operations)
@@ -199,6 +201,14 @@ As shown above, the "test_fspaths" section of the configuration corresponds to a
 
 <img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
 
+### Managing filesystems
+
+A target uses the configuration option `fspaths` as the list of local directories where the targets stores objects. A `fspath` aka `mountpath` (both terms are used interchangeably) is, simply, a local directory that is serviced by a local filesystem. NOTE: there must be a 1-to-1 relationship between a `fspath` and an underlying local filesystem.
+
+DFC REST API makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the DFC built-in mechanism of object distribution. For further details about FSHC and filesystem REST API, please [see FSHC readme](./fshc.md).
+
+Warning: as of the version 1.2, all changes done via REST API are not persistent.
+
 ### Disabling extended attributes
 
 To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh) that'd be further used to deploy the cluster.
@@ -289,18 +299,12 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 |--- | --- | ---|
 | Unregister storage target | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://localhost:8080/v1/cluster/daemon/15205:8083` |
 | Register storage target | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"node_ip_addr": "172.16.175.41", "daemon_port": "8083", "daemon_id": "43888:8083", "direct_url": "http://172.16.175.41:8083"}' http://localhost:8083/v1/cluster/register` |
-| Get cluster map | GET /v1/daemon | `curl -X GET http://localhost:8080/v1/daemon?what=smap` |
-| Get proxy or target configuration| GET /v1/daemon | `curl -X GET http://localhost:8080/v1/daemon?what=config` |
 | Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8081/v1/daemon` |
 | Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | ` curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setconfig","name":"loglevel","value":"4"}' http://localhost:8080/v1/daemon` |
 | Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8080/v1/cluster` |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8082/v1/daemon` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8080/v1/cluster` |
 | Rebalance cluster (proxy) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://localhost:8080/v1/cluster` |
-| Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://localhost:8080/v1/cluster?what=stats` |
-| Get rebalance statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://localhost:8080/v1/cluster?what=xaction&props=rebalance'` |
-| Get target statistics | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=stats` |
-| Get proxy/target info | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=daemoninfo` |
 | Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET http://localhost:8080/v1/objects/myS3bucket/myobject -o myobject` <sup id="a1">[1](#ft1)</sup> |
 | Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET http://localhost:8080/v1/objects/myS3bucket/myobject?offset=1024&length=512 -o myobject` |
 | Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://localhost:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |
@@ -324,6 +328,10 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 | Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head http://localhost:8080/v1/objects/mybucket/myobject` |
 | Check if an object is cached | HEAD /v1/objects/bucket-name/object-name | `curl -L --head http://localhost:8080/v1/objects/mybucket/myobject?check_cached=true` |
 | Set primary proxy (primary proxy only)| PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT http://localhost:8080/v1/cluster/proxy/26869:8080` |
+| Disable mountpath in target | POST {"action": "disable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "disable", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths`<sup>[7](#ft7)</sup> |
+| Enable mountpath in target | POST {"action": "enable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "enable", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths`<sup>[7](#ft7)</sup> |
+| Add mountpath in target | PUT {"action": "add", "value": "/new/mountpath"} /v1/daemon/mountpaths | `curl -X PUT -L -H 'Content-Type: application/json' -d '{"action": "add", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
+| Remove mountpath from target | DELETE {"action": "remove", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "remove", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
 ___
 <a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
@@ -336,6 +344,25 @@ ___
 <a name="ft5">5</a>: See the List/Range Operations section for details.
 
 <a name="ft6">6</a>: Query string parameter `?local=true` can be used to retrieve just the local buckets.
+
+<a name="ft7">7</a>: The request returns an HTTP status code 204 if the mountpath is already enabled/disabled or 404 if mountpath was not found.
+
+### Querying information
+
+DFC provides an extensive list of RESTful operations to retrieve cluster current state:
+
+| Operation | HTTP action | Example |
+|--- | --- | ---|
+| Get cluster map | GET /v1/daemon | `curl -X GET http://localhost:8080/v1/daemon?what=smap` |
+| Get proxy or target configuration| GET /v1/daemon | `curl -X GET http://localhost:8080/v1/daemon?what=config` |
+| Get proxy/target info | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=daemoninfo` |
+| Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://localhost:8080/v1/cluster?what=stats` |
+| Get target statistics | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=stats` |
+| Get rebalance statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://localhost:8080/v1/cluster?what=xaction&props=rebalance'` |
+| Get prefetch statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://localhost:8080/v1/cluster?what=xaction&props=prefetch'` |
+| Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://localhost:8084/v1/daemon?what=mountpaths` |
+| Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://localhost:8080/v1/cluster?what=mountpaths` |
+| Get target bucket list | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=bucketmd` |
 
 ### Example: querying runtime statistics
 
