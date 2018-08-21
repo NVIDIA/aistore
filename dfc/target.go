@@ -2258,7 +2258,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 
 	slab := iosgl.SelectSlab(size)
 	if cksumcfg.Checksum != ChecksumNone {
-		assert(cksumcfg.Checksum == ChecksumXXHash)
+		assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
 		buf := slab.Alloc()
 		if xxhashval, errstr = ComputeXXHash(file, buf); errstr != "" {
 			slab.Free(buf)
