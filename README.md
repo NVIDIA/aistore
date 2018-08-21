@@ -21,6 +21,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [Helpful Links: Go](#helpful-links-go)
 - [Helpful Links: AWS](#helpful-links-aws)
 - [Configuration](#configuration)
+  * [Runtime configuration](#runtime-configuration)
   * [Managing filesystems](#managing-filesystems)
   * [Disabling extended attributes](#disabling-extended-attributes)
   * [Enabling HTTPS](#enabling-https)
@@ -201,6 +202,39 @@ As shown above, the "test_fspaths" section of the configuration corresponds to a
 
 <img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
 
+### Runtime configuration
+
+In most cases restart of the node is required after changing any of its configuration options. But a number of options can be modified on the fly using [REST API](#rest-operations).
+
+Each option can be set for an individual daemon, by sending a request to the daemon URL /v1/daemon or, for the entire cluster, by sending a request to the URL /v1/cluster of any proxy or gateway. In the latter case the primary proxy broadcasts the new value to all proxies and targets after it updates its local configuration.
+
+Both a proxy and a storage target support the same set of runtime options but a proxy uses only a few of them. The list of options which affect proxy includes `loglevel`, `vmodule`, `dest_retry_time`, `default_timeout`, and `default_long_timeout`.
+
+Warning: as of the version 1.2, all changes done via REST API(below) are not persistent. The default values are also all as of version 1.2 and are subject to change in next versions.
+
+| Option | Default value | Description |
+|---|---|---|---|
+| loglevel | 3 | Set global logging level. The greater number the more verbose log output |
+| vmodule | "" | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
+| stats_time | 10s | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
+| dont_evict_time | 120m | LRU does not evict an object which was accessed less than dont_evict_time ago |
+| disk_util_low_wm | 60 | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
+| disk_util_high_wm | 80 | Operations that implement self-throttling mechanism, e.g. LRU, turn on maximum throttle if disk utilization is higher than `disk_util_high_wm` |
+| capacity_upd_time | 10m | Determines how often DFC updates filesystem usage |
+| dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
+| send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
+| default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
+| default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |
+| lowwm | 75 | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
+| highwm | 90 | LRU starts immediately if a filesystem usage exceeds the value |
+| lru_enabled | true | Enables and disabled the LRU |
+| rebalancing_enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
+| validate_checksum_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
+| validate_checksum_warm_get | false | If the option is enabled, DFC checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next DFC tier based version |
+| checksum | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
+| versioning | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
+| fschecker_enabled | true | Enables and disables filesystem health checker (FSHC) |
+
 ### Managing filesystems
 
 A target uses the configuration option `fspaths` as the list of local directories where the targets stores objects. A `fspath` aka `mountpath` (both terms are used interchangeably) is, simply, a local directory that is serviced by a local filesystem. NOTE: there must be a 1-to-1 relationship between a `fspath` and an underlying local filesystem.
@@ -299,9 +333,8 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 |--- | --- | ---|
 | Unregister storage target | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://localhost:8080/v1/cluster/daemon/15205:8083` |
 | Register storage target | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"node_ip_addr": "172.16.175.41", "daemon_port": "8083", "daemon_id": "43888:8083", "direct_url": "http://172.16.175.41:8083"}' http://localhost:8083/v1/cluster/register` |
-| Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8081/v1/daemon` |
-| Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | ` curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setconfig","name":"loglevel","value":"4"}' http://localhost:8080/v1/daemon` |
-| Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8080/v1/cluster` |
+| Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8081/v1/daemon`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
+| Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8080/v1/cluster`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8082/v1/daemon` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8080/v1/cluster` |
 | Rebalance cluster (proxy) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://localhost:8080/v1/cluster` |
