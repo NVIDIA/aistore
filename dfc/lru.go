@@ -20,6 +20,30 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
+// ============================================= Summary ===========================================
+//
+// The LRU module implements a well-known last-recently-used cache replacement policy.
+//
+// In DFC, LRU-driven eviction is based on the two configurable watermarks: ctx.config.LRU.LowWM and
+// ctx.config.LRU.HighWM (section "lru_config" in the setup/config.sh).
+// When and if exceeded, DFC storage target will start gradually evicting objects from its
+// stable storage: oldest first access-time wise.
+//
+// LRU is implemented as a so-called extended action (aka x-action, see xaction.go) that gets
+// triggered when/if a used local capacity exceeds high watermark (ctx.config.LRU.HighWM). LRU then
+// runs automatically. In order to reduce its impact on the live workload, LRU throttles itself
+// in accordance with the current storage-target's utilization (see xaction_throttle.go).
+//
+// There's only one API that this module provides to the rest of the code:
+//   - runLRU - to initiate a new LRU extended action on the receiving target
+//
+// All other methods are private to this module and used only internally, including:
+//   - oneLRU   - initiates LRU context and walks a given local filesystem processing each
+//                object (lruwalkfn method) to determine whether the object is to be evicted;
+//   - lruEvict - evicts a given file from the cache
+//
+// ============================================= Summary ===========================================
+
 type fileInfo struct {
 	fqn     string
 	usetime time.Time
@@ -121,8 +145,7 @@ func (t *targetrunner) oneLRU(mpathInfo *fs.MountpathInfo, bucketdir string, fsc
 	}
 }
 
-// the walking callback is execited by the LRU xaction
-// (notice the receiver)
+// the callback is executed by the LRU xaction (notice the receiver)
 func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
 		glog.Errorf("walkfunc callback invoked with err: %v", err)
@@ -193,8 +216,8 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	// partial optimization:
-	// 	do nothing if the heap's cursize >= totsize &&
-	// 	the file is more recent then the the heap's newest
+	// do nothing if the heap's cursize >= totsize &&
+	// the file is more recent then the the heap's newest
 	// full optimization (tbd) entails compacting the heap when its cursize >> totsize
 	if lctx.cursize >= lctx.totsize && usetime.After(lctx.newest) {
 		if glog.V(3) {
