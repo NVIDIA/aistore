@@ -22,7 +22,7 @@ import (
 
 // ============================================= Summary ===========================================
 //
-// The LRU module implements a well-known last-recently-used cache replacement policy.
+// The LRU module implements a well-known least-recently-used cache replacement policy.
 //
 // In DFC, LRU-driven eviction is based on the two configurable watermarks: ctx.config.LRU.LowWM and
 // ctx.config.LRU.HighWM (section "lru_config" in the setup/config.sh).
