@@ -65,7 +65,7 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 If this is the case - that is, if you happen not to have xattrs handy, you can configure DFC not to use them at all (section **Configuration** below).
 
-To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket. If you don't have or don't want to use Amazon and/or Google Cloud accounts - or if you simply deploy DFC as a non-redundant object store - you can use so caled *local buckets* as illustrated:
+To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket. If you don't have or don't want to use Amazon and/or Google Cloud accounts - or if you simply deploy DFC as a non-redundant object store - you can use so called *local buckets* as illustrated:
 
 a) in the [REST Operations](#rest-operations) section below, and
 b) in the [test sources](dfc/tests/regression_test.go)
@@ -110,7 +110,7 @@ The `make deploy` command deploys DFC daemons locally (for details, please see [
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 
 ```
-For information about AuthN server, please see [AuthN documentation](./authn/README.md)
+For information about AuthN server, please see [AuthN documentation](./authn/README.md).
 
 Finally, for the last command in the sequence above to work, you'll need to have a name - the bucket name.
 The bucket could be an Amazon or GCP based one, **or** a DFC-own *local bucket*.
@@ -439,7 +439,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 ### `GET`
 
 5. If the object already exists locally (meaning, it belongs to a DFC local bucket or the most recent version of a Cloud-based object is cached
-   and resides on a local disk), the target optionally balidates the object's checksum and version.
+   and resides on a local disk), the target optionally validates the object's checksum and version.
    This type of `GET` is often referred to as a "warm `GET`".
 6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next DFC tier or from the Cloud.
 7. Finally, the target delivers the object to the client via HTTP(S) response.
@@ -650,6 +650,7 @@ Examples of the supported extended actions include:
 * LRU-based eviction
 * Prefetch
 * Consensus voting when electing a new leader
+* Object re-checksumming
 
 At the time of this writing the corresponding RESTful API (section [REST Operations](#rest-operations)) includes support for querying two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
 
