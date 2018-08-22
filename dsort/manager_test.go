@@ -7,114 +7,140 @@
 package dsort
 
 import (
-	"reflect"
-	"testing"
+	"github.com/NVIDIA/dfcpub/fs"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-func TestMergeSortedMeta(t *testing.T) {
-	{
-		m := &Manager{SortedRecords: make([]Record, 0)}
-		expected := []Record{
-			{Key: "abc", Name: "first"},
-			{Key: "def", Name: "second"},
-			{Key: "ghi", Name: "third"}}
-		m.MergeSortedRecords(expected)
+var _ = Describe("Init", func() {
+	ctx.smap = newTestSmap("target")
+	ctx.node = ctx.smap.Get().Tmap["target"]
+	fs.Mountpaths = fs.NewMountedFS()
 
-		if len(m.SortedRecords) != len(expected) {
-			t.Errorf("expected len: %d, got len: %d", len(expected), len(m.SortedRecords))
-		}
-		for i, v := range m.SortedRecords {
-			if !reflect.DeepEqual(v, expected[i]) {
-				t.Errorf("Record at index %d not equal. Expected: %+v, got: %+v", i, expected[i], v)
-			}
-		}
-	}
-	{
-		initial := []Record{{Key: "a"}, {Key: "c"}, {Key: "e"}}
-		toMerge := []Record{{Key: "b"}, {Key: "d"}}
-		expected := []Record{{Key: "a"}, {Key: "b"}, {Key: "c"}, {Key: "d"}, {Key: "e"}}
-		m := &Manager{SortedRecords: initial}
-		m.MergeSortedRecords(toMerge)
+	It("should init with tar extension", func() {
+		m := &Manager{}
+		sr := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
+		Expect(m.init(sr)).NotTo(HaveOccurred())
+		_, ok := m.extractCreator.(*tarExtractCreator)
+		Expect(ok).To(BeTrue())
+		Expect(m.extractCreator.UsingCompression()).To(BeFalse())
+	})
 
-		if len(m.SortedRecords) != len(expected) {
-			t.Errorf("expected len: %d, got len: %d", len(expected), len(m.SortedRecords))
-		}
-		for i, v := range m.SortedRecords {
-			if !reflect.DeepEqual(v, expected[i]) {
-				t.Errorf("Record at index %d not equal. Expected: %+v, got: %+v", i, expected[i], v)
-			}
-		}
-	}
-	{
-		initial := []Record{{Key: "c"}, {Key: "a"}}
-		toMerge := []Record{{Key: "e"}, {Key: "d"}, {Key: "b"}}
-		expected := []Record{{Key: "e"}, {Key: "d"}, {Key: "c"}, {Key: "b"}, {Key: "a"}}
-		m := &Manager{SortedRecords: initial, sortAlgo: sortAlgorithm{Decreasing: true}}
-		m.MergeSortedRecords(toMerge)
+	It("should init with tgz extension", func() {
+		m := &Manager{}
+		sr := &ParsedRequestSpec{Extension: extTarTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
+		Expect(m.init(sr)).NotTo(HaveOccurred())
+		_, ok := m.extractCreator.(*tarExtractCreator)
+		Expect(ok).To(BeTrue())
+		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
+	})
 
-		if len(m.SortedRecords) != len(expected) {
-			t.Errorf("expected len: %d, got len: %d", len(expected), len(m.SortedRecords))
-		}
-		for i, v := range m.SortedRecords {
-			if !reflect.DeepEqual(v, expected[i]) {
-				t.Errorf("Record at index %d not equal. Expected: %+v, got: %+v", i, expected[i], v)
-			}
-		}
-	}
-}
+	It("should init with tar.gz extension", func() {
+		m := &Manager{}
+		sr := &ParsedRequestSpec{Extension: extTgz, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
+		Expect(m.init(sr)).NotTo(HaveOccurred())
+		_, ok := m.extractCreator.(*tarExtractCreator)
+		Expect(ok).To(BeTrue())
+		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
+	})
 
-func TestInit(t *testing.T) {
-	{
+	It("should init with zip extension", func() {
 		m := &Manager{}
-		sr := RequestSpec{Extension: ".jpg"}
-		err := m.Init(sr, nil, "http://localhost:8081")
-		if err == nil {
-			t.Error("expected non-nil error from passing in invalid extension, got nil error")
-		}
-	}
-	{
-		m := &Manager{}
-		sr := RequestSpec{Extension: ".tar"}
-		err := m.Init(sr, nil, "http://localhost:8081")
-		if err != nil {
-			t.Errorf("expected nil error, got: %v", err)
-		}
-		if _, ok := m.ExtractCreater.(*tarExtractCreater); !ok {
-			t.Errorf("expected m.ExtractCreater to be type tarExtractCreater, got type %s",
-				reflect.TypeOf(m.ExtractCreater))
-		}
-		if m.ExtractCreater.UsingCompression() {
-			t.Error("ExtractCreater for extension .tar should not be using compression")
-		}
-	}
-	{
-		m := &Manager{}
-		sr := RequestSpec{Extension: ".tgz"}
-		err := m.Init(sr, nil, "http://localhost:8081")
-		if err != nil {
-			t.Errorf("expected nil error, got: %v", err)
-		}
-		if _, ok := m.ExtractCreater.(*tarExtractCreater); !ok {
-			t.Errorf("expected m.ExtractCreater to be type tarExtractCreater, got type %s",
-				reflect.TypeOf(m.ExtractCreater))
-		}
-		if !m.ExtractCreater.UsingCompression() {
-			t.Error("ExtractCreater for extension .tgz should be using compression")
-		}
-	}
-	{
-		m := &Manager{}
-		sr := RequestSpec{Extension: ".tar.gz"}
-		err := m.Init(sr, nil, "http://localhost:8081")
-		if err != nil {
-			t.Errorf("expected nil error, got: %v", err)
-		}
-		if _, ok := m.ExtractCreater.(*tarExtractCreater); !ok {
-			t.Errorf("expected m.ExtractCreater to be type tarExtractCreater, got type %s",
-				reflect.TypeOf(m.ExtractCreater))
-		}
-		if !m.ExtractCreater.UsingCompression() {
-			t.Error("ExtractCreater for extension .tar.gz should be using compression")
-		}
-	}
-}
+		sr := &ParsedRequestSpec{Extension: extZip, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
+		Expect(m.init(sr)).NotTo(HaveOccurred())
+		_, ok := m.extractCreator.(*zipExtractCreator)
+		Expect(ok).To(BeTrue())
+		Expect(m.extractCreator.UsingCompression()).To(BeTrue())
+	})
+})
+
+var _ = Describe("Records", func() {
+	const objectSize = 100
+
+	Context("insert", func() {
+		It("should insert record", func() {
+			records := newRecords(0)
+			records.insert(&record{
+				Key:         "some_key",
+				ContentPath: "some_key",
+				Objects: []*recordObj{
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".cls",
+					},
+				},
+			})
+			records.insert(&record{
+				Key:         "some_key1",
+				ContentPath: "some_key1",
+				Objects: []*recordObj{
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".cls",
+					},
+				},
+			})
+
+			Expect(records.len()).To(Equal(2))
+		})
+
+		It("should insert record but merge it", func() {
+			records := newRecords(0)
+			records.insert(&record{
+				Key:         "some_key",
+				ContentPath: "some_key",
+				Objects: []*recordObj{
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".cls",
+					},
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".txt",
+					},
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".jpg",
+					},
+				},
+			})
+
+			Expect(records.len()).To(Equal(1))
+			Expect(records.objectCount()).To(Equal(3))
+			r := records.all()[0]
+			Expect(r.totalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
+
+			records.insert(&record{
+				Key:         "some_key",
+				ContentPath: "some_key",
+				Objects: []*recordObj{
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".xml",
+					},
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".png",
+					},
+					&recordObj{
+						MetadataSize: 10,
+						Size:         objectSize,
+						Extension:    ".tar",
+					},
+				},
+			})
+
+			Expect(records.len()).To(Equal(1))
+			Expect(records.objectCount()).To(Equal(6))
+			r = records.all()[0]
+			Expect(r.totalSize()).To(BeEquivalentTo(len(r.Objects) * objectSize))
+		})
+	})
+})

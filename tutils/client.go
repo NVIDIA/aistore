@@ -27,6 +27,8 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type (
@@ -663,4 +665,63 @@ func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
 	}
 
 	return response, nil
+}
+
+func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {
+	msg, err := json.Marshal(rs)
+	if err != nil {
+		return "", err
+	}
+
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start)
+	body, err := api.DoHTTPRequest(HTTPClient, http.MethodPost, url, msg)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), err
+}
+
+func AbortDSort(proxyURL, managerUUID string) error {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+	_, err := api.DoHTTPRequest(HTTPClient, http.MethodDelete, url, nil)
+	return err
+}
+
+func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
+	for {
+		allMetrics, err := MetricsDSort(proxyURL, managerUUID)
+		if err != nil {
+			return false, err
+		}
+
+		allFinished := true
+		for _, metrics := range allMetrics {
+			if metrics.Aborted {
+				return true, nil
+			}
+
+			allFinished = allFinished && metrics.Extraction.Finished && metrics.Sorting.Finished && metrics.Creation.Finished
+		}
+
+		if allFinished {
+			break
+		}
+
+		time.Sleep(time.Millisecond * 500)
+	}
+
+	return false, nil
+}
+
+func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, error) {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+	body, err := api.DoHTTPRequest(HTTPClient, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var metrics map[string]*dsort.Metrics
+	err = jsoniter.Unmarshal(body, &metrics)
+	return metrics, err
 }

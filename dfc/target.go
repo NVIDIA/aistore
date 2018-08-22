@@ -98,13 +98,13 @@ type (
 		regstate       regstate // registration state - the state of being registered (with the proxy) or maybe not
 		fsprg          fsprungroup
 		readahead      readaheader
-		dsortManager   dsort.Manager
 	}
 )
 
 //
 // target runner
 //
+
 func (t *targetrunner) Run() error {
 	config := cmn.GCO.Get()
 
@@ -191,8 +191,6 @@ func (t *targetrunner) Run() error {
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Daemon), t.daemonHandler)
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Push)+"/", t.pushHandler)
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), t.tokenHandler)
-	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Sort), t.sortHandler)
-
 	transport.SetMux(cmn.NetworkPublic, t.publicServer.mux) // to register transport handlers at runtime
 	t.registerPublicNetHandler("/", cmn.InvalidHandler)
 
@@ -200,9 +198,7 @@ func (t *targetrunner) Run() error {
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), t.metasyncHandler)
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), t.healthHandler)
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), t.voteHandler)
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Records), t.recordsHandler)
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.RecordContents), t.recordContentsHandler)
-	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Shards), t.shardsHandler)
+	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Sort), dsort.SortHandler)
 	if config.Net.UseIntraControl {
 		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux) // to register transport handlers at runtime
 		t.registerIntraControlNetHandler("/", cmn.InvalidHandler)

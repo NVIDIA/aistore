@@ -28,10 +28,11 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/OneOfOne/xxhash"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -360,6 +361,8 @@ func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
 
 func (h *httprunner) run() error {
 	config := cmn.GCO.Get()
+	dsort.RegisterNode(h.smapowner, h.si)
+
 	// a wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)

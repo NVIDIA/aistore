@@ -28,6 +28,10 @@ tags:
     description: All APIs to perform operations on individual DFC daemons
     externalDocs:
       url: https://github.com/NVIDIA/dfcpub
+  - name: Sort
+    description: All APIs to interact with DSort operation
+    externalDocs:
+      url: https://github.com/NVIDIA/dfcpub/dsort
 servers:
   - url: http://localhost:8080/v1
 paths:
@@ -671,8 +675,225 @@ paths:
             text/plain:
               schema:
                 type: string
+  /sort/start:
+    post:
+      summary: Starts distributed sort operation on cluster
+      operationId: startSort
+      tags:
+        - Sort
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SortSpec'
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: uuid
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+                format: uuid
+  /sort/metrics/{sort-uuid}:
+    get:
+      summary: Get metrics of given sort operation
+      operationId: getSortMetrics
+      tags:
+        - Sort
+      parameters:
+        - name: sort-uuid
+          in: path
+          description: Sort uuid which is returned when starting dsort
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapOfMetrics'
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /sort/abort/{sort-uuid}:
+    delete:
+      summary: Abort distributed sort operation
+      operationId: abortSort
+      tags:
+        - Sort
+      parameters:
+        - name: sort-uuid
+          in: path
+          description: Sort uuid which is returned when starting dsort
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Operation was successfully aborted
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+
 components:
   schemas:
+    SortSpec:
+      type: object
+      properties:
+        bucket:
+          type: string
+          description: Name of the bucket from where data is read and written
+          example: "dsort-bucket"
+        local:
+          type: boolean
+          description: Describes if the bucket is local or not
+          default: false
+        extension:
+          type: string
+          example: ".tar"
+        shard_size:
+          type: integer
+          format: int64
+        input_format:
+          $ref: '#/components/schemas/NameTemplate'
+        output_format:
+          $ref: '#/components/schemas/NameTemplate'
+        algorithm:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum: [alphanumeric, shuffle, none]
+            decreasing:
+              type: boolean
+              default: false
+            seed:
+              type: string
+              default: ""
+        max_mem_usage:
+          type: string
+          example: "10%"
+        extract_concurrency_limit:
+          type: integer
+          minimum: 0
+          default: 10
+          example: 50
+        create_concurrency_limit:
+          type: integer
+          minimum: 0
+          default: 10
+          example: 50
+      required:
+        - bucket
+        - extension
+        - input_format
+        - output_format
+    MapOfMetrics: # <---- dictionary
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          local_extraction:
+            type: object
+            properties:
+              started_time:
+                type: string
+                format: date-time
+              end_time:
+                type: string
+                format: date-time
+              elapsed:
+                type: integer
+                description: Time passed from start to given point of time or end (if the phase has finished)
+                example: 50
+              running:
+                type: boolean
+              finished:
+                type: boolean
+              seen_count:
+                type: integer
+              to_seen_count:
+                type: integer
+              extracted_count:
+                type: integer
+              extracted_size:
+                type: integer
+                format: int64
+              extracted_record_count:
+                type: integer
+              extracted_to_disk_count:
+                type: integer
+              extracted_to_disk_size:
+                type: integer
+                format: int64
+          meta_sorting:
+            type: object
+            properties:
+              started_time:
+                type: string
+                format: date-time
+              end_time:
+                type: string
+                format: date-time
+              elapsed:
+                type: integer
+                description: Time passed from start to given point of time or end (if the phase has finished)
+                example: 50
+              running:
+                type: boolean
+              finished:
+                type: boolean
+              sent_count:
+                type: integer
+              recv_count:
+                type: integer
+          shard_creation:
+            type: object
+            properties:
+              started_time:
+                type: string
+                format: date-time
+              end_time:
+                type: string
+                format: date-time
+              elapsed:
+                type: integer
+                description: Time passed from start to given point of time or end (if the phase has finished)
+                example: 50
+              running:
+                type: boolean
+              finished:
+                type: boolean
+              to_create:
+                type: integer
+              created_count:
+                type: integer
+              moved_shard_count:
+                type: integer
+          aborted:
+            type: boolean
+            description: Specifies if the distributed sort has been aborted or not.
+    NameTemplate:
+      type: string
+      example: "prefix-{0001..0999}-suffix"
     InputParameters:
       type: object
       properties:

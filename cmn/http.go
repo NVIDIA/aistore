@@ -5,6 +5,8 @@
 package cmn
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"html"
 	"io"
@@ -156,4 +158,18 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 		return err
 	}
 	return nil
+}
+
+// ReqWithContext executes request with ability to cancel it.
+func ReqWithContext(method, url string, body []byte) (*http.Request, context.Context, context.CancelFunc, error) {
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if method == http.MethodPost || method == http.MethodPut {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	req = req.WithContext(ctx)
+	return req, ctx, cancel, nil
 }

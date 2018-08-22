@@ -125,10 +125,9 @@ const (
 	URLParamReadahead        = "rah" // Proxy to target: readeahed
 
 	// dsort
-	URLParamBucket                = "bucket" // TODO: remove?!
-	URLParamTotalCompressionRatio = "total_compression_ratio"
-	URLParamTotalInputShardsSeen  = "total_input_shards_seen"
-	URLParamPathToContents        = "path_to_contents"
+	URLParamTotalCompressedSize   = "tcs"
+	URLParamTotalUncompressedSize = "tunc"
+	URLParamTotalInputShardsSeen  = "tiss"
 )
 
 // TODO: sort and some props are TBD
@@ -291,10 +290,12 @@ const (
 	Mountpaths = "mountpaths"
 
 	// dsort
-	Sort           = "sort"
-	Records        = "records"
-	RecordContents = "record-contents"
-	Shards         = "shards"
+	Sort    = "sort"
+	Start   = "start"
+	Abort   = "abort"
+	Metrics = "metrics"
+	Records = "records"
+	Shards  = "shards"
 )
 
 const (

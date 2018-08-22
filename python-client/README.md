@@ -91,6 +91,9 @@ Class | Method | HTTP request | Description
 *ObjectApi* | [**get_properties**](docs/ObjectApi.md#get_properties) | **HEAD** /objects/{bucket-name}/{object-name} | Query object properties
 *ObjectApi* | [**perform_operation**](docs/ObjectApi.md#perform_operation) | **POST** /objects/{bucket-name}/{object-name} | Perform operations on object such as rename
 *ObjectApi* | [**put**](docs/ObjectApi.md#put) | **PUT** /objects/{bucket-name}/{object-name} | Put object
+*SortApi* | [**abort_sort**](docs/SortApi.md#abort_sort) | **DELETE** /sort/abort/{sort-uuid} | Abort distributed sort operation
+*SortApi* | [**get_sort_metrics**](docs/SortApi.md#get_sort_metrics) | **GET** /sort/metrics/{sort-uuid} | Get metrics of given sort operation
+*SortApi* | [**start_sort**](docs/SortApi.md#start_sort) | **POST** /sort/start | Starts distributed sort operation on cluster
 
 
 ## Documentation For Models
@@ -127,6 +130,7 @@ Class | Method | HTTP request | Description
  - [InputParameters](docs/InputParameters.md)
  - [KeepAliveTrackerConfiguration](docs/KeepAliveTrackerConfiguration.md)
  - [ListParameters](docs/ListParameters.md)
+ - [MapOfMetrics](docs/MapOfMetrics.md)
  - [NetInfo](docs/NetInfo.md)
  - [ObjectProperties](docs/ObjectProperties.md)
  - [ObjectPropertiesRequestParams](docs/ObjectPropertiesRequestParams.md)
@@ -140,6 +144,8 @@ Class | Method | HTTP request | Description
  - [RebalanceClusterStatistics](docs/RebalanceClusterStatistics.md)
  - [RebalanceTargetStatistics](docs/RebalanceTargetStatistics.md)
  - [Snode](docs/Snode.md)
+ - [SortSpec](docs/SortSpec.md)
+ - [SortSpecAlgorithm](docs/SortSpecAlgorithm.md)
  - [TargetCoreStatistics](docs/TargetCoreStatistics.md)
  - [TargetStatistics](docs/TargetStatistics.md)
  - [TimeFormat](docs/TimeFormat.md)
