@@ -2367,6 +2367,9 @@ func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request, 
 
 func (t *targetrunner) bmdVersionFixup() {
 	smap := t.smapowner.get()
+	if smap == nil || !smap.isValid() {
+		return
+	}
 	psi := smap.ProxySI
 	q := url.Values{}
 	q.Add(URLParamWhat, GetWhatBucketMeta)
