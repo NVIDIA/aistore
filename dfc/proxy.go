@@ -2403,7 +2403,7 @@ func validateBucketProps(props *BucketProps, isLocal bool) error {
 			props.WritePolicy = RWPolicyNextTier
 		}
 	}
-	if props.CksumConf.Checksum != "" && props.CksumConf.Checksum != ChecksumInherit &&
+	if props.CksumConf.Checksum != ChecksumInherit &&
 		props.CksumConf.Checksum != ChecksumNone && props.CksumConf.Checksum != ChecksumXXHash {
 		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s", props.CksumConf.Checksum, ChecksumXXHash, ChecksumNone, ChecksumInherit)
 	}
