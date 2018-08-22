@@ -693,8 +693,7 @@ Currently, the endpoints which support multi-tier policies are the following:
 
 ### Checksumming
 
-Checksumming on bucket level is configured at the bucket level by setting
-bucket properties:
+Checksumming on bucket level is configured by setting bucket properties:
 
 * `cksum_config.checksum`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
 `"inherit"` indicates that the global checksumming configuration should be used.
@@ -704,8 +703,7 @@ whether to perform checksum validation during cold GET.
 whether to perform checksum validation during warm GET.
 * `cksum_config.enable_read_range_checksum`: `true` or `false` indicate whether to perform checksum validation during byte serving.
 
-If the client specifies a hashing algorithm, then he should also explicitly provide the value for every other `cksum_config` setting,
-otherwise the default values for those setting will be applied.
+Value for the `checksum` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise the request will be rejected.
 
 Example of setting bucket properties:
 ```shell
