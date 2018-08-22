@@ -109,7 +109,7 @@ func (p *proxyrunner) run() error {
 	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 		p.rproxy.cloud = &httputil.ReverseProxy{
 			Director:  func(r *http.Request) {},
-			Transport: p.createTransport(0, 0),
+			Transport: p.createTransport(0, 0), // default idle connections per host, unlimited idle total
 		}
 	}
 

@@ -37,8 +37,8 @@ import (
 )
 
 const ( // to compute MaxIdleConnsPerHost and MaxIdleConns
-	targetMaxIdleConnsPer = 4
-	proxyMaxIdleConnsPer  = 8
+	targetMaxIdleConnsPer = 32
+	proxyMaxIdleConnsPer  = 32
 )
 const ( //  h.call(timeout)
 	defaultTimeout = time.Duration(-1)
@@ -241,18 +241,13 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	if isproxy {
 		perhost = proxyMaxIdleConnsPer
 	}
-	numDaemons := ctx.config.Net.HTTP.MaxNumTargets * 2 // an estimate, given a dual-function
-	assert(numDaemons < 1024)                           // not a limitation!
-	if numDaemons < 4 {
-		numDaemons = 4
-	}
 
 	h.httpclient = &http.Client{
-		Transport: h.createTransport(perhost, numDaemons),
+		Transport: h.createTransport(perhost, 0),
 		Timeout:   ctx.config.Timeout.Default, // defaultTimeout
 	}
 	h.httpclientLongTimeout = &http.Client{
-		Transport: h.createTransport(perhost, numDaemons),
+		Transport: h.createTransport(perhost, 0),
 		Timeout:   ctx.config.Timeout.DefaultLong, // longTimeout
 	}
 	h.publicServer = &netServer{
@@ -335,7 +330,7 @@ func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
 		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
 		// custom
 		MaxIdleConnsPerHost: perhost,
-		MaxIdleConns:        perhost * numDaemons,
+		MaxIdleConns:        0, // Zero means no limit
 	}
 	if ctx.config.Net.HTTP.UseHTTPS {
 		glog.Warningln("HTTPS for inter-cluster communications is not yet supported and should be avoided")
