@@ -7,7 +7,7 @@ DFC is a simple distributed caching service written in Go. The service consists 
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
 
-Users connect to the proxies and execute RESTful commands. Data then moves directly between storage targets that cache this data and the requesting HTTP(S) clients.
+Users connect to the proxies and execute RESTful commands. Data then moves directly between storage targets (that store or cache this data) and the requesting HTTP or HTTPS clients. All DFC proxies/gateways provide API endpoints and are identical, functionality-wise, as far as user-accessible control and data planes.
 
 
 ## Table of Contents
@@ -26,6 +26,8 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
   * [Disabling extended attributes](#disabling-extended-attributes)
   * [Enabling HTTPS](#enabling-https)
   * [Filesystem Health Checker](#filesystem-health-checker)
+  * [Networking](#networking)
+  * [Reverse proxy](#reverse-proxy)
 - [Performance tuning](#performance-tuning)
 - [REST Operations](#rest-operations)
   * [Querying information](#querying-information)
@@ -38,6 +40,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
   * [Bootstrap](#bootstrap)
   * [Election](#election)
   * [Non-electable gateways](#non-electable-gateways)
+  * [Metasync](#metasync)
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
 - [Multi-tiering](#multi-tiering)
@@ -260,6 +263,13 @@ When enabled, FSHC gets notified on every I/O error upon which it performs exten
 
 Please see [FSHC readme](./fshc.md) for further details.
 
+### Networking
+
+In addition to user-accessible (public) network, DFC cluster will optionally make use of a 2nd network that we call "internal" or intra-cluster. If configured via the [netconfig section of the configuration](dfc/setup/config.sh), this network will be utilized for latency-sensitive control plane communications including keep-alive and [metasync](#metasync).
+
+### Reverse proxy
+
+DFC gateway can act as a reverse proxy vis-à-vis DFC storage targets. As of the v1.2, this functionality is restricted to GET requests only and must be used with caution and consideration. Related [configuration variable](dfc/setup/config.sh) is called "rproxy" - see sub-section "http" of the section "netconfig". To eliminate HTTP redirects, simply set the "rproxy" value to "target" ("rproxy": "target").
 
 ## Performance tuning
 
@@ -631,6 +641,11 @@ The primary proxy election process is as follows:
 ### Non-electable gateways
 
 DFC cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([DFC configuration](dfc/setup/config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
+
+### Metasync
+
+By design DFC does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In DFC, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](dfc/metasync.go). DFC metasync makes sure to keep cluster-level metadata in-sync at all times.
+
 
 ## WebDAV
 
