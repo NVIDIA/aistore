@@ -214,7 +214,7 @@ Both a proxy and a storage target support the same set of runtime options but a 
 Warning: as of the version 1.2, all changes done via REST API(below) are not persistent. The default values are also all as of version 1.2 and are subject to change in next versions.
 
 | Option | Default value | Description |
-|---|---|---|---|
+|---|---|---|
 | loglevel | 3 | Set global logging level. The greater number the more verbose log output |
 | vmodule | "" | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
 | stats_time | 10s | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
