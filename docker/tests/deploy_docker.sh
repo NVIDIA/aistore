@@ -81,7 +81,9 @@ IPV4LIST_INTRA=""
 for i in `seq 2 $(( $TARGET_CNT + $PROXY_CNT + 1 ))`; do
     IPV4LIST="${IPV4LIST}${PUB_NET}.$i,"
 done
-IPV4LIST=${IPV4LIST::-1} # remove last ","
+if [ "$IPV4LIST" != "" ]; then
+    IPV4LIST=${IPV4LIST::-1} # remove last ","
+fi
 
 if [ "$network" = "multi" ]; then
     for i in `seq 2 $(( $TARGET_CNT + $PROXY_CNT + 1 ))`; do
