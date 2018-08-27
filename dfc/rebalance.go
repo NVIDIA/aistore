@@ -337,7 +337,9 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 	}
 
 	// do rebalance
-	glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si.DaemonID, si.DaemonID)
+	if glog.V(4) {
+		glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si.DaemonID, si.DaemonID)
+	}
 	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", ""); errstr != "" {
 		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
 	} else {

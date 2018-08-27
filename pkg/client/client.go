@@ -269,7 +269,7 @@ func emitError(r *http.Response, err error, errch chan error) {
 	}
 }
 
-func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+func get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
@@ -279,7 +279,7 @@ func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 		defer wg.Done()
 	}
 
-	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
+	url += "/" + dfc.Rversion + "/" + dfc.Robjects + "/" + bucket + "/" + keyname
 	req, _ := http.NewRequest("GET", url, nil)
 	req.URL.RawQuery = query.Encode() // golang handles query == nil
 
@@ -343,28 +343,28 @@ func get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	return len, l, err
 }
 
-// Get sends a get request to proxy and discard the data returned
-func Get(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+// Get sends a GET request to url and discards returned data
+func Get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool) (int64, HTTPLatencies, error) {
-	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, nil)
+	return get(url, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, nil)
 }
 
-// Get sends a get request to proxy and discard the data returned
-func GetWithQuery(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+// Get sends a GET request to url and discards the return
+func GetWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool, q url.Values) (int64, HTTPLatencies, error) {
-	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, q)
+	return get(url, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, q)
 }
 
-// GetFile sends a get request to proxy and save the data returned to an io.Writer
-func GetFile(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+// GetFile sends a GET request to url and writes the data to io.Writer
+func GetFile(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
-	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w, nil)
+	return get(url, bucket, keyname, wg, errch, silent, validate, w, nil)
 }
 
-// GetFile sends a get request to proxy and save the data returned to an io.Writer
-func GetFileWithQuery(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+// GetFile sends a GET request to url and writes the data to io.Writer
+func GetFileWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
 	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
-	return get(proxyurl, bucket, keyname, wg, errch, silent, validate, w, query)
+	return get(url, bucket, keyname, wg, errch, silent, validate, w, query)
 }
 
 func Del(proxyurl, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
@@ -666,6 +666,10 @@ func HeadObject(proxyurl, bucket, objname string) (objProps *ObjectProps, err er
 
 func SetBucketProps(proxyurl, bucket string, props dfc.BucketProps) error {
 	var url = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, bucket)
+
+	if props.CksumConf.Checksum == "" {
+		props.CksumConf.Checksum = dfc.ChecksumInherit
+	}
 
 	b, err := json.Marshal(dfc.ActionMsg{Action: dfc.ActSetProps, Value: props})
 	if err != nil {

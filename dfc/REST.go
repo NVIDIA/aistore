@@ -73,25 +73,26 @@ const (
 	Version               = "Version"               // Object version number
 )
 
-// URL Query Parameter enum
+// URL Query "?name1=val1&name2=..."
 const (
-	URLParamLocal            = "local"         // true: bucket is expected to be local
-	URLParamFromID           = "from_id"       // from_id=string - ID to copy from
-	URLParamToID             = "to_id"         // to_id=string - ID to copy to
-	URLParamFromName         = "from_name"     // rename from
-	URLParamToName           = "to_name"       // rename to
-	URLParamCached           = "cachedonly"    // true: return cached objects (names, metadata) instead of requesting the list from the cloud
-	URLParamPrimaryCandidate = "candidate"     // ID of the candidate for the primary proxy
-	URLParamForce            = "force"         // true: shutdown the primary proxy
-	URLParamPrepare          = "prepare"       // true: request belongs to the "prepare" phase of the primary proxy election
-	URLParamDaemonID         = "daemon_id"     // daemon ID
-	URLParamCheckCached      = "check_cached"  // true: check if object is cached in DFC
-	URLParamOffset           = "offset"        // Offset from where the object should be read
-	URLParamLength           = "length"        // the total number of bytes that need to be read from the offset
-	URLParamWhat             = "what"          // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
-	URLParamProps            = "props"         // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
-	URLParamNonElectable     = "non_electable" // true: proxy is non-electable for the primary role
-	URLParamMetaVersions     = "meta_versions" // cluster-wide metadata version info (json)
+	// user/app API
+	URLParamWhat        = "what"         // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
+	URLParamProps       = "props"        // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
+	URLParamCheckCached = "check_cached" // true: check if object is cached in DFC
+	URLParamOffset      = "offset"       // Offset from where the object should be read
+	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
+	// internal use
+	URLParamLocal            = "loc" // true: bucket is local
+	URLParamFromID           = "fid" // source target ID
+	URLParamToID             = "tid" // destination target ID
+	URLParamProxyID          = "pid" // ID of the redirecting proxy
+	URLParamPrimaryCandidate = "can" // ID of the candidate for the primary proxy
+	URLParamCached           = "cho" // true: return cached objects (names & metadata); false: list Cloud bucket
+	URLParamForce            = "frc" // true: force the operation (e.g., shutdown primary proxy and the entire cluster)
+	URLParamPrepare          = "prp" // true: request belongs to the "prepare" phase of the primary proxy election
+	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
+	URLParamSmapVersion      = "vsm" // Smap version
+	URLParamBMDVersion       = "vbm" // version of the bucket-metadata
 )
 
 // TODO: sort and some props are TBD
@@ -139,11 +140,6 @@ type SmapVoteMsg struct {
 type MountpathList struct {
 	Available []string `json:"available"`
 	Disabled  []string `json:"disabled"`
-}
-
-type MetadataVersionInfo struct {
-	SmapVersion     int64
-	BucketMDVersion int64
 }
 
 //===================

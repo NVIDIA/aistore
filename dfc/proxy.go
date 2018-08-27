@@ -303,10 +303,6 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	if p.smapowner.get().countTargets() < 1 {
-		p.invalmsghdlr(w, r, "No registered targets yet")
-		return
-	}
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -316,22 +312,12 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	si, errstr := HrwTarget(bucket, objname, p.smapowner.get())
+	smap := p.smapowner.get()
+	si, errstr := HrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	var (
-		redirecturl string
-		mdinfo      MetadataVersionInfo
-		mdinfobytes []byte
-		bucketmd    = p.bmdowner.get()
-		islocal     = bucketmd.islocal(bucket)
-	)
-	mdinfo.SmapVersion = p.smapowner.get().version()
-	mdinfo.BucketMDVersion = bucketmd.version()
-	mdinfobytes, err := json.Marshal(mdinfo)
-	assert(err == nil, err)
 
 	if ctx.config.Net.HTTP.RevProxy == RevProxyTarget {
 		if glog.V(4) {
@@ -339,28 +325,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.reverseDP(w, r, si)
 	} else {
-		if r.URL.RawQuery != "" {
-			redirecturl = fmt.Sprintf("%s%s?%s&%s=%t", si.PublicNet.DirectURL, r.URL.Path, r.URL.RawQuery, URLParamLocal, islocal)
-		} else {
-			redirecturl = fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
-		}
-		redirecturl = fmt.Sprintf("%s&%s=%s", redirecturl, URLParamMetaVersions, mdinfobytes)
 		if glog.V(4) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 		}
-		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
-			req, err := http.NewRequest(http.MethodGet, redirecturl, r.Body)
-			if err != nil {
-				p.invalmsghdlr(w, r, err.Error())
-				return
-			}
-			p.rproxy.cloud.ServeHTTP(w, req)
-		} else {
-			http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
-		}
+		redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
 	delta := time.Since(started)
-	p.statsif.addMany("numget", int64(1), "getlatency", int64(delta))
+	p.statsif.addMany(namedVal64{"numget", 1}, namedVal64{"getlatency", int64(delta)})
 }
 
 // PUT "/"+Rversion+"/"+Robjects
@@ -375,20 +347,20 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	// FIXME: add protection against putting into non-existing local bucket
 	//
 	objname := strings.Join(apitems[1:], "/")
-	si, errstr := HrwTarget(bucket, objname, p.smapowner.get())
+	smap := p.smapowner.get()
+	si, errstr := HrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t&%s=%s", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal,
-		p.bmdowner.get().islocal(bucket), URLParamDaemonID, p.httprunner.si.DaemonID)
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	delta := time.Since(started)
-	p.statsif.addMany("numput", int64(1), "putlatency", int64(delta))
+	p.statsif.addMany(namedVal64{"numput", 1}, namedVal64{"putlatency", int64(delta)})
 }
 
 // DELETE { action } /Rversion/Rbuckets
@@ -427,6 +399,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.put(clone)
 		p.bmdowner.Unlock()
+		msg.Action = path.Join(msg.Action, bucket)
 		p.metasyncer.sync(true, clone, &msg)
 	case ActDelete, ActEvict:
 		p.actionlistrange(w, r, &msg)
@@ -443,18 +416,19 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket := apitems[0]
 	objname := strings.Join(apitems[1:], "/")
-	si, errstr := HrwTarget(bucket, objname, p.smapowner.get())
+	smap := p.smapowner.get()
+	si, errstr := HrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := si.PublicNet.DirectURL + r.URL.Path
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	p.statsif.add("numdelete", 1)
-	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
 // [METHOD] /Rversion/Rmetasync
@@ -570,6 +544,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.put(clone)
 		p.bmdowner.Unlock()
+		msg.Action = path.Join(msg.Action, lbucket)
 		p.metasyncer.sync(true, clone, &msg)
 	case ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
@@ -620,7 +595,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
-		p.statsif.addMany("numlist", int64(1), "listlatency", int64(delta))
+		p.statsif.addMany(namedVal64{"numlist", 1}, namedVal64{"listlatency", int64(delta)})
 		if glog.V(3) {
 			lat := int64(delta / time.Microsecond)
 			if pagemarker != "" {
@@ -673,10 +648,10 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	for _, si = range smap.Tmap {
 		break
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, p.bmdowner.get().islocal(bucket))
 	if glog.V(3) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
@@ -758,17 +733,17 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	var si *daemonInfo
-	si, errstr := HrwTarget(bucket, objname, p.smapowner.get())
+	smap := p.smapowner.get()
+	si, errstr := HrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		return
 	}
-	redirecturl := fmt.Sprintf("%s%s?%s=%t", si.PublicNet.DirectURL, r.URL.Path, URLParamLocal, p.bmdowner.get().islocal(bucket))
+	if glog.V(4) {
+		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
+	}
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
 	if checkCached {
 		redirecturl += fmt.Sprintf("&%s=true", URLParamCheckCached)
-	}
-	if glog.V(3) {
-		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
@@ -909,6 +884,25 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	}
 }
 
+func (p *proxyrunner) redirectURL(r *http.Request, to string, bucket string) (redirect string) {
+	var (
+		query    = url.Values{}
+		bucketmd = p.bmdowner.get()
+		islocal  = bucketmd.islocal(bucket)
+	)
+	redirect = to + r.URL.Path + "?"
+	if r.URL.RawQuery != "" {
+		redirect += r.URL.RawQuery + "&"
+	}
+
+	query.Add(URLParamLocal, strconv.FormatBool(islocal))
+	query.Add(URLParamProxyID, p.si.DaemonID)
+	query.Add(URLParamBMDVersion, bucketmd.vstr)
+
+	redirect += query.Encode()
+	return
+}
+
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
 	getMsg *GetMsg, islocal bool, cached bool) (*bucketResp, error) {
@@ -929,12 +923,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 	query := url.Values{}
 	query.Add(URLParamLocal, strconv.FormatBool(islocal))
 	query.Add(URLParamCached, strconv.FormatBool(cached))
-
-	var mdinfo MetadataVersionInfo
-	mdinfo.SmapVersion = p.smapowner.get().version()
-	mdinfo.BucketMDVersion = p.bmdowner.get().version()
-	mdinfobytes, err := json.Marshal(mdinfo)
-	query.Add(URLParamMetaVersions, string(mdinfobytes))
+	query.Add(URLParamBMDVersion, p.bmdowner.get().vstr)
 
 	args := callArgs{
 		si: dinfo,
@@ -1291,22 +1280,23 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 		return
 	}
 
-	si, errstr := HrwTarget(lbucket, objname, p.smapowner.get())
+	smap := p.smapowner.get()
+	si, errstr := HrwTarget(lbucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
 	}
-	redirecturl := si.PublicNet.DirectURL + r.URL.Path
 	if glog.V(3) {
 		glog.Infof("RENAME %s %s/%s => %s", r.Method, lbucket, objname, si.DaemonID)
 	}
 
-	p.statsif.add("numrename", 1)
-
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
 	//       original JSON payload (GetMsg - see REST.go)
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, lbucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
+
+	p.statsif.add("numrename", 1)
 }
 
 func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *ActionMsg) {

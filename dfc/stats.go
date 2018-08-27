@@ -39,12 +39,18 @@ type fscapacity struct {
 type statslogger interface {
 	log() (runlru bool)
 	housekeep(bool)
+	doAdd(nv namedVal64)
 }
 
 // implemented by the ***CoreStats types
 type statsif interface {
 	add(name string, val int64)
-	addMany(nameval ...interface{})
+	addMany(namedVal64 ...namedVal64)
+}
+
+type namedVal64 struct {
+	name string
+	val  int64
 }
 
 type proxyCoreStats struct {
@@ -92,7 +98,8 @@ type targetCoreStats struct {
 type statsrunner struct {
 	sync.RWMutex
 	namedrunner
-	chsts     chan struct{}
+	stopCh    chan struct{}
+	workCh    chan namedVal64
 	starttime time.Time
 }
 
@@ -127,7 +134,7 @@ type ClusterStatsRaw struct {
 type iostatrunner struct {
 	sync.RWMutex
 	namedrunner
-	chsts       chan struct{}
+	stopCh      chan struct{}
 	CPUidle     string
 	metricnames []string
 	Disk        map[string]simplekvs
@@ -183,17 +190,22 @@ type (
 //
 //==================
 func (r *statsrunner) runcommon(logger statslogger) error {
-	r.chsts = make(chan struct{}, 4)
+	r.stopCh = make(chan struct{}, 4)
+	r.workCh = make(chan namedVal64, 256)
 	r.starttime = time.Now()
 
 	glog.Infof("Starting %s", r.name)
 	ticker := time.NewTicker(ctx.config.Periodic.StatsTime)
 	for {
 		select {
+		case nv, ok := <-r.workCh:
+			if ok {
+				logger.doAdd(nv)
+			}
 		case <-ticker.C:
 			runlru := logger.log()
 			logger.housekeep(runlru)
-		case <-r.chsts:
+		case <-r.stopCh:
 			ticker.Stop()
 			return nil
 		}
@@ -203,17 +215,24 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 func (r *statsrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 	var v struct{}
-	r.chsts <- v
-	close(r.chsts)
+	r.stopCh <- v
+	close(r.stopCh)
+	close(r.workCh)
 }
 
 // statslogger interface impl
-func (r *statsrunner) log() (runlru bool) {
-	assert(false)
-	return false
+func (r *statsrunner) log() (runlru bool) { return false }
+func (r *statsrunner) housekeep(bool)     {}
+func (r *statsrunner) doAdd(nv namedVal64) {}
+
+func (r *statsrunner) addMany(nvs ...namedVal64) {
+	for _, nv := range nvs {
+		r.workCh <- nv
+	}
 }
 
-func (r *statsrunner) housekeep(bool) {
+func (r *statsrunner) add(name string, val int64) {
+	r.workCh <- namedVal64{name, val}
 }
 
 //=================
@@ -264,33 +283,14 @@ func (r *proxystatsrunner) log() (runlru bool) {
 	return
 }
 
-func (r *proxystatsrunner) add(name string, val int64) {
+func (r *proxystatsrunner) doAdd(nv namedVal64) {
 	r.Lock()
-	r.addL(name, val)
-	r.Unlock()
-}
-
-func (r *proxystatsrunner) addMany(nameval ...interface{}) {
-	r.Lock()
-	i := 0
-	for i < len(nameval) {
-		statsname, ok := nameval[i].(string)
-		assert(ok, fmt.Sprintf("Invalid stats name: %v, %T", nameval[i], nameval[i]))
-		i++
-		statsval, ok := nameval[i].(int64)
-		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
-		i++
-		r.addL(statsname, statsval)
-	}
-	r.Unlock()
-}
-
-func (r *proxystatsrunner) addL(name string, val int64) {
 	s := &r.Core
-	s.addL(name, val)
+	s.doAdd(nv.name, nv.val)
+	r.Unlock()
 }
 
-func (s *proxyCoreStats) addL(name string, val int64) {
+func (s *proxyCoreStats) doAdd(name string, val int64) {
 	var v *int64
 	switch name {
 	case "numget":
@@ -554,41 +554,21 @@ func (r *storstatsrunner) updateCapacity() (runlru bool) {
 	return
 }
 
-func (r *storstatsrunner) add(name string, val int64) {
+func (r *storstatsrunner) doAdd(nv namedVal64) {
 	r.Lock()
-	r.addL(name, val)
-	r.Unlock()
-}
-
-// FIXME: copy paste
-func (r *storstatsrunner) addMany(nameval ...interface{}) {
-	r.Lock()
-	i := 0
-	for i < len(nameval) {
-		statsname, ok := nameval[i].(string)
-		assert(ok, fmt.Sprintf("Invalid stats name: %v, %T", nameval[i], nameval[i]))
-		i++
-		statsval, ok := nameval[i].(int64)
-		assert(ok, fmt.Sprintf("Invalid stats type: %v, %T", nameval[i], nameval[i]))
-		i++
-		r.addL(statsname, statsval)
-	}
-	r.Unlock()
-}
-
-func (r *storstatsrunner) addL(name string, val int64) {
 	s := &r.Core
-	s.addL(name, val)
+	s.doAdd(nv.name, nv.val)
+	r.Unlock()
 }
 
-func (s *targetCoreStats) addL(name string, val int64) {
+func (s *targetCoreStats) doAdd(name string, val int64) {
 	var v *int64
 	switch name {
 	// common
 	case "numget", "numput", "numpost", "numdelete", "numrename", "numlist",
 		"getlatency", "putlatency", "listlatency",
 		"kalive", "kalivemin", "kalivemax", "numerr":
-		s.proxyCoreStats.addL(name, val)
+		s.proxyCoreStats.doAdd(name, val)
 		return
 	// target only
 	case "numcoldget":

@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"encoding/json"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -26,9 +27,10 @@ type BucketProps struct {
 }
 
 type bucketMD struct {
-	LBmap   map[string]BucketProps `json:"l_bmap"` // local cache-only buckets and their props
-	CBmap   map[string]BucketProps `json:"c_bmap"` // Cloud-based buckets and their DFC-only metadata
-	Version int64                  `json:"version"`
+	LBmap   map[string]BucketProps `json:"l_bmap"`  // local cache-only buckets and their props
+	CBmap   map[string]BucketProps `json:"c_bmap"`  // Cloud-based buckets and their DFC-only metadata
+	Version int64                  `json:"version"` // version - gets incremented on every update
+	vstr    string                 // itoa(Version), to have it handy for http redirects
 }
 
 type bmdowner struct {
@@ -37,6 +39,7 @@ type bmdowner struct {
 }
 
 func (r *bmdowner) put(bucketmd *bucketMD) {
+	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
 	atomic.StorePointer(&r.bucketmd, unsafe.Pointer(bucketmd))
 }
 

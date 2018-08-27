@@ -345,10 +345,14 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-
+	query := r.URL.Query()
+	if glog.V(4) {
+		pid := query.Get(URLParamProxyID)
+		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
+	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.islocal(bucket)
-	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
+	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -534,7 +538,7 @@ existslocally:
 	}
 
 	delta := time.Since(started)
-	t.statsif.addMany("numget", int64(1), "getlatency", int64(delta))
+	t.statsif.addMany(namedVal64{"numget", 1}, namedVal64{"getlatency", int64(delta)})
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
@@ -615,7 +619,10 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// PUT
-		pid := query.Get(URLParamDaemonID)
+		pid := query.Get(URLParamProxyID)
+		if glog.V(4) {
+			glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
+		}
 		if pid == "" {
 			t.invalmsghdlr(w, r, "PUT requests are expected to be redirected")
 			return
@@ -795,7 +802,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		tag, ok := t.listbucket(w, r, lbucket, &msg)
 		if ok {
 			delta := time.Since(started)
-			t.statsif.addMany("numlist", int64(1), "listlatency", int64(delta))
+			t.statsif.addMany(namedVal64{"numlist", 1}, namedVal64{"listlatency", int64(delta)})
 			if glog.V(3) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
@@ -848,9 +855,14 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
+	query := r.URL.Query()
+	if glog.V(4) {
+		pid := query.Get(URLParamProxyID)
+		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
+	}
 	bucketmd := t.bmdowner.get()
 	islocal = bucketmd.islocal(bucket)
-	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
+	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -913,8 +925,14 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	islocal = t.bmdowner.get().islocal(bucket)
-	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
+	query := r.URL.Query()
+	if glog.V(4) {
+		pid := query.Get(URLParamProxyID)
+		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
+	}
+	bucketmd := t.bmdowner.get()
+	islocal = bucketmd.islocal(bucket)
+	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -1356,9 +1374,10 @@ ret:
 		t.rtnamemap.unlockname(uname, true)
 	} else {
 		if vchanged {
-			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size, "bytesvchanged", props.size, "numvchanged", int64(1))
+			t.statsif.addMany(namedVal64{"numcoldget", 1}, namedVal64{"bytesloaded", props.size},
+				namedVal64{"bytesvchanged", props.size}, namedVal64{"numvchanged", 1})
 		} else {
-			t.statsif.addMany("numcoldget", int64(1), "bytesloaded", props.size)
+			t.statsif.addMany(namedVal64{"numcoldget", 1}, namedVal64{"bytesloaded", props.size})
 		}
 		t.rtnamemap.downgradelock(uname)
 	}
@@ -1572,8 +1591,14 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		errstr  string
 		errcode int
 	)
-	islocal := t.bmdowner.get().islocal(bucket)
-	errstr, errcode = t.checkLocalQueryParameter(bucket, r, islocal)
+	query := r.URL.Query()
+	if glog.V(4) {
+		pid := query.Get(URLParamProxyID)
+		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
+	}
+	bucketmd := t.bmdowner.get()
+	islocal := bucketmd.islocal(bucket)
+	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -1837,7 +1862,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 		if errstr == "" {
 			delta := time.Since(started)
-			t.statsif.addMany("numput", int64(1), "putlatency", int64(delta))
+			t.statsif.addMany(namedVal64{"numput", 1}, namedVal64{"putlatency", int64(delta)})
 			if glog.V(4) {
 				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 			}
@@ -2019,7 +2044,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		//
 		// the destination
 		//
-		if glog.V(3) {
+		if glog.V(4) {
 			glog.Infof("Rebalance %s/%s from %s to %s (self, %s, ver %d)", bucket, objname, from, to, fqn, ver)
 		}
 		putfqn := t.fqn2workfile(fqn)
@@ -2047,7 +2072,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
-			t.statsif.addMany("numrecvfiles", int64(1), "numrecvbytes", size)
+			t.statsif.addMany(namedVal64{"numrecvfiles", 1}, namedVal64{"numrecvbytes", size})
 		}
 	}
 	return
@@ -2092,7 +2117,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		if err := os.Remove(fqn); err != nil {
 			return err
 		} else if evict {
-			t.statsif.addMany("filesevicted", int64(1), "bytesevicted", finfo.Size())
+			t.statsif.addMany(namedVal64{"filesevicted", 1}, namedVal64{"bytesevicted", finfo.Size()})
 		}
 	}
 	return nil
@@ -2307,7 +2332,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	response.Body.Close()
 	// stats
-	t.statsif.addMany("numsentfiles", int64(1), "numsentbytes", size)
+	t.statsif.addMany(namedVal64{"numsentfiles", 1}, namedVal64{"numsentbytes", size})
 	return ""
 }
 
@@ -2322,36 +2347,34 @@ func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool,
 	return
 }
 
-func (t *targetrunner) checkLocalQueryParameter(bucket string, r *http.Request, islocal bool) (errstr string, errcode int) {
-	var (
-		q             = r.URL.Query()
-		proxylocalstr = q.Get(URLParamLocal)
-		bucketmd      = t.bmdowner.get()
-		mdinfo        MetadataVersionInfo
-	)
-
-	if proxylocal, err := parsebool(proxylocalstr); err != nil {
+func (t *targetrunner) checkIsLocal(bucket string, bucketmd *bucketMD, q url.Values, islocal bool) (errstr string, errcode int) {
+	proxylocalstr := q.Get(URLParamLocal)
+	if proxylocalstr == "" {
+		return
+	}
+	proxylocal, err := parsebool(proxylocalstr)
+	if err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, URLParamLocal, proxylocalstr)
 		errcode = http.StatusInternalServerError
-	} else if proxylocalstr != "" && islocal != proxylocal {
-		errstr = fmt.Sprintf("islocalbucket(%s) mismatch: %t (proxy) != %t (target %s)", bucket, proxylocal, islocal, t.si.DaemonID)
-		errcode = http.StatusInternalServerError
-
-		if s := q.Get(URLParamMetaVersions); s != "" {
-			err := json.Unmarshal([]byte(s), &mdinfo)
-			if err != nil {
-				glog.Errorf("Unexpected: failed to unmarshal %s mdinfo, err: %v", s, err)
-			} else if mdinfo.BucketMDVersion < bucketmd.version() {
-				glog.Errorf("bucket-metadata v%d > v%d (primary)", bucketmd.version(), mdinfo.BucketMDVersion)
-				// fix-up
-			} else if mdinfo.BucketMDVersion > bucketmd.version() {
-				glog.Errorf("Warning: bucket-metadata v%d < v%d (primary) - updating...", bucketmd.version(), mdinfo.BucketMDVersion)
-				t.bmdVersionFixup()
-				islocal := t.bmdowner.get().islocal(bucket)
-				if islocal == proxylocal {
-					glog.Infof("Success: updated bucket-metadata to v%d - resolved 'islocal' mismatch", bucketmd.version())
-					errstr, errcode = "", 0
-				}
+		return
+	}
+	if islocal == proxylocal {
+		return
+	}
+	errstr = fmt.Sprintf("islocalbucket(%s) mismatch: %t (proxy) != %t (target %s)", bucket, proxylocal, islocal, t.si.DaemonID)
+	errcode = http.StatusInternalServerError
+	if s := q.Get(URLParamBMDVersion); s != "" {
+		if v, err := strconv.ParseInt(s, 0, 64); err != nil {
+			glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
+		} else if v < bucketmd.version() {
+			glog.Errorf("bucket-metadata v%d > v%d (primary)", bucketmd.version(), v)
+		} else if v > bucketmd.version() { // fixup
+			glog.Errorf("Warning: bucket-metadata v%d < v%d (primary) - updating...", bucketmd.version(), v)
+			t.bmdVersionFixup()
+			islocal := t.bmdowner.get().islocal(bucket)
+			if islocal == proxylocal {
+				glog.Infof("Success: updated bucket-metadata to v%d - resolved 'islocal' mismatch", bucketmd.version())
+				errstr, errcode = "", 0
 			}
 		}
 	}
@@ -2735,7 +2758,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
 
-				t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
+				t.statsif.addMany(namedVal64{"numbadchecksum", 1}, namedVal64{"bytesbadchecksum", written})
 				return
 			}
 		}
@@ -2752,7 +2775,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
 				objname, ohval[:8], nhval[:8], fqn)
 
-			t.statsif.addMany("numbadchecksum", int64(1), "bytesbadchecksum", written)
+			t.statsif.addMany(namedVal64{"numbadchecksum", 1}, namedVal64{"bytesbadchecksum", written})
 			return
 		}
 	} else {

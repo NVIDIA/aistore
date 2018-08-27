@@ -26,7 +26,7 @@ const (
 // newIostatRunner initalizes iostatrunner struct with default values
 func newIostatRunner() *iostatrunner {
 	return &iostatrunner{
-		chsts:       make(chan struct{}, 1),
+		stopCh:      make(chan struct{}, 1),
 		Disk:        make(map[string]simplekvs),
 		metricnames: make([]string, 0),
 	}
@@ -96,7 +96,7 @@ func (r *iostatrunner) run() error {
 			}
 		}
 		select {
-		case <-r.chsts:
+		case <-r.stopCh:
 			return nil
 		default:
 		}
@@ -106,8 +106,8 @@ func (r *iostatrunner) run() error {
 func (r *iostatrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
 	var v struct{}
-	r.chsts <- v
-	close(r.chsts)
+	r.stopCh <- v
+	close(r.stopCh)
 
 	// Kill process if started
 	if r.process != nil {

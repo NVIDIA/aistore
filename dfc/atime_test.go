@@ -290,7 +290,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		atimer.stop(fmt.Errorf("test"))
 	}
 
-	getiostatrunner().chsts <- struct{}{}
+	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
@@ -334,7 +334,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	}
 
 	atimer.stop(fmt.Errorf("test"))
-	getiostatrunner().chsts <- struct{}{}
+	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
@@ -380,7 +380,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	}
 
 	atimer.stop(fmt.Errorf("test"))
-	getiostatrunner().chsts <- struct{}{}
+	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
@@ -426,7 +426,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	}
 
 	atimer.stop(fmt.Errorf("test"))
-	getiostatrunner().chsts <- struct{}{}
+	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
@@ -473,7 +473,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	}
 
 	atimer.stop(fmt.Errorf("test"))
-	getiostatrunner().chsts <- struct{}{}
+	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
@@ -521,7 +521,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	}
 
 	atimer.stop(fmt.Errorf("test"))
-	getiostatrunner().chsts <- struct{}{}
+	getiostatrunner().stopCh <- struct{}{}
 }
 
 func getTempFile(t *testing.T, prefix string) (*os.File, string) {
