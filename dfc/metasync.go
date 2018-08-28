@@ -6,13 +6,13 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 // REVS tags
@@ -292,13 +292,13 @@ OUTER:
 		jsbytes, err = revs.marshal()
 		assert(err == nil, err)
 		y.lastclone[tag] = string(jsbytes)
-		jsmsg, err = json.Marshal(msg)
+		jsmsg, err = jsoniter.Marshal(msg)
 		assert(err == nil, err)
 
 		payload[tag] = string(jsbytes)         // payload
 		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
 	}
-	jsbytes, err = json.Marshal(payload)
+	jsbytes, err = jsoniter.Marshal(payload)
 	assert(err == nil, err)
 
 	// step 3: b-cast
@@ -444,7 +444,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	payload := make(simplekvs)
 	pairs := make([]revspair, 0, len(y.last))
 	msg := &ActionMsg{Action: "metasync: handle-pending"} // the same action msg for all
-	jsmsg, err := json.Marshal(msg)
+	jsmsg, err := jsoniter.Marshal(msg)
 	assert(err == nil, err)
 	for tag, revs := range y.last {
 		body, err := revs.marshal()
@@ -454,7 +454,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 		pairs = append(pairs, revspair{revs, msg})
 	}
 
-	body, err := json.Marshal(payload)
+	body, err := jsoniter.Marshal(payload)
 	assert(err == nil, err)
 
 	bcastArgs := bcastCallArgs{

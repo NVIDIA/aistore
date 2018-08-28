@@ -5,12 +5,13 @@
 package dfc
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/json-iterator/go"
 )
 
 const httpProto = "http"
@@ -49,7 +50,7 @@ func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 				Smap:           &Smap{Version: smapVersion},
 				BucketMD:       &bucketMD{Version: bmdVersion},
 			}
-			b, _ := json.Marshal(msg)
+			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
 		},
 	))
@@ -68,7 +69,7 @@ func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 			Smap:           &Smap{Version: smapVersion},
 			BucketMD:       &bucketMD{Version: bmdVersion},
 		}
-		b, _ := json.Marshal(msg)
+		b, _ := jsoniter.Marshal(msg)
 		w.Write(b)
 	}
 
@@ -89,7 +90,7 @@ func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 				Smap:           &Smap{Version: smapVersion},
 				BucketMD:       &bucketMD{Version: bmdVersion},
 			}
-			b, _ := json.Marshal(msg)
+			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
 		} else {
 			http.Error(w, "retry", http.StatusUnavailableForLegalReasons)
@@ -117,7 +118,7 @@ func discoverServerVoteInProgressHandler(sv int64, lv int64) *httptest.Server {
 				Smap:           &Smap{Version: 12345},
 				BucketMD:       &bucketMD{Version: 67890},
 			}
-			b, _ := json.Marshal(msg)
+			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
 		},
 	))

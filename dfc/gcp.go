@@ -7,7 +7,6 @@ package dfc
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,6 +19,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -85,7 +85,7 @@ func extractGCPCreds(credsList map[string]string) (*gcpCreds, error) {
 		return nil, nil
 	}
 	rec := &gcpAuthRec{}
-	if err := json.Unmarshal([]byte(raw), rec); err != nil {
+	if err := jsoniter.Unmarshal([]byte(raw), rec); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 		glog.Infof("listbucket count %d", len(reslist.Entries))
 	}
 
-	jsbytes, err = json.Marshal(reslist)
+	jsbytes, err = jsoniter.Marshal(reslist)
 	assert(err == nil, err)
 	return
 }

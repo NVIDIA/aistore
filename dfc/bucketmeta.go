@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -156,5 +155,5 @@ func (m *bucketMD) tag() string    { return bucketmdtag }
 func (m *bucketMD) version() int64 { return m.Version }
 
 func (m *bucketMD) marshal() ([]byte, error) {
-	return json.Marshal(m)
+	return jsonCompat.Marshal(m) // jsoniter + sorting
 }

@@ -7,13 +7,13 @@ package dfc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -384,7 +384,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	resch := make(chan voteResult, chansize)
 
 	msg := VoteMessage{Record: *vr}
-	jsbytes, err := json.Marshal(&msg)
+	jsbytes, err := jsoniter.Marshal(&msg)
 	assert(err == nil, err)
 
 	q := url.Values{}
@@ -420,7 +420,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 }
 
 func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
-	jsbytes, err := json.Marshal(
+	jsbytes, err := jsoniter.Marshal(
 		&VoteResultMessage{
 			VoteResult{
 				Candidate: vr.Candidate,
@@ -524,7 +524,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *daemonInfo) {
 	msg := VoteInitiationMessage{Request: *vr}
-	body, err := json.Marshal(&msg)
+	body, err := jsoniter.Marshal(&msg)
 	assert(err == nil, err)
 
 	args := callArgs{

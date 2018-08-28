@@ -8,7 +8,6 @@ package dfc
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -26,12 +25,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 const tokenStart = "Bearer"
 
 type ClusterMountpathsRaw struct {
-	Targets map[string]json.RawMessage `json:"targets"`
+	Targets map[string]jsoniter.RawMessage `json:"targets"`
 }
 
 // Keeps a target response when doing parallel requests to all targets
@@ -324,15 +324,16 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objname, si.DaemonID)
 		}
 		p.reverseDP(w, r, si)
+		delta := time.Since(started)
+		p.statsif.add("get.μs", int64(delta))
 	} else {
 		if glog.V(4) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 		}
-		redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+		redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
-	delta := time.Since(started)
-	p.statsif.addMany(namedVal64{"numget", 1}, namedVal64{"getlatency", int64(delta)})
+	p.statsif.add("get.n", 1)
 }
 
 // PUT "/"+Rversion+"/"+Robjects
@@ -356,11 +357,10 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	delta := time.Since(started)
-	p.statsif.addMany(namedVal64{"numput", 1}, namedVal64{"putlatency", int64(delta)})
+	p.statsif.add("put.n", 1)
 }
 
 // DELETE { action } /Rversion/Rbuckets
@@ -410,6 +410,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /Rversion/Robjects/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -425,10 +426,10 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add("numdelete", 1)
+	p.statsif.add("del.n", 1)
 }
 
 // [METHOD] /Rversion/Rmetasync
@@ -503,7 +504,7 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if p.startedup(0) == 0 {
 		rr.Core.Uptime = 0
 	}
-	jsbytes, err := json.Marshal(rr.Core)
+	jsbytes, err := jsoniter.Marshal(rr.Core)
 	rr.Unlock()
 
 	assert(err == nil, err)
@@ -595,7 +596,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
-		p.statsif.addMany(namedVal64{"numlist", 1}, namedVal64{"listlatency", int64(delta)})
+		p.statsif.addMany(namedVal64{"lst.n", 1}, namedVal64{"lst.μs", int64(delta)})
 		if glog.V(3) {
 			lat := int64(delta / time.Microsecond)
 			if pagemarker != "" {
@@ -634,6 +635,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
 		return
@@ -651,7 +653,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if glog.V(3) {
 		glog.Infof("%s %s => %s", r.Method, bucket, si.DaemonID)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
 
@@ -724,6 +726,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	checkCached, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
@@ -741,7 +744,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, bucket)
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	if checkCached {
 		redirecturl += fmt.Sprintf("&%s=true", URLParamCheckCached)
 	}
@@ -767,7 +770,7 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *Act
 	}
 	if body == nil {
 		var err error
-		body, err = json.Marshal(msg)
+		body, err = jsoniter.Marshal(msg)
 		assert(err == nil, err)
 	}
 	p.rproxy.Lock()
@@ -812,7 +815,7 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *buck
 	smap4bcast := p.smapowner.get()
 
 	msg.Value = clone
-	jsbytes, err := json.Marshal(msg)
+	jsbytes, err := jsoniter.Marshal(msg)
 	assert(err == nil, err)
 
 	res := p.broadcastTargets(
@@ -854,7 +857,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		for bucket := range bucketmd.LBmap {
 			bucketnames.Local = append(bucketnames.Local, bucket)
 		}
-		jsbytes, err := json.Marshal(bucketnames)
+		jsbytes, err := jsoniter.Marshal(bucketnames)
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "getbucketnames?local=true")
 		return
@@ -884,7 +887,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 	}
 }
 
-func (p *proxyrunner) redirectURL(r *http.Request, to string, bucket string) (redirect string) {
+func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, bucket string) (redirect string) {
 	var (
 		query    = url.Values{}
 		bucketmd = p.bmdowner.get()
@@ -898,6 +901,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, bucket string) (re
 	query.Add(URLParamLocal, strconv.FormatBool(islocal))
 	query.Add(URLParamProxyID, p.si.DaemonID)
 	query.Add(URLParamBMDVersion, bucketmd.vstr)
+	query.Add(URLParamUnixTime, strconv.FormatInt(int64(ts.UnixNano()), 10))
 
 	redirect += query.Encode()
 	return
@@ -906,7 +910,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, bucket string) (re
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
 	getMsg *GetMsg, islocal bool, cached bool) (*bucketResp, error) {
-	actionMsgBytes, err := json.Marshal(ActionMsg{Action: ActListObjects, Value: getMsg})
+	actionMsgBytes, err := jsoniter.Marshal(ActionMsg{Action: ActListObjects, Value: getMsg})
 	if err != nil {
 		return &bucketResp{
 			outjson: nil,
@@ -997,7 +1001,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, data
 		}
 
 		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
-		if err := json.Unmarshal(resp.outjson, &entries); err != nil {
+		if err := jsoniter.Unmarshal(resp.outjson, &entries); err != nil {
 			if dataCh != nil {
 				dataCh <- &localFilePage{
 					id:  daemon.DaemonID,
@@ -1030,7 +1034,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, data
 // of files from cloud with local metadata (iscached, atime etc)
 func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList, getmsgjson []byte) (err error) {
 	reqParams := &GetMsg{}
-	err = json.Unmarshal(getmsgjson, reqParams)
+	err = jsoniter.Unmarshal(getmsgjson, reqParams)
 	if err != nil {
 		return
 	}
@@ -1097,7 +1101,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		cachedObjs = false
 	)
 	msg := &GetMsg{}
-	if err = json.Unmarshal(listmsgjson, msg); err != nil {
+	if err = jsoniter.Unmarshal(listmsgjson, msg); err != nil {
 		return
 	}
 	pageSize := DefaultPageSize
@@ -1141,7 +1145,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		}
 
 		bucketList := &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
-		if err = json.Unmarshal(r.resp.outjson, &bucketList); err != nil {
+		if err = jsoniter.Unmarshal(r.resp.outjson, &bucketList); err != nil {
 			return
 		}
 
@@ -1180,7 +1184,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	var resp *bucketResp
 	allentries = &BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
 	msg := GetMsg{}
-	err = json.Unmarshal(listmsgjson, &msg)
+	err = jsoniter.Unmarshal(listmsgjson, &msg)
 	if err != nil {
 		return
 	}
@@ -1201,7 +1205,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	if resp.outjson == nil || len(resp.outjson) == 0 {
 		return
 	}
-	if err = json.Unmarshal(resp.outjson, &allentries); err != nil {
+	if err = jsoniter.Unmarshal(resp.outjson, &allentries); err != nil {
 		return
 	}
 	if len(allentries.Entries) == 0 {
@@ -1237,7 +1241,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 //   - returns the list
 func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *ActionMsg) (pagemarker string, ok bool) {
 	var allentries *BucketList
-	listmsgjson, err := json.Marshal(actionMsg.Value)
+	listmsgjson, err := jsoniter.Marshal(actionMsg.Value)
 	if err != nil {
 		s := fmt.Sprintf("Unable to marshal action message: %v. Error: %v", actionMsg, err)
 		p.invalmsghdlr(w, r, s)
@@ -1253,7 +1257,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
-	jsbytes, err := json.Marshal(allentries)
+	jsbytes, err := jsoniter.Marshal(allentries)
 	assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "listbucket")
 	pagemarker = allentries.PageMarker
@@ -1269,6 +1273,7 @@ func (p *proxyrunner) savebmdconf(bucketmd *bucketMD) (errstr string) {
 }
 
 func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *ActionMsg) {
+	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
 		return
@@ -1293,10 +1298,10 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
 	//       original JSON payload (GetMsg - see REST.go)
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, lbucket)
+	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, lbucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add("numrename", 1)
+	p.statsif.add("ren.n", 1)
 }
 
 func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *ActionMsg) {
@@ -1324,7 +1329,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		}
 	}
 	// Send json message to all
-	jsonbytes, err := json.Marshal(actionMsg)
+	jsonbytes, err := jsoniter.Marshal(actionMsg)
 	assert(err == nil, err)
 
 	switch actionMsg.Action {
@@ -1490,7 +1495,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatStats:
 		rst := getproxystatsrunner()
 		rst.RLock()
-		jsbytes, err := json.Marshal(rst)
+		jsbytes, err := jsoniter.Marshal(rst)
 		rst.RUnlock()
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
@@ -1506,7 +1511,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			time.Sleep(time.Second)
 			smap = p.smapowner.get()
 		}
-		jsbytes, err := json.Marshal(smap)
+		jsbytes, err := jsoniter.Marshal(smap)
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	default:
@@ -1858,7 +1863,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 	}
 
 	outputXactionStats.TargetStats = targetStats
-	jsonBytes, err := json.Marshal(outputXactionStats)
+	jsonBytes, err := jsoniter.Marshal(outputXactionStats)
 	if err != nil {
 		glog.Errorf(
 			"Unable to marshal outputXactionStats. Error: [%s]", err)
@@ -1870,7 +1875,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 	return ok
 }
 
-func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]json.RawMessage, bool) {
+func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
 	results := p.broadcastTargets(
 		URLPath(Rversion, Rdaemon),
 		r.URL.Query(),
@@ -1880,7 +1885,7 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.R
 		ctx.config.Timeout.Default,
 	)
 
-	targetResults := make(map[string]json.RawMessage, p.smapowner.get().countTargets())
+	targetResults := make(map[string]jsoniter.RawMessage, p.smapowner.get().countTargets())
 	for result := range results {
 		if result.err != nil {
 			glog.Errorf(
@@ -1890,8 +1895,7 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.R
 			return nil, false
 		}
 
-		targetResults[result.si.DaemonID] = json.RawMessage(
-			result.outjson)
+		targetResults[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
 	}
 
 	return targetResults, true
@@ -1915,7 +1919,7 @@ func (p *proxyrunner) invokeHttpGetClusterStats(
 	rr := getproxystatsrunner()
 	rr.RLock()
 	out.Proxy = &rr.Core
-	jsbytes, err := json.Marshal(out)
+	jsbytes, err := jsoniter.Marshal(out)
 	rr.RUnlock()
 	assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterStats")
@@ -1935,7 +1939,7 @@ func (p *proxyrunner) invokeHttpGetClusterMountpaths(
 
 	out := &ClusterMountpathsRaw{}
 	out.Targets = targetMountpaths
-	jsbytes, err := json.Marshal(out)
+	jsbytes, err := jsoniter.Marshal(out)
 	assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterMountpaths")
 	return ok
@@ -1977,7 +1981,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if isproxy {
 		msg = &ActionMsg{Action: ActRegProxy}
 	}
-	body, err := json.Marshal(nsi)
+	body, err := jsoniter.Marshal(nsi)
 	assert(err == nil, err)
 	if p.forwardCP(w, r, msg, s, body) {
 		return
@@ -1988,7 +1992,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsif.add("numpost", 1)
+	p.statsif.add("pst.n", 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
@@ -2035,7 +2039,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	// upon joining a running cluster new target gets bucket-metadata right away
 	if !isproxy {
 		bmd4reg := p.bmdowner.get()
-		outjson, err := json.Marshal(bmd4reg)
+		outjson, err := jsoniter.Marshal(bmd4reg)
 		assert(err == nil, err)
 		p.writeJSON(w, r, outjson, "bucket-metadata")
 	}
@@ -2244,7 +2248,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, errstr)
 		} else {
 			glog.Infof("setconfig %s=%s", msg.Name, value)
-			msgbytes, err := json.Marshal(msg) // same message -> all targets and proxies
+			msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets and proxies
 			assert(err == nil, err)
 
 			results := p.broadcastCluster(
@@ -2270,7 +2274,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		}
 	case ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
-		msgbytes, err := json.Marshal(msg) // same message -> all targets
+		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets
 		assert(err == nil, err)
 
 		p.broadcastCluster(
@@ -2413,7 +2417,7 @@ func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketC
 }
 
 func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
-	jsbytes, err := json.Marshal(ActionMsg{Action: ActRechecksum})
+	jsbytes, err := jsoniter.Marshal(ActionMsg{Action: ActRechecksum})
 	assert(err == nil, err)
 
 	res := p.broadcastTargets(
@@ -2452,7 +2456,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 		return false
 	}
 	si := &daemonInfo{}
-	if err := json.Unmarshal(res.outjson, si); err != nil {
+	if err := jsoniter.Unmarshal(res.outjson, si); err != nil {
 		assert(false, err)
 	}
 	return !nsi.Equals(si)

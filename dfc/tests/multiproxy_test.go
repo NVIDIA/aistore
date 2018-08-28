@@ -7,7 +7,6 @@ package dfc_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -26,6 +25,7 @@ import (
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -499,7 +499,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 	oldProxyCnt := len(smap.Pmap)
 
 	smap.Version++
-	jsonMap, err := json.Marshal(smap)
+	jsonMap, err := jsoniter.Marshal(smap)
 	checkFatal(err, t)
 
 	n := getNum(len(smap.Tmap) + len(smap.Pmap) - 1)
@@ -1135,7 +1135,7 @@ func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 			DirectURL:  "http://" + v.PublicNet.NodeIPAddr + ":" + mockTargetPort,
 		}
 		v.InternalNet = v.PublicNet
-		jsonDaemonInfo, err = json.Marshal(v)
+		jsonDaemonInfo, err = jsoniter.Marshal(v)
 		if err != nil {
 			return err
 		}
@@ -1206,7 +1206,7 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 			Smap: &dfc.Smap{Version: 1},
 		}
 
-		jsbytes, err := json.Marshal(msg)
+		jsbytes, err := jsoniter.Marshal(msg)
 		if err == nil {
 			_, err = w.Write(jsbytes)
 		}

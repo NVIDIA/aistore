@@ -7,7 +7,6 @@ package main
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -397,7 +397,7 @@ func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interfac
 		return err
 	}
 
-	err = json.Unmarshal(b, out)
+	err = jsoniter.Unmarshal(b, out)
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
 		glog.Errorf(s)

@@ -15,9 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/fs"
-
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 // ============================================= Summary ===========================================
@@ -270,8 +269,8 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 		bevicted += fi.size
 		fevicted++
 	}
-	t.statsif.add("bytesevicted", bevicted)
-	t.statsif.add("filesevicted", fevicted)
+	t.statsif.add("lru.evict.size", bevicted)
+	t.statsif.add("lru.evict.n", fevicted)
 	return nil
 }
 

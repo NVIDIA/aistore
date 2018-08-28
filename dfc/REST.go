@@ -93,6 +93,7 @@ const (
 	URLParamNonElectable     = "nel" // true: proxy is non-electable for the primary role
 	URLParamSmapVersion      = "vsm" // Smap version
 	URLParamBMDVersion       = "vbm" // version of the bucket-metadata
+	URLParamUnixTime         = "utm" // Unix time: number of nanoseconds elapsed since 01/01/70 UTC
 )
 
 // TODO: sort and some props are TBD

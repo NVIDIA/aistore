@@ -7,7 +7,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 const maxRetrySeconds = 5
@@ -49,7 +49,7 @@ func (p *proxyrunner) bootstrap() {
 					continue
 				}
 				svm := SmapVoteMsg{}
-				if err := json.Unmarshal(re.outjson, &svm); err != nil {
+				if err := jsoniter.Unmarshal(re.outjson, &svm); err != nil {
 					continue
 				}
 				if svm.Smap == nil || svm.Smap.version() == 0 {
@@ -149,7 +149,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			glog.Fatalf("FATAL: %s", s)
 		}
 		smap := &Smap{}
-		if err := json.Unmarshal(res.outjson, smap); err != nil {
+		if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
 			assert(false, err)
 		}
 		if !smap.isValid() {
@@ -338,7 +338,7 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 				continue
 			}
 			svm := SmapVoteMsg{}
-			if err := json.Unmarshal(re.outjson, &svm); err != nil {
+			if err := jsoniter.Unmarshal(re.outjson, &svm); err != nil {
 				glog.Errorf("Unexpected unmarshal-error: %v", err)
 				keeptrying = true
 				continue

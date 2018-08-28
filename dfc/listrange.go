@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -57,7 +57,7 @@ func (t *targetrunner) getListFromRangeCloud(ct context.Context, bucket string, 
 			return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
 		}
 		reslist := &BucketList{}
-		if err := json.Unmarshal(jsbytes, reslist); err != nil {
+		if err := jsoniter.Unmarshal(jsbytes, reslist); err != nil {
 			return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
 		}
 		bucketList.Entries = append(bucketList.Entries, reslist.Entries...)
@@ -157,7 +157,7 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 		go func() {
 			if err := operation(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done); err != nil {
 				glog.Errorf("Error performing list operation: %v", err)
-				t.statsif.add("numerr", 1)
+				t.statsif.add("err.n", 1)
 			}
 		}()
 
@@ -191,7 +191,7 @@ func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, ra
 		if err := operation(t.contextWithAuth(r), bucket, rangeMsg.Prefix, rangeMsg.Regex,
 			min, max, rangeMsg.Deadline, done); err != nil {
 			glog.Errorf("Error performing range operation: %v", err)
-			t.statsif.add("numerr", 1)
+			t.statsif.add("err.n", 1)
 		}
 	}()
 
@@ -399,11 +399,11 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	if glog.V(4) {
 		glog.Infof("PREFETCH: %s/%s", bucket, objname)
 	}
-	t.statsif.add("numprefetch", 1)
-	t.statsif.add("bytesprefetched", props.size)
+	t.statsif.add("pre.n", 1)
+	t.statsif.add("pre.size", props.size)
 	if vchanged {
-		t.statsif.add("bytesvchanged", props.size)
-		t.statsif.add("numvchanged", 1)
+		t.statsif.add("vchange.size", props.size)
+		t.statsif.add("vchange.n", 1)
 	}
 }
 

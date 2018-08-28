@@ -5,7 +5,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -17,6 +16,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/json-iterator/go"
 )
 
 type (
@@ -160,9 +161,10 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	clone := &bucketMD{}
 	bucketmd.deepcopy(clone)
 
-	b1, _ := json.Marshal(bucketmd)
+	var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	b1, _ := jsonCompat.Marshal(bucketmd)
 	s1 := string(b1)
-	b2, _ := json.Marshal(clone)
+	b2, _ := jsonCompat.Marshal(clone)
 	s2 := string(b2)
 	if s1 == "" || s2 == "" || s1 != s2 {
 		t.Log(s1)
@@ -519,7 +521,7 @@ func TestMetaSyncData(t *testing.T) {
 		emptyActionMsg string
 	)
 
-	b, err := json.Marshal(ActionMsg{})
+	b, err := jsoniter.Marshal(ActionMsg{})
 	if err != nil {
 		t.Fatal("Failed to marshal empty ActionMsg, err =", err)
 	}
@@ -636,7 +638,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	// sync smap pair
 	msgSMap := &ActionMsg{Action: "msg8"}
-	b, err = json.Marshal(msgSMap)
+	b, err = jsoniter.Marshal(msgSMap)
 	if err != nil {
 		t.Fatal("Failed to marshal action message, err =", err)
 	}
@@ -895,8 +897,8 @@ func TestMetaSyncReceive(t *testing.T) {
 
 		var am ActionMsg
 		y := &ActionMsg{Action: ""}
-		b, _ := json.Marshal(y)
-		json.Unmarshal(b, &am)
+		b, _ := jsoniter.Marshal(y)
+		jsoniter.Unmarshal(b, &am)
 
 		s = httptest.NewServer(http.HandlerFunc(fTarget))
 		defer s.Close()
@@ -933,8 +935,8 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chTarget
 
 		y = &ActionMsg{Action: ""}
-		b, _ = json.Marshal(y)
-		json.Unmarshal(b, &am)
+		b, _ = jsoniter.Marshal(y)
+		jsoniter.Unmarshal(b, &am)
 
 		s = httptest.NewServer(http.HandlerFunc(fTarget))
 		defer s.Close()
@@ -1031,8 +1033,8 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chTarget
 
 		y = &ActionMsg{Action: "New proxy"}
-		b, _ = json.Marshal(y)
-		json.Unmarshal(b, &am)
+		b, _ = jsoniter.Marshal(y)
+		jsoniter.Unmarshal(b, &am)
 
 		// new smap and new bucketmd pairs
 		s = httptest.NewServer(http.HandlerFunc(fProxy))

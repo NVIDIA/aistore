@@ -27,7 +27,6 @@ package dfc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -273,5 +272,5 @@ func (t *TokenList) version() int64 {
 }
 
 func (t *TokenList) marshal() ([]byte, error) {
-	return json.Marshal(t)
+	return jsonCompat.Marshal(t)
 }

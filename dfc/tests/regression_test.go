@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
+	"github.com/json-iterator/go"
 )
 
 type Test struct {
@@ -503,7 +504,7 @@ func TestRenameObjects(t *testing.T) {
 	for _, fname := range basenames {
 		RenameMsg.Name = RenameStr + "/" + fname + ".renamed" // objname
 		bnewnames = append(bnewnames, fname+".renamed")       // base name
-		injson, err = json.Marshal(RenameMsg)
+		injson, err = jsoniter.Marshal(RenameMsg)
 		if err != nil {
 			t.Fatalf("Failed to marshal RenameMsg: %v", err)
 		}
@@ -919,9 +920,9 @@ func TestPrefetchList(t *testing.T) {
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
-			t.Fatalf("Could not decode target stats: numprefetch")
+			t.Fatalf("Could not decode target stats: pre.n")
 		}
 		netprefetches -= npf
 	}
@@ -949,9 +950,9 @@ func TestPrefetchList(t *testing.T) {
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
-			t.Fatalf("Could not decode target stats: numprefetch")
+			t.Fatalf("Could not decode target stats: pre.n")
 		}
 		netprefetches += npf
 	}
@@ -1026,9 +1027,9 @@ func TestPrefetchRange(t *testing.T) {
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
-			t.Fatalf("Could not decode target stats: numprefetch")
+			t.Fatalf("Could not decode target stats: pre.n")
 		}
 		netprefetches -= npf
 	}
@@ -1082,9 +1083,9 @@ func TestPrefetchRange(t *testing.T) {
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["numprefetch"].(json.Number).Int64()
+		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
-			t.Fatalf("Could not decode target stats: numprefetch")
+			t.Fatalf("Could not decode target stats: pre.n")
 		}
 		netprefetches += npf
 	}
@@ -1333,7 +1334,7 @@ func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterSt
 		t.Fatalf("HTTP error = %d, message = %v", resp.StatusCode, string(b))
 	}
 
-	err = json.Unmarshal(b, &stats)
+	err = jsoniter.Unmarshal(b, &stats)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal, err = %v", err)
 	}
@@ -1360,7 +1361,7 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats ma
 		t.Fatalf("HTTP error = %d, message = %s", err, string(b))
 	}
 
-	dec := json.NewDecoder(bytes.NewReader(b))
+	dec := jsoniter.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
 	// If this isn't used, json.Unmarshal converts uint32s to floats, losing precision
 	err = dec.Decode(&stats)
@@ -1405,7 +1406,7 @@ func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[str
 		return
 	}
 
-	err = json.Unmarshal(b, &dfcfg)
+	err = jsoniter.Unmarshal(b, &dfcfg)
 	if err != nil {
 		t.Errorf("Failed to unmarshal config: %v", err)
 	}
@@ -1419,7 +1420,7 @@ func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 		Value: value,
 	}
 
-	injson, err := json.Marshal(SetConfigMsg)
+	injson, err := jsoniter.Marshal(SetConfigMsg)
 	if err != nil {
 		t.Errorf("Failed to marshal SetConfig Message: %v", err)
 		return

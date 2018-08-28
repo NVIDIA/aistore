@@ -11,7 +11,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,6 +32,7 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -226,7 +226,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (int, err
 	}
 	// not being sent at cluster startup and keepalive..
 	if len(res.outjson) > 0 {
-		err := json.Unmarshal(res.outjson, &newbucketmd)
+		err := jsoniter.Unmarshal(res.outjson, &newbucketmd)
 		assert(err == nil, err)
 		t.bmdowner.Lock()
 		v := t.bmdowner.get().version()
@@ -349,6 +349,9 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		pid := query.Get(URLParamProxyID)
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
+	}
+	if redelta := t.redirectLatency(started, query); redelta != 0 {
+		t.statsif.add("get.redir.μs", redelta)
 	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.islocal(bucket)
@@ -523,7 +526,7 @@ existslocally:
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
 		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 		t.fshc(err, fqn)
-		t.statsif.add("numerr", 1)
+		t.statsif.add("err.n", 1)
 		return
 	}
 	if !coldget {
@@ -538,7 +541,7 @@ existslocally:
 	}
 
 	delta := time.Since(started)
-	t.statsif.addMany(namedVal64{"numget", 1}, namedVal64{"getlatency", int64(delta)})
+	t.statsif.addMany(namedVal64{"get.n", 1}, namedVal64{"get.μs", int64(delta)})
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
@@ -618,6 +621,9 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 		}
 	} else {
+		if redelta := t.redirectLatency(time.Now(), query); redelta != 0 {
+			t.statsif.add("put.redir.μs", redelta)
+		}
 		// PUT
 		pid := query.Get(URLParamProxyID)
 		if glog.V(4) {
@@ -665,7 +671,7 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if err == nil && len(b) > 0 {
-		err = json.Unmarshal(b, &msg)
+		err = jsoniter.Unmarshal(b, &msg)
 	}
 	if err != nil {
 		s := fmt.Sprintf("Failed to read %s body, err: %v", r.Method, err)
@@ -713,7 +719,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	if err == nil && len(b) > 0 {
-		err = json.Unmarshal(b, &msg)
+		err = jsoniter.Unmarshal(b, &msg)
 		if err == nil {
 			evict = (msg.Action == ActEvict)
 		}
@@ -802,7 +808,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		tag, ok := t.listbucket(w, r, lbucket, &msg)
 		if ok {
 			delta := time.Since(started)
-			t.statsif.addMany(namedVal64{"numlist", 1}, namedVal64{"listlatency", int64(delta)})
+			t.statsif.addMany(namedVal64{"lst.n", 1}, namedVal64{"lst.μs", int64(delta)})
 			if glog.V(3) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
@@ -1041,7 +1047,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	aborted, running := t.xactinp.isAbortedOrRunningRebalance()
 	status := &thealthstatus{IsRebalancing: aborted || running}
 
-	jsbytes, err := json.Marshal(status)
+	jsbytes, err := jsoniter.Marshal(status)
 	assert(err == nil, err)
 	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
 		return
@@ -1075,7 +1081,7 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		objnames := make([]string, 0)
-		err = json.Unmarshal(objnamebytes, &objnames)
+		err = jsoniter.Unmarshal(objnamebytes, &objnames)
 		if err != nil {
 			s := fmt.Sprintf("Could not unmarshal objnames: %v", err)
 			t.invalmsghdlr(w, r, s)
@@ -1374,10 +1380,10 @@ ret:
 		t.rtnamemap.unlockname(uname, true)
 	} else {
 		if vchanged {
-			t.statsif.addMany(namedVal64{"numcoldget", 1}, namedVal64{"bytesloaded", props.size},
-				namedVal64{"bytesvchanged", props.size}, namedVal64{"numvchanged", 1})
+			t.statsif.addMany(namedVal64{"get.cold.n", 1}, namedVal64{"get.cold.size", props.size},
+				namedVal64{"vchange.size", props.size}, namedVal64{"vchange.n", 1})
 		} else {
-			t.statsif.addMany(namedVal64{"numcoldget", 1}, namedVal64{"bytesloaded", props.size})
+			t.statsif.addMany(namedVal64{"get.cold.n", 1}, namedVal64{"get.cold.size", props.size})
 		}
 		t.rtnamemap.downgradelock(uname)
 	}
@@ -1433,7 +1439,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 		return nil, err.Error(), 0
 	}
 
-	outbytes, err = json.Marshal(reslist)
+	outbytes, err = jsoniter.Marshal(reslist)
 	if err != nil {
 		return nil, err.Error(), 0
 	}
@@ -1564,7 +1570,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 		bucketnames.Cloud = buckets
 	}
 
-	jsbytes, err := json.Marshal(bucketnames)
+	jsbytes, err := jsoniter.Marshal(bucketnames)
 	assert(err == nil, err)
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }
@@ -1575,7 +1581,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 		errstr = fmt.Sprintf("List local bucket %s failed, err: %v", bucket, err)
 		return
 	}
-	jsbytes, err := json.Marshal(reslist)
+	jsbytes, err := jsoniter.Marshal(reslist)
 	assert(err == nil, err)
 	ok = t.writeJSON(w, r, jsbytes, "listbucket")
 	return
@@ -1609,7 +1615,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 
-	getMsgJson, err := json.Marshal(actionMsg.Value)
+	getMsgJson, err := jsoniter.Marshal(actionMsg.Value)
 	if err != nil {
 		errstr := fmt.Sprintf("Unable to marshal 'value' in request: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, errstr)
@@ -1617,7 +1623,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	}
 
 	var msg GetMsg
-	err = json.Unmarshal(getMsgJson, &msg)
+	err = jsoniter.Unmarshal(getMsgJson, &msg)
 	if err != nil {
 		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a GetMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, errstr)
@@ -1862,7 +1868,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 		if errstr == "" {
 			delta := time.Since(started)
-			t.statsif.addMany(namedVal64{"numput", 1}, namedVal64{"putlatency", int64(delta)})
+			t.statsif.addMany(namedVal64{"put.n", 1}, namedVal64{"put.μs", int64(delta)})
 			if glog.V(4) {
 				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 			}
@@ -2072,7 +2078,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
-			t.statsif.addMany(namedVal64{"numrecvfiles", 1}, namedVal64{"numrecvbytes", size})
+			t.statsif.addMany(namedVal64{"rx.n", 1}, namedVal64{"rx.size", size})
 		}
 	}
 	return
@@ -2098,7 +2104,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
 
-		t.statsif.add("numdelete", 1)
+		t.statsif.add("del.n", 1)
 	}
 
 	finfo, err := os.Stat(fqn)
@@ -2117,7 +2123,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		if err := os.Remove(fqn); err != nil {
 			return err
 		} else if evict {
-			t.statsif.addMany(namedVal64{"filesevicted", 1}, namedVal64{"bytesevicted", finfo.Size()})
+			t.statsif.addMany(namedVal64{"lru.evict.n", 1}, namedVal64{"lru.evict.size", finfo.Size()})
 		}
 	}
 	return nil
@@ -2169,7 +2175,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 		} else {
-			t.statsif.add("numrename", 1)
+			t.statsif.add("ren.n", 1)
 			if glog.V(3) {
 				glog.Infof("Renamed %s => %s", fqn, newfqn)
 			}
@@ -2332,7 +2338,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	response.Body.Close()
 	// stats
-	t.statsif.addMany(namedVal64{"numsentfiles", 1}, namedVal64{"numsentbytes", size})
+	t.statsif.addMany(namedVal64{"tx.n", 1}, namedVal64{"tx.size", size})
 	return ""
 }
 
@@ -2405,7 +2411,7 @@ func (t *targetrunner) bmdVersionFixup() {
 		return
 	}
 	newbucketmd := &bucketMD{}
-	err := json.Unmarshal(res.outjson, newbucketmd)
+	err := jsoniter.Unmarshal(res.outjson, newbucketmd)
 	if err != nil {
 		glog.Errorf("Unexpected: failed to unmarshal get-what=%s response from %s, err: %v [%v]",
 			GetWhatBucketMeta, psi.InternalNet.DirectURL, err, string(res.outjson))
@@ -2554,7 +2560,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	case GetWhatStats:
 		rst := getstorstatsrunner()
 		rst.RLock()
-		jsbytes, err := json.Marshal(rst)
+		jsbytes, err := jsoniter.Marshal(rst)
 		rst.RUnlock()
 		assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
@@ -2584,7 +2590,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			mpList.Disabled[idx] = mpath
 			idx++
 		}
-		jsbytes, err := json.Marshal(&mpList)
+		jsbytes, err := jsoniter.Marshal(&mpList)
 		if err != nil {
 			s := fmt.Sprintf("Failed to marshal mountpaths: %v", err)
 			t.invalmsghdlr(w, r, s)
@@ -2758,7 +2764,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
 
-				t.statsif.addMany(namedVal64{"numbadchecksum", 1}, namedVal64{"bytesbadchecksum", written})
+				t.statsif.addMany(namedVal64{"cksum.bad.n", 1}, namedVal64{"cksum.bad.size", written})
 				return
 			}
 		}
@@ -2775,7 +2781,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
 				objname, ohval[:8], nhval[:8], fqn)
 
-			t.statsif.addMany(namedVal64{"numbadchecksum", 1}, namedVal64{"bytesbadchecksum", written})
+			t.statsif.addMany(namedVal64{"cksum.bad.n", 1}, namedVal64{"cksum.bad.size", written})
 			return
 		}
 	} else {
@@ -2798,6 +2804,20 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 //==============================================================================
 func (t *targetrunner) starttime() time.Time {
 	return t.uxprocess.starttime
+}
+
+func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (redelta int64) {
+	s := query.Get(URLParamUnixTime)
+	if s == "" {
+		return
+	}
+	pts, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
+		return
+	}
+	redelta = started.UnixNano() - pts
+	return
 }
 
 // (bucket, object) => (local hashed path, fully qualified name aka fqn)
@@ -3320,7 +3340,7 @@ func (t *targetrunner) pollClusterStarted() {
 			continue
 		}
 		proxystats := &proxyCoreStats{}
-		err := json.Unmarshal(res.outjson, proxystats)
+		err := jsoniter.Unmarshal(res.outjson, proxystats)
 		if err != nil {
 			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.PublicNet.DirectURL, err, string(res.outjson))
 			continue

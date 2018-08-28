@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 const NeighborRebalanceStartDelay = 10 * time.Second
@@ -107,7 +107,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		}
 
 		tsmap := &Smap{}
-		err := json.Unmarshal(res.outjson, tsmap)
+		err := jsoniter.Unmarshal(res.outjson, tsmap)
 		if err != nil {
 			glog.Errorf("Unexpected: failed to unmarshal response, err: %v [%v]", err, string(res.outjson))
 			return
@@ -142,7 +142,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		}
 
 		status := &thealthstatus{}
-		err := json.Unmarshal(res.outjson, status)
+		err := jsoniter.Unmarshal(res.outjson, status)
 		if err != nil {
 			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", si.PublicNet.DirectURL, err, string(res.outjson))
 			break

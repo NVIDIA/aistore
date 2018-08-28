@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -249,7 +249,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 		reslist.PageMarker = reslist.Entries[len(reslist.Entries)-1].Name
 	}
 
-	jsbytes, err = json.Marshal(reslist)
+	jsbytes, err = jsoniter.Marshal(reslist)
 	assert(err == nil, err)
 	return
 }

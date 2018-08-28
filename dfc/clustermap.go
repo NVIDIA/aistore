@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/OneOfOne/xxhash"
+	"github.com/json-iterator/go"
 )
 
 // ============================= Background ==================================
@@ -173,7 +173,7 @@ func (m *Smap) init(tsize, psize, elsize int) {
 }
 
 func (m *Smap) pp() string {
-	s, _ := json.MarshalIndent(m, "", "\t")
+	s, _ := jsoniter.MarshalIndent(m, "", " ")
 	return fmt.Sprintf("Smap v%d:\n%s", m.version(), string(s))
 }
 
@@ -326,6 +326,5 @@ func (m *Smap) tag() string    { return smaptag }
 func (m *Smap) version() int64 { return m.Version }
 
 func (m *Smap) marshal() (b []byte, err error) {
-	b, err = json.Marshal(m)
-	return
+	return jsonCompat.Marshal(m) // jsoniter + sorting
 }

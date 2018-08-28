@@ -12,7 +12,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +34,7 @@ import (
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
+	"github.com/json-iterator/go"
 )
 
 // worker's result
@@ -496,12 +496,12 @@ func printbucketnames(t *testing.T, r *http.Response) {
 		return
 	}
 	bucketnames := &dfc.BucketNames{}
-	err = json.Unmarshal(b, bucketnames)
+	err = jsoniter.Unmarshal(b, bucketnames)
 	if err != nil {
 		t.Errorf("Failed to unmarshal bucket names, err: %v", err)
 		return
 	}
-	pretty, err := json.MarshalIndent(bucketnames, "", "\t")
+	pretty, err := jsoniter.MarshalIndent(bucketnames, "", " ")
 	if err != nil {
 		t.Errorf("Failed to pretty-print bucket names, err: %v", err)
 		return

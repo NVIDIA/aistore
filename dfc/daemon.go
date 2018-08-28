@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/json-iterator/go"
 )
 
 // runners
@@ -78,9 +79,10 @@ func (r *namedrunner) getName() string  { return r.name }
 //
 //====================
 var (
-	build   string
-	ctx     = &daemon{}
-	clivars = &cliVars{}
+	build      string
+	ctx        = &daemon{}
+	clivars    = &cliVars{}
+	jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
 //====================

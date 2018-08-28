@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"hash"
 	"io"
@@ -26,6 +25,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/OneOfOne/xxhash"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -321,7 +321,7 @@ func LocalSave(pathname string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(v, "", "\t")
+	b, err := jsoniter.MarshalIndent(v, "", " ")
 	if err != nil {
 		_ = file.Close()
 		_ = os.Remove(tmp)
@@ -347,7 +347,7 @@ func LocalLoad(pathname string, v interface{}) (err error) {
 	if err != nil {
 		return
 	}
-	err = json.NewDecoder(file).Decode(v)
+	err = jsoniter.NewDecoder(file).Decode(v)
 	_ = file.Close()
 	return
 }

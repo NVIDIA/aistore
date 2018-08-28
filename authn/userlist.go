@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -254,7 +254,7 @@ func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
 	}
 
 	tokenList := dfc.TokenList{Tokens: tokens}
-	injson, _ := json.Marshal(tokenList)
+	injson, _ := jsoniter.Marshal(tokenList)
 	if err := m.proxyRequest(http.MethodDelete, dfc.Rtokens, injson); err != nil {
 		glog.Errorf("Failed to send token list: %v", err)
 	}

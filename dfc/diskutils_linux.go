@@ -7,7 +7,6 @@ package dfc
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/json-iterator/go"
 )
 
 const (
@@ -215,7 +215,7 @@ func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks StringSet) {
 	disks = make(StringSet)
 	device := strings.TrimPrefix(fs, "/dev/")
 	var lsBlkOutput LsBlk
-	err := json.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
+	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)
 	if err != nil {
 		glog.Errorf("Unable to unmarshal lsblk output [%s]. Error: [%v]", string(lsblkOutputBytes), err)
 		return

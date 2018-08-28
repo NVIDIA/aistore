@@ -254,10 +254,10 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 		}
 	}
 	if min != time.Duration(time.Hour) {
-		pkr.p.statsif.add("kalivemin", int64(min/time.Microsecond))
+		pkr.p.statsif.add("kalive.μs.min", int64(min/time.Microsecond))
 	}
 	if max != 0 {
-		pkr.p.statsif.add("kalivemax", int64(max/time.Microsecond))
+		pkr.p.statsif.add("kalive.μs.max", int64(max/time.Microsecond))
 	}
 }
 
@@ -280,7 +280,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta t
 	res := pkr.p.call(args)
 	delta = time.Since(t)
 	pkr.updateTimeoutForDaemon(to.DaemonID, delta)
-	pkr.p.statsif.add("kalive", int64(delta/time.Microsecond))
+	pkr.p.statsif.add("kalive.μs", int64(delta/time.Microsecond))
 
 	if res.err == nil {
 		return true, false, delta
@@ -368,7 +368,7 @@ func (k *keepalive) register(r registerer, statsif statsif, primaryProxyID strin
 	now := time.Now()
 	s, err := r.register(true, timeout)
 	delta := time.Since(now)
-	statsif.add("kalive", int64(delta/time.Microsecond))
+	statsif.add("kalive.μs", int64(delta/time.Microsecond))
 	timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
 	if err == nil {
 		return

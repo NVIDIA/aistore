@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/json-iterator/go"
 )
 
 const logsTotalSizeCheckTime = time.Hour * 3
@@ -54,20 +54,20 @@ type namedVal64 struct {
 }
 
 type proxyCoreStats struct {
-	Numget      int64 `json:"numget"`
-	Numput      int64 `json:"numput"`
-	Numpost     int64 `json:"numpost"`
-	Numdelete   int64 `json:"numdelete"`
-	Numrename   int64 `json:"numrename"`
-	Numlist     int64 `json:"numlist"`
-	Getlatency  int64 `json:"getlatency"`  // microseconds
-	Putlatency  int64 `json:"putlatency"`  // ---/---
-	Listlatency int64 `json:"listlatency"` // ---/---
-	Kalivemin   int64 `json:"kalivemin"`   // ---/---
-	Kalivemax   int64 `json:"kalivemax"`   // ---/---
-	Kalive      int64 `json:"kalive"`      // ---/---
-	Uptime      int64 `json:"uptime"`      // proxy or cluster uptime: microseconds
-	Numerr      int64 `json:"numerr"`
+	Numget      int64 `json:"get.n"`
+	Numput      int64 `json:"put.n"`
+	Numpost     int64 `json:"pst.n"`
+	Numdelete   int64 `json:"del.n"`
+	Numrename   int64 `json:"ren.n"`
+	Numlist     int64 `json:"lst.n"`
+	Getlatency  int64 `json:"get.μs"`
+	Putlatency  int64 `json:"put.μs"`
+	Listlatency int64 `json:"lst.μs"`
+	Kalivemin   int64 `json:"kalive.μs.min"`
+	Kalivemax   int64 `json:"kalive.μs.max"`
+	Kalive      int64 `json:"kalive.μs"`
+	Uptime      int64 `json:"uptime.μs"`
+	Numerr      int64 `json:"err.n"`
 	// omitempty
 	statsdC               *statsd.Client
 	ngets                 int64
@@ -79,20 +79,24 @@ type proxyCoreStats struct {
 
 type targetCoreStats struct {
 	proxyCoreStats
-	Numcoldget       int64 `json:"numcoldget"`
-	Bytesloaded      int64 `json:"bytesloaded"`
-	Bytesevicted     int64 `json:"bytesevicted"`
-	Filesevicted     int64 `json:"filesevicted"`
-	Numsentfiles     int64 `json:"numsentfiles"`
-	Numsentbytes     int64 `json:"numsentbytes"`
-	Numrecvfiles     int64 `json:"numrecvfiles"`
-	Numrecvbytes     int64 `json:"numrecvbytes"`
-	Numprefetch      int64 `json:"numprefetch"`
-	Bytesprefetched  int64 `json:"bytesprefetched"`
-	Numvchanged      int64 `json:"numvchanged"`
-	Bytesvchanged    int64 `json:"bytesvchanged"`
-	Numbadchecksum   int64 `json:"numbadchecksum"`
-	Bytesbadchecksum int64 `json:"bytesbadchecksum"`
+	Numcoldget       int64 `json:"get.cold.n"`
+	Bytesloaded      int64 `json:"get.cold.size"`
+	Bytesevicted     int64 `json:"lru.evict.size"`
+	Filesevicted     int64 `json:"lru.evict.n"`
+	Numsentfiles     int64 `json:"tx.n"`
+	Numsentbytes     int64 `json:"tx.size"`
+	Numrecvfiles     int64 `json:"rx.n"`
+	Numrecvbytes     int64 `json:"rx.size"`
+	Numprefetch      int64 `json:"pre.n"`
+	Bytesprefetched  int64 `json:"pre.size"`
+	Numvchanged      int64 `json:"vchange.n"`
+	Bytesvchanged    int64 `json:"vchange.size"`
+	Numbadchecksum   int64 `json:"cksum.bad.n"`
+	Bytesbadchecksum int64 `json:"cksum.bad.size"`
+	GetRedirlatency  int64 `json:"get.redir.μs"`
+	PutRedirlatency  int64 `json:"put.redir.μs"`
+	// omitempty
+	ngetredirs, nputredirs int64
 }
 
 type statsrunner struct {
@@ -127,8 +131,8 @@ type ClusterStats struct {
 }
 
 type ClusterStatsRaw struct {
-	Proxy  *proxyCoreStats            `json:"proxy"`
-	Target map[string]json.RawMessage `json:"target"`
+	Proxy  *proxyCoreStats                `json:"proxy"`
+	Target map[string]jsoniter.RawMessage `json:"target"`
 }
 
 type iostatrunner struct {
@@ -148,8 +152,8 @@ type (
 	}
 
 	XactionStats struct {
-		Kind        string                     `json:"kind"`
-		TargetStats map[string]json.RawMessage `json:"target"`
+		Kind        string                         `json:"kind"`
+		TargetStats map[string]jsoniter.RawMessage `json:"target"`
 	}
 
 	XactionDetails struct {
@@ -221,8 +225,8 @@ func (r *statsrunner) stop(err error) {
 }
 
 // statslogger interface impl
-func (r *statsrunner) log() (runlru bool) { return false }
-func (r *statsrunner) housekeep(bool)     {}
+func (r *statsrunner) log() (runlru bool)  { return false }
+func (r *statsrunner) housekeep(bool)      {}
 func (r *statsrunner) doAdd(nv namedVal64) {}
 
 func (r *statsrunner) addMany(nvs ...namedVal64) {
@@ -269,7 +273,7 @@ func (r *proxystatsrunner) log() (runlru bool) {
 	if r.Core.nkmax > 0 {
 		r.Core.Kalivemax /= r.Core.nkmax
 	}
-	b, err := json.Marshal(r.Core)
+	b, err := jsoniter.Marshal(r.Core)
 	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
 	r.Core.Kalivemin, r.Core.Kalivemax, r.Core.Kalive = 0, 0, 0
 	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
@@ -293,52 +297,64 @@ func (r *proxystatsrunner) doAdd(nv namedVal64) {
 func (s *proxyCoreStats) doAdd(name string, val int64) {
 	var v *int64
 	switch name {
-	case "numget":
+	case "get.n":
 		v = &s.Numget
-	case "numput":
+	case "put.n":
 		v = &s.Numput
-	case "numpost":
+	case "pst.n":
 		v = &s.Numpost
 		s.statsdC.Send("cluster_post", metric{statsd.Counter, "count", val})
-	case "numdelete":
+	case "del.n":
 		v = &s.Numdelete
 		s.statsdC.Send("delete", metric{statsd.Counter, "count", val})
-	case "numrename":
+	case "ren.n":
 		v = &s.Numrename
 		s.statsdC.Send("rename", metric{statsd.Counter, "count", val})
-	case "numlist":
+	case "lst.n":
 		v = &s.Numlist
-	case "getlatency":
+	case "get.μs":
 		v = &s.Getlatency
 		s.ngets++
 		s.statsdC.Send("get",
 			metric{statsd.Counter, "count", 1},
 			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
 		val = int64(time.Duration(val) / time.Microsecond)
-	case "putlatency":
+	case "put.μs":
 		v = &s.Putlatency
 		s.nputs++
 		s.statsdC.Send("put",
 			metric{statsd.Counter, "count", 1},
 			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
 		val = int64(time.Duration(val) / time.Microsecond)
-	case "listlatency":
+	case "lst.μs":
 		v = &s.Listlatency
 		s.nlists++
 		s.statsdC.Send("list",
 			metric{statsd.Counter, "count", 1},
 			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
 		val = int64(time.Duration(val) / time.Microsecond)
-	case "kalive":
+	case "kalive.μs":
 		v = &s.Kalive
 		s.nkcalls++
-	case "kalivemax":
+		s.statsdC.Send("kalive",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
+	case "kalive.μs.max":
 		v = &s.Kalivemax
 		s.nkmax++
-	case "kalivemin":
+		s.statsdC.Send("kalive.max",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
+	case "kalive.μs.min":
 		v = &s.Kalivemin
 		s.nkmin++
-	case "numerr":
+		s.statsdC.Send("kalive.min",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
+	case "err.n":
 		v = &s.Numerr
 	default:
 		assert(false, "Invalid stats name "+name)
@@ -396,10 +412,17 @@ func (r *storstatsrunner) log() (runlru bool) {
 	if r.Core.nkmax > 0 {
 		r.Core.Kalivemax /= r.Core.nkmax
 	}
+	if r.Core.ngetredirs > 0 {
+		r.Core.GetRedirlatency /= r.Core.ngetredirs
+	}
+	if r.Core.nputredirs > 0 {
+		r.Core.PutRedirlatency /= r.Core.nputredirs
+	}
 	r.Core.Uptime = int64(time.Since(r.starttime) / time.Microsecond)
 
-	b, err := json.Marshal(r.Core)
+	b, err := jsoniter.Marshal(r.Core)
 	r.Core.Getlatency, r.Core.Putlatency, r.Core.Listlatency = 0, 0, 0
+	r.Core.GetRedirlatency, r.Core.PutRedirlatency = 0, 0
 	r.Core.Kalivemin, r.Core.Kalivemax, r.Core.Kalive = 0, 0, 0
 	r.Core.ngets, r.Core.nputs, r.Core.nlists = 0, 0, 0
 	r.Core.nkcalls, r.Core.nkmin, r.Core.nkmax = 0, 0, 0
@@ -411,7 +434,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for mpath, fsCapacity := range r.Capacity {
-			b, err := json.Marshal(fsCapacity)
+			b, err := jsoniter.Marshal(fsCapacity)
 			if err == nil {
 				lines = append(lines, mpath+": "+string(b))
 			}
@@ -427,7 +450,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 		if riostat.isZeroUtil(dev) {
 			continue // skip zeros
 		}
-		b, err := json.Marshal(r.Disk[dev])
+		b, err := jsoniter.Marshal(r.Disk[dev])
 		if err == nil {
 			lines = append(lines, dev+": "+string(b))
 		}
@@ -565,54 +588,68 @@ func (s *targetCoreStats) doAdd(name string, val int64) {
 	var v *int64
 	switch name {
 	// common
-	case "numget", "numput", "numpost", "numdelete", "numrename", "numlist",
-		"getlatency", "putlatency", "listlatency",
-		"kalive", "kalivemin", "kalivemax", "numerr":
+	case "get.n", "put.n", "pst.n", "del.n", "ren.n", "lst.n",
+		"get.μs", "put.μs", "lst.μs",
+		"kalive.μs", "kalive.μs.min", "kalive.μs.max", "err.n":
 		s.proxyCoreStats.doAdd(name, val)
 		return
 	// target only
-	case "numcoldget":
+	case "get.cold.n":
 		v = &s.Numcoldget
-	case "bytesloaded":
+	case "get.cold.size":
 		v = &s.Bytesloaded
 		s.statsdC.Send("get.cold",
 			metric{statsd.Counter, "count", 1},
-			metric{statsd.Counter, "bytesloaded", val})
-	case "bytesevicted":
+			metric{statsd.Counter, "get.cold.size", val})
+	case "lru.evict.size":
 		v = &s.Bytesevicted
 		s.statsdC.Send("evict", metric{statsd.Counter, "bytes", val})
-	case "filesevicted":
+	case "lru.evict.n":
 		v = &s.Filesevicted
 		s.statsdC.Send("evict", metric{statsd.Counter, "files", val})
-	case "numsentfiles":
+	case "tx.n":
 		v = &s.Numsentfiles
 		s.statsdC.Send("rebalance.send", metric{statsd.Counter, "files", val})
-	case "numsentbytes":
+	case "tx.size":
 		v = &s.Numsentbytes
 		s.statsdC.Send("rebalance.send", metric{statsd.Counter, "bytes", val})
-	case "numrecvfiles":
+	case "rx.n":
 		v = &s.Numrecvfiles
 		s.statsdC.Send("rebalance.receive", metric{statsd.Counter, "files", val})
-	case "numrecvbytes":
+	case "rx.size":
 		v = &s.Numrecvbytes
 		s.statsdC.Send("rebalance.receive", metric{statsd.Counter, "bytes", val})
-	case "numprefetch":
+	case "pre.n":
 		v = &s.Numprefetch
-	case "bytesprefetched":
+	case "pre.size":
 		v = &s.Bytesprefetched
-	case "numvchanged":
+	case "vchange.n":
 		v = &s.Numvchanged
-	case "bytesvchanged":
+	case "vchange.size":
 		v = &s.Bytesvchanged
 		s.statsdC.Send("get.cold",
 			metric{statsd.Counter, "vchanged", 1},
-			metric{statsd.Counter, "bytesvchanged", val})
-	case "numbadchecksum":
+			metric{statsd.Counter, "vchange.size", val})
+	case "cksum.bad.n":
 		v = &s.Numbadchecksum
 		s.statsdC.Send("error.badchecksum", metric{statsd.Counter, "count", val})
-	case "bytesbadchecksum":
+	case "cksum.bad.size":
 		v = &s.Bytesbadchecksum
 		s.statsdC.Send("error.badchecksum", metric{statsd.Counter, "bytes", val})
+	case "get.redir.μs":
+		v = &s.GetRedirlatency
+		s.ngetredirs++
+		s.statsdC.Send("get.redir",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
+	case "put.redir.μs":
+		v = &s.PutRedirlatency
+		s.nputredirs++
+		s.statsdC.Send("put.redir",
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
 	default:
 		assert(false, "Invalid stats name "+name)
 	}
@@ -629,7 +666,7 @@ func (p PrefetchTargetStats) getStats(allXactionDetails []XactionDetails) []byte
 		NumFilesPrefetched: rstor.Core.Bytesprefetched,
 	}
 	rstor.RUnlock()
-	jsonBytes, err := json.Marshal(prefetchXactionStats)
+	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
 	assert(err == nil, err)
 	return jsonBytes
 }
@@ -645,7 +682,7 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) []byt
 		NumSentFiles: rstor.Core.Numsentfiles,
 	}
 	rstor.RUnlock()
-	jsonBytes, err := json.Marshal(rebalanceXactionStats)
+	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
 	assert(err == nil, err)
 	return jsonBytes
 }

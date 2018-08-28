@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -32,6 +31,7 @@ import (
 	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
+	"github.com/json-iterator/go"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -359,7 +359,7 @@ func (h *httprunner) run() error {
 		return <-controlCh
 	}
 
-	// When only public net is configured just listen all addresses/interfaces
+	// When only public net is configured listen on *:port
 	addr := ":" + h.si.PublicNet.DaemonPort
 	return h.publicServer.listenAndServe(addr, h.glogger)
 }
@@ -612,7 +612,7 @@ func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interf
 		return err
 	}
 
-	err = json.Unmarshal(b, out)
+	err = jsoniter.Unmarshal(b, out)
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
 		if _, file, line, ok := runtime.Caller(1); ok {
@@ -644,7 +644,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
 		glog.Errorln(s)
-		h.statsif.add("numerr", 1)
+		h.statsif.add("err.n", 1)
 		return
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
@@ -682,22 +682,22 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	)
 	switch getWhat {
 	case GetWhatConfig:
-		jsbytes, err = json.Marshal(ctx.config)
+		jsbytes, err = jsoniter.Marshal(ctx.config)
 		assert(err == nil, err)
 	case GetWhatSmap:
-		jsbytes, err = json.Marshal(h.smapowner.get())
+		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
 		assert(err == nil, err)
 	case GetWhatBucketMeta:
-		jsbytes, err = json.Marshal(h.bmdowner.get())
+		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
 		assert(err == nil, err)
 	case GetWhatSmapVote:
 		_, xx := h.xactinp.findL(ActElection)
 		vote := xx != nil
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
-		jsbytes, err = json.Marshal(msg)
+		jsbytes, err = jsoniter.Marshal(msg)
 		assert(err == nil, err)
 	case GetWhatDaemonInfo:
-		jsbytes, err = json.Marshal(h.si)
+		jsbytes, err = jsoniter.Marshal(h.si)
 		assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
@@ -881,7 +881,7 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	}
 	glog.Errorln(s)
 	http.Error(w, s, status)
-	h.statsif.add("numerr", 1)
+	h.statsif.add("err.n", 1)
 }
 
 //=====================
@@ -896,13 +896,13 @@ func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *ActionM
 	newsmap, msg = &Smap{}, &ActionMsg{}
 	smapvalue := payload[smaptag]
 	msgvalue := ""
-	if err := json.Unmarshal([]byte(smapvalue), newsmap); err != nil {
+	if err := jsoniter.Unmarshal([]byte(smapvalue), newsmap); err != nil {
 		errstr = fmt.Sprintf("Failed to unmarshal new smap, value (%+v, %T), err: %v", smapvalue, smapvalue, err)
 		return
 	}
 	if _, ok := payload[smaptag+actiontag]; ok {
 		msgvalue = payload[smaptag+actiontag]
-		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
+		if err := jsoniter.Unmarshal([]byte(msgvalue), msg); err != nil {
 			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
 			return
 		}
@@ -947,13 +947,13 @@ func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, 
 	newbucketmd, msg = &bucketMD{}, &ActionMsg{}
 	bmdvalue := payload[bucketmdtag]
 	msgvalue := ""
-	if err := json.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
+	if err := jsoniter.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
 		errstr = fmt.Sprintf("Failed to unmarshal new bucket-metadata, value (%+v, %T), err: %v", bmdvalue, bmdvalue, err)
 		return
 	}
 	if _, ok := payload[bucketmdtag+actiontag]; ok {
 		msgvalue = payload[bucketmdtag+actiontag]
-		if err := json.Unmarshal([]byte(msgvalue), msg); err != nil {
+		if err := jsoniter.Unmarshal([]byte(msgvalue), msg); err != nil {
 			errstr = fmt.Sprintf("Failed to unmarshal action message, value (%+v, %T), err: %v", msgvalue, msgvalue, err)
 			return
 		}
@@ -977,7 +977,7 @@ func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, str
 	msg := ActionMsg{}
 	if _, ok := payload[tokentag+actiontag]; ok {
 		msgvalue := payload[tokentag+actiontag]
-		if err := json.Unmarshal([]byte(msgvalue), &msg); err != nil {
+		if err := jsoniter.Unmarshal([]byte(msgvalue), &msg); err != nil {
 			errstr := fmt.Sprintf(
 				"Failed to unmarshal action message, value (%+v, %T), err: %v",
 				msgvalue, msgvalue, err)
@@ -986,7 +986,7 @@ func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, str
 	}
 
 	tokenList := &TokenList{}
-	if err := json.Unmarshal([]byte(bytes), tokenList); err != nil {
+	if err := jsoniter.Unmarshal([]byte(bytes), tokenList); err != nil {
 		return nil, fmt.Sprintf(
 			"Failed to unmarshal blocked token list, value (%+v, %T), err: %v",
 			bytes, bytes, err)
@@ -1064,7 +1064,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 
 func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, query url.Values,
 	keepalive bool) (res callResult) {
-	info, err := json.Marshal(h.si)
+	info, err := jsoniter.Marshal(h.si)
 	assert(err == nil, err)
 
 	path := URLPath(Rversion, Rcluster)

@@ -5,7 +5,6 @@
 package dfc
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/json-iterator/go"
 )
 
 func TestGetFSUsedPercentage(t *testing.T) {
@@ -92,7 +92,7 @@ func TestGetDiskFromFileSystem(t *testing.T) {
 }
 
 func TestMultipleMountPathsOnSameDisk(t *testing.T) {
-	rawJson := json.RawMessage(
+	rawJson := jsoniter.RawMessage(
 		`{
         "blockdevices": [{
                 "name": "xvda",
@@ -113,7 +113,7 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
             }
         ]
 		}`)
-	bytes, err := json.Marshal(&rawJson)
+	bytes, err := jsoniter.Marshal(&rawJson)
 	if err != nil {
 		t.Errorf("Unable to marshal input json. Error: [%v]", err)
 	}
