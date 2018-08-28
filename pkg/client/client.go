@@ -993,9 +993,9 @@ func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
 
 // ListBuckets returns all buckets in DFC (cloud and local)
 func ListBuckets(proxyURL string, local bool) (*dfc.BucketNames, error) {
-	url := proxyURL + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*"
+	url := proxyURL + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, "*")
 	if local {
-		url += "?local=true"
+		url += fmt.Sprintf("?%s=true", dfc.URLParamLocal)
 	}
 
 	resp, err := http.Get(url)
@@ -1147,7 +1147,8 @@ func HTTPRequest(method string, url string, msg io.Reader) error {
 
 // GetLocalBucketNames returns list of all local buckets.
 func GetLocalBucketNames(proxyurl string) (*dfc.BucketNames, error) {
-	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rbuckets + "/*?local=true"
+	url := proxyurl + dfc.URLPath(dfc.Rversion, dfc.Rbuckets, "*") +
+		fmt.Sprintf("?%s=true", dfc.URLParamLocal)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request, err = %v", err)
