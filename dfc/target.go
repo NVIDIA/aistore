@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -89,6 +90,20 @@ type (
 		DisableMountpath(path string, why string) (disabled, exists bool)
 	}
 )
+
+// Configuration for selective disabling of disk and/or network IO.
+// It is initialized at target startup and cannot be changed on the fly.
+// The values can be set via CLI arguments or by using environment variables.
+// Environment variables have higher priority.
+type dataIOConfig struct {
+	useDisk        bool   // disk read/write is enabled (-diskio/DFCDISKIO)
+	useNetwork     bool   // network read/write is enabled (-netio/DFCNETIO)
+	dryFileSizeStr string // size of a fake object if disk IO is disabled (-dryobjsize/DFCDRYOBJSIZE)
+	dryFileSize    int64  // as above - converted to bytes from a string like '8m'
+	dryRun         bool   // dry-run mode is enabled: either disk or network IO is disabled
+}
+
+var ioConfig = &dataIOConfig{useDisk: true, useNetwork: true}
 
 //===========================================================================
 //
@@ -162,6 +177,10 @@ func (t *targetrunner) run() error {
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
+
+	// disable HTTP and/or disk read and writes for performance testing if
+	// a user requested it (via CLI arguments or environment variables)
+	dataIOSetup()
 
 	//
 	// REST API: register storage target's handler(s) and start listening
@@ -330,6 +349,9 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		started                       time.Time
 		errcode                       int
 		coldget, vchanged, inNextTier bool
+		err                           error
+		file                          *os.File
+		written                       int64
 	)
 	started = time.Now()
 	cksumcfg := &ctx.config.Cksum
@@ -437,7 +459,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			coldget = true
 		}
 	}
-	if coldget {
+	if coldget && ioConfig.useDisk {
 		t.rtnamemap.unlockname(uname, false)
 		if props, errstr, errcode = t.coldget(ct, bucket, objname, false); errstr != "" {
 			if errcode == 0 {
@@ -476,7 +498,24 @@ existslocally:
 		w.Header().Add(api.HeaderDFCObjVersion, props.version)
 	}
 
-	file, err := os.Open(fqn)
+	// shortcut in case of disk IO is disabled
+	if !ioConfig.useDisk {
+		if ioConfig.useNetwork {
+			rd := readers.NewRandReader(ioConfig.dryFileSize)
+			if _, err = io.Copy(w, rd); err != nil {
+				errstr = fmt.Sprintf("Failed to send file: %v", err)
+				glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
+				t.statsif.add("err.n", 1)
+				return
+			}
+		}
+
+		delta := time.Since(started)
+		t.statsif.addMany(namedVal64{"get.n", 1}, namedVal64{"get.μs", int64(delta)})
+		return
+	}
+
+	file, err = os.Open(fqn)
 	if err != nil {
 		if os.IsPermission(err) {
 			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
@@ -518,12 +557,19 @@ existslocally:
 		w.Header().Add(api.HeaderDFCChecksumVal, cksum)
 	}
 
-	var written int64
 	if readRange {
-		written, err = io.CopyBuffer(w, rangeReader, buf)
+		if ioConfig.useNetwork {
+			written, err = io.CopyBuffer(w, rangeReader, buf)
+		} else {
+			written, err = io.CopyBuffer(ioutil.Discard, rangeReader, buf)
+		}
 	} else {
 		// copy
-		written, err = io.CopyBuffer(w, file, buf)
+		if ioConfig.useNetwork {
+			written, err = io.CopyBuffer(w, file, buf)
+		} else {
+			written, err = io.CopyBuffer(ioutil.Discard, file, buf)
+		}
 	}
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
@@ -1394,6 +1440,10 @@ ret:
 }
 
 func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool, size int64, version, errstr string) {
+	if !ioConfig.useDisk {
+		return false, ioConfig.dryFileSize, "1", ""
+	}
+
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		switch {
@@ -1827,7 +1877,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		htype, hval = hdhobj.get()
 	}
 	// optimize out if the checksums do match
-	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone {
+	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone && !ioConfig.dryRun {
 		file, err = os.Open(fqn)
 		// exists - compute checksum and compare with the caller's
 		if err == nil {
@@ -1861,14 +1911,16 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		assert(hdhobj == nil || htype == nhtype)
 	}
 	// validate checksum when and if provided
-	if hval != "" && nhval != "" && hval != nhval {
+	if hval != "" && nhval != "" && hval != nhval && !ioConfig.dryRun {
 		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %s... != %s...", bucket, objname, htype, hval[:8], nhval[:8])
 		return
 	}
 	// commit
 	props := &objectProps{nhobj: nhobj}
 	if sgl == nil {
-		errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		if !ioConfig.dryRun {
+			errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
+		}
 		if errstr == "" {
 			delta := time.Since(started)
 			t.statsif.addMany(namedVal64{"put.n", 1}, namedVal64{"put.μs", int64(delta)})
@@ -2725,12 +2777,26 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			cksumcfg = &bucketProps.CksumConf
 		}
 	}
-	if file, err = CreateFile(fqn); err != nil {
-		t.fshc(err, fqn)
-		errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
+
+	// shortcut if nothing to do
+	if !ioConfig.useDisk && !ioConfig.useNetwork {
 		return
 	}
-	filewriter = file
+
+	if !ioConfig.useNetwork {
+		reader = readers.NewRandReader(ioConfig.dryFileSize)
+	}
+	if ioConfig.useDisk {
+		if file, err = CreateFile(fqn); err != nil {
+			t.fshc(err, fqn)
+			errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
+			return
+		}
+		filewriter = file
+	} else {
+		filewriter = ioutil.Discard
+	}
+
 	slab := iosgl.SelectSlab(0)
 	buf := slab.Alloc()
 	defer func() { // free & cleanup on err
@@ -2738,13 +2804,29 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		if errstr == "" {
 			return
 		}
-		if err = file.Close(); err != nil {
-			glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
-		}
-		if err = os.Remove(fqn); err != nil {
-			glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, fqn, err)
+		if ioConfig.useDisk {
+			if err = file.Close(); err != nil {
+				glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
+			}
+			if err = os.Remove(fqn); err != nil {
+				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, fqn, err)
+			}
 		}
 	}()
+
+	// shortcut for dry run
+	if ioConfig.dryRun {
+		if written, err = ReceiveAndChecksum(filewriter, reader, buf); err != nil {
+			errstr = err.Error()
+		}
+		if ioConfig.useDisk {
+			if err = file.Close(); err != nil {
+				errstr = fmt.Sprintf("Failed to close received file %s, err: %v", fqn, err)
+			}
+		}
+		return
+	}
+
 	// receive and checksum
 	if cksumcfg.Checksum != ChecksumNone {
 		assert(cksumcfg.Checksum == ChecksumXXHash)
@@ -3514,4 +3596,37 @@ func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled,
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
 	return t.fsprg.disableMountpath(mountpath)
+}
+
+// Environment variables override disk and network IO settings passed in command line
+func dataIOSetup() {
+	str := os.Getenv("DFCDISKIO")
+	if b, err := strconv.ParseBool(str); err == nil {
+		ioConfig.useDisk = b
+	}
+	str = os.Getenv("DFCNETIO")
+	if b, err := strconv.ParseBool(str); err == nil {
+		ioConfig.useNetwork = b
+	}
+	str = os.Getenv("DFCDRYOBJSIZE")
+	if str != "" {
+		if dryFileSize, err := strToBytes(str); dryFileSize > 0 && err == nil {
+			ioConfig.dryFileSize = dryFileSize
+		}
+	}
+
+	if !ioConfig.useDisk {
+		warning := "Dry run: disk IO will be disabled"
+		fmt.Fprintf(os.Stderr, "%s\n", warning)
+		glog.Infof("%s - in memory file size: %d (%s) bytes",
+			warning, ioConfig.dryFileSize, bytesToStr(ioConfig.dryFileSize, 0))
+	}
+	if !ioConfig.useNetwork {
+		warning := "Dry run: DFC will not return bytes for GET requests and " +
+			"will not read data from PUT requests"
+		fmt.Fprintf(os.Stderr, "%s\n", warning)
+		glog.Info(warning)
+	}
+
+	ioConfig.dryRun = !ioConfig.useNetwork || !ioConfig.useDisk
 }

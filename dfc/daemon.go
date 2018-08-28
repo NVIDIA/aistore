@@ -131,6 +131,10 @@ func init() {
 	flag.DurationVar(&clivars.statstime, "statstime", 0, "http and capacity utilization statistics log interval")
 	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 	flag.StringVar(&clivars.proxyurl, "proxyurl", "", "Override config Proxy settings")
+
+	flag.BoolVar(&ioConfig.useDisk, "diskio", true, "perform disks/cloud operations for GET/PUT")
+	flag.BoolVar(&ioConfig.useNetwork, "netio", true, "perform network operations for GET/PUT")
+	flag.StringVar(&ioConfig.dryFileSizeStr, "dryobjsize", "8m", "size of the in-memory object for dry run without disk IO")
 }
 
 //==================
@@ -139,7 +143,14 @@ func init() {
 //
 //==================
 func dfcinit() {
+	var err error
+
 	flag.Parse()
+
+	ioConfig.dryFileSize, err = strToBytes(ioConfig.dryFileSizeStr)
+	if ioConfig.dryFileSize < 1 || err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid object size: %d [%s]\n", ioConfig.dryFileSize, ioConfig.dryFileSizeStr)
+	}
 
 	if clivars.conffile == "" {
 		fmt.Fprintf(os.Stderr, "Missing configuration file - must be provided via command line\n")

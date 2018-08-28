@@ -29,6 +29,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
   * [Networking](#networking)
   * [Reverse proxy](#reverse-proxy)
 - [Performance tuning](#performance-tuning)
+- [Performance testing](#performance-testing)
 - [REST Operations](#rest-operations)
   * [Querying information](#querying-information)
 - [Read and Write Data Paths](#read-and-write-data-paths)
@@ -305,6 +306,28 @@ DFC storage node, in particular, needs to have a physical resource in its entire
 And, of course, make sure to use PCI passthrough for all local hard drives given to DFC.
 
 Finally, to ease troubleshooting, consider the usual and familiar load generators such as `fio` and `iperf`, and observability tools: `iostat`, `mpstat`, `sar`, `top`, and more. For instance, `fio` and `iperf` may appear to be almost indispensable in terms of validating and then tuning performances of local storages and clustered networks, respectively. Goes without saying that it does make sense to do this type of basic checking-and-validating prior to running DFC under stressful workloads.
+
+## Performance testing
+
+[Command-line load generator](#command-line-load-generator) is a good tool to test overall DFC performance. But it does not show what local subsystem - disk or network one - is a bottleneck. DFC provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then DFC uses the environment variable.
+
+If any kind of IO is disabled then DFC sends a warning to stderr and turns off some internal features including object checksumming, versioning, atime and extended attributes management.
+
+Warning: as of version 1.2, disabling and enabling IO on the fly is not supported, it must be done at target's startup.
+
+| CLI argument | Environment variable | Default value | Description |
+|---|---|---|---|
+| diskio | DFCDISKIO | true | false - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see DFCDRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
+| netio | DFCNETIO | true | false - disables HTTP read and write. For GET requests a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, DFC reads the data from in-memory object and saves the data to disks.<br>Valid values are true or 1, and false or 0 |
+| dryobjsize | DFCDRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m' - the size of an object is 8 megabytes |
+
+Example of deploying a cluster with disk IO disabled and object size 256 kilobytes:
+
+```
+/opt/dfcpub/dfc$ DFCNETIO=true DFCDISKIO=false DFCDRYOBJSIZE=256k make deploy
+```
+
+Warning: the command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
 
 ## REST Operations
 

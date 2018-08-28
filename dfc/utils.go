@@ -503,3 +503,32 @@ func parsePort(p string) (int, error) {
 
 	return port, nil
 }
+
+func strToBytes(s string) (int64, error) {
+	if s == "" {
+		return 0, nil
+	}
+
+	s = strings.ToUpper(s)
+	factors := map[string]int64{"T": TiB, "G": GiB, "M": MiB, "K": KiB, "B": 1}
+	for k, v := range factors {
+		if idx := strings.Index(s, k); idx != -1 {
+			i, err := strconv.ParseInt(strings.TrimSpace(s[:idx]), 10, 64)
+			return v * i, err
+		}
+	}
+	i, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	return i, err
+}
+
+func bytesToStr(b int64, digits int) string {
+	factors := map[string]int64{"TiB": TiB, "GiB": GiB, "MiB": MiB, "KiB": KiB, "B": 1}
+
+	for s, f := range factors {
+		if b >= f {
+			return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(f), s)
+		}
+	}
+
+	return fmt.Sprintf("%dB", b)
+}
