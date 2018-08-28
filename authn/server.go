@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -77,7 +77,7 @@ func isSyscallWriteError(err error) bool {
 }
 
 func isValidProvider(prov string) bool {
-	return prov == dfc.ProviderAmazon || prov == dfc.ProviderGoogle || prov == dfc.ProviderDfc
+	return prov == api.ProviderAmazon || prov == api.ProviderGoogle || prov == api.ProviderDFC
 }
 
 //-------------------------------------
@@ -136,8 +136,8 @@ func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter
 }
 
 func (a *authServ) registerPublicHandlers() {
-	a.registerHandler(dfc.URLPath(dfc.Rversion, pathUsers), a.userHandler)
-	a.registerHandler(dfc.URLPath(dfc.Rversion, pathTokens), a.tokenHandler)
+	a.registerHandler(api.URLPath(api.Version, pathUsers), a.userHandler)
+	a.registerHandler(api.URLPath(api.Version, pathTokens), a.tokenHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {

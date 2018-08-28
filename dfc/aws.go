@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -55,7 +56,7 @@ func extractAWSCreds(credsList map[string]string) *awsCreds {
 	if len(credsList) == 0 {
 		return nil
 	}
-	raw, ok := credsList[ProviderAmazon]
+	raw, ok := credsList[api.ProviderAmazon]
 	if raw == "" || !ok {
 		return nil
 	}
@@ -126,7 +127,7 @@ func createSession(ct context.Context) *session.Session {
 
 	creds := extractAWSCreds(userCreds)
 	if creds == nil {
-		glog.Errorf("Failed to retrieve %s credentials %s", ProviderAmazon, userID)
+		glog.Errorf("Failed to retrieve %s credentials %s", api.ProviderAmazon, userID)
 		return session.Must(session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable}))
 	}
@@ -156,7 +157,7 @@ func awsIsVersionSet(version *string) bool {
 // bucket operations
 //
 //==================
-func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
+func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *api.GetMsg) (jsbytes []byte, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -192,7 +193,7 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 	}
 
 	var versions map[string]*string
-	if strings.Contains(msg.GetProps, GetPropsVersion) {
+	if strings.Contains(msg.GetProps, api.GetPropsVersion) {
 		verResp, err := svc.ListObjectVersions(verParams)
 		if err != nil {
 			errstr = err.Error()
@@ -208,35 +209,35 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 		}
 	}
 
-	// var msg GetMsg
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
+	// var msg api.GetMsg
+	var reslist = api.BucketList{Entries: make([]*api.BucketEntry, 0, initialBucketListSize)}
 	for _, key := range resp.Contents {
-		entry := &BucketEntry{}
+		entry := &api.BucketEntry{}
 		entry.Name = *(key.Key)
-		if strings.Contains(msg.GetProps, GetPropsSize) {
+		if strings.Contains(msg.GetProps, api.GetPropsSize) {
 			entry.Size = *(key.Size)
 		}
-		if strings.Contains(msg.GetProps, GetPropsCtime) {
+		if strings.Contains(msg.GetProps, api.GetPropsCtime) {
 			t := *(key.LastModified)
 			switch msg.GetTimeFormat {
 			case "":
 				fallthrough
-			case RFC822:
+			case api.RFC822:
 				entry.Ctime = t.Format(time.RFC822)
 			default:
 				entry.Ctime = t.Format(msg.GetTimeFormat)
 			}
 		}
-		if strings.Contains(msg.GetProps, GetPropsChecksum) {
+		if strings.Contains(msg.GetProps, api.GetPropsChecksum) {
 			omd5, _ := strconv.Unquote(*key.ETag)
 			entry.Checksum = omd5
 		}
-		if strings.Contains(msg.GetProps, GetPropsVersion) {
+		if strings.Contains(msg.GetProps, api.GetPropsVersion) {
 			if val, ok := versions[*(key.Key)]; ok && awsIsVersionSet(val) {
 				entry.Version = *val
 			}
 		}
-		// TODO: other GetMsg props TBD
+		// TODO: other api.GetMsg props TBD
 		reslist.Entries = append(reslist.Entries, entry)
 	}
 	if glog.V(4) {
@@ -270,7 +271,7 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 		return
 	}
-	bucketprops[CloudProvider] = ProviderAmazon
+	bucketprops[api.HeaderCloudProvider] = api.ProviderAmazon
 
 	inputVers := &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}
 	result, err := svc.GetBucketVersioning(inputVers)
@@ -279,9 +280,9 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 	} else {
 		if result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled {
-			bucketprops[Versioning] = VersionCloud
+			bucketprops[api.HeaderVersioning] = VersionCloud
 		} else {
-			bucketprops[Versioning] = VersionNone
+			bucketprops[api.HeaderVersioning] = VersionNone
 		}
 	}
 	return
@@ -327,7 +328,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	objmeta[CloudProvider] = ProviderAmazon
+	objmeta[api.HeaderCloudProvider] = api.ProviderAmazon
 	if awsIsVersionSet(headOutput.VersionId) {
 		objmeta["version"] = *headOutput.VersionId
 	}

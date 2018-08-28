@@ -10,11 +10,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/NVIDIA/dfcpub/api"
 )
 
 func (t *targetrunner) objectInNextTier(nextURL, bucket, objName string) (in bool, errstr string, errcode int) {
-	var url = nextURL + URLPath(Rversion, Robjects, bucket, objName) + fmt.Sprintf(
-		"?%s=true", URLParamCheckCached)
+	url := nextURL + api.URLPath(api.Version, api.Objects, bucket, objName) + fmt.Sprintf("?%s=true", api.URLParamCheckCached)
 
 	r, err := t.httprunner.httpclientLongTimeout.Head(url)
 	if err != nil {
@@ -47,7 +48,7 @@ func (t *targetrunner) objectInNextTier(nextURL, bucket, objName string) (in boo
 }
 
 func (t *targetrunner) getObjectNextTier(nextURL, bucket, objName, fqn string) (p *objectProps, errstr string, errcode int) {
-	var url = nextURL + URLPath(Rversion, Robjects, bucket, objName)
+	var url = nextURL + api.URLPath(api.Version, api.Objects, bucket, objName)
 
 	r, err := t.httprunner.httpclientLongTimeout.Get(url)
 	if err != nil {
@@ -78,7 +79,7 @@ func (t *targetrunner) getObjectNextTier(nextURL, bucket, objName, fqn string) (
 }
 
 func (t *targetrunner) putObjectNextTier(nextURL, bucket, objName string, body io.Reader) (errstr string, errcode int) {
-	var url = nextURL + URLPath(Rversion, Robjects, bucket, objName)
+	var url = nextURL + api.URLPath(api.Version, api.Objects, bucket, objName)
 
 	req, err := http.NewRequest(http.MethodPut, url, body)
 	if err != nil {

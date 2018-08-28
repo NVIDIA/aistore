@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -46,7 +47,7 @@ const (
 //
 //         (shared-replicated-object, associated action-message)
 //
-// Action message (above, see ActionMsg) provides receivers with a context as
+// Action message (above, see api.ActionMsg) provides receivers with a context as
 // to what exactly to do with the newly received versioned replica.
 //
 // In addition, storage target in particular make use action message structured as:
@@ -97,7 +98,7 @@ type revsowner interface {
 type (
 	revspair struct {
 		revs revs
-		msg  *ActionMsg
+		msg  *api.ActionMsg
 	}
 	revsReq struct {
 		pairs []revspair
@@ -197,10 +198,10 @@ func (y *metasyncer) sync(wait bool, params ...interface{}) {
 		revs, ok := params[i].(revs)
 		assert(ok)
 		if action, ok := params[i+1].(string); ok {
-			msg := &ActionMsg{Action: action}
+			msg := &api.ActionMsg{Action: action}
 			revsReq.pairs[i/2] = revspair{revs, msg}
 		} else {
-			msg, ok := params[i+1].(*ActionMsg)
+			msg, ok := params[i+1].(*api.ActionMsg)
 			assert(ok)
 			revsReq.pairs[i/2] = revspair{revs, msg}
 		}
@@ -302,7 +303,7 @@ OUTER:
 	assert(err == nil, err)
 
 	// step 3: b-cast
-	urlPath := URLPath(Rversion, Rmetasync)
+	urlPath := api.URLPath(api.Version, api.Metasync)
 	res := y.p.broadcastCluster(
 		urlPath,
 		nil, // query
@@ -443,7 +444,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 
 	payload := make(simplekvs)
 	pairs := make([]revspair, 0, len(y.last))
-	msg := &ActionMsg{Action: "metasync: handle-pending"} // the same action msg for all
+	msg := &api.ActionMsg{Action: "metasync: handle-pending"} // the same action msg for all
 	jsmsg, err := jsoniter.Marshal(msg)
 	assert(err == nil, err)
 	for tag, revs := range y.last {
@@ -460,7 +461,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,
-			path:   URLPath(Rversion, Rmetasync),
+			path:   api.URLPath(api.Version, api.Metasync),
 			body:   body,
 		},
 		internal: true,

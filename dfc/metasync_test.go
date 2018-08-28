@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -135,7 +136,7 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
 	bucketmd.add("bucket1", true, BucketProps{
-		CloudProvider: ProviderDfc,
+		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://foo.com",
 		CksumConf: cksumconfig{
 			Checksum: ChecksumInherit,
@@ -147,7 +148,7 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 		},
 	})
 	bucketmd.add("bucket3", false, BucketProps{
-		CloudProvider: ProviderDfc,
+		CloudProvider: api.ProviderDFC,
 		CksumConf: cksumconfig{
 			Checksum: ChecksumInherit,
 		},
@@ -401,7 +402,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	)
 
 	// handler for /v1/metasync
-	http.HandleFunc(URLPath(Rversion, Rmetasync), func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(api.URLPath(api.Version, api.Metasync), func(w http.ResponseWriter, r *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 
@@ -521,9 +522,9 @@ func TestMetaSyncData(t *testing.T) {
 		emptyActionMsg string
 	)
 
-	b, err := jsoniter.Marshal(ActionMsg{})
+	b, err := jsoniter.Marshal(api.ActionMsg{})
 	if err != nil {
-		t.Fatal("Failed to marshal empty ActionMsg, err =", err)
+		t.Fatal("Failed to marshal empty api.ActionMsg, err =", err)
 	}
 
 	emptyActionMsg = string(b)
@@ -558,13 +559,13 @@ func TestMetaSyncData(t *testing.T) {
 
 	// sync bucketmd, fail target and retry
 	bucketmd.add("bucket1", true, BucketProps{
-		CloudProvider: ProviderDfc,
+		CloudProvider: api.ProviderDFC,
 		CksumConf: cksumconfig{
 			Checksum: ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, BucketProps{
-		CloudProvider: ProviderDfc,
+		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
 		CksumConf: cksumconfig{
 			Checksum: ChecksumInherit,
@@ -602,7 +603,7 @@ func TestMetaSyncData(t *testing.T) {
 
 	bucketmd = bucketmd.clone()
 	bucketmd.add("bucket4", true, BucketProps{
-		CloudProvider: ProviderDfc,
+		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://foo.com",
 		CksumConf: cksumconfig{
 			Checksum: ChecksumInherit,
@@ -637,7 +638,7 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, exp, ch, 3)
 
 	// sync smap pair
-	msgSMap := &ActionMsg{Action: "msg8"}
+	msgSMap := &api.ActionMsg{Action: "msg8"}
 	b, err = jsoniter.Marshal(msgSMap)
 	if err != nil {
 		t.Fatal("Failed to marshal action message, err =", err)
@@ -657,7 +658,7 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, exp, ch, 2)
 
 	// NOTE: will cause an error "duplicated - already sync-ed or pending" - expected
-	msgBMD := &ActionMsg{Action: "msg-duplicated"}
+	msgBMD := &api.ActionMsg{Action: "msg-duplicated"}
 	msgSMap = msgBMD
 	delete(exp, bucketmdtag)
 	delete(exp, bucketmdtag+actiontag)
@@ -789,15 +790,15 @@ func TestMetaSyncReceive(t *testing.T) {
 			}
 		}
 
-		emptyActionMsg := func(a *ActionMsg) {
+		emptyActionMsg := func(a *api.ActionMsg) {
 			if a.Action != "" || a.Name != "" || a.Value != nil {
 				t.Fatal("Expecting empty action message", a)
 			}
 		}
 
-		matchActionMsg := func(a, b *ActionMsg) {
+		matchActionMsg := func(a, b *api.ActionMsg) {
 			if !reflect.DeepEqual(a, b) {
-				t.Fatal("ActionMsg mismatch ", a, b)
+				t.Fatal("api.ActionMsg mismatch ", a, b)
 			}
 		}
 
@@ -895,8 +896,8 @@ func TestMetaSyncReceive(t *testing.T) {
 		clone.Version--
 		proxy1.smapowner.put(clone)
 
-		var am ActionMsg
-		y := &ActionMsg{Action: ""}
+		var am api.ActionMsg
+		y := &api.ActionMsg{Action: ""}
 		b, _ := jsoniter.Marshal(y)
 		jsoniter.Unmarshal(b, &am)
 
@@ -914,7 +915,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		target1.bmdowner = &bmdowner{}
 		target1.bmdowner.put(newBucketMD())
 
-		c := func(n *Smap, m *ActionMsg, e string) {
+		c := func(n *Smap, m *api.ActionMsg, e string) {
 			noErr(e)
 			matchActionMsg(&am, m)
 			matchSMap(primary.smapowner.get(), n)
@@ -934,7 +935,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		// (smap is the only one and it is already synced)
 		payload = <-chTarget
 
-		y = &ActionMsg{Action: ""}
+		y = &api.ActionMsg{Action: ""}
 		b, _ = jsoniter.Marshal(y)
 		jsoniter.Unmarshal(b, &am)
 
@@ -986,13 +987,13 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chTarget
 
 		bucketmd.add("lb1", true, BucketProps{
-			CloudProvider: ProviderDfc,
+			CloudProvider: api.ProviderDFC,
 			CksumConf: cksumconfig{
 				Checksum: ChecksumInherit,
 			},
 		})
 		bucketmd.add("lb2", true, BucketProps{
-			CloudProvider: ProviderAmazon,
+			CloudProvider: api.ProviderAmazon,
 			CksumConf: cksumconfig{
 				Checksum: ChecksumInherit,
 			},
@@ -1023,7 +1024,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		p1bmd.Version--
 		proxy1.bmdowner.put(p1bmd)
 
-		am1 := ActionMsg{Action: "Action"}
+		am1 := api.ActionMsg{Action: "Action"}
 		syncer.sync(true, bucketmd, &am1)
 		payload = <-chTarget
 		lb, actMsg, errStr = proxy1.extractbucketmd(payload)
@@ -1032,7 +1033,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		payload = <-chProxy
 		payload = <-chTarget
 
-		y = &ActionMsg{Action: "New proxy"}
+		y = &api.ActionMsg{Action: "New proxy"}
 		b, _ = jsoniter.Marshal(y)
 		jsoniter.Unmarshal(b, &am)
 
@@ -1051,25 +1052,25 @@ func TestMetaSyncReceive(t *testing.T) {
 		proxy2.bmdowner.put(newBucketMD())
 
 		bucketmd.add("lb3", true, BucketProps{
-			CloudProvider: ProviderGoogle,
+			CloudProvider: api.ProviderGoogle,
 			CksumConf: cksumconfig{
 				Checksum: ChecksumInherit,
 			},
 		})
 
-		c = func(n *Smap, m *ActionMsg, e string) {
+		c = func(n *Smap, m *api.ActionMsg, e string) {
 			noErr(e)
 			matchActionMsg(&am, m)
 			matchSMap(primary.smapowner.get(), n)
 		}
 
-		clb := func(lb *bucketMD, m *ActionMsg, e string) {
+		clb := func(lb *bucketMD, m *api.ActionMsg, e string) {
 			noErr(e)
 			matchActionMsg(&am1, m)
 			matchBMD(bucketmd, lb)
 		}
 
-		syncer.sync(true, bucketmd, &am1, primary.smapowner.get(), &ActionMsg{Action: "New proxy"})
+		syncer.sync(true, bucketmd, &am1, primary.smapowner.get(), &api.ActionMsg{Action: "New proxy"})
 		payload = <-chProxy
 		lb, actMsg, errStr = proxy2.extractbucketmd(payload)
 		clb(lb, actMsg, errStr)
@@ -1174,12 +1175,12 @@ func TestMetaSyncReceive(t *testing.T) {
 		<-chTarget
 
 		bucketmd.add("lb2", true, BucketProps{
-			CloudProvider: ProviderDfc,
+			CloudProvider: api.ProviderDFC,
 			CksumConf: cksumconfig{
 				Checksum: ChecksumInherit,
 			},
 		})
-		syncer.sync(false, bucketmd, &ActionMsg{Action: "NB"})
+		syncer.sync(false, bucketmd, &api.ActionMsg{Action: "NB"})
 		payload := <-chTarget
 		_, actMsg, _ := target2.extractbucketmd(payload)
 		if actMsg.Action == "" {

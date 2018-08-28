@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 )
 
 const (
@@ -263,7 +264,7 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 
 func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta time.Duration) {
 	query := url.Values{}
-	query.Add(URLParamFromID, pkr.p.si.DaemonID)
+	query.Add(api.URLParamFromID, pkr.p.si.DaemonID)
 
 	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
 	args := callArgs{
@@ -271,7 +272,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta t
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   to.InternalNet.DirectURL,
-			path:   URLPath(Rversion, Rhealth),
+			path:   api.URLPath(api.Version, api.Health),
 			query:  query,
 		},
 		timeout: timeout,

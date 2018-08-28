@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -46,7 +47,6 @@ type regressionTestData struct {
 const (
 	rootDir = "/tmp/dfc"
 
-	RestAPIDaemonSuffix   = "/" + dfc.Rversion + "/" + dfc.Rdaemon
 	TestLocalBucketName   = "TESTLOCALBUCKET"
 	RenameLocalBucketName = "renamebucket"
 	RenameDir             = rootDir + "/rename"
@@ -55,7 +55,7 @@ const (
 )
 
 var (
-	RenameMsg        = dfc.ActionMsg{Action: dfc.ActRename}
+	RenameMsg        = api.ActionMsg{Action: api.ActRename}
 	HighWaterMark    = uint32(80)
 	LowWaterMark     = uint32(60)
 	UpdTime          = time.Second * 20
@@ -106,7 +106,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	putRandomFiles(seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, true)
 
-	msg := &dfc.GetMsg{GetPageSize: int(pagesize), GetProps: dfc.GetTargetURL}
+	msg := &api.GetMsg{GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
 	bl, err := client.ListBucket(proxyurl, bucket, msg, num)
 	checkFatal(err, t)
 
@@ -195,7 +195,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		}
 	}()
 
-	listBucketMsg := &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: dfc.GetTargetURL}
+	listBucketMsg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
 	bucketList, err := client.ListBucket(proxyurl, bucketName, listBucketMsg, 0)
 	checkFatal(err, t)
 
@@ -412,7 +412,7 @@ func TestListObjects(t *testing.T) {
 
 	for idx, test := range tests {
 		tlogf("%d. %s\n    Prefix: [%s], Expected objects: %d\n", idx+1, test.title, test.prefix, test.expected)
-		msg := &dfc.GetMsg{GetPageSize: test.pageSize, GetPrefix: test.prefix}
+		msg := &api.GetMsg{GetPageSize: test.pageSize, GetPrefix: test.prefix}
 		reslist, err := listObjects(t, msg, bucket, test.limit)
 		if err != nil {
 			t.Error(err)
@@ -509,10 +509,8 @@ func TestRenameObjects(t *testing.T) {
 			t.Fatalf("Failed to marshal RenameMsg: %v", err)
 		}
 
-		err := client.HTTPRequest("POST",
-			proxyurl+"/"+dfc.Rversion+"/"+dfc.Robjects+"/"+RenameLocalBucketName+"/"+RenameStr+"/"+fname,
-			bytes.NewBuffer(injson))
-		if err != nil {
+		url := proxyurl + api.URLPath(api.Version, api.Objects, RenameLocalBucketName, RenameStr, fname)
+		if err := client.HTTPRequest(http.MethodPost, url, bytes.NewBuffer(injson)); err != nil {
 			t.Fatalf("Failed to send request, err = %v", err)
 		}
 
@@ -717,15 +715,15 @@ func TestGetClusterStats(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	oconfig := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
-		setConfig(k, v, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig(k, v, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 
-	nconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	nconfig := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nperiodic := nconfig["periodic"].(map[string]interface{})
 
@@ -734,21 +732,21 @@ func TestConfig(t *testing.T) {
 			nperiodic["stats_time"], configRegression["stats_time"])
 	} else {
 		o := operiodic["stats_time"].(string)
-		setConfig("stats_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("stats_time", o, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
 	} else {
 		o := olruconfig["dont_evict_time"].(string)
-		setConfig("dont_evict_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("dont_evict_time", o, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
 			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
 	} else {
 		o := olruconfig["capacity_upd_time"].(string)
-		setConfig("capacity_upd_time", o, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("capacity_upd_time", o, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -757,7 +755,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["highwm"], hw)
 	} else {
 		o := olruconfig["highwm"].(float64)
-		setConfig("highwm", strconv.Itoa(int(o)), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("highwm", strconv.Itoa(int(o)), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -766,7 +764,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["lowwm"], lw)
 	} else {
 		o := olruconfig["lowwm"].(float64)
-		setConfig("lowwm", strconv.Itoa(int(o)), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("lowwm", strconv.Itoa(int(o)), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)
@@ -775,7 +773,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["lru_enabled"], pt)
 	} else {
 		o := olruconfig["lru_enabled"].(bool)
-		setConfig("lru_enabled", strconv.FormatBool(o), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("lru_enabled", strconv.FormatBool(o), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 }
 
@@ -806,7 +804,7 @@ func TestLRU(t *testing.T) {
 	bytesEvictedOrig := make(map[string]int64)
 	filesEvictedOrig := make(map[string]int64)
 	for k, di := range smap.Tmap {
-		cfg := getConfig(di.PublicNet.DirectURL+RestAPIDaemonSuffix, httpclient, t)
+		cfg := getConfig(di.PublicNet.DirectURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 		lrucfg := cfg["lru_config"].(map[string]interface{})
 		lwms[k] = lrucfg["lowwm"]
 		hwms[k] = lrucfg["highwm"]
@@ -834,7 +832,7 @@ func TestLRU(t *testing.T) {
 		t.Skip()
 		return
 	}
-	oconfig := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	oconfig := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	if t.Failed() {
 		return
 	}
@@ -844,13 +842,13 @@ func TestLRU(t *testing.T) {
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 	defer func() {
-		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 		for k, di := range smap.Tmap {
-			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+RestAPIDaemonSuffix, httpclient, t)
-			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+RestAPIDaemonSuffix, httpclient, t)
+			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
+			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 		}
 	}()
 	//
@@ -862,16 +860,16 @@ func TestLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
-	setConfig("dont_evict_time", dontevicttimestr, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-	setConfig("capacity_upd_time", capacityupdtimestr, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("dont_evict_time", dontevicttimestr, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("capacity_upd_time", capacityupdtimestr, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
 		return
 	}
-	setConfig("lowwm", fmt.Sprint(lowwm), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("lowwm", fmt.Sprint(lowwm), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
 		return
 	}
-	setConfig("highwm", fmt.Sprint(highwm), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("highwm", fmt.Sprint(highwm), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
 		return
 	}
@@ -993,7 +991,7 @@ func TestDeleteList(t *testing.T) {
 	}
 
 	// 3. Check to see that all the files have been deleted.
-	msg := &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1049,7 +1047,7 @@ func TestPrefetchRange(t *testing.T) {
 	if re, err = regexp.Compile(prefetchRegex); err != nil {
 		t.Errorf("Error compiling regex: %v", err)
 	}
-	msg := &dfc.GetMsg{GetPrefix: prefetchPrefix, GetPageSize: int(pagesize)}
+	msg := &api.GetMsg{GetPrefix: prefetchPrefix, GetPageSize: int(pagesize)}
 	objsToFilter := testListBucket(t, clibucket, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
@@ -1130,12 +1128,12 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 3. Check to see that the correct files have been deleted
-	msg := &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
 	}
-	filemap := make(map[string]*dfc.BucketEntry)
+	filemap := make(map[string]*api.BucketEntry)
 	for _, entry := range bktlst.Entries {
 		filemap[entry.Name] = entry
 	}
@@ -1282,7 +1280,7 @@ OUTER:
 		for _, targetStats := range rebalanceStats.TargetStats {
 			if len(targetStats.Xactions) > 0 {
 				for _, xaction := range targetStats.Xactions {
-					if xaction.Status != dfc.XactionStatusCompleted {
+					if xaction.Status != api.XactionStatusCompleted {
 						continue OUTER
 					}
 				}
@@ -1316,14 +1314,13 @@ waitloop:
 }
 
 func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterStats) {
-	q := getWhatRawQuery(dfc.GetWhatStats)
-	url := fmt.Sprintf("%s?%s", proxyurl+dfc.URLPath(dfc.Rversion, dfc.Rcluster), q)
+	q := getWhatRawQuery(api.GetWhatStats)
+	url := fmt.Sprintf("%s?%s", proxyurl+api.URLPath(api.Version, api.Cluster), q)
 	resp, err := httpclient.Get(url)
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
+	if err != nil {
+		t.Fatalf("Failed to perform get, err = %v", err)
+	}
+	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -1342,15 +1339,14 @@ func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterSt
 	return
 }
 
-func getDaemonStats(httpclient *http.Client, t *testing.T, URL string) (stats map[string]interface{}) {
-	q := getWhatRawQuery(dfc.GetWhatStats)
-	url := fmt.Sprintf("%s?%s", URL+RestAPIDaemonSuffix, q)
+func getDaemonStats(httpclient *http.Client, t *testing.T, url string) (stats map[string]interface{}) {
+	q := getWhatRawQuery(api.GetWhatStats)
+	url = fmt.Sprintf("%s?%s", url+api.URLPath(api.Version, api.Daemon), q)
 	resp, err := httpclient.Get(url)
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
+	if err != nil {
+		t.Fatalf("Failed to perform get, err = %v", err)
+	}
+	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -1379,19 +1375,13 @@ func getClusterMap(t *testing.T) dfc.Smap {
 }
 
 func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[string]interface{}) {
-	q := getWhatRawQuery(dfc.GetWhatConfig)
+	q := getWhatRawQuery(api.GetWhatConfig)
 	url := fmt.Sprintf("%s?%s", URL, q)
 	resp, err := httpclient.Get(url)
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
-
 	if err != nil {
-		t.Errorf("Get configuration, err = %v", err)
-		return
+		t.Fatalf("Failed to perform get, err = %v", err)
 	}
+	defer resp.Body.Close()
 
 	var b []byte
 	b, err = ioutil.ReadAll(resp.Body)
@@ -1415,7 +1405,7 @@ func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[str
 }
 
 func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
-	SetConfigMsg := dfc.ActionMsg{Action: dfc.ActSetConfig,
+	SetConfigMsg := api.ActionMsg{Action: api.ActSetConfig,
 		Name:  name,
 		Value: value,
 	}
@@ -1425,21 +1415,16 @@ func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 		t.Errorf("Failed to marshal SetConfig Message: %v", err)
 		return
 	}
-	req, err := http.NewRequest("PUT", URL, bytes.NewBuffer(injson))
+	req, err := http.NewRequest(http.MethodPut, URL, bytes.NewBuffer(injson))
 	if err != nil {
 		t.Errorf("Failed to create request: %v", err)
 		return
 	}
 	r, err := httpclient.Do(req)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
 	if err != nil {
-		t.Errorf("Failed to execute SetConfig request: %v", err)
-		return
+		t.Fatalf("Failed to perform request, err = %v", err)
 	}
+	defer r.Body.Close()
 }
 
 //
@@ -1487,6 +1472,6 @@ func stringInSlice(str string, values []string) bool {
 
 func getWhatRawQuery(getWhat string) string {
 	q := url.Values{}
-	q.Add(dfc.URLParamWhat, getWhat)
+	q.Add(api.URLParamWhat, getWhat)
 	return q.Encode()
 }

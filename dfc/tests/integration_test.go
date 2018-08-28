@@ -18,6 +18,7 @@ import (
 
 	"runtime/debug"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -1285,7 +1286,7 @@ func checkObjectDistribution(t *testing.T, m *metadata) {
 		targetObjectCount = make(map[string]int64)
 	)
 	tlogf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
-	bucketList, err := client.ListBucket(proxyurl, m.bucket, &dfc.GetMsg{GetProps: dfc.GetTargetURL}, 0)
+	bucketList, err := client.ListBucket(proxyurl, m.bucket, &api.GetMsg{GetProps: api.GetTargetURL}, 0)
 	checkFatal(err, t)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL] += 1

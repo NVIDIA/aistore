@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
@@ -86,6 +86,13 @@ type (
 		servers         []map[string]*daemonInfo
 		serversToIgnore map[string]struct{}
 	}
+
+	// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
+	SmapVoteMsg struct {
+		VoteInProgress bool      `json:"vote_in_progress"`
+		Smap           *Smap     `json:"smap"`
+		BucketMD       *bucketMD `json:"bucketmd"`
+	}
 )
 
 //===========
@@ -96,7 +103,7 @@ type (
 const initialBucketListSize = 512
 
 type cloudif interface {
-	listbucket(ctx context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int)
+	listbucket(ctx context.Context, bucket string, msg *api.GetMsg) (jsbytes []byte, errstr string, errcode int)
 	headbucket(ctx context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//
@@ -557,29 +564,26 @@ func (h *httprunner) restAPIItems(unescapedpath string, maxsplit int) []string {
 }
 
 // remove validated fields and return the resulting slice
-func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n int, ver, res string) []string {
-	if len(apitems) > 0 && ver != "" {
-		if apitems[0] != ver {
-			s := fmt.Sprintf("Invalid API version: %s (expecting %s)", apitems[0], ver)
-			if _, file, line, ok := runtime.Caller(1); ok {
-				f := filepath.Base(file)
-				s += fmt.Sprintf("(%s, #%d)", f, line)
-			}
-			h.invalmsghdlr(w, r, s)
-			return nil
+func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n int, expectedAPIs ...string) []string {
+	invalidItem := func(got, expected string) {
+		s := fmt.Sprintf("Invalid API item: %s (expecting %s)", got, expected)
+		if _, file, line, ok := runtime.Caller(2); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
-		apitems = apitems[1:]
+		h.invalmsghdlr(w, r, s)
 	}
-	if len(apitems) > 0 && res != "" {
-		if apitems[0] != res {
-			s := fmt.Sprintf("Invalid API resource: %s (expecting %s)", apitems[0], res)
-			if _, file, line, ok := runtime.Caller(1); ok {
-				f := filepath.Base(file)
-				s += fmt.Sprintf("(%s, #%d)", f, line)
+	for _, expectedAPI := range expectedAPIs {
+		if len(apitems) > 0 {
+			if apitems[0] != expectedAPI {
+				invalidItem(apitems[0], expectedAPI)
+				return nil
 			}
-			h.invalmsghdlr(w, r, s)
+		} else {
+			invalidItem("[empty]", expectedAPI)
 			return nil
 		}
+
 		apitems = apitems[1:]
 	}
 	if len(apitems) < n {
@@ -678,25 +682,25 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		jsbytes []byte
 		err     error
-		getWhat = r.URL.Query().Get(URLParamWhat)
+		getWhat = r.URL.Query().Get(api.URLParamWhat)
 	)
 	switch getWhat {
-	case GetWhatConfig:
+	case api.GetWhatConfig:
 		jsbytes, err = jsoniter.Marshal(ctx.config)
 		assert(err == nil, err)
-	case GetWhatSmap:
+	case api.GetWhatSmap:
 		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
 		assert(err == nil, err)
-	case GetWhatBucketMeta:
+	case api.GetWhatBucketMeta:
 		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
 		assert(err == nil, err)
-	case GetWhatSmapVote:
-		_, xx := h.xactinp.findL(ActElection)
+	case api.GetWhatSmapVote:
+		_, xx := h.xactinp.findL(api.ActElection)
 		vote := xx != nil
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		jsbytes, err = jsoniter.Marshal(msg)
 		assert(err == nil, err)
-	case GetWhatDaemonInfo:
+	case api.GetWhatDaemonInfo:
 		jsbytes, err = jsoniter.Marshal(h.si)
 		assert(err == nil, err)
 	default:
@@ -889,11 +893,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 // metasync Rx handlers
 //
 //=====================
-func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *api.ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
-	newsmap, msg = &Smap{}, &ActionMsg{}
+	newsmap, msg = &Smap{}, &api.ActionMsg{}
 	smapvalue := payload[smaptag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(smapvalue), newsmap); err != nil {
@@ -940,11 +944,11 @@ func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *ActionM
 	return
 }
 
-func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, msg *ActionMsg, errstr string) {
+func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, msg *api.ActionMsg, errstr string) {
 	if _, ok := payload[bucketmdtag]; !ok {
 		return
 	}
-	newbucketmd, msg = &bucketMD{}, &ActionMsg{}
+	newbucketmd, msg = &bucketMD{}, &api.ActionMsg{}
 	bmdvalue := payload[bucketmdtag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
@@ -974,7 +978,7 @@ func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, str
 		return nil, ""
 	}
 
-	msg := ActionMsg{}
+	msg := api.ActionMsg{}
 	if _, ok := payload[tokentag+actiontag]; ok {
 		msgvalue := payload[tokentag+actiontag]
 		if err := jsoniter.Unmarshal([]byte(msgvalue), &msg); err != nil {
@@ -999,11 +1003,6 @@ func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, str
 	glog.Infof("received TokenList ntokens %d%s", len(tokenList.Tokens), s)
 
 	return tokenList, ""
-}
-
-// URLPath returns a HTTP URL path by joining all segments with "/"
-func URLPath(segments ...string) string {
-	return path.Join("/", path.Join(segments...))
 }
 
 // ================================== Background =========================================
@@ -1067,12 +1066,12 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 	info, err := jsoniter.Marshal(h.si)
 	assert(err == nil, err)
 
-	path := URLPath(Rversion, Rcluster)
+	path := api.URLPath(api.Version, api.Cluster)
 	if isproxy {
-		path += URLPath(Rproxy)
+		path += api.URLPath(api.Proxy)
 	}
 	if keepalive {
-		path += URLPath(Rkeepalive)
+		path += api.URLPath(api.Keepalive)
 	}
 
 	callArgs := callArgs{

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -29,8 +30,8 @@ func TestGetObjectInNextTier(t *testing.T) {
 	}
 
 	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, TestLocalBucketName, object) {
-			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {
+		if r.URL.Path == api.URLPath(api.Version, api.Objects, TestLocalBucketName, object) {
+			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
 				w.Write(localData)
@@ -40,8 +41,8 @@ func TestGetObjectInNextTier(t *testing.T) {
 		}
 	}))
 	nextTierMockForCloudBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) {
-			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {
+		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) {
+			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
 				w.Write(cloudData)
@@ -58,14 +59,14 @@ func TestGetObjectInNextTier(t *testing.T) {
 	defer deleteLocalBucket(TestLocalBucketName, t)
 
 	bucketProps := dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
 	err = client.SetBucketProps(proxyurl, TestLocalBucketName, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(TestLocalBucketName, t)
 
 	bucketProps = dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
 	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
@@ -95,8 +96,8 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) {
-			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {
+		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) {
+			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
 				http.Error(w, "arbitrary internal server error from nextTierMock", http.StatusInternalServerError)
@@ -107,7 +108,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	u := proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object)
+	u := proxyurl + api.URLPath(api.Version, api.Objects, clibucket, object)
 	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
 	checkFatal(err, t)
 
@@ -123,7 +124,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	checkFatal(err, t)
 
 	bucketProps := dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
@@ -149,8 +150,8 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) {
-			if r.Method == http.MethodHead && r.URL.Query().Get(dfc.URLParamCheckCached) == "true" {
+		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) {
+			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				http.Error(w, "not found in nextTierMock", http.StatusNotFound)
 			} else if r.Method == http.MethodGet {
 				w.Write(data)
@@ -173,7 +174,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	checkFatal(err, t)
 
 	bucketProps := dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
@@ -203,7 +204,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	}
 
 	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, TestLocalBucketName, object) &&
+		if r.URL.Path == api.URLPath(api.Version, api.Objects, TestLocalBucketName, object) &&
 			r.Method == http.MethodPut {
 			b, err := ioutil.ReadAll(r.Body)
 			checkFatal(err, t)
@@ -218,7 +219,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 		}
 	}))
 	nextTierMockForCloudBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object) && r.Method == http.MethodPut {
+		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) && r.Method == http.MethodPut {
 			b, err := ioutil.ReadAll(r.Body)
 			checkFatal(err, t)
 			expected := string(cloudData)
@@ -239,21 +240,21 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	defer deleteLocalBucket(TestLocalBucketName, t)
 
 	bucketProps := dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
 	err = client.SetBucketProps(proxyurl, TestLocalBucketName, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(TestLocalBucketName, t)
 
 	bucketProps = dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
 	bucketProps.WritePolicy = dfc.RWPolicyNextTier
 	err = client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
-	u := proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, TestLocalBucketName, object)
+	u := proxyurl + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
 	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(localData))
 	checkFatal(err, t)
 
@@ -268,7 +269,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			nextTierMockForLocalBucketReached)
 	}
 
-	u = proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object)
+	u = proxyurl + api.URLPath(api.Version, api.Objects, clibucket, object)
 	req, err = http.NewRequest(http.MethodPut, u, bytes.NewReader(cloudData))
 	checkFatal(err, t)
 
@@ -300,7 +301,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	defer nextTierMock.Close()
 
 	bucketProps := dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.ReadPolicy = dfc.RWPolicyCloud
 	bucketProps.WritePolicy = dfc.RWPolicyNextTier
@@ -308,7 +309,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
-	u := proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object)
+	u := proxyurl + api.URLPath(api.Version, api.Objects, clibucket, object)
 	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
 	checkFatal(err, t)
 
@@ -347,14 +348,14 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	defer nextTierMock.Close()
 
 	bucketProps := dfc.NewBucketProps()
-	bucketProps.CloudProvider = dfc.ProviderDfc
+	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.WritePolicy = dfc.RWPolicyCloud
 	err := client.SetBucketProps(proxyurl, clibucket, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(clibucket, t)
 
-	u := proxyurl + dfc.URLPath(dfc.Rversion, dfc.Robjects, clibucket, object)
+	u := proxyurl + api.URLPath(api.Version, api.Objects, clibucket, object)
 	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
 	checkFatal(err, t)
 

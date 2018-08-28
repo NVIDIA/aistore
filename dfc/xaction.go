@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 )
 
 const timeStampFormat = "15:04:05.000000"
@@ -193,7 +194,7 @@ func (q *xactInProgress) del(by interface{}) {
 
 func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runnersCnt int) *xactRebalance {
 	q.lock.Lock()
-	_, xx := q.findU(ActRebalance)
+	_, xx := q.findU(api.ActRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
@@ -216,7 +217,7 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runne
 	}
 	id := q.uniqueid()
 	xreb := &xactRebalance{
-		xactBase:     *newxactBase(id, ActRebalance),
+		xactBase:     *newxactBase(id, api.ActRebalance),
 		curversion:   curversion,
 		targetrunner: t,
 		runnersCnt:   runnersCnt,
@@ -241,7 +242,7 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 	}
 
 	q.lock.Lock()
-	_, xx := q.findU(ActRebalance)
+	_, xx := q.findU(api.ActRebalance)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.finished() {
@@ -254,7 +255,7 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 
 func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 	q.lock.Lock()
-	_, xx := q.findU(ActLRU)
+	_, xx := q.findU(api.ActLRU)
 	if xx != nil {
 		xlru := xx.(*xactLRU)
 		glog.Infof("%s already running, nothing to do", xlru.tostring())
@@ -262,7 +263,7 @@ func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 		return nil
 	}
 	id := q.uniqueid()
-	xlru := &xactLRU{xactBase: *newxactBase(id, ActLRU)}
+	xlru := &xactLRU{xactBase: *newxactBase(id, api.ActLRU)}
 	xlru.targetrunner = t
 	q.add(xlru)
 	q.lock.Unlock()
@@ -271,7 +272,7 @@ func (q *xactInProgress) renewLRU(t *targetrunner) *xactLRU {
 
 func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
 	q.lock.Lock()
-	_, xx := q.findU(ActElection)
+	_, xx := q.findU(api.ActElection)
 	if xx != nil {
 		xele := xx.(*xactElection)
 		glog.Infof("%s already running, nothing to do", xele.tostring())
@@ -280,7 +281,7 @@ func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElec
 	}
 	id := q.uniqueid()
 	xele := &xactElection{
-		xactBase:    *newxactBase(id, ActElection),
+		xactBase:    *newxactBase(id, api.ActElection),
 		proxyrunner: p,
 		vr:          vr,
 	}
@@ -293,7 +294,7 @@ func (q *xactInProgress) renewRechecksum(t *targetrunner, bucket string) *xactRe
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	for _, xx := range q.findUAll(ActRechecksum) {
+	for _, xx := range q.findUAll(api.ActRechecksum) {
 		xrcksum := xx.(*xactRechecksum)
 		if xrcksum.bucket == bucket {
 			glog.Infof("%s already running for bucket %s, nothing to do", xrcksum.tostring(), bucket)
@@ -302,7 +303,7 @@ func (q *xactInProgress) renewRechecksum(t *targetrunner, bucket string) *xactRe
 	}
 	id := q.uniqueid()
 	xrcksum := &xactRechecksum{
-		xactBase:     *newxactBase(id, ActRechecksum),
+		xactBase:     *newxactBase(id, api.ActRechecksum),
 		targetrunner: t,
 		bucket:       bucket,
 	}

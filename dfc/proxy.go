@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -44,7 +45,7 @@ type bucketResp struct {
 // A list of target local files: cached or local bucket
 // Maximum number of files in the response is `pageSize` entries
 type localFilePage struct {
-	entries []*BucketEntry
+	entries []*api.BucketEntry
 	err     error
 	id      string
 	marker  string
@@ -119,16 +120,16 @@ func (p *proxyrunner) run() error {
 
 	// Public network
 	if ctx.config.Auth.Enabled {
-		p.registerPublicNetHandler(URLPath(Rversion, Rbuckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
-		p.registerPublicNetHandler(URLPath(Rversion, Robjects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
+		p.registerPublicNetHandler(api.URLPath(api.Version, api.Buckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
+		p.registerPublicNetHandler(api.URLPath(api.Version, api.Objects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
 	} else {
-		p.registerPublicNetHandler(URLPath(Rversion, Rbuckets)+"/", p.bucketHandler)
-		p.registerPublicNetHandler(URLPath(Rversion, Robjects)+"/", p.objectHandler)
+		p.registerPublicNetHandler(api.URLPath(api.Version, api.Buckets)+"/", p.bucketHandler)
+		p.registerPublicNetHandler(api.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
 	}
 
-	p.registerPublicNetHandler(URLPath(Rversion, Rdaemon), p.daemonHandler)
-	p.registerPublicNetHandler(URLPath(Rversion, Rcluster), p.clusterHandler)
-	p.registerPublicNetHandler(URLPath(Rversion, Rtokens), p.tokenHandler)
+	p.registerPublicNetHandler(api.URLPath(api.Version, api.Daemon), p.daemonHandler)
+	p.registerPublicNetHandler(api.URLPath(api.Version, api.Cluster), p.clusterHandler)
+	p.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), p.tokenHandler)
 
 	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
@@ -137,9 +138,9 @@ func (p *proxyrunner) run() error {
 	}
 
 	// Internal network
-	p.registerInternalNetHandler(URLPath(Rversion, Rmetasync), p.metasyncHandler)
-	p.registerInternalNetHandler(URLPath(Rversion, Rhealth), p.healthHandler)
-	p.registerInternalNetHandler(URLPath(Rversion, Rvote), p.voteHandler)
+	p.registerInternalNetHandler(api.URLPath(api.Version, api.Metasync), p.metasyncHandler)
+	p.registerInternalNetHandler(api.URLPath(api.Version, api.Health), p.healthHandler)
+	p.registerInternalNetHandler(api.URLPath(api.Version, api.Vote), p.voteHandler)
 	if ctx.config.Net.UseIntra {
 		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 			p.registerInternalNetHandler("/", p.reverseProxyHandler)
@@ -175,7 +176,7 @@ func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status in
 	if !keepalive {
 		if ctx.config.Proxy.NonElectable {
 			query := url.Values{}
-			query.Add(URLParamNonElectable, "true")
+			query.Add(api.URLParamNonElectable, "true")
 			res = p.join(true, query)
 		} else {
 			res = p.join(true, nil)
@@ -193,7 +194,7 @@ func (p *proxyrunner) unregister() (int, error) {
 		si: smap.ProxySI,
 		req: reqArgs{
 			method: http.MethodDelete,
-			path:   URLPath(Rversion, Rcluster, Rdaemon, Rproxy, p.si.DaemonID),
+			path:   api.URLPath(api.Version, api.Cluster, api.Daemon, api.Proxy, p.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -241,7 +242,7 @@ func (p *proxyrunner) stop(err error) {
 //
 //==================================
 
-// verb /Rversion/Rbuckets/
+// verb /v1/buckets/
 func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -259,7 +260,7 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// verb /Rversion/Robjects/
+// verb /v1/buckets/
 func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -284,7 +285,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -304,7 +305,7 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
@@ -336,11 +337,11 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	p.statsif.add("get.n", 1)
 }
 
-// PUT "/"+Rversion+"/"+Robjects
+// PUT /v1/objects
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Robjects); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -363,11 +364,11 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	p.statsif.add("put.n", 1)
 }
 
-// DELETE { action } /Rversion/Rbuckets
+// DELETE { action } /v1/buckets
 func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
-	var msg ActionMsg
+	var msg api.ActionMsg
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -375,7 +376,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case ActDestroyLB:
+	case api.ActDestroyLB:
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
@@ -401,18 +402,18 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		p.bmdowner.Unlock()
 		msg.Action = path.Join(msg.Action, bucket)
 		p.metasyncer.sync(true, clone, &msg)
-	case ActDelete, ActEvict:
+	case api.ActDelete, api.ActEvict:
 		p.actionlistrange(w, r, &msg)
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
 	}
 }
 
-// DELETE /Rversion/Robjects/object-name
+// DELETE /v1/objects/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -432,7 +433,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	p.statsif.add("del.n", 1)
 }
 
-// [METHOD] /Rversion/Rmetasync
+// [METHOD] /v1/metasync
 func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
@@ -442,11 +443,11 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT /Rversion/Rmetasync
+// PUT /v1/metasync
 func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
 	if p.smapowner.get().isPrimary(p.si) {
-		_, xx := p.xactinp.findL(ActElection)
+		_, xx := p.xactinp.findL(api.ActElection)
 		vote := xx != nil
 		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si.DaemonID, vote)
 		p.invalmsghdlr(w, r, s)
@@ -496,7 +497,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 	p.authn.updateRevokedList(revokedTokens)
 }
 
-// GET /Rversion/Rhealth
+// GET /v1/health
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
 	rr.Lock()
@@ -514,9 +515,9 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 // POST { action } /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	var msg ActionMsg
+	var msg api.ActionMsg
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	lbucket := apitems[0]
@@ -527,7 +528,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case ActCreateLB:
+	case api.ActCreateLB:
 		if p.forwardCP(w, r, &msg, lbucket, nil) {
 			return
 		}
@@ -547,7 +548,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.bmdowner.Unlock()
 		msg.Action = path.Join(msg.Action, lbucket)
 		p.metasyncer.sync(true, clone, &msg)
-	case ActRenameLB:
+	case api.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
@@ -576,23 +577,23 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, errstr)
 		}
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
-	case ActSyncLB:
+	case api.ActSyncLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
 		p.metasyncer.sync(false, p.bmdowner.get(), &msg)
-	case ActPrefetch:
+	case api.ActPrefetch:
 		p.actionlistrange(w, r, &msg)
-	case ActListObjects:
+	case api.ActListObjects:
 		p.listBucketAndCollectStats(w, r, lbucket, msg, started)
 	default:
-		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected api.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
 
 func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
-	r *http.Request, lbucket string, msg ActionMsg, started time.Time) {
+	r *http.Request, lbucket string, msg api.ActionMsg, started time.Time) {
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
@@ -610,9 +611,9 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 
 // POST { action } /v1/objects/bucket-name
 func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
-	var msg ActionMsg
+	var msg api.ActionMsg
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Robjects); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	lbucket := apitems[0]
@@ -623,11 +624,11 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch msg.Action {
-	case ActRename:
+	case api.ActRename:
 		p.filrename(w, r, &msg)
 		return
 	default:
-		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected api.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -637,7 +638,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -660,7 +661,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 
@@ -669,12 +670,12 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	props := &BucketProps{} // every field has to have zero value
-	msg := ActionMsg{Value: props}
+	msg := api.ActionMsg{Value: props}
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
-	if msg.Action != ActSetProps {
-		s := fmt.Sprintf("Invalid ActionMsg [%v] - expecting '%s' action", msg, ActSetProps)
+	if msg.Action != api.ActSetProps {
+		s := fmt.Sprintf("Invalid api.ActionMsg [%v] - expecting '%s' action", msg, api.ActSetProps)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -727,9 +728,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	checkCached, _ := parsebool(r.URL.Query().Get(URLParamCheckCached))
+	checkCached, _ := parsebool(r.URL.Query().Get(api.URLParamCheckCached))
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
@@ -746,7 +747,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	if checkCached {
-		redirecturl += fmt.Sprintf("&%s=true", URLParamCheckCached)
+		redirecturl += fmt.Sprintf("&%s=true", api.URLParamCheckCached)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 }
@@ -758,7 +759,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 //============================
 // forward control plane request to the current primary proxy
 // return: forf (forwarded or failed) where forf = true means exactly that: forwarded or failed
-func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *ActionMsg, s string, body []byte) (forf bool) {
+func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *api.ActionMsg, s string, body []byte) (forf bool) {
 	smap := p.smapowner.get()
 	if smap == nil || !smap.isValid() {
 		s := fmt.Sprintf("%s must be starting up: cannot execute %s:%s", p.si.DaemonID, msg.Action, s)
@@ -811,7 +812,7 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *dae
 }
 
 func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props BucketProps,
-	msg *ActionMsg, method string) bool {
+	msg *api.ActionMsg, method string) bool {
 	smap4bcast := p.smapowner.get()
 
 	msg.Value = clone
@@ -819,7 +820,7 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *buck
 	assert(err == nil, err)
 
 	res := p.broadcastTargets(
-		URLPath(Rversion, Rbuckets, bucketFrom),
+		api.URLPath(api.Version, api.Buckets, bucketFrom),
 		nil, // query
 		method,
 		jsbytes,
@@ -850,10 +851,10 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *buck
 
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec string) {
 	q := r.URL.Query()
-	localonly, _ := parsebool(q.Get(URLParamLocal))
+	localonly, _ := parsebool(q.Get(api.URLParamLocal))
 	bucketmd := p.bmdowner.get()
 	if localonly {
-		bucketnames := &BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
+		bucketnames := &api.BucketNames{Cloud: []string{}, Local: make([]string, 0, 64)}
 		for bucket := range bucketmd.LBmap {
 			bucketnames.Local = append(bucketnames.Local, bucket)
 		}
@@ -874,7 +875,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		req: reqArgs{
 			method: r.Method,
 			header: r.Header,
-			path:   URLPath(Rversion, Rbuckets, bucketspec),
+			path:   api.URLPath(api.Version, api.Buckets, bucketspec),
 		},
 		timeout: defaultTimeout,
 	}
@@ -898,19 +899,18 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 		redirect += r.URL.RawQuery + "&"
 	}
 
-	query.Add(URLParamLocal, strconv.FormatBool(islocal))
-	query.Add(URLParamProxyID, p.si.DaemonID)
-	query.Add(URLParamBMDVersion, bucketmd.vstr)
-	query.Add(URLParamUnixTime, strconv.FormatInt(int64(ts.UnixNano()), 10))
-
+	query.Add(api.URLParamLocal, strconv.FormatBool(islocal))
+	query.Add(api.URLParamProxyID, p.si.DaemonID)
+	query.Add(api.URLParamBMDVersion, bucketmd.vstr)
+	query.Add(api.URLParamUnixTime, strconv.FormatInt(int64(ts.UnixNano()), 10))
 	redirect += query.Encode()
 	return
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
 func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
-	getMsg *GetMsg, islocal bool, cached bool) (*bucketResp, error) {
-	actionMsgBytes, err := jsoniter.Marshal(ActionMsg{Action: ActListObjects, Value: getMsg})
+	getMsg *api.GetMsg, islocal bool, cached bool) (*bucketResp, error) {
+	actionMsgBytes, err := jsoniter.Marshal(api.ActionMsg{Action: api.ActListObjects, Value: getMsg})
 	if err != nil {
 		return &bucketResp{
 			outjson: nil,
@@ -925,16 +925,16 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 	}
 
 	query := url.Values{}
-	query.Add(URLParamLocal, strconv.FormatBool(islocal))
-	query.Add(URLParamCached, strconv.FormatBool(cached))
-	query.Add(URLParamBMDVersion, p.bmdowner.get().vstr)
+	query.Add(api.URLParamLocal, strconv.FormatBool(islocal))
+	query.Add(api.URLParamCached, strconv.FormatBool(cached))
+	query.Add(api.URLParamBMDVersion, p.bmdowner.get().vstr)
 
 	args := callArgs{
 		si: dinfo,
 		req: reqArgs{
 			method: http.MethodPost,
 			header: header,
-			path:   URLPath(Rversion, Rbuckets, bucket),
+			path:   api.URLPath(api.Version, api.Buckets, bucket),
 			query:  query,
 			body:   actionMsgBytes,
 		},
@@ -954,7 +954,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 
 // Receives info about locally cached files from targets in batches
 // and merges with existing list of cloud files
-func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry, dataCh chan *localFilePage, errch chan error) {
+func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh chan *localFilePage, errch chan error) {
 	for rb := range dataCh {
 		if rb.err != nil {
 			if errch != nil {
@@ -979,8 +979,8 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*BucketEntry, dataCh cha
 
 // Request list of all cached files from a target.
 // The target returns its list in batches `pageSize` length
-func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, dataCh chan *localFilePage, origmsg *GetMsg) {
-	var msg GetMsg
+func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, dataCh chan *localFilePage, origmsg *api.GetMsg) {
+	var msg api.GetMsg
 	copyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
 	for {
@@ -1000,7 +1000,7 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, data
 			return
 		}
 
-		entries := BucketList{Entries: make([]*BucketEntry, 0, 128)}
+		entries := api.BucketList{Entries: make([]*api.BucketEntry, 0, 128)}
 		if err := jsoniter.Unmarshal(resp.outjson, &entries); err != nil {
 			if dataCh != nil {
 				dataCh <- &localFilePage{
@@ -1032,14 +1032,14 @@ func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, data
 
 // Get list of cached files from all targets and update the list
 // of files from cloud with local metadata (iscached, atime etc)
-func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList, getmsgjson []byte) (err error) {
-	reqParams := &GetMsg{}
+func (p *proxyrunner) collectCachedFileList(bucket string, fileList *api.BucketList, getmsgjson []byte) (err error) {
+	reqParams := &api.GetMsg{}
 	err = jsoniter.Unmarshal(getmsgjson, reqParams)
 	if err != nil {
 		return
 	}
 
-	bucketMap := make(map[string]*BucketEntry, initialBucketListSize)
+	bucketMap := make(map[string]*api.BucketEntry, initialBucketListSize)
 	for _, entry := range fileList.Entries {
 		bucketMap[entry.Name] = entry
 	}
@@ -1077,7 +1077,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	default:
 	}
 
-	fileList.Entries = make([]*BucketEntry, 0, len(bucketMap))
+	fileList.Entries = make([]*api.BucketEntry, 0, len(bucketMap))
 	for _, entry := range bucketMap {
 		fileList.Entries = append(fileList.Entries, entry)
 	}
@@ -1091,7 +1091,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *BucketList,
 	return
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
+func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allentries *api.BucketList, err error) {
 	type targetReply struct {
 		resp *bucketResp
 		err  error
@@ -1100,11 +1100,11 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		islocal    = true
 		cachedObjs = false
 	)
-	msg := &GetMsg{}
+	msg := &api.GetMsg{}
 	if err = jsoniter.Unmarshal(listmsgjson, msg); err != nil {
 		return
 	}
-	pageSize := DefaultPageSize
+	pageSize := api.DefaultPageSize
 	if msg.GetPageSize != 0 {
 		pageSize = msg.GetPageSize
 	}
@@ -1133,7 +1133,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	close(chresult)
 
 	// combine results
-	allentries = &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
+	allentries = &api.BucketList{Entries: make([]*api.BucketEntry, 0, pageSize)}
 	for r := range chresult {
 		if r.err != nil {
 			err = r.err
@@ -1144,7 +1144,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 			continue
 		}
 
-		bucketList := &BucketList{Entries: make([]*BucketEntry, 0, pageSize)}
+		bucketList := &api.BucketList{Entries: make([]*api.BucketEntry, 0, pageSize)}
 		if err = jsoniter.Unmarshal(r.resp.outjson, &bucketList); err != nil {
 			return
 		}
@@ -1176,14 +1176,14 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	return allentries, nil
 }
 
-func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, listmsgjson []byte) (allentries *BucketList, err error) {
+func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, listmsgjson []byte) (allentries *api.BucketList, err error) {
 	const (
 		islocal       = false
 		cachedObjects = false
 	)
 	var resp *bucketResp
-	allentries = &BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
-	msg := GetMsg{}
+	allentries = &api.BucketList{Entries: make([]*api.BucketEntry, 0, initialBucketListSize)}
+	msg := api.GetMsg{}
 	err = jsoniter.Unmarshal(listmsgjson, &msg)
 	if err != nil {
 		return
@@ -1211,7 +1211,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	if len(allentries.Entries) == 0 {
 		return
 	}
-	if strings.Contains(msg.GetProps, GetTargetURL) {
+	if strings.Contains(msg.GetProps, api.GetTargetURL) {
 		for _, e := range allentries.Entries {
 			si, errStr := HrwTarget(bucket, e.Name, p.smapowner.get())
 			if errStr != "" {
@@ -1221,8 +1221,8 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 			e.TargetURL = si.PublicNet.DirectURL
 		}
 	}
-	if strings.Contains(msg.GetProps, GetPropsAtime) ||
-		strings.Contains(msg.GetProps, GetPropsIsCached) {
+	if strings.Contains(msg.GetProps, api.GetPropsAtime) ||
+		strings.Contains(msg.GetProps, api.GetPropsIsCached) {
 		// Now add local properties to the cloud objects
 		// The call replaces allentries.Entries with new values
 		err = p.collectCachedFileList(bucket, allentries, listmsgjson)
@@ -1239,8 +1239,8 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 //      * get list of cached files info from all targets
 //      * updates the list of objects from the cloud with cached info
 //   - returns the list
-func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *ActionMsg) (pagemarker string, ok bool) {
-	var allentries *BucketList
+func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *api.ActionMsg) (pagemarker string, ok bool) {
+	var allentries *api.BucketList
 	listmsgjson, err := jsoniter.Marshal(actionMsg.Value)
 	if err != nil {
 		s := fmt.Sprintf("Unable to marshal action message: %v. Error: %v", actionMsg, err)
@@ -1272,10 +1272,10 @@ func (p *proxyrunner) savebmdconf(bucketmd *bucketMD) (errstr string) {
 	return
 }
 
-func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *ActionMsg) {
+func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *api.ActionMsg) {
 	started := time.Now()
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	lbucket, objname := apitems[0], strings.Join(apitems[1:], "/")
@@ -1297,21 +1297,21 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *Act
 
 	// NOTE:
 	//       code 307 is the only way to http-redirect with the
-	//       original JSON payload (GetMsg - see REST.go)
+	//       original JSON payload (GetMsg - see pkg/api/constant.go)
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, lbucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	p.statsif.add("ren.n", 1)
 }
 
-func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *ActionMsg) {
+func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *api.ActionMsg) {
 	var (
 		err    error
 		method string
 	)
 
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -1333,9 +1333,9 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	assert(err == nil, err)
 
 	switch actionMsg.Action {
-	case ActEvict, ActDelete:
+	case api.ActEvict, api.ActDelete:
 		method = http.MethodDelete
-	case ActPrefetch:
+	case api.ActPrefetch:
 		method = http.MethodPost
 	default:
 		s := fmt.Sprintf("Action unavailable for List/Range Operations: %s", actionMsg.Action)
@@ -1349,12 +1349,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		timeout time.Duration
 	)
 
-	if islocal {
-		q.Set(URLParamLocal, "true")
-	} else {
-		q.Set(URLParamLocal, "false")
-	}
-
+	q.Set(api.URLParamLocal, strconv.FormatBool(islocal))
 	if wait {
 		timeout = longTimeout
 	} else {
@@ -1363,7 +1358,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 
 	smap := p.smapowner.get()
 	results = p.broadcastTargets(
-		URLPath(Rversion, Rbuckets, bucket),
+		api.URLPath(api.Version, api.Buckets, bucket),
 		q,
 		method,
 		jsonbytes,
@@ -1397,11 +1392,11 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Tokens); apitems == nil {
 		return
 	}
 
-	msg := &ActionMsg{Action: ActRevokeToken}
+	msg := &api.ActionMsg{Action: api.ActRevokeToken}
 	if p.forwardCP(w, r, msg, "revoke token", nil) {
 		return
 	}
@@ -1475,7 +1470,7 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 //
 //======================
 
-// "/"+Rversion+"/"+Rdaemon
+// "/"+api.Version+"/"+Rdaemon
 func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1488,18 +1483,18 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(URLParamWhat)
+	getWhat := r.URL.Query().Get(api.URLParamWhat)
 	switch getWhat {
-	case GetWhatConfig, GetWhatBucketMeta, GetWhatSmapVote, GetWhatDaemonInfo:
+	case api.GetWhatConfig, api.GetWhatBucketMeta, api.GetWhatSmapVote, api.GetWhatDaemonInfo:
 		p.httprunner.httpdaeget(w, r)
-	case GetWhatStats:
+	case api.GetWhatStats:
 		rst := getproxystatsrunner()
 		rst.RLock()
 		jsbytes, err := jsoniter.Marshal(rst)
 		rst.RUnlock()
 		assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
-	case GetWhatSmap:
+	case api.GetWhatSmap:
 		smap := p.smapowner.get()
 		for smap == nil || !smap.isValid() {
 			if p.startedup(0) != 0 { // must be starting up
@@ -1507,7 +1502,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 				assert(smap.isValid())
 				break
 			}
-			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si.DaemonID, GetWhatSmap)
+			glog.Errorf("%s is starting up: cannot execute GET %s yet...", p.si.DaemonID, api.GetWhatSmap)
 			time.Sleep(time.Second)
 			smap = p.smapowner.get()
 		}
@@ -1521,15 +1516,15 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Daemon); apitems == nil {
 		return
 	}
 	if len(apitems) > 0 {
 		switch apitems[0] {
-		case Rproxy:
+		case api.Proxy:
 			p.httpdaesetprimaryproxy(w, r)
 			return
-		case Rsyncsmap:
+		case api.SyncSmap:
 			var newsmap = &Smap{}
 			if p.readJSON(w, r, newsmap) != nil {
 				return
@@ -1549,7 +1544,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if s := p.smapowner.synchronize(newsmap, true /*saveSmap*/, true /* lesserIsErr */); s != "" {
 				p.invalmsghdlr(w, r, s)
 			}
-			glog.Infof("%s: %s v%d done", p.si.DaemonID, Rsyncsmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", p.si.DaemonID, api.SyncSmap, newsmap.version())
 			return
 		default:
 		}
@@ -1558,12 +1553,12 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	//
 	// other PUT /daemon actions
 	//
-	var msg ActionMsg
+	var msg api.ActionMsg
 	if p.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
-	case ActSetConfig:
+	case api.ActSetConfig:
 		var (
 			value string
 			ok    bool
@@ -1580,11 +1575,11 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			// the primary broadcasts the change to all nodes...
 			glog.Infof("setconfig %s=%s", msg.Name, value)
 		}
-	case ActShutdown:
+	case api.ActShutdown:
 		q := r.URL.Query()
-		force, _ := parsebool(q.Get(URLParamForce))
+		force, _ := parsebool(q.Get(api.URLParamForce))
 		if p.smapowner.get().isPrimary(p.si) && !force {
-			s := fmt.Sprintf("Cannot shutdown primary proxy without %s=true query parameter", URLParamForce)
+			s := fmt.Sprintf("Cannot shutdown primary proxy without %s=true query parameter", api.URLParamForce)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
@@ -1601,7 +1596,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		err     error
 	)
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rdaemon); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Daemon); apitems == nil {
 		return
 	}
 	if p.smapowner.get().isPrimary(p.si) {
@@ -1612,9 +1607,9 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	proxyid := apitems[1]
 	query := r.URL.Query()
-	preparestr := query.Get(URLParamPrepare)
+	preparestr := query.Get(api.URLParamPrepare)
 	if prepare, err = strconv.ParseBool(preparestr); err != nil {
-		s := fmt.Sprintf("Failed to parse %s URL parameter: %v", URLParamPrepare, err)
+		s := fmt.Sprintf("Failed to parse %s URL parameter: %v", api.URLParamPrepare, err)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
@@ -1676,7 +1671,7 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 	p.smapowner.put(clone)
 	p.smapowner.Unlock()
 
-	msg := &ActionMsg{Action: ActNewPrimary}
+	msg := &api.ActionMsg{Action: api.ActNewPrimary}
 	bucketmd := p.bmdowner.get()
 	if glog.V(3) {
 		glog.Infof("Distributing Smap v%d with the newly elected primary %s = self", clone.version(), p.si.DaemonID)
@@ -1688,12 +1683,12 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Cluster); apitems == nil {
 		return
 	}
 	proxyid := apitems[1]
 	s := "designate new primary proxy '" + proxyid + "'"
-	if p.forwardCP(w, r, &ActionMsg{}, s, nil) {
+	if p.forwardCP(w, r, &api.ActionMsg{}, s, nil) {
 		return
 	}
 	smap := p.smapowner.get()
@@ -1710,9 +1705,9 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I) prepare phase
-	urlPath := URLPath(Rversion, Rdaemon, Rproxy, proxyid)
+	urlPath := api.URLPath(api.Version, api.Daemon, api.Proxy, proxyid)
 	q := url.Values{}
-	q.Set(URLParamPrepare, "true")
+	q.Set(api.URLParamPrepare, "true")
 	method := http.MethodPut
 	results := p.broadcastCluster(
 		urlPath,
@@ -1743,7 +1738,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	p.smapowner.Unlock()
 
 	// (II) commit phase
-	q.Set(URLParamPrepare, "false")
+	q.Set(api.URLParamPrepare, "false")
 	results = p.broadcastCluster(
 		urlPath,
 		q,
@@ -1773,7 +1768,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 //
 //=======================
 
-// handler for: "/"+Rversion+"/"+Rcluster
+// handler for: "/"+api.Version+"/"+Rcluster
 func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1791,7 +1786,7 @@ func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handler for: "/"+Rversion+"/"+Rtokens
+// handler for: "/"+api.Version+"/"+Rtokens
 func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
@@ -1808,11 +1803,11 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 	if baseURL == gcsURL && r.Method == http.MethodGet {
 		s := p.restAPIItems(r.URL.Path, -1)
 		if len(s) == 2 {
-			r.URL.Path = URLPath(Rversion, Robjects) + r.URL.Path
+			r.URL.Path = api.URLPath(api.Version, api.Objects) + r.URL.Path
 			p.httpobjget(w, r)
 			return
 		} else if len(s) == 1 {
-			r.URL.Path = URLPath(Rversion, Rbuckets) + r.URL.Path
+			r.URL.Path = api.URLPath(api.Version, api.Buckets) + r.URL.Path
 			p.httpbckget(w, r)
 			return
 		}
@@ -1822,19 +1817,19 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 
 // gets target info
 func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(URLParamWhat)
+	getWhat := r.URL.Query().Get(api.URLParamWhat)
 	switch getWhat {
-	case GetWhatStats:
+	case api.GetWhatStats:
 		ok := p.invokeHttpGetClusterStats(w, r)
 		if !ok {
 			return
 		}
-	case GetWhatXaction:
+	case api.GetWhatXaction:
 		ok := p.invokeHttpGetXaction(w, r)
 		if !ok {
 			return
 		}
-	case GetWhatMountpaths:
+	case api.GetWhatMountpaths:
 		if ok := p.invokeHttpGetClusterMountpaths(w, r); !ok {
 			return
 		}
@@ -1845,8 +1840,8 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Request) bool {
-	kind := r.URL.Query().Get(URLParamProps)
-	if errstr := isXactionQueryable(kind); errstr != "" {
+	kind := r.URL.Query().Get(api.URLParamProps)
+	if errstr := api.ValidateXactionQueryable(kind); errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return false
 	}
@@ -1855,7 +1850,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
 	if !ok {
 		e := fmt.Sprintf(
-			"Unable to invoke GetMsg on targets. Query: [%s]",
+			"Unable to invoke api.GetMsg on targets. Query: [%s]",
 			r.URL.RawQuery)
 		glog.Errorf(e)
 		p.invalmsghdlr(w, r, e)
@@ -1877,7 +1872,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 
 func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
 	results := p.broadcastTargets(
-		URLPath(Rversion, Rdaemon),
+		api.URLPath(api.Version, api.Daemon),
 		r.URL.Query(),
 		r.Method,
 		nil, // message
@@ -1902,12 +1897,11 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: read-lock
-func (p *proxyrunner) invokeHttpGetClusterStats(
-	w http.ResponseWriter, r *http.Request) bool {
+func (p *proxyrunner) invokeHttpGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
 	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
-			"Unable to invoke GetMsg on targets. Query: [%s]",
+			"Unable to invoke api.GetMsg on targets. Query: [%s]",
 			r.URL.RawQuery)
 		glog.Errorf(errstr)
 		p.invalmsghdlr(w, r, errstr)
@@ -1926,12 +1920,11 @@ func (p *proxyrunner) invokeHttpGetClusterStats(
 	return ok
 }
 
-func (p *proxyrunner) invokeHttpGetClusterMountpaths(
-	w http.ResponseWriter, r *http.Request) bool {
+func (p *proxyrunner) invokeHttpGetClusterMountpaths(w http.ResponseWriter, r *http.Request) bool {
 	targetMountpaths, ok := p.invokeHttpGetMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
-			"Unable to invoke GetMsg on targets. Query: [%s]", r.URL.RawQuery)
+			"Unable to invoke api.GetMsg on targets. Query: [%s]", r.URL.RawQuery)
 		glog.Errorf(errstr)
 		p.invalmsghdlr(w, r, errstr)
 		return false
@@ -1951,25 +1944,25 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		nsi                   daemonInfo
 		keepalive, register   bool
 		isproxy, nonelectable bool
-		msg                   *ActionMsg
+		msg                   *api.ActionMsg
 		s                     string
 	)
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Cluster); apitems == nil {
 		return
 	}
 	if p.readJSON(w, r, &nsi) != nil {
 		return
 	}
 	if len(apitems) > 0 {
-		keepalive = apitems[0] == Rkeepalive
-		register = apitems[0] == Rregister
-		isproxy = apitems[0] == Rproxy
+		keepalive = apitems[0] == api.Keepalive
+		register = apitems[0] == api.Register
+		isproxy = apitems[0] == api.Proxy
 		if isproxy {
 			if len(apitems) > 1 {
-				keepalive = apitems[1] == Rkeepalive
+				keepalive = apitems[1] == api.Keepalive
 			}
-			s := r.URL.Query().Get(URLParamNonElectable)
+			s := r.URL.Query().Get(api.URLParamNonElectable)
 			var err error
 			if nonelectable, err = parsebool(s); s != "" && err != nil {
 				glog.Errorf("Failed to parse %s for non-electability: %v", s, err)
@@ -1977,9 +1970,9 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s = fmt.Sprintf("register %s (isproxy=%t, keepalive=%t)", nsi.DaemonID, isproxy, keepalive)
-	msg = &ActionMsg{Action: ActRegTarget}
+	msg = &api.ActionMsg{Action: api.ActRegTarget}
 	if isproxy {
-		msg = &ActionMsg{Action: ActRegProxy}
+		msg = &api.ActionMsg{Action: api.ActRegProxy}
 	}
 	body, err := jsoniter.Marshal(nsi)
 	assert(err == nil, err)
@@ -2016,7 +2009,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				si: &nsi,
 				req: reqArgs{
 					method: http.MethodPost,
-					path:   URLPath(Rversion, Rdaemon, Rregister),
+					path:   api.URLPath(api.Version, api.Daemon, api.Register),
 				},
 				timeout: ProxyPingTimeout,
 			}
@@ -2129,24 +2122,24 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 // unregisters a target/proxy
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 6)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, Rversion, Rcluster); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Cluster); apitems == nil {
 		return
 	}
-	if apitems[0] != Rdaemon {
-		s := fmt.Sprintf("Invalid API element: %s (expecting %s)", apitems[0], Rdaemon)
+	if apitems[0] != api.Daemon {
+		s := fmt.Sprintf("Invalid API element: %s (expecting %s)", apitems[0], api.Daemon)
 		p.invalmsghdlr(w, r, s)
 		return
 	}
 	var (
 		isproxy bool
-		msg     *ActionMsg
+		msg     *api.ActionMsg
 		osi     *daemonInfo
 		psi     *daemonInfo
 		sid     = apitems[1]
 	)
-	msg = &ActionMsg{Action: ActUnregTarget}
-	if sid == Rproxy {
-		msg = &ActionMsg{Action: ActUnregProxy}
+	msg = &api.ActionMsg{Action: api.ActUnregTarget}
+	if sid == api.Proxy {
+		msg = &api.ActionMsg{Action: api.ActUnregProxy}
 		isproxy = true
 		sid = apitems[2]
 	}
@@ -2185,7 +2178,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			si: osi,
 			req: reqArgs{
 				method: http.MethodDelete,
-				path:   URLPath(Rversion, Rdaemon, Runregister),
+				path:   api.URLPath(api.Version, api.Daemon, api.Unregister),
 			},
 			timeout: ProxyPingTimeout,
 		}
@@ -2222,14 +2215,14 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	var (
 		apitems []string
-		msg     ActionMsg
+		msg     api.ActionMsg
 	)
 	apitems = p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, Rversion, Rcluster); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Cluster); apitems == nil {
 		return
 	}
 	// cluster-wide: designate a new primary proxy administratively
-	if len(apitems) > 0 && apitems[0] == Rproxy {
+	if len(apitems) > 0 && apitems[0] == api.Proxy {
 		p.httpclusetprimaryproxy(w, r)
 		return
 	}
@@ -2241,7 +2234,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch msg.Action {
-	case ActSetConfig:
+	case api.ActSetConfig:
 		if value, ok := msg.Value.(string); !ok {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T)", msg.Value, msg.Value))
 		} else if errstr := p.setconfig(msg.Name, value); errstr != "" {
@@ -2252,7 +2245,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			assert(err == nil, err)
 
 			results := p.broadcastCluster(
-				URLPath(Rversion, Rdaemon),
+				api.URLPath(api.Version, api.Daemon),
 				nil, // query
 				http.MethodPut,
 				msgbytes,
@@ -2272,13 +2265,13 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	case ActShutdown:
+	case api.ActShutdown:
 		glog.Infoln("Proxy-controlled cluster shutdown...")
 		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets
 		assert(err == nil, err)
 
 		p.broadcastCluster(
-			URLPath(Rversion, Rdaemon),
+			api.URLPath(api.Version, api.Daemon),
 			nil, // query
 			http.MethodPut,
 			msgbytes,
@@ -2290,11 +2283,11 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(time.Second)
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 
-	case ActRebalance:
+	case api.ActRebalance:
 		p.metasyncer.sync(false, p.smapowner.get(), &msg)
 
 	default:
-		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected api.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
@@ -2304,7 +2297,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 // broadcasts: Rx and Tx
 //
 //========================
-func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg) (errstr string) {
+func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg) (errstr string) {
 	if msg.Action == "" {
 		glog.Infof("receive bucket-metadata: version %d", newbucketmd.version())
 	} else {
@@ -2386,7 +2379,7 @@ func validateBucketProps(props *BucketProps, isLocal bool) error {
 	if props.NextTierURL != "" {
 		if props.CloudProvider == "" {
 			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
-				ProviderAmazon, ProviderGoogle, ProviderDfc)
+				api.ProviderAmazon, api.ProviderGoogle, api.ProviderDFC)
 		}
 		if props.ReadPolicy == "" {
 			props.ReadPolicy = RWPolicyNextTier
@@ -2417,11 +2410,11 @@ func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketC
 }
 
 func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
-	jsbytes, err := jsoniter.Marshal(ActionMsg{Action: ActRechecksum})
+	jsbytes, err := jsoniter.Marshal(api.ActionMsg{Action: api.ActRechecksum})
 	assert(err == nil, err)
 
 	res := p.broadcastTargets(
-		URLPath(Rversion, Rbuckets, bucket),
+		api.URLPath(api.Version, api.Buckets, bucket),
 		nil,
 		http.MethodPost,
 		jsbytes,
@@ -2440,12 +2433,12 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 // and is equal to nsi
 func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bool {
 	query := url.Values{}
-	query.Add(URLParamWhat, GetWhatDaemonInfo)
+	query.Add(api.URLParamWhat, api.GetWhatDaemonInfo)
 	args := callArgs{
 		si: osi,
 		req: reqArgs{
 			method: http.MethodGet,
-			path:   URLPath(Rversion, Rdaemon),
+			path:   api.URLPath(api.Version, api.Daemon),
 			query:  query,
 		},
 		timeout: ctx.config.Timeout.CplaneOperation,
@@ -2463,11 +2456,11 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 }
 
 func ValidateCloudProvider(provider string, isLocal bool) error {
-	if provider != "" && provider != ProviderAmazon && provider != ProviderGoogle && provider != ProviderDfc {
+	if provider != "" && provider != api.ProviderAmazon && provider != api.ProviderGoogle && provider != api.ProviderDFC {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
-			ProviderAmazon, ProviderGoogle, ProviderDfc)
-	} else if isLocal && provider != ProviderDfc && provider != "" {
-		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", ProviderDfc)
+			api.ProviderAmazon, api.ProviderGoogle, api.ProviderDFC)
+	} else if isLocal && provider != api.ProviderDFC && provider != "" {
+		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", api.ProviderDFC)
 	}
 	return nil
 }

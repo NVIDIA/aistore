@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -49,14 +50,14 @@ type xactDeleteEvict struct {
 //
 //===========================
 
-func (t *targetrunner) getListFromRangeCloud(ct context.Context, bucket string, msg *GetMsg) (bucketList *BucketList, err error) {
-	bucketList = &BucketList{Entries: make([]*BucketEntry, 0)}
+func (t *targetrunner) getListFromRangeCloud(ct context.Context, bucket string, msg *api.GetMsg) (bucketList *api.BucketList, err error) {
+	bucketList = &api.BucketList{Entries: make([]*api.BucketEntry, 0)}
 	for i := 0; i < maxPrefetchPages; i++ {
 		jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
 		if errstr != "" {
 			return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
 		}
-		reslist := &BucketList{}
+		reslist := &api.BucketList{}
 		if err := jsoniter.Unmarshal(jsbytes, reslist); err != nil {
 			return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
 		}
@@ -73,9 +74,9 @@ func (t *targetrunner) getListFromRangeCloud(ct context.Context, bucket string, 
 }
 
 func (t *targetrunner) getListFromRange(ct context.Context, bucket, prefix, regex string, min, max int64) ([]string, error) {
-	msg := &GetMsg{GetPrefix: prefix}
+	msg := &api.GetMsg{GetPrefix: prefix}
 	var (
-		fullbucketlist *BucketList
+		fullbucketlist *api.BucketList
 		err            error
 	)
 	islocal := t.bmdowner.get().islocal(bucket)
@@ -130,9 +131,9 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
 type rangef func(ct context.Context, bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error
 
-func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg *ListMsg, operation listf) {
+func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg *api.ListMsg, operation listf) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -168,10 +169,10 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 	}
 }
 
-func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg *RangeMsg, operation rangef) {
+func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg *api.RangeMsg, operation rangef) {
 	var err error
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -207,19 +208,19 @@ func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, ra
 //
 //=============
 
-func (t *targetrunner) deleteList(w http.ResponseWriter, r *http.Request, deleteMsg *ListMsg) {
+func (t *targetrunner) deleteList(w http.ResponseWriter, r *http.Request, deleteMsg *api.ListMsg) {
 	t.listOperation(w, r, deleteMsg, t.doListDelete)
 }
 
-func (t *targetrunner) evictList(w http.ResponseWriter, r *http.Request, evictMsg *ListMsg) {
+func (t *targetrunner) evictList(w http.ResponseWriter, r *http.Request, evictMsg *api.ListMsg) {
 	t.listOperation(w, r, evictMsg, t.doListEvict)
 }
 
-func (t *targetrunner) deleteRange(w http.ResponseWriter, r *http.Request, deleteRangeMsg *RangeMsg) {
+func (t *targetrunner) deleteRange(w http.ResponseWriter, r *http.Request, deleteRangeMsg *api.RangeMsg) {
 	t.rangeOperation(w, r, deleteRangeMsg, t.doRangeDelete)
 }
 
-func (t *targetrunner) evictRange(w http.ResponseWriter, r *http.Request, evictMsg *RangeMsg) {
+func (t *targetrunner) evictRange(w http.ResponseWriter, r *http.Request, evictMsg *api.RangeMsg) {
 	t.rangeOperation(w, r, evictMsg, t.doRangeEvict)
 }
 
@@ -294,7 +295,7 @@ func (q *xactInProgress) newDelete() *xactDeleteEvict {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	id := q.uniqueid()
-	xpre := &xactDeleteEvict{xactBase: *newxactBase(id, ActDelete)}
+	xpre := &xactDeleteEvict{xactBase: *newxactBase(id, api.ActDelete)}
 	q.add(xpre)
 	return xpre
 }
@@ -303,7 +304,7 @@ func (q *xactInProgress) newEvict() *xactDeleteEvict {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	id := q.uniqueid()
-	xpre := &xactDeleteEvict{xactBase: *newxactBase(id, ActEvict)}
+	xpre := &xactDeleteEvict{xactBase: *newxactBase(id, api.ActEvict)}
 	q.add(xpre)
 	return xpre
 }
@@ -323,11 +324,11 @@ func (xact *xactDeleteEvict) tostring() string {
 //
 //=========
 
-func (t *targetrunner) prefetchList(w http.ResponseWriter, r *http.Request, prefetchMsg *ListMsg) {
+func (t *targetrunner) prefetchList(w http.ResponseWriter, r *http.Request, prefetchMsg *api.ListMsg) {
 	t.listOperation(w, r, prefetchMsg, t.addPrefetchList)
 }
 
-func (t *targetrunner) prefetchRange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg *RangeMsg) {
+func (t *targetrunner) prefetchRange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg *api.RangeMsg) {
 	t.rangeOperation(w, r, prefetchRangeMsg, t.addPrefetchRange)
 }
 
@@ -438,14 +439,14 @@ func (t *targetrunner) addPrefetchRange(ct context.Context, bucket, prefix, rege
 func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.findU(ActPrefetch)
+	_, xx := q.findU(api.ActPrefetch)
 	if xx != nil {
 		xpre := xx.(*xactPrefetch)
 		glog.Infof("%s already running, nothing to do", xpre.tostring())
 		return nil
 	}
 	id := q.uniqueid()
-	xpre := &xactPrefetch{xactBase: *newxactBase(id, ActPrefetch)}
+	xpre := &xactPrefetch{xactBase: *newxactBase(id, api.ActPrefetch)}
 	xpre.targetrunner = t
 	q.add(xpre)
 	return xpre
@@ -466,9 +467,9 @@ func (xact *xactPrefetch) tostring() string {
 //
 //================
 
-func parseRangeListMsgBase(jsmap map[string]interface{}) (pmb *RangeListMsgBase, errstr string) {
+func parseRangeListMsgBase(jsmap map[string]interface{}) (pmb *api.RangeListMsgBase, errstr string) {
 	const s = "Error parsing PrefetchMsgBase:"
-	pmb = &RangeListMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
+	pmb = &api.RangeListMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
 	if v, ok := jsmap["deadline"]; ok {
 		deadline, err := time.ParseDuration(v.(string))
 		if err != nil {
@@ -486,13 +487,13 @@ func parseRangeListMsgBase(jsmap map[string]interface{}) (pmb *RangeListMsgBase,
 	return
 }
 
-func parseListMsg(jsmap map[string]interface{}) (pm *ListMsg, errstr string) {
+func parseListMsg(jsmap map[string]interface{}) (pm *api.ListMsg, errstr string) {
 	const s = "Error parsing PrefetchMsg: "
 	pmb, errstr := parseRangeListMsgBase(jsmap)
 	if errstr != "" {
 		return
 	}
-	pm = &ListMsg{RangeListMsgBase: *pmb}
+	pm = &api.ListMsg{RangeListMsgBase: *pmb}
 	v, ok := jsmap["objnames"]
 	if !ok {
 		return pm, s + "No objnames field"
@@ -512,13 +513,13 @@ func parseListMsg(jsmap map[string]interface{}) (pm *ListMsg, errstr string) {
 	return
 }
 
-func parseRangeMsg(jsmap map[string]interface{}) (pm *RangeMsg, errstr string) {
+func parseRangeMsg(jsmap map[string]interface{}) (pm *api.RangeMsg, errstr string) {
 	const s = "Error parsing PrefetchRangeMsg:"
 	pmb, errstr := parseRangeListMsgBase(jsmap)
 	if errstr != "" {
 		return
 	}
-	pm = &RangeMsg{RangeListMsgBase: *pmb}
+	pm = &api.RangeMsg{RangeListMsgBase: *pmb}
 	v, ok := jsmap["prefix"]
 	if !ok {
 		return pm, s + " no prefix"

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -42,8 +43,8 @@ func (p *proxyrunner) bootstrap() {
 	if err := LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
 		if smap.countTargets() > 0 || smap.countProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
-			q.Add(URLParamWhat, GetWhatSmapVote)
-			res := p.broadcastCluster(URLPath(Rversion, Rdaemon), q, http.MethodGet, nil, smap, tout, false)
+			q.Add(api.URLParamWhat, api.GetWhatSmapVote)
+			res := p.broadcastCluster(api.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, smap, tout, false)
 			for re := range res {
 				if re.err != nil {
 					continue
@@ -117,11 +118,11 @@ func (p *proxyrunner) bootstrap() {
 // no change of mind when on the "secondary" track
 func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 	query := url.Values{}
-	query.Add(URLParamWhat, GetWhatSmap)
+	query.Add(api.URLParamWhat, api.GetWhatSmap)
 	req := reqArgs{
 		method: http.MethodGet,
 		base:   getSmapURL,
-		path:   URLPath(Rversion, Rdaemon),
+		path:   api.URLPath(api.Version, api.Daemon),
 		query:  query,
 	}
 
@@ -328,9 +329,9 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 		tout           = ctx.config.Timeout.CplaneOperation
 		keeptrying     = true
 	)
-	q.Add(URLParamWhat, GetWhatSmapVote)
+	q.Add(api.URLParamWhat, api.GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
-		res := p.broadcastCluster(URLPath(Rversion, Rdaemon), q, http.MethodGet, nil, bcastSmap, tout, false)
+		res := p.broadcastCluster(api.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, bcastSmap, tout, false)
 		keeptrying = false
 		for re := range res {
 			if re.err != nil {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -38,7 +39,7 @@ type xrebpathrunner struct {
 // false otherwise.
 func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadline time.Duration) bool {
 	query := url.Values{}
-	query.Add(URLParamFromID, t.si.DaemonID)
+	query.Add(api.URLParamFromID, t.si.DaemonID)
 
 	pollstarted, ok := time.Now(), false
 	callArgs := callArgs{
@@ -46,7 +47,7 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   URLPath(Rversion, Rhealth),
+			path:   api.URLPath(api.Version, api.Health),
 			query:  query,
 		},
 		timeout: timeout,
@@ -82,12 +83,12 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion int64) {
 	// Phase 1: Call and check if smap is at least our version.
 	query := url.Values{}
-	query.Add(URLParamWhat, GetWhatSmap)
+	query.Add(api.URLParamWhat, api.GetWhatSmap)
 	args := callArgs{
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
-			path:   URLPath(Rversion, Rdaemon),
+			path:   api.URLPath(api.Version, api.Daemon),
 			query:  query,
 		},
 		timeout: defaultTimeout,
@@ -129,7 +130,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   URLPath(Rversion, Rhealth),
+			path:   api.URLPath(api.Version, api.Health),
 		},
 		timeout: defaultTimeout,
 	}

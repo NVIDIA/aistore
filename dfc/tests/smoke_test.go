@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -141,7 +142,7 @@ func getRandomFiles(seed int64, numGets int, bucket, prefix string, t *testing.T
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
-	var msg = &dfc.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	var msg = &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
 		items, err := client.ListBucket(proxyurl, bucket, msg, 0)
 		if err != nil {

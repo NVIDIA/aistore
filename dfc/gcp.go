@@ -18,6 +18,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
@@ -80,7 +81,7 @@ func extractGCPCreds(credsList map[string]string) (*gcpCreds, error) {
 	if len(credsList) == 0 {
 		return nil, nil
 	}
-	raw, ok := credsList[ProviderGoogle]
+	raw, ok := credsList[api.ProviderGoogle]
 	if raw == "" || !ok {
 		return nil, nil
 	}
@@ -107,7 +108,7 @@ func defaultClient(gctx context.Context) (*storage.Client, context.Context, stri
 }
 
 func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
-	dir := filepath.Join(baseDir, ProviderGoogle)
+	dir := filepath.Join(baseDir, api.ProviderGoogle)
 	filePath := filepath.Join(dir, userID+".json")
 
 	if _, err := os.Stat(filePath); err == nil {
@@ -154,7 +155,7 @@ func createClient(ct context.Context) (*storage.Client, context.Context, string,
 
 	creds, err := extractGCPCreds(userCreds)
 	if err != nil || creds == nil {
-		glog.Errorf("Failed to retrieve %s credentials %s: %v", ProviderGoogle, userID, err)
+		glog.Errorf("Failed to retrieve %s credentials %s: %v", api.ProviderGoogle, userID, err)
 		return defaultClient(gctx)
 	}
 
@@ -178,7 +179,7 @@ func createClient(ct context.Context) (*storage.Client, context.Context, string,
 // bucket operations
 //
 //==================
-func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMsg) (jsbytes []byte, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *api.GetMsg) (jsbytes []byte, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("listbucket %s", bucket)
 	}
@@ -209,18 +210,18 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 		errstr = fmt.Sprintf("Failed to list objects of bucket %s, err: %v", bucket, err)
 	}
 
-	var reslist = BucketList{Entries: make([]*BucketEntry, 0, initialBucketListSize)}
+	var reslist = api.BucketList{Entries: make([]*api.BucketEntry, 0, initialBucketListSize)}
 	reslist.PageMarker = nextPageToken
 	for _, attrs := range objs {
-		entry := &BucketEntry{}
+		entry := &api.BucketEntry{}
 		entry.Name = attrs.Name
-		if strings.Contains(msg.GetProps, GetPropsSize) {
+		if strings.Contains(msg.GetProps, api.GetPropsSize) {
 			entry.Size = attrs.Size
 		}
-		if strings.Contains(msg.GetProps, GetPropsBucket) {
+		if strings.Contains(msg.GetProps, api.GetPropsBucket) {
 			entry.Bucket = attrs.Bucket
 		}
-		if strings.Contains(msg.GetProps, GetPropsCtime) {
+		if strings.Contains(msg.GetProps, api.GetPropsCtime) {
 			t := attrs.Created
 			if !attrs.Updated.IsZero() {
 				t = attrs.Updated
@@ -228,19 +229,19 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *GetMs
 			switch msg.GetTimeFormat {
 			case "":
 				fallthrough
-			case RFC822:
+			case api.RFC822:
 				entry.Ctime = t.Format(time.RFC822)
 			default:
 				entry.Ctime = t.Format(msg.GetTimeFormat)
 			}
 		}
-		if strings.Contains(msg.GetProps, GetPropsChecksum) {
+		if strings.Contains(msg.GetProps, api.GetPropsChecksum) {
 			entry.Checksum = hex.EncodeToString(attrs.MD5)
 		}
-		if strings.Contains(msg.GetProps, GetPropsVersion) {
+		if strings.Contains(msg.GetProps, api.GetPropsVersion) {
 			entry.Version = fmt.Sprintf("%d", attrs.Generation)
 		}
-		// TODO: other GetMsg props TBD
+		// TODO: other api.GetMsg props TBD
 
 		reslist.Entries = append(reslist.Entries, entry)
 	}
@@ -270,10 +271,10 @@ func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketpro
 		errstr = fmt.Sprintf("Failed to get attributes (bucket %s), err: %v", bucket, err)
 		return
 	}
-	bucketprops[CloudProvider] = ProviderGoogle
+	bucketprops[api.HeaderCloudProvider] = api.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
-	bucketprops[Versioning] = VersionCloud
+	bucketprops[api.HeaderVersioning] = VersionCloud
 	return
 }
 
@@ -323,7 +324,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	objmeta[CloudProvider] = ProviderGoogle
+	objmeta[api.HeaderCloudProvider] = api.ProviderGoogle
 	objmeta["version"] = fmt.Sprintf("%d", attrs.Generation)
 	return
 }

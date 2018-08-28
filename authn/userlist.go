@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/json-iterator/go"
@@ -255,7 +256,7 @@ func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
 
 	tokenList := dfc.TokenList{Tokens: tokens}
 	injson, _ := jsoniter.Marshal(tokenList)
-	if err := m.proxyRequest(http.MethodDelete, dfc.Rtokens, injson); err != nil {
+	if err := m.proxyRequest(http.MethodDelete, api.Tokens, injson); err != nil {
 		glog.Errorf("Failed to send token list: %v", err)
 	}
 }
@@ -288,7 +289,7 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
-		url := m.proxy.URL + dfc.URLPath(dfc.Rversion, path)
+		url := m.proxy.URL + api.URLPath(api.Version, path)
 		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
 			// Fatal - interrupt the loop

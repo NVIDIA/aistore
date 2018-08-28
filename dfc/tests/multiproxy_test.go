@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/dfc/tests/util"
@@ -508,7 +509,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 			break
 		}
 
-		url := fmt.Sprintf("%s/%s/%s/%s", v.PublicNet.DirectURL, dfc.Rversion, dfc.Rdaemon, dfc.Rsyncsmap)
+		url := v.PublicNet.DirectURL + api.URLPath(api.Version, api.Daemon, api.SyncSmap)
 		req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonMap))
 		checkFatal(err, t)
 
@@ -809,7 +810,7 @@ func setPrimaryTo(t *testing.T, smap dfc.Smap, directURL, toID, toURL string) {
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
-	url := fmt.Sprintf("%s/%s/%s/%s/%s", directURL, dfc.Rversion, dfc.Rcluster, dfc.Rproxy, toID)
+	url := directURL + api.URLPath(api.Version, api.Cluster, api.Proxy, toID)
 	// http://host:8081/v1/cluster/proxy/15205:8080
 	tlogf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
 	req, err := http.NewRequest(http.MethodPut, url, nil)
@@ -1094,12 +1095,11 @@ type targetMocker interface {
 func runMockTarget(t *testing.T, mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rbuckets+"/", mocktgt.filehdlr)
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Robjects+"/", mocktgt.filehdlr)
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rdaemon, mocktgt.daemonhdlr)
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rdaemon+"/", mocktgt.daemonhdlr)
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rvote, mocktgt.votehdlr)
-	mux.HandleFunc("/"+dfc.Rversion+"/"+dfc.Rhealth, func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc(api.URLPath(api.Version, api.Buckets), mocktgt.filehdlr)
+	mux.HandleFunc(api.URLPath(api.Version, api.Objects), mocktgt.filehdlr)
+	mux.HandleFunc(api.URLPath(api.Version, api.Daemon), mocktgt.daemonhdlr)
+	mux.HandleFunc(api.URLPath(api.Version, api.Vote), mocktgt.votehdlr)
+	mux.HandleFunc(api.URLPath(api.Version, api.Health), func(w http.ResponseWriter, r *http.Request) {})
 
 	ip := ""
 	for _, v := range smap.Tmap {
@@ -1143,7 +1143,7 @@ func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 		break
 	}
 
-	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rcluster
+	url := proxyurl + api.URLPath(api.Version, api.Cluster)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonDaemonInfo))
 	if err != nil {
 		return err
@@ -1165,7 +1165,7 @@ func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 }
 
 func unregisterMockTarget(mocktgt targetMocker) error {
-	url := proxyurl + "/" + dfc.Rversion + "/" + dfc.Rcluster + "/" + dfc.Rdaemon + "/" + "MOCK"
+	url := proxyurl + api.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
@@ -1242,7 +1242,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	tlogf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	config := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
 	origURL := proxyconf["original_url"].(string)
 

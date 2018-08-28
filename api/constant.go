@@ -1,12 +1,10 @@
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package dfc
+package api
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -40,6 +38,7 @@ const (
 	ActUnregProxy  = "unregproxy"
 	ActNewPrimary  = "newprimary"
 	ActRevokeToken = "revoketoken"
+	ActElection    = "election"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -52,25 +51,25 @@ const (
 const (
 	ProviderAmazon = "aws"
 	ProviderGoogle = "gcp"
-	ProviderDfc    = "dfc"
+	ProviderDFC    = "dfc"
 )
 
 // Header Key enum
 const (
-	CloudProvider         = "CloudProvider"         // from Cloud Provider enum
-	Versioning            = "Versioning"            // Versioning state for a bucket: "enabled"/"disabled"
-	NextTierURL           = "NextTierURL"           // URL of the next tier in a DFC multi-tier environment
-	ReadPolicy            = "ReadPolicy"            // Policy used for reading in a DFC multi-tier environment
-	WritePolicy           = "WritePolicy"           // Policy used for writing in a DFC multi-tier environment
-	BucketChecksumType    = "BucketChecksumType"    // Checksum type used for objects in the bucket
-	BucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
-	BucketValidateWarmGet = "BucketValidateWarmGet" // Warm get validation policy used for objects in the bucket
-	BucketValidateRange   = "BucketValidateRange"   // Byte range validation policy used for objects in the bucket
-	HeaderDfcChecksumType = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
-	HeaderDfcChecksumVal  = "HeaderDfcChecksumVal"  // Checksum Value
-	HeaderDfcObjVersion   = "HeaderDfcObjVersion"   // Object version/generation
-	Size                  = "Size"                  // Size of object in bytes
-	Version               = "Version"               // Object version number
+	HeaderCloudProvider         = "CloudProvider"         // from Cloud Provider enum
+	HeaderVersioning            = "Versioning"            // Versioning state for a bucket: "enabled"/"disabled"
+	HeaderNextTierURL           = "NextTierURL"           // URL of the next tier in a DFC multi-tier environment
+	HeaderReadPolicy            = "ReadPolicy"            // Policy used for reading in a DFC multi-tier environment
+	HeaderWritePolicy           = "WritePolicy"           // Policy used for writing in a DFC multi-tier environment
+	HeaderBucketChecksumType    = "BucketChecksumType"    // Checksum type used for objects in the bucket
+	HeaderBucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
+	HeaderBucketValidateWarmGet = "BucketValidateWarmGet" // Warm get validation policy used for objects in the bucket
+	HeaderBucketValidateRange   = "BucketValidateRange"   // Byte range validation policy used for objects in the bucket
+	HeaderDFCChecksumType       = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
+	HeaderDFCChecksumVal        = "HeaderDfcChecksumVal"  // Checksum Value
+	HeaderDFCObjVersion         = "HeaderDfcObjVersion"   // Object version/generation
+	HeaderSize                  = "Size"                  // Size of object in bytes
+	HeaderVersion               = "Version"               // Object version number
 )
 
 // URL Query "?name1=val1&name2=..."
@@ -125,13 +124,6 @@ type RangeMsg struct {
 	Prefix string `json:"prefix"`
 	Regex  string `json:"regex"`
 	Range  string `json:"range"`
-}
-
-// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
-type SmapVoteMsg struct {
-	VoteInProgress bool      `json:"vote_in_progress"`
-	Smap           *Smap     `json:"smap"`
-	BucketMD       *bucketMD `json:"bucketmd"`
 }
 
 // MountpathList contains two lists:
@@ -217,32 +209,37 @@ type BucketList struct {
 	PageMarker string         `json:"pagemarker"`
 }
 
-// All bucket names known to the system
+// BucketNames is used to transfer all bucket names known to the system
 type BucketNames struct {
 	Cloud []string `json:"cloud"`
 	Local []string `json:"local"`
 }
 
+const (
+	// DefaultPageSize determines the number of cached file infos returned in one page
+	DefaultPageSize = 1000
+)
+
 // RESTful URL path: /v1/....
 const (
-	Rversion    = "v1"
-	Rbuckets    = "buckets"
-	Robjects    = "objects"
-	Rcluster    = "cluster"
-	Rdaemon     = "daemon"
-	Rsyncsmap   = "syncsmap"
-	Rpush       = "push"
-	Rkeepalive  = "keepalive"
-	Rregister   = "register"
-	Runregister = "unregister"
-	Rhealth     = "health"
-	Rvote       = "vote"
-	Rproxy      = "proxy"
-	Rvoteres    = "result"
-	Rvoteinit   = "init"
-	Rtokens     = "tokens"
-	Rmetasync   = "metasync"
-	Rmountpaths = "mountpaths"
+	Version    = "v1"
+	Buckets    = "buckets"
+	Objects    = "objects"
+	Cluster    = "cluster"
+	Daemon     = "daemon"
+	SyncSmap   = "syncsmap"
+	Push       = "push"
+	Keepalive  = "keepalive"
+	Register   = "register"
+	Unregister = "unregister"
+	Health     = "health"
+	Vote       = "vote"
+	Proxy      = "proxy"
+	Voteres    = "result"
+	VoteInit   = "init"
+	Tokens     = "tokens"
+	Metasync   = "metasync"
+	Mountpaths = "mountpaths"
 )
 
 const (
@@ -254,11 +251,3 @@ const (
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
 )
-
-// query-able xactions
-func isXactionQueryable(kind string) (errstr string) {
-	if kind == XactionRebalance || kind == XactionPrefetch {
-		return
-	}
-	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, XactionRebalance, XactionPrefetch)
-}

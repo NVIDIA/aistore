@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/json-iterator/go"
 )
 
@@ -21,7 +22,6 @@ const (
 	VoteNo  Vote = "NO"
 
 	// xaction constant for Election
-	ActElection      = "election"
 	ProxyPingTimeout = 100 * time.Millisecond
 )
 
@@ -64,17 +64,17 @@ type (
 //
 //==========
 
-// [METHOD] /Rversion/Rvote
+// [METHOD] /v1/vote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Vote); apitems == nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodGet && apitems[0] == Rproxy:
+	case r.Method == http.MethodGet && apitems[0] == api.Proxy:
 		t.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apitems[0] == Rvoteres:
+	case r.Method == http.MethodPut && apitems[0] == api.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -82,19 +82,19 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// [METHOD] /Rversion/Rvote
+// [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Vote); apitems == nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodGet && apitems[0] == Rproxy:
+	case r.Method == http.MethodGet && apitems[0] == api.Proxy:
 		p.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apitems[0] == Rvoteres:
+	case r.Method == http.MethodPut && apitems[0] == api.Voteres:
 		p.httpsetprimaryproxy(w, r)
-	case r.Method == http.MethodPut && apitems[0] == Rvoteinit:
+	case r.Method == http.MethodPut && apitems[0] == api.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -102,10 +102,10 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /Rversion/Rvote
+// GET /v1/vote/proxy
 func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	apitems := h.restAPIItems(r.URL.Path, 5)
-	if apitems = h.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
+	if apitems = h.checkRestAPI(w, r, apitems, 0, api.Version, api.Vote, api.Proxy); apitems == nil {
 		return
 	}
 
@@ -176,10 +176,10 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT /Rversion/Rvote/Rvoteres
+// PUT /v1/vote/result
 func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
 	apitems := h.restAPIItems(r.URL.Path, 5)
-	if apitems = h.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
+	if apitems = h.checkRestAPI(w, r, apitems, 0, api.Version, api.Vote, api.Voteres); apitems == nil {
 		return
 	}
 
@@ -220,10 +220,10 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 	glog.Infof("resulting %s", clone.pp())
 }
 
-// PUT /Rversion/Rvote/Rvoteinit
+// PUT /v1/vote/init
 func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
 	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, Rversion, Rvote); apitems == nil {
+	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Vote, api.VoteInit); apitems == nil {
 		return
 	}
 
@@ -388,9 +388,9 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	assert(err == nil, err)
 
 	q := url.Values{}
-	q.Set(URLParamPrimaryCandidate, p.si.DaemonID)
+	q.Set(api.URLParamPrimaryCandidate, p.si.DaemonID)
 	res := p.broadcastCluster(
-		URLPath(Rversion, Rvote, Rproxy),
+		api.URLPath(api.Version, api.Vote, api.Proxy),
 		q,
 		http.MethodGet,
 		jsbytes,
@@ -433,7 +433,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 
 	smap := p.smapowner.get()
 	res := p.broadcastCluster(
-		URLPath(Rversion, Rvote, Rvoteres),
+		api.URLPath(api.Version, api.Vote, api.Voteres),
 		nil, // query
 		http.MethodPut,
 		jsbytes,
@@ -532,7 +532,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 		req: reqArgs{
 			method: http.MethodPut,
 			base:   nextPrimaryProxy.InternalNet.DirectURL,
-			path:   URLPath(Rversion, Rvote, Rvoteinit),
+			path:   api.URLPath(api.Version, api.Vote, api.VoteInit),
 			body:   body,
 		},
 		timeout: defaultTimeout,
@@ -585,7 +585,7 @@ func (p *proxyrunner) pingWithTimeout(si *daemonInfo, timeout time.Duration) (bo
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   URLPath(Rversion, Rhealth),
+			path:   api.URLPath(api.Version, api.Health),
 		},
 		timeout: timeout,
 	}

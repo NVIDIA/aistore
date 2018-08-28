@@ -17,9 +17,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -117,7 +117,7 @@ func prefixCreateFiles(t *testing.T) {
 
 func prefixLookupOne(t *testing.T) {
 	tlogf("Looking up for files than names start with %s\n", prefix)
-	var msg = &dfc.GetMsg{GetPrefix: prefix}
+	var msg = &api.GetMsg{GetPrefix: prefix}
 	numFiles := 0
 	objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 	if err != nil {
@@ -145,7 +145,7 @@ func prefixLookupDefault(t *testing.T) {
 	for i := 0; i < len(letters); i++ {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
-		var msg = &dfc.GetMsg{GetPrefix: lookFor}
+		var msg = &api.GetMsg{GetPrefix: lookFor}
 		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
@@ -187,7 +187,7 @@ func prefixLookupCornerCases(t *testing.T) {
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 		tlogf("%d. Prefix: %s [%s]\n", idx, test.title, p)
-		var msg = &dfc.GetMsg{GetPrefix: p}
+		var msg = &api.GetMsg{GetPrefix: p}
 		objList, err := client.ListBucket(proxyurl, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)

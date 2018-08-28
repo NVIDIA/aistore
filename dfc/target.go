@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
@@ -36,7 +37,6 @@ import (
 )
 
 const (
-	DefaultPageSize  = 1000      // the number of cached file infos returned in one page
 	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
 	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
 	workfileprefix   = ".~~~."
@@ -45,7 +45,7 @@ const (
 )
 
 type allfinfos struct {
-	files        []*BucketEntry
+	files        []*api.BucketEntry
 	fileCount    int
 	rootLength   int
 	prefix       string
@@ -55,7 +55,7 @@ type allfinfos struct {
 	needCtime    bool
 	needChkSum   bool
 	needVersion  bool
-	msg          *GetMsg
+	msg          *api.GetMsg
 	lastFilePath string
 	t            *targetrunner
 	bucket       string
@@ -142,12 +142,12 @@ func (t *targetrunner) run() error {
 	t.detectMpathChanges()
 
 	// cloud provider
-	if ctx.config.CloudProvider == ProviderAmazon {
+	if ctx.config.CloudProvider == api.ProviderAmazon {
 		// TODO: sessions
 		t.cloudif = &awsimpl{t}
 
 	} else {
-		assert(ctx.config.CloudProvider == ProviderGoogle)
+		assert(ctx.config.CloudProvider == api.ProviderGoogle)
 		t.cloudif = &gcpimpl{t}
 	}
 
@@ -165,17 +165,17 @@ func (t *targetrunner) run() error {
 	//
 
 	// Public network
-	t.registerPublicNetHandler(URLPath(Rversion, Rbuckets)+"/", t.bucketHandler)
-	t.registerPublicNetHandler(URLPath(Rversion, Robjects)+"/", t.objectHandler)
-	t.registerPublicNetHandler(URLPath(Rversion, Rdaemon), t.daemonHandler)
-	t.registerPublicNetHandler(URLPath(Rversion, Rpush)+"/", t.pushHandler)
-	t.registerPublicNetHandler(URLPath(Rversion, Rtokens), t.tokenHandler)
+	t.registerPublicNetHandler(api.URLPath(api.Version, api.Buckets)+"/", t.bucketHandler)
+	t.registerPublicNetHandler(api.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
+	t.registerPublicNetHandler(api.URLPath(api.Version, api.Daemon), t.daemonHandler)
+	t.registerPublicNetHandler(api.URLPath(api.Version, api.Push)+"/", t.pushHandler)
+	t.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), t.tokenHandler)
 	t.registerPublicNetHandler("/", invalhdlr)
 
 	// Internal network
-	t.registerInternalNetHandler(URLPath(Rversion, Rmetasync), t.metasyncHandler)
-	t.registerInternalNetHandler(URLPath(Rversion, Rhealth), t.healthHandler)
-	t.registerInternalNetHandler(URLPath(Rversion, Rvote), t.voteHandler)
+	t.registerInternalNetHandler(api.URLPath(api.Version, api.Metasync), t.metasyncHandler)
+	t.registerInternalNetHandler(api.URLPath(api.Version, api.Health), t.healthHandler)
+	t.registerInternalNetHandler(api.URLPath(api.Version, api.Vote), t.voteHandler)
 	if ctx.config.Net.UseIntra {
 		t.registerInternalNetHandler("/", invalhdlr)
 	}
@@ -246,7 +246,7 @@ func (t *targetrunner) unregister() (int, error) {
 		si: t.smapowner.get().ProxySI,
 		req: reqArgs{
 			method: http.MethodDelete,
-			path:   URLPath(Rversion, Rcluster, Rdaemon, t.si.DaemonID),
+			path:   api.URLPath(api.Version, api.Cluster, api.Daemon, t.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -260,7 +260,7 @@ func (t *targetrunner) unregister() (int, error) {
 //
 //===========================================================================================
 
-// verb /Rversion/Rbuckets
+// verb /v1/buckets
 func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -276,7 +276,7 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// verb /Rversion/Robjects
+// verb /v1/objects
 func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -294,10 +294,10 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /Rversion/Rbuckets/bucket-name
+// GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -313,7 +313,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	t.invalmsghdlr(w, r, s)
 }
 
-// GET /Rversion/Robjects/bucket[+"/"+objname]
+// GET /v1/objects/bucket[+"/"+objname]
 // Checks if the object exists locally (if not, downloads it) and sends it back
 // If the bucket is in the Cloud one and ValidateWarmGet is enabled there is an extra
 // check whether the object exists locally. Version is checked as well if configured.
@@ -333,7 +333,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	versioncfg := &ctx.config.Ver
 	ct := t.contextWithAuth(r)
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket, objname = apitems[0], apitems[1]
@@ -347,7 +347,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	if glog.V(4) {
-		pid := query.Get(URLParamProxyID)
+		pid := query.Get(api.URLParamProxyID)
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
 	}
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
@@ -466,11 +466,11 @@ existslocally:
 	}
 	if nhobj != nil && !returnRangeChecksum {
 		htype, hval := nhobj.get()
-		w.Header().Add(HeaderDfcChecksumType, htype)
-		w.Header().Add(HeaderDfcChecksumVal, hval)
+		w.Header().Add(api.HeaderDFCChecksumType, htype)
+		w.Header().Add(api.HeaderDFCChecksumVal, hval)
 	}
 	if props != nil && props.version != "" {
-		w.Header().Add(HeaderDfcObjVersion, props.version)
+		w.Header().Add(api.HeaderDFCObjVersion, props.version)
 	}
 
 	file, err := os.Open(fqn)
@@ -511,8 +511,8 @@ existslocally:
 			return
 
 		}
-		w.Header().Add(HeaderDfcChecksumType, cksumcfg.Checksum)
-		w.Header().Add(HeaderDfcChecksumVal, cksum)
+		w.Header().Add(api.HeaderDFCChecksumType, cksumcfg.Checksum)
+		w.Header().Add(api.HeaderDFCChecksumVal, cksum)
 	}
 
 	var written int64
@@ -577,7 +577,7 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offse
 func (t *targetrunner) validateOffsetAndLength(r *http.Request) (
 	offset int64, length int64, readRange bool, errstr string) {
 	query := r.URL.Query()
-	offsetStr, lengthStr := query.Get(URLParamOffset), query.Get(URLParamLength)
+	offsetStr, lengthStr := query.Get(api.URLParamOffset), query.Get(api.URLParamLength)
 	if offsetStr == "" && lengthStr == "" {
 		return
 	}
@@ -597,10 +597,10 @@ func (t *targetrunner) validateOffsetAndLength(r *http.Request) (
 	return offset, length, true, ""
 }
 
-// PUT /Rversion/Robjects/bucket-name/object-name
+// PUT /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -608,7 +608,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	from, to := query.Get(URLParamFromID), query.Get(URLParamToID)
+	from, to := query.Get(api.URLParamFromID), query.Get(api.URLParamToID)
 	objname := strings.Join(apitems[1:], "/")
 	if from != "" && to != "" {
 		// REBALANCE "?from_id="+from_id+"&to_id="+to_id
@@ -625,7 +625,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.statsif.add("put.redir.μs", redelta)
 		}
 		// PUT
-		pid := query.Get(URLParamProxyID)
+		pid := query.Get(api.URLParamProxyID)
 		if glog.V(4) {
 			glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
 		}
@@ -648,16 +648,16 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// DELETE { action} /Rversion/Rbuckets/bucket-name
+// DELETE { action} /v1/objects/bucket-name
 func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket  string
-		msg     ActionMsg
+		msg     api.ActionMsg
 		started = time.Now()
 		ok      = true
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket = apitems[0]
@@ -693,17 +693,17 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	ok = false
 }
 
-// DELETE [ { action } ] /Rversion/Robjects/bucket-name/object-name
+// DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket, objname string
-		msg             ActionMsg
+		msg             api.ActionMsg
 		evict           bool
 		started         = time.Now()
 		ok              = true
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket = apitems[0]
@@ -721,7 +721,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	if err == nil && len(b) > 0 {
 		err = jsoniter.Unmarshal(b, &msg)
 		if err == nil {
-			evict = (msg.Action == ActEvict)
+			evict = (msg.Action == api.ActEvict)
 		}
 	} else if err != nil {
 		s := fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
@@ -747,19 +747,19 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	ok = false
 }
 
-// POST /Rversion/Rbuckets/bucket-name
+// POST /v1/buckets/bucket-name
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	var msg ActionMsg
+	var msg api.ActionMsg
 	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
-	case ActPrefetch:
+	case api.ActPrefetch:
 		t.prefetchfiles(w, r, msg)
-	case ActRenameLB:
+	case api.ActRenameLB:
 		apitems := t.restAPIItems(r.URL.Path, 5)
-		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 			return
 		}
 		lbucket := apitems[0]
@@ -795,9 +795,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
-	case ActListObjects:
+	case api.ActListObjects:
 		apitems := t.restAPIItems(r.URL.Path, 5)
-		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 			return
 		}
 		lbucket := apitems[0]
@@ -813,9 +813,9 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
 		}
-	case ActRechecksum:
+	case api.ActRechecksum:
 		apitems := t.restAPIItems(r.URL.Path, 5)
-		if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+		if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 			return
 		}
 		bucket := apitems[0]
@@ -829,21 +829,21 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /Rversion/Robjects/bucket-name/object-name
+// POST /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
-	var msg ActionMsg
+	var msg api.ActionMsg
 	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
-	case ActRename:
+	case api.ActRename:
 		t.renamefile(w, r, msg)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
 }
 
-// HEAD /Rversion/Rbuckets/bucket-name
+// HEAD /v1/buckets/bucket-name
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket      string
@@ -854,7 +854,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		cksumcfg    *cksumconfig
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rbuckets); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
 		return
 	}
 	bucket = apitems[0]
@@ -863,7 +863,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	if glog.V(4) {
-		pid := query.Get(URLParamProxyID)
+		pid := query.Get(api.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
@@ -886,12 +886,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		bucketprops = make(simplekvs)
-		bucketprops[CloudProvider] = ProviderDfc
-		bucketprops[Versioning] = VersionLocal
+		bucketprops[api.HeaderCloudProvider] = api.ProviderDFC
+		bucketprops[api.HeaderVersioning] = VersionLocal
 	}
 	// double check if we support versioning internally for the bucket
 	if !t.versioningConfigured(bucket) {
-		bucketprops[Versioning] = VersionNone
+		bucketprops[api.HeaderVersioning] = VersionNone
 	}
 
 	for k, v := range bucketprops {
@@ -905,16 +905,16 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		cksumcfg = &props.CksumConf
 	}
 
-	w.Header().Add(NextTierURL, props.NextTierURL)
-	w.Header().Add(ReadPolicy, props.ReadPolicy)
-	w.Header().Add(WritePolicy, props.WritePolicy)
-	w.Header().Add(BucketChecksumType, cksumcfg.Checksum)
-	w.Header().Add(BucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
-	w.Header().Add(BucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
-	w.Header().Add(BucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
+	w.Header().Add(api.HeaderNextTierURL, props.NextTierURL)
+	w.Header().Add(api.HeaderReadPolicy, props.ReadPolicy)
+	w.Header().Add(api.HeaderWritePolicy, props.WritePolicy)
+	w.Header().Add(api.HeaderBucketChecksumType, cksumcfg.Checksum)
+	w.Header().Add(api.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
+	w.Header().Add(api.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
+	w.Header().Add(api.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
 }
 
-// HEAD /Rversion/Robjects/bucket-name/object-name
+// HEAD /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket, objname, errstr string
@@ -922,9 +922,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		errcode                 int
 		objmeta                 simplekvs
 	)
-	checkCached, _ = parsebool(r.URL.Query().Get(URLParamCheckCached))
+	checkCached, _ = parsebool(r.URL.Query().Get(api.URLParamCheckCached))
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket, objname = apitems[0], apitems[1]
@@ -933,7 +933,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	if glog.V(4) {
-		pid := query.Get(URLParamProxyID)
+		pid := query.Get(api.URLParamProxyID)
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
 	}
 	bucketmd := t.bmdowner.get()
@@ -976,7 +976,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handler for: "/"+Rversion+"/"+Rtokens
+// handler for: /v1/tokens
 func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
@@ -986,7 +986,7 @@ func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// [METHOD] /Rversion/Rmetasync
+// [METHOD] /v1/metasync
 func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
@@ -996,7 +996,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT /Rversion/Rmetasync
+// PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	var payload = make(simplekvs)
 	if err := t.readJSON(w, r, &payload); err != nil {
@@ -1039,10 +1039,10 @@ func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request
 	t.authn.updateRevokedList(revokedTokens)
 }
 
-// GET /Rversion/Rhealth
+// GET /v1/health
 func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	from := query.Get(URLParamFromID)
+	from := query.Get(api.URLParamFromID)
 
 	aborted, running := t.xactinp.isAbortedOrRunningRebalance()
 	status := &thealthstatus{IsRebalancing: aborted || running}
@@ -1056,10 +1056,10 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	t.keepalive.heardFrom(from, false)
 }
 
-//  /Rversion/Rpush/bucket-name
+// [METHOD] /v1/push/bucket-name
 func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, Rversion, Rpush); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Push); apitems == nil {
 		return
 	}
 	bucket := apitems[0]
@@ -1089,7 +1089,7 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, objname := range objnames {
-			err := pusher.Push("/"+Rversion+"/"+Robjects+"/"+bucket+"/"+objname, nil)
+			err := pusher.Push(api.URLPath(api.Version, api.Objects, bucket, objname), nil)
 			if err != nil {
 				t.invalmsghdlr(w, r, "Error Pushing "+bucket+"/"+objname+": "+err.Error())
 				return
@@ -1214,7 +1214,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		glog.Infof("getFromNeighbor: found %s/%s at %s", bucket, objname, neighsi.DaemonID)
 	}
 
-	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.PublicNet.DirectURL, r.URL.Path, URLParamLocal, islocal)
+	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.PublicNet.DirectURL, r.URL.Path, api.URLParamLocal, islocal)
 	//
 	// http request
 	//
@@ -1237,10 +1237,10 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		nhobj   cksumvalue
 		errstr  string
 		size    int64
-		hval    = response.Header.Get(HeaderDfcChecksumVal)
-		htype   = response.Header.Get(HeaderDfcChecksumType)
+		hval    = response.Header.Get(api.HeaderDFCChecksumVal)
+		htype   = response.Header.Get(api.HeaderDFCChecksumType)
 		hdhobj  = newcksumvalue(htype, hval)
-		version = response.Header.Get(HeaderDfcObjVersion)
+		version = response.Header.Get(api.HeaderDFCObjVersion)
 		fqn     = t.fqn(bucket, objname, islocal)
 		getfqn  = t.fqn2workfile(fqn)
 	)
@@ -1415,7 +1415,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 
 func (t *targetrunner) lookupRemotely(bucket, objname string) *daemonInfo {
 	res := t.broadcastNeighbors(
-		URLPath(Rversion, Robjects, bucket, objname),
+		api.URLPath(api.Version, api.Objects, bucket, objname),
 		nil, // query
 		http.MethodHead,
 		nil,
@@ -1433,7 +1433,7 @@ func (t *targetrunner) lookupRemotely(bucket, objname string) *daemonInfo {
 }
 
 // should not be called for local buckets
-func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes []byte, errstr string, errcode int) {
+func (t *targetrunner) listCachedObjects(bucket string, msg *api.GetMsg) (outbytes []byte, errstr string, errcode int) {
 	reslist, err := t.prepareLocalObjectList(bucket, msg)
 	if err != nil {
 		return nil, err.Error(), 0
@@ -1446,7 +1446,7 @@ func (t *targetrunner) listCachedObjects(bucket string, msg *GetMsg) (outbytes [
 	return
 }
 
-func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*BucketList, error) {
+func (t *targetrunner) prepareLocalObjectList(bucket string, msg *api.GetMsg) (*api.BucketList, error) {
 	type mresp struct {
 		infos      *allfinfos
 		failedPath string
@@ -1500,8 +1500,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 
 	// combine results into one long list
 	// real size of page is set in newFileWalk, so read it from any of results inside loop
-	pageSize := DefaultPageSize
-	allfinfos := make([]*BucketEntry, 0)
+	pageSize := api.DefaultPageSize
+	allfinfos := make([]*api.BucketEntry, 0)
 	fileCount := 0
 	for r := range ch {
 		if r.err != nil {
@@ -1530,12 +1530,12 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 		marker = allfinfos[pageSize-1].Name
 	}
 
-	bucketList := &BucketList{
+	bucketList := &api.BucketList{
 		Entries:    allfinfos,
 		PageMarker: marker,
 	}
 
-	if strings.Contains(msg.GetProps, GetTargetURL) {
+	if strings.Contains(msg.GetProps, api.GetTargetURL) {
 		for _, e := range bucketList.Entries {
 			e.TargetURL = t.si.PublicNet.DirectURL
 		}
@@ -1547,7 +1547,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *GetMsg) (*Buck
 func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	bucketmd := t.bmdowner.get()
 
-	bucketnames := &BucketNames{
+	bucketnames := &api.BucketNames{
 		Local: make([]string, 0, len(bucketmd.LBmap)),
 		Cloud: make([]string, 0, 64),
 	}
@@ -1556,7 +1556,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	localonly, _ := parsebool(q.Get(URLParamLocal))
+	localonly, _ := parsebool(q.Get(api.URLParamLocal))
 	if !localonly {
 		buckets, errstr, errcode := getcloudif().getbucketnames(t.contextWithAuth(r))
 		if errstr != "" {
@@ -1575,7 +1575,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }
 
-func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *GetMsg) (errstr string, ok bool) {
+func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request, bucket string, msg *api.GetMsg) (errstr string, ok bool) {
 	reslist, err := t.prepareLocalObjectList(bucket, msg)
 	if err != nil {
 		errstr = fmt.Sprintf("List local bucket %s failed, err: %v", bucket, err)
@@ -1591,7 +1591,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 // Special case:
 // If URL contains cachedonly=true then the function returns the list of
 // locally cached objects. Paging is used to return a long list of objects
-func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *ActionMsg) (tag string, ok bool) {
+func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket string, actionMsg *api.ActionMsg) (tag string, ok bool) {
 	var (
 		jsbytes []byte
 		errstr  string
@@ -1599,7 +1599,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	)
 	query := r.URL.Query()
 	if glog.V(4) {
-		pid := query.Get(URLParamProxyID)
+		pid := query.Get(api.URLParamProxyID)
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
@@ -1622,10 +1622,10 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		return
 	}
 
-	var msg GetMsg
+	var msg api.GetMsg
 	err = jsoniter.Unmarshal(getMsgJson, &msg)
 	if err != nil {
-		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a GetMsg: %v", actionMsg.Value)
+		errstr := fmt.Sprintf("Unable to unmarshal 'value' in request to a api.GetMsg: %v", actionMsg.Value)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -1656,7 +1656,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 	return
 }
 
-func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
+func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 	// Marker is always a file name, so we need to strip filename from path
 	markerDir := ""
 	if msg.GetPageMarker != "" {
@@ -1665,21 +1665,21 @@ func (t *targetrunner) newFileWalk(bucket string, msg *GetMsg) *allfinfos {
 
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
-	ci := &allfinfos{make([]*BucketEntry, 0, DefaultPageSize),
+	ci := &allfinfos{make([]*api.BucketEntry, 0, api.DefaultPageSize),
 		0,                 // fileCount
 		0,                 // rootLength
 		msg.GetPrefix,     // prefix
 		msg.GetPageMarker, // marker
 		markerDir,         // markerDir
-		strings.Contains(msg.GetProps, GetPropsAtime),    // needAtime
-		strings.Contains(msg.GetProps, GetPropsCtime),    // needCtime
-		strings.Contains(msg.GetProps, GetPropsChecksum), // needChkSum
-		strings.Contains(msg.GetProps, GetPropsVersion),  // needVersion
-		msg,             // GetMsg
-		"",              // lastFilePath - next page marker
-		t,               // targetrunner
-		bucket,          // bucket
-		DefaultPageSize, // limit - maximun number of objects to return
+		strings.Contains(msg.GetProps, api.GetPropsAtime),    // needAtime
+		strings.Contains(msg.GetProps, api.GetPropsCtime),    // needCtime
+		strings.Contains(msg.GetProps, api.GetPropsChecksum), // needChkSum
+		strings.Contains(msg.GetProps, api.GetPropsVersion),  // needVersion
+		msg,                 // GetMsg
+		"",                  // lastFilePath - next page marker
+		t,                   // targetrunner
+		bucket,              // bucket
+		api.DefaultPageSize, // limit - maximun number of objects to return
 	}
 
 	if msg.GetPageSize != 0 {
@@ -1730,11 +1730,11 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 
 	// the file passed all checks - add it to the batch
 	ci.fileCount++
-	fileInfo := &BucketEntry{Name: relname, Atime: "", IsCached: true}
+	fileInfo := &api.BucketEntry{Name: relname, Atime: "", IsCached: true}
 	if ci.needAtime {
 		atime, _, _ := getAmTimes(osfi)
 		if ci.msg.GetTimeFormat == "" {
-			fileInfo.Atime = atime.Format(RFC822)
+			fileInfo.Atime = atime.Format(api.RFC822)
 		} else {
 			fileInfo.Atime = atime.Format(ci.msg.GetTimeFormat)
 		}
@@ -1744,7 +1744,7 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 		switch ci.msg.GetTimeFormat {
 		case "":
 			fallthrough
-		case RFC822:
+		case api.RFC822:
 			fileInfo.Ctime = t.Format(time.RFC822)
 		default:
 			fileInfo.Ctime = t.Format(ci.msg.GetTimeFormat)
@@ -1818,7 +1818,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
-	hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
+	hdhobj = newcksumvalue(r.Header.Get(api.HeaderDFCChecksumType), r.Header.Get(api.HeaderDFCChecksumVal))
 
 	if hdhobj != nil {
 		htype, hval = hdhobj.get()
@@ -2060,8 +2060,8 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			return // not an error, nothing to do
 		}
 		var (
-			hdhobj = newcksumvalue(r.Header.Get(HeaderDfcChecksumType), r.Header.Get(HeaderDfcChecksumVal))
-			props  = &objectProps{version: r.Header.Get(HeaderDfcObjVersion)}
+			hdhobj = newcksumvalue(r.Header.Get(api.HeaderDFCChecksumType), r.Header.Get(api.HeaderDFCChecksumVal))
+			props  = &objectProps{version: r.Header.Get(api.HeaderDFCObjVersion)}
 		)
 		if _, props.nhobj, size, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
 			return
@@ -2129,11 +2129,11 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	return nil
 }
 
-func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
+func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
 	var errstr string
 
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, Rversion, Robjects); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
 	}
 	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
@@ -2189,11 +2189,11 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	return
 }
 
-func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
+func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
 	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
 	jsmap, ok := msg.Value.(map[string]interface{})
 	if !ok {
-		t.invalmsghdlr(w, r, "Unexpected ActionMsg.Value format"+detail)
+		t.invalmsghdlr(w, r, "Unexpected api.ActionMsg.Value format"+detail)
 		return
 	}
 	if _, ok := jsmap["objnames"]; ok {
@@ -2213,12 +2213,12 @@ func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg
 	}
 }
 
-func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg ActionMsg) {
-	evict := msg.Action == ActEvict
+func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
+	evict := msg.Action == api.ActEvict
 	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
 	jsmap, ok := msg.Value.(map[string]interface{})
 	if !ok {
-		t.invalmsghdlr(w, r, "deletefiles: invalid ActionMsg.Value format"+detail)
+		t.invalmsghdlr(w, r, "deletefiles: invalid api.ActionMsg.Value format"+detail)
 		return
 	}
 	if _, ok := jsmap["objnames"]; ok {
@@ -2261,9 +2261,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		newbucket = bucket
 	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	url := destsi.PublicNet.DirectURL + "/" + Rversion + "/" + Robjects + "/"
-	url += newbucket + "/" + newobjname
-	url += fmt.Sprintf("?%s=%s&%s=%s", URLParamFromID, fromid, URLParamToID, toid)
+	url := destsi.PublicNet.DirectURL + api.URLPath(api.Version, api.Objects, newbucket, newobjname)
+	url += fmt.Sprintf("?%s=%s&%s=%s", api.URLParamFromID, fromid, api.URLParamToID, toid)
 	islocal := t.bmdowner.get().islocal(bucket)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
@@ -2302,11 +2301,11 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)
 	}
 	if xxhashval != "" {
-		request.Header.Set(HeaderDfcChecksumType, ChecksumXXHash)
-		request.Header.Set(HeaderDfcChecksumVal, xxhashval)
+		request.Header.Set(api.HeaderDFCChecksumType, ChecksumXXHash)
+		request.Header.Set(api.HeaderDFCChecksumVal, xxhashval)
 	}
 	if len(version) != 0 {
-		request.Header.Set(HeaderDfcObjVersion, string(version))
+		request.Header.Set(api.HeaderDFCObjVersion, string(version))
 	}
 	// Do
 	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.SendFile)
@@ -2343,24 +2342,24 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 }
 
 func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {
-	useCacheStr := r.URL.Query().Get(URLParamCached)
+	useCacheStr := r.URL.Query().Get(api.URLParamCached)
 	var err error
 	if useCache, err = parsebool(useCacheStr); err != nil {
 		errstr = fmt.Sprintf("Invalid URL query parameter: %s=%s (expecting: '' | true | false)",
-			URLParamCached, useCacheStr)
+			api.URLParamCached, useCacheStr)
 		errcode = http.StatusInternalServerError
 	}
 	return
 }
 
 func (t *targetrunner) checkIsLocal(bucket string, bucketmd *bucketMD, q url.Values, islocal bool) (errstr string, errcode int) {
-	proxylocalstr := q.Get(URLParamLocal)
+	proxylocalstr := q.Get(api.URLParamLocal)
 	if proxylocalstr == "" {
 		return
 	}
 	proxylocal, err := parsebool(proxylocalstr)
 	if err != nil {
-		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, URLParamLocal, proxylocalstr)
+		errstr = fmt.Sprintf("Invalid URL query parameter for bucket %s: %s=%s (expecting bool)", bucket, api.URLParamLocal, proxylocalstr)
 		errcode = http.StatusInternalServerError
 		return
 	}
@@ -2369,7 +2368,7 @@ func (t *targetrunner) checkIsLocal(bucket string, bucketmd *bucketMD, q url.Val
 	}
 	errstr = fmt.Sprintf("islocalbucket(%s) mismatch: %t (proxy) != %t (target %s)", bucket, proxylocal, islocal, t.si.DaemonID)
 	errcode = http.StatusInternalServerError
-	if s := q.Get(URLParamBMDVersion); s != "" {
+	if s := q.Get(api.URLParamBMDVersion); s != "" {
 		if v, err := strconv.ParseInt(s, 0, 64); err != nil {
 			glog.Errorf("Unexpected: failed to convert %s to int, err: %v", s, err)
 		} else if v < bucketmd.version() {
@@ -2394,30 +2393,30 @@ func (t *targetrunner) bmdVersionFixup() {
 	}
 	psi := smap.ProxySI
 	q := url.Values{}
-	q.Add(URLParamWhat, GetWhatBucketMeta)
+	q.Add(api.URLParamWhat, api.GetWhatBucketMeta)
 	args := callArgs{
 		si: psi,
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   psi.InternalNet.DirectURL,
-			path:   URLPath(Rversion, Rdaemon),
+			path:   api.URLPath(api.Version, api.Daemon),
 			query:  q,
 		},
 		timeout: ctx.config.Timeout.CplaneOperation,
 	}
 	res := t.call(args)
 	if res.err != nil {
-		glog.Errorf("Failed to get-what=%s, err: %v", GetWhatBucketMeta, res.err)
+		glog.Errorf("Failed to get-what=%s, err: %v", api.GetWhatBucketMeta, res.err)
 		return
 	}
 	newbucketmd := &bucketMD{}
 	err := jsoniter.Unmarshal(res.outjson, newbucketmd)
 	if err != nil {
 		glog.Errorf("Unexpected: failed to unmarshal get-what=%s response from %s, err: %v [%v]",
-			GetWhatBucketMeta, psi.InternalNet.DirectURL, err, string(res.outjson))
+			api.GetWhatBucketMeta, psi.InternalNet.DirectURL, err, string(res.outjson))
 		return
 	}
-	var msg = ActionMsg{Action: "get-what=" + GetWhatBucketMeta}
+	var msg = api.ActionMsg{Action: "get-what=" + api.GetWhatBucketMeta}
 	t.receiveBucketMD(newbucketmd, &msg, "fixup")
 }
 
@@ -2427,7 +2426,7 @@ func (t *targetrunner) bmdVersionFixup() {
 //
 //===========================
 
-// "/"+Rversion+"/"+Rdaemon
+// [METHOD] /v1/daemon
 func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -2446,16 +2445,16 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rdaemon); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 0, api.Version, api.Daemon); apitems == nil {
 		return
 	}
 	if len(apitems) > 0 {
 		switch apitems[0] {
 		// PUT /v1/daemon/proxy/newprimaryproxyid
-		case Rproxy:
+		case api.Proxy:
 			t.httpdaesetprimaryproxy(w, r, apitems)
 			return
-		case Rsyncsmap:
+		case api.SyncSmap:
 			var newsmap = &Smap{}
 			if t.readJSON(w, r, newsmap) != nil {
 				return
@@ -2463,9 +2462,9 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
-			glog.Infof("%s: %s v%d done", t.si.DaemonID, Rsyncsmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", t.si.DaemonID, api.SyncSmap, newsmap.version())
 			return
-		case Rmountpaths:
+		case api.Mountpaths:
 			t.handleMountpathReq(w, r)
 			return
 		default:
@@ -2474,20 +2473,20 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	//
 	// other PUT /daemon actions
 	//
-	var msg ActionMsg
+	var msg api.ActionMsg
 	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
-	case ActSetConfig:
+	case api.ActSetConfig:
 		if value, ok := msg.Value.(string); !ok {
-			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse ActionMsg value: Not a string"))
+			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to parse api.ActionMsg value: Not a string"))
 		} else if errstr := t.setconfig(msg.Name, value); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 		} else {
 			glog.Infof("setconfig %s=%s", msg.Name, value)
 			if msg.Name == "lru_enabled" && value == "false" {
-				_, lruxact := t.xactinp.findU(ActLRU)
+				_, lruxact := t.xactinp.findU(api.ActLRU)
 				if lruxact != nil {
 					if glog.V(3) {
 						glog.Infof("Aborting LRU due to lru_enabled config change")
@@ -2496,10 +2495,10 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	case ActShutdown:
+	case api.ActShutdown:
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	default:
-		s := fmt.Sprintf("Unexpected ActionMsg <- JSON [%v]", msg)
+		s := fmt.Sprintf("Unexpected api.ActionMsg <- JSON [%v]", msg)
 		t.invalmsghdlr(w, r, s)
 	}
 }
@@ -2517,9 +2516,9 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 
 	proxyid := apitems[1]
 	query := r.URL.Query()
-	preparestr := query.Get(URLParamPrepare)
+	preparestr := query.Get(api.URLParamPrepare)
 	if prepare, err = strconv.ParseBool(preparestr); err != nil {
-		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", URLParamPrepare, err)
+		s := fmt.Sprintf("Failed to parse %s URL Parameter: %v", api.URLParamPrepare, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
@@ -2553,20 +2552,20 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 }
 
 func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
-	getWhat := r.URL.Query().Get(URLParamWhat)
+	getWhat := r.URL.Query().Get(api.URLParamWhat)
 	switch getWhat {
-	case GetWhatConfig, GetWhatSmap, GetWhatBucketMeta, GetWhatSmapVote, GetWhatDaemonInfo:
+	case api.GetWhatConfig, api.GetWhatSmap, api.GetWhatBucketMeta, api.GetWhatSmapVote, api.GetWhatDaemonInfo:
 		t.httprunner.httpdaeget(w, r)
-	case GetWhatStats:
+	case api.GetWhatStats:
 		rst := getstorstatsrunner()
 		rst.RLock()
 		jsbytes, err := jsoniter.Marshal(rst)
 		rst.RUnlock()
 		assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
-	case GetWhatXaction:
-		kind := r.URL.Query().Get(URLParamProps)
-		if errstr := isXactionQueryable(kind); errstr != "" {
+	case api.GetWhatXaction:
+		kind := r.URL.Query().Get(api.URLParamProps)
+		if errstr := api.ValidateXactionQueryable(kind); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -2574,8 +2573,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		allXactionDetails := t.getXactionsByType(kind)
 		jsbytes := xactionStatsRetriever.getStats(allXactionDetails)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
-	case GetWhatMountpaths:
-		mpList := MountpathList{}
+	case api.GetWhatMountpaths:
+		mpList := api.MountpathList{}
 		availablePaths, disabledPaths := ctx.mountpaths.Mountpaths()
 		mpList.Available = make([]string, len(availablePaths))
 		mpList.Disabled = make([]string, len(disabledPaths))
@@ -2608,9 +2607,9 @@ func (t *targetrunner) getXactionStatsRetriever(kind string) XactionStatsRetriev
 	// No need to handle default since kind has already been validated by
 	// this point.
 	switch kind {
-	case XactionRebalance:
+	case api.XactionRebalance:
 		xactionStatsRetriever = RebalanceTargetStats{}
-	case XactionPrefetch:
+	case api.XactionPrefetch:
 		xactionStatsRetriever = PrefetchTargetStats{}
 	}
 
@@ -2621,9 +2620,9 @@ func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 	allXactionDetails := []XactionDetails{}
 	for _, xaction := range t.xactinp.xactinp {
 		if xaction.getkind() == kind {
-			status := XactionStatusCompleted
+			status := api.XactionStatusCompleted
 			if !xaction.finished() {
-				status = XactionStatusInProgress
+				status = api.XactionStatusInProgress
 			}
 
 			xactionStats := XactionDetails{
@@ -2644,19 +2643,19 @@ func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 // enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	apiItems := t.restAPIItems(r.URL.Path, 5)
-	if apiItems = t.checkRestAPI(w, r, apiItems, 0, Rversion, Rdaemon); apiItems == nil {
+	if apiItems = t.checkRestAPI(w, r, apiItems, 0, api.Version, api.Daemon); apiItems == nil {
 		return
 	}
 
 	if len(apiItems) > 0 {
 		switch apiItems[0] {
-		case Rregister:
+		case api.Register:
 			if glog.V(3) {
 				glog.Infoln("Sending register signal to target keepalive control channel")
 			}
 			gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: register}
 			return
-		case Rmountpaths:
+		case api.Mountpaths:
 			t.handleMountpathReq(w, r)
 			return
 		default:
@@ -2680,15 +2679,15 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 // remove mountpath
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 	apiItems := t.restAPIItems(r.URL.Path, 5)
-	if apiItems = t.checkRestAPI(w, r, apiItems, 1, Rversion, Rdaemon); apiItems == nil {
+	if apiItems = t.checkRestAPI(w, r, apiItems, 1, api.Version, api.Daemon); apiItems == nil {
 		return
 	}
 
 	switch apiItems[0] {
-	case Rmountpaths:
+	case api.Mountpaths:
 		t.handleMountpathReq(w, r)
 		return
-	case Runregister:
+	case api.Unregister:
 		if glog.V(3) {
 			glog.Infoln("Sending unregister signal to target keepalive control channel")
 		}
@@ -2807,7 +2806,7 @@ func (t *targetrunner) starttime() time.Time {
 }
 
 func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (redelta int64) {
-	s := query.Get(URLParamUnixTime)
+	s := query.Get(api.URLParamUnixTime)
 	if s == "" {
 		return
 	}
@@ -3131,7 +3130,7 @@ func makePathCloud(basePath string) string {
 }
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
-	msg := ActionMsg{}
+	msg := api.ActionMsg{}
 	if t.readJSON(w, r, &msg) != nil {
 		t.invalmsghdlr(w, r, "Invalid mountpath request")
 		return
@@ -3149,13 +3148,13 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	}
 
 	switch msg.Action {
-	case ActMountpathEnable:
+	case api.ActMountpathEnable:
 		t.handleEnableMountpathReq(w, r, mountpath)
-	case ActMountpathDisable:
+	case api.ActMountpathDisable:
 		t.handleDisableMountpathReq(w, r, mountpath)
-	case ActMountpathAdd:
+	case api.ActMountpathAdd:
 		t.handleAddMountpathReq(w, r, mountpath)
-	case ActMountpathRemove:
+	case api.ActMountpathRemove:
 		t.handleRemoveMountpathReq(w, r, mountpath)
 	default:
 		t.invalmsghdlr(w, r, "Invalid action in request")
@@ -3205,7 +3204,7 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: use the message
-func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg, tag string) (errstr string) {
+func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg, tag string) (errstr string) {
 	if msg.Action == "" {
 		glog.Infof("%s bucket-metadata: version %d", tag, newbucketmd.version())
 	} else {
@@ -3252,7 +3251,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *ActionMsg, ta
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap *Smap, msg *ActionMsg) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap *Smap, msg *api.ActionMsg) (errstr string) {
 	var (
 		newtargetid, s                 string
 		existentialQ, aborted, running bool
@@ -3281,7 +3280,7 @@ func (t *targetrunner) receiveSmap(newsmap *Smap, msg *ActionMsg) (errstr string
 	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 		return
 	}
-	if msg.Action == ActRebalance {
+	if msg.Action == api.ActRebalance {
 		go t.runRebalance(newsmap, newtargetid)
 		return
 	}
@@ -3331,7 +3330,7 @@ func (t *targetrunner) pollClusterStarted() {
 			req: reqArgs{
 				method: http.MethodGet,
 				base:   psi.InternalNet.DirectURL,
-				path:   URLPath(Rversion, Rhealth),
+				path:   api.URLPath(api.Version, api.Health),
 			},
 			timeout: defaultTimeout,
 		}
@@ -3380,7 +3379,7 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
 	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 0, Rversion, Rtokens); apitems == nil {
+	if apitems = t.checkRestAPI(w, r, apitems, 0, api.Version, api.Tokens); apitems == nil {
 		return
 	}
 

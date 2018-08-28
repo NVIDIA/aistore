@@ -506,7 +506,7 @@ The following Go code retrieves a list of all of object names from a named bucke
 // e.g. proxyurl: "http://localhost:8080"
 url := proxyurl + "/v1/buckets/" + bucket
 
-msg := &dfc.ActionMsg{Action: dfc.ActListObjects}
+msg := &api.ActionMsg{Action: dfc.ActListObjects}
 fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
 for {
     // 1. First, send the request

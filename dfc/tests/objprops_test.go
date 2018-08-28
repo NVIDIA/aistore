@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 
@@ -30,7 +31,7 @@ func propsStats(t *testing.T) (objChanged int64, bytesChanged int64) {
 	return
 }
 
-func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]string, msg *dfc.GetMsg,
+func propsUpdateObjects(t *testing.T, bucket string, oldVersions map[string]string, msg *api.GetMsg,
 	versionEnabled bool, isLocalBucket bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tlogf("Updating objects...\n")
@@ -103,7 +104,7 @@ func propsReadObjects(t *testing.T, bucket string, filelist map[string]string) {
 	}
 }
 
-func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *dfc.GetMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *api.GetMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -169,7 +170,7 @@ func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *dfc.
 	}
 }
 
-func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, msg *dfc.GetMsg, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, msg *api.GetMsg, versionEnabled bool) {
 	tlogf("Refetching objects...\n")
 	propsReadObjects(t, bucket, objs)
 	tlogf("Checking objects properties after refetching...\n")
@@ -208,7 +209,7 @@ func propsRecacheObjects(t *testing.T, bucket string, objs map[string]string, ms
 	}
 }
 
-func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg *dfc.GetMsg, versionEnabled bool, isLocalBucket bool) {
+func propsRebalance(t *testing.T, bucket string, objects map[string]string, msg *api.GetMsg, versionEnabled bool, isLocalBucket bool) {
 	propsCleanupObjects(t, bucket, objects)
 
 	smap := getClusterMap(t)
@@ -341,9 +342,9 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	}
 
 	// Read object versions
-	msg := &dfc.GetMsg{
+	msg := &api.GetMsg{
 		GetPrefix: versionDir,
-		GetProps:  dfc.GetPropsVersion + ", " + dfc.GetPropsIsCached + ", " + dfc.GetPropsAtime,
+		GetProps:  api.GetPropsVersion + ", " + api.GetPropsIsCached + ", " + api.GetPropsAtime,
 	}
 	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {
@@ -404,29 +405,27 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 }
 
 func propsMainTest(t *testing.T, versioning string) {
-	var (
-		chkVersion    = true
-		isLocalBucket = false
-	)
-	config := getConfig(proxyurl+"/"+dfc.Rversion+"/"+dfc.Rdaemon, httpclient, t)
+	chkVersion := true
+
+	config := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	versionCfg := config["version_config"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+		setConfig("versioning", versioning, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 		}
 		if oldVersioning != versioning {
-			setConfig("versioning", oldVersioning, proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+			setConfig("versioning", oldVersioning, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 		}
 		if created {
 			if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
@@ -440,8 +439,7 @@ func propsMainTest(t *testing.T, versioning string) {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
 	versionEnabled := props.Versioning != dfc.VersionNone
-	isLocalBucket = props.CloudProvider == dfc.ProviderDfc
-
+	isLocalBucket := props.CloudProvider == api.ProviderDFC
 	propsTestCore(t, versionEnabled, isLocalBucket)
 }
 

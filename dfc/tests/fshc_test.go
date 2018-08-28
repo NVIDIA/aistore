@@ -6,12 +6,14 @@ package dfc_test
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -28,7 +30,7 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 	var err error
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
-	var newMpaths *dfc.MountpathList
+	var newMpaths *api.MountpathList
 	for detectLimit.After(time.Now()) {
 		newMpaths, err = client.TargetMountpaths(target)
 		if err != nil {
@@ -76,7 +78,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	tlogf("Recheck mountpaths\n")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
-	var mpaths *dfc.MountpathList
+	var mpaths *api.MountpathList
 	// Wait for fsckeeper detects that the mountpath is accessible now
 	for detectLimit.After(time.Now()) {
 		mpaths, err = client.TargetMountpaths(target)
@@ -179,7 +181,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	checkFatal(err, t)
 
 	mpList := make(map[string]string, 0)
-	allMps := make(map[string]*dfc.MountpathList, 0)
+	allMps := make(map[string]*api.MountpathList, 0)
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
 		tlogf("Target: %s\n", target)
@@ -201,7 +203,7 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// select random target and mountpath
 	failedTarget, failedMpath := "", ""
-	var failedMap *dfc.MountpathList
+	var failedMap *api.MountpathList
 	for m, t := range mpList {
 		failedTarget, failedMpath = t, m
 		failedMap = allMps[failedTarget]
@@ -233,7 +235,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	// Checking detection on object PUT
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, "PUT", failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
@@ -248,7 +250,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	// Checking detection on object GET
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, "GET", failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
@@ -274,11 +276,11 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// try PUT and GET with disabled FSChecker
 	tlogf("*** Testing with disabled FSHC***\n")
-	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
-	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyurl+"/"+dfc.Rversion+"/"+dfc.Rcluster, httpclient, t)
+	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, "PUT", failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
@@ -291,7 +293,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	}
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, "GET", failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
@@ -318,7 +320,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	checkFatal(err, t)
 
 	mpList := make(map[string]string, 0)
-	allMps := make(map[string]*dfc.MountpathList, 0)
+	allMps := make(map[string]*api.MountpathList, 0)
 	origAvail := 0
 	origOff := 0
 	for target, tinfo := range smap.Tmap {
