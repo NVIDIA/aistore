@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -233,7 +234,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Verify hash
-		t := r.Header.Get(dfc.HeaderDfcChecksumType)
+		t := r.Header.Get(api.HeaderDFCChecksumType)
 		if t != dfc.ChecksumXXHash {
 			errf(http.StatusBadRequest, fmt.Sprintf("Do not know how to handle hash type %s", t))
 			return
@@ -250,7 +251,7 @@ func TestMain(m *testing.M) {
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(hasher.Sum64()))
 		hash := hex.EncodeToString(b)
-		v := r.Header.Get(dfc.HeaderDfcChecksumVal)
+		v := r.Header.Get(api.HeaderDFCChecksumVal)
 		if hash != v {
 			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", v, hash))
 		}
