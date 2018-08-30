@@ -168,7 +168,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
 	if !isCloud {
-		t.Skip("TestCloudListBucketGetTargetURL test is for cloud buckets only")
+		t.Skip("TestCloudListBucketGetTargetURL requires a cloud bucket")
 	}
 
 	clusterMap, err := client.GetClusterMap(proxyurl)
@@ -548,7 +548,7 @@ func TestObjectsVersions(t *testing.T) {
 func TestRegressionCloudBuckets(t *testing.T) {
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
 	if !isCloud {
-		t.Skip("TestRegressionCloudBuckets test is for cloud buckets only")
+		t.Skip("TestRegressionCloudBuckets requires a cloud bucket")
 	}
 
 	doBucketRegressionTest(t, regressionTestData{bucket: clibucket})
@@ -784,7 +784,7 @@ func TestLRU(t *testing.T) {
 	)
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
 	if !isCloud {
-		t.Skip("TestLRU test is for cloud buckets only")
+		t.Skip("TestLRU test requires a cloud bucket")
 	}
 
 	getRandomFiles(0, 20, clibucket, "", t, nil, errch)

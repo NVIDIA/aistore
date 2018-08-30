@@ -525,7 +525,7 @@ func Test_coldgetmd5(t *testing.T) {
 
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
 	if !isCloud {
-		t.Skip("Coldgetmd5 test is for cloud buckets only")
+		t.Skip("Test_coldgetmd5 requires a cloud bucket")
 	}
 
 	ldir := LocalSrcDir + "/" + ColdValidStr
@@ -658,7 +658,7 @@ func TestHeadCloudBucket(t *testing.T) {
 	var bucketProps dfc.BucketProps
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestHeadCloudBucket requires a cloud bucket")
 	}
 
 	nextTierURL := "http://foo.com"
@@ -993,7 +993,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
 	if !isCloud {
-		t.Skip("TestRegressionCloudBuckets test is for cloud buckets only")
+		t.Skip("TestRegressionCloudBuckets test requires a cloud bucket")
 	}
 
 	if usingSG {
@@ -1568,9 +1568,9 @@ func createLocalBucketIfNotExists(t *testing.T, proxyurl, bucket string) (create
 		return false
 	}
 
-	err = client.CreateLocalBucket(proxyurl, clibucket)
+	err = client.CreateLocalBucket(proxyurl, bucket)
 	if err != nil {
-		t.Fatalf("Failed to create local bucket %s: %v", clibucket, err)
+		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
 	}
 
 	return true

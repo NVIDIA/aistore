@@ -177,7 +177,12 @@ func dfcinit() {
 		if err := checkIostatVersion(); err != nil {
 			glog.Exit(err)
 		}
-		ctx.rg.add(newIostatRunner(), xiostat)
+
+		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
+
+		iostat := newIostatRunner()
+		ctx.rg.add(iostat, xiostat)
+		t.fsprg.add(iostat)
 
 		ctx.rg.add(&atimerunner{
 			chstop:      make(chan struct{}, 4),
@@ -203,10 +208,9 @@ func dfcinit() {
 			}
 		}
 
-		ctx.rg.add(
-			newFSHealthChecker(ctx.mountpaths, &ctx.config.FSChecker, t.fqn2workfile),
-			xfshealthchecker,
-		)
+		fshc := newFSHC(ctx.mountpaths, &ctx.config.FSHC, t.fqn2workfile)
+		ctx.rg.add(fshc, xfshealthchecker)
+		t.fsprg.add(fshc)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
@@ -300,9 +304,9 @@ func getmetasyncer() *metasyncer {
 	return rr
 }
 
-func getfshealthchecker() *fsHealthChecker {
+func getfshealthchecker() *fshc {
 	r := ctx.rg.runmap[xfshealthchecker]
-	rr, ok := r.(*fsHealthChecker)
+	rr, ok := r.(*fshc)
 	assert(ok)
 	return rr
 }

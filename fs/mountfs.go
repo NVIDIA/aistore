@@ -15,7 +15,10 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/OneOfOne/xxhash"
 )
+
+const MLCG32 = 1103515245
 
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
@@ -25,20 +28,41 @@ import (
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
 // MountedFS holds all mountpaths for the target.
-type MountedFS struct {
-	mu sync.Mutex
-	// fsIDs is set in which we store fsids of mountpaths. This allows for
-	// determining if there are any duplications of file system - we allow
-	// only one mountpath per file system.
-	fsIDs map[syscall.Fsid]string
-	// checkFsID determines if we should actually check FSID when adding new
-	// mountpath. By default it is set to true.
-	checkFsID bool
-	// Available mountpaths - mountpaths which are used to store the data.
-	available unsafe.Pointer
-	// Disabled mountpaths - mountpaths which for some reason did not pass
-	// the health check and cannot be used for a moment.
-	disabled unsafe.Pointer
+type (
+	MountpathInfo struct {
+		Path       string // Cleaned OrigPath
+		OrigPath   string // As entered by the user, must be used for logging / returning errors
+		Fsid       syscall.Fsid
+		FileSystem string
+		PathDigest uint64
+	}
+
+	MountedFS struct {
+		mu sync.Mutex
+		// fsIDs is set in which we store fsids of mountpaths. This allows for
+		// determining if there are any duplications of file system - we allow
+		// only one mountpath per file system.
+		fsIDs map[syscall.Fsid]string
+		// checkFsID determines if we should actually check FSID when adding new
+		// mountpath. By default it is set to true.
+		checkFsID bool
+		// Available mountpaths - mountpaths which are used to store the data.
+		available unsafe.Pointer
+		// Disabled mountpaths - mountpaths which for some reason did not pass
+		// the health check and cannot be used for a moment.
+		disabled unsafe.Pointer
+	}
+)
+
+func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
+	cleanPath := filepath.Clean(path)
+	return &MountpathInfo{
+		Path:       cleanPath,
+		OrigPath:   path,
+		Fsid:       fsid,
+		FileSystem: fs,
+		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
+	}
 }
 
 // NewMountedFS returns initialized instance of MountedFS struct.

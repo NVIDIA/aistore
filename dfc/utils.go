@@ -208,17 +208,13 @@ func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, 
 	return ip, nil
 }
 
-func CreateDir(dirname string) (err error) {
-	if _, err := os.Stat(dirname); err != nil {
-		if os.IsNotExist(err) {
-			if err = os.MkdirAll(dirname, 0755); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
+func CreateDir(dirname string) error {
+	stat, err := os.Stat(dirname)
+	if err == nil && stat.IsDir() {
+		return nil
 	}
-	return
+	err = os.MkdirAll(dirname, 0755)
+	return err
 }
 
 func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,

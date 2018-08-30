@@ -72,7 +72,7 @@ type dfconfig struct {
 	FSpaths          simplekvs         `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	Net              netconfig         `json:"netconfig"`
-	FSChecker        fshcconf          `json:"fschecker"`
+	FSHC             fshcconf          `json:"fshc"`
 	Auth             authconf          `json:"auth"`
 	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
 }
@@ -183,9 +183,9 @@ type versionconfig struct {
 }
 
 type fshcconf struct {
-	Enabled       bool `json:"fschecker_enabled"`
-	TestFileCount int  `json:"fschecker_test_files"`  // the number of files to read and write during a test
-	ErrorLimit    int  `json:"fschecker_error_limit"` // thresholds of number of errors, exceeding any of them results in disabling a mountpath
+	Enabled       bool `json:"fshc_enabled"`
+	TestFileCount int  `json:"fshc_test_files"`  // the number of files to read and write during a test
+	ErrorLimit    int  `json:"fshc_error_limit"` // thresholds of number of errors, exceeding any of them results in disabling a mountpath
 }
 
 type authconf struct {

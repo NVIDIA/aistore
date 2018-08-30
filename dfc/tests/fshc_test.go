@@ -103,7 +103,8 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	}
 }
 
-func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail, chstop chan struct{}, sgl *iosgl.SGL) {
+func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
+	chstop chan struct{}, sgl *iosgl.SGL, bucket string) {
 	var (
 		seed     = baseseed + 300
 		filesize = uint64(64 * 1024)
@@ -139,14 +140,14 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				fillWithRandomData(seed, filesize, fileList, clibucket, t, errch, filesput, ldir, fshcDir, true, sgl)
+				fillWithRandomData(seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
 				select {
 				case <-errch:
 					// do nothing
 				default:
 				}
 			case "GET":
-				_, _, _ = client.Get(proxyurl, clibucket, fshcDir+"/"+fname, nil, nil, true, false)
+				_, _, _ = client.Get(proxyurl, bucket, fshcDir+"/"+fname, nil, nil, true, false)
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -173,9 +174,19 @@ func TestFSCheckerDetection(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	if isCloudBucket(t, proxyurl, clibucket) {
-		t.Skip("test is for local buckets only")
+	bucket := clibucket
+	if isCloudBucket(t, proxyurl, bucket) {
+		bucket = TestLocalBucketName
 	}
+	// create local bucket to write to, or use an existing one
+	if createLocalBucketIfNotExists(t, proxyurl, bucket) {
+		tlogf("created local bucket %s\n", bucket)
+	}
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, bucket)
+		checkFatal(err, t)
+	}()
 
 	smap, err := client.GetClusterMap(proxyurl)
 	checkFatal(err, t)
@@ -209,15 +220,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		failedMap = allMps[failedTarget]
 		break
 	}
-
-	// create a local bucket to write to
-	tlogf("Mpath %s of %s is going offline\n", failedMpath, failedTarget)
-	_ = createLocalBucketIfNotExists(t, proxyurl, clibucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, clibucket)
-		checkFatal(err, t)
-	}()
+	tlogf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
 	if usingSG {
 		sgl = iosgl.NewSGL(filesize)
@@ -235,7 +238,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	// Checking detection on object PUT
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl, bucket)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
@@ -250,7 +253,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	// Checking detection on object GET
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl, bucket)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, true); detected {
@@ -266,7 +269,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	{
 		tlogf("Reading non-existing objects: read must fails, but mpath must be available\n")
 		for n := 1; n < 10; n++ {
-			_, _, err = client.Get(proxyurl, clibucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
+			_, _, err = client.Get(proxyurl, bucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting non-existing objects should not disable mountpath")
@@ -280,7 +283,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl, bucket)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
@@ -293,7 +296,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	}
 	{
 		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl)
+		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl, bucket)
 		time.Sleep(time.Second * 2)
 		chfail <- struct{}{}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
@@ -312,8 +315,9 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
-	if isCloudBucket(t, proxyurl, clibucket) {
-		t.Skip("test is for local buckets only")
+	bucket := clibucket
+	if isCloudBucket(t, proxyurl, bucket) {
+		bucket = TestLocalBucketName
 	}
 
 	smap, err := client.GetClusterMap(proxyurl)

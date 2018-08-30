@@ -28,7 +28,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -312,7 +311,7 @@ func (h *httprunner) initSI() {
 
 	daemonID := os.Getenv("DFCDAEMONID")
 	if daemonID == "" {
-		cs := xxhash.ChecksumString32S(publicAddr.String(), constants.MLCG32)
+		cs := xxhash.ChecksumString32S(publicAddr.String(), MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if testingFSPpaths() {
 			daemonID += ":" + ctx.config.Net.L4.PortStr
@@ -845,7 +844,7 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse fschecker_enabled, err: %v", err)
 		} else {
-			ctx.config.FSChecker.Enabled = v
+			ctx.config.FSHC.Enabled = v
 		}
 	default:
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)

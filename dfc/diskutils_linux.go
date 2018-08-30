@@ -41,6 +41,12 @@ type BlockDevice struct {
 	BlockDevices []BlockDevice `json:"children"`
 }
 
+// as an fsprunner
+func (r *iostatrunner) reqEnableMountpath(mpath string)  { r.updateFSDisks() }
+func (r *iostatrunner) reqDisableMountpath(mpath string) { r.updateFSDisks() }
+func (r *iostatrunner) reqAddMountpath(mpath string)     { r.updateFSDisks() }
+func (r *iostatrunner) reqRemoveMountpath(mpath string)  { r.updateFSDisks() }
+
 // iostat -cdxtm 10
 func (r *iostatrunner) run() error {
 	r.updateFSDisks()

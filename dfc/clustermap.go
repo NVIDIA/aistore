@@ -16,7 +16,6 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
@@ -78,7 +77,7 @@ func newDaemonInfo(id, proto string, publicAddr, internalAddr *net.TCPAddr) *dae
 		DaemonID:    id,
 		PublicNet:   publicNet,
 		InternalNet: internalNet,
-		idDigest:    xxhash.ChecksumString64S(id, constants.MLCG32),
+		idDigest:    xxhash.ChecksumString64S(id, MLCG32),
 	}
 }
 
@@ -96,12 +95,12 @@ func (a *daemonInfo) Equals(b *daemonInfo) bool {
 func (r *smapowner) put(smap *Smap) {
 	for _, sinfo := range smap.Tmap {
 		if sinfo.idDigest == 0 {
-			sinfo.idDigest = xxhash.ChecksumString64S(sinfo.DaemonID, constants.MLCG32)
+			sinfo.idDigest = xxhash.ChecksumString64S(sinfo.DaemonID, MLCG32)
 		}
 	}
 	for _, sinfo := range smap.Pmap {
 		if sinfo.idDigest == 0 {
-			sinfo.idDigest = xxhash.ChecksumString64S(sinfo.DaemonID, constants.MLCG32)
+			sinfo.idDigest = xxhash.ChecksumString64S(sinfo.DaemonID, MLCG32)
 		}
 	}
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))

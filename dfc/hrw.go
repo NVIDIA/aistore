@@ -8,10 +8,11 @@ package dfc
 import (
 	"fmt"
 
-	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
+
+const MLCG32 = 1103515245
 
 // A variant of consistent hash based on rendezvous algorithm by Thaler and Ravishankar,
 // aka highest random weight (HRW)
@@ -25,7 +26,7 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *daemonInfo, errstr strin
 		return
 	}
 	name := uniquename(bucket, objname)
-	digest := xxhash.ChecksumString64S(name, constants.MLCG32)
+	digest := xxhash.ChecksumString64S(name, MLCG32)
 	var max uint64
 	for _, sinfo := range smap.Tmap {
 		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
@@ -69,7 +70,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *daemonInfo, errstr string) {
 func hrwMpath(bucket, objname string) (mpath string) {
 	var max uint64
 	name := uniquename(bucket, objname)
-	digest := xxhash.ChecksumString64S(name, constants.MLCG32)
+	digest := xxhash.ChecksumString64S(name, MLCG32)
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)

@@ -44,49 +44,51 @@ const (
 	maxBytesInMem    = 256 * KiB
 )
 
-type allfinfos struct {
-	files        []*api.BucketEntry
-	fileCount    int
-	rootLength   int
-	prefix       string
-	marker       string
-	markerDir    string
-	needAtime    bool
-	needCtime    bool
-	needChkSum   bool
-	needVersion  bool
-	msg          *api.GetMsg
-	lastFilePath string
-	t            *targetrunner
-	bucket       string
-	limit        int
-}
+type (
+	allfinfos struct {
+		t            *targetrunner
+		files        []*api.BucketEntry
+		prefix       string
+		marker       string
+		markerDir    string
+		msg          *api.GetMsg
+		lastFilePath string
+		bucket       string
+		fileCount    int
+		rootLength   int
+		limit        int
+		needAtime    bool
+		needCtime    bool
+		needChkSum   bool
+		needVersion  bool
+	}
 
-type uxprocess struct {
-	starttime time.Time
-	spid      string
-	pid       int64
-}
+	uxprocess struct {
+		starttime time.Time
+		spid      string
+		pid       int64
+	}
 
-type thealthstatus struct {
-	IsRebalancing bool `json:"is_rebalancing"`
-	// NOTE: include core stats and other info as needed
-}
+	thealthstatus struct {
+		IsRebalancing bool `json:"is_rebalancing"`
+		// NOTE: include core stats and other info as needed
+	}
 
-type renamectx struct {
-	bucketFrom string
-	bucketTo   string
-	t          *targetrunner
-}
+	renamectx struct {
+		bucketFrom string
+		bucketTo   string
+		t          *targetrunner
+	}
 
-type targetState struct {
-	sync.Mutex
-	disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
-}
+	regstate struct {
+		sync.Mutex
+		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
+	}
 
-type MountpathDispatcher interface {
-	DisableMountpath(path string, why string) (disabled, exists bool)
-}
+	fspathDispatcher interface {
+		DisableMountpath(path string, why string) (disabled, exists bool)
+	}
+)
 
 //===========================================================================
 //
@@ -101,7 +103,8 @@ type targetrunner struct {
 	prefetchQueue  chan filesWithDeadline
 	authn          *authManager
 	clusterStarted int64
-	state          targetState
+	regstate       regstate // registration state - the state of being registered (with the proxy) or maybe not
+	fsprg          fsprungroup
 }
 
 // start target runner
@@ -1665,21 +1668,21 @@ func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
-	ci := &allfinfos{make([]*api.BucketEntry, 0, api.DefaultPageSize),
-		0,                 // fileCount
-		0,                 // rootLength
-		msg.GetPrefix,     // prefix
-		msg.GetPageMarker, // marker
-		markerDir,         // markerDir
+	ci := &allfinfos{t, // targetrunner
+		make([]*api.BucketEntry, 0, api.DefaultPageSize),     // ls
+		msg.GetPrefix,                                        // prefix
+		msg.GetPageMarker,                                    // marker
+		markerDir,                                            // markerDir
+		msg,                                                  // GetMsg
+		"",                                                   // lastFilePath - next page marker
+		bucket,                                               // bucket
+		0,                                                    // fileCount
+		0,                                                    // rootLength
+		api.DefaultPageSize,                                  // limit - maximun number of objects to return
 		strings.Contains(msg.GetProps, api.GetPropsAtime),    // needAtime
 		strings.Contains(msg.GetProps, api.GetPropsCtime),    // needCtime
 		strings.Contains(msg.GetProps, api.GetPropsChecksum), // needChkSum
 		strings.Contains(msg.GetProps, api.GetPropsVersion),  // needVersion
-		msg,                 // GetMsg
-		"",                  // lastFilePath - next page marker
-		t,                   // targetrunner
-		bucket,              // bucket
-		api.DefaultPageSize, // limit - maximun number of objects to return
 	}
 
 	if msg.GetPageSize != 0 {
@@ -3048,10 +3051,9 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 	return
 }
 
-// fshc wakes up FSHC and makes it to run filesystem check
-// immediately if err != nil
+// fshc wakes up FSHC and makes it to run filesystem check immediately if err != nil
 func (t *targetrunner) fshc(err error, filepath string) {
-	glog.Errorf("FSHealthChecker called with error: %#v, file: %s", err, filepath)
+	glog.Errorf("FSHC called with error: %#v, file: %s", err, filepath)
 
 	if !isIOError(err) {
 		return
@@ -3062,7 +3064,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 		// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 		t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
 	}
-	if ctx.config.FSChecker.Enabled {
+	if ctx.config.FSHC.Enabled {
 		getfshealthchecker().onerr(filepath)
 	}
 }
@@ -3162,7 +3164,7 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 }
 
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := enableMountpath(mountpath)
+	enabled, exists := t.fsprg.enableMountpath(mountpath)
 	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -3175,7 +3177,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	enabled, exists := disableMountpath(mountpath)
+	enabled, exists := t.fsprg.disableMountpath(mountpath)
 	if !enabled && exists {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -3188,7 +3190,7 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := addMountpath(mountpath)
+	err := t.fsprg.addMountpath(mountpath)
 	if err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
 		return
@@ -3196,7 +3198,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
-	err := removeMountpath(mountpath)
+	err := t.fsprg.removeMountpath(mountpath)
 	if err != nil {
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
 		return
@@ -3436,10 +3438,10 @@ func (t *targetrunner) disable() error {
 		eunreg error
 	)
 
-	t.state.Lock()
-	defer t.state.Unlock()
+	t.regstate.Lock()
+	defer t.regstate.Unlock()
 
-	if t.state.disabled {
+	if t.regstate.disabled {
 		return nil
 	}
 
@@ -3463,7 +3465,7 @@ func (t *targetrunner) disable() error {
 		return eunreg
 	}
 
-	t.state.disabled = true
+	t.regstate.disabled = true
 	glog.Info("Target has been disabled")
 	return nil
 }
@@ -3475,10 +3477,10 @@ func (t *targetrunner) enable() error {
 		ereg   error
 	)
 
-	t.state.Lock()
-	defer t.state.Unlock()
+	t.regstate.Lock()
+	defer t.regstate.Unlock()
 
-	if !t.state.disabled {
+	if !t.regstate.disabled {
 		return nil
 	}
 
@@ -3502,14 +3504,14 @@ func (t *targetrunner) enable() error {
 		return ereg
 	}
 
-	t.state.disabled = false
+	t.regstate.disabled = false
 	glog.Info("Target has been enabled")
 	return nil
 }
 
-// DisableMountpath implements MountpathDispatcher interface
+// DisableMountpath implements fspathDispatcher interface
 func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled, exists bool) {
-	// TODO: notify an admin that the mountpath is gone
+	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
-	return disableMountpath(mountpath)
+	return t.fsprg.disableMountpath(mountpath)
 }

@@ -24,43 +24,89 @@ const (
 	fshcMaxFileList  = 100              // maximum number of files to read by Readdir
 )
 
-// fsHealthChecker is a basic mountpath health monitor.
+const (
+	fshcReqAddMountpath    = "fshc_addmountpath"
+	fshcReqRemoveMountpath = "fshc_removemountpath"
+)
+
+// fshc is a basic mountpath health monitor.
 // When an IO error is triggered, it runs a few tests to make sure that the
 // failed mountpath is healthy. Once the mountpath is considered faulty the
 // mountpath is disabled and removed from the list of mountpaths utilized by DFC
 //
 // for mountpath definition, see fs/mountfs.go
-type fsHealthChecker struct {
-	namedrunner
-	controlCh     chan struct{}
-	fileListCh    chan string
-	requestCh     chan fshcRequest
-	mpathCheckers map[string]*mountpathChecker
+type (
+	fshc struct {
+		namedrunner
+		controlCh     chan struct{}
+		fileListCh    chan string
+		reqCh         chan fshcReq
+		mpathCheckers map[string]*mountpathChecker
 
-	// pointers to common data
-	config         *fshcconf
-	mountpaths     *fs.MountedFS
-	fnMakeTempName func(string) string
+		// pointers to common data
+		config         *fshcconf
+		mountpaths     *fs.MountedFS
+		fnMakeTempName func(string) string
 
-	// listener is notified in case of a mountpath is disabled
-	dispatcher MountpathDispatcher
-}
+		// listener is notified in case of a mountpath is disabled
+		dispatcher fspathDispatcher
+	}
 
-type mountpathChecker struct {
-	controlCh chan struct{}
-	fileCh    chan string
-	mpath     string
-}
+	mountpathChecker struct {
+		controlCh chan struct{}
+		fileCh    chan string
+		mpath     string
+	}
 
-type fshcRequest struct {
-	ty   string
-	body interface{}
-}
-
-const (
-	fshcRequestAddMountpath    = "fshc_addmountpath"
-	fshcRequestRemoveMountpath = "fshc_removemountpath"
+	fshcReq struct {
+		ty   string
+		body string
+	}
 )
+
+// as an fsprunner
+func (f *fshc) reqEnableMountpath(mpath string) {}
+
+func (f *fshc) reqDisableMountpath(mpath string) {}
+
+func (f *fshc) reqAddMountpath(mpath string) {
+	f.reqCh <- fshcReq{ty: fshcReqAddMountpath, body: mpath}
+}
+func (f *fshc) reqRemoveMountpath(mpath string) {
+	f.reqCh <- fshcReq{ty: fshcReqRemoveMountpath, body: mpath}
+}
+
+// as a runner
+func (f *fshc) run() error {
+	glog.Infof("Starting %s", f.name)
+	f.init()
+
+	for {
+		select {
+		case filepath := <-f.fileListCh:
+			f.checkFile(filepath)
+		case request := <-f.reqCh:
+			switch request.ty {
+			case fshcReqAddMountpath:
+				f.addMountpath(request.body)
+			case fshcReqRemoveMountpath:
+				f.removeMountpath(request.body)
+			}
+		case <-f.controlCh:
+			return nil
+		}
+	}
+}
+
+func (f *fshc) stop(err error) {
+	glog.Infof("Stopping %s, err: %v", f.name, err)
+	for _, r := range f.mpathCheckers {
+		r.controlCh <- struct{}{}
+	}
+
+	f.controlCh <- struct{}{}
+	close(f.controlCh)
+}
 
 // gets a base directory and looks for a random file inside it.
 // Returns an error if any directory cannot be read
@@ -109,24 +155,23 @@ func newMountpathChecker(mpath string) *mountpathChecker {
 	}
 }
 
-func newFSHealthChecker(mounts *fs.MountedFS, conf *fshcconf,
-	f func(string) string) *fsHealthChecker {
-	return &fsHealthChecker{
+func newFSHC(mounts *fs.MountedFS, conf *fshcconf, f func(string) string) *fshc {
+	return &fshc{
 		mountpaths:     mounts,
 		fnMakeTempName: f,
 		config:         conf,
 		controlCh:      make(chan struct{}, 4),
 		fileListCh:     make(chan string, 32),
-		requestCh:      make(chan fshcRequest),
+		reqCh:          make(chan fshcReq),
 		mpathCheckers:  make(map[string]*mountpathChecker),
 	}
 }
 
-func (f *fsHealthChecker) SetDispatcher(dispatcher MountpathDispatcher) {
+func (f *fshc) SetDispatcher(dispatcher fspathDispatcher) {
 	f.dispatcher = dispatcher
 }
 
-func (f *fsHealthChecker) runMountpathChecker(r *mountpathChecker) {
+func (f *fshc) runMountpathChecker(r *mountpathChecker) {
 	for {
 		select {
 		case filename := <-r.fileCh:
@@ -137,7 +182,7 @@ func (f *fsHealthChecker) runMountpathChecker(r *mountpathChecker) {
 	}
 }
 
-func (f *fsHealthChecker) init() {
+func (f *fshc) init() {
 	availablePaths, disabledPaths := f.mountpaths.Mountpaths()
 	for mpath := range availablePaths {
 		f.addMountpath(mpath)
@@ -148,7 +193,7 @@ func (f *fsHealthChecker) init() {
 	}
 }
 
-func (f *fsHealthChecker) onerr(fqn string) {
+func (f *fshc) onerr(fqn string) {
 	if !f.config.Enabled {
 		return
 	}
@@ -156,62 +201,7 @@ func (f *fsHealthChecker) onerr(fqn string) {
 	f.fileListCh <- fqn
 }
 
-func (f *fsHealthChecker) run() error {
-	glog.Infof("Starting %s", f.name)
-	f.init()
-
-	for {
-		select {
-		case filepath := <-f.fileListCh:
-			f.checkFile(filepath)
-		case request := <-f.requestCh:
-			switch request.ty {
-			case fshcRequestAddMountpath:
-				mpath, ok := request.body.(string)
-				if !ok {
-					glog.Errorf("invalid request passed to fsHealthChecker: %v", request)
-					break
-				}
-				f.addMountpath(mpath)
-			case fshcRequestRemoveMountpath:
-				mpath, ok := request.body.(string)
-				if !ok {
-					glog.Errorf("invalid request passed to fsHealthChecker: %v", request)
-					break
-				}
-				f.removeMountpath(mpath)
-			}
-		case <-f.controlCh:
-			return nil
-		}
-	}
-}
-
-func (f *fsHealthChecker) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", f.name, err)
-	for _, r := range f.mpathCheckers {
-		r.controlCh <- struct{}{}
-	}
-
-	f.controlCh <- struct{}{}
-	close(f.controlCh)
-}
-
-func (f *fsHealthChecker) RequestAddMountpath(mpath string) {
-	f.requestCh <- fshcRequest{
-		ty:   fshcRequestAddMountpath,
-		body: mpath,
-	}
-}
-
-func (f *fsHealthChecker) RequestRemoveMountpath(mpath string) {
-	f.requestCh <- fshcRequest{
-		ty:   fshcRequestRemoveMountpath,
-		body: mpath,
-	}
-}
-
-func (f *fsHealthChecker) removeMountpath(mpath string) {
+func (f *fshc) removeMountpath(mpath string) {
 	mpathChecker, ok := f.mpathCheckers[mpath]
 	if !ok {
 		glog.Error("wanted to remove mountpath which was not registered")
@@ -222,13 +212,13 @@ func (f *fsHealthChecker) removeMountpath(mpath string) {
 	mpathChecker.controlCh <- struct{}{} // stop mpathChecker
 }
 
-func (f *fsHealthChecker) addMountpath(mpath string) {
+func (f *fshc) addMountpath(mpath string) {
 	mpathChecker := newMountpathChecker(mpath)
 	f.mpathCheckers[mpath] = mpathChecker
 	go f.runMountpathChecker(mpathChecker)
 }
 
-func (f *fsHealthChecker) isTestPassed(mpath string, readErrors,
+func (f *fshc) isTestPassed(mpath string, readErrors,
 	writeErrors int, available bool) (passed bool, whyFailed string) {
 	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
@@ -246,9 +236,8 @@ func (f *fsHealthChecker) isTestPassed(mpath string, readErrors,
 	return passed, whyFailed
 }
 
-func (f *fsHealthChecker) runMpathTest(mpath, filepath string) {
-	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath,
-		f.config.TestFileCount, fshcFileSize)
+func (f *fshc) runMpathTest(mpath, filepath string) {
+	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath, f.config.TestFileCount, fshcFileSize)
 
 	if passed, why := f.isTestPassed(mpath, readErrs, writeErrs, exists); !passed {
 		glog.Errorf("Disabling mountpath %s...", mpath)
@@ -262,7 +251,7 @@ func (f *fsHealthChecker) runMpathTest(mpath, filepath string) {
 	}
 }
 
-func (f *fsHealthChecker) checkFile(filepath string) {
+func (f *fshc) checkFile(filepath string) {
 	mpath := fqn2mountPath(filepath)
 	if mpath == "" {
 		glog.Errorf("Failed to get mountpath for file %s", filepath)
@@ -284,7 +273,7 @@ func (f *fsHealthChecker) checkFile(filepath string) {
 }
 
 // reads the entire file content
-func (f *fsHealthChecker) tryReadFile(fqn string, sgl *iosgl.SGL) error {
+func (f *fshc) tryReadFile(fqn string, sgl *iosgl.SGL) error {
 	stat, err := os.Stat(fqn)
 	if err != nil {
 		return err
@@ -308,7 +297,7 @@ func (f *fsHealthChecker) tryReadFile(fqn string, sgl *iosgl.SGL) error {
 }
 
 // creates a random file in a random directory inside a mountpath
-func (f *fsHealthChecker) tryWriteFile(mountpath string, fileSize int, sgl *iosgl.SGL) error {
+func (f *fshc) tryWriteFile(mountpath string, fileSize int, sgl *iosgl.SGL) error {
 	tmpdir, err := ioutil.TempDir(mountpath, fshcNameTemplate)
 	if err != nil {
 		glog.Errorf("Failed to create temporary directory: %v", err)
@@ -363,7 +352,7 @@ func (f *fsHealthChecker) tryWriteFile(mountpath string, fileSize int, sgl *iosg
 // The function returns the number of read/write errors, and if the mountpath
 //   is accessible. When the specified local directory is inaccessible the
 //   function returns immediately without any read/write operations
-func (f *fsHealthChecker) testMountpath(filepath, mountpath string,
+func (f *fshc) testMountpath(filepath, mountpath string,
 	maxTestFiles, fileSize int) (readFails, writeFails int, accessible bool) {
 	if glog.V(4) {
 		glog.Infof("Testing mountpath %s", mountpath)

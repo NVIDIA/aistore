@@ -26,7 +26,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestGetObjectInNextTier requires a cloud bucket")
 	}
 
 	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +92,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestGetObjectInNextTierErrorOnGet requires a cloud bucket")
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +146,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestGetObjectNotInNextTier requires a cloud bucket")
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +200,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestPutObjectNextTierPolicy requires a cloud bucket")
 	}
 
 	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +292,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestPutObjectNextTierPolicyErrorOnPut requires a cloud bucket")
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +339,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyurl, clibucket) {
-		t.Skipf("skipping test - bucket: %s is not a cloud bucket", clibucket)
+		t.Skip("TestPutObjectCloudPolicy requires a cloud bucket")
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

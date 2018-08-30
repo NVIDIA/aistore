@@ -67,7 +67,7 @@ func testCheckerCleanup() {
 }
 
 func TestFSCheckerMain(t *testing.T) {
-	fshc := newFSHealthChecker(testCheckerMountPaths(), testCheckerConfig(), testTmpFileName)
+	fshc := newFSHC(testCheckerMountPaths(), testCheckerConfig(), testTmpFileName)
 
 	if fshc == nil {
 		t.Error("Failed to create fshc")

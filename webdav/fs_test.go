@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -138,7 +138,7 @@ func TestName(t *testing.T) {
 }
 
 func TestGroup(t *testing.T) {
-	act := groupBucketEntries("", []*dfc.BucketEntry{
+	act := groupBucketEntries("", []*api.BucketEntry{
 		{Name: "dir/file1", Size: 16},
 	})
 
@@ -146,7 +146,7 @@ func TestGroup(t *testing.T) {
 		&fileInfo{name: "dir", size: 0, mode: defaultDirMode},
 	})
 
-	act = groupBucketEntries("", []*dfc.BucketEntry{
+	act = groupBucketEntries("", []*api.BucketEntry{
 		{Name: "dir/file1", Size: 16},
 		{Name: "dir/file2", Size: 160},
 		{Name: "dir/file1", Size: 16},
@@ -156,7 +156,7 @@ func TestGroup(t *testing.T) {
 		&fileInfo{name: "dir", size: 0, mode: defaultDirMode},
 	})
 
-	act = groupBucketEntries("", []*dfc.BucketEntry{
+	act = groupBucketEntries("", []*api.BucketEntry{
 		{Name: "dir/file1", Size: 16},
 		{Name: "dir/file2", Size: 160},
 		{Name: "file1", Size: 164},
@@ -167,7 +167,7 @@ func TestGroup(t *testing.T) {
 		&fileInfo{name: "file1", size: 164, mode: defaultFileMode},
 	})
 
-	act = groupBucketEntries("", []*dfc.BucketEntry{
+	act = groupBucketEntries("", []*api.BucketEntry{
 		{Name: "dir/file1", Size: 16},
 		{Name: "file1", Size: 164},
 		{Name: "dir/file2", Size: 160},
@@ -178,7 +178,7 @@ func TestGroup(t *testing.T) {
 		&fileInfo{name: "file1", size: 164, mode: defaultFileMode},
 	})
 
-	act = groupBucketEntries("", []*dfc.BucketEntry{
+	act = groupBucketEntries("", []*api.BucketEntry{
 		{Name: "file1", Size: 164},
 		{Name: "dir/file1", Size: 16},
 		{Name: "dir/file2", Size: 160},
@@ -189,7 +189,7 @@ func TestGroup(t *testing.T) {
 		&fileInfo{name: "file1", size: 164, mode: defaultFileMode},
 	})
 
-	act = groupBucketEntries("", []*dfc.BucketEntry{
+	act = groupBucketEntries("", []*api.BucketEntry{
 		{Name: "file1", Size: 164},
 		{Name: "dir/dir2/file1", Size: 16},
 		{Name: "dir/file2", Size: 160},
@@ -200,7 +200,7 @@ func TestGroup(t *testing.T) {
 		&fileInfo{name: "file1", size: 164, mode: defaultFileMode},
 	})
 
-	act = groupBucketEntries("loader", []*dfc.BucketEntry{
+	act = groupBucketEntries("loader", []*api.BucketEntry{
 		{Name: "loader/file1", Size: 164},
 		{Name: "loader/dir/dir2/file1", Size: 16},
 		{Name: "loader/dir/file2", Size: 160},
@@ -212,7 +212,7 @@ func TestGroup(t *testing.T) {
 	})
 }
 
-func groupBucketEntries(prefix string, entries []*dfc.BucketEntry) []os.FileInfo {
+func groupBucketEntries(prefix string, entries []*api.BucketEntry) []os.FileInfo {
 	act := group(entries, prefix)
 	return act
 }

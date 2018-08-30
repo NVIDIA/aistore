@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/constants"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -1302,7 +1301,7 @@ func hrwProxyTest(smap *dfc.Smap, idToSkip string) (pi string, errstr string) {
 			skipped++
 			continue
 		}
-		cs := xxhash.ChecksumString64S(sinfo.DaemonID, constants.MLCG32)
+		cs := xxhash.ChecksumString64S(sinfo.DaemonID, dfc.MLCG32)
 		if cs > max {
 			max = cs
 			pi = id

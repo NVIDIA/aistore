@@ -79,10 +79,10 @@ cat > $CONFFILE <<EOL
 			"use_https":		${USE_HTTPS}
 		}
 	},
-	"fschecker": {
-		"fschecker_enabled":      true,
-		"fschecker_test_files":   4,
-		"fschecker_error_limit":  2
+	"fshc": {
+		"fshc_enabled":		true,
+		"fshc_test_files":	4,
+		"fshc_error_limit":	2
 	},
 	"auth": {
 		"secret": "$SECRETKEY",
