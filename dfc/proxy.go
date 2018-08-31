@@ -1590,22 +1590,110 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *proxyrunner) smapFromURL(baseURL string) (smap *Smap, errstr string) {
+	query := url.Values{}
+	query.Add(api.URLParamWhat, api.GetWhatSmap)
+	req := reqArgs{
+		method: http.MethodGet,
+		base:   baseURL,
+		path:   api.URLPath(api.Version, api.Daemon),
+		query:  query,
+	}
+	args := callArgs{req: req, timeout: defaultTimeout}
+	res := p.call(args)
+	if res.err != nil {
+		return nil, fmt.Sprintf("Failed to get smap from %s: %v", baseURL, res.err)
+	}
+	smap = &Smap{}
+	if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
+		return nil, fmt.Sprintf("Failed to unmarshal smap: %v", err)
+	}
+	if !smap.isValid() {
+		return nil, fmt.Sprintf("Invalid Smap from %s: %s", baseURL, smap.pp())
+	}
+
+	return smap, ""
+}
+
+// forceful primary change - is used when the original primary network is down
+// for a while and the remained nodes selected a new primary. After the
+// original primary is back it does not attach automatically to the new primary
+// and the cluster gets into split-brain mode. This request makes original
+// primary connect to the new primary
+func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxyID string) {
+	newPrimaryURL := r.URL.Query().Get(api.URLParamPrimaryCandidate)
+	glog.Infof("Force new primary %s (URL: %s)", proxyID, newPrimaryURL)
+
+	if p.si.DaemonID == proxyID {
+		glog.Warningf("Proxy %s(self) is already the primary", proxyID)
+		return
+	}
+
+	smap := p.smapowner.get()
+	psi := smap.getProxy(proxyID)
+
+	if psi == nil && newPrimaryURL == "" {
+		s := fmt.Sprintf("Failed to find new primary %s in local smap: %s",
+			proxyID, smap.pp())
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	if newPrimaryURL == "" {
+		newPrimaryURL = psi.PublicNet.DirectURL
+	}
+
+	if newPrimaryURL == "" {
+		s := fmt.Sprintf("Failed to get new primary %s direct URL", proxyID)
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	newSmap, errstr := p.smapFromURL(newPrimaryURL)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	if proxyID != newSmap.ProxySI.DaemonID {
+		s := fmt.Sprintf("Proxy %s is not a primary. Current smap: %s", proxyID, newSmap.pp())
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	// notify metasync to cancel all pending sync requests
+	p.metasyncer.becomeNonPrimary()
+	p.smapowner.put(newSmap)
+	res := p.registerToURL(newSmap.ProxySI.PublicNet.DirectURL, newSmap.ProxySI, defaultTimeout, true, nil, false)
+	if res.err != nil {
+		p.invalmsghdlr(w, r, res.err.Error())
+		return
+	}
+}
+
 func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request) {
 	var (
 		prepare bool
 		err     error
 	)
+
 	apitems := p.restAPIItems(r.URL.Path, 5)
 	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Daemon); apitems == nil {
 		return
 	}
-	if p.smapowner.get().isPrimary(p.si) {
-		s := fmt.Sprint("Expecting 'cluster' (RESTful) resource when designating primary proxy via API")
-		p.invalmsghdlr(w, r, s)
+
+	proxyID := apitems[1]
+	force, _ := parsebool(r.URL.Query().Get(api.URLParamForce))
+	// forceful primary change
+	if force && apitems[0] == api.Proxy {
+		if !p.smapowner.get().isPrimary(p.si) {
+			s := fmt.Sprintf("Proxy %s is not a primary", p.si.DaemonID)
+			p.invalmsghdlr(w, r, s)
+		}
+		p.forcefulJoin(w, r, proxyID)
 		return
 	}
 
-	proxyid := apitems[1]
 	query := r.URL.Query()
 	preparestr := query.Get(api.URLParamPrepare)
 	if prepare, err = strconv.ParseBool(preparestr); err != nil {
@@ -1614,7 +1702,13 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if p.si.DaemonID == proxyid {
+	if p.smapowner.get().isPrimary(p.si) {
+		s := fmt.Sprint("Expecting 'cluster' (RESTful) resource when designating primary proxy via API")
+		p.invalmsghdlr(w, r, s)
+		return
+	}
+
+	if p.si.DaemonID == proxyID {
 		if !prepare {
 			if s := p.becomeNewPrimary(""); s != "" {
 				p.invalmsghdlr(w, r, s)
@@ -1624,9 +1718,10 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	smap := p.smapowner.get()
-	psi := smap.getProxy(proxyid)
+	psi := smap.getProxy(proxyID)
+
 	if psi == nil {
-		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
+		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyID, smap.pp())
 		p.invalmsghdlr(w, r, s)
 		return
 	}

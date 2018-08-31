@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -49,6 +50,7 @@ var (
 		{"MajorityTargetMapVersionMismatch", majorityTargetMapVersionMismatch},
 		{"ConcurrentPutGetDel", concurrentPutGetDel},
 		{"ProxyStress", proxyStress},
+		{"NetworkFailure", networkFailure},
 	}
 )
 
@@ -1311,4 +1313,160 @@ func hrwProxyTest(smap *dfc.Smap, idToSkip string) (pi string, errstr string) {
 		errstr = fmt.Sprintf("Cannot HRW-select proxy: current count=%d, skipped=%d", len(smap.Pmap), skipped)
 	}
 	return
+}
+
+func networkFailureTarget(t *testing.T) {
+	smap := getClusterMap(t)
+	if len(smap.Tmap) == 0 {
+		t.Fatal("At least 1 target required")
+	}
+	proxyCount, targetCount := len(smap.Pmap), len(smap.Tmap)
+
+	targetID := ""
+	for id := range smap.Tmap {
+		targetID = id
+		break
+	}
+
+	tlogf("Disconnecting target: %s\n", targetID)
+	oldNetworks, err := util.DisconnectContainer(targetID)
+	checkFatal(err, t)
+
+	smap, err = waitForPrimaryProxy(
+		"target is down",
+		smap.Version, testing.Verbose(),
+		proxyCount,
+		targetCount-1,
+	)
+	checkFatal(err, t)
+
+	tlogf("Connecting target %s to networks again\n", targetID)
+	err = util.ConnectContainer(targetID, oldNetworks)
+	checkFatal(err, t)
+
+	smap, err = waitForPrimaryProxy(
+		"to check cluster state",
+		smap.Version, testing.Verbose(),
+		proxyCount,
+		targetCount,
+	)
+	checkFatal(err, t)
+}
+
+func networkFailureProxy(t *testing.T) {
+	smap := getClusterMap(t)
+	if len(smap.Pmap) < 2 {
+		t.Fatal("At least 2 proxy required")
+	}
+	proxyCount, targetCount := len(smap.Pmap), len(smap.Tmap)
+
+	oldPrimaryID := smap.ProxySI.DaemonID
+	proxyID, _, err := chooseNextProxy(&smap)
+	checkFatal(err, t)
+
+	tlogf("Disconnecting proxy: %s\n", proxyID)
+	oldNetworks, err := util.DisconnectContainer(proxyID)
+	checkFatal(err, t)
+
+	smap, err = waitForPrimaryProxy(
+		"proxy is down",
+		smap.Version, testing.Verbose(),
+		proxyCount-1,
+		targetCount,
+	)
+	checkFatal(err, t)
+
+	tlogf("Connecting proxy %s to networks again\n", proxyID)
+	err = util.ConnectContainer(proxyID, oldNetworks)
+	checkFatal(err, t)
+
+	smap, err = waitForPrimaryProxy(
+		"to check cluster state",
+		smap.Version, testing.Verbose(),
+		proxyCount,
+		targetCount,
+	)
+	checkFatal(err, t)
+
+	if oldPrimaryID != smap.ProxySI.DaemonID {
+		t.Fatalf("Primary proxy changed from %s to %s",
+			oldPrimaryID, smap.ProxySI.DaemonID)
+	}
+}
+
+func networkFailurePrimary(t *testing.T) {
+	smap := getClusterMap(t)
+	if len(smap.Pmap) < 2 {
+		t.Fatal("At least 2 proxy required")
+	}
+
+	proxyCount, targetCount := len(smap.Pmap), len(smap.Tmap)
+	oldPrimaryID, oldPrimaryURL := smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DirectURL
+	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
+
+	// Disconnect primary
+	tlogf("Disconnecting primary %s from all networks\n", oldPrimaryID)
+	oldNetworks, err := util.DisconnectContainer(oldPrimaryID)
+	checkFatal(err, t)
+
+	// Check smap
+	proxyurl = newPrimaryURL
+	smap, err = waitForPrimaryProxy(
+		"original primary is gone",
+		smap.Version, testing.Verbose(),
+		proxyCount-1,
+		targetCount,
+	)
+	checkFatal(err, t)
+
+	if smap.ProxySI.DaemonID != newPrimaryID {
+		t.Fatalf("wrong primary proxy: %s, expecting: %s after disconnecting", smap.ProxySI.DaemonID, newPrimaryID)
+	}
+
+	// Connect again
+	tlogf("Connecting primary %s to networks again\n", oldPrimaryID)
+	err = util.ConnectContainer(oldPrimaryID, oldNetworks)
+	checkFatal(err, t)
+
+	// give a little time to original primary, so it picks up the network
+	// connections and starts talking to neighbors
+	waitProgressBar("Wait for old primary is connected to network", 5*time.Second)
+
+	oldSmap, err := client.GetClusterMap(oldPrimaryURL)
+	checkFatal(err, t)
+
+	// the original primary still thinks that it is the primary, so its smap
+	// should not change after the network is back
+	if oldSmap.ProxySI.DaemonID != oldPrimaryID {
+		tlogf("Old primary changed its smap. Its current primary: %s (expected %s - self)\n", oldSmap.ProxySI.DaemonID, oldPrimaryID)
+	}
+
+	// Forcefully set new primary for the original one
+	purl := oldPrimaryURL + api.URLPath(api.Version, api.Daemon, api.Proxy, newPrimaryID) +
+		fmt.Sprintf("?%s=true&%s=%s", api.URLParamForce, api.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
+
+	err = client.HTTPRequest(http.MethodPut, purl, nil)
+	checkFatal(err, t)
+
+	smap, err = waitForPrimaryProxy(
+		"original primary joined the new primary",
+		smap.Version, testing.Verbose(),
+		proxyCount,
+		targetCount,
+	)
+	checkFatal(err, t)
+
+	if smap.ProxySI.DaemonID != newPrimaryID {
+		t.Fatalf("expected primary=%s, got %s after connecting again", newPrimaryID, smap.ProxySI.DaemonID)
+	}
+}
+
+func networkFailure(t *testing.T) {
+	if !util.DockerRunning() {
+		t.Skip("Network failure test requires Docker cluster")
+	}
+
+	t.Run("Target network disconnect", networkFailureTarget)
+	t.Run("Secondary proxy network disconnect", networkFailureProxy)
+	t.Run("Primary proxy network disconnect", networkFailurePrimary)
 }

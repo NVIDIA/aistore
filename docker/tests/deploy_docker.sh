@@ -20,6 +20,7 @@ USE_FS=0
 FS_LIST=""
 TESTFS_CNT=0
 network="single"
+LOCAL_AWS="./aws.env"
 
 aws_env="";
 os="ubuntu"
@@ -206,7 +207,13 @@ then
   fi
 
   CLDPROVIDER="aws"
-  cp $aws_env .
+  cp $aws_env ${LOCAL_AWS}
+
+  sed -i 's/\[default\]//g' ${LOCAL_AWS}
+  sed -i 's/ = /=/g' ${LOCAL_AWS}
+  sed -i 's/aws_access_key_id/AWS_ACCESS_KEY_ID/g' ${LOCAL_AWS}
+  sed -i 's/aws_secret_access_key/AWS_SECRET_ACCESS_KEY/g' ${LOCAL_AWS}
+  sed -i 's/region/AWS_DEFAULT_REGION/g' ${LOCAL_AWS}
 else
   CLDPROVIDER="gcp"
 fi
