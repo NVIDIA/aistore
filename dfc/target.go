@@ -733,7 +733,16 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, fmt.Sprintf("PUT from an unknown proxy/gateway ID '%s' - Smap out of sync?", pid))
 			return
 		}
-		errstr, errcode := t.doput(w, r, bucket, objname)
+
+		errstr := ""
+		errcode := 0
+		if replica, replicaSrc := isReplicationPUT(r); !replica {
+			// regular PUT
+			errstr, errcode = t.doput(w, r, bucket, objname)
+		} else {
+			// replication PUT
+			errstr = t.doReplicationPut(w, r, bucket, objname, replicaSrc)
+		}
 		if errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
@@ -1979,6 +1988,28 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	// FIXME: use xaction
 	go t.sglToCloudAsync(t.contextWithAuth(r), sgl, bucket, objname, putfqn, fqn, props)
 	return
+}
+
+func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
+	bucket, objname, replicaSrc string) (errstr string) {
+
+	var (
+		started = time.Now()
+		islocal = t.bmdowner.get().islocal(bucket)
+		fqn     = t.fqn(bucket, objname, islocal)
+	)
+
+	err := getreplicationrunner().receiveReplica(replicaSrc, fqn, r)
+
+	if err == nil {
+		delta := time.Since(started)
+		t.statsif.addMany(namedVal64{"replication.put.n", 1}, namedVal64{"replication.put.µs", int64(delta / time.Microsecond)})
+		if glog.V(4) {
+			glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
+		}
+	}
+
+	return err.Error()
 }
 
 func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {

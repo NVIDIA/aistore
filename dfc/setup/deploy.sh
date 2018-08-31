@@ -33,6 +33,7 @@ export GOOGLE_CLOUD_PROJECT="involuted-forge-189016"
 USE_HTTPS=false
 PORT=${PORT:-8080}
 PORT_INTRA=${PORT_INTRA:-9080}
+PORT_REPL=${PORT_REPL:-10080}
 PROXYURL="http://localhost:$PORT"
 if $USE_HTTPS; then
 	PROXYURL="https://localhost:$PORT"
@@ -147,6 +148,7 @@ do
 	source $DIR/config.sh
 	((PORT++))
 	((PORT_INTRA++))
+	((PORT_REPL++))
 done
 
 # conf file for authn

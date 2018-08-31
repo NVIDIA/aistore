@@ -376,7 +376,14 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	if glog.V(4) {
 		glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 	}
-	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+	var redirecturl string
+	if replica, _ := isReplicationPUT(r); !replica {
+		// regular PUT
+		redirecturl = p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+	} else {
+		// replication PUT
+		redirecturl = p.redirectURL(r, si.ReplNet.DirectURL, started, bucket)
+	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	p.statsif.add("put.n", 1)

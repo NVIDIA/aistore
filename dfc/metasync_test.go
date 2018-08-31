@@ -77,7 +77,7 @@ func serverTCPAddr(u string) *net.TCPAddr {
 func newPrimary() *proxyrunner {
 	p := proxyrunner{}
 	p.smapowner = &smapowner{}
-	p.si = newDaemonInfo("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = newDaemonInfo("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	smap := newSmap()
 	smap.addProxy(p.si)
 	smap.ProxySI = p.si
@@ -120,7 +120,7 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 	// creates the test proxy/target server and add to primary proxy's smap
 	ts := httptest.NewServer(http.HandlerFunc(f))
 	addrInfo := serverTCPAddr(ts.URL)
-	di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
+	di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 	clone := primary.smapowner.get().clone()
 	if s.isProxy {
 		clone.Pmap[id] = di
@@ -407,7 +407,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	})
 
 	clone := primary.smapowner.get().clone()
-	clone.Pmap[id] = newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
+	clone.Pmap[id] = newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 	clone.Version++
 	primary.smapowner.put(clone)
 
@@ -479,7 +479,7 @@ func TestMetaSyncData(t *testing.T) {
 		// creates the test proxy/target server and add to primary proxy's smap
 		ts := httptest.NewServer(http.HandlerFunc(f))
 		addrInfo := serverTCPAddr(ts.URL)
-		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
+		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		clone := primary.smapowner.get().clone()
 		if s.isProxy {
 			clone.Pmap[id] = di
@@ -694,7 +694,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		id := "t"
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addTarget(newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 		syncer.sync(true, clone, "")
 		time.Sleep(time.Millisecond * 300)
@@ -736,7 +736,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t1111"
 		addrInfo := serverTCPAddr(s1.URL)
-		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
+		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		clone := primary.smapowner.get().clone()
 		clone.addTarget(di)
 		primary.smapowner.put(clone)
@@ -758,7 +758,7 @@ func TestMetaSyncMembership(t *testing.T) {
 
 		id := "t22222"
 		addrInfo := serverTCPAddr(s2.URL)
-		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{})
+		di := newDaemonInfo(id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 		clone := primary.smapowner.get().clone()
 		clone.addTarget(di)
 		primary.smapowner.put(clone)
@@ -855,7 +855,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addProxy(newDaemonInfo("proxy1", httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addProxy(newDaemonInfo("proxy1", httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		proxy1 := proxyrunner{}
@@ -906,7 +906,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		addrInfo = serverTCPAddr(s.URL)
 
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target1", httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addTarget(newDaemonInfo("target1", httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target1 := targetrunner{}
@@ -943,7 +943,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo = serverTCPAddr(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target2", httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addTarget(newDaemonInfo("target2", httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target2 := targetrunner{}
@@ -1042,7 +1042,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo = serverTCPAddr(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addProxy(newDaemonInfo("proxy2", httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addProxy(newDaemonInfo("proxy2", httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		proxy2 := proxyrunner{}
@@ -1141,7 +1141,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo := serverTCPAddr(s.URL)
 		clone := primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target1", httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addTarget(newDaemonInfo("target1", httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target1 := targetrunner{}
@@ -1158,7 +1158,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		defer s.Close()
 		addrInfo = serverTCPAddr(s.URL)
 		clone = primary.smapowner.get().clone()
-		clone.addTarget(newDaemonInfo("target2", httpProto, addrInfo, &net.TCPAddr{}))
+		clone.addTarget(newDaemonInfo("target2", httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{}))
 		primary.smapowner.put(clone)
 
 		target2 := targetrunner{}

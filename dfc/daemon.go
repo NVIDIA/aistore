@@ -31,6 +31,7 @@ const (
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
+	xreplication     = "replication"
 )
 
 type (
@@ -269,6 +270,9 @@ func dfcinit() {
 			t.readahead = &dummyreadahead{}
 		}
 
+		replRunner := newReplicationRunner(t)
+		ctx.rg.add(replRunner, xreplication)
+		t.fsprg.add(replRunner)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
@@ -323,6 +327,13 @@ func gettarget() *targetrunner {
 func gettargetkeepalive() *targetKeepaliveRunner {
 	r := ctx.rg.runmap[xtargetkeepalive]
 	rr, ok := r.(*targetKeepaliveRunner)
+	assert(ok)
+	return rr
+}
+
+func getreplicationrunner() *replicationRunner {
+	r := ctx.rg.runmap[xreplication]
+	rr, ok := r.(*replicationRunner)
 	assert(ok)
 	return rr
 }

@@ -177,6 +177,7 @@ type httprunner struct {
 	namedrunner
 	publicServer          *netServer
 	internalServer        *netServer
+	replServer            *netServer
 	glogger               *log.Logger
 	si                    *daemonInfo
 	httpclient            *http.Client // http client for intra-cluster comm
@@ -235,6 +236,13 @@ func (h *httprunner) registerInternalNetHandler(path string, handler func(http.R
 	}
 }
 
+func (h *httprunner) registerReplNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+	h.replServer.mux.HandleFunc(path, handler)
+	if !strings.HasSuffix(path, "/") {
+		h.replServer.mux.HandleFunc(path+"/", handler)
+	}
+}
+
 func (h *httprunner) init(s statsif, isproxy bool) {
 	// clivars proxyurl overrides config proxy settings.
 	// If it is set, the proxy will not register as the primary proxy.
@@ -259,9 +267,15 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	h.publicServer = &netServer{
 		mux: http.NewServeMux(),
 	}
-	h.internalServer = h.publicServer // by default internal net is same as public
+	h.internalServer = h.publicServer // by default internal net is the same as public
 	if ctx.config.Net.UseIntra {
 		h.internalServer = &netServer{
+			mux: http.NewServeMux(),
+		}
+	}
+	h.replServer = h.publicServer // by default replication net is the same as public
+	if ctx.config.Net.UseRepl {
+		h.replServer = &netServer{
 			mux: http.NewServeMux(),
 		}
 	}
@@ -286,6 +300,7 @@ func (h *httprunner) initSI() {
 		glog.Fatalf("Failed to get public network address: %v", err)
 	}
 	glog.Infof("Configured PUBLIC NETWORK address: [%s:%d] (out of: %s)\n", ipAddr, ctx.config.Net.L4.Port, ctx.config.Net.IPv4)
+
 	ipAddrIntra := net.IP{}
 	if ctx.config.Net.UseIntra {
 		ipAddrIntra, err = getipv4addr(addrList, ctx.config.Net.IPv4Intra)
@@ -296,6 +311,16 @@ func (h *httprunner) initSI() {
 			ipAddrIntra, ctx.config.Net.L4.PortIntra, ctx.config.Net.IPv4Intra)
 	}
 
+	ipAddrRepl := net.IP{}
+	if ctx.config.Net.UseRepl {
+		ipAddrRepl, err = getipv4addr(addrList, ctx.config.Net.IPv4Repl)
+		if err != nil {
+			glog.Fatalf("Failed to get replication network address: %v", err)
+		}
+		glog.Infof("Configured REPLICATION NETWORK address: [%s:%d] (out of: %s)\n",
+			ipAddrRepl, ctx.config.Net.L4.PortRepl, ctx.config.Net.IPv4Repl)
+	}
+
 	publicAddr := &net.TCPAddr{
 		IP:   ipAddr,
 		Port: ctx.config.Net.L4.Port,
@@ -303,6 +328,10 @@ func (h *httprunner) initSI() {
 	internalAddr := &net.TCPAddr{
 		IP:   ipAddrIntra,
 		Port: ctx.config.Net.L4.PortIntra,
+	}
+	replAddr := &net.TCPAddr{
+		IP:   ipAddrRepl,
+		Port: ctx.config.Net.L4.PortRepl,
 	}
 
 	daemonID := os.Getenv("DFCDAEMONID")
@@ -314,7 +343,7 @@ func (h *httprunner) initSI() {
 		}
 	}
 
-	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.proto, publicAddr, internalAddr)
+	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.proto, publicAddr, internalAddr, replAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
@@ -346,12 +375,27 @@ func (h *httprunner) run() error {
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 
-	if ctx.config.Net.UseIntra {
-		controlCh := make(chan error, 2)
-		go func() {
-			addr := h.si.InternalNet.NodeIPAddr + ":" + h.si.InternalNet.DaemonPort
-			controlCh <- h.internalServer.listenAndServe(addr, h.glogger)
-		}()
+	if ctx.config.Net.UseIntra || ctx.config.Net.UseRepl {
+		var controlCh chan error
+		if ctx.config.Net.UseIntra && ctx.config.Net.UseRepl {
+			controlCh = make(chan error, 3)
+		} else {
+			controlCh = make(chan error, 2)
+		}
+
+		if ctx.config.Net.UseIntra {
+			go func() {
+				addr := h.si.InternalNet.NodeIPAddr + ":" + h.si.InternalNet.DaemonPort
+				controlCh <- h.internalServer.listenAndServe(addr, h.glogger)
+			}()
+		}
+
+		if ctx.config.Net.UseRepl {
+			go func() {
+				addr := h.si.ReplNet.NodeIPAddr + ":" + h.si.ReplNet.DaemonPort
+				controlCh <- h.replServer.listenAndServe(addr, h.glogger)
+			}()
+		}
 
 		go func() {
 			addr := h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
@@ -386,6 +430,14 @@ func (h *httprunner) stop(err error) {
 		wg.Add(1)
 		go func() {
 			h.internalServer.shutdown()
+			wg.Done()
+		}()
+	}
+
+	if ctx.config.Net.UseRepl {
+		wg.Add(1)
+		go func() {
+			h.replServer.shutdown()
 			wg.Done()
 		}()
 	}
@@ -1123,4 +1175,9 @@ func (h *httprunner) initStatsD(daemonStr string) (err error) {
 		glog.Infoln("Failed to connect to StatsD daemon")
 	}
 	return
+}
+
+func isReplicationPUT(r *http.Request) (isreplica bool, replicasrc string) {
+	replicasrc = r.Header.Get(api.HeaderDFCReplicationSrc)
+	return replicasrc != "", replicasrc
 }

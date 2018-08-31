@@ -69,6 +69,7 @@ const (
 	HeaderDFCChecksumType       = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDFCChecksumVal        = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDFCObjVersion         = "HeaderDfcObjVersion"   // Object version/generation
+	HeaderDFCReplicationSrc     = "DfcReplicationSrc"     // In replication PUT request specifies the source target
 	HeaderSize                  = "Size"                  // Size of object in bytes
 	HeaderVersion               = "Version"               // Object version number
 )

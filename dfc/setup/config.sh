@@ -73,10 +73,12 @@ cat > $CONFFILE <<EOL
 	"netconfig": {
 		"ipv4":       "${IPV4LIST}",
 		"ipv4_intra": "${IPV4LIST_INTRA}",
+		"ipv4_repl":  "${IPV4LIST_REPL}",
 		"l4": {
 			"proto":      "tcp",
 			"port":       "${PORT}",
-			"port_intra": "${PORT_INTRA}"
+			"port_intra": "${PORT_INTRA}",
+			"port_repl":  "${PORT_REPL}"
 		},
 		"http": {
 			"rproxy":		"",

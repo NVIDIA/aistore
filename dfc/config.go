@@ -160,7 +160,9 @@ type testfspathconf struct {
 type netconfig struct {
 	IPv4      string  `json:"ipv4"`
 	IPv4Intra string  `json:"ipv4_intra"`
+	IPv4Repl  string  `json:"ipv4_repl"`
 	UseIntra  bool    `json:"-"`
+	UseRepl   bool    `json:"-"`
 	L4        l4cnf   `json:"l4"`
 	HTTP      httpcnf `json:"http"`
 }
@@ -171,6 +173,8 @@ type l4cnf struct {
 	Port         int    `json:"-"`
 	PortIntraStr string `json:"port_intra"` // listening port for intra network
 	PortIntra    int    `json:"-"`
+	PortReplStr  string `json:"port_repl"` // listening port for replication network
+	PortRepl     int    `json:"-"`
 }
 
 type httpcnf struct {
@@ -273,6 +277,13 @@ func initconfigparam() error {
 	ctx.config.Net.UseIntra = false
 	if ctx.config.Net.IPv4Intra != "" && ctx.config.Net.L4.PortIntra != 0 && (differentIPs || differentPorts) {
 		ctx.config.Net.UseIntra = true
+	}
+
+	differentIPs = ctx.config.Net.IPv4 != ctx.config.Net.IPv4Repl
+	differentPorts = ctx.config.Net.L4.Port != ctx.config.Net.L4.PortRepl
+	ctx.config.Net.UseRepl = false
+	if ctx.config.Net.IPv4Repl != "" && ctx.config.Net.L4.PortRepl != 0 && (differentIPs || differentPorts) {
+		ctx.config.Net.UseRepl = true
 	}
 
 	if build != "" {
@@ -397,26 +408,34 @@ func validateconf() (err error) {
 			return fmt.Errorf("Bad internal port specified: %v", err)
 		}
 	}
+	ctx.config.Net.L4.PortRepl = 0
+	if ctx.config.Net.L4.PortReplStr != "" {
+		if ctx.config.Net.L4.PortRepl, err = parsePort(ctx.config.Net.L4.PortReplStr); err != nil {
+			return fmt.Errorf("Bad replication port specified: %v", err)
+		}
+	}
 
 	ctx.config.Net.IPv4 = strings.Replace(ctx.config.Net.IPv4, " ", "", -1)
 	ctx.config.Net.IPv4Intra = strings.Replace(ctx.config.Net.IPv4Intra, " ", "", -1)
+	ctx.config.Net.IPv4Repl = strings.Replace(ctx.config.Net.IPv4Repl, " ", "", -1)
 
-	// Check if public and internal addresses doesn't overlap
-	if ctx.config.Net.IPv4Intra != "" {
-		publicAddrs := strings.Split(ctx.config.Net.IPv4, ",")
-		for _, addr := range publicAddrs {
-			addr = strings.TrimSpace(addr)
-			if addr == "" {
-				continue
-			}
-
-			if strings.Contains(ctx.config.Net.IPv4Intra, addr) {
-				return fmt.Errorf(
-					"Public and internal addresses overlap: %s (public: %s; internal %s)",
-					addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4Intra,
-				)
-			}
-		}
+	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4, ctx.config.Net.IPv4Intra); overlap {
+		return fmt.Errorf(
+			"Public and internal addresses overlap: %s (public: %s; internal: %s)",
+			addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4Intra,
+		)
+	}
+	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4, ctx.config.Net.IPv4Repl); overlap {
+		return fmt.Errorf(
+			"Public and replication addresses overlap: %s (public: %s; replication: %s)",
+			addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4Repl,
+		)
+	}
+	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4Intra, ctx.config.Net.IPv4Repl); overlap {
+		return fmt.Errorf(
+			"Internal and replication addresses overlap: %s (internal: %s; replication: %s)",
+			addr, ctx.config.Net.IPv4Intra, ctx.config.Net.IPv4Repl,
+		)
 	}
 
 	if ctx.config.Net.HTTP.RevProxy != "" {
@@ -461,4 +480,23 @@ func setGLogVModule(v string) error {
 // moreover, all the cluster is running on a single machine
 func testingFSPpaths() bool {
 	return ctx.config.TestFSP.Count > 0
+}
+
+// ipv4ListsOverlap checks if two comma-separated ipv4 address lists
+// contain at least one common ipv4 address
+func ipv4ListsOverlap(alist, blist string) (overlap bool, addr string) {
+	if alist == "" || blist == "" {
+		return
+	}
+	alistAddrs := strings.Split(alist, ",")
+	for _, a := range alistAddrs {
+		a = strings.TrimSpace(a)
+		if a == "" {
+			continue
+		}
+		if strings.Contains(blist, a) {
+			return true, a
+		}
+	}
+	return
 }

@@ -41,6 +41,7 @@ type daemonInfo struct {
 	DaemonID    string  `json:"daemon_id"`
 	PublicNet   NetInfo `json:"public_net"`
 	InternalNet NetInfo `json:"internal_net"`
+	ReplNet     NetInfo `json:"repl_net"`
 	idDigest    uint64
 }
 
@@ -58,7 +59,7 @@ type smapowner struct {
 	smap unsafe.Pointer
 }
 
-func newDaemonInfo(id, proto string, publicAddr, internalAddr *net.TCPAddr) *daemonInfo {
+func newDaemonInfo(id, proto string, publicAddr, internalAddr, replAddr *net.TCPAddr) *daemonInfo {
 	publicNet := NetInfo{
 		NodeIPAddr: publicAddr.IP.String(),
 		DaemonPort: strconv.Itoa(publicAddr.Port),
@@ -72,11 +73,20 @@ func newDaemonInfo(id, proto string, publicAddr, internalAddr *net.TCPAddr) *dae
 			DirectURL:  proto + "://" + internalAddr.String(),
 		}
 	}
+	replNet := publicNet
+	if len(replAddr.IP) > 0 {
+		replNet = NetInfo{
+			NodeIPAddr: replAddr.IP.String(),
+			DaemonPort: strconv.Itoa(replAddr.Port),
+			DirectURL:  proto + "://" + replAddr.String(),
+		}
+	}
 
 	return &daemonInfo{
 		DaemonID:    id,
 		PublicNet:   publicNet,
 		InternalNet: internalNet,
+		ReplNet:     replNet,
 		idDigest:    xxhash.ChecksumString64S(id, MLCG32),
 	}
 }
