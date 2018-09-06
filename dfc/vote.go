@@ -158,7 +158,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if glog.V(4) {
-		glog.Info("Proxy voted '%v' for %s", vote, psi.DaemonID)
+		glog.Infof("Proxy voted '%v' for %s", vote, psi.DaemonID)
 	}
 
 	if vote {

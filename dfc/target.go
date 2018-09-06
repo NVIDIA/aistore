@@ -844,7 +844,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		version := int64(v2)
 		if bucketmd.version() != version {
-			glog.Warning("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
+			glog.Warningf("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
 		}
 		clone := bucketmd.clone()
 		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, props, clone); errstr != "" {
@@ -1727,16 +1727,16 @@ func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
 	ci := &allfinfos{t, // targetrunner
-		make([]*api.BucketEntry, 0, api.DefaultPageSize),     // ls
-		msg.GetPrefix,                                        // prefix
-		msg.GetPageMarker,                                    // marker
-		markerDir,                                            // markerDir
-		msg,                                                  // GetMsg
-		"",                                                   // lastFilePath - next page marker
-		bucket,                                               // bucket
-		0,                                                    // fileCount
-		0,                                                    // rootLength
-		api.DefaultPageSize,                                  // limit - maximun number of objects to return
+		make([]*api.BucketEntry, 0, api.DefaultPageSize), // ls
+		msg.GetPrefix,       // prefix
+		msg.GetPageMarker,   // marker
+		markerDir,           // markerDir
+		msg,                 // GetMsg
+		"",                  // lastFilePath - next page marker
+		bucket,              // bucket
+		0,                   // fileCount
+		0,                   // rootLength
+		api.DefaultPageSize, // limit - maximun number of objects to return
 		strings.Contains(msg.GetProps, api.GetPropsAtime),    // needAtime
 		strings.Contains(msg.GetProps, api.GetPropsCtime),    // needCtime
 		strings.Contains(msg.GetProps, api.GetPropsChecksum), // needChkSum

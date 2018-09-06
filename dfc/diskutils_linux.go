@@ -229,7 +229,7 @@ func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks StringSet) {
 
 	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
 	if glog.V(3) {
-		glog.Info("Device: %s, disk list: %v\n", device, disks)
+		glog.Infof("Device: %s, disk list: %v\n", device, disks)
 	}
 
 	return disks
