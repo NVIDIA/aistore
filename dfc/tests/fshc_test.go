@@ -281,29 +281,43 @@ func TestFSCheckerDetection(t *testing.T) {
 	tlogf("*** Testing with disabled FSHC***\n")
 	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	// generate a short list of file to run the test (to avoid flooding the log with false errors)
+	fileList := []string{}
+	for n := 0; n < 5; n++ {
+		fileList = append(fileList, fileNames[n])
+	}
+	ldir := LocalSrcDir + "/" + fshcDir
 	{
-		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodPut, failedMpath, fileNames, chfail, chstop, sgl, bucket)
-		time.Sleep(time.Second * 2)
-		chfail <- struct{}{}
+		os.RemoveAll(failedMpath)
+
+		f, err := os.OpenFile(failedMpath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			t.Errorf("Failed to create file: %v", err)
+		}
+		f.Close()
+		filesput := make(chan string, len(fileList))
+		errch := make(chan error, len(fileList))
+		fillWithRandomData(seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("PUTting objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}
-		chstop <- struct{}{}
-		wg.Wait()
 
 		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
 	}
 	{
-		wg.Add(1)
-		go runAsyncJob(t, wg, http.MethodGet, failedMpath, fileNames, chfail, chstop, sgl, bucket)
-		time.Sleep(time.Second * 2)
-		chfail <- struct{}{}
+		os.RemoveAll(failedMpath)
+
+		f, err := os.OpenFile(failedMpath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			t.Errorf("Failed to create file: %v", err)
+		}
+		f.Close()
+		for _, n := range fileList {
+			_, _, err = client.Get(proxyurl, bucket, n, nil, nil, true, false)
+		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}
-		chstop <- struct{}{}
-		wg.Wait()
 
 		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))
 	}

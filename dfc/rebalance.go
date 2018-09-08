@@ -23,7 +23,10 @@ import (
 
 const NeighborRebalanceStartDelay = 10 * time.Second
 
-var runRebalanceOnce = &sync.Once{}
+var (
+	runRebalanceOnce      = &sync.Once{}
+	runLocalRebalanceOnce = &sync.Once{}
+)
 
 type xrebpathrunner struct {
 	t         *targetrunner
@@ -32,13 +35,17 @@ type xrebpathrunner struct {
 	wg        *sync.WaitGroup
 	newsmap   *Smap
 	aborted   bool
+	fileMoved int64
+	byteMoved int64
 }
 
 type localRebPathRunner struct {
-	t       *targetrunner
-	mpath   string
-	xreb    *xactLocalRebalance
-	aborted bool
+	t         *targetrunner
+	mpath     string
+	xreb      *xactLocalRebalance
+	aborted   bool
+	fileMoved int64
+	byteMoved int64
 }
 
 func (rcl *xrebpathrunner) oneRebalance() {
@@ -113,10 +120,9 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", ""); errstr != "" {
 		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
 	} else {
-		// FIXME: TODO: delay the removal or (even) rely on the LRU
-		if err := os.Remove(fqn); err != nil {
-			glog.Errorf("Failed to delete %s after it has been moved, err: %v", fqn, err)
-		}
+		// LRU cleans up the file later
+		rcl.fileMoved++
+		rcl.byteMoved += osfi.Size()
 	}
 	return nil
 }
@@ -178,22 +184,29 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 		return nil
 	}
 
-	// Do local rebalance
-	// FIXME: When there is GET already on this file, we will still try to move it.
-	// The fix would be creating a copy and ensuring that the old will be cleaned
-	// by LRU.
 	if glog.V(4) {
 		glog.Infof("%s => %s", fqn, newFQN)
 	}
 	dir := filepath.Dir(newFQN)
 	if err := CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
+		rb.xreb.abort()
+		rb.t.fshc(err, newFQN)
 		return nil
 	}
-	if err := os.Rename(fqn, newFQN); err != nil {
-		glog.Errorf("Failed to rename %s to %s, err %v", fqn, newFQN, err)
+
+	// Copy the file instead of moving, LRU takes care of obsolete copies
+	if glog.V(4) {
+		glog.Infof("Copying %s -> %s", fqn, newFQN)
+	}
+	if errFQN, err := copyFile(fqn, newFQN); err != nil {
+		glog.Error(err.Error())
+		rb.t.fshc(err, errFQN)
+		rb.xreb.abort()
 		return nil
 	}
+	rb.fileMoved++
+	rb.byteMoved += fileInfo.Size()
 
 	return nil
 }
@@ -394,18 +407,25 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		allr = append(allr, rl)
 	}
 	wg.Wait()
+
 	if pmarker != "" {
 		var aborted bool
+		totalMovedN, totalMovedBytes := int64(0), int64(0)
 		for _, r := range allr {
 			if r.aborted {
 				aborted = true
-				break
 			}
+			totalMovedN += r.fileMoved
+			totalMovedBytes += r.byteMoved
 		}
 		if !aborted {
 			if err := os.Remove(pmarker); err != nil {
 				glog.Errorf("Failed to remove rebalance-in-progress mark %s, err: %v", pmarker, err)
 			}
+		}
+		if totalMovedN > 0 {
+			t.statsif.add("reb.global.n", totalMovedN)
+			t.statsif.add("reb.global.size", totalMovedBytes)
 		}
 	}
 	if newtargetid == t.si.DaemonID {
@@ -440,6 +460,16 @@ func (t *targetrunner) runLocalRebalance() {
 	runnerCnt := len(availablePaths) * 2
 	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 
+	pmarker := t.xactinp.localRebalanceInProgress()
+	file, err := CreateFile(pmarker)
+	if err != nil {
+		glog.Errorln("Failed to create", pmarker, err)
+		pmarker = ""
+	} else {
+		_ = file.Close()
+	}
+	allr := make([]*localRebPathRunner, 0, runnerCnt)
+
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
 	for _, mpathInfo := range availablePaths {
@@ -449,6 +479,7 @@ func (t *targetrunner) runLocalRebalance() {
 			runner.run()
 			wg.Done()
 		}(runner)
+		allr = append(allr, runner)
 
 		runner = &localRebPathRunner{t: t, mpath: makePathLocal(mpathInfo.Path), xreb: xreb}
 		wg.Add(1)
@@ -456,8 +487,30 @@ func (t *targetrunner) runLocalRebalance() {
 			runner.run()
 			wg.Done()
 		}(runner)
+		allr = append(allr, runner)
 	}
 	wg.Wait()
+
+	if pmarker != "" {
+		var aborted bool
+		totalMovedN, totalMovedBytes := int64(0), int64(0)
+		for _, r := range allr {
+			if r.aborted {
+				aborted = true
+			}
+			totalMovedN += r.fileMoved
+			totalMovedBytes += r.byteMoved
+		}
+		if !aborted {
+			if err := os.Remove(pmarker); err != nil {
+				glog.Errorf("Failed to remove rebalance-in-progress mark %s, err: %v", pmarker, err)
+			}
+		}
+		if totalMovedN > 0 {
+			t.statsif.add("reb.local.n", totalMovedN)
+			t.statsif.add("reb.local.size", totalMovedBytes)
+		}
+	}
 
 	xreb.etime = time.Now()
 	glog.Infoln(xreb.tostring())

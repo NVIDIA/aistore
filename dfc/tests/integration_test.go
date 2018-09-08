@@ -610,6 +610,242 @@ func TestPutDuringRebalance(t *testing.T) {
 	assertClusterState(&m)
 }
 
+func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	const (
+		num       = 20000
+		filesize  = uint64(1024 * 128)
+		seed      = int64(112)
+		maxErrPct = 0
+	)
+
+	var (
+		md = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 10,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		err        error
+		filenameCh = make(chan string, md.num)
+		errch      = make(chan error, md.num)
+		sgl        *iosgl.SGL
+	)
+
+	// Init. metadata
+	saveClusterState(&md)
+	if md.originalTargetCount < 2 {
+		t.Fatalf("Must have at least 2 target in the cluster")
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, md.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, md.bucket)
+		checkFatal(err, t)
+	}()
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	var (
+		targetURL     string
+		killTargetURL string
+		killTargetSI  string
+	)
+
+	// select a random target to disable one of its mountpaths,
+	// and another random target to unregister
+	for _, tinfo := range md.smap.Tmap {
+		if targetURL == "" {
+			targetURL = tinfo.PublicNet.DirectURL
+		} else {
+			killTargetURL = tinfo.PublicNet.DirectURL
+			killTargetSI = tinfo.DaemonID
+			break
+		}
+	}
+
+	mpList, err := client.TargetMountpaths(targetURL)
+	checkFatal(err, t)
+
+	if len(mpList.Available) < 2 {
+		t.Fatalf("Must have at least 2 mountpaths")
+	}
+
+	// Disable mountpaths temporarily
+	mpath := mpList.Available[0]
+	err = client.DisableTargetMountpath(targetURL, mpath)
+
+	// Unregister a target
+	tlogf("Trying to unregister target: %s\n", killTargetURL)
+	err = client.UnregisterTarget(proxyurl, killTargetSI)
+	checkFatal(err, t)
+	smap, err := waitForPrimaryProxy(
+		"target is gone",
+		md.smap.Version, testing.Verbose(),
+		md.originalProxyCount,
+		md.originalTargetCount-1,
+	)
+	checkFatal(err, md.t)
+
+	tlogf("Putting %d files into bucket %s...\n", num, md.bucket)
+	putRandomFiles(seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+	for f := range filenameCh {
+		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
+	}
+	tlogf("Putting finished.\n")
+
+	// Start getting files
+	md.wg.Add(num * md.numGetsEachFile)
+	go func() {
+		doGetsInParallel(&md)
+	}()
+
+	// register a new target
+	err = client.RegisterTarget(killTargetSI, killTargetURL, md.smap)
+	checkFatal(err, t)
+
+	// enable mountpath
+	err = client.EnableTargetMountpath(targetURL, mpath)
+	checkFatal(err, t)
+
+	// wait until GETs are done while 2 rebalance are running
+	md.wg.Wait()
+
+	// make sure that the cluster has all targets enabled
+	_, err = waitForPrimaryProxy(
+		"target is back",
+		smap.Version, testing.Verbose(),
+		md.originalProxyCount,
+		md.originalTargetCount,
+	)
+	checkFatal(err, md.t)
+
+	resultsBeforeAfter(&md, num, maxErrPct)
+
+	mpListAfter, err := client.TargetMountpaths(targetURL)
+	checkFatal(err, t)
+	if len(mpList.Available) != len(mpListAfter.Available) {
+		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
+			len(mpList.Available), len(mpListAfter.Available))
+	}
+}
+
+func TestGetDuringLocalRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+
+	const (
+		num       = 20000
+		filesize  = uint64(1024 * 128)
+		seed      = int64(112)
+		maxErrPct = 0
+	)
+
+	var (
+		md = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 1,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		err        error
+		filenameCh = make(chan string, md.num)
+		errch      = make(chan error, md.num)
+		sgl        *iosgl.SGL
+	)
+
+	// Init. metadata
+	saveClusterState(&md)
+	if md.originalTargetCount < 1 {
+		t.Fatalf("Must have at least 1 target in the cluster")
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, proxyurl, md.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(proxyurl, md.bucket)
+		checkFatal(err, t)
+	}()
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	var targetURL string
+	for _, tinfo := range md.smap.Tmap {
+		targetURL = tinfo.PublicNet.DirectURL
+		break
+	}
+
+	mpList, err := client.TargetMountpaths(targetURL)
+	checkFatal(err, t)
+
+	if len(mpList.Available) < 2 {
+		t.Fatalf("Must have at least 2 mountpaths")
+	}
+
+	// select up to 2 mountpath
+	mpaths := []string{mpList.Available[0]}
+	if len(mpList.Available) > 2 {
+		mpaths = append(mpaths, mpList.Available[1])
+	}
+
+	// Disable mountpaths temporarily
+	for _, mp := range mpaths {
+		err = client.DisableTargetMountpath(targetURL, mp)
+		checkFatal(err, t)
+	}
+
+	tlogf("Putting %d files into bucket %s...\n", num, md.bucket)
+	putRandomFiles(seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+	for f := range filenameCh {
+		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
+	}
+	tlogf("Putting finished.\n")
+
+	// Start getting files and enable mountpaths in parallel
+	md.wg.Add(num * md.numGetsEachFile)
+	doGetsInParallel(&md)
+
+	for _, mp := range mpaths {
+		// sleep for a while before enabling another mountpath
+		time.Sleep(50 * time.Millisecond)
+		err = client.EnableTargetMountpath(targetURL, mp)
+		checkFatal(err, t)
+	}
+
+	md.wg.Wait()
+	resultsBeforeAfter(&md, num, maxErrPct)
+
+	mpListAfter, err := client.TargetMountpaths(targetURL)
+	checkFatal(err, t)
+	if len(mpList.Available) != len(mpListAfter.Available) {
+		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
+			len(mpList.Available), len(mpListAfter.Available))
+	}
+}
+
 func TestGetDuringRebalance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")

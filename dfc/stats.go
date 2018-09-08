@@ -95,6 +95,10 @@ type targetCoreStats struct {
 	Bytesbadchecksum int64 `json:"cksum.bad.size"`
 	GetRedirlatency  int64 `json:"get.redir.μs"`
 	PutRedirlatency  int64 `json:"put.redir.μs"`
+	NumGlobalReb     int64 `json:"reb.global.n"`
+	BytesGlobalReb   int64 `json:"reb.global.size"`
+	NumLocalReb      int64 `json:"reb.local.n"`
+	BytesLocalReb    int64 `json:"reb.local.size"`
 	// omitempty
 	ngetredirs, nputredirs int64
 }
@@ -594,6 +598,14 @@ func (s *targetCoreStats) doAdd(name string, val int64) {
 		s.proxyCoreStats.doAdd(name, val)
 		return
 	// target only
+	case "reb.global.n":
+		v = &s.NumGlobalReb
+	case "reb.local.n":
+		v = &s.NumLocalReb
+	case "reb.global.size":
+		v = &s.BytesGlobalReb
+	case "reb.local.size":
+		v = &s.BytesLocalReb
 	case "get.cold.n":
 		v = &s.Numcoldget
 	case "get.cold.size":

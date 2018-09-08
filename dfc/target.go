@@ -206,6 +206,16 @@ func (t *targetrunner) run() error {
 
 	getfshealthchecker().SetDispatcher(t)
 
+	aborted, _ := t.xactinp.isAbortedOrRunningLocalRebalance()
+	if aborted {
+		// resume local rebalance
+		f := func() {
+			glog.Infoln("resuming local rebalance...")
+			t.runLocalRebalance()
+		}
+		go runLocalRebalanceOnce.Do(f) // only once at startup
+	}
+
 	return t.httprunner.run()
 }
 
@@ -409,13 +419,32 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// existence, access & versioning
 	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); islocal && errstr != "" {
 		errcode = http.StatusInternalServerError
-		// given certain conditions (below) make an effort to locate the object cluster-wide
+		// given certain conditions (below) make an effort to locate the object
 		if strings.Contains(errstr, doesnotexist) {
 			errcode = http.StatusNotFound
-			aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+
+			// check FS-wide (local rebalance is running)
+			aborted, running := t.xactinp.isAbortedOrRunningLocalRebalance()
+			if aborted || running {
+				oldFQN, oldSize := t.getFromNeighborFS(bucket, objname, islocal)
+				if oldFQN != "" {
+					if glog.V(4) {
+						glog.Infof("Local rebalance is not completed: file found at %s [size %s]", oldFQN, bytesToStr(oldSize, 1))
+					}
+					fqn = oldFQN
+					size = oldSize
+					goto existslocally
+				}
+			}
+
+			// check cluster-wide (global rebalance is running)
+			aborted, running = t.xactinp.isAbortedOrRunningRebalance()
 			if aborted || running {
 				if props := t.getFromNeighbor(bucket, objname, r, islocal); props != nil {
 					size, nhobj = props.size, props.nhobj
+					if glog.V(4) {
+						glog.Infof("Rebalance is not completed: found somewhere [size %s]", bytesToStr(size, 1))
+					}
 					goto existslocally
 				}
 			} else {
@@ -1150,6 +1179,9 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	from := query.Get(api.URLParamFromID)
 
 	aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+	if !aborted && !running {
+		aborted, running = t.xactinp.isAbortedOrRunningLocalRebalance()
+	}
 	status := &thealthstatus{IsRebalancing: aborted || running}
 
 	jsbytes, err := jsoniter.Marshal(status)
@@ -3449,12 +3481,13 @@ func (t *targetrunner) receiveSmap(newsmap *Smap, msg *api.ActionMsg) (errstr st
 		go t.runRebalance(newsmap, newtargetid) // auto-rebalancing xaction
 		return
 	}
+
 	aborted, running = t.xactinp.isAbortedOrRunningRebalance()
 	if !aborted || running {
 		glog.Infof("the cluster is starting up, rebalancing=(aborted=%t, running=%t)", aborted, running)
 		return
 	}
-	// resume
+	// resume global rebalance
 	f := func() {
 		glog.Infoln("waiting for cluster startup to resume rebalance...")
 		for {
@@ -3664,4 +3697,29 @@ func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled,
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
 	return t.fsprg.disableMountpath(mountpath)
+}
+
+func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (fqn string, size int64) {
+	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	fn := makePathCloud
+	if islocal {
+		fn = makePathLocal
+	}
+	for _, mpathInfo := range availablePaths {
+		dir := fn(mpathInfo.Path)
+
+		filePath := filepath.Join(dir, bucket, object)
+		stat, err := os.Stat(filePath)
+		if err == nil {
+			return filePath, stat.Size()
+		}
+	}
+
+	return "", 0
+}
+
+func (t *targetrunner) isRebalancing() bool {
+	_, running := t.xactinp.isAbortedOrRunningRebalance()
+	_, runningLocal := t.xactinp.isAbortedOrRunningLocalRebalance()
+	return running || runningLocal
 }

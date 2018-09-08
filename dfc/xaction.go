@@ -237,8 +237,12 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runne
 
 // persistent mark indicating rebalancing in progress
 func (q *xactInProgress) rebalanceInProgress() (pmarker string) {
-	pmarker = filepath.Join(ctx.config.Confdir, rebinpname)
-	return
+	return filepath.Join(ctx.config.Confdir, rebinpname)
+}
+
+// persistent mark indicating rebalancing in progress
+func (q *xactInProgress) localRebalanceInProgress() (pmarker string) {
+	return filepath.Join(ctx.config.Confdir, reblocinpname)
 }
 
 func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
@@ -252,6 +256,25 @@ func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
 	_, xx := q.findU(api.ActGlobalReb)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
+		if !xreb.finished() {
+			running = true
+		}
+	}
+	q.lock.Unlock()
+	return
+}
+
+func (q *xactInProgress) isAbortedOrRunningLocalRebalance() (aborted, running bool) {
+	pmarker := q.localRebalanceInProgress()
+	_, err := os.Stat(pmarker)
+	if err == nil {
+		aborted = true
+	}
+
+	q.lock.Lock()
+	_, xx := q.findU(api.ActLocalReb)
+	if xx != nil {
+		xreb := xx.(*xactLocalRebalance)
 		if !xreb.finished() {
 			running = true
 		}

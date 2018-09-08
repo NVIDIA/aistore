@@ -24,6 +24,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
@@ -559,10 +560,11 @@ func strToBytes(s string) (int64, error) {
 	}
 
 	s = strings.ToUpper(s)
-	factors := map[string]int64{"T": TiB, "G": GiB, "M": MiB, "K": KiB, "B": 1}
-	for k, v := range factors {
-		if idx := strings.Index(s, k); idx != -1 {
-			i, err := strconv.ParseInt(strings.TrimSpace(s[:idx]), 10, 64)
+	suffixs := []string{"T", "G", "M", "K", "B"}
+	factors := []int64{TiB, GiB, MiB, KiB, 1}
+	for idx, v := range factors {
+		if pos := strings.Index(s, suffixs[idx]); pos != -1 {
+			i, err := strconv.ParseInt(strings.TrimSpace(s[:pos]), 10, 64)
 			return v * i, err
 		}
 	}
@@ -571,13 +573,40 @@ func strToBytes(s string) (int64, error) {
 }
 
 func bytesToStr(b int64, digits int) string {
-	factors := map[string]int64{"TiB": TiB, "GiB": GiB, "MiB": MiB, "KiB": KiB, "B": 1}
+	suffixs := []string{"TiB", "GiB", "MiB", "KiB", "B"}
+	factors := []int64{TiB, GiB, MiB, KiB, 1}
 
-	for s, f := range factors {
+	for idx, f := range factors {
 		if b >= f {
-			return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(f), s)
+			return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(f), suffixs[idx])
 		}
 	}
 
 	return fmt.Sprintf("%dB", b)
+}
+
+func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
+	fileIn, err := os.Open(fromFQN)
+	if err != nil {
+		glog.Errorf("Failed to open source %s: %v", fromFQN, err)
+		return fromFQN, err
+	}
+	defer fileIn.Close()
+
+	fileOut, err := os.Create(toFQN)
+	if err != nil {
+		glog.Errorf("Failed to open destination %s: %v", toFQN, err)
+		return toFQN, err
+	}
+	defer fileOut.Close()
+
+	buf, slab := iosgl.AllocFromSlab(iosgl.MiB)
+	defer iosgl.FreeToSlab(buf, slab)
+
+	if _, err = io.CopyBuffer(fileOut, fileIn, buf); err != nil {
+		glog.Errorf("Failed to copy %s -> %s: %v", fromFQN, toFQN, err)
+		return toFQN, err
+	}
+
+	return "", nil
 }

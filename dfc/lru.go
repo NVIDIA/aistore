@@ -209,11 +209,24 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	now := time.Now()
 	dontevictime := now.Add(-ctx.config.LRU.DontEvictTime)
 	if usetime.After(dontevictime) {
-		if glog.V(3) {
+		if glog.V(4) {
 			glog.Infof("DEBUG: not evicting %s (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
 		}
 		return nil
 	}
+
+	// cleanup after rebalance
+	_, _, err = lctx.t.fqn2bckobj(fqn)
+	if err != nil {
+		glog.Infof("Found orphan file: %s", fqn)
+		fi := &fileInfo{
+			fqn:  fqn,
+			size: stat.Size,
+		}
+		lctx.oldwork = append(lctx.oldwork, fi)
+		return nil
+	}
+
 	// partial optimization:
 	// do nothing if the heap's cursize >= totsize &&
 	// the file is more recent then the the heap's newest
@@ -252,6 +265,14 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 		fevicted, bevicted int64
 	)
 	for _, fi := range lctx.oldwork {
+		if t.isRebalancing() {
+			iswork, _ := t.isworkfile(fi.fqn)
+			_, _, err := t.fqn2bckobj(fi.fqn)
+			// keep a copy of a rebalanced file while rebalance is running
+			if !iswork && err != nil {
+				continue
+			}
+		}
 		if err := os.Remove(fi.fqn); err != nil {
 			glog.Warningf("LRU: failed to GC %q", fi.fqn)
 			continue
