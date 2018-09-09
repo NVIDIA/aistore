@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -28,7 +29,8 @@ const (
 	xiostat          = "iostat"
 	xatime           = "atime"
 	xmetasyncer      = "metasyncer"
-	xfshealthchecker = "fshealthchecker"
+	xfshc            = "fshc"
+	xreadahead       = "readahead"
 )
 
 type (
@@ -73,6 +75,17 @@ type (
 func (r *namedrunner) setname(n string) { r.name = n }
 func (r *namedrunner) getName() string  { return r.name }
 
+// - selective disabling of a disk and/or network IO.
+// - dry-run is initialized at startup and cannot be changed.
+// - the values can be set via CLI or environment (environment will override CLI).
+// - for details see README, section "Performance testing"
+type dryRunConfig struct {
+	sizeStr string // random content size used when disk IO is disabled (-dryobjsize/DFCDRYOBJSIZE)
+	size    int64  // as above converted to bytes from a string like '8m'
+	disk    bool   // dry-run disk (-diskio/DFCDISKIO)
+	network bool   // dry-run network (-netio/DFCNETIO)
+}
+
 //====================
 //
 // globals
@@ -83,6 +96,7 @@ var (
 	ctx        = &daemon{}
 	clivars    = &cliVars{}
 	jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
+	dryRun     = &dryRunConfig{}
 )
 
 //====================
@@ -132,9 +146,37 @@ func init() {
 	flag.IntVar(&clivars.ntargets, "ntargets", 0, "number of storage targets to expect at startup (hint, proxy-only)")
 	flag.StringVar(&clivars.proxyurl, "proxyurl", "", "Override config Proxy settings")
 
-	flag.BoolVar(&ioConfig.useDisk, "diskio", true, "perform disks/cloud operations for GET/PUT")
-	flag.BoolVar(&ioConfig.useNetwork, "netio", true, "perform network operations for GET/PUT")
-	flag.StringVar(&ioConfig.dryFileSizeStr, "dryobjsize", "8m", "size of the in-memory object for dry run without disk IO")
+	flag.BoolVar(&dryRun.disk, "diskio", false, "if true, no disk operations for GET and PUT")
+	flag.BoolVar(&dryRun.network, "netio", false, "if true, no network operations for GET and PUT")
+	flag.StringVar(&dryRun.sizeStr, "dryobjsize", "8m", "in-memory random content")
+}
+
+// dry-run environment overrides dry-run CLI
+func dryinit() {
+	str := os.Getenv("DFCDISKIO")
+	if b, err := strconv.ParseBool(str); err == nil {
+		dryRun.disk = b
+	}
+	str = os.Getenv("DFCNETIO")
+	if b, err := strconv.ParseBool(str); err == nil {
+		dryRun.network = b
+	}
+	str = os.Getenv("DFCDRYOBJSIZE")
+	if str != "" {
+		if size, err := strToBytes(str); size > 0 && err == nil {
+			dryRun.size = size
+		}
+	}
+	if dryRun.disk {
+		warning := "Dry-run: disk IO will be disabled"
+		fmt.Fprintf(os.Stderr, "%s\n", warning)
+		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, bytesToStr(dryRun.size, 0))
+	}
+	if dryRun.network {
+		warning := "Dry-run: GET won't return objects, PUT won't send objects"
+		fmt.Fprintf(os.Stderr, "%s\n", warning)
+		glog.Info(warning)
+	}
 }
 
 //==================
@@ -146,10 +188,11 @@ func dfcinit() {
 	var err error
 
 	flag.Parse()
+	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 
-	ioConfig.dryFileSize, err = strToBytes(ioConfig.dryFileSizeStr)
-	if ioConfig.dryFileSize < 1 || err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid object size: %d [%s]\n", ioConfig.dryFileSize, ioConfig.dryFileSizeStr)
+	dryRun.size, err = strToBytes(dryRun.sizeStr)
+	if dryRun.size < 1 || err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid object size: %d [%s]\n", dryRun.size, dryRun.sizeStr)
 	}
 
 	if clivars.conffile == "" {
@@ -163,13 +206,12 @@ func dfcinit() {
 
 	// init daemon
 	ctx.mountpaths = fs.NewMountedFS()
+	// NOTE: proxy and, respectively, target terminations are executed in the same
+	//       exact order as the initializations below
 	ctx.rg = &rungroup{
 		runarr: make([]runner, 0, 8),
 		runmap: make(map[string]runner, 8),
 	}
-	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
-	// NOTE: proxy and, respectively, target terminations are executed in the same
-	//       exact order as the initializations below
 	if clivars.role == xproxy {
 		p := &proxyrunner{}
 		p.initSI()
@@ -195,13 +237,8 @@ func dfcinit() {
 		ctx.rg.add(iostat, xiostat)
 		t.fsprg.add(iostat)
 
-		ctx.rg.add(&atimerunner{
-			chstop:      make(chan struct{}, 4),
-			chfqn:       make(chan string, chfqnSize),
-			atimemap:    &atimemap{fsToFilesMap: make(map[string]map[string]time.Time, atimeCacheFlushThreshold)},
-			chGetAtime:  make(chan string),
-			chSendAtime: make(chan accessTimeResponse),
-		}, xatime)
+		atime := newAtimeRunner()
+		ctx.rg.add(atime, xatime)
 
 		// for mountpath definition, see fs/mountfs.go
 		if testingFSPpaths() {
@@ -220,8 +257,19 @@ func dfcinit() {
 		}
 
 		fshc := newFSHC(ctx.mountpaths, &ctx.config.FSHC, t.fqn2workfile)
-		ctx.rg.add(fshc, xfshealthchecker)
+		ctx.rg.add(fshc, xfshc)
 		t.fsprg.add(fshc)
+
+		if ctx.config.Readahead.Enabled {
+			readaheader := newReadaheader()
+			ctx.rg.add(readaheader, xreadahead)
+			t.fsprg.add(readaheader)
+			t.readahead = readaheader
+		} else {
+			ctx.config.Readahead.ByProxy = false
+			t.readahead = &dummyreadahead{}
+		}
+
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }
@@ -316,7 +364,7 @@ func getmetasyncer() *metasyncer {
 }
 
 func getfshealthchecker() *fshc {
-	r := ctx.rg.runmap[xfshealthchecker]
+	r := ctx.rg.runmap[xfshc]
 	rr, ok := r.(*fshc)
 	assert(ok)
 	return rr

@@ -276,10 +276,6 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 //       proxyrunner and targetrunner exist.
 func (h *httprunner) initSI() {
 	allowLoopback, err := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
-	if err != nil {
-		allowLoopback = false
-	}
-
 	addrList, err := getLocalIPv4List(allowLoopback)
 	if err != nil {
 		glog.Fatalf("FATAL: %v", err)

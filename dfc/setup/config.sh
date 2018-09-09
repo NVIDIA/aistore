@@ -4,6 +4,13 @@ cat > $CONFFILE <<EOL
 	"cloudprovider":		"${CLDPROVIDER}",
 	"cloud_buckets":		"cloud",
 	"local_buckets":		"local",
+	"readahead": {
+		"rahobjectmem":		1048576,
+		"rahtotalmem":		1073741824,
+		"rahbyproxy":		true,
+		"rahdiscard":		false,
+		"rahenabled":		true
+	},
 	"log": {
 		"logdir":		"$LOGDIR",
 		"loglevel": 		"${LOGLEVEL}",
