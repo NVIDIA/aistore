@@ -91,20 +91,6 @@ type (
 	}
 )
 
-// Configuration for selective disabling of disk and/or network IO.
-// It is initialized at target startup and cannot be changed on the fly.
-// The values can be set via CLI arguments or by using environment variables.
-// Environment variables have higher priority.
-type dataIOConfig struct {
-	useDisk        bool   // disk read/write is enabled (-diskio/DFCDISKIO)
-	useNetwork     bool   // network read/write is enabled (-netio/DFCNETIO)
-	dryFileSizeStr string // size of a fake object if disk IO is disabled (-dryobjsize/DFCDRYOBJSIZE)
-	dryFileSize    int64  // as above - converted to bytes from a string like '8m'
-	dryRun         bool   // dry-run mode is enabled: either disk or network IO is disabled
-}
-
-var ioConfig = &dataIOConfig{useDisk: true, useNetwork: true}
-
 //===========================================================================
 //
 // target runner
@@ -112,7 +98,7 @@ var ioConfig = &dataIOConfig{useDisk: true, useNetwork: true}
 //===========================================================================
 type targetrunner struct {
 	httprunner
-	cloudif        cloudif // multi-cloud vendor support
+	cloudif        cloudif // multi-cloud backend
 	uxprocess      *uxprocess
 	rtnamemap      *rtnamemap
 	prefetchQueue  chan filesWithDeadline
@@ -120,6 +106,7 @@ type targetrunner struct {
 	clusterStarted int64
 	regstate       regstate // registration state - the state of being registered (with the proxy) or maybe not
 	fsprg          fsprungroup
+	readahead      readaheader
 }
 
 // start target runner
@@ -127,6 +114,8 @@ func (t *targetrunner) run() error {
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.keepalive = gettargetkeepalive()
+
+	dryinit()
 
 	t.rtnamemap = newrtnamemap(128) // lock/unlock name
 
@@ -185,10 +174,6 @@ func (t *targetrunner) run() error {
 		revokedTokens: make(map[string]bool),
 		version:       1,
 	}
-
-	// disable HTTP and/or disk read and writes for performance testing if
-	// a user requested it (via CLI arguments or environment variables)
-	dataIOSetup()
 
 	//
 	// REST API: register storage target's handler(s) and start listening
@@ -272,8 +257,12 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (int, err
 }
 
 func (t *targetrunner) unregister() (int, error) {
+	smap := t.smapowner.get()
+	if smap == nil || !smap.isValid() {
+		return 0, nil
+	}
 	args := callArgs{
-		si: t.smapowner.get().ProxySI,
+		si: smap.ProxySI,
 		req: reqArgs{
 			method: http.MethodDelete,
 			path:   api.URLPath(api.Version, api.Cluster, api.Daemon, t.si.DaemonID),
@@ -352,7 +341,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		nhobj                         cksumvalue
 		bucket, objname, fqn          string
 		uname, errstr, version        string
-		size                          int64
+		size, rangeOff, rangeLen      int64
 		props                         *objectProps
 		started                       time.Time
 		errcode                       int
@@ -361,10 +350,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		file                          *os.File
 		written                       int64
 	)
+	//
+	// 1. start, validate, readahead
+	//
 	started = time.Now()
-	cksumcfg := &ctx.config.Cksum
-	versioncfg := &ctx.config.Ver
-	ct := t.contextWithAuth(r)
 	apitems := t.restAPIItems(r.URL.Path, 5)
 	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
 		return
@@ -373,12 +362,21 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	offset, length, readRange, errstr := t.validateOffsetAndLength(r)
+	query := r.URL.Query()
+	rangeOff, rangeLen, errstr = t.offsetAndLength(query)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	query := r.URL.Query()
+	bucketmd := t.bmdowner.get()
+	islocal := bucketmd.islocal(bucket)
+	fqn = t.fqn(bucket, objname, islocal)
+	if !dryRun.disk {
+		if x := query.Get(api.URLParamReadahead); x != "" { // FIXME
+			t.readahead.ahead(fqn, rangeOff, rangeLen)
+			return
+		}
+	}
 	if glog.V(4) {
 		pid := query.Get(api.URLParamProxyID)
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
@@ -386,19 +384,24 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsif.add("get.redir.μs", redelta)
 	}
-	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.islocal(bucket)
 	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
-
+	//
+	// 2. coldget, maybe
+	//
+	var (
+		cksumcfg   = &ctx.config.Cksum
+		versioncfg = &ctx.config.Ver
+		ct         = t.contextWithAuth(r)
+	)
 	// lockname(ro)
-	fqn, uname = t.fqn(bucket, objname, islocal), uniquename(bucket, objname)
+	uname = uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
-	// check if bucket-level checksumming configuration should override cluster-level configuration
+	// bucket-level checksumming should override global
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
@@ -467,7 +470,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			coldget = true
 		}
 	}
-	if coldget && ioConfig.useDisk {
+	if coldget && !dryRun.disk {
 		t.rtnamemap.unlockname(uname, false)
 		if props, errstr, errcode = t.coldget(ct, bucket, objname, false); errstr != "" {
 			if errcode == 0 {
@@ -480,24 +483,42 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		size, nhobj = props.size, props.nhobj
 	}
 
+	//
+	// 3. read local, write http (note: coldget() keeps the read lock if successful)
+	//
 existslocally:
-	// note: coldget() keeps the read lock if successful
-	defer t.rtnamemap.unlockname(uname, false)
+	var (
+		sgl                *iosgl.SGL
+		slab               *iosgl.Slab
+		buf                []byte
+		rangeReader        io.ReadSeeker
+		reader             io.Reader
+		rahSize            int64
+		rahfcacher, rahsgl = t.readahead.get(fqn)
+		sendMore           bool
+	)
+	defer func() {
+		rahfcacher.got()
+		t.rtnamemap.unlockname(uname, false)
+		if file != nil {
+			file.Close()
+		}
+		if buf != nil {
+			slab.Free(buf)
+		}
+		if sgl != nil {
+			sgl.Free()
+		}
+	}()
 
-	//
-	// local file => http response
-	//
-	if size == 0 {
-		glog.Warningf("Unexpected: object %s/%s size is 0 (zero)", bucket, objname)
-	}
-	returnRangeChecksum := cksumcfg.Checksum != ChecksumNone && readRange && cksumcfg.EnableReadRangeChecksum
-	if !coldget && !returnRangeChecksum && cksumcfg.Checksum != ChecksumNone {
+	cksumRange := cksumcfg.Checksum != ChecksumNone && rangeLen > 0 && cksumcfg.EnableReadRangeChecksum
+	if !coldget && !cksumRange && cksumcfg.Checksum != ChecksumNone {
 		hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" && hashbinary != nil {
 			nhobj = newcksumvalue(cksumcfg.Checksum, string(hashbinary))
 		}
 	}
-	if nhobj != nil && !returnRangeChecksum {
+	if nhobj != nil && !cksumRange {
 		htype, hval := nhobj.get()
 		w.Header().Add(api.HeaderDFCChecksumType, htype)
 		w.Header().Add(api.HeaderDFCChecksumVal, hval)
@@ -506,13 +527,12 @@ existslocally:
 		w.Header().Add(api.HeaderDFCObjVersion, props.version)
 	}
 
-	// shortcut in case of disk IO is disabled
-	if !ioConfig.useDisk {
-		if ioConfig.useNetwork {
-			rd := readers.NewRandReader(ioConfig.dryFileSize)
+	// loopback if disk IO is disabled
+	if dryRun.disk {
+		if !dryRun.network {
+			rd := readers.NewRandReader(dryRun.size)
 			if _, err = io.Copy(w, rd); err != nil {
-				errstr = fmt.Sprintf("Failed to send file: %v", err)
-				glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
+				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
 				t.statsif.add("err.n", 1)
 				return
 			}
@@ -522,70 +542,92 @@ existslocally:
 		t.statsif.addMany(namedVal64{"get.n", 1}, namedVal64{"get.μs", int64(delta)})
 		return
 	}
-
-	file, err = os.Open(fqn)
-	if err != nil {
-		if os.IsPermission(err) {
-			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", fqn)
-			t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
-		} else {
-			errstr = fmt.Sprintf("Failed to open local file %s, err: %v", fqn, err)
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-		}
-		t.fshc(err, fqn)
+	if size == 0 {
+		glog.Warningf("%s/%s size is 0 (zero)", bucket, objname)
 		return
 	}
-
-	defer file.Close()
-	if readRange {
-		size = length
-	}
-
-	slab := iosgl.SelectSlab(size)
-	buf := slab.Alloc()
-	defer slab.Free(buf)
-
-	var sgl *iosgl.SGL
-	defer func() {
-		if sgl != nil {
-			sgl.Free()
+	if rahsgl != nil {
+		rahSize = rahsgl.Size()
+		if rangeLen == 0 {
+			sendMore = rahSize < size
+		} else {
+			sendMore = rahSize < rangeLen
 		}
-	}()
-	var rangeReader io.ReadSeeker = io.NewSectionReader(file, offset, length)
-	if returnRangeChecksum {
-		var cksum string
-		cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, length, offset, buf)
-		if errstr != "" {
-			glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
-			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+	}
+	if rahSize == 0 || sendMore {
+		file, err = os.Open(fqn)
+		if err != nil {
+			if os.IsPermission(err) {
+				errstr = fmt.Sprintf("Permission to access %s denied, err: %v", fqn, err)
+				t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
+			} else {
+				errstr = fmt.Sprintf("Failed to open %s, err: %v", fqn, err)
+				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+			}
+			t.fshc(err, fqn)
 			return
-
 		}
-		w.Header().Add(api.HeaderDFCChecksumType, cksumcfg.Checksum)
-		w.Header().Add(api.HeaderDFCChecksumVal, cksum)
 	}
 
-	if readRange {
-		if ioConfig.useNetwork {
-			written, err = io.CopyBuffer(w, rangeReader, buf)
-		} else {
-			written, err = io.CopyBuffer(ioutil.Discard, rangeReader, buf)
+send:
+	if rahsgl != nil && rahSize > 0 {
+		// reader = iosgl.NewReader(rahsgl) - NOTE
+		reader = rahsgl
+		slab = rahsgl.Slab()
+		buf = slab.Alloc()
+		glog.Infof("%s readahead %d", fqn, rahSize) // FIXME: DEBUG
+	} else if rangeLen == 0 {
+		if rahSize > 0 {
+			file.Seek(rahSize, io.SeekStart)
 		}
+		reader = file
+		buf, slab = iosgl.AllocFromSlab(size)
 	} else {
-		// copy
-		if ioConfig.useNetwork {
-			written, err = io.CopyBuffer(w, file, buf)
-		} else {
-			written, err = io.CopyBuffer(ioutil.Discard, file, buf)
+		if rahSize > 0 {
+			rangeOff += rahSize
+			rangeLen -= rahSize
 		}
+		buf, slab = iosgl.AllocFromSlab(rangeLen)
+		if cksumRange {
+			assert(rahSize == 0, "NOT IMPLEMENTED YET") // TODO
+			var cksum string
+			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
+			if errstr != "" {
+				glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
+				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
+				return
+
+			}
+			reader = rangeReader
+			w.Header().Add(api.HeaderDFCChecksumType, cksumcfg.Checksum)
+			w.Header().Add(api.HeaderDFCChecksumVal, cksum)
+		} else {
+			reader = io.NewSectionReader(file, rangeOff, rangeLen)
+		}
+	}
+
+	if !dryRun.network {
+		written, err = io.CopyBuffer(w, reader, buf)
+	} else {
+		written, err = io.CopyBuffer(ioutil.Discard, reader, buf)
 	}
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to send file %s, err: %v", fqn, err)
+		if !dryRun.network {
+			errstr = fmt.Sprintf("Failed to GET %s, err: %v", fqn, err)
+		} else {
+			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", fqn, err)
+		}
 		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 		t.fshc(err, fqn)
 		t.statsif.add("err.n", 1)
 		return
 	}
+	if sendMore {
+		rahsgl = nil
+		sendMore = false
+		goto send
+	}
+
 	if !coldget {
 		getatimerunner().touch(fqn)
 	}
@@ -601,7 +643,7 @@ existslocally:
 	t.statsif.addMany(namedVal64{"get.n", 1}, namedVal64{"get.μs", int64(delta)})
 }
 
-func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offset int64, buf []byte) (
+func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
 	cksum string, sgl *iosgl.SGL, rangeReader io.ReadSeeker, errstr string) {
 	rangeReader = io.NewSectionReader(file, offset, length)
 	xx := xxhash.New64()
@@ -631,27 +673,24 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, length int64, offse
 	return
 }
 
-func (t *targetrunner) validateOffsetAndLength(r *http.Request) (
-	offset int64, length int64, readRange bool, errstr string) {
-	query := r.URL.Query()
+func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, errstr string) {
 	offsetStr, lengthStr := query.Get(api.URLParamOffset), query.Get(api.URLParamLength)
 	if offsetStr == "" && lengthStr == "" {
 		return
 	}
-	errstr = fmt.Sprintf("Invalid offset: [%s] and length: [%s] combination", offsetStr, lengthStr)
-	// Specifying only one is invalid
+	s := fmt.Sprintf("Invalid offset [%s] and/or length [%s]", offsetStr, lengthStr)
 	if offsetStr == "" || lengthStr == "" {
+		errstr = s
 		return
 	}
-	offset, err := strconv.ParseInt(url.QueryEscape(offsetStr), 10, 64)
-	if err != nil || offset < 0 {
+	o, err1 := strconv.ParseInt(url.QueryEscape(offsetStr), 10, 64)
+	l, err2 := strconv.ParseInt(url.QueryEscape(lengthStr), 10, 64)
+	if err1 != nil || err2 != nil || o < 0 || l <= 0 {
+		errstr = s
 		return
 	}
-	length, err = strconv.ParseInt(url.QueryEscape(lengthStr), 10, 64)
-	if err != nil || length <= 0 {
-		return
-	}
-	return offset, length, true, ""
+	offset, length = o, l
+	return
 }
 
 // PUT /v1/objects/bucket-name/object-name
@@ -1448,8 +1487,8 @@ ret:
 }
 
 func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool, size int64, version, errstr string) {
-	if !ioConfig.useDisk {
-		return false, ioConfig.dryFileSize, "1", ""
+	if dryRun.disk {
+		return false, dryRun.size, "1", ""
 	}
 
 	finfo, err := os.Stat(fqn)
@@ -1727,16 +1766,16 @@ func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
 	ci := &allfinfos{t, // targetrunner
-		make([]*api.BucketEntry, 0, api.DefaultPageSize), // ls
-		msg.GetPrefix,       // prefix
-		msg.GetPageMarker,   // marker
-		markerDir,           // markerDir
-		msg,                 // GetMsg
-		"",                  // lastFilePath - next page marker
-		bucket,              // bucket
-		0,                   // fileCount
-		0,                   // rootLength
-		api.DefaultPageSize, // limit - maximun number of objects to return
+		make([]*api.BucketEntry, 0, api.DefaultPageSize),     // ls
+		msg.GetPrefix,                                        // prefix
+		msg.GetPageMarker,                                    // marker
+		markerDir,                                            // markerDir
+		msg,                                                  // GetMsg
+		"",                                                   // lastFilePath - next page marker
+		bucket,                                               // bucket
+		0,                                                    // fileCount
+		0,                                                    // rootLength
+		api.DefaultPageSize,                                  // limit - maximun number of objects to return
 		strings.Contains(msg.GetProps, api.GetPropsAtime),    // needAtime
 		strings.Contains(msg.GetProps, api.GetPropsCtime),    // needCtime
 		strings.Contains(msg.GetProps, api.GetPropsChecksum), // needChkSum
@@ -1885,12 +1924,11 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		htype, hval = hdhobj.get()
 	}
 	// optimize out if the checksums do match
-	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone && !ioConfig.dryRun {
+	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone && !dryRun.disk && !dryRun.network {
 		file, err = os.Open(fqn)
 		// exists - compute checksum and compare with the caller's
 		if err == nil {
-			slab := iosgl.SelectSlab(0)
-			buf := slab.Alloc()
+			buf, slab := iosgl.AllocFromSlab(0)
 			if htype == ChecksumXXHash {
 				xxhashval, errstr = ComputeXXHash(file, buf)
 			} else {
@@ -1919,14 +1957,14 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		assert(hdhobj == nil || htype == nhtype)
 	}
 	// validate checksum when and if provided
-	if hval != "" && nhval != "" && hval != nhval && !ioConfig.dryRun {
+	if hval != "" && nhval != "" && hval != nhval && !dryRun.disk && !dryRun.network {
 		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %s... != %s...", bucket, objname, htype, hval[:8], nhval[:8])
 		return
 	}
 	// commit
 	props := &objectProps{nhobj: nhobj}
 	if sgl == nil {
-		if !ioConfig.dryRun {
+		if !dryRun.disk && !dryRun.network {
 			errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 		}
 		if errstr == "" {
@@ -1944,7 +1982,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 }
 
 func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {
-	slab := iosgl.SelectSlab(sgl.Size())
+	slab := sgl.Slab()
 	buf := slab.Alloc()
 	defer func() {
 		sgl.Free()
@@ -2342,10 +2380,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, XattrObjVersion, errstr)
 	}
 
-	slab := iosgl.SelectSlab(size)
 	if cksumcfg.Checksum != ChecksumNone {
 		assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
-		buf := slab.Alloc()
+		buf, slab := iosgl.AllocFromSlab(size)
 		if xxhashval, errstr = ComputeXXHash(file, buf); errstr != "" {
 			slab.Free(buf)
 			return errstr
@@ -2779,6 +2816,9 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		cksumcfg             = &ctx.config.Cksum
 	)
 
+	if dryRun.disk && dryRun.network {
+		return
+	}
 	// try to override cksum config with bucket-level config
 	if bucket, _, err := t.fqn2bckobj(fqn); err == nil {
 		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
@@ -2786,15 +2826,10 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		}
 	}
 
-	// shortcut if nothing to do
-	if !ioConfig.useDisk && !ioConfig.useNetwork {
-		return
+	if dryRun.network {
+		reader = readers.NewRandReader(dryRun.size)
 	}
-
-	if !ioConfig.useNetwork {
-		reader = readers.NewRandReader(ioConfig.dryFileSize)
-	}
-	if ioConfig.useDisk {
+	if !dryRun.disk {
 		if file, err = CreateFile(fqn); err != nil {
 			t.fshc(err, fqn)
 			errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
@@ -2805,14 +2840,13 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		filewriter = ioutil.Discard
 	}
 
-	slab := iosgl.SelectSlab(0)
-	buf := slab.Alloc()
+	buf, slab := iosgl.AllocFromSlab(0)
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		if errstr == "" {
 			return
 		}
-		if ioConfig.useDisk {
+		if !dryRun.disk {
 			if err = file.Close(); err != nil {
 				glog.Errorf("Nested: failed to close received file %s, err: %v", fqn, err)
 			}
@@ -2822,12 +2856,11 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		}
 	}()
 
-	// shortcut for dry run
-	if ioConfig.dryRun {
+	if dryRun.disk || dryRun.network {
 		if written, err = ReceiveAndChecksum(filewriter, reader, buf); err != nil {
 			errstr = err.Error()
 		}
-		if ioConfig.useDisk {
+		if !dryRun.disk {
 			if err = file.Close(); err != nil {
 				errstr = fmt.Sprintf("Failed to close received file %s, err: %v", fqn, err)
 			}
@@ -3504,8 +3537,7 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 		return false, errstr
 	}
 
-	slab := iosgl.SelectSlab(slabSize)
-	buf := slab.Alloc()
+	buf, slab := iosgl.AllocFromSlab(slabSize)
 	xxHashValue, errstr := ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)
@@ -3601,37 +3633,4 @@ func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled,
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
 	return t.fsprg.disableMountpath(mountpath)
-}
-
-// Environment variables override disk and network IO settings passed in command line
-func dataIOSetup() {
-	str := os.Getenv("DFCDISKIO")
-	if b, err := strconv.ParseBool(str); err == nil {
-		ioConfig.useDisk = b
-	}
-	str = os.Getenv("DFCNETIO")
-	if b, err := strconv.ParseBool(str); err == nil {
-		ioConfig.useNetwork = b
-	}
-	str = os.Getenv("DFCDRYOBJSIZE")
-	if str != "" {
-		if dryFileSize, err := strToBytes(str); dryFileSize > 0 && err == nil {
-			ioConfig.dryFileSize = dryFileSize
-		}
-	}
-
-	if !ioConfig.useDisk {
-		warning := "Dry run: disk IO will be disabled"
-		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Infof("%s - in memory file size: %d (%s) bytes",
-			warning, ioConfig.dryFileSize, bytesToStr(ioConfig.dryFileSize, 0))
-	}
-	if !ioConfig.useNetwork {
-		warning := "Dry run: DFC will not return bytes for GET requests and " +
-			"will not read data from PUT requests"
-		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Info(warning)
-	}
-
-	ioConfig.dryRun = !ioConfig.useNetwork || !ioConfig.useDisk
 }

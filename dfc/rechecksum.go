@@ -126,8 +126,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 		return ioerr
 	}
 
-	slab := iosgl.SelectSlab(0)
-	buf := slab.Alloc()
+	buf, slab := iosgl.AllocFromSlab(osfi.Size())
 	xxHashVal, errstr := ComputeXXHash(file, buf)
 	slab.Free(buf)
 	if errstr != "" {

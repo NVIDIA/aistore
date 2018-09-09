@@ -17,17 +17,14 @@ import (
 	"github.com/json-iterator/go"
 )
 
+type Vote string
+
 const (
 	VoteYes Vote = "YES"
 	VoteNo  Vote = "NO"
-
-	// xaction constant for Election
-	ProxyPingTimeout = 100 * time.Millisecond
 )
 
 type (
-	Vote string
-
 	VoteRecord struct {
 		Candidate string    `json:"candidate"`
 		Primary   string    `json:"primary"`

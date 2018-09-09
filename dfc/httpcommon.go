@@ -275,11 +275,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 // Note: Sadly httprunner has become the sharing point where common code for
 //       proxyrunner and targetrunner exist.
 func (h *httprunner) initSI() {
-	allowLoopback, err := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
-	if err != nil {
-		allowLoopback = false
-	}
-
+	allowLoopback, _ := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
 	addrList, err := getLocalIPv4List(allowLoopback)
 	if err != nil {
 		glog.Fatalf("FATAL: %v", err)

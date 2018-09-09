@@ -537,20 +537,6 @@ func getTempFile(t *testing.T, prefix string) (*os.File, string) {
 	return tempFile, fileSystem
 }
 
-func newAtimeRunner() *atimerunner {
-	atimer := &atimerunner{
-		chfqn:  make(chan string),
-		chstop: make(chan struct{}),
-		atimemap: &atimemap{
-			fsToFilesMap: make(map[string]map[string]time.Time),
-		},
-		chGetAtime:  make(chan string, 1),
-		chSendAtime: make(chan accessTimeResponse, 1),
-	}
-
-	return atimer
-}
-
 func cleanMountpaths() {
 	availableMountpaths, disabledMountpaths := ctx.mountpaths.Mountpaths()
 	for _, mpathInfo := range availableMountpaths {

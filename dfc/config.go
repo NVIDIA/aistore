@@ -22,16 +22,18 @@ const (
 	TiB = 1024 * GiB
 )
 
-// checksums: xattr, http header, and config; versioning
+// string enum: http header, checksum, versioning - FIXME: move to ../api
 const (
+	// http header
 	XattrXXHashVal  = "user.obj.dfchash"
 	XattrObjVersion = "user.obj.version"
-
-	ChecksumNone    = "none"
-	ChecksumXXHash  = "xxhash"
-	ChecksumMD5     = "md5"
+	// checksum hash function
+	ChecksumNone   = "none"
+	ChecksumXXHash = "xxhash"
+	ChecksumMD5    = "md5"
+	// buckets to inherit global checksum config
 	ChecksumInherit = "inherit"
-
+	// versioning
 	VersionAll   = "all"
 	VersionCloud = "cloud"
 	VersionLocal = "local"
@@ -61,6 +63,7 @@ type dfconfig struct {
 	CloudProvider    string            `json:"cloudprovider"`
 	CloudBuckets     string            `json:"cloud_buckets"`
 	LocalBuckets     string            `json:"local_buckets"`
+	Readahead        rahconfig         `json:"readahead"`
 	Log              logconfig         `json:"log"`
 	Periodic         periodic          `json:"periodic"`
 	Timeout          timeoutconfig     `json:"timeout"`
@@ -81,6 +84,14 @@ type dfconfig struct {
 type xactionConfig struct {
 	DiskUtilLowWM  uint32 `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
 	DiskUtilHighWM uint32 `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
+}
+
+type rahconfig struct {
+	ObjectMem int64 `json:"rahobjectmem"`
+	TotalMem  int64 `json:"rahtotalmem"`
+	ByProxy   bool  `json:"rahbyproxy"`
+	Discard   bool  `json:"rahdiscard"`
+	Enabled   bool  `json:"rahenabled"`
 }
 
 type logconfig struct {

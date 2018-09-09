@@ -317,14 +317,14 @@ Warning: as of version 1.2, disabling and enabling IO on the fly is not supporte
 
 | CLI argument | Environment variable | Default value | Description |
 |---|---|---|---|
-| diskio | DFCDISKIO | true | false - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see DFCDRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
-| netio | DFCNETIO | true | false - disables HTTP read and write. For GET requests a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, DFC reads the data from in-memory object and saves the data to disks.<br>Valid values are true or 1, and false or 0 |
+| nodiskio | DFCNODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see DFCDRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
+| nonetio | DFCNONETIO | false | true - disables HTTP read and write. For GET requests a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, DFC reads the data from in-memory object and saves the data to disks.<br>Valid values are true or 1, and false or 0 |
 | dryobjsize | DFCDRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m' - the size of an object is 8 megabytes |
 
-Example of deploying a cluster with disk IO disabled and object size 256 kilobytes:
+Example of deploying a cluster with disk IO disabled and object size 256KB:
 
 ```
-/opt/dfcpub/dfc$ DFCNETIO=true DFCDISKIO=false DFCDRYOBJSIZE=256k make deploy
+/opt/dfcpub/dfc$ DFCNODISKIO=true DFCDRYOBJSIZE=256k make deploy
 ```
 
 Warning: the command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.

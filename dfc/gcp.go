@@ -385,8 +385,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	gcpObj := client.Bucket(bucket).Object(objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
-	slab := iosgl.SelectSlab(0)
-	buf := slab.Alloc()
+	buf, slab := iosgl.AllocFromSlab(0)
 	written, err := io.CopyBuffer(wc, file, buf)
 	slab.Free(buf)
 	if err != nil {

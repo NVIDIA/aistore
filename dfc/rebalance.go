@@ -54,13 +54,12 @@ func (rcl *xrebpathrunner) oneRebalance() {
 	rcl.wg.Done()
 }
 
-// the walking callback is execited by the LRU xaction
-// (notice the receiver)
+// the walking callback is executed by the LRU xaction
 func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) error {
 	// Check if we should abort
 	select {
 	case <-rcl.xreb.abrt:
-		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rcl.xreb.tostring(), rcl.mpathplus)
+		err = fmt.Errorf("%s: aborted for path %s", rcl.xreb.tostring(), rcl.mpathplus)
 		glog.Infoln(err)
 		glog.Flush()
 		rcl.aborted = true
@@ -76,11 +75,11 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 	if err != nil {
 		// If we are traversing non-existing file we should not care
 		if os.IsNotExist(err) {
-			glog.Errorf("rebwalkf attempted to read a file that was deleted, file: %s", fqn)
+			glog.Warningf("%s does not exist", fqn)
 			return nil
 		}
 		// Otherwise we care
-		glog.Errorf("rebwalkf invoked with err: %v", err)
+		glog.Errorf("invoked with err: %v", err)
 		return err
 	}
 	// Skip dirs
@@ -157,11 +156,11 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 	if err != nil {
 		// If we are traversing non-existing file we should not care
 		if os.IsNotExist(err) {
-			glog.Errorf("rebwalkf attempted to read a file that was deleted, file: %s", fqn)
+			glog.Warningf("%s does not exist", fqn)
 			return nil
 		}
 		// Otherwise we care
-		glog.Errorf("rebwalkf invoked with err: %v", err)
+		glog.Errorf("invoked with err: %v", err)
 		return err
 	}
 	// Skip dirs

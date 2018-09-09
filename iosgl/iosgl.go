@@ -53,6 +53,7 @@ func NewSGL(oosize uint64) *SGL {
 
 func (z *SGL) Cap() int64  { return int64(len(z.sgl)) * z.slab.Size() }
 func (z *SGL) Size() int64 { return z.woff }
+func (z *SGL) Slab() *Slab { return z.slab }
 
 func (z *SGL) grow(toSize int64) {
 	for z.Cap() < toSize {

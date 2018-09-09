@@ -74,6 +74,16 @@ type accessTimeResponse struct {
 	ok         bool
 }
 
+func newAtimeRunner() (r *atimerunner) {
+	r = &atimerunner{}
+	r.chstop = make(chan struct{}, 4)
+	r.chfqn = make(chan string, chfqnSize)
+	r.atimemap = &atimemap{fsToFilesMap: make(map[string]map[string]time.Time, atimeCacheFlushThreshold)}
+	r.chGetAtime = make(chan string)
+	r.chSendAtime = make(chan accessTimeResponse)
+	return
+}
+
 // run initiates the work of the receiving atimerunner
 func (r *atimerunner) run() error {
 	glog.Infof("Starting %s", r.name)

@@ -88,9 +88,9 @@ func (f *fshc) run() error {
 		case request := <-f.reqCh:
 			switch request.ty {
 			case fshcReqAddMountpath:
-				f.addMountpath(request.body)
+				f.addmp(request.body)
 			case fshcReqRemoveMountpath:
-				f.removeMountpath(request.body)
+				f.delmp(request.body)
 			}
 		case <-f.controlCh:
 			return nil
@@ -185,11 +185,11 @@ func (f *fshc) runMountpathChecker(r *mountpathChecker) {
 func (f *fshc) init() {
 	availablePaths, disabledPaths := f.mountpaths.Mountpaths()
 	for mpath := range availablePaths {
-		f.addMountpath(mpath)
+		f.addmp(mpath)
 	}
 
 	for mpath := range disabledPaths {
-		f.addMountpath(mpath)
+		f.addmp(mpath)
 	}
 }
 
@@ -201,7 +201,7 @@ func (f *fshc) onerr(fqn string) {
 	f.fileListCh <- fqn
 }
 
-func (f *fshc) removeMountpath(mpath string) {
+func (f *fshc) delmp(mpath string) {
 	mpathChecker, ok := f.mpathCheckers[mpath]
 	if !ok {
 		glog.Error("wanted to remove mountpath which was not registered")
@@ -212,7 +212,7 @@ func (f *fshc) removeMountpath(mpath string) {
 	mpathChecker.controlCh <- struct{}{} // stop mpathChecker
 }
 
-func (f *fshc) addMountpath(mpath string) {
+func (f *fshc) addmp(mpath string) {
 	mpathChecker := newMountpathChecker(mpath)
 	f.mpathCheckers[mpath] = mpathChecker
 	go f.runMountpathChecker(mpathChecker)
@@ -284,7 +284,7 @@ func (f *fshc) tryReadFile(fqn string, sgl *iosgl.SGL) error {
 	}
 	defer file.Close()
 
-	slab := iosgl.SelectSlab(sgl.Size())
+	slab := sgl.Slab()
 	buf := slab.Alloc()
 	defer slab.Free(buf)
 
@@ -316,7 +316,7 @@ func (f *fshc) tryWriteFile(mountpath string, fileSize int, sgl *iosgl.SGL) erro
 		return err
 	}
 
-	slab := iosgl.SelectSlab(sgl.Size())
+	slab := sgl.Slab()
 	buf := slab.Alloc()
 	defer func() {
 		slab.Free(buf)

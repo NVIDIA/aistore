@@ -332,6 +332,24 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
 		}
 		redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+		if ctx.config.Readahead.Enabled && ctx.config.Readahead.ByProxy {
+			go func(url string) {
+				url += "&" + api.URLParamReadahead + "=true"
+				args := callArgs{
+					si: nil, // already inside url
+					req: reqArgs{
+						method: r.Method,
+						header: r.Header,
+						base:   url,
+					},
+					timeout: ctx.config.Timeout.ProxyPing,
+				}
+				res := p.call(args)
+				if res.err != nil {
+					glog.Errorf("Failed readahead %s/%s => %s: %v", bucket, objname, si.DaemonID, res.err)
+				}
+			}(redirecturl)
+		}
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
 	p.statsif.add("get.n", 1)
@@ -2106,7 +2124,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 					method: http.MethodPost,
 					path:   api.URLPath(api.Version, api.Daemon, api.Register),
 				},
-				timeout: ProxyPingTimeout,
+				timeout: ctx.config.Timeout.ProxyPing,
 			}
 			res := p.call(args)
 			if res.err != nil {
@@ -2275,7 +2293,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 				method: http.MethodDelete,
 				path:   api.URLPath(api.Version, api.Daemon, api.Unregister),
 			},
-			timeout: ProxyPingTimeout,
+			timeout: ctx.config.Timeout.ProxyPing,
 		}
 		res := p.call(args)
 		if res.err != nil {
