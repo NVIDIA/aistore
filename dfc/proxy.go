@@ -527,9 +527,9 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
 	rr.Lock()
-	rr.Core.Uptime = int64(time.Since(p.starttime) / time.Microsecond)
+	rr.Core.Tracker["uptime.μs"].Value = int64(time.Since(p.starttime) / time.Microsecond)
 	if p.startedup(0) == 0 {
-		rr.Core.Uptime = 0
+		rr.Core.Tracker["uptime.μs"].Value = 0
 	}
 	jsbytes, err := jsoniter.Marshal(rr.Core)
 	rr.Unlock()
@@ -2035,7 +2035,7 @@ func (p *proxyrunner) invokeHttpGetClusterStats(w http.ResponseWriter, r *http.R
 	out.Target = targetStats
 	rr := getproxystatsrunner()
 	rr.RLock()
-	out.Proxy = &rr.Core
+	out.Proxy = rr.Core
 	jsbytes, err := jsoniter.Marshal(out)
 	rr.RUnlock()
 	common.Assert(err == nil, err)

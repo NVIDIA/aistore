@@ -3602,7 +3602,7 @@ func (t *targetrunner) pollClusterStarted() {
 			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.PublicNet.DirectURL, err, string(res.outjson))
 			continue
 		}
-		if proxystats.Uptime != 0 {
+		if proxystats.Tracker["uptime.μs"].Value != 0 {
 			break
 		}
 	}

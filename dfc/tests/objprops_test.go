@@ -24,8 +24,8 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 	bytesChanged = 0
 
 	for _, v := range stats.Target {
-		objChanged += v.Core.Numvchanged
-		bytesChanged += v.Core.Bytesvchanged
+		objChanged += v.Core.Tracker["vchange.n"].Value
+		bytesChanged += v.Core.Tracker["vchange.size"].Value
 	}
 
 	return

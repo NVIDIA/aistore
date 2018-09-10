@@ -580,7 +580,8 @@ func TestRebalance(t *testing.T) {
 	stats := getClusterStats(httpclient, t, proxyURL)
 	for k, v := range stats.Target {
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
-			v.Core.Numsentbytes, v.Core.Numsentfiles, v.Core.Numrecvbytes, v.Core.Numrecvfiles
+			v.Core.Tracker["tx.size"].Value, v.Core.Tracker["tx.n"].Value,
+			v.Core.Tracker["rx.size"].Value, v.Core.Tracker["rx.n"].Value
 	}
 
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
@@ -655,10 +656,10 @@ func TestRebalance(t *testing.T) {
 	stats = getClusterStats(httpclient, t, proxyURL)
 	var bsent, fsent, brecv, frecv int64
 	for k, v := range stats.Target {
-		bsent += v.Core.Numsentbytes - bytesSentOrig[k]
-		fsent += v.Core.Numsentfiles - filesSentOrig[k]
-		brecv += v.Core.Numrecvbytes - bytesRecvOrig[k]
-		frecv += v.Core.Numrecvfiles - filesRecvOrig[k]
+		bsent += v.Core.Tracker["tx.size"].Value - bytesSentOrig[k]
+		fsent += v.Core.Tracker["tx.n"].Value - filesSentOrig[k]
+		brecv += v.Core.Tracker["rx.size"].Value - bytesRecvOrig[k]
+		frecv += v.Core.Tracker["rx.n"].Value - filesRecvOrig[k]
 	}
 
 	//
@@ -825,7 +826,7 @@ func TestLRU(t *testing.T) {
 	//
 	stats := getClusterStats(httpclient, t, proxyURL)
 	for k, v := range stats.Target {
-		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Bytesevicted, v.Core.Filesevicted
+		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Tracker["lru.evict.size"].Value, v.Core.Tracker["lru.evict.n"].Value
 		for _, c := range v.Capacity {
 			usedpct = common.Min(usedpct, int(c.Usedpct))
 		}
@@ -890,9 +891,9 @@ func TestLRU(t *testing.T) {
 	stats = getClusterStats(httpclient, t, proxyURL)
 	testFsPaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
-		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
+		bytes := v.Core.Tracker["lru.evict.size"].Value - bytesEvictedOrig[k]
 		tlogf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
-			k, v.Core.Filesevicted-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
+			k, v.Core.Tracker["lru.evict.n"].Value-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
 		//
 		// testingFSPpaths() - cannot reliably verify space utilization by tmpfs
 		//
