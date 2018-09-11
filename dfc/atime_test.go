@@ -248,6 +248,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		runarr: make([]runner, 0, 4),
 		runmap: make(map[string]runner),
 	}
+	ctx.mountpaths = fs.NewMountedFS()
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -301,6 +302,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		runarr: make([]runner, 0, 1),
 		runmap: make(map[string]runner),
 	}
+	ctx.mountpaths = fs.NewMountedFS()
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -346,6 +348,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		runarr: make([]runner, 0, 1),
 		runmap: make(map[string]runner),
 	}
+	ctx.mountpaths = fs.NewMountedFS()
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -392,6 +395,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		runarr: make([]runner, 0, 1),
 		runmap: make(map[string]runner),
 	}
+	ctx.mountpaths = fs.NewMountedFS()
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -439,6 +443,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		runarr: make([]runner, 0, 1),
 		runmap: make(map[string]runner),
 	}
+	ctx.mountpaths = fs.NewMountedFS()
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -486,6 +491,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		runarr: make([]runner, 0, 1),
 		runmap: make(map[string]runner),
 	}
+	ctx.mountpaths = fs.NewMountedFS()
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
