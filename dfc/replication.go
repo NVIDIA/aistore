@@ -86,7 +86,7 @@ func (rr *replicationRunner) newReceiveService(srcDirectURL, fqn string, httpReq
 func newReplicationRunner(t *targetrunner) *replicationRunner {
 	return &replicationRunner{
 		t:                 t,
-		controlCh:         make(chan struct{}, 1),
+		controlCh:         make(chan struct{}),
 		serviceDispatchCh: make(chan *replicationService, replicationDispatchBufferSize),
 		serviceControlCh:  make(chan struct{}, replicationServicePoolSize),
 	}
@@ -259,42 +259,44 @@ func (rserv *replicationService) wait() error {
 }
 
 func (rr *replicationRunner) run() error {
-	select {
-	case service := <-rr.serviceDispatchCh:
-		go func() {
-			var err error
+	for {
+		select {
+		case service := <-rr.serviceDispatchCh:
+			go func() {
+				var err error
 
-			// allow at most replicationServicePoolSize services
-			// to run concurrently
-			rr.serviceControlCh <- struct{}{}
+				// allow at most replicationServicePoolSize services
+				// to run concurrently
+				rr.serviceControlCh <- struct{}{}
 
-			if service.action == replicationActSend {
-				err = service.send()
-			} else { // replicationActReceive
-				err = service.receive()
-			}
+				if service.action == replicationActSend {
+					err = service.send()
+				} else { // replicationActReceive
+					err = service.receive()
+				}
 
-			if err != nil {
-				glog.Errorf("Error occurred during object replication: "+
-					"action: %s %s, source: %s, destination: %s",
-					service.action, service.fqn, service.srcDirectURL, service.dstDirectURL)
-			}
+				if err != nil {
+					glog.Errorf("Error occurred during object replication: "+
+						"action: %s %s, source: %s, destination: %s",
+						service.action, service.fqn, service.srcDirectURL, service.dstDirectURL)
+				}
 
-			if service.resultCh != nil {
-				service.resultCh <- err
-				close(service.resultCh)
-			}
+				if service.resultCh != nil {
+					service.resultCh <- err
+					close(service.resultCh)
+				}
 
-			<-rr.serviceControlCh
-		}()
-	case <-rr.controlCh:
-		break
+				<-rr.serviceControlCh
+			}()
+		case <-rr.controlCh:
+			return nil
+		}
 	}
-	return nil
 }
 
 func (rr *replicationRunner) stop(err error) {
 	rr.controlCh <- struct{}{}
+	glog.Warningf("Replication runner stopped with error: %v", err)
 }
 
 func (rr *replicationRunner) dispatchService(rserv *replicationService) {
