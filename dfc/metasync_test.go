@@ -398,7 +398,6 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 			IP:   net.ParseIP("127.0.0.1"),
 			Port: 53538, // the lucky port
 		}
-		s = &http.Server{Addr: addrInfo.String()}
 	)
 
 	// handler for /v1/metasync
@@ -413,7 +412,8 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 
 	// function shared between the two cases: start proxy, wait for a sync call
 	f := func(n int) {
-		var wg sync.WaitGroup
+		wg := &sync.WaitGroup{}
+		s := &http.Server{Addr: addrInfo.String()}
 
 		wg.Add(1)
 		go func() {
