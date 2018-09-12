@@ -16,6 +16,27 @@
   version = "v0.23.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/NVIDIA/dfcpub"
+  packages = [
+    "3rdparty/glog",
+    "3rdparty/webdav",
+    "3rdparty/webdav/internal/xml",
+    "api",
+    "cmd/dfcloader/stats",
+    "dfc",
+    "dfc/statsd",
+    "dfc/tests/util",
+    "dfc/util/readers",
+    "fs",
+    "iosgl",
+    "pkg/client",
+    "pkg/client/readers",
+    "xoshiro256"
+  ]
+  revision = "261123779e562b7ea8fac49151aec51ccac8e021"
+
+[[projects]]
   name = "github.com/OneOfOne/xxhash"
   packages = ["."]
   revision = "6def279d2ce6c81a79dd1c1be580f03bb216fb8a"
@@ -96,6 +117,24 @@
   name = "github.com/jmespath/go-jmespath"
   packages = ["."]
   revision = "0b12d6b5"
+
+[[projects]]
+  name = "github.com/json-iterator/go"
+  packages = ["."]
+  revision = "1624edc4454b8682399def8740d46db5e4362ba4"
+  version = "v1.1.5"
+
+[[projects]]
+  name = "github.com/modern-go/concurrent"
+  packages = ["."]
+  revision = "bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94"
+  version = "1.0.3"
+
+[[projects]]
+  name = "github.com/modern-go/reflect2"
+  packages = ["."]
+  revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
+  version = "1.0.1"
 
 [[projects]]
   name = "go.opencensus.io"
@@ -245,6 +284,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "64d8645b6fe963a03e1954672940de590caec78f6584b774216b675fd8b3468b"
+  inputs-digest = "0173134fae628cca146168f2a7c59731dfe82330a2aa1330eb68f640cc54ac9d"
   solver-name = "gps-cdcl"
   solver-version = 1
