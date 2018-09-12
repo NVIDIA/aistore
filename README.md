@@ -95,13 +95,12 @@ When these two are set, DFC will act as a reverse proxy for your outgoing HTTP r
 
 ### Regular installation
 
-If you've already installed [Go](https://golang.org/dl/) and [dep](https://github.com/golang/dep), getting started with DFC takes about 30 seconds:
+If you've already installed [Go](https://golang.org/dl/), getting started with DFC takes about 30 seconds:
 
 ```shell
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/dfcpub/dfc
 $ cd github.com/NVIDIA/dfcpub/dfc
-$ dep ensure
 $ make deploy
 $ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
 ```
