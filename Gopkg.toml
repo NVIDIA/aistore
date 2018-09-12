@@ -1,16 +1,4 @@
 [[constraint]]
-  name = "cloud.google.com/go"
-  version = "0.23.0"
-
-[[constraint]]
-  name = "github.com/OneOfOne/xxhash"
-  version = "1.2.2"
-
-[[constraint]]
-  name = "github.com/aws/aws-sdk-go"
-  version = "1.13.57"
-
-[[constraint]]
   name = "github.com/dgrijalva/jwt-go"
   version = "3.2.0"
 

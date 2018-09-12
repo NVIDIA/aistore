@@ -99,7 +99,7 @@ If you've already installed [Go](https://golang.org/dl/) and [dep](https://githu
 
 ```shell
 $ cd $GOPATH/src
-$ go get -u -v github.com/NVIDIA/dfcpub/dfc
+$ go get -v github.com/NVIDIA/dfcpub/dfc
 $ cd github.com/NVIDIA/dfcpub/dfc
 $ dep ensure
 $ make deploy

@@ -5,5 +5,3 @@
 .*.swp
 tags
 FlameGraph/
-
-vendor/

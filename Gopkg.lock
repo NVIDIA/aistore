@@ -16,27 +16,6 @@
   version = "v0.23.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/NVIDIA/dfcpub"
-  packages = [
-    "3rdparty/glog",
-    "3rdparty/webdav",
-    "3rdparty/webdav/internal/xml",
-    "api",
-    "cmd/dfcloader/stats",
-    "dfc",
-    "dfc/statsd",
-    "dfc/tests/util",
-    "dfc/util/readers",
-    "fs",
-    "iosgl",
-    "pkg/client",
-    "pkg/client/readers",
-    "xoshiro256"
-  ]
-  revision = "261123779e562b7ea8fac49151aec51ccac8e021"
-
-[[projects]]
   name = "github.com/OneOfOne/xxhash"
   packages = ["."]
   revision = "6def279d2ce6c81a79dd1c1be580f03bb216fb8a"
@@ -284,6 +263,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0173134fae628cca146168f2a7c59731dfe82330a2aa1330eb68f640cc54ac9d"
+  inputs-digest = "c4814a0d5948bbe9a265edfac857a93de7fdedf90e156144e7045c7dcdc13f6a"
   solver-name = "gps-cdcl"
   solver-version = 1
