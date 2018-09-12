@@ -328,7 +328,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
 	}
 
-	time.Sleep(time.Millisecond) // wait for runner to process
+	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	n := atimer.getNumberItemsToFlush(fs)
 	if n != itemCount/4 {
@@ -368,7 +368,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
 	}
 
-	time.Sleep(time.Millisecond) // wait for runner to process
+	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]simplekvs)
@@ -415,7 +415,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
 	}
 
-	time.Sleep(time.Millisecond) // wait for runner to process
+	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]simplekvs)
@@ -463,7 +463,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
 	}
 
-	time.Sleep(time.Millisecond) // wait for runner to process
+	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]simplekvs)
@@ -512,7 +512,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
 	}
 
-	time.Sleep(time.Millisecond) // wait for runner to process
+	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]simplekvs)
