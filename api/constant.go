@@ -183,6 +183,14 @@ const (
 	GetPropsBucket   = "bucket"
 	GetPropsVersion  = "version"
 	GetTargetURL     = "targetURL"
+	GetPropsStatus   = "status"
+)
+
+// BucketEntry.Status
+const (
+	ObjStatusOK      = ""
+	ObjStatusMoved   = "moved"
+	ObjStatusDeleted = "deleted"
 )
 
 //===================
@@ -204,6 +212,7 @@ type BucketEntry struct {
 	Version   string `json:"version"`             // version/generation ID. In GCP it is int64, in AWS it is a string
 	IsCached  bool   `json:"iscached"`            // if the file is cached on one of targets
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
+	Status    string `json:"status,omitempty"`    // empty - normal object, it can be "moved", "deleted" etc
 }
 
 // BucketList represents the contents of a given bucket - somewhat analogous to the 'ls <bucket-name>'

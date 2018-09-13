@@ -62,6 +62,7 @@ type (
 		needCtime    bool
 		needChkSum   bool
 		needVersion  bool
+		needStatus   bool
 	}
 
 	uxprocess struct {
@@ -1821,6 +1822,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 		strings.Contains(msg.GetProps, api.GetPropsCtime),    // needCtime
 		strings.Contains(msg.GetProps, api.GetPropsChecksum), // needChkSum
 		strings.Contains(msg.GetProps, api.GetPropsVersion),  // needVersion
+		strings.Contains(msg.GetProps, api.GetPropsStatus),   // needStatus
 	}
 
 	if msg.GetPageSize != 0 {
@@ -1859,7 +1861,7 @@ func (ci *allfinfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
+func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus string) error {
 	relname := fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
@@ -1871,7 +1873,12 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo) error {
 
 	// the file passed all checks - add it to the batch
 	ci.fileCount++
-	fileInfo := &api.BucketEntry{Name: relname, Atime: "", IsCached: true}
+	fileInfo := &api.BucketEntry{
+		Name:     relname,
+		Atime:    "",
+		IsCached: true,
+		Status:   objStatus,
+	}
 	if ci.needAtime {
 		atime, _, _ := getAmTimes(osfi)
 		if ci.msg.GetTimeFormat == "" {
@@ -1926,13 +1933,22 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if iswork, _ := ci.t.isworkfile(fqn); iswork {
 		return nil
 	}
-	_, _, err = ci.t.fqn2bckobj(fqn)
-	if err != nil {
-		glog.Error(err)
-		return nil
+
+	objStatus := api.ObjStatusOK
+	if ci.needStatus {
+		bucket, objname, err := ci.t.fqn2bckobj(fqn)
+		if err != nil {
+			glog.Warning(err)
+			objStatus = api.ObjStatusMoved
+		}
+		si, errstr := HrwTarget(bucket, objname, ci.t.smapowner.get())
+		if errstr != "" || ci.t.si.DaemonID != si.DaemonID {
+			glog.Warning("Rebalanced object: %s/%s: %s", bucket, objname, errstr)
+			objStatus = api.ObjStatusMoved
+		}
 	}
 
-	return ci.processRegularFile(fqn, osfi)
+	return ci.processRegularFile(fqn, osfi, objStatus)
 }
 
 // After putting a new version it updates xattr attributes for the object

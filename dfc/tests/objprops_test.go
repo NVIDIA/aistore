@@ -143,7 +143,12 @@ func propsEvict(t *testing.T, bucket string, objMap map[string]string, msg *api.
 		if !ok {
 			continue
 		}
-		tlogf("%s/%s - iscached: [%v], atime [%v]\n", bucket, m.Name, m.IsCached, m.Atime)
+		tlogf("%s/%s [%s] - iscached: [%v], atime [%v]\n", bucket, m.Name, m.Status, m.IsCached, m.Atime)
+
+		// invalid object: rebalance leftover or uploaded directly to target
+		if m.Status != "" {
+			continue
+		}
 
 		if _, wasEvicted := evictMap[m.Name]; wasEvicted {
 			if m.Atime != "" {
@@ -344,7 +349,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	// Read object versions
 	msg := &api.GetMsg{
 		GetPrefix: versionDir,
-		GetProps:  api.GetPropsVersion + ", " + api.GetPropsIsCached + ", " + api.GetPropsAtime,
+		GetProps:  api.GetPropsVersion + ", " + api.GetPropsIsCached + ", " + api.GetPropsAtime + ", " + api.GetPropsStatus,
 	}
 	reslist := testListBucket(t, bucket, msg, 0)
 	if reslist == nil {

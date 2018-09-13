@@ -997,6 +997,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh
 			if entry, ok := bmap[nm]; ok {
 				entry.IsCached = true
 				entry.Atime = newEntry.Atime
+				entry.Status = newEntry.Status
 			}
 		}
 	}
@@ -1247,6 +1248,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 		}
 	}
 	if strings.Contains(msg.GetProps, api.GetPropsAtime) ||
+		strings.Contains(msg.GetProps, api.GetPropsStatus) ||
 		strings.Contains(msg.GetProps, api.GetPropsIsCached) {
 		// Now add local properties to the cloud objects
 		// The call replaces allentries.Entries with new values
