@@ -1220,16 +1220,14 @@ func executeTwoGETsForChecksumValidation(bucket string, fName string, t *testing
 	_, _, err := client.Get(proxyurl, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
-	}
-	if !strings.Contains(err.Error(), "http status 500") {
+	} else if !strings.Contains(err.Error(), "http status 500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
 	_, _, err = client.Get(proxyurl, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
-	}
-	if !strings.Contains(err.Error(), "http status 404") {
+	} else if !strings.Contains(err.Error(), "http status 404") {
 		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%s]", err.Error())
 	}
 }
