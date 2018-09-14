@@ -1013,7 +1013,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, clibucket) {
+		if filepath.Base(path) == fileName && strings.Contains(path, clibucket+"/"+ChecksumWarmValidateStr) {
 			fqn = path
 		}
 		return nil
@@ -1160,7 +1160,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		if info.IsDir() && info.Name() == "cloud" {
 			return filepath.SkipDir
 		}
-		if filepath.Base(path) == fileName && strings.Contains(path, bucketName) {
+		if filepath.Base(path) == fileName && strings.Contains(path, bucketName+"/"+ChecksumWarmValidateStr) {
 			fqn = path
 		}
 		return nil
@@ -1267,7 +1267,7 @@ func TestRangeRead(t *testing.T) {
 			goto cleanup
 		}
 	}
-	testValidCases(fileSize, t, bucketName, fileName, true)
+	testValidCases(fileSize, t, bucketName, fileName, true, RangeGetStr)
 
 	// Validate only range checksum is being returned
 	if !oldEnableReadRangeChecksum {
@@ -1276,7 +1276,7 @@ func TestRangeRead(t *testing.T) {
 			goto cleanup
 		}
 	}
-	testValidCases(fileSize, t, bucketName, fileName, false)
+	testValidCases(fileSize, t, bucketName, fileName, false, RangeGetStr)
 
 	tlogln("Testing invalid cases.")
 	verifyInvalidParams(t, bucketName, fileName, "", "1")
@@ -1308,24 +1308,25 @@ cleanup:
 	}
 }
 
-func testValidCases(fileSize uint64, t *testing.T, bucketName string, fileName string, checkEntireObjCkSum bool) {
+func testValidCases(fileSize uint64, t *testing.T, bucketName string, fileName string, checkEntireObjCkSum bool, checkDir string) {
 	// Read the entire file range by range
 	// Read in ranges of 500 to test covered, partially covered and completely
 	// uncovered ranges
 	byteRange := int64(500)
 	iterations := int64(fileSize) / byteRange
 	for i := int64(0); i < iterations; i += byteRange {
-		verifyValidRanges(t, bucketName, fileName, int64(i), byteRange, byteRange, checkEntireObjCkSum)
+		verifyValidRanges(t, bucketName, fileName, int64(i), byteRange, byteRange, checkEntireObjCkSum, checkDir)
 	}
-	verifyValidRanges(t, bucketName, fileName, byteRange*iterations, byteRange, int64(fileSize)%byteRange, checkEntireObjCkSum)
-	verifyValidRanges(t, bucketName, fileName, int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum)
+	verifyValidRanges(t, bucketName, fileName, byteRange*iterations, byteRange, int64(fileSize)%byteRange, checkEntireObjCkSum, checkDir)
+	verifyValidRanges(t, bucketName, fileName, int64(fileSize)+100, byteRange, 0, checkEntireObjCkSum, checkDir)
 }
 
 func verifyValidRanges(t *testing.T, bucketName string, fileName string,
-	offset int64, length int64, expectedLength int64, checkEntireObjCksum bool) {
+	offset int64, length int64, expectedLength int64, checkEntireObjCksum bool,
+	checkDir string) {
 	var fqn string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, bucketName) {
+		if filepath.Base(path) == fileName && strings.Contains(path, bucketName+"/"+checkDir) {
 			fqn = path
 		}
 		return nil

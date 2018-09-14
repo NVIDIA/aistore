@@ -310,7 +310,7 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan erro
 
 	tr.tsHTTPEnd = time.Now()
 
-	if validate {
+	if validate && resp != nil {
 		hdhash = resp.Header.Get(api.HeaderDFCChecksumVal)
 		hdhashtype = resp.Header.Get(api.HeaderDFCChecksumType)
 	}
