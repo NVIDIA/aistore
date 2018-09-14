@@ -2284,6 +2284,11 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			hdhobj = newcksumvalue(r.Header.Get(api.HeaderDFCChecksumType), r.Header.Get(api.HeaderDFCChecksumVal))
 			props  = &objectProps{version: r.Header.Get(api.HeaderDFCObjVersion)}
 		)
+		if timeStr := r.Header.Get(api.HeaderDFCObjAtime); timeStr != "" {
+			if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
+				props.atime = tm
+			}
+		}
 		if _, props.nhobj, size, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
 			return
 		}
@@ -2509,6 +2514,25 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if errstr != "" {
 		return errstr
 	}
+
+	atimeRunner := getatimerunner()
+	accessTime, ok := atimeRunner.atime(fqn)
+
+	// must read a file access before any operation: the next Open changes atime
+	accessTimeStr := ""
+	if ok {
+		accessTimeStr = accessTime.Format(api.RFC822)
+	} else {
+		fileInfo, err := os.Stat(fqn)
+		if err == nil {
+			atime, mtime, _ := getAmTimes(fileInfo)
+			if mtime.After(atime) {
+				atime = mtime
+			}
+			accessTimeStr = atime.Format(api.RFC822)
+		}
+	}
+
 	file, err := os.Open(fqn)
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
@@ -2546,6 +2570,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if len(version) != 0 {
 		request.Header.Set(api.HeaderDFCObjVersion, string(version))
 	}
+	if accessTimeStr != "" {
+		request.Header.Set(api.HeaderDFCObjAtime, accessTimeStr)
+	}
+
 	// Do
 	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.SendFile)
 	defer cancel()
@@ -3286,6 +3314,13 @@ func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr st
 	if objprops.version != "" {
 		errstr = Setxattr(fqn, XattrObjVersion, []byte(objprops.version))
 	}
+
+	if !objprops.atime.IsZero() {
+		if err := os.Chtimes(fqn, objprops.atime, objprops.atime); err != nil {
+			errstr = fmt.Sprintf("Failed to set atime for %s: %v", fqn, err)
+		}
+	}
+
 	return
 }
 

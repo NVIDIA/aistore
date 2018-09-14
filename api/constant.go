@@ -73,9 +73,10 @@ const (
 	HeaderBucketDontEvictTime   = "LRUDontEvictTime"      // Enforces an eviction-free time period between [atime, atime+dontevicttime]
 	HeaderBucketCapUpdTime      = "LRUCapUpdTime"         // Minimum time to update the capacity
 	HeaderBucketLRUEnabled      = "LRUEnabled"            // LRU is run on a bucket only if this field is true
-	HeaderDFCChecksumType       = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
-	HeaderDFCChecksumVal        = "HeaderDfcChecksumVal"  // Checksum Value
-	HeaderDFCObjVersion         = "HeaderDfcObjVersion"   // Object version/generation
+	HeaderDFCChecksumType       = "DfcChecksumType"       // Checksum Type (xxhash, md5, none)
+	HeaderDFCChecksumVal        = "DfcChecksumVal"        // Checksum Value
+	HeaderDFCObjVersion         = "DfcObjVersion"         // Object version/generation
+	HeaderDFCObjAtime           = "DfcObjAtime"           // Object access time
 	HeaderDFCReplicationSrc     = "DfcReplicationSrc"     // In replication PUT request specifies the source target
 	HeaderSize                  = "Size"                  // Size of object in bytes
 	HeaderVersion               = "Version"               // Object version number

@@ -1794,3 +1794,116 @@ func TestForwardCP(t *testing.T) {
 	checkFatal(err, t)
 	tlogf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
 }
+
+func TestAtimeRebalance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	const (
+		num      = 50
+		filesize = uint64(1024)
+		seed     = int64(141)
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			delay:           0 * time.Second,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          TestLocalBucketName,
+		}
+		filenameCh = make(chan string, m.num)
+		errch      = make(chan error, m.num)
+		sgl        *iosgl.SGL
+	)
+
+	if usingSG {
+		sgl = iosgl.NewSGL(filesize)
+		defer sgl.Free()
+	}
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 2 {
+		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	target := extractTargetsInfo(m.smap)[0]
+
+	// Unregister a target
+	tlogf("Trying to unregister target: %s\n", target.directURL)
+	err = client.UnregisterTarget(m.proxyURL, target.sid)
+	checkFatal(err, t)
+	smap, err := waitForPrimaryProxy(
+		m.proxyURL,
+		"target is gone",
+		m.smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount-1,
+	)
+	checkFatal(err, t)
+
+	// Put random files
+	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errch, "put", t, false)
+	close(filenameCh)
+
+	objNames := make(map[string]string, 0)
+	msg := &api.GetMsg{GetProps: api.GetPropsAtime + ", " + api.GetPropsStatus}
+	bucketList, err := client.ListBucket(m.proxyURL, m.bucket, msg, 0)
+	checkFatal(err, t)
+
+	for _, entry := range bucketList.Entries {
+		objNames[entry.Name] = entry.Atime
+	}
+
+	// register a new target
+	err = client.RegisterTarget(target.sid, target.directURL, m.smap)
+	checkFatal(err, t)
+
+	// make sure that the cluster has all targets enabled
+	_, err = waitForPrimaryProxy(
+		m.proxyURL,
+		"target is back",
+		smap.Version, testing.Verbose(),
+		m.originalProxyCount,
+		m.originalTargetCount,
+	)
+	checkFatal(err, t)
+
+	waitForRebalanceToComplete(t, m.proxyURL)
+
+	bucketListReb, err := client.ListBucket(m.proxyURL, m.bucket, msg, 0)
+	checkFatal(err, t)
+
+	itemCount := 0
+	for _, entry := range bucketListReb.Entries {
+		if entry.Status != api.ObjStatusOK {
+			continue
+		}
+		itemCount++
+		atime, ok := objNames[entry.Name]
+		if !ok {
+			t.Errorf("Object %q not found", entry.Name)
+			continue
+		}
+
+		if atime != entry.Atime {
+			t.Errorf("Atime mismatched for %s: before %q, after %q", entry.Name, atime, entry.Atime)
+		}
+	}
+	if itemCount != len(bucketList.Entries) {
+		t.Errorf("The number of objects mismatch: before %d, after %d",
+			len(bucketList.Entries), itemCount)
+	}
+}

@@ -48,6 +48,7 @@ const ( //  h.call(timeout)
 type (
 	objectProps struct {
 		version string
+		atime   time.Time
 		size    int64
 		nhobj   cksumvalue
 	}
