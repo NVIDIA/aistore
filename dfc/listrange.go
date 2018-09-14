@@ -373,7 +373,11 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	)
 	versioncfg := &ctx.config.Ver
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn := t.fqn(bucket, objname, islocal)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		glog.Error(errstr)
+		return
+	}
 	//
 	// NOTE: lockless
 	//

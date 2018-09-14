@@ -11,6 +11,7 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -381,7 +382,11 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.islocal(bucket)
-	fqn = t.fqn(bucket, objname, islocal)
+	fqn, errstr = t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
 	if !dryRun.disk {
 		if x := query.Get(api.URLParamReadahead); x != "" { // FIXME
 			t.readahead.ahead(fqn, rangeOff, rangeLen)
@@ -1079,7 +1084,11 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if islocal || checkCached {
-		fqn := t.fqn(bucket, objname, islocal)
+		fqn, errstr := t.fqn(bucket, objname, islocal)
+		if errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
 		var (
 			size    int64
 			version string
@@ -1379,9 +1388,14 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		htype   = response.Header.Get(api.HeaderDFCChecksumType)
 		hdhobj  = newcksumvalue(htype, hval)
 		version = response.Header.Get(api.HeaderDFCObjVersion)
-		fqn     = t.fqn(bucket, objname, islocal)
-		getfqn  = t.fqn2workfile(fqn)
 	)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		response.Body.Close()
+		glog.Error(errstr)
+		return
+	}
+	getfqn := t.fqn2workfile(fqn)
 	if _, nhobj, size, errstr = t.receive(getfqn, objname, "", hdhobj, response.Body); errstr != "" {
 		response.Body.Close()
 		glog.Errorf(errstr)
@@ -1417,9 +1431,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	var (
 		bucketmd    = t.bmdowner.get()
 		islocal     = bucketmd.islocal(bucket)
-		fqn         = t.fqn(bucket, objname, islocal)
 		uname       = uniquename(bucket, objname)
-		getfqn      = t.fqn2workfile(fqn)
 		versioncfg  = &ctx.config.Ver
 		cksumcfg    = &ctx.config.Cksum
 		errv        string
@@ -1429,6 +1441,11 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		bucketProps BucketProps
 		err         error
 	)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		return nil, errstr, http.StatusBadRequest
+	}
+	getfqn := t.fqn2workfile(fqn)
 	// one cold GET at a time
 	if prefetch {
 		if !t.rtnamemap.trylockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}) {
@@ -1969,7 +1986,10 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	)
 	started = time.Now()
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn := t.fqn(bucket, objname, islocal)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		return errstr, http.StatusBadRequest
+	}
 	putfqn := t.fqn2workfile(fqn)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
@@ -2044,9 +2064,12 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	var (
 		started = time.Now()
 		islocal = t.bmdowner.get().islocal(bucket)
-		fqn     = t.fqn(bucket, objname, islocal)
 	)
 
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		return errstr
+	}
 	err := getreplicationrunner().receiveReplica(replicaSrc, fqn, r)
 
 	if err == nil {
@@ -2196,7 +2219,10 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 	}
 	var size int64
 	bucketmd := t.bmdowner.get()
-	fqn := t.fqn(bucket, objname, bucketmd.islocal(bucket))
+	fqn, errstr := t.fqn(bucket, objname, bucketmd.islocal(bucket))
+	if errstr != "" {
+		return
+	}
 	ver := bucketmd.version()
 	if t.si.DaemonID == from {
 		//
@@ -2270,7 +2296,10 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		errcode int
 	)
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn := t.fqn(bucket, objname, islocal)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		return errors.New(errstr)
+	}
 	uname := uniquename(bucket, objname)
 
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
@@ -2322,7 +2351,11 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ap
 	}
 	newobjname := msg.Name
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn := t.fqn(bucket, objname, islocal)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
 	uname := uniquename(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
@@ -2333,13 +2366,19 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ap
 }
 
 func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
-	var si *daemonInfo
+	var (
+		si     *daemonInfo
+		newfqn string
+	)
 	if si, errstr = HrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
 		return
 	}
 	bucketmd := t.bmdowner.get()
 	islocalFrom := bucketmd.islocal(bucketFrom)
-	fqn := t.fqn(bucketFrom, objnameFrom, islocalFrom)
+	fqn, errstr := t.fqn(bucketFrom, objnameFrom, islocalFrom)
+	if errstr != "" {
+		return
+	}
 	finfo, err := os.Stat(fqn)
 	if err != nil {
 		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
@@ -2348,7 +2387,10 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		islocalTo := bucketmd.islocal(bucketTo)
-		newfqn := t.fqn(bucketTo, objnameTo, islocalTo)
+		newfqn, errstr = t.fqn(bucketTo, objnameTo, islocalTo)
+		if errstr != "" {
+			return
+		}
 		dirname := filepath.Dir(newfqn)
 		if err := CreateDir(dirname); err != nil {
 			errstr = fmt.Sprintf("Unexpected failure to create local dir %s, err: %v", dirname, err)
@@ -2448,7 +2490,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
-	fqn := t.fqn(bucket, objname, islocal)
+	fqn, errstr := t.fqn(bucket, objname, islocal)
+	if errstr != "" {
+		return errstr
+	}
 	file, err := os.Open(fqn)
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
@@ -3024,13 +3069,16 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	return
 }
 
-// (bucket, object) => (local hashed path, fully qualified name aka fqn)
-func (t *targetrunner) fqn(bucket, objname string, islocal bool) string {
-	mpath := hrwMpath(bucket, objname)
-	if islocal {
-		return filepath.Join(makePathLocal(mpath), bucket, objname)
+// (bucket, object) => (local hashed path, fully qualified name aka fqn & error)
+func (t *targetrunner) fqn(bucket, objname string, islocal bool) (string, string) {
+	mpath, errstr := hrwMpath(bucket, objname)
+	if errstr != "" {
+		return "", errstr
 	}
-	return filepath.Join(makePathCloud(mpath), bucket, objname)
+	if islocal {
+		return filepath.Join(makePathLocal(mpath), bucket, objname), ""
+	}
+	return filepath.Join(makePathCloud(mpath), bucket, objname), ""
 }
 
 // the opposite
@@ -3043,7 +3091,11 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error
 	}
 
 	bucketmd := t.bmdowner.get()
-	if t.fqn(bucket, objName, isLocal) != fqn || bucketmd.islocal(bucket) != isLocal {
+	realFQN, errstr := t.fqn(bucket, objName, isLocal)
+	if errstr != "" {
+		return "", "", errors.New(errstr)
+	}
+	if realFQN != fqn || bucketmd.islocal(bucket) != isLocal {
 		err = fmt.Errorf("Cannot convert %q => %s/%s - localbuckets or device mountpaths changed?", fqn, bucket, objName)
 		return
 	}
@@ -3059,7 +3111,10 @@ func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
 	if err != nil {
 		return false, "", err
 	}
-	newFQN := t.fqn(bucket, objName, isLocal)
+	newFQN, errstr := t.fqn(bucket, objName, isLocal)
+	if errstr != "" {
+		return false, "", errors.New(errstr)
+	}
 	return fqn != newFQN, newFQN, nil
 }
 
