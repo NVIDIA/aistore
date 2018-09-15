@@ -268,7 +268,7 @@ func dfcinit() {
 			t.readahead = &dummyreadahead{}
 		}
 
-		replRunner := newReplicationRunner(t)
+		replRunner := newReplicationRunner(t, ctx.mountpaths)
 		ctx.rg.add(replRunner, xreplication)
 		t.fsprg.add(replRunner)
 	}

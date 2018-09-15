@@ -16,15 +16,16 @@ import (
 )
 
 func TestReplicationRunnerStop(t *testing.T) {
+	ctx.mountpaths = fs.NewMountedFS()
 	tr := newFakeTargetrunner()
-	rr := newReplicationRunner(tr)
+	rr := newReplicationRunner(tr, ctx.mountpaths)
 	go rr.run()
 
 	rr.stop(fmt.Errorf("Testing replicationRunner.stop"))
 
 	waitCh := make(chan struct{})
 	go func() {
-		rr.sendReplica("fakeDirectURL", "fakeFqn", false, replicationPolicySync)
+		rr.reqSendReplica("fakeDirectURL", "fakeFqn", false, replicationPolicySync)
 		waitCh <- struct{}{}
 	}()
 
@@ -41,10 +42,10 @@ func TestReplicationSendNonExistingFile(t *testing.T) {
 	cleanMountpaths()
 
 	tr := newFakeTargetrunner()
-	rr := newReplicationRunner(tr)
+	rr := newReplicationRunner(tr, ctx.mountpaths)
 	go rr.run()
 
-	err := rr.sendReplica("fakeDirectURL", "fakeFqn", false, replicationPolicySync)
+	err := rr.reqSendReplica("fakeDirectURL", "fakeFqn", false, replicationPolicySync)
 	if err == nil {
 		t.Error("Send operation should fail on non-existing file")
 	}

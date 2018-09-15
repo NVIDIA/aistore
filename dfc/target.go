@@ -2071,7 +2071,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	if errstr != "" {
 		return errstr
 	}
-	err := getreplicationrunner().receiveReplica(replicaSrc, fqn, r)
+	err := getreplicationrunner().reqReceiveReplica(replicaSrc, fqn, r)
 
 	if err == nil {
 		delta := time.Since(started)

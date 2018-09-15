@@ -12,15 +12,36 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/iosgl"
 )
 
-// TODO: Instead of using below listed constants, make some of these settings configurable
+// ================================================= Summary ===============================================
+//
+// This replication module implements a replication service in DFC - a long running task with the
+// purpose of creating replicas of stored objects.
+//
+// The API exposed to the rest of the code includes the following operations:
+//   * reqSendReplica    - to send a replica of a specified object to a specified URL
+//   * reqReceiveReplica - to receive a replica of an object
+// As a fsprunner, replicationRunner implements methods described by the fsprunner interface.
+//
+// All other operations are private to the replication module and used only internally!
+//
+// replicationRunner creates and runs an mpathReplicator for each found or added mountpath.
+// mpathReplicators send and receive object replicas. For now, there is only one mpathReplicator
+// per mountpath. Communication between the client code and replicationRunner as well between
+// the replicationRunner and each mpathReplicator is through a channel of replRequest (replication request).
+// replRequest also holds a result channel for synchronous replication calls.
+//
+// ================================================= Summary ===============================================
+
 const (
 	replicationPolicyNone  = "none"
 	replicationPolicySync  = "sync"
@@ -29,127 +50,200 @@ const (
 	replicationActSend    = "send"
 	replicationActReceive = "receive"
 
-	replicationDispatchBufferSize = 1024
-	replicationServicePoolSize    = 32
+	replicationAddMountpath    = "addmpath"
+	replicationRemoveMountpath = "removempath"
+
+	replicationRequestBufferSize      = 1024
+	mpathReplicationRequestBufferSize = 1024
 )
+
+type mpathReq struct {
+	action string
+	mpath  string
+}
+
+type replRequest struct {
+	action          string
+	remoteDirectURL string
+	fqn             string
+	deleteObject    bool          // used only on send side
+	httpReq         *http.Request // used only on receive side
+	resultCh        chan error
+}
+
+type mpathReplicator struct {
+	t         *targetrunner
+	directURL string
+	mpath     string
+	replReqCh chan *replRequest
+	once      *sync.Once
+	controlCh chan struct{}
+}
 
 type replicationRunner struct {
 	namedrunner
-	t                 *targetrunner
-	controlCh         chan struct{}
-	serviceDispatchCh chan *replicationService
-	serviceControlCh  chan struct{}
+	t                *targetrunner
+	replReqCh        chan *replRequest
+	mpathReqCh       chan mpathReq
+	mountpaths       *fs.MountedFS
+	mpathReplicators map[string]*mpathReplicator // mpath -> replicator
+	controlCh        chan struct{}
 }
 
-type replicationService struct {
-	t            *targetrunner
-	action       string
-	srcDirectURL string
-	dstDirectURL string
-	fqn          string
-	resultCh     chan error
-	deleteObject bool          // used only on send side
-	httpReq      *http.Request // used only on receive side
+func (rr *replicationRunner) newMpathReplicator(mpath string) *mpathReplicator {
+	return &mpathReplicator{
+		t:         rr.t,
+		directURL: rr.t.si.ReplNet.DirectURL,
+		mpath:     mpath,
+		replReqCh: make(chan *replRequest, mpathReplicationRequestBufferSize),
+		once:      &sync.Once{},
+		controlCh: make(chan struct{}, 1),
+	}
 }
 
-func (rr *replicationRunner) newSendService(dstDirectURL, fqn string, deleteObject, sync bool) *replicationService {
-	rserv := &replicationService{
-		t:            rr.t,
-		action:       replicationActSend,
-		srcDirectURL: rr.t.si.ReplNet.DirectURL,
-		dstDirectURL: dstDirectURL,
-		fqn:          fqn,
-		deleteObject: deleteObject,
-		httpReq:      nil,
+func (rr *replicationRunner) newSendReplRequest(dstDirectURL, fqn string, deleteObject, sync bool) *replRequest {
+	req := &replRequest{
+		action:          replicationActSend,
+		remoteDirectURL: dstDirectURL,
+		fqn:             fqn,
+		deleteObject:    deleteObject,
+		httpReq:         nil,
 	}
 	if sync {
-		rserv.resultCh = make(chan error, 1)
+		req.resultCh = make(chan error, 1)
 	}
-	return rserv
+	return req
 }
 
-func (rr *replicationRunner) newReceiveService(srcDirectURL, fqn string, httpReq *http.Request, sync bool) *replicationService {
-	rserv := &replicationService{
-		t:            rr.t,
-		action:       replicationActReceive,
-		srcDirectURL: srcDirectURL,
-		dstDirectURL: rr.t.si.ReplNet.DirectURL,
-		fqn:          fqn,
-		deleteObject: false,
-		httpReq:      httpReq,
+func (rr *replicationRunner) newReceiveReplRequest(srcDirectURL, fqn string, httpReq *http.Request, sync bool) *replRequest {
+	req := &replRequest{
+		action:          replicationActReceive,
+		remoteDirectURL: srcDirectURL,
+		fqn:             fqn,
+		deleteObject:    false,
+		httpReq:         httpReq,
 	}
 	if sync {
-		rserv.resultCh = make(chan error, 1)
+		req.resultCh = make(chan error, 1)
 	}
-	return rserv
+	return req
 }
 
-func newReplicationRunner(t *targetrunner) *replicationRunner {
+func newReplicationRunner(t *targetrunner, mountpaths *fs.MountedFS) *replicationRunner {
 	return &replicationRunner{
-		t:                 t,
-		controlCh:         make(chan struct{}),
-		serviceDispatchCh: make(chan *replicationService, replicationDispatchBufferSize),
-		serviceControlCh:  make(chan struct{}, replicationServicePoolSize),
+		t:                t,
+		replReqCh:        make(chan *replRequest, replicationRequestBufferSize),
+		mpathReqCh:       make(chan mpathReq),
+		mountpaths:       mountpaths,
+		mpathReplicators: make(map[string]*mpathReplicator),
+		controlCh:        make(chan struct{}),
 	}
 }
 
-func (rserv *replicationService) send() error {
+func (r *mpathReplicator) run() {
+	glog.Infof("Started replicator for mountpath: %s", r.mpath)
+	for {
+		select {
+		case req := <-r.replReqCh:
+			r.replicate(req)
+		case <-r.controlCh:
+			return
+		}
+	}
+}
+
+func (r *mpathReplicator) stop() {
+	glog.Infof("Stopping replicator for mountpath: %s", r.mpath)
+	r.controlCh <- struct{}{}
+	close(r.controlCh)
+}
+
+func (r *mpathReplicator) replicate(req *replRequest) {
+	var err error
+
+	switch req.action {
+	case replicationActSend:
+		err = r.send(req)
+	case replicationActReceive:
+		err = r.receive(req)
+	}
+
+	if err != nil {
+		var src, dst string
+		switch req.action {
+		case replicationActSend:
+			src, dst = r.directURL, req.remoteDirectURL
+		case replicationActReceive:
+			src, dst = req.remoteDirectURL, r.directURL
+		}
+		glog.Errorf("Error occurred during object replication: "+
+			"action: %s %s, source: %s, destination: %s",
+			req.action, req.fqn, src, dst)
+	}
+
+	if req.resultCh != nil {
+		req.resultCh <- err
+		close(req.resultCh)
+	}
+}
+
+func (r *mpathReplicator) send(req *replRequest) error {
 	var (
 		errstr string
 		err    error
 	)
 
-	bucket, object, err := rserv.t.fqn2bckobj(rserv.fqn)
+	bucket, object, err := r.t.fqn2bckobj(req.fqn)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", rserv.fqn, err)
+		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)
 		return errors.New(errstr)
 	}
 
-	url := rserv.dstDirectURL + api.URLPath(api.Version, api.Objects, bucket, object)
+	url := req.remoteDirectURL + api.URLPath(api.Version, api.Objects, bucket, object)
 
 	uname := uniquename(bucket, object)
-	rserv.t.rtnamemap.lockname(uname, rserv.deleteObject, &pendinginfo{Time: time.Now(), fqn: rserv.fqn}, time.Second)
-	defer rserv.t.rtnamemap.unlockname(uname, rserv.deleteObject)
+	r.t.rtnamemap.lockname(uname, req.deleteObject, &pendinginfo{Time: time.Now(), fqn: req.fqn}, time.Second)
+	defer r.t.rtnamemap.unlockname(uname, req.deleteObject)
 
-	file, err := os.Open(rserv.fqn)
+	file, err := os.Open(req.fqn)
 	if err != nil {
 		if os.IsPermission(err) {
-			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", rserv.fqn)
+			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", req.fqn)
 		} else {
-			errstr = fmt.Sprintf("Failed to open local file %s, error: %v", rserv.fqn, err)
+			errstr = fmt.Sprintf("Failed to open local file %s, error: %v", req.fqn, err)
 		}
-		rserv.t.fshc(err, rserv.fqn)
+		r.t.fshc(err, req.fqn)
 		return errors.New(errstr)
 	}
 	defer file.Close()
 
-	xxhashbinary, errstr := Getxattr(rserv.fqn, XattrXXHashVal)
+	xxhashbinary, errstr := Getxattr(req.fqn, XattrXXHashVal)
 	xxhashval := ""
 	if errstr != "" {
 		buf, slab := iosgl.AllocFromSlab(0)
 		xxhashval, errstr = ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if errstr != "" {
-			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", rserv.fqn, errstr)
+			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", req.fqn, errstr)
 			return errors.New(errstr)
 		}
 	} else {
 		xxhashval = string(xxhashbinary)
 	}
 
-	req, err := http.NewRequest(http.MethodPut, url, file)
+	httpReq, err := http.NewRequest(http.MethodPut, url, file)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to create HTTP request, err: %v", err)
 		return errors.New(errstr)
 	}
 
 	// specify source direct URL in request header
-	req.Header.Add(api.HeaderDFCReplicationSrc, rserv.srcDirectURL)
+	httpReq.Header.Add(api.HeaderDFCReplicationSrc, r.directURL)
 
-	req.Header.Add(api.HeaderDFCChecksumType, ChecksumXXHash)
-	req.Header.Add(api.HeaderDFCChecksumVal, xxhashval)
+	httpReq.Header.Add(api.HeaderDFCChecksumType, ChecksumXXHash)
+	httpReq.Header.Add(api.HeaderDFCChecksumVal, xxhashval)
 
-	resp, err := rserv.t.httpclientLongTimeout.Do(req)
+	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
 	if err != nil {
 		return err
 	}
@@ -166,15 +260,15 @@ func (rserv *replicationService) send() error {
 			errstr = fmt.Sprintf(
 				"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, "+
 					"destination URL: %s",
-				resp.StatusCode, string(b), bucket, object, rserv.dstDirectURL,
+				resp.StatusCode, string(b), bucket, object, req.remoteDirectURL,
 			)
 		}
 		return errors.New(errstr)
 	}
 
-	if rserv.deleteObject {
-		if err := os.Remove(rserv.fqn); err != nil {
-			errstr = fmt.Sprintf("failed to remove local file %s, error: %v", rserv.fqn, err)
+	if req.deleteObject {
+		if err := os.Remove(req.fqn); err != nil {
+			errstr = fmt.Sprintf("failed to remove local file %s, error: %v", req.fqn, err)
 			return errors.New(errstr)
 		}
 	}
@@ -182,39 +276,39 @@ func (rserv *replicationService) send() error {
 	return nil
 }
 
-func (rserv *replicationService) receive() error {
+func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
 		nhobj         cksumvalue
 		nhtype, nhval string
 		sgl           *iosgl.SGL
 		errstr        string
 	)
-	r := rserv.httpReq
-	putfqn := rserv.t.fqn2workfile(rserv.fqn)
-	bucket, object, err := rserv.t.fqn2bckobj(rserv.fqn)
+	httpr := req.httpReq
+	putfqn := r.t.fqn2workfile(req.fqn)
+	bucket, object, err := r.t.fqn2bckobj(req.fqn)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", rserv.fqn, err)
+		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)
 		return errors.New(errstr)
 	}
 
-	hdhobj := newcksumvalue(r.Header.Get(api.HeaderDFCChecksumType), r.Header.Get(api.HeaderDFCChecksumVal))
+	hdhobj := newcksumvalue(httpr.Header.Get(api.HeaderDFCChecksumType), httpr.Header.Get(api.HeaderDFCChecksumVal))
 	if hdhobj == nil {
 		errstr = fmt.Sprintf("Failed to extract checksum from replication PUT request for %s/%s", bucket, object)
 		return errors.New(errstr)
 	}
 	hdhtype, hdhval := hdhobj.get()
 	if hdhtype != ChecksumXXHash {
-		errstr = fmt.Sprintf("Unsupported checksum type: %s", hdhtype)
+		errstr = fmt.Sprintf("Unsupported checksum type: %q", hdhtype)
 		return errors.New(errstr)
 	}
 
 	// optimize out if checksums from header and existing file match
-	if file, err := os.Open(rserv.fqn); err == nil {
+	if file, err := os.Open(req.fqn); err == nil {
 		buf, slab := iosgl.AllocFromSlab(0)
 		xxhashval, errstr := ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if err = file.Close(); err != nil {
-			glog.Warningf("Unexpected failure to close %s once xxhash has been computed, error: %v", rserv.fqn, err)
+			glog.Warningf("Unexpected failure to close %s once xxhash has been computed, error: %v", req.fqn, err)
 		}
 		if errstr == "" && xxhashval == hdhval {
 			glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
@@ -222,11 +316,11 @@ func (rserv *replicationService) receive() error {
 		}
 	}
 
-	// TODO:
-	// targetrunner.receive validates checksum based on cluster-level or bucket-level
-	// checksum configuration. Replication service needs its own checksum configuration
-	sgl, nhobj, _, errstr = rserv.t.receive(putfqn, object, "", hdhobj, r.Body)
-	r.Body.Close()
+	// TODO
+	// Method targetrunner.receive validates checksum based on cluster-level or bucket-level
+	// checksum configuration. Replication service needs its own checksum configuration.
+	sgl, nhobj, _, errstr = r.t.receive(putfqn, object, "", hdhobj, httpr.Body)
+	httpr.Body.Close()
 	if errstr != "" {
 		return errors.New(errstr)
 	}
@@ -247,48 +341,38 @@ func (rserv *replicationService) receive() error {
 	}
 
 	props := &objectProps{nhobj: nhobj}
-	errstr, _ = rserv.t.putCommit(rserv.t.contextWithAuth(r), bucket, object, putfqn, rserv.fqn, props, false /* rebalance */)
+	errstr, _ = r.t.putCommit(r.t.contextWithAuth(httpr), bucket, object, putfqn, req.fqn, props, false /* rebalance */)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
 	return nil
 }
 
-func (rserv *replicationService) wait() error {
-	common.Assert(rserv.resultCh != nil)
-	return <-rserv.resultCh
+func (rr *replicationRunner) init() {
+	availablePaths, disabledPaths := rr.mountpaths.Mountpaths()
+	for mpath := range availablePaths {
+		rr.addMpath(mpath)
+	}
+	for mpath := range disabledPaths {
+		rr.addMpath(mpath)
+	}
 }
 
 func (rr *replicationRunner) run() error {
+	glog.Infof("Starting %s", rr.name)
+	rr.init()
+
 	for {
 		select {
-		case service := <-rr.serviceDispatchCh:
-			go func() {
-				var err error
-
-				// allow at most replicationServicePoolSize services
-				// to run concurrently
-				rr.serviceControlCh <- struct{}{}
-
-				if service.action == replicationActSend {
-					err = service.send()
-				} else { // replicationActReceive
-					err = service.receive()
-				}
-
-				if err != nil {
-					glog.Errorf("Error occurred during object replication: "+
-						"action: %s %s, source: %s, destination: %s",
-						service.action, service.fqn, service.srcDirectURL, service.dstDirectURL)
-				}
-
-				if service.resultCh != nil {
-					service.resultCh <- err
-					close(service.resultCh)
-				}
-
-				<-rr.serviceControlCh
-			}()
+		case req := <-rr.replReqCh:
+			rr.dispatchRequest(req)
+		case mpathRequest := <-rr.mpathReqCh:
+			switch mpathRequest.action {
+			case replicationAddMountpath:
+				rr.addMpath(mpathRequest.mpath)
+			case replicationRemoveMountpath:
+				rr.removeMpath(mpathRequest.mpath)
+			}
 		case <-rr.controlCh:
 			return nil
 		}
@@ -298,22 +382,37 @@ func (rr *replicationRunner) run() error {
 func (rr *replicationRunner) stop(err error) {
 	rr.controlCh <- struct{}{}
 	glog.Warningf("Replication runner stopped with error: %v", err)
+	close(rr.controlCh)
 }
 
-func (rr *replicationRunner) dispatchService(rserv *replicationService) {
-	rr.serviceDispatchCh <- rserv
+func (rr *replicationRunner) dispatchRequest(req *replRequest) {
+	mpath := fqn2mountPath(req.fqn)
+	if mpath == "" {
+		errmsg := fmt.Sprintf("Failed to get mountpath for file %q", req.fqn)
+		glog.Error(errmsg)
+		if req.resultCh != nil {
+			req.resultCh <- errors.New(errmsg)
+		}
+		return
+	}
+
+	r, ok := rr.mpathReplicators[mpath]
+	common.Assert(ok, "Invalid mountpath given in replication request")
+
+	go r.once.Do(r.run) // only run replicator if there is at least one replication request
+	r.replReqCh <- req
 }
 
-func (rr *replicationRunner) sendReplica(dstDirectURL, fqn string, deleteObject bool, policy string) error {
+func (rr *replicationRunner) reqSendReplica(dstDirectURL, fqn string, deleteObject bool, policy string) error {
 
 	switch policy {
 	case replicationPolicyAsync:
-		rr.dispatchService(rr.newSendService(dstDirectURL, fqn, deleteObject, false))
+		rr.replReqCh <- rr.newSendReplRequest(dstDirectURL, fqn, deleteObject, false)
 
 	case replicationPolicySync:
-		service := rr.newSendService(dstDirectURL, fqn, deleteObject, true)
-		rr.dispatchService(service)
-		return service.wait()
+		req := rr.newSendReplRequest(dstDirectURL, fqn, deleteObject, true)
+		rr.replReqCh <- req
+		return <-req.resultCh // block until replication finishes
 
 	case replicationPolicyNone:
 		return nil // do nothing
@@ -327,24 +426,22 @@ func (rr *replicationRunner) sendReplica(dstDirectURL, fqn string, deleteObject 
 	return nil
 }
 
-func (rr *replicationRunner) receiveReplica(srcDirectURL, fqn string, r *http.Request) error {
-	service := rr.newReceiveService(srcDirectURL, fqn, r, true)
-	rr.dispatchService(service)
-	return service.wait()
+func (rr *replicationRunner) reqReceiveReplica(srcDirectURL, fqn string, r *http.Request) error {
+	req := rr.newReceiveReplRequest(srcDirectURL, fqn, r, true)
+	rr.replReqCh <- req
+	return <-req.resultCh // block until replication finishes
+}
+
+func (rr *replicationRunner) reqAddMountpath(mpath string) {
+	rr.mpathReqCh <- mpathReq{action: replicationAddMountpath, mpath: mpath}
 }
 
 /*
- *
  * fsprunner methods
- *
  */
 
-func (rr *replicationRunner) reqAddMountpath(mpath string) {
-	return
-}
-
 func (rr *replicationRunner) reqRemoveMountpath(mpath string) {
-	return
+	rr.mpathReqCh <- mpathReq{action: replicationRemoveMountpath, mpath: mpath}
 }
 
 func (rr *replicationRunner) reqEnableMountpath(mpath string) {
@@ -353,4 +450,20 @@ func (rr *replicationRunner) reqEnableMountpath(mpath string) {
 
 func (rr *replicationRunner) reqDisableMountpath(mpath string) {
 	return
+}
+
+func (rr *replicationRunner) addMpath(mpath string) {
+	replicator, ok := rr.mpathReplicators[mpath]
+	if ok && replicator != nil {
+		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
+		return
+	}
+	rr.mpathReplicators[mpath] = rr.newMpathReplicator(mpath)
+}
+
+func (rr *replicationRunner) removeMpath(mpath string) {
+	replicator, ok := rr.mpathReplicators[mpath]
+	common.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
+	replicator.stop()
+	delete(rr.mpathReplicators, mpath)
 }

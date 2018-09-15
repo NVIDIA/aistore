@@ -671,7 +671,6 @@ DFC cluster can be *stretched* to collocate its redundant gateways with the comp
 
 By design DFC does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In DFC, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](dfc/metasync.go). DFC metasync makes sure to keep cluster-level metadata in-sync at all times.
 
-
 ## WebDAV
 
 WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
