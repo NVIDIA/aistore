@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
@@ -50,9 +51,6 @@ type (
 		mountpaths *fs.MountedFS // for mountpath definition, see fs/mountfs.go
 		rg         *rungroup
 	}
-
-	// most basic and commonly used key/value map where both the keys and the values are strings
-	simplekvs map[string]string
 
 	namedrunner struct {
 		name string
@@ -189,7 +187,7 @@ func dfcinit() {
 	var err error
 
 	flag.Parse()
-	assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
+	common.Assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 
 	dryRun.size, err = strToBytes(dryRun.sizeStr)
 	if dryRun.size < 1 || err != nil {
@@ -306,76 +304,76 @@ m:
 func getproxystatsrunner() *proxystatsrunner {
 	r := ctx.rg.runmap[xproxystats]
 	rr, ok := r.(*proxystatsrunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getproxykeepalive() *proxyKeepaliveRunner {
 	r := ctx.rg.runmap[xproxykeepalive]
 	rr, ok := r.(*proxyKeepaliveRunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func gettarget() *targetrunner {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func gettargetkeepalive() *targetKeepaliveRunner {
 	r := ctx.rg.runmap[xtargetkeepalive]
 	rr, ok := r.(*targetKeepaliveRunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getreplicationrunner() *replicationRunner {
 	r := ctx.rg.runmap[xreplication]
 	rr, ok := r.(*replicationRunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getstorstatsrunner() *storstatsrunner {
 	r := ctx.rg.runmap[xstorstats]
 	rr, ok := r.(*storstatsrunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getiostatrunner() *iostatrunner {
 	r := ctx.rg.runmap[xiostat]
 	rr, ok := r.(*iostatrunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getatimerunner() *atimerunner {
 	r := ctx.rg.runmap[xatime]
 	rr, ok := r.(*atimerunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getcloudif() cloudif {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
-	assert(ok)
+	common.Assert(ok)
 	return rr.cloudif
 }
 
 func getmetasyncer() *metasyncer {
 	r := ctx.rg.runmap[xmetasyncer]
 	rr, ok := r.(*metasyncer)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }
 
 func getfshealthchecker() *fshc {
 	r := ctx.rg.runmap[xfshc]
 	rr, ok := r.(*fshc)
-	assert(ok)
+	common.Assert(ok)
 	return rr
 }

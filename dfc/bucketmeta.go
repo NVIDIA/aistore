@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 const (
@@ -107,7 +109,7 @@ func (m *bucketMD) set(b string, local bool, p BucketProps) {
 		mm = m.CBmap
 	}
 	if _, ok := mm[b]; !ok {
-		assert(false)
+		common.Assert(false)
 	}
 
 	m.Version++

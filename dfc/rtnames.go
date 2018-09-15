@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 type rtnamemap struct {
@@ -78,10 +79,10 @@ func (rtnamemap *rtnamemap) downgradelock(name string) {
 	rtnamemap.Lock()
 
 	info, found := rtnamemap.m[name]
-	assert(found)
+	common.Assert(found)
 	info.exclusive = false
 	info.rc++
-	assert(info.rc == 1)
+	common.Assert(info.rc == 1)
 	rtnamemap.Unlock()
 }
 
@@ -92,9 +93,9 @@ func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
 		return
 	}
 	info, ok := rtnamemap.m[name]
-	assert(ok)
+	common.Assert(ok)
 	if exclusive {
-		assert(info.exclusive)
+		common.Assert(info.exclusive)
 		delete(rtnamemap.m, name)
 		rtnamemap.Unlock()
 		return

@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -33,11 +33,11 @@ func Test_smoke(t *testing.T) {
 		os.Exit(1)
 	}
 
-	if err := dfc.CreateDir(LocalDestDir); err != nil {
+	if err := common.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
 
-	if err := dfc.CreateDir(SmokeDir); err != nil {
+	if err := common.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
 

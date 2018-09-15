@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
 
@@ -970,7 +971,7 @@ func TestMetaSyncReceive(t *testing.T) {
 
 		// extract bucketmd
 		// empty payload
-		lb, actMsg, errStr := proxy1.extractbucketmd(make(simplekvs))
+		lb, actMsg, errStr := proxy1.extractbucketmd(make(common.SimpleKVs))
 		if lb != nil || actMsg != nil || errStr != "" {
 			t.Fatal("Extract bucketmd from empty payload returned data")
 		}
@@ -978,7 +979,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		bucketmd := newBucketMD()
 		syncer.sync(true, bucketmd, "")
 		payload = <-chProxy
-		lb, actMsg, errStr = proxy1.extractbucketmd(make(simplekvs))
+		lb, actMsg, errStr = proxy1.extractbucketmd(make(common.SimpleKVs))
 		if lb != nil || actMsg != nil || errStr != "" {
 			t.Fatal("Extract bucketmd from empty payload returned data")
 		}

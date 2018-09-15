@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -87,7 +88,7 @@ func TestSplitFQN(t *testing.T) {
 		t.Run(tt.testName, func(t *testing.T) {
 			mfs := fs.NewMountedFS()
 			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
-				CreateDir(tt.mpath)
+				common.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
 			}
 			err := mfs.AddMountpath(tt.mpath)

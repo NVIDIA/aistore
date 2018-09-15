@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
@@ -49,7 +50,7 @@ type daemonInfo struct {
 type Smap struct {
 	Tmap      map[string]*daemonInfo `json:"tmap"` // daemonID -> daemonInfo
 	Pmap      map[string]*daemonInfo `json:"pmap"` // proxyID -> proxyInfo
-	NonElects simplekvs              `json:"non_electable"`
+	NonElects common.SimpleKVs       `json:"non_electable"`
 	ProxySI   *daemonInfo            `json:"proxy_si"`
 	Version   int64                  `json:"version"`
 }
@@ -152,7 +153,7 @@ func (r *smapowner) synchronize(newsmap *Smap, saveSmap, lesserVersionIsErr bool
 func (r *smapowner) persist(newsmap *Smap, saveSmap bool) (errstr string) {
 	origURL := ctx.config.Proxy.PrimaryURL
 	ctx.config.Proxy.PrimaryURL = newsmap.ProxySI.PublicNet.DirectURL
-	if err := LocalSave(clivars.conffile, ctx.config); err != nil {
+	if err := common.LocalSave(clivars.conffile, ctx.config); err != nil {
 		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.conffile, err)
 		ctx.config.Proxy.PrimaryURL = origURL
 		return
@@ -160,7 +161,7 @@ func (r *smapowner) persist(newsmap *Smap, saveSmap bool) (errstr string) {
 
 	if saveSmap {
 		smappathname := filepath.Join(ctx.config.Confdir, smapname)
-		if err := LocalSave(smappathname, newsmap); err != nil {
+		if err := common.LocalSave(smappathname, newsmap); err != nil {
 			glog.Errorf("Error writing Smap %s, err: %v", smappathname, err)
 		}
 	}
@@ -177,7 +178,7 @@ func (m *Smap) init(tsize, psize, elsize int) {
 	m.Tmap = make(map[string]*daemonInfo, tsize)
 	m.Pmap = make(map[string]*daemonInfo, psize)
 	if elsize > 0 {
-		m.NonElects = make(simplekvs, elsize)
+		m.NonElects = make(common.SimpleKVs, elsize)
 	}
 }
 
@@ -220,20 +221,20 @@ func (m *Smap) containsID(id string) bool {
 }
 
 func (m *Smap) addTarget(tsi *daemonInfo) {
-	assert(!m.containsID(tsi.DaemonID), "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
+	common.Assert(!m.containsID(tsi.DaemonID), "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
 	m.Tmap[tsi.DaemonID] = tsi
 	m.Version++
 }
 
 func (m *Smap) addProxy(psi *daemonInfo) {
-	assert(!m.containsID(psi.DaemonID), "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
+	common.Assert(!m.containsID(psi.DaemonID), "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
 	m.Pmap[psi.DaemonID] = psi
 	m.Version++
 }
 
 func (m *Smap) delTarget(sid string) {
 	if m.getTarget(sid) == nil {
-		assert(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
+		common.Assert(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
 	}
 	delete(m.Tmap, sid)
 	m.Version++
@@ -241,7 +242,7 @@ func (m *Smap) delTarget(sid string) {
 
 func (m *Smap) delProxy(pid string) {
 	if m.getProxy(pid) == nil {
-		assert(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
+		common.Assert(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
 	}
 	delete(m.Pmap, pid)
 	m.Version++

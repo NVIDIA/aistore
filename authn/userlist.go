@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/json-iterator/go"
@@ -93,7 +94,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		return mgr
 	}
 
-	if err = dfc.LocalLoad(dbPath, &mgr.Users); err != nil {
+	if err = common.LocalLoad(dbPath, &mgr.Users); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
 	}
 	// update loaded list: create empty map for users who do not have credentials in saved file
@@ -117,7 +118,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 // It is called from functions of this module that acquire lock, so this
 //    function needs no locks
 func (m *userManager) saveUsers() (err error) {
-	if err = dfc.LocalSave(m.Path, &m.Users); err != nil {
+	if err = common.LocalSave(m.Path, &m.Users); err != nil {
 		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
 	}
 	return err

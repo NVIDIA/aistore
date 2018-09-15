@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -116,7 +117,7 @@ func (t *targetrunner) oneLRU(mpathInfo *fs.MountpathInfo, bucketdir string, fsc
 	if err != nil {
 		return
 	}
-	glog.Infof("%s: evicting %.2f MB", bucketdir, float64(toevict)/MiB)
+	glog.Infof("%s: evicting %.2f MB", bucketdir, float64(toevict)/common.MiB)
 
 	// init LRU context
 	var oldwork []*fileInfo

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -312,8 +313,8 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	}()
 
 	iostatr := newIostatRunner()
-	iostatr.Disk = map[string]simplekvs{
-		"disk1": simplekvs{
+	iostatr.Disk = map[string]common.SimpleKVs{
+		"disk1": common.SimpleKVs{
 			"%util": "21.34",
 		},
 	}
@@ -371,10 +372,10 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]simplekvs)
+	iostatr.Disk = make(map[string]common.SimpleKVs)
 	disks := fs2disks(fs)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.getNumberItemsToFlush(fs)
@@ -418,10 +419,10 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]simplekvs)
+	iostatr.Disk = make(map[string]common.SimpleKVs)
 	disks := fs2disks(fs)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.getNumberItemsToFlush(fs)
@@ -466,10 +467,10 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]simplekvs)
+	iostatr.Disk = make(map[string]common.SimpleKVs)
 	disks := fs2disks(fs)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.getNumberItemsToFlush(fs)
@@ -515,10 +516,10 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]simplekvs)
+	iostatr.Disk = make(map[string]common.SimpleKVs)
 	disks := fs2disks(fs)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(simplekvs, 0)
+		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.34"
 	}
 	n := atimer.getNumberItemsToFlush(fs)

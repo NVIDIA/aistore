@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/cmd/dfcloader/stats"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
@@ -193,7 +193,7 @@ func main() {
 	}
 
 	if runParams.usingFile {
-		err = dfc.CreateDir(runParams.tmpDir + "/" + myName)
+		err = common.CreateDir(runParams.tmpDir + "/" + myName)
 		if err != nil {
 			fmt.Println("Failed to create local test directory", runParams.tmpDir, "err = ", err)
 			return
@@ -711,14 +711,6 @@ func completeWorkOrder(wo *workOrder) {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
-
 func cleanUp() {
 	fmt.Println(prettyTimeStamp() + " Clean up ...")
 
@@ -727,7 +719,7 @@ func cleanUp() {
 		defer wg.Done()
 
 		t := len(objs)
-		b := min(t, runParams.batchSize)
+		b := common.Min(t, runParams.batchSize)
 		n := t / b
 		for i := 0; i < n; i++ {
 			err := client.DeleteList(runParams.proxyURL, runParams.bucket, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)

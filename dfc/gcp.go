@@ -19,6 +19,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
@@ -117,7 +118,7 @@ func saveCredentialsToFile(baseDir, userID, userCreds string) (string, error) {
 		return "", nil
 	}
 
-	if err := CreateDir(dir); err != nil {
+	if err := common.CreateDir(dir); err != nil {
 		return "", fmt.Errorf("Failed to create directory %s: %v", dir, err)
 	}
 
@@ -251,15 +252,15 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *api.G
 	}
 
 	jsbytes, err = jsoniter.Marshal(reslist)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	return
 }
 
-func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketprops common.SimpleKVs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headbucket %s", bucket)
 	}
-	bucketprops = make(simplekvs)
+	bucketprops = make(common.SimpleKVs)
 
 	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -308,11 +309,11 @@ func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname string) (objmeta simplekvs, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname string) (objmeta common.SimpleKVs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headobject %s/%s", bucket, objname)
 	}
-	objmeta = make(simplekvs)
+	objmeta = make(common.SimpleKVs)
 
 	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -370,7 +371,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
 	var (
 		htype, hval string
-		md          simplekvs
+		md          common.SimpleKVs
 	)
 	client, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -378,7 +379,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	}
 	if ohash != nil {
 		htype, hval = ohash.get()
-		md = make(simplekvs)
+		md = make(common.SimpleKVs)
 		md[gcpDfcHashType] = htype
 		md[gcpDfcHashVal] = hval
 	}

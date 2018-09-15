@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -202,7 +203,7 @@ func Test_putdeleteRange(t *testing.T) {
 	)
 	var sgl *iosgl.SGL
 
-	if err := dfc.CreateDir(DeleteDir); err != nil {
+	if err := common.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
 	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
@@ -349,7 +350,7 @@ func Test_putdelete(t *testing.T) {
 	}
 
 	var sgl *iosgl.SGL
-	if err := dfc.CreateDir(DeleteDir); err != nil {
+	if err := common.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
 
@@ -417,7 +418,7 @@ func listObjects(t *testing.T, msg *api.GetMsg, bucket string, objLimit int) (*a
 	fname := LocalDestDir + "/" + bucket
 	if copy {
 		// Write list to a local filename = bucket
-		if err = dfc.CreateDir(LocalDestDir); err != nil {
+		if err = common.CreateDir(LocalDestDir); err != nil {
 			t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
 			return nil, err
 		}
@@ -529,7 +530,7 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 
 	ldir := LocalSrcDir + "/" + ColdValidStr
-	if err := dfc.CreateDir(ldir); err != nil {
+	if err := common.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
@@ -854,7 +855,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 
 	// Create a local copy
 	fname := LocalDestDir + "/" + keyname
-	file, err := dfc.CreateFile(fname)
+	file, err := common.CreateFile(fname)
 	if err != nil {
 		t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
 		failed = true
@@ -1422,7 +1423,7 @@ func Test_checksum(t *testing.T) {
 
 	created := createLocalBucketIfNotExists(t, proxyurl, bucket)
 	ldir := LocalSrcDir + "/" + ChksumValidStr
-	if err := dfc.CreateDir(ldir); err != nil {
+	if err := common.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 

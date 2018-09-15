@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/dgrijalva/jwt-go"
 )
 
@@ -55,7 +56,7 @@ type (
 		userID  string
 		issued  time.Time
 		expires time.Time
-		creds   simplekvs
+		creds   common.SimpleKVs
 	}
 
 	authList map[string]*authRec
@@ -110,7 +111,7 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	if rec.expires, err = time.Parse(time.RFC822, expireStr); err != nil {
 		return nil, invalTokenErr
 	}
-	rec.creds = make(simplekvs, 0)
+	rec.creds = make(common.SimpleKVs, 0)
 	if cc, ok := claims["creds"].(map[string]interface{}); ok {
 		for key, value := range cc {
 			if asStr, ok := value.(string); ok {
@@ -143,13 +144,13 @@ func getStringFromContext(ct context.Context, fieldName contextID) string {
 }
 
 // Retreives a userCreds from context or nil if nothing found
-func userCredsFromContext(ct context.Context) simplekvs {
+func userCredsFromContext(ct context.Context) common.SimpleKVs {
 	userIf := ct.Value(ctxUserCreds)
 	if userIf == nil {
 		return nil
 	}
 
-	if userCreds, ok := userIf.(simplekvs); ok {
+	if userCreds, ok := userIf.(common.SimpleKVs); ok {
 		return userCreds
 	}
 

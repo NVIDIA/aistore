@@ -6,7 +6,6 @@
 package dfc
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -17,16 +16,15 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
-	"github.com/json-iterator/go"
 )
 
 const (
@@ -37,48 +35,6 @@ const (
 type localIPv4Info struct {
 	ipv4 string
 	mtu  int
-}
-
-type StringSet map[string]struct{}
-
-func (ss StringSet) String() string {
-	keys := make([]string, len(ss))
-	idx := 0
-	for key := range ss {
-		keys[idx] = key
-		idx++
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, ",")
-}
-
-func assert(cond bool, args ...interface{}) {
-	if cond {
-		return
-	}
-	var message = "assertion failed"
-	if len(args) > 0 {
-		message += ": "
-		for i := 0; i < len(args); i++ {
-			message += fmt.Sprintf("%#v ", args[i])
-		}
-	}
-	glog.Flush()
-	glog.Fatalln(message)
-}
-
-// MinU64 returns min value of a and b for uint64 types
-func MinU64(a, b uint64) uint64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-func min64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func copyStruct(dst interface{}, src interface{}) {
@@ -215,15 +171,6 @@ func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, 
 	return ip, nil
 }
 
-func CreateDir(dirname string) error {
-	stat, err := os.Stat(dirname)
-	if err == nil && stat.IsDir() {
-		return nil
-	}
-	err = os.MkdirAll(dirname, 0755)
-	return err
-}
-
 func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
 	buf []byte, hashes ...hash.Hash) (written int64, err error) {
 	var writer io.Writer
@@ -245,15 +192,6 @@ func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
 	if err != nil {
 		return written, err
 	}
-	return
-}
-
-func CreateFile(fname string) (file *os.File, err error) {
-	dirname := filepath.Dir(fname)
-	if err = CreateDir(dirname); err != nil {
-		return
-	}
-	file, err = os.Create(fname)
 	return
 }
 
@@ -305,55 +243,13 @@ func newcksumvalue(kind string, val string) cksumvalue {
 	if kind == ChecksumXXHash {
 		return &cksumvalxxhash{kind, val}
 	}
-	assert(kind == ChecksumMD5)
+	common.Assert(kind == ChecksumMD5)
 	return &cksumvalmd5{kind, val}
 }
 
 func (v *cksumvalxxhash) get() (string, string) { return v.tag, v.val }
 
 func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
-
-//===========================================================================
-//
-// local (config) save and restore - NOTE: caller is responsible to serialize
-//
-//===========================================================================
-func LocalSave(pathname string, v interface{}) error {
-	tmp := pathname + ".tmp"
-	file, err := os.Create(tmp)
-	if err != nil {
-		return err
-	}
-	b, err := jsoniter.MarshalIndent(v, "", " ")
-	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(tmp)
-		return err
-	}
-	r := bytes.NewReader(b)
-	_, err = io.Copy(file, r)
-	errclose := file.Close()
-	if err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if errclose != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	err = os.Rename(tmp, pathname)
-	return err
-}
-
-func LocalLoad(pathname string, v interface{}) (err error) {
-	file, err := os.Open(pathname)
-	if err != nil {
-		return
-	}
-	err = jsoniter.NewDecoder(file).Decode(v)
-	_ = file.Close()
-	return
-}
 
 // as of 1.9 net/http does not appear to provide any better way..
 func IsErrConnectionRefused(err error) (yes bool) {
@@ -512,7 +408,7 @@ OUTER:
 	return
 }
 
-func maxUtilDisks(disksMetricsMap map[string]simplekvs, disks StringSet) (maxutil float64) {
+func maxUtilDisks(disksMetricsMap map[string]common.SimpleKVs, disks common.StringSet) (maxutil float64) {
 	maxutil = -1
 	util := func(disk string) (u float64) {
 		if ioMetrics, ok := disksMetricsMap[disk]; ok {
@@ -561,7 +457,7 @@ func strToBytes(s string) (int64, error) {
 
 	s = strings.ToUpper(s)
 	suffixs := []string{"T", "G", "M", "K", "B"}
-	factors := []int64{TiB, GiB, MiB, KiB, 1}
+	factors := []int64{common.TiB, common.GiB, common.MiB, common.KiB, 1}
 	for idx, v := range factors {
 		if pos := strings.Index(s, suffixs[idx]); pos != -1 {
 			i, err := strconv.ParseInt(strings.TrimSpace(s[:pos]), 10, 64)
@@ -574,7 +470,7 @@ func strToBytes(s string) (int64, error) {
 
 func bytesToStr(b int64, digits int) string {
 	suffixs := []string{"TiB", "GiB", "MiB", "KiB", "B"}
-	factors := []int64{TiB, GiB, MiB, KiB, 1}
+	factors := []int64{common.TiB, common.GiB, common.MiB, common.KiB, 1}
 
 	for idx, f := range factors {
 		if b >= f {
@@ -600,7 +496,7 @@ func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 	}
 	defer fileOut.Close()
 
-	buf, slab := iosgl.AllocFromSlab(iosgl.MiB)
+	buf, slab := iosgl.AllocFromSlab(common.MiB)
 	defer iosgl.FreeToSlab(buf, slab)
 
 	if _, err = io.CopyBuffer(fileOut, fileIn, buf); err != nil {

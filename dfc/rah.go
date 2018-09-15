@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
 )
 
@@ -220,7 +221,7 @@ func (rj *rahjogger) jog() error {
 			if ok {
 				rj.Lock()
 				if e, ok := rj.rahmap[rahfcache.fqn]; !ok {
-					assert(rahfcache.ts.get.IsZero())
+					common.Assert(rahfcache.ts.get.IsZero())
 					rahfcache.ts.head = time.Now()
 					rj.rahmap[rahfcache.fqn] = rahfcache
 					rj.Unlock()
@@ -278,7 +279,7 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		}
 		if rahfcache.sgl != nil {
 			rahfcache.size = size
-			assert(rahfcache.sgl.Size() == size)
+			common.Assert(rahfcache.sgl.Size() == size)
 		}
 		rahfcache.Unlock()
 	}()
@@ -292,10 +293,10 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		return
 	}
 	if rahfcache.rangeLen == 0 {
-		fsize = min64(ctx.config.Readahead.ObjectMem, stat.Size())
+		fsize = common.MinI64(ctx.config.Readahead.ObjectMem, stat.Size())
 		reader = file
 	} else {
-		fsize = min64(ctx.config.Readahead.ObjectMem, rahfcache.rangeLen)
+		fsize = common.MinI64(ctx.config.Readahead.ObjectMem, rahfcache.rangeLen)
 		reader = io.NewSectionReader(file, rahfcache.rangeOff, rahfcache.rangeLen)
 	}
 	if !ctx.config.Readahead.Discard {

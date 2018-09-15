@@ -28,6 +28,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -103,10 +104,10 @@ const initialBucketListSize = 512
 
 type cloudif interface {
 	listbucket(ctx context.Context, bucket string, msg *api.GetMsg) (jsbytes []byte, errstr string, errcode int)
-	headbucket(ctx context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int)
+	headbucket(ctx context.Context, bucket string) (bucketprops common.SimpleKVs, errstr string, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//
-	headobject(ctx context.Context, bucket string, objname string) (objmeta simplekvs, errstr string, errcode int)
+	headobject(ctx context.Context, bucket string, objname string) (objmeta common.SimpleKVs, errstr string, errcode int)
 	//
 	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
 	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
@@ -467,7 +468,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		sid = args.si.DaemonID
 	}
 
-	assert(args.si != nil || args.req.base != "") // either we have si or base
+	common.Assert(args.si != nil || args.req.base != "") // either we have si or base
 	if args.req.base == "" && args.si != nil {
 		args.req.base = args.si.PublicNet.DirectURL
 	}
@@ -734,22 +735,22 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	switch getWhat {
 	case api.GetWhatConfig:
 		jsbytes, err = jsoniter.Marshal(ctx.config)
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 	case api.GetWhatSmap:
 		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 	case api.GetWhatBucketMeta:
 		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 	case api.GetWhatSmapVote:
 		_, xx := h.xactinp.findL(api.ActElection)
 		vote := xx != nil
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		jsbytes, err = jsoniter.Marshal(msg)
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 	case api.GetWhatDaemonInfo:
 		jsbytes, err = jsoniter.Marshal(h.si)
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
 		h.invalmsghdlr(w, r, s)
@@ -940,7 +941,7 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 // metasync Rx handlers
 //
 //=====================
-func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *api.ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *Smap, msg *api.ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
@@ -991,7 +992,7 @@ func (h *httprunner) extractSmap(payload simplekvs) (newsmap *Smap, msg *api.Act
 	return
 }
 
-func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, msg *api.ActionMsg, errstr string) {
+func (h *httprunner) extractbucketmd(payload common.SimpleKVs) (newbucketmd *bucketMD, msg *api.ActionMsg, errstr string) {
 	if _, ok := payload[bucketmdtag]; !ok {
 		return
 	}
@@ -1019,7 +1020,7 @@ func (h *httprunner) extractbucketmd(payload simplekvs) (newbucketmd *bucketMD, 
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload simplekvs) (*TokenList, string) {
+func (h *httprunner) extractRevokedTokenList(payload common.SimpleKVs) (*TokenList, string) {
 	bytes, ok := payload[tokentag]
 	if !ok {
 		return nil, ""
@@ -1111,7 +1112,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, query url.Values,
 	keepalive bool) (res callResult) {
 	info, err := jsoniter.Marshal(h.si)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 
 	path := api.URLPath(api.Version, api.Cluster)
 	if isproxy {

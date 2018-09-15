@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
 )
 
@@ -232,7 +233,7 @@ func (rserv *replicationService) receive() error {
 
 	if nhobj != nil {
 		nhtype, nhval = nhobj.get()
-		assert(hdhtype == nhtype)
+		common.Assert(hdhtype == nhtype)
 	}
 	if hdhval != "" && nhval != "" && hdhval != nhval {
 		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %s... != %s...", bucket, object, nhtype, hdhval[:8], nhval[:8])
@@ -254,7 +255,7 @@ func (rserv *replicationService) receive() error {
 }
 
 func (rserv *replicationService) wait() error {
-	assert(rserv.resultCh != nil)
+	common.Assert(rserv.resultCh != nil)
 	return <-rserv.resultCh
 }
 

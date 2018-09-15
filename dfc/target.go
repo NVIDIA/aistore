@@ -31,6 +31,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/iosgl"
@@ -43,7 +44,7 @@ const (
 	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
 	workfileprefix   = ".~~~."
 	doesnotexist     = "does not exist"
-	maxBytesInMem    = 256 * KiB
+	maxBytesInMem    = 256 * common.KiB
 )
 
 type (
@@ -164,7 +165,7 @@ func (t *targetrunner) run() error {
 		t.cloudif = &awsimpl{t}
 
 	} else {
-		assert(ctx.config.CloudProvider == api.ProviderGoogle)
+		common.Assert(ctx.config.CloudProvider == api.ProviderGoogle)
 		t.cloudif = &gcpimpl{t}
 	}
 
@@ -254,7 +255,7 @@ func (t *targetrunner) register(keepalive bool, timeout time.Duration) (int, err
 	// not being sent at cluster startup and keepalive..
 	if len(res.outjson) > 0 {
 		err := jsoniter.Unmarshal(res.outjson, &newbucketmd)
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 		t.bmdowner.Lock()
 		v := t.bmdowner.get().version()
 		if v > newbucketmd.version() {
@@ -624,7 +625,7 @@ send:
 		}
 		buf, slab = iosgl.AllocFromSlab(rangeLen)
 		if cksumRange {
-			assert(rahSize == 0, "NOT IMPLEMENTED YET") // TODO
+			common.Assert(rahSize == 0, "NOT IMPLEMENTED YET") // TODO
 			var cksum string
 			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
 			if errstr != "" {
@@ -667,7 +668,7 @@ send:
 		getatimerunner().touch(fqn)
 	}
 	if glog.V(4) {
-		s := fmt.Sprintf("GET: %s/%s, %.2f MB, %d µs", bucket, objname, float64(written)/MiB, time.Since(started)/1000)
+		s := fmt.Sprintf("GET: %s/%s, %.2f MB, %d µs", bucket, objname, float64(written)/common.MiB, time.Since(started)/1000)
 		if coldget {
 			s += " (cold)"
 		}
@@ -990,7 +991,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		islocal     bool
 		errstr      string
 		errcode     int
-		bucketprops simplekvs
+		bucketprops common.SimpleKVs
 		cksumcfg    *cksumconfig
 	)
 	apitems := t.restAPIItems(r.URL.Path, 5)
@@ -1025,7 +1026,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		bucketprops = make(simplekvs)
+		bucketprops = make(common.SimpleKVs)
 		bucketprops[api.HeaderCloudProvider] = api.ProviderDFC
 		bucketprops[api.HeaderVersioning] = VersionLocal
 	}
@@ -1060,7 +1061,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		bucket, objname, errstr string
 		islocal, checkCached    bool
 		errcode                 int
-		objmeta                 simplekvs
+		objmeta                 common.SimpleKVs
 	)
 	checkCached, _ = parsebool(r.URL.Query().Get(api.URLParamCheckCached))
 	apitems := t.restAPIItems(r.URL.Path, 5)
@@ -1100,7 +1101,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		} else if checkCached {
 			return
 		}
-		objmeta = make(simplekvs)
+		objmeta = make(common.SimpleKVs)
 		objmeta["size"] = strconv.FormatInt(size, 10)
 		objmeta["version"] = version
 		glog.Infoln("httpobjhead FOUND:", bucket, objname, size, version)
@@ -1142,7 +1143,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
-	var payload = make(simplekvs)
+	var payload = make(common.SimpleKVs)
 	if err := t.readJSON(w, r, &payload); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
@@ -1195,7 +1196,7 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	status := &thealthstatus{IsRebalancing: aborted || running}
 
 	jsbytes, err := jsoniter.Marshal(status)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	if ok := t.writeJSON(w, r, jsbytes, "thealthstatus"); !ok {
 		return
 	}
@@ -1272,7 +1273,7 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 	for _, mpathInfo := range availablePaths {
 		// Create directory for new local bucket
 		toDir := filepath.Join(makePathLocal(mpathInfo.Path), bucketTo)
-		if err := CreateDir(toDir); err != nil {
+		if err := common.CreateDir(toDir); err != nil {
 			ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
 			continue
 		}
@@ -1338,7 +1339,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 // and the object should be refreshed from Cloud storage
 // It should be called only in case of the object is present in DFC cache
 func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
-	var objmeta simplekvs
+	var objmeta common.SimpleKVs
 	if objmeta, errstr, errcode = t.cloudif.headobject(ct, bucket, objname); errstr != "" {
 		return
 	}
@@ -1404,7 +1405,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 	response.Body.Close()
 	if nhobj != nil {
 		nhtype, nhval := nhobj.get()
-		assert(hdhobj == nil || htype == nhtype)
+		common.Assert(hdhobj == nil || htype == nhtype)
 		if hval != "" && nhval != "" && hval != nhval {
 			glog.Errorf("Bad checksum: %s/%s %s %s... != %s...", bucket, objname, htype, hval[:8], nhval[:8])
 			return
@@ -1730,7 +1731,7 @@ func (t *targetrunner) getbucketnames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsbytes, err := jsoniter.Marshal(bucketnames)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	t.writeJSON(w, r, jsbytes, "getbucketnames")
 }
 
@@ -1741,7 +1742,7 @@ func (t *targetrunner) doLocalBucketList(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	jsbytes, err := jsoniter.Marshal(reslist)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	ok = t.writeJSON(w, r, jsbytes, "listbucket")
 	return
 }
@@ -2031,7 +2032,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	}
 	if nhobj != nil {
 		nhtype, nhval = nhobj.get()
-		assert(hdhobj == nil || htype == nhtype)
+		common.Assert(hdhobj == nil || htype == nhtype)
 	}
 	// validate checksum when and if provided
 	if hval != "" && nhval != "" && hval != nhval && !dryRun.disk && !dryRun.network {
@@ -2091,7 +2092,7 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucke
 		slab.Free(buf)
 	}()
 	// sgl => fqn sequence
-	file, err := CreateFile(putfqn)
+	file, err := common.CreateFile(putfqn)
 	if err != nil {
 		t.fshc(err, putfqn)
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
@@ -2110,7 +2111,7 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucke
 		}
 		return
 	}
-	assert(written == sgl.Size())
+	common.Assert(written == sgl.Size())
 	err = file.Close()
 	if err != nil {
 		glog.Errorln("sglToCloudAsync: Close", err)
@@ -2250,7 +2251,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			return
 		}
 		if glog.V(4) {
-			glog.Infof("Rebalance %s/%s done, %.2f MB", bucket, objname, float64(size)/MiB)
+			glog.Infof("Rebalance %s/%s done, %.2f MB", bucket, objname, float64(size)/common.MiB)
 		}
 	} else {
 		//
@@ -2275,7 +2276,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if props.nhobj != nil {
 			nhtype, nhval := props.nhobj.get()
 			htype, hval := hdhobj.get()
-			assert(htype == nhtype)
+			common.Assert(htype == nhtype)
 			if hval != nhval {
 				errstr = fmt.Sprintf("Bad checksum at the destination %s: %s/%s %s %s... != %s...",
 					t.si.DaemonID, bucket, objname, htype, hval[:8], nhval[:8])
@@ -2392,7 +2393,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 			return
 		}
 		dirname := filepath.Dir(newfqn)
-		if err := CreateDir(dirname); err != nil {
+		if err := common.CreateDir(dirname); err != nil {
 			errstr = fmt.Sprintf("Unexpected failure to create local dir %s, err: %v", dirname, err)
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
@@ -2505,7 +2506,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 
 	if cksumcfg.Checksum != ChecksumNone {
-		assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
+		common.Assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
 		buf, slab := iosgl.AllocFromSlab(size)
 		if xxhashval, errstr = ComputeXXHash(file, buf); errstr != "" {
 			slab.Free(buf)
@@ -2785,7 +2786,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		rst.RLock()
 		jsbytes, err := jsoniter.Marshal(rst)
 		rst.RUnlock()
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case api.GetWhatXaction:
 		kind := r.URL.Query().Get(api.URLParamProps)
@@ -2954,7 +2955,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		reader = readers.NewRandReader(dryRun.size)
 	}
 	if !dryRun.disk {
-		if file, err = CreateFile(fqn); err != nil {
+		if file, err = common.CreateFile(fqn); err != nil {
 			t.fshc(err, fqn)
 			errstr = fmt.Sprintf("Failed to create %s, err: %s", fqn, err)
 			return
@@ -2994,7 +2995,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 
 	// receive and checksum
 	if cksumcfg.Checksum != ChecksumNone {
-		assert(cksumcfg.Checksum == ChecksumXXHash)
+		common.Assert(cksumcfg.Checksum == ChecksumXXHash)
 		xx := xxhash.New64()
 		if written, err = ReceiveAndChecksum(filewriter, reader, buf, xx); err != nil {
 			errstr = err.Error()
@@ -3008,7 +3009,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		nhobj = newcksumvalue(ChecksumXXHash, nhval)
 		if ohobj != nil {
 			ohtype, ohval = ohobj.get()
-			assert(ohtype == ChecksumXXHash)
+			common.Assert(ohtype == ChecksumXXHash)
 			if ohval != nhval {
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
@@ -3120,8 +3121,8 @@ func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
 
 func (t *targetrunner) fqn2workfile(fqn string) (workfqn string) {
 	dir, base := filepath.Split(fqn)
-	assert(strings.HasSuffix(dir, "/"), dir+" : "+base)
-	assert(base != "", dir+" : "+base)
+	common.Assert(strings.HasSuffix(dir, "/"), dir+" : "+base)
+	common.Assert(base != "", dir+" : "+base)
 
 	tiebreaker := strconv.FormatInt(time.Now().UnixNano(), 16)
 	workfqn = dir + workfileprefix + base + "." + tiebreaker[5:] + "." + t.uxprocess.spid
@@ -3163,13 +3164,13 @@ func (t *targetrunner) testCachepathMounts() {
 	}
 	for i := 0; i < ctx.config.TestFSP.Count; i++ {
 		mpath := filepath.Join(instpath, strconv.Itoa(i+1))
-		if err := CreateDir(mpath); err != nil {
+		if err := common.CreateDir(mpath); err != nil {
 			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
 			os.Exit(1)
 		}
 
 		err := ctx.mountpaths.AddMountpath(mpath)
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 	}
 }
 
@@ -3183,7 +3184,7 @@ func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath stri
 		if _, exists := availablePaths[dir]; exists {
 			return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo.Path, dir)
 		}
-		if err := CreateDir(dir); err != nil {
+		if err := common.CreateDir(dir); err != nil {
 			return fmt.Errorf("cannot create %s buckets dir %q, err: %v", s, dir, err)
 		}
 	}
@@ -3195,16 +3196,16 @@ func (t *targetrunner) detectMpathChanges() {
 	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
 
 	type mfs struct {
-		Available StringSet `json:"available"`
-		Disabled  StringSet `json:"disabled"`
+		Available common.StringSet `json:"available"`
+		Disabled  common.StringSet `json:"disabled"`
 	}
 
 	// load old/prev and compare
 	var (
 		oldfs = mfs{}
 		newfs = mfs{
-			Available: make(StringSet),
-			Disabled:  make(StringSet),
+			Available: make(common.StringSet),
+			Disabled:  make(common.StringSet),
 		}
 	)
 
@@ -3216,7 +3217,7 @@ func (t *targetrunner) detectMpathChanges() {
 		newfs.Disabled[mpath] = struct{}{}
 	}
 
-	if err := LocalLoad(mpathconfigfqn, &oldfs); err != nil {
+	if err := common.LocalLoad(mpathconfigfqn, &oldfs); err != nil {
 		if !os.IsNotExist(err) && err != io.EOF {
 			glog.Errorf("Failed to load old mpath config %q, err: %v", mpathconfigfqn, err)
 		}
@@ -3240,7 +3241,7 @@ func (t *targetrunner) detectMpathChanges() {
 		glog.Errorln(newfsPprint)
 	}
 	// persist
-	if err := LocalSave(mpathconfigfqn, newfs); err != nil {
+	if err := common.LocalSave(mpathconfigfqn, newfs); err != nil {
 		glog.Errorf("Error writing config file: %v", err)
 	}
 }
@@ -3263,7 +3264,7 @@ func (t *targetrunner) versioningConfigured(bucket string) bool {
 func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr string) {
 	if objprops.nhobj != nil {
 		htype, hval := objprops.nhobj.get()
-		assert(htype == ChecksumXXHash)
+		common.Assert(htype == ChecksumXXHash)
 		if errstr = Setxattr(fqn, XattrXXHashVal, []byte(hval)); errstr != "" {
 			return errstr
 		}
@@ -3498,7 +3499,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg
 		if _, ok := bucketmd.LBmap[bucket]; !ok {
 			for _, mpathInfo := range availablePaths {
 				localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
-				if err := CreateDir(localbucketfqn); err != nil {
+				if err := common.CreateDir(localbucketfqn); err != nil {
 					glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
 				}
 			}

@@ -10,18 +10,16 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 const (
-	KiB = 1024
-	MiB = 1024 * KiB
-	GiB = 1024 * MiB
-
-	largeSizeUseThresh = MiB / 2
-	minSizeUnknown     = 32 * KiB
+	largeSizeUseThresh = common.MiB / 2
+	minSizeUnknown     = 32 * common.KiB
 )
 
-var fixedSizes = []int64{4 * KiB, 16 * KiB, 32 * KiB, 64 * KiB, 128 * KiB}
+var fixedSizes = []int64{4 * common.KiB, 16 * common.KiB, 32 * common.KiB, 64 * common.KiB, 128 * common.KiB}
 var allSlabs = []*Slab{nil, nil, nil, nil, nil} // Note: the length of allSlabs must equal the length of fixedSizes.
 
 func init() {
@@ -43,7 +41,7 @@ func NewSGL(oosize uint64) *SGL {
 		osize = minSizeUnknown
 	}
 	slab := SelectSlab(osize)
-	n := divCeil(osize, slab.Size())
+	n := common.DivCeil(osize, slab.Size())
 	sgl := make([][]byte, n)
 	for i := 0; i < int(n); i++ {
 		sgl[i] = slab.Alloc()
@@ -69,7 +67,7 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 	}
 	idx, off, poff := z.woff/z.slab.Size(), z.woff%z.slab.Size(), 0
 	for wlen > 0 {
-		size := MinI64(z.slab.Size()-off, int64(wlen))
+		size := common.MinI64(z.slab.Size()-off, int64(wlen))
 		buf := z.sgl[idx]
 		copy(buf[off:], p[poff:poff+int(size)])
 		z.woff += size
@@ -94,13 +92,13 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64
 	}
 	idx, off := int(roff/z.slab.Size()), roff%z.slab.Size()
 	buf := z.sgl[idx]
-	size := MinI64(int64(len(b)), z.woff-roff)
+	size := common.MinI64(int64(len(b)), z.woff-roff)
 	n = copy(b[:size], buf[off:])
 	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
 		idx++
 		buf = z.sgl[idx]
-		size = MinI64(int64(len(b)-n), z.woff-roff)
+		size = common.MinI64(int64(len(b)-n), z.woff-roff)
 		n1 := copy(b[n:n+int(size)], buf)
 		roff += int64(n1)
 		n += n1
@@ -171,22 +169,6 @@ func (r *Reader) Open() (io.ReadCloser, error) {
 }
 
 func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
-
-// MinI64 returns min value of a and b for int64 types
-func MinI64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func divCeil(a, b int64) int64 {
-	d, r := a/b, a%b
-	if r > 0 {
-		return d + 1
-	}
-	return d
-}
 
 type Slab struct {
 	pool      *sync.Pool

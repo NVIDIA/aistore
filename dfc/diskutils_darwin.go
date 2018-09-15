@@ -14,18 +14,18 @@ func newIostatRunner() *iostatrunner {
 	return &iostatrunner{
 		chsts:       make(chan struct{}, 1),
 		CPUidle:     "(error: iostat unavailable)",
-		Disk:        make(map[string]simplekvs, 0),
+		Disk:        make(map[string]common.SimpleKVs, 0),
 		metricnames: make([]string, 0),
 	}
 }
 
 func (r *iostatrunner) run() (err error) {
-	assert(false, "niy")
+	common.Assert(false, "niy")
 	return nil
 }
 
 func (r *iostatrunner) stop(err error) {
-	assert(false, "niy")
+	common.Assert(false, "niy")
 }
 
 func (r *iostatrunner) isZeroUtil(dev string) bool {
@@ -44,10 +44,10 @@ func (r *iostatrunner) diskUtilFromFQN(path string) (utilization float32, ok boo
 	return float32(-1), false
 }
 
-func fs2disks(fileSystem string) (disks StringSet) {
-	return make(StringSet)
+func fs2disks(fileSystem string) (disks common.StringSet) {
+	return make(common.StringSet)
 }
 
-func lsblkOutput2disks(lsblkOutputBytes []byte, fileSystem string) (disks StringSet) {
-	return make(StringSet)
+func lsblkOutput2disks(lsblkOutputBytes []byte, fileSystem string) (disks common.StringSet) {
+	return make(common.StringSet)
 }

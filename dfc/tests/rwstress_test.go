@@ -18,10 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
@@ -307,7 +306,7 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 }
 
 func rwstress(t *testing.T) {
-	if err := dfc.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir)); err != nil {
+	if err := common.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir)); err != nil {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 

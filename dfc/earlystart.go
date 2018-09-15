@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
 
@@ -40,7 +41,7 @@ func (p *proxyrunner) bootstrap() {
 	// step 1: load a local copy of the cluster map and
 	//         try to use it for discovery of the current one
 	smap = newSmap()
-	if err := LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
+	if err := common.LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
 		if smap.countTargets() > 0 || smap.countProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
 			q.Add(api.URLParamWhat, api.GetWhatSmapVote)
@@ -106,7 +107,7 @@ func (p *proxyrunner) bootstrap() {
 	// step 3: join as a non-primary, or
 	// 	   keep starting up as a primary
 	if !guessAmPrimary {
-		assert(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
+		common.Assert(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
 		glog.Infof("%s: starting up as non-primary, joining => %s", p.si.DaemonID, getSmapURL)
 		p.secondaryStartup(getSmapURL)
 		return
@@ -151,7 +152,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		}
 		smap := &Smap{}
 		if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
-			assert(false, err)
+			common.Assert(false, err)
 		}
 		if !smap.isValid() {
 			s := fmt.Sprintf("Invalid Smap at startup/registration: %s", smap.pp())
@@ -194,7 +195,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 		metaction2 = "primary-started-up"
 	)
 	// (i) initialize empty Smap
-	assert(p.smapowner.get() == nil)
+	common.Assert(p.smapowner.get() == nil)
 	p.smapowner.Lock()
 	startupSmap := newSmap()
 	startupSmap.Pmap[p.si.DaemonID] = p.si
@@ -215,7 +216,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	haveRegistratons := false
 	p.smapowner.Lock()
 	if smap.version() > 0 {
-		assert(smap.countTargets() > 0 || smap.countProxies() > 1)
+		common.Assert(smap.countTargets() > 0 || smap.countProxies() > 1)
 		haveRegistratons = true
 		guessSmap.merge(smap)
 		p.smapowner.put(smap)

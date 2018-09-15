@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
 
@@ -382,7 +383,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 
 	msg := VoteMessage{Record: *vr}
 	jsbytes, err := jsoniter.Marshal(&msg)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 
 	q := url.Values{}
 	q.Set(api.URLParamPrimaryCandidate, p.si.DaemonID)
@@ -426,7 +427,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 				StartTime: time.Now(),
 				Initiator: p.si.DaemonID,
 			}})
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 
 	smap := p.smapowner.get()
 	res := p.broadcastCluster(
@@ -522,7 +523,7 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *daemonInfo) {
 	msg := VoteInitiationMessage{Request: *vr}
 	body, err := jsoniter.Marshal(&msg)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 
 	args := callArgs{
 		si: nextPrimaryProxy,

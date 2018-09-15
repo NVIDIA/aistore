@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -70,7 +70,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	// cleanup
 	// restore original mountpath
 	os.Remove(mpath)
-	dfc.CreateDir(mpath)
+	common.CreateDir(mpath)
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list

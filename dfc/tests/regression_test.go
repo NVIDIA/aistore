@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -483,7 +484,7 @@ func TestRenameObjects(t *testing.T) {
 
 	time.Sleep(time.Second * 5)
 
-	if err = dfc.CreateDir(RenameDir); err != nil {
+	if err = common.CreateDir(RenameDir); err != nil {
 		t.Errorf("Error creating dir: %v", err)
 	}
 
@@ -780,7 +781,7 @@ func TestConfig(t *testing.T) {
 func TestLRU(t *testing.T) {
 	var (
 		errch   = make(chan error, 100)
-		usedpct = uint32(100)
+		usedpct = 100
 	)
 	isCloud := isCloudBucket(t, proxyurl, clibucket)
 	if !isCloud {
@@ -819,7 +820,7 @@ func TestLRU(t *testing.T) {
 	for k, v := range stats.Target {
 		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Bytesevicted, v.Core.Filesevicted
 		for _, c := range v.Capacity {
-			usedpct = min(usedpct, c.Usedpct)
+			usedpct = common.Min(usedpct, int(c.Usedpct))
 		}
 	}
 	tlogf("LRU: current min space usage in the cluster: %d%%\n", usedpct)
@@ -892,7 +893,7 @@ func TestLRU(t *testing.T) {
 			continue
 		}
 		for mpath, c := range v.Capacity {
-			if c.Usedpct < lowwm-1 || c.Usedpct > lowwm+1 {
+			if c.Usedpct < uint32(lowwm)-1 || c.Usedpct > uint32(lowwm)+1 {
 				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s, used space %d%%", k, lowwm, mpath, c.Usedpct)
 			}
 		}
@@ -1425,17 +1426,6 @@ func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 		t.Fatalf("Failed to perform request, err = %v", err)
 	}
 	defer r.Body.Close()
-}
-
-//
-// FIXME: extract the most basic utility functions (such as the ones below)
-//        into a separate file within the dfc_test module
-//
-func min(a, b uint32) uint32 {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func selectErr(errch chan error, verb string, t *testing.T, errisfatal bool) {

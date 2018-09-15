@@ -13,13 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-)
-
-const (
-	KiB = 1024
-	MiB = 1024 * KiB
-	GiB = 1024 * MiB
-	TiB = 1024 * GiB
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 // string enum: http header, checksum, versioning - FIXME: move to ../api
@@ -74,7 +68,7 @@ type dfconfig struct {
 	Rebalance        rebalanceconf     `json:"rebalance_conf"`
 	Cksum            cksumconfig       `json:"cksum_config"`
 	Ver              versionconfig     `json:"version_config"`
-	FSpaths          simplekvs         `json:"fspaths"`
+	FSpaths          common.SimpleKVs  `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	Net              netconfig         `json:"netconfig"`
 	FSHC             fshcconf          `json:"fshc"`
@@ -237,7 +231,7 @@ func initconfigparam() error {
 	if err != nil {
 		glog.Errorf("Failed to flag-set glog dir %q, err: %v", ctx.config.Log.Dir, err)
 	}
-	if err = CreateDir(ctx.config.Log.Dir); err != nil {
+	if err = common.CreateDir(ctx.config.Log.Dir); err != nil {
 		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Log.Dir, err)
 		return err
 	}
@@ -246,9 +240,9 @@ func initconfigparam() error {
 	}
 	// glog rotate
 	glog.MaxSize = ctx.config.Log.MaxSize
-	if glog.MaxSize > GiB {
+	if glog.MaxSize > common.GiB {
 		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
-		glog.MaxSize = MiB
+		glog.MaxSize = common.MiB
 	}
 	// CLI override
 	if clivars.statstime != 0 {
@@ -297,7 +291,7 @@ func initconfigparam() error {
 }
 
 func getConfig(fpath string) {
-	err := LocalLoad(fpath, &ctx.config)
+	err := common.LocalLoad(fpath, &ctx.config)
 	if err != nil {
 		glog.Errorf("Failed to load config %q, err: %v", fpath, err)
 		os.Exit(1)

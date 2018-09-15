@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -251,15 +252,15 @@ func (awsimpl *awsimpl) listbucket(ct context.Context, bucket string, msg *api.G
 	}
 
 	jsbytes, err = jsoniter.Marshal(reslist)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	return
 }
 
-func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketprops simplekvs, errstr string, errcode int) {
+func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketprops common.SimpleKVs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headbucket %s", bucket)
 	}
-	bucketprops = make(simplekvs)
+	bucketprops = make(common.SimpleKVs)
 
 	sess := createSession(ct)
 	svc := s3.New(sess)
@@ -312,11 +313,11 @@ func (awsimpl *awsimpl) getbucketnames(ct context.Context) (buckets []string, er
 // object meta
 //
 //============
-func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname string) (objmeta simplekvs, errstr string, errcode int) {
+func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname string) (objmeta common.SimpleKVs, errstr string, errcode int) {
 	if glog.V(4) {
 		glog.Infof("headobject %s/%s", bucket, objname)
 	}
-	objmeta = make(simplekvs)
+	objmeta = make(common.SimpleKVs)
 
 	sess := createSession(ct)
 	svc := s3.New(sess)

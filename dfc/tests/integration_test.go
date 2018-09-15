@@ -20,6 +20,7 @@ import (
 	"runtime/debug"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -1403,7 +1404,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	// Add new mountpath to all targets
 	for idx, target := range targets {
 		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
-		dfc.CreateDir(mountpath)
+		common.CreateDir(mountpath)
 		err = client.AddTargetMountpath(target.directURL, mountpath)
 		checkFatal(err, t)
 	}

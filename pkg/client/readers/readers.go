@@ -17,6 +17,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
@@ -32,14 +33,6 @@ const (
 	// ReaderTypeInMem defines the name for inmem reader
 	ReaderTypeInMem = "inmem"
 )
-
-// helper functions
-func min(x, y int64) int64 {
-	if x < y {
-		return x
-	}
-	return y
-}
 
 // populateData reads data from random source and writes to a writer,
 // calculates and returns xxhash (if needed)
@@ -57,7 +50,7 @@ func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (strin
 		h = xxhash.New64()
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
-		n := min(blkSize, left)
+		n := common.MinI64(blkSize, left)
 		rnd.Read(blk[:n])
 		m, err := w.Write(blk[:n])
 		if err != nil {
@@ -103,7 +96,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 	}
 
 	want := int64(len(buf))
-	n := min(want, available)
+	n := common.MinI64(want, available)
 	actual, err := r.rnd.Read(buf[:n])
 	if err != nil {
 		return 0, nil

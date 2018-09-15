@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 // ================================ Summary ===============================================
@@ -141,7 +142,7 @@ func (r *atimerunner) getNumberItemsToFlush(fileSystem string) (n int) {
 		return
 	}
 
-	filling := MinU64(100, uint64(atimeMapSize)*100/ctx.config.LRU.AtimeCacheMax)
+	filling := common.MinU64(100, uint64(atimeMapSize)*100/ctx.config.LRU.AtimeCacheMax)
 	riostat := getiostatrunner()
 
 	maxDiskUtil := float32(-1)

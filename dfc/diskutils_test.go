@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
@@ -138,18 +139,18 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 
 func TestGetMaxUtil(t *testing.T) {
 	riostat := newIostatRunner()
-	riostat.Disk = make(map[string]simplekvs, 2)
-	disks := make(StringSet)
+	riostat.Disk = make(map[string]common.SimpleKVs, 2)
+	disks := make(common.StringSet)
 	disk1 := "disk1"
 	disks[disk1] = struct{}{}
-	riostat.Disk[disk1] = make(simplekvs, 1)
+	riostat.Disk[disk1] = make(common.SimpleKVs, 1)
 	riostat.Disk[disk1]["%util"] = "23.2"
 	util := maxUtilDisks(riostat.Disk, disks)
 	if math.Abs(23.2-util) > 0.0001 {
 		t.Errorf("Expected: 23.2. Actual: %f", util)
 	}
 	disk2 := "disk2"
-	riostat.Disk[disk2] = make(simplekvs, 1)
+	riostat.Disk[disk2] = make(common.SimpleKVs, 1)
 	riostat.Disk[disk2]["%util"] = "25.9"
 	disks[disk2] = struct{}{}
 	util = maxUtilDisks(riostat.Disk, disks)
@@ -269,7 +270,7 @@ func testAssert(t *testing.T, condition bool, msg string, args ...interface{}) {
 
 func createDirs(dirs ...string) error {
 	for _, dir := range dirs {
-		err := CreateDir(dir)
+		err := common.CreateDir(dir)
 		if err != nil {
 			return err
 		}

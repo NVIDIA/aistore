@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
 
@@ -112,7 +113,7 @@ type metasyncer struct {
 	p            *proxyrunner          // parent
 	revsmap      map[string]revsdaemon // sync-ed versions (cluster-wide, by DaemonID)
 	last         map[string]revs       // last/current sync-ed
-	lastclone    simplekvs             // to enforce CoW
+	lastclone    common.SimpleKVs      // to enforce CoW
 	stopCh       chan struct{}         // stop channel
 	workCh       chan revsReq          // work channel
 	retryTimer   *time.Timer           // timer to sync pending
@@ -125,7 +126,7 @@ type metasyncer struct {
 func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 	y = &metasyncer{p: p}
 	y.last = make(map[string]revs)
-	y.lastclone = make(simplekvs)
+	y.lastclone = make(common.SimpleKVs)
 	y.revsmap = make(map[string]revsdaemon)
 
 	y.stopCh = make(chan struct{}, 1)
@@ -147,7 +148,7 @@ func (y *metasyncer) run() error {
 				if revsReq.pairs == nil { // <== see becomeNonPrimary()
 					y.revsmap = make(map[string]revsdaemon)
 					y.last = make(map[string]revs)
-					y.lastclone = make(simplekvs)
+					y.lastclone = make(common.SimpleKVs)
 					y.retryTimer.Stop()
 					y.timerStopped = true
 					break
@@ -192,17 +193,17 @@ func (y *metasyncer) sync(wait bool, params ...interface{}) {
 		return
 	}
 	l := len(params) / 2
-	assert(l > 0 && len(params) == l*2)
+	common.Assert(l > 0 && len(params) == l*2)
 	revsReq := revsReq{pairs: make([]revspair, l, l)}
 	for i := 0; i < len(params); i += 2 {
 		revs, ok := params[i].(revs)
-		assert(ok)
+		common.Assert(ok)
 		if action, ok := params[i+1].(string); ok {
 			msg := &api.ActionMsg{Action: action}
 			revsReq.pairs[i/2] = revspair{revs, msg}
 		} else {
 			msg, ok := params[i+1].(*api.ActionMsg)
-			assert(ok)
+			common.Assert(ok)
 			revsReq.pairs[i/2] = revspair{revs, msg}
 		}
 	}
@@ -233,19 +234,19 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		jsbytes, jsmsg []byte
 		err            error
 		refused        map[string]*daemonInfo
-		payload        = make(simplekvs)
+		payload        = make(common.SimpleKVs)
 		smap           = y.p.smapowner.get()
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
 	for tag, revs := range y.last {
 		jsbytes, err = revs.marshal()
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 		if cowcopy, ok := y.lastclone[tag]; ok {
 			if cowcopy != string(jsbytes) {
 				s := fmt.Sprintf("CoW violation: previously sync-ed %s v%d has been updated in-place",
 					tag, revs.version())
-				assert(false, s)
+				common.Assert(false, s)
 			}
 		}
 	}
@@ -261,7 +262,7 @@ OUTER:
 		if tag == smaptag {
 			v := smap.version()
 			if revs.version() > v {
-				assert(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
+				common.Assert(false, fmt.Sprintf("FATAL: %s is newer than the current Smap v%d", s, v))
 			} else if revs.version() < v {
 				glog.Warningf("Warning: %s: using newer Smap v%d to broadcast", s, v)
 			}
@@ -291,16 +292,16 @@ OUTER:
 
 		y.last[tag] = revs
 		jsbytes, err = revs.marshal()
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 		y.lastclone[tag] = string(jsbytes)
 		jsmsg, err = jsoniter.Marshal(msg)
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 
 		payload[tag] = string(jsbytes)         // payload
 		payload[tag+actiontag] = string(jsmsg) // action message always on the wire even when empty
 	}
 	jsbytes, err = jsoniter.Marshal(payload)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 
 	// step 3: b-cast
 	urlPath := api.URLPath(api.Version, api.Metasync)
@@ -415,7 +416,7 @@ func (y *metasyncer) pending(needMap bool) (count int, pending map[string]*daemo
 				for tag, revs := range y.last {
 					v, ok := revsdaemon[tag]
 					if !ok || v != revs.version() {
-						assert(!ok || v < revs.version())
+						common.Assert(!ok || v < revs.version())
 						count++
 						inSync = false
 						break
@@ -442,21 +443,21 @@ func (y *metasyncer) handlePending() (cnt int) {
 		return
 	}
 
-	payload := make(simplekvs)
+	payload := make(common.SimpleKVs)
 	pairs := make([]revspair, 0, len(y.last))
 	msg := &api.ActionMsg{Action: "metasync: handle-pending"} // the same action msg for all
 	jsmsg, err := jsoniter.Marshal(msg)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	for tag, revs := range y.last {
 		body, err := revs.marshal()
-		assert(err == nil, err)
+		common.Assert(err == nil, err)
 		payload[tag] = string(body)
 		payload[tag+actiontag] = string(jsmsg)
 		pairs = append(pairs, revspair{revs, msg})
 	}
 
 	body, err := jsoniter.Marshal(payload)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
@@ -483,7 +484,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 
 func (y *metasyncer) checkPrimary() bool {
 	smap := y.p.smapowner.get()
-	assert(smap != nil)
+	common.Assert(smap != nil)
 	if smap.isPrimary(y.p.si) {
 		return true
 	}

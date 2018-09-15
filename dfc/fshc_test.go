@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -21,11 +22,11 @@ func testTmpFileName(fname string) string {
 }
 
 func testCheckerMountPaths() *fs.MountedFS {
-	CreateDir(fsCheckerTmpDir)
-	CreateDir(fsCheckerTmpDir + "/1")
-	CreateDir(fsCheckerTmpDir + "/2")
-	CreateDir(fsCheckerTmpDir + "/3")
-	CreateDir(fsCheckerTmpDir + "/4")
+	common.CreateDir(fsCheckerTmpDir)
+	common.CreateDir(fsCheckerTmpDir + "/1")
+	common.CreateDir(fsCheckerTmpDir + "/2")
+	common.CreateDir(fsCheckerTmpDir + "/3")
+	common.CreateDir(fsCheckerTmpDir + "/4")
 
 	mountedFS := fs.NewMountedFS()
 	mountedFS.DisableFsIDCheck()

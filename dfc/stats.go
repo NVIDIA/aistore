@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/json-iterator/go"
 )
@@ -121,8 +122,8 @@ type storstatsrunner struct {
 	Core     targetCoreStats        `json:"core"`
 	Capacity map[string]*fscapacity `json:"capacity"`
 	// iostat
-	CPUidle string               `json:"cpuidle"`
-	Disk    map[string]simplekvs `json:"disk"`
+	CPUidle string                      `json:"cpuidle"`
+	Disk    map[string]common.SimpleKVs `json:"disk"`
 	// omitempty
 	timeUpdatedCapacity time.Time
 	timeCheckedLogSizes time.Time
@@ -145,9 +146,9 @@ type iostatrunner struct {
 	stopCh      chan struct{}
 	CPUidle     string
 	metricnames []string
-	Disk        map[string]simplekvs
+	Disk        map[string]common.SimpleKVs
 	process     *os.Process // running iostat process. Required so it can be killed later
-	fsdisks     map[string]StringSet
+	fsdisks     map[string]common.StringSet
 }
 
 type (
@@ -361,7 +362,7 @@ func (s *proxyCoreStats) doAdd(name string, val int64) {
 	case "err.n":
 		v = &s.Numerr
 	default:
-		assert(false, "Invalid stats name "+name)
+		common.Assert(false, "Invalid stats name "+name)
 	}
 	*v += val
 	s.logged = false
@@ -386,7 +387,7 @@ func (r *storstatsrunner) run() error {
 }
 
 func (r *storstatsrunner) init() {
-	r.Disk = make(map[string]simplekvs, 8)
+	r.Disk = make(map[string]common.SimpleKVs, 8)
 	r.updateCapacity()
 }
 
@@ -663,7 +664,7 @@ func (s *targetCoreStats) doAdd(name string, val int64) {
 			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
 		val = int64(time.Duration(val) / time.Microsecond)
 	default:
-		assert(false, "Invalid stats name "+name)
+		common.Assert(false, "Invalid stats name "+name)
 	}
 	*v += val
 	s.logged = false
@@ -679,7 +680,7 @@ func (p PrefetchTargetStats) getStats(allXactionDetails []XactionDetails) []byte
 	}
 	rstor.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	return jsonBytes
 }
 
@@ -695,7 +696,7 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) []byt
 	}
 	rstor.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
-	assert(err == nil, err)
+	common.Assert(err == nil, err)
 	return jsonBytes
 }
 

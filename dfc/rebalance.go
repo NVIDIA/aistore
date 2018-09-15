@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
 
@@ -188,7 +189,7 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 		glog.Infof("%s => %s", fqn, newFQN)
 	}
 	dir := filepath.Dir(newFQN)
-	if err := CreateDir(dir); err != nil {
+	if err := common.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
 		rb.xreb.abort()
 		rb.t.fshc(err, newFQN)
@@ -383,7 +384,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 		return
 	}
 	pmarker := t.xactinp.rebalanceInProgress()
-	file, err := CreateFile(pmarker)
+	file, err := common.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""
@@ -461,7 +462,7 @@ func (t *targetrunner) runLocalRebalance() {
 	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 
 	pmarker := t.xactinp.localRebalanceInProgress()
-	file, err := CreateFile(pmarker)
+	file, err := common.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""

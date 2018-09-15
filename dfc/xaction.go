@@ -17,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 const timeStampFormat = "15:04:05.000000"
@@ -101,7 +102,7 @@ func (xact *xactBase) getEndTime() time.Time {
 	return xact.etime
 }
 
-func (xact *xactBase) tostring() string { assert(false, "must be implemented"); return "" }
+func (xact *xactBase) tostring() string { common.Assert(false, "must be implemented"); return "" }
 
 func (xact *xactBase) abort() {
 	xact.etime = time.Now()
@@ -135,7 +136,7 @@ func (q *xactInProgress) uniqueid() int64 {
 		}
 		id = (time.Now().UTC().UnixNano() + id) & 0xffff
 	}
-	assert(false)
+	common.Assert(false)
 	return 0
 }
 
@@ -152,7 +153,7 @@ func (q *xactInProgress) findU(by interface{}) (idx int, xact xactInterface) {
 	case string:
 		kind = by.(string)
 	default:
-		assert(false, fmt.Sprintf("unexpected find() arg: %#v", by))
+		common.Assert(false, fmt.Sprintf("unexpected find() arg: %#v", by))
 	}
 	for i, xact := range q.xactinp {
 		if id != 0 && xact.getid() == id {
