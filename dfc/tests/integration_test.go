@@ -109,8 +109,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
 
 	// Step 2.
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
@@ -213,8 +212,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	// Step 2.
 	m.bucket = TestLocalBucketName
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
@@ -352,8 +350,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	// Create local bucket
 	m.bucket = TestLocalBucketName
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
@@ -1029,9 +1026,7 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, proxyurl, m.bucket)
-
-	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
-	checkFatal(err, t)
+	destroyLocalBucket(t, proxyurl, newTestLocalBucketName)
 
 	// Rename it
 	err = client.RenameLocalBucket(proxyurl, m.bucket, newTestLocalBucketName)
@@ -1076,9 +1071,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, proxyurl, m.bucket)
-
-	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
-	checkFatal(err, t)
+	destroyLocalBucket(t, proxyurl, newTestLocalBucketName)
 
 	if usingSG {
 		sgl = iosgl.NewSGL(filesize)
@@ -1150,9 +1143,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, proxyurl, m.bucket)
-
-	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
-	checkFatal(err, t)
+	destroyLocalBucket(t, proxyurl, newTestLocalBucketName)
 
 	if _, err := os.Stat(bucketFQN); os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not created")
@@ -1679,14 +1670,18 @@ func assertClusterState(m *metadata) {
 }
 
 func createFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
-	exists, err := client.DoesLocalBucketExist(proxyurl, bucketFQN)
+	destroyLocalBucket(t, proxyURL, bucketFQN)
+	err := client.CreateLocalBucket(proxyURL, bucketFQN)
+	checkFatal(err, t)
+}
+
+func destroyLocalBucket(t *testing.T, proxyURL, bucket string) {
+	exists, err := client.DoesLocalBucketExist(proxyURL, bucket)
 	checkFatal(err, t)
 	if exists {
-		err = client.DestroyLocalBucket(proxyurl, bucketFQN)
+		err = client.DestroyLocalBucket(proxyURL, bucket)
 		checkFatal(err, t)
 	}
-	err = client.CreateLocalBucket(proxyurl, bucketFQN)
-	checkFatal(err, t)
 }
 
 func checkObjectDistribution(t *testing.T, m *metadata) {
@@ -1744,8 +1739,7 @@ func TestForwardCP(t *testing.T) {
 	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, err := chooseNextProxy(&m.smap)
 
-	err = client.DestroyLocalBucket(proxyurl, m.bucket)
-	checkFatal(err, t)
+	destroyLocalBucket(t, proxyurl, m.bucket)
 
 	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
 	checkFatal(err, t)

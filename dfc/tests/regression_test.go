@@ -96,8 +96,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	err = client.CreateLocalBucket(proxyurl, bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, bucket)
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyurl, bucket)
@@ -256,11 +255,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		fqn        string
 	)
 	bucket := TestLocalBucketName
-	err := client.CreateLocalBucket(proxyurl, bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, bucket)
 
 	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, bucket)
+		err := client.DestroyLocalBucket(proxyurl, bucket)
 		checkFatal(err, t)
 	}()
 
@@ -289,7 +287,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	fName = <-filenameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tlogf("Corrupting file data[%s]: %s\n", fName, fqn)
-	err = ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
+	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	checkFatal(err, t)
 	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
@@ -311,11 +309,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 func TestRegressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
-	err := client.CreateLocalBucket(proxyurl, bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, bucket)
 
 	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, bucket)
+		err := client.DestroyLocalBucket(proxyurl, bucket)
 		checkFatal(err, t)
 	}()
 	doBucketRegressionTest(t, regressionTestData{bucket: bucket})
@@ -328,11 +325,11 @@ func TestRenameLocalBuckets(t *testing.T) {
 	}
 	bucket := TestLocalBucketName
 	renamedBucket := bucket + "_renamed"
-	err := client.CreateLocalBucket(proxyurl, bucket)
-	checkFatal(err, t)
+	createFreshLocalBucket(t, proxyurl, bucket)
+	destroyLocalBucket(t, proxyurl, renamedBucket)
 
 	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, renamedBucket)
+		err := client.DestroyLocalBucket(proxyurl, renamedBucket)
 		checkFatal(err, t)
 	}()
 
@@ -453,10 +450,7 @@ func TestRenameObjects(t *testing.T) {
 		sgl       *iosgl.SGL
 	)
 
-	err = client.CreateLocalBucket(proxyurl, RenameLocalBucketName)
-	if err != nil {
-		t.Fatal(err)
-	}
+	createFreshLocalBucket(t, proxyurl, RenameLocalBucketName)
 
 	defer func() {
 		// cleanup
