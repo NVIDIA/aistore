@@ -83,9 +83,10 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		errch      = make(chan error, num)
 		sgl        *iosgl.SGL
 		targets    = make(map[string]struct{})
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
-	smap, err := client.GetClusterMap(proxyurl)
+	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
 	if len(smap.Tmap) == 1 {
 		tlogln("Warning: more than 1 target should deployed for best utility of this test.")
@@ -96,18 +97,18 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	createFreshLocalBucket(t, proxyurl, bucket)
+	createFreshLocalBucket(t, proxyURL, bucket)
 
 	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, bucket)
+		err = client.DestroyLocalBucket(proxyURL, bucket)
 		checkFatal(err, t)
 	}()
 
-	putRandomFiles(seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandomFiles(proxyURL, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, true)
 
 	msg := &api.GetMsg{GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
-	bl, err := client.ListBucket(proxyurl, bucket, msg, num)
+	bl, err := client.ListBucket(proxyURL, bucket, msg, num)
 	checkFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -134,7 +135,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.GetProps = ""
-	bl, err = client.ListBucket(proxyurl, bucket, msg, num)
+	bl, err = client.ListBucket(proxyURL, bucket, msg, num)
 	checkFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -155,6 +156,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		seed          = int64(111)
 	)
 
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	random := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	prefix := client.FastRandomFilename(random, 32)
 
@@ -166,12 +168,12 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		targets    = make(map[string]struct{})
 	)
 
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 	if !isCloud {
 		t.Skip("TestCloudListBucketGetTargetURL requires a cloud bucket")
 	}
 
-	clusterMap, err := client.GetClusterMap(proxyurl)
+	clusterMap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
 	if len(clusterMap.Tmap) == 1 {
 		tlogln("Warning: more than 1 target should deployed for best utility of this test.")
@@ -182,21 +184,21 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(seed, fileSize, numberOfFiles, bucketName, t, nil, errorCh, fileNameCh, SmokeDir, prefix, true, sgl)
+	putRandomFiles(proxyURL, seed, fileSize, numberOfFiles, bucketName, t, nil, errorCh, fileNameCh, SmokeDir, prefix, true, sgl)
 	selectErr(errorCh, "put", t, true)
 	defer func() {
 		files := make([]string, numberOfFiles)
 		for i := 0; i < numberOfFiles; i++ {
 			files[i] = prefix + "/" + <-fileNameCh
 		}
-		err := client.DeleteList(proxyurl, bucketName, files, true, 0)
+		err := client.DeleteList(proxyURL, bucketName, files, true, 0)
 		if err != nil {
 			t.Error("Unable to delete files during cleanup from cloud bucket.")
 		}
 	}()
 
 	listBucketMsg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
-	bucketList, err := client.ListBucket(proxyurl, bucketName, listBucketMsg, 0)
+	bucketList, err := client.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
 	checkFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -227,7 +229,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	listBucketMsg.GetProps = ""
-	bucketList, err = client.ListBucket(proxyurl, bucketName, listBucketMsg, 0)
+	bucketList, err = client.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
 	checkFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -253,12 +255,13 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		filesize   = uint64(1024)
 		seed       = int64(111)
 		fqn        string
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 	bucket := TestLocalBucketName
-	createFreshLocalBucket(t, proxyurl, bucket)
+	createFreshLocalBucket(t, proxyURL, bucket)
 
 	defer func() {
-		err := client.DestroyLocalBucket(proxyurl, bucket)
+		err := client.DestroyLocalBucket(proxyURL, bucket)
 		checkFatal(err, t)
 	}()
 
@@ -267,7 +270,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandomFiles(proxyURL, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 
 	// Test corrupting the file contents
@@ -289,7 +292,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tlogf("Corrupting file data[%s]: %s\n", fName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	checkFatal(err, t)
-	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
+	_, _, err = client.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
@@ -301,7 +304,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	if errstr := dfc.Setxattr(fqn, dfc.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = client.Get(proxyurl, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
+	_, _, err = client.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
@@ -309,13 +312,14 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 func TestRegressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
-	createFreshLocalBucket(t, proxyurl, bucket)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	createFreshLocalBucket(t, proxyURL, bucket)
 
 	defer func() {
-		err := client.DestroyLocalBucket(proxyurl, bucket)
+		err := client.DestroyLocalBucket(proxyURL, bucket)
 		checkFatal(err, t)
 	}()
-	doBucketRegressionTest(t, regressionTestData{bucket: bucket})
+	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: bucket})
 
 }
 
@@ -323,20 +327,21 @@ func TestRenameLocalBuckets(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	bucket := TestLocalBucketName
 	renamedBucket := bucket + "_renamed"
-	createFreshLocalBucket(t, proxyurl, bucket)
-	destroyLocalBucket(t, proxyurl, renamedBucket)
+	createFreshLocalBucket(t, proxyURL, bucket)
+	destroyLocalBucket(t, proxyURL, renamedBucket)
 
 	defer func() {
-		err := client.DestroyLocalBucket(proxyurl, renamedBucket)
+		err := client.DestroyLocalBucket(proxyURL, renamedBucket)
 		checkFatal(err, t)
 	}()
 
-	b, err := client.ListBuckets(proxyurl, true)
+	b, err := client.ListBuckets(proxyURL, true)
 	checkFatal(err, t)
 
-	doBucketRegressionTest(t, regressionTestData{
+	doBucketRegressionTest(t, proxyURL, regressionTestData{
 		bucket: bucket, renamedBucket: renamedBucket, numLocalBuckets: len(b.Local), rename: true,
 	})
 }
@@ -351,6 +356,7 @@ func TestListObjects(t *testing.T) {
 		errch           = make(chan error, numFiles*5)
 		filesput        = make(chan string, numfiles)
 		dir             = DeleteDir
+		proxyURL        = getPrimaryURL(t, proxyURLRO)
 		sgl      *iosgl.SGL
 	)
 	if usingSG {
@@ -358,13 +364,13 @@ func TestListObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 	tlogf("Create a list of %d objects", numFiles)
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fileList := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
 		fname := fmt.Sprintf("obj%d", i+1)
 		fileList = append(fileList, fname)
 	}
-	fillWithRandomData(seed, fileSize, fileList, bucket, t, errch, filesput, dir, prefix, !testing.Verbose(), sgl)
+	fillWithRandomData(proxyURL, seed, fileSize, fileList, bucket, t, errch, filesput, dir, prefix, !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
 
@@ -411,7 +417,7 @@ func TestListObjects(t *testing.T) {
 	for idx, test := range tests {
 		tlogf("%d. %s\n    Prefix: [%s], Expected objects: %d\n", idx+1, test.title, test.prefix, test.expected)
 		msg := &api.GetMsg{GetPageSize: test.pageSize, GetPrefix: test.prefix}
-		reslist, err := listObjects(t, msg, bucket, test.limit)
+		reslist, err := listObjects(t, proxyURL, msg, bucket, test.limit)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -429,7 +435,7 @@ func TestListObjects(t *testing.T) {
 	}
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
@@ -448,16 +454,17 @@ func TestRenameObjects(t *testing.T) {
 		basenames = make([]string, 0, numPuts) // basenames
 		bnewnames = make([]string, 0, numPuts) // new basenames
 		sgl       *iosgl.SGL
+		proxyURL  = getPrimaryURL(t, proxyURLRO)
 	)
 
-	createFreshLocalBucket(t, proxyurl, RenameLocalBucketName)
+	createFreshLocalBucket(t, proxyURL, RenameLocalBucketName)
 
 	defer func() {
 		// cleanup
 		wg := &sync.WaitGroup{}
 		for _, fname := range bnewnames {
 			wg.Add(1)
-			go client.Del(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, !testing.Verbose())
+			go client.Del(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, !testing.Verbose())
 		}
 
 		if usingFile {
@@ -472,7 +479,7 @@ func TestRenameObjects(t *testing.T) {
 		wg.Wait()
 		selectErr(errch, "delete", t, false)
 		close(errch)
-		err = client.DestroyLocalBucket(proxyurl, RenameLocalBucketName)
+		err = client.DestroyLocalBucket(proxyURL, RenameLocalBucketName)
 		checkFatal(err, t)
 	}()
 
@@ -487,7 +494,7 @@ func TestRenameObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir,
+	putRandomFiles(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir,
 		RenameStr, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 	close(filesput)
@@ -504,7 +511,7 @@ func TestRenameObjects(t *testing.T) {
 			t.Fatalf("Failed to marshal RenameMsg: %v", err)
 		}
 
-		url := proxyurl + api.URLPath(api.Version, api.Objects, RenameLocalBucketName, RenameStr, fname)
+		url := proxyURL + api.URLPath(api.Version, api.Objects, RenameLocalBucketName, RenameStr, fname)
 		if err := client.HTTPRequest(http.MethodPost, url, bytes.NewBuffer(injson)); err != nil {
 			t.Fatalf("Failed to send request, err = %v", err)
 		}
@@ -515,22 +522,23 @@ func TestRenameObjects(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
-		client.Get(proxyurl, RenameLocalBucketName, RenameStr+"/"+fname, nil,
+		client.Get(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, nil,
 			errch, !testing.Verbose(), false /* validate */)
 	}
 	selectErr(errch, "get", t, false)
 }
 
 func TestObjectPrefix(t *testing.T) {
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	prefixFileNumber = numfiles
-	prefixCreateFiles(t)
-	prefixLookup(t)
-	prefixCleanup(t)
+	prefixCreateFiles(t, proxyURL)
+	prefixLookup(t, proxyURL)
+	prefixCleanup(t, proxyURL)
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
@@ -541,12 +549,13 @@ func TestObjectsVersions(t *testing.T) {
 }
 
 func TestRegressionCloudBuckets(t *testing.T) {
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 	if !isCloud {
 		t.Skip("TestRegressionCloudBuckets requires a cloud bucket")
 	}
 
-	doBucketRegressionTest(t, regressionTestData{bucket: clibucket})
+	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: clibucket})
 }
 
 func TestRebalance(t *testing.T) {
@@ -562,25 +571,26 @@ func TestRebalance(t *testing.T) {
 		wg              = &sync.WaitGroup{}
 		sgl             *iosgl.SGL
 		filesize        = uint64(1024 * 128)
+		proxyURL        = getPrimaryURL(t, proxyURLRO)
 	)
 	filesSentOrig := make(map[string]int64)
 	bytesSentOrig := make(map[string]int64)
 	filesRecvOrig := make(map[string]int64)
 	bytesRecvOrig := make(map[string]int64)
-	stats := getClusterStats(httpclient, t)
+	stats := getClusterStats(httpclient, t, proxyURL)
 	for k, v := range stats.Target {
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
 			v.Core.Numsentbytes, v.Core.Numsentfiles, v.Core.Numrecvbytes, v.Core.Numrecvfiles
 	}
 
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	//
 	// step 1. config
 	//
 	defer func() {
 		if created {
-			if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 				t.Errorf("Failed to delete local bucket: %v", err)
 			}
 		}
@@ -594,7 +604,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 2. unregister random target
 	//
-	smap := getClusterMap(t)
+	smap := getClusterMap(t, proxyURL)
 	l := len(smap.Tmap)
 	if l < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
@@ -604,7 +614,7 @@ func TestRebalance(t *testing.T) {
 	}
 	targetDirectURL = smap.Tmap[sid].PublicNet.DirectURL
 
-	err := client.UnregisterTarget(proxyurl, sid)
+	err := client.UnregisterTarget(proxyURL, sid)
 	checkFatal(err, t)
 	tlogf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
 	//
@@ -614,7 +624,7 @@ func TestRebalance(t *testing.T) {
 		sgl = iosgl.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandomFiles(baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
+	putRandomFiles(proxyURL, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
 		SmokeStr, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 
@@ -625,7 +635,7 @@ func TestRebalance(t *testing.T) {
 	checkFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
-		smap = getClusterMap(t)
+		smap = getClusterMap(t, proxyURL)
 		if len(smap.Tmap) == l {
 			break
 		}
@@ -638,11 +648,11 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 5. wait for rebalance to run its course
 	//
-	waitForRebalanceToComplete(t)
+	waitForRebalanceToComplete(t, proxyURL)
 	//
 	// step 6. statistics
 	//
-	stats = getClusterStats(httpclient, t)
+	stats = getClusterStats(httpclient, t, proxyURL)
 	var bsent, fsent, brecv, frecv int64
 	for k, v := range stats.Target {
 		bsent += v.Core.Numsentbytes - bytesSentOrig[k]
@@ -664,7 +674,7 @@ func TestRebalance(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.Del(proxyurl, clibucket, "smoke/"+fname, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, clibucket, "smoke/"+fname, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -676,8 +686,9 @@ func TestRebalance(t *testing.T) {
 }
 
 func TestGetClusterStats(t *testing.T) {
-	smap := getClusterMap(t)
-	stats := getClusterStats(httpclient, t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
+	stats := getClusterStats(httpclient, t, proxyURL)
 
 	for k, v := range stats.Target {
 		tdstats := getDaemonStats(httpclient, t, smap.Tmap[k].PublicNet.DirectURL)
@@ -710,15 +721,16 @@ func TestGetClusterStats(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	oconfig := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	oconfig := getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
-		setConfig(k, v, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig(k, v, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 
-	nconfig := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
+	nconfig := getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nperiodic := nconfig["periodic"].(map[string]interface{})
 
@@ -727,21 +739,21 @@ func TestConfig(t *testing.T) {
 			nperiodic["stats_time"], configRegression["stats_time"])
 	} else {
 		o := operiodic["stats_time"].(string)
-		setConfig("stats_time", o, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("stats_time", o, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
 	} else {
 		o := olruconfig["dont_evict_time"].(string)
-		setConfig("dont_evict_time", o, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("dont_evict_time", o, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
 			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
 	} else {
 		o := olruconfig["capacity_upd_time"].(string)
-		setConfig("capacity_upd_time", o, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("capacity_upd_time", o, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -750,7 +762,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["highwm"], hw)
 	} else {
 		o := olruconfig["highwm"].(float64)
-		setConfig("highwm", strconv.Itoa(int(o)), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("highwm", strconv.Itoa(int(o)), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -759,7 +771,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["lowwm"], lw)
 	} else {
 		o := olruconfig["lowwm"].(float64)
-		setConfig("lowwm", strconv.Itoa(int(o)), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("lowwm", strconv.Itoa(int(o)), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)
@@ -768,21 +780,22 @@ func TestConfig(t *testing.T) {
 			nlruconfig["lru_enabled"], pt)
 	} else {
 		o := olruconfig["lru_enabled"].(bool)
-		setConfig("lru_enabled", strconv.FormatBool(o), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("lru_enabled", strconv.FormatBool(o), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 }
 
 func TestLRU(t *testing.T) {
 	var (
-		errch   = make(chan error, 100)
-		usedpct = 100
+		errch    = make(chan error, 100)
+		usedpct  = 100
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 	if !isCloud {
 		t.Skip("TestLRU test requires a cloud bucket")
 	}
 
-	getRandomFiles(0, 20, clibucket, "", t, nil, errch)
+	getRandomFiles(proxyURL, 0, 20, clibucket, "", t, nil, errch)
 	// The error could be no object in the bucket. In that case, consider it as not an error;
 	// this test will be skipped
 	if len(errch) != 0 {
@@ -793,7 +806,7 @@ func TestLRU(t *testing.T) {
 	//
 	// remember targets' watermarks
 	//
-	smap := getClusterMap(t)
+	smap := getClusterMap(t, proxyURL)
 	lwms := make(map[string]interface{})
 	hwms := make(map[string]interface{})
 	bytesEvictedOrig := make(map[string]int64)
@@ -805,12 +818,12 @@ func TestLRU(t *testing.T) {
 		hwms[k] = lrucfg["highwm"]
 	}
 	// add a few more
-	getRandomFiles(0, 3, clibucket, "", t, nil, errch)
+	getRandomFiles(proxyURL, 0, 3, clibucket, "", t, nil, errch)
 	selectErr(errch, "get", t, true)
 	//
 	// find out min usage %% across all targets
 	//
-	stats := getClusterStats(httpclient, t)
+	stats := getClusterStats(httpclient, t, proxyURL)
 	for k, v := range stats.Target {
 		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Bytesevicted, v.Core.Filesevicted
 		for _, c := range v.Capacity {
@@ -827,7 +840,7 @@ func TestLRU(t *testing.T) {
 		t.Skip()
 		return
 	}
-	oconfig := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
+	oconfig := getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	if t.Failed() {
 		return
 	}
@@ -837,10 +850,10 @@ func TestLRU(t *testing.T) {
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 	defer func() {
-		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 		for k, di := range smap.Tmap {
 			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
@@ -855,26 +868,26 @@ func TestLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
-	setConfig("dont_evict_time", dontevicttimestr, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
-	setConfig("capacity_upd_time", capacityupdtimestr, proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("dont_evict_time", dontevicttimestr, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("capacity_upd_time", capacityupdtimestr, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
 		return
 	}
-	setConfig("lowwm", fmt.Sprint(lowwm), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("lowwm", fmt.Sprint(lowwm), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
 		return
 	}
-	setConfig("highwm", fmt.Sprint(highwm), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("highwm", fmt.Sprint(highwm), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
 		return
 	}
 	waitProgressBar("LRU: ", sleeptime/2)
-	getRandomFiles(0, 1, clibucket, "", t, nil, errch)
+	getRandomFiles(proxyURL, 0, 1, clibucket, "", t, nil, errch)
 	waitProgressBar("LRU: ", sleeptime/2)
 	//
 	// results
 	//
-	stats = getClusterStats(httpclient, t)
+	stats = getClusterStats(httpclient, t, proxyURL)
 	testFsPaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := v.Core.Bytesevicted - bytesEvictedOrig[k]
@@ -901,15 +914,16 @@ func TestPrefetchList(t *testing.T) {
 	var (
 		toprefetch    = make(chan string, numfiles)
 		netprefetches = int64(0)
+		proxyURL      = getPrimaryURL(t, proxyURLRO)
 	)
 
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 	if !isCloud {
 		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
 	}
 
 	// 1. Get initial number of prefetches
-	smap := getClusterMap(t)
+	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
@@ -921,7 +935,7 @@ func TestPrefetchList(t *testing.T) {
 	}
 
 	// 2. Get keys to prefetch
-	n := int64(getMatchingKeys(match, clibucket, []chan string{toprefetch}, nil, t))
+	n := int64(getMatchingKeys(proxyURL, match, clibucket, []chan string{toprefetch}, nil, t))
 	close(toprefetch) // to exit for-range
 	files := make([]string, 0)
 	for i := range toprefetch {
@@ -930,11 +944,11 @@ func TestPrefetchList(t *testing.T) {
 
 	// 3. Evict those objects from the cache and prefetch them
 	tlogf("Evicting and Prefetching %d objects\n", len(files))
-	err := client.EvictList(proxyurl, clibucket, files, true, 0)
+	err := client.EvictList(proxyURL, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = client.PrefetchList(proxyurl, clibucket, files, true, 0)
+	err = client.PrefetchList(proxyURL, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -956,13 +970,14 @@ func TestPrefetchList(t *testing.T) {
 
 func TestDeleteList(t *testing.T) {
 	var (
-		err    error
-		prefix = ListRangeStr + "/tstf-"
-		wg     = &sync.WaitGroup{}
-		errch  = make(chan error, numfiles)
-		files  = make([]string, 0, numfiles)
+		err      error
+		prefix   = ListRangeStr + "/tstf-"
+		wg       = &sync.WaitGroup{}
+		errch    = make(chan error, numfiles)
+		files    = make([]string, 0, numfiles)
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
@@ -972,7 +987,7 @@ func TestDeleteList(t *testing.T) {
 		keyname := fmt.Sprintf("%s%d", prefix, i)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyurl, r, clibucket, keyname, errch, !testing.Verbose())
+		go client.PutAsync(wg, proxyURL, r, clibucket, keyname, errch, !testing.Verbose())
 		files = append(files, keyname)
 
 	}
@@ -980,20 +995,20 @@ func TestDeleteList(t *testing.T) {
 	selectErr(errch, "put", t, true)
 
 	// 2. Delete the objects
-	err = client.DeleteList(proxyurl, clibucket, files, true, 0)
+	err = client.DeleteList(proxyURL, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 3. Check to see that all the files have been deleted.
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
+	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
 
 	if created {
-		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
@@ -1008,15 +1023,16 @@ func TestPrefetchRange(t *testing.T) {
 		err           error
 		rmin, rmax    int64
 		re            *regexp.Regexp
+		proxyURL      = getPrimaryURL(t, proxyURLRO)
 	)
 
-	isCloud := isCloudBucket(t, proxyurl, clibucket)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 	if !isCloud {
 		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
 	}
 
 	// 1. Get initial number of prefetches
-	smap := getClusterMap(t)
+	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
@@ -1043,7 +1059,7 @@ func TestPrefetchRange(t *testing.T) {
 		t.Errorf("Error compiling regex: %v", err)
 	}
 	msg := &api.GetMsg{GetPrefix: prefetchPrefix, GetPageSize: int(pagesize)}
-	objsToFilter := testListBucket(t, clibucket, msg, 0)
+	objsToFilter := testListBucket(t, proxyURL, clibucket, msg, 0)
 	files := make([]string, 0)
 	if objsToFilter != nil {
 		for _, be := range objsToFilter.Entries {
@@ -1063,11 +1079,11 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Evict those objects from the cache, and then prefetch them.
 	tlogf("Evicting and Prefetching %d objects\n", len(files))
-	err = client.EvictRange(proxyurl, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = client.EvictRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = client.PrefetchRange(proxyurl, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = client.PrefetchRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1100,9 +1116,10 @@ func TestDeleteRange(t *testing.T) {
 		regex          = "\\d?\\d"
 		wg             = &sync.WaitGroup{}
 		errch          = make(chan error, numfiles)
+		proxyURL       = getPrimaryURL(t, proxyURLRO)
 	)
 
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
@@ -1110,21 +1127,21 @@ func TestDeleteRange(t *testing.T) {
 		checkFatal(err, t)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyurl, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch,
+		go client.PutAsync(wg, proxyURL, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch,
 			!testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "put", t, true)
 
 	// 2. Delete the small range of objects:
-	err = client.DeleteRange(proxyurl, clibucket, prefix, regex, smallrange, true, 0)
+	err = client.DeleteRange(proxyURL, clibucket, prefix, regex, smallrange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := client.ListBucket(proxyurl, clibucket, msg, 0)
+	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
 	}
@@ -1143,29 +1160,29 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 4. Delete the big range of objects:
-	err = client.DeleteRange(proxyurl, clibucket, prefix, regex, bigrange, true, 0)
+	err = client.DeleteRange(proxyURL, clibucket, prefix, regex, bigrange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = client.ListBucket(proxyurl, clibucket, msg, 0)
+	bktlst, err = client.ListBucket(proxyURL, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
 
 	if created {
-		if err = client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
 }
 
-func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int, filesput chan string) {
-	err := client.RenameLocalBucket(proxyurl, rtd.bucket, rtd.renamedBucket)
+func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesput chan string) {
+	err := client.RenameLocalBucket(proxyURL, rtd.bucket, rtd.renamedBucket)
 	checkFatal(err, t)
 
-	buckets, err := client.ListBuckets(proxyurl, true)
+	buckets, err := client.ListBuckets(proxyURL, true)
 	checkFatal(err, t)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
@@ -1186,7 +1203,7 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int, f
 		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
 	}
 
-	objs, err := client.ListObjects(proxyurl, rtd.renamedBucket, "", numPuts+1)
+	objs, err := client.ListObjects(proxyURL, rtd.renamedBucket, "", numPuts+1)
 	checkFatal(err, t)
 
 	if len(objs) != numPuts {
@@ -1207,7 +1224,7 @@ func doRenameRegressionTest(t *testing.T, rtd regressionTestData, numPuts int, f
 	}
 }
 
-func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
+func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
 	var (
 		numPuts  = 64
 		filesput = make(chan string, numPuts)
@@ -1223,18 +1240,18 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
+	putRandomFiles(proxyURL, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
 		SmokeStr, !testing.Verbose(), sgl)
 	close(filesput)
 	selectErr(errch, "put", t, true)
 
 	if rtd.rename {
-		doRenameRegressionTest(t, rtd, numPuts, filesput)
+		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesput)
 		tlogf("\nRenamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
 		bucket = rtd.renamedBucket
 	}
 
-	getRandomFiles(0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
+	getRandomFiles(proxyURL, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
 	selectErr(errch, "get", t, false)
 	for fname := range filesput {
 		if usingFile {
@@ -1245,7 +1262,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 		}
 
 		wg.Add(1)
-		go client.Del(proxyurl, bucket, "smoke/"+fname, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, bucket, "smoke/"+fname, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errch, "delete", t, abortonerr)
@@ -1258,7 +1275,7 @@ func doBucketRegressionTest(t *testing.T, rtd regressionTestData) {
 //
 //========
 
-func waitForRebalanceToComplete(t *testing.T) {
+func waitForRebalanceToComplete(t *testing.T, proxyURL string) {
 	time.Sleep(dfc.NeighborRebalanceStartDelay)
 OUTER:
 	for {
@@ -1266,7 +1283,7 @@ OUTER:
 		time.Sleep(time.Second * 3)
 		tlogln("Waiting for rebalance to complete.")
 
-		rebalanceStats, err := client.GetXactionRebalance(proxyurl)
+		rebalanceStats, err := client.GetXactionRebalance(proxyURL)
 		if err != nil {
 			t.Fatalf("Unable to get rebalance stats. Error: [%v]", err)
 		}
@@ -1308,9 +1325,9 @@ waitloop:
 	ticker.Stop()
 }
 
-func getClusterStats(httpclient *http.Client, t *testing.T) (stats dfc.ClusterStats) {
+func getClusterStats(httpclient *http.Client, t *testing.T, proxyURL string) (stats dfc.ClusterStats) {
 	q := getWhatRawQuery(api.GetWhatStats)
-	url := fmt.Sprintf("%s?%s", proxyurl+api.URLPath(api.Version, api.Cluster), q)
+	url := fmt.Sprintf("%s?%s", proxyURL+api.URLPath(api.Version, api.Cluster), q)
 	resp, err := httpclient.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to perform get, err = %v", err)
@@ -1363,8 +1380,8 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, url string) (stats ma
 	return
 }
 
-func getClusterMap(t *testing.T) dfc.Smap {
-	smap, err := client.GetClusterMap(proxyurl)
+func getClusterMap(t *testing.T, URL string) dfc.Smap {
+	smap, err := client.GetClusterMap(URL)
 	checkFatal(err, t)
 	return smap
 }

@@ -59,7 +59,8 @@ func TestMultiProxy(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	if len(smap.Pmap) < 3 {
 		t.Fatal("Not enough proxies to run proxy tests, must be more than 2")
 	}
@@ -81,7 +82,8 @@ func TestMultiProxy(t *testing.T) {
 // clusterHealthCheck verifies the cluster has the same servers after tests
 // note: add verify primary if primary is reset
 func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
-	smapAfter := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smapAfter := getClusterMap(t, proxyURL)
 	if len(smapAfter.Tmap) != len(smapBefore.Tmap) {
 		t.Fatalf("Number of targets mismatch, before = %d, after = %d",
 			len(smapBefore.Tmap), len(smapAfter.Tmap))
@@ -141,11 +143,12 @@ func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
 // primaryCrashElectRestart kills the current primary proxy, wait for the new primary prioxy is up and verifies it,
 // restores the original primary proxy as non primary
 func primaryCrashElectRestart(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	checkFatal(err, t)
 
-	if err = checkPmapVersions(); err != nil {
+	if err = checkPmapVersions(proxyURL); err != nil {
 		t.Errorf("Cluster is inconsistent state: %v", err)
 	}
 
@@ -158,8 +161,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	// example: cmd = /Users/lid/go/bin/dfc, args = -config=/Users/lid/.dfc/dfc0.json -role=proxy -ntargets=3
 	checkFatal(err, t)
 
-	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 	tlogf("New primary elected: %s\n", newPrimaryID)
 
@@ -173,13 +175,13 @@ func primaryCrashElectRestart(t *testing.T) {
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	checkFatal(err, t)
 
-	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
 		t.Fatalf("Previous primary proxy did not rejoin the cluster")
 	}
-	if err = checkPmapVersions(); err != nil {
+	if err = checkPmapVersions(newPrimaryURL); err != nil {
 		t.Error(err)
 	}
 }
@@ -191,7 +193,8 @@ func primaryAndTargetCrash(t *testing.T) {
 		t.Skip("Skipped because setting new primary URL in command line for docker is not supported")
 	}
 
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	checkFatal(err, t)
 
@@ -220,8 +223,7 @@ func primaryAndTargetCrash(t *testing.T) {
 	tcmd, targs, err := kill(targetID, targetPort)
 	checkFatal(err, t)
 
-	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1, origTargetCount-1)
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1, origTargetCount-1)
 	checkFatal(err, t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
@@ -234,14 +236,15 @@ func primaryAndTargetCrash(t *testing.T) {
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	checkFatal(err, t)
 
-	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount, origTargetCount)
+	_, err = waitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose(), origProxyCount, origTargetCount)
 	checkFatal(err, t)
 }
 
 // A very simple test to check if a primary proxy can detect non-primary one
 // dies and then update and sync SMap
 func proxyCrash(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 
 	oldPrimaryURL, oldPrimaryID := smap.ProxySI.PublicNet.DirectURL, smap.ProxySI.DaemonID
 	tlogf("Primary proxy: %s\n", oldPrimaryURL)
@@ -267,13 +270,13 @@ func proxyCrash(t *testing.T) {
 	secondCmd, secondArgs, err := kill(secondID, secondPort)
 	checkFatal(err, t)
 
-	smap, err = waitForPrimaryProxy("to propagate new Smap", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = waitForPrimaryProxy(proxyURL, "to propagate new Smap", smap.Version, testing.Verbose(), origProxyCount-1)
 	checkFatal(err, t)
 
 	err = restore(secondCmd, secondArgs, false, "proxy")
 	checkFatal(err, t)
 
-	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = waitForPrimaryProxy(proxyURL, "to restore", smap.Version, testing.Verbose(), origProxyCount)
 	checkFatal(err, t)
 
 	if _, ok := smap.Pmap[secondID]; !ok {
@@ -284,7 +287,8 @@ func proxyCrash(t *testing.T) {
 // primaryAndProxyCrash kills primary proxy and one another proxy(not the next in line primary)
 // and restore them afterwards
 func primaryAndProxyCrash(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	checkFatal(err, t)
 
@@ -317,19 +321,18 @@ func primaryAndProxyCrash(t *testing.T) {
 	secondCmd, secondArgs, err := kill(secondID, secondPort)
 	checkFatal(err, t)
 
-	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-2)
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-2)
 	checkFatal(err, t)
 
 	err = restore(cmd, args, true, "proxy (prev primary)")
 	checkFatal(err, t)
 
-	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1)
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), origProxyCount-1)
 	checkFatal(err, t)
 	err = restore(secondCmd, secondArgs, false, "proxy")
 	checkFatal(err, t)
 
-	smap, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose(), origProxyCount)
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to restore", smap.Version, testing.Verbose(), origProxyCount)
 	checkFatal(err, t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
@@ -352,7 +355,8 @@ func targetRejoin(t *testing.T) {
 		port string
 	)
 
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
 		id = v.DaemonID
 		port = v.PublicNet.DaemonPort
@@ -360,7 +364,7 @@ func targetRejoin(t *testing.T) {
 	}
 
 	cmd, args, err := kill(id, port)
-	smap, err = waitForPrimaryProxy("to synchronize on 'target crashed'", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'target crashed'", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 
 	if _, ok := smap.Tmap[id]; ok {
@@ -370,7 +374,7 @@ func targetRejoin(t *testing.T) {
 	err = restore(cmd, args, false, "target")
 	checkFatal(err, t)
 
-	smap, err = waitForPrimaryProxy("to synchronize on 'target rejoined'", smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'target rejoined'", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 
 	if _, ok := smap.Tmap[id]; !ok {
@@ -380,7 +384,8 @@ func targetRejoin(t *testing.T) {
 
 // crashAndFastRestore kills the primary and restores it before a new leader is elected
 func crashAndFastRestore(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 
 	id := smap.ProxySI.DaemonID
 	tlogf("The current primary %s, Smap version %d\n", id, smap.Version)
@@ -398,7 +403,7 @@ func crashAndFastRestore(t *testing.T) {
 	// Note: using (version - 1) because the primary will restart with its old version,
 	//       there will be no version change for this restore, so force beginning version to 1 less
 	//       than the original version in order to use waitForPrimaryProxy
-	smap, err = waitForPrimaryProxy("to restore", smap.Version-1, testing.Verbose())
+	smap, err = waitForPrimaryProxy(proxyURL, "to restore", smap.Version-1, testing.Verbose())
 	checkFatal(err, t)
 
 	if smap.ProxySI.DaemonID != id {
@@ -411,7 +416,8 @@ func joinWhileVoteInProgress(t *testing.T) {
 		t.Skip("Skipping because mocking is not supported for docker cluster")
 	}
 
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	oldTargetCnt := len(smap.Tmap)
 	oldProxyCnt := len(smap.Pmap)
@@ -424,17 +430,16 @@ func joinWhileVoteInProgress(t *testing.T) {
 		errch:          errch,
 	}
 
-	go runMockTarget(t, mocktgt, stopch, &smap)
+	go runMockTarget(t, proxyURL, mocktgt, stopch, &smap)
 
-	smap, err = waitForPrimaryProxy("to synchronize on 'new mock target'", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
+	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'new mock target'", smap.Version, testing.Verbose(), 0, oldTargetCnt+1)
 	checkFatal(err, t)
 
 	oldPrimaryID := smap.ProxySI.DaemonID
 	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
-	proxyurl = newPrimaryURL
-	smap, err = waitForPrimaryProxy("to designate new primary", smap.Version, testing.Verbose(), oldProxyCnt-1, oldTargetCnt+1)
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose(), oldProxyCnt-1, oldTargetCnt+1)
 	checkFatal(err, t)
 
 	err = restore(cmd, args, true, "proxy (prev primary)")
@@ -443,7 +448,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	// check if the previous primary proxy has not yet rejoined the cluster
 	// it should be waiting for the mock target to return voteInProgress=false
 	time.Sleep(5 * time.Second)
-	smap = getClusterMap(t)
+	smap = getClusterMap(t, newPrimaryURL)
 	if smap.ProxySI.DaemonID != newPrimaryID {
 		t.Fatalf("Wrong primary proxy: %s, expecting: %s", smap.ProxySI.DaemonID, newPrimaryID)
 	}
@@ -453,7 +458,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 
 	mocktgt.voteInProgress = false
 
-	smap, err = waitForPrimaryProxy("to synchronize new Smap", smap.Version, testing.Verbose(), oldProxyCnt, oldTargetCnt+1)
+	smap, err = waitForPrimaryProxy(newPrimaryURL, "to synchronize new Smap", smap.Version, testing.Verbose(), oldProxyCnt, oldTargetCnt+1)
 	checkFatal(err, t)
 
 	if smap.ProxySI.DaemonID != newPrimaryID {
@@ -475,28 +480,30 @@ func joinWhileVoteInProgress(t *testing.T) {
 	default:
 	}
 
-	_, err = waitForPrimaryProxy("to kill mock target", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy(newPrimaryURL, "to kill mock target", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 }
 
 func minorityTargetMapVersionMismatch(t *testing.T) {
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	targetMapVersionMismatch(
 		func(i int) int {
 			return i/4 + 1
-		}, t)
+		}, t, proxyURL)
 }
 
 func majorityTargetMapVersionMismatch(t *testing.T) {
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	targetMapVersionMismatch(
 		func(i int) int {
 			return i/2 + 1
-		}, t)
+		}, t, proxyURL)
 }
 
 // targetMapVersionMismatch updates map verison of a few targets, kill the primary proxy
 // wait for the new leader to come online
-func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
-	smap := getClusterMap(t)
+func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL string) {
+	smap := getClusterMap(t, proxyURL)
 	oldVer := smap.Version
 	oldProxyCnt := len(smap.Pmap)
 
@@ -535,8 +542,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	checkFatal(err, t)
 
-	proxyurl = nextProxyURL
-	smap, err = waitForPrimaryProxy("to designate new primary", oldVer, testing.Verbose(), oldProxyCnt-1)
+	smap, err = waitForPrimaryProxy(nextProxyURL, "to designate new primary", oldVer, testing.Verbose(), oldProxyCnt-1)
 	checkFatal(err, t)
 
 	if smap.ProxySI == nil {
@@ -550,18 +556,19 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T) {
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	checkFatal(err, t)
 
-	_, err = waitForPrimaryProxy("to restore", smap.Version, testing.Verbose())
+	_, err = waitForPrimaryProxy(nextProxyURL, "to restore", smap.Version, testing.Verbose())
 	checkFatal(err, t)
 }
 
 // concurrentPutGetDel does put/get/del sequence against all proxies concurrently
 func concurrentPutGetDel(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 
-	exists, err := client.DoesLocalBucketExist(proxyurl, clibucket)
+	exists, err := client.DoesLocalBucketExist(proxyURL, clibucket)
 	checkFatal(err, t)
 	if !exists {
-		err := client.CreateLocalBucket(proxyurl, clibucket)
+		err := client.CreateLocalBucket(proxyURL, clibucket)
 		checkFatal(err, t)
 	}
 
@@ -590,11 +597,11 @@ func concurrentPutGetDel(t *testing.T) {
 	for err := range errch {
 		checkFatal(err, t)
 	}
-	client.DestroyLocalBucket(proxyurl, clibucket)
+	client.DestroyLocalBucket(proxyURL, clibucket)
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
-func proxyPutGetDelete(seed int64, count int, proxyurl string) error {
+func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 	random := rand.New(rand.NewSource(seed))
 	for i := 0; i < count; i++ {
 		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
@@ -605,17 +612,17 @@ func proxyPutGetDelete(seed int64, count int, proxyurl string) error {
 		fname := client.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 
-		err = client.Put(proxyurl, reader, clibucket, keyname, true /* silent */)
+		err = client.Put(proxyURL, reader, clibucket, keyname, true /* silent */)
 		if err != nil {
 			return fmt.Errorf("Error executing put: %v", err)
 		}
 
-		client.Get(proxyurl, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */, false /* validate */)
+		client.Get(proxyURL, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */, false /* validate */)
 		if err != nil {
 			return fmt.Errorf("Error executing get: %v", err)
 		}
 
-		err = client.Del(proxyurl, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */)
+		err = client.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */)
 		if err != nil {
 			return fmt.Errorf("Error executing del: %v", err)
 		}
@@ -627,7 +634,7 @@ func proxyPutGetDelete(seed int64, count int, proxyurl string) error {
 // putGetDelWorker does put/get/del in sequence; if primary proxy change happens, it checks the failed delete
 // channel and route the deletes to the new primary proxy
 // stops when told to do so via the stop channel
-func putGetDelWorker(seed int64, stopch <-chan struct{}, proxyurlch <-chan string,
+func putGetDelWorker(proxyURL string, seed int64, stopch <-chan struct{}, proxyurlch <-chan string,
 	errch chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -668,18 +675,18 @@ loop:
 		fname := client.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 
-		err = client.Put(proxyurl, reader, localBucketName, keyname, true /* silent */)
+		err = client.Put(proxyURL, reader, localBucketName, keyname, true /* silent */)
 		if err != nil {
 			errch <- err
 			continue
 		}
 
-		_, _, err = client.Get(proxyurl, localBucketName, keyname, nil, errch, true, false)
+		_, _, err = client.Get(proxyURL, localBucketName, keyname, nil, errch, true, false)
 		if err != nil {
 			errch <- err
 		}
 
-		err = client.Del(proxyurl, localBucketName, keyname, nil, errch, true)
+		err = client.Del(proxyURL, localBucketName, keyname, nil, errch, true)
 		if err != nil {
 			missedDeleteCh <- keyname
 		}
@@ -688,12 +695,12 @@ loop:
 	// process left over not deleted objects
 	close(missedDeleteCh)
 	for n := range missedDeleteCh {
-		client.Del(proxyurl, localBucketName, n, nil, nil, true)
+		client.Del(proxyURL, localBucketName, n, nil, nil, true)
 	}
 }
 
 // primaryKiller kills primary proxy, notifies all workers, and restore it.
-func primaryKiller(t *testing.T, seed int64, stopch <-chan struct{}, proxyurlchs []chan string,
+func primaryKiller(t *testing.T, proxyURL string, seed int64, stopch <-chan struct{}, proxyurlchs []chan string,
 	errch chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -711,7 +718,7 @@ loop:
 		default:
 		}
 
-		smap := getClusterMap(t)
+		smap := getClusterMap(t, proxyURL)
 		_, nextProxyURL, err := chooseNextProxy(&smap)
 		checkFatal(err, t)
 
@@ -721,8 +728,7 @@ loop:
 		// let the workers go to the dying primary for a little while longer to generate errored requests
 		time.Sleep(time.Second)
 
-		proxyurl = nextProxyURL
-		smap, err = waitForPrimaryProxy("to propagate 'primary crashed'", smap.Version, testing.Verbose())
+		smap, err = waitForPrimaryProxy(nextProxyURL, "to propagate 'primary crashed'", smap.Version, testing.Verbose())
 		checkFatal(err, t)
 
 		for _, ch := range proxyurlchs {
@@ -732,7 +738,7 @@ loop:
 		err = restore(cmd, args, false, "proxy (prev primary)")
 		checkFatal(err, t)
 
-		_, err = waitForPrimaryProxy("to synchronize on 'primary restored'", smap.Version, testing.Verbose())
+		_, err = waitForPrimaryProxy(nextProxyURL, "to synchronize on 'primary restored'", smap.Version, testing.Verbose())
 		checkFatal(err, t)
 	}
 }
@@ -748,12 +754,13 @@ func proxyStress(t *testing.T) {
 		stopchs     = make([]chan struct{}, numworkers+1)
 		proxyurlchs = make([]chan string, numworkers)
 		wg          sync.WaitGroup
+		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	exists, err := client.DoesLocalBucketExist(proxyurl, localBucketName)
+	exists, err := client.DoesLocalBucketExist(proxyURL, localBucketName)
 	checkFatal(err, t)
 	if !exists {
-		err := client.CreateLocalBucket(proxyurl, localBucketName)
+		err := client.CreateLocalBucket(proxyURL, localBucketName)
 		checkFatal(err, t)
 	}
 
@@ -764,7 +771,7 @@ func proxyStress(t *testing.T) {
 		proxyurlchs[i] = make(chan string, defaultChanSize)
 
 		wg.Add(1)
-		go putGetDelWorker(bs, stopchs[i], proxyurlchs[i], errchs[i], &wg)
+		go putGetDelWorker(proxyURL, bs, stopchs[i], proxyurlchs[i], errchs[i], &wg)
 
 		// stagger the workers so they don't always do the same operation at the same time
 		n := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(999)
@@ -775,7 +782,7 @@ func proxyStress(t *testing.T) {
 	errchs[numworkers] = make(chan error, defaultChanSize)
 	stopchs[numworkers] = make(chan struct{}, defaultChanSize)
 	wg.Add(1)
-	go primaryKiller(t, bs, stopchs[numworkers], proxyurlchs, errchs[numworkers], &wg)
+	go primaryKiller(t, proxyURL, bs, stopchs[numworkers], proxyurlchs, errchs[numworkers], &wg)
 
 	timer := time.After(multiProxyTestDuration)
 loop:
@@ -800,14 +807,14 @@ loop:
 	}
 
 	wg.Wait()
-	client.DestroyLocalBucket(proxyurl, localBucketName)
+	client.DestroyLocalBucket(proxyURL, localBucketName)
 }
 
 // smap 	- current Smap
 // directURL	- DirectURL of the proxy that we send the request to
 //           	  (not necessarily the current primary)
 // toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
-func setPrimaryTo(t *testing.T, smap dfc.Smap, directURL, toID, toURL string) {
+func setPrimaryTo(t *testing.T, proxyURL string, smap dfc.Smap, directURL, toID, toURL string) {
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
@@ -821,18 +828,17 @@ func setPrimaryTo(t *testing.T, smap dfc.Smap, directURL, toID, toURL string) {
 	checkFatal(err, t)
 	r.Body.Close()
 
-	smap, err = waitForPrimaryProxy("to designate new primary ID="+toID, smap.Version, testing.Verbose())
+	smap, err = waitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
 	checkFatal(err, t)
 	if smap.ProxySI.DaemonID != toID {
 		t.Fatalf("Expected primary=%s, got %s", toID, smap.ProxySI.DaemonID)
 	}
-	if err = checkPmapVersions(); err != nil {
+	if err = checkPmapVersions(proxyURL); err != nil {
 		t.Fatal(err)
 	}
-	proxyurl = toURL
 }
 
-func chooseNextProxy(smap *dfc.Smap) (proxyid, proxyurl string, err error) {
+func chooseNextProxy(smap *dfc.Smap) (proxyid, proxyURL string, err error) {
 	pid, errstr := hrwProxyTest(smap, smap.ProxySI.DaemonID)
 	pi := smap.Pmap[pid]
 	if errstr != "" {
@@ -959,14 +965,14 @@ func getProcess(port string) (string, string, []string, error) {
 
 // Read Pmap from all proxies and checks versions. If any proxy's smap version
 // differs from primary's one then an error returned
-func checkPmapVersions() error {
-	smapPrimary, err := client.GetClusterMap(proxyurl)
+func checkPmapVersions(proxyURL string) error {
+	smapPrimary, err := client.GetClusterMap(proxyURL)
 	if err != nil {
 		return err
 	}
 
 	for proxyID, proxyInfo := range smapPrimary.Pmap {
-		if proxyurl == proxyInfo.PublicNet.DirectURL {
+		if proxyURL == proxyInfo.PublicNet.DirectURL {
 			continue
 		}
 		smap, err := client.GetClusterMap(proxyInfo.PublicNet.DirectURL)
@@ -994,7 +1000,7 @@ func checkPmapVersions() error {
 // It is useful if the test kills more than one proxy/target. In this case the
 // primary proxy may run two metasync calls and we cannot tell if the current SMap
 // is what we are waiting for only by looking at its version.
-func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt ...int) (dfc.Smap, error) {
+func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (dfc.Smap, error) {
 	var (
 		lastVersion          int64
 		timeUntil, timeStart time.Time
@@ -1022,7 +1028,7 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 
 	var loopCnt int = 0
 	for {
-		smap, err := client.GetClusterMap(proxyurl)
+		smap, err := client.GetClusterMap(proxyURL)
 		if err != nil && !dfc.IsErrConnectionRefused(err) {
 			return dfc.Smap{}, err
 		}
@@ -1039,13 +1045,13 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 				expectedProxies = len(smap.Pmap)
 			}
 			tlogf("Smap is not updated yet at %s, targets: %d/%d, proxies: %d/%d (%v)\n",
-				proxyurl, len(smap.Tmap), expectedTargets, len(smap.Pmap), expectedProxies, d.Truncate(time.Second))
+				proxyURL, len(smap.Tmap), expectedTargets, len(smap.Pmap), expectedProxies, d.Truncate(time.Second))
 		}
 
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if err == nil && smap.Version == lastVersion && smap.Version > origVersion && doCheckSMap {
 			for {
-				smap, err = client.GetClusterMap(proxyurl)
+				smap, err = client.GetClusterMap(proxyURL)
 				if err == nil {
 					break
 				}
@@ -1063,7 +1069,7 @@ func waitForPrimaryProxy(reason string, origVersion int64, verbose bool, nodeCnt
 			// skip primary proxy and mock targets
 			var proxyID string
 			for _, p := range smap.Pmap {
-				if p.PublicNet.DirectURL == proxyurl {
+				if p.PublicNet.DirectURL == proxyURL {
 					proxyID = p.DaemonID
 				}
 			}
@@ -1093,7 +1099,7 @@ type targetMocker interface {
 	votehdlr(w http.ResponseWriter, r *http.Request)
 }
 
-func runMockTarget(t *testing.T, mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
+func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(api.URLPath(api.Version, api.Buckets), mocktgt.filehdlr)
@@ -1111,17 +1117,17 @@ func runMockTarget(t *testing.T, mocktgt targetMocker, stopch chan struct{}, sma
 	s := &http.Server{Addr: ip + ":" + mockTargetPort, Handler: mux}
 	go s.ListenAndServe()
 
-	err := registerMockTarget(mocktgt, smap)
+	err := registerMockTarget(proxyURL, mocktgt, smap)
 	if err != nil {
 		t.Fatalf("failed to start http server for mock target: %v", err)
 	}
 
 	<-stopch
-	unregisterMockTarget(mocktgt)
+	unregisterMockTarget(proxyURL, mocktgt)
 	s.Shutdown(context.Background())
 }
 
-func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
+func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *dfc.Smap) error {
 	var (
 		jsonDaemonInfo []byte
 		err            error
@@ -1144,7 +1150,7 @@ func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 		break
 	}
 
-	url := proxyurl + api.URLPath(api.Version, api.Cluster)
+	url := proxyURL + api.URLPath(api.Version, api.Cluster)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonDaemonInfo))
 	if err != nil {
 		return err
@@ -1165,8 +1171,8 @@ func registerMockTarget(mocktgt targetMocker, smap *dfc.Smap) error {
 	return err
 }
 
-func unregisterMockTarget(mocktgt targetMocker) error {
-	url := proxyurl + api.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
+func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
+	url := proxyURL + api.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
@@ -1231,19 +1237,20 @@ func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 // primary proxy was down and retuned back. So, the test should be executed
 // after primaryCrashElectRestart test
 func primarySetToOriginal(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	var (
 		currID, currURL       string
 		byURL, byPort, origID string
 	)
 	currID = smap.ProxySI.DaemonID
 	currURL = smap.ProxySI.PublicNet.DirectURL
-	if currURL != proxyurl {
-		t.Fatalf("Err in the test itself: expecting currURL %s == proxyurl %s", currURL, proxyurl)
+	if currURL != proxyURL {
+		t.Fatalf("Err in the test itself: expecting currURL %s == proxyurl %s", currURL, proxyURL)
 	}
 	tlogf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := getConfig(proxyurl+api.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
 	origURL := proxyconf["original_url"].(string)
 
@@ -1278,7 +1285,7 @@ func primarySetToOriginal(t *testing.T) {
 		return
 	}
 
-	setPrimaryTo(t, smap, "", origID, origURL)
+	setPrimaryTo(t, proxyURL, smap, "", origID, origURL)
 }
 
 // This is duplicated in the tests because the `idDigest` of `daemonInfo` is not
@@ -1316,7 +1323,8 @@ func hrwProxyTest(smap *dfc.Smap, idToSkip string) (pi string, errstr string) {
 }
 
 func networkFailureTarget(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	if len(smap.Tmap) == 0 {
 		t.Fatal("At least 1 target required")
 	}
@@ -1333,6 +1341,7 @@ func networkFailureTarget(t *testing.T) {
 	checkFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(
+		proxyURL,
 		"target is down",
 		smap.Version, testing.Verbose(),
 		proxyCount,
@@ -1345,6 +1354,7 @@ func networkFailureTarget(t *testing.T) {
 	checkFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(
+		proxyURL,
 		"to check cluster state",
 		smap.Version, testing.Verbose(),
 		proxyCount,
@@ -1354,7 +1364,8 @@ func networkFailureTarget(t *testing.T) {
 }
 
 func networkFailureProxy(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	if len(smap.Pmap) < 2 {
 		t.Fatal("At least 2 proxy required")
 	}
@@ -1369,6 +1380,7 @@ func networkFailureProxy(t *testing.T) {
 	checkFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(
+		proxyURL,
 		"proxy is down",
 		smap.Version, testing.Verbose(),
 		proxyCount-1,
@@ -1381,6 +1393,7 @@ func networkFailureProxy(t *testing.T) {
 	checkFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(
+		proxyURL,
 		"to check cluster state",
 		smap.Version, testing.Verbose(),
 		proxyCount,
@@ -1395,7 +1408,8 @@ func networkFailureProxy(t *testing.T) {
 }
 
 func networkFailurePrimary(t *testing.T) {
-	smap := getClusterMap(t)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap := getClusterMap(t, proxyURL)
 	if len(smap.Pmap) < 2 {
 		t.Fatal("At least 2 proxy required")
 	}
@@ -1410,8 +1424,8 @@ func networkFailurePrimary(t *testing.T) {
 	checkFatal(err, t)
 
 	// Check smap
-	proxyurl = newPrimaryURL
 	smap, err = waitForPrimaryProxy(
+		newPrimaryURL,
 		"original primary is gone",
 		smap.Version, testing.Verbose(),
 		proxyCount-1,
@@ -1449,6 +1463,7 @@ func networkFailurePrimary(t *testing.T) {
 	checkFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(
+		newPrimaryURL,
 		"original primary joined the new primary",
 		smap.Version, testing.Verbose(),
 		proxyCount,

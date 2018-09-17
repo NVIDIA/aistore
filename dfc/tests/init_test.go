@@ -61,14 +61,14 @@ var (
 	clichecksum            string
 	cycles                 int
 
-	clibucket string
-	proxyurl  string
-	usingSG   bool // True if using SGL as reader backing memory
-	usingFile bool // True if using file as reader backing
+	clibucket  string
+	proxyURLRO string // user-defined primary proxy URL - it is read-only variable and tests mustn't change it
+	usingSG    bool   // True if using SGL as reader backing memory
+	usingFile  bool   // True if using file as reader backing
 )
 
 func init() {
-	flag.StringVar(&proxyurl, "url", ProxyURL, "Proxy URL")
+	flag.StringVar(&proxyURLRO, "url", ProxyURL, "Proxy URL")
 	flag.IntVar(&numfiles, "numfiles", 100, "Number of the files to download")
 	flag.IntVar(&numworkers, "numworkers", 10, "Number of the workers")
 	flag.StringVar(&match, "match", ".*", "object name regex")
@@ -104,8 +104,8 @@ func init() {
 	usingFile = readerType == readers.ReaderTypeFile
 	checkMemory()
 
-	if util.DockerRunning() && proxyurl == ProxyURL {
-		proxyurl = "http://172.50.0.2:8080"
+	if util.DockerRunning() && proxyURLRO == ProxyURL {
+		proxyURLRO = "http://172.50.0.2:8080"
 	}
 }
 
@@ -127,12 +127,12 @@ func TestMain(m *testing.M) {
 
 	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test
 	// find out who is the current primary proxy
-	url, err := client.GetPrimaryProxy(proxyurl)
+	url, err := client.GetPrimaryProxy(proxyURLRO)
 	if err != nil {
 		fmt.Printf("Failed to get primary proxy, err = %v", err)
 		os.Exit(1)
 	}
 
-	proxyurl = url
+	proxyURLRO = url
 	os.Exit(m.Run())
 }

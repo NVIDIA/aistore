@@ -28,11 +28,7 @@ func Test_smoke(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	if err := client.Tcping(proxyurl); err != nil {
-		tlogf("%s: %v\n", proxyurl, err)
-		os.Exit(1)
-	}
-
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if err := common.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
@@ -41,12 +37,12 @@ func Test_smoke(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
 
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
 		for _, r := range ratios {
-			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, fs, r, bs, fp) })
+			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, bs, fp) })
 			bs += int64(numworkers + 1)
 		}
 	}
@@ -64,7 +60,7 @@ func Test_smoke(t *testing.T) {
 			}
 		}
 		wg.Add(1)
-		go client.Del(proxyurl, clibucket, "smoke/"+file, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, clibucket, "smoke/"+file, wg, errch, !testing.Verbose())
 	}
 	wg.Wait()
 	select {
@@ -74,13 +70,13 @@ func Test_smoke(t *testing.T) {
 	}
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
 }
 
-func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput chan string) {
+func oneSmoke(t *testing.T, proxyURL string, filesize int, ratio float32, bseed int64, filesput chan string) {
 	// Start the worker pools
 	errch := make(chan error, 100)
 	var wg = &sync.WaitGroup{}
@@ -112,7 +108,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 					sgl = sgls[i]
 				}
 
-				putRandomFiles(bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
+				putRandomFiles(proxyURL, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
 					SmokeDir, SmokeStr, !testing.Verbose(), sgl)
 				wg.Done()
 			}(i)
@@ -120,7 +116,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 		} else {
 			wg.Add(1)
 			go func(i int) {
-				getRandomFiles(bseed+int64(i), numops, clibucket, SmokeStr+"/", t, nil, errch)
+				getRandomFiles(proxyURL, bseed+int64(i), numops, clibucket, SmokeStr+"/", t, nil, errch)
 				wg.Done()
 			}(i)
 			nGet--
@@ -134,7 +130,7 @@ func oneSmoke(t *testing.T, filesize int, ratio float32, bseed int64, filesput c
 	}
 }
 
-func getRandomFiles(seed int64, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
+func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix string, t *testing.T, wg *sync.WaitGroup, errch chan error) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -144,7 +140,7 @@ func getRandomFiles(seed int64, numGets int, bucket, prefix string, t *testing.T
 	getsGroup := &sync.WaitGroup{}
 	var msg = &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
-		items, err := client.ListBucket(proxyurl, bucket, msg, 0)
+		items, err := client.ListBucket(proxyURL, bucket, msg, 0)
 		if err != nil {
 			errch <- err
 			t.Error(err)
@@ -173,13 +169,13 @@ func getRandomFiles(seed int64, numGets int, bucket, prefix string, t *testing.T
 
 		keyname := files[random.Intn(len(files))]
 		getsGroup.Add(1)
-		go client.Get(proxyurl, bucket, keyname, getsGroup, errch, !testing.Verbose(), false /* validate */)
+		go client.Get(proxyURL, bucket, keyname, getsGroup, errch, !testing.Verbose(), false /* validate */)
 	}
 
 	getsGroup.Wait()
 }
 
-func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket string,
+func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []string, bucket string,
 	t *testing.T, errch chan error, filesput chan string,
 	dir, keystr string, silent bool, sgl *iosgl.SGL) {
 	src := rand.NewSource(seed)
@@ -219,7 +215,7 @@ func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket st
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		err = client.Put(proxyurl, r, bucket, keystr+"/"+fname, silent)
+		err = client.Put(proxyURL, r, bucket, keystr+"/"+fname, silent)
 		if err != nil {
 			if errch == nil {
 				fmt.Println("Error channel is nil, do not know how to report error")
@@ -230,7 +226,7 @@ func fillWithRandomData(seed int64, fileSize uint64, objList []string, bucket st
 	}
 }
 
-func putRandomFiles(seed int64, fileSize uint64, numPuts int, bucket string,
+func putRandomFiles(proxyURL string, seed int64, fileSize uint64, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
 	dir, keystr string, silent bool, sgl *iosgl.SGL) {
 	if wg != nil {
@@ -245,5 +241,5 @@ func putRandomFiles(seed int64, fileSize uint64, numPuts int, bucket string,
 		fileList = append(fileList, fname)
 	}
 
-	fillWithRandomData(seed, fileSize, fileList, bucket, t, errch, filesput, dir, keystr, silent, sgl)
+	fillWithRandomData(proxyURL, seed, fileSize, fileList, bucket, t, errch, filesput, dir, keystr, silent, sgl)
 }

@@ -109,6 +109,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 		seed     = baseseed + 300
 		filesize = uint64(64 * 1024)
 		ldir     = LocalSrcDir + "/" + fshcDir
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 	tlogf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
@@ -140,14 +141,14 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				fillWithRandomData(seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
+				fillWithRandomData(proxyURL, seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
 				select {
 				case <-errch:
 					// do nothing
 				default:
 				}
 			case "GET":
-				_, _, _ = client.Get(proxyurl, bucket, fshcDir+"/"+fname, nil, nil, true, false)
+				_, _, _ = client.Get(proxyURL, bucket, fshcDir+"/"+fname, nil, nil, true, false)
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -168,6 +169,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		seed     = baseseed + 300
 		numObjs  = 100
 		filesize = uint64(64 * 1024)
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 
 	if testing.Short() {
@@ -175,20 +177,20 @@ func TestFSCheckerDetection(t *testing.T) {
 	}
 
 	bucket := clibucket
-	if isCloudBucket(t, proxyurl, bucket) {
+	if isCloudBucket(t, proxyURL, bucket) {
 		bucket = TestLocalBucketName
 	}
 	// create local bucket to write to, or use an existing one
-	if createLocalBucketIfNotExists(t, proxyurl, bucket) {
+	if createLocalBucketIfNotExists(t, proxyURL, bucket) {
 		tlogf("created local bucket %s\n", bucket)
 	}
 
 	defer func() {
-		err = client.DestroyLocalBucket(proxyurl, bucket)
+		err = client.DestroyLocalBucket(proxyURL, bucket)
 		checkFatal(err, t)
 	}()
 
-	smap, err := client.GetClusterMap(proxyurl)
+	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
 
 	mpList := make(map[string]string, 0)
@@ -269,7 +271,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	{
 		tlogf("Reading non-existing objects: read must fails, but mpath must be available\n")
 		for n := 1; n < 10; n++ {
-			_, _, err = client.Get(proxyurl, bucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
+			_, _, err = client.Get(proxyURL, bucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting non-existing objects should not disable mountpath")
@@ -279,8 +281,8 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// try PUT and GET with disabled FSChecker
 	tlogf("*** Testing with disabled FSHC***\n")
-	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
-	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyurl+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	fileList := []string{}
 	for n := 0; n < 5; n++ {
@@ -297,7 +299,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		f.Close()
 		filesput := make(chan string, len(fileList))
 		errch := make(chan error, len(fileList))
-		fillWithRandomData(seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
+		fillWithRandomData(proxyURL, seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("PUTting objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}
@@ -313,7 +315,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		}
 		f.Close()
 		for _, n := range fileList {
-			_, _, err = client.Get(proxyurl, bucket, n, nil, nil, true, false)
+			_, _, err = client.Get(proxyURL, bucket, n, nil, nil, true, false)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")
@@ -329,12 +331,13 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	bucket := clibucket
-	if isCloudBucket(t, proxyurl, bucket) {
+	if isCloudBucket(t, proxyURL, bucket) {
 		bucket = TestLocalBucketName
 	}
 
-	smap, err := client.GetClusterMap(proxyurl)
+	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
 
 	mpList := make(map[string]string, 0)
@@ -382,7 +385,8 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 }
 
 func TestFSCheckerTargetDisable(t *testing.T) {
-	smap, err := client.GetClusterMap(proxyurl)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
 
 	proxyCnt := len(smap.Pmap)
@@ -409,7 +413,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		checkFatal(err, t)
 	}
 
-	smap, err = waitForPrimaryProxy("all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
+	smap, err = waitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
 	checkFatal(err, t)
 
 	tlogf("Restoring target %s mountpaths\n", tgtURL)
@@ -418,6 +422,6 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		checkFatal(err, t)
 	}
 
-	smap, err = waitForPrimaryProxy("all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
+	smap, err = waitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
 	checkFatal(err, t)
 }

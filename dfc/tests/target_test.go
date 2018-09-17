@@ -18,9 +18,12 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		bucket = TestLocalBucketName
 		object = "someObject"
 	)
-	var sid string
+	var (
+		sid      string
+		proxyURL = getPrimaryURL(t, proxyURLRO)
+	)
 
-	smap, err := client.GetClusterMap(proxyurl)
+	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
 
 	for sid = range smap.Tmap {

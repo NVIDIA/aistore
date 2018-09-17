@@ -133,7 +133,7 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 	return currAsyncOps+1 < int64(maxAsycOps)
 }
 
-func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
+func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	var (
 		totalOps int
 		prc      int
@@ -168,12 +168,12 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.PutAsync(&wg, proxyurl, r, clibucket, keyname, errch, true /* silent */)
+						client.PutAsync(&wg, proxyURL, r, clibucket, keyname, errch, true /* silent */)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					err = client.Put(proxyurl, r, clibucket, keyname, true /* silent */)
+					err = client.Put(proxyURL, r, clibucket, keyname, true /* silent */)
 					if err != nil {
 						errch <- err
 					}
@@ -204,7 +204,7 @@ func rwPutLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	}
 }
 
-func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
+func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
 	done := false
 	var totalOps, currIdx int
 	errch := make(chan error, 10)
@@ -223,12 +223,12 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Del(proxyurl, clibucket, keyname, wg, errch, true)
+					client.Del(proxyURL, clibucket, keyname, wg, errch, true)
 					unlockFile(localIdx, rwFileDeleted)
 					atomic.AddInt64(&delCounter, -1)
 				}()
 			} else {
-				client.Del(proxyurl, clibucket, keyname, nil, errch, true)
+				client.Del(proxyURL, clibucket, keyname, nil, errch, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 
@@ -256,7 +256,7 @@ func rwDelLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 	wg.Wait()
 }
 
-func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
+func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	done := false
 	var currIdx, totalOps int
 	errch := make(chan error, 10)
@@ -275,12 +275,12 @@ func rwGetLoop(t *testing.T, fileNames []string, taskGrp *sync.WaitGroup, doneCh
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Get(proxyurl, clibucket, keyname, wg, errch, true, false)
+					client.Get(proxyURL, clibucket, keyname, wg, errch, true, false)
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
 				}()
 			} else {
-				client.Get(proxyurl, clibucket, keyname, nil, errch, true, false)
+				client.Get(proxyURL, clibucket, keyname, nil, errch, true, false)
 				unlockFile(idx, rwFileExists)
 			}
 			currIdx = idx + 1
@@ -310,7 +310,8 @@ func rwstress(t *testing.T) {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 
-	created := createLocalBucketIfNotExists(t, proxyurl, clibucket)
+	proxyURL := getPrimaryURL(t, proxyURLRO)
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	filelock.files = make([]fileLock, numFiles, numFiles)
 
 	generateRandomData(t, baseseed+10000, numFiles)
@@ -318,20 +319,20 @@ func rwstress(t *testing.T) {
 	var wg sync.WaitGroup
 	doneCh := make(chan int, 2)
 	wg.Add(1)
-	go rwPutLoop(t, fileNames, &wg, doneCh)
+	go rwPutLoop(t, proxyURL, fileNames, &wg, doneCh)
 	wg.Add(1)
-	go rwGetLoop(t, fileNames, &wg, doneCh)
+	go rwGetLoop(t, proxyURL, fileNames, &wg, doneCh)
 	if !skipdel {
 		wg.Add(1)
-		go rwDelLoop(t, fileNames, &wg, doneCh, rwRunNormal)
+		go rwDelLoop(t, proxyURL, fileNames, &wg, doneCh, rwRunNormal)
 	}
 
 	wg.Wait()
-	rwDelLoop(t, fileNames, nil, doneCh, rwRunCleanUp)
+	rwDelLoop(t, proxyURL, fileNames, nil, doneCh, rwRunCleanUp)
 	rwstressCleanup(t)
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyurl, clibucket); err != nil {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
 			t.Errorf("Failed to delete local bucket: %v", err)
 		}
 	}
@@ -367,11 +368,6 @@ func TestRWStress(t *testing.T) {
 func Test_rwstress(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Long run only")
-	}
-
-	if err := client.Tcping(proxyurl); err != nil {
-		tlogf("%s: %v\n", proxyurl, err)
-		os.Exit(1)
 	}
 
 	numLoops = cycles

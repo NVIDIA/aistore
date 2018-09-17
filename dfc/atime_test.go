@@ -103,6 +103,7 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 
 func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
+	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
 	go atimer.run()
 
@@ -145,6 +146,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 
 func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
+	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
 	go atimer.run()
 
@@ -186,6 +188,7 @@ func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 
 func TestAtimerunnerFlush(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
+	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
 	go atimer.run()
 
