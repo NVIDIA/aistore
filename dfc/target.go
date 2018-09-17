@@ -569,7 +569,7 @@ existslocally:
 			rd := readers.NewRandReader(dryRun.size)
 			if _, err = io.Copy(w, rd); err != nil {
 				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
-				t.statsif.add("err.n", 1)
+				t.statsif.add("err.get.n", 1)
 				return
 			}
 		}
@@ -655,7 +655,7 @@ send:
 		}
 		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 		t.fshc(err, fqn)
-		t.statsif.add("err.n", 1)
+		t.statsif.add("err.get.n", 1)
 		return
 	}
 	if sendMore {
@@ -3014,7 +3014,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
 
-				t.statsif.addMany(namedVal64{"cksum.bad.n", 1}, namedVal64{"cksum.bad.size", written})
+				t.statsif.addMany(namedVal64{"err.cksum.n", 1}, namedVal64{"err.cksum.size", written})
 				return
 			}
 		}
@@ -3031,7 +3031,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
 				objname, ohval[:8], nhval[:8], fqn)
 
-			t.statsif.addMany(namedVal64{"cksum.bad.n", 1}, namedVal64{"cksum.bad.size", written})
+			t.statsif.addMany(namedVal64{"err.cksum.n", 1}, namedVal64{"err.cksum.size", written})
 			return
 		}
 	} else {

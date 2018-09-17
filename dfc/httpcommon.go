@@ -696,7 +696,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
 		glog.Errorln(s)
-		h.statsif.add("err.n", 1)
+		h.statsif.addErrorHTTP(r.Method, 1)
 		return
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
@@ -933,7 +933,7 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 	}
 	glog.Errorln(s)
 	http.Error(w, s, status)
-	h.statsif.add("err.n", 1)
+	h.statsif.addErrorHTTP(r.Method, 1)
 }
 
 //=====================

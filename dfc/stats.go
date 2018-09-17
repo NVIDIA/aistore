@@ -8,6 +8,7 @@ package dfc
 import (
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -57,6 +58,7 @@ type statslogger interface {
 // implemented by the ***CoreStats types
 type statsif interface {
 	add(name string, val int64)
+	addErrorHTTP(method string, val int64)
 	addMany(namedVal64 ...namedVal64)
 }
 
@@ -199,13 +201,20 @@ func (stats statsTracker) registerCommonStats() {
 	stats.register("del.n", statsKindCounter)
 	stats.register("ren.n", statsKindCounter)
 	stats.register("lst.n", statsKindCounter)
-	stats.register("get.μs", statsKindLatency)
+	stats.register("put.μs", statsKindLatency)
 	stats.register("lst.μs", statsKindLatency)
 	stats.register("kalive.μs.min", statsKindLatency)
 	stats.register("kalive.μs.max", statsKindLatency)
 	stats.register("kalive.μs", statsKindLatency)
 	stats.register("uptime.μs", statsKindLatency)
 	stats.register("err.n", statsKindCounter)
+	stats.register("err.get.n", statsKindCounter)
+	stats.register("err.delete.n", statsKindCounter)
+	stats.register("err.post.n", statsKindCounter)
+	stats.register("err.put.n", statsKindCounter)
+	stats.register("err.head.n", statsKindCounter)
+	stats.register("err.list.n", statsKindCounter)
+	stats.register("err.range.n", statsKindCounter)
 }
 
 func (p *proxyCoreStats) initStatsTracker() {
@@ -230,8 +239,8 @@ func (t *targetCoreStats) initStatsTracker() {
 	t.Tracker.register("pre.size", statsKindCounter)
 	t.Tracker.register("vchange.n", statsKindCounter)
 	t.Tracker.register("vchange.size", statsKindCounter)
-	t.Tracker.register("cksum.bad.n", statsKindCounter)
-	t.Tracker.register("cksum.bad.size", statsKindCounter)
+	t.Tracker.register("err.cksum.n", statsKindCounter)
+	t.Tracker.register("err.cksum.size", statsKindCounter)
 	t.Tracker.register("get.redir.μs", statsKindLatency)
 	t.Tracker.register("put.redir.μs", statsKindLatency)
 	t.Tracker.register("reb.global.n", statsKindCounter)
@@ -299,7 +308,6 @@ func (r *statsrunner) stop(err error) {
 	var v struct{}
 	r.stopCh <- v
 	close(r.stopCh)
-	close(r.workCh)
 }
 
 // statslogger interface impl
@@ -315,6 +323,23 @@ func (r *statsrunner) addMany(nvs ...namedVal64) {
 
 func (r *statsrunner) add(name string, val int64) {
 	r.workCh <- namedVal64{name, val}
+}
+
+func (r *statsrunner) addErrorHTTP(method string, val int64) {
+	switch method {
+	case http.MethodGet:
+		r.workCh <- namedVal64{"err.get.n", val}
+	case http.MethodDelete:
+		r.workCh <- namedVal64{"err.del.n", val}
+	case http.MethodPost:
+		r.workCh <- namedVal64{"err.post.n", val}
+	case http.MethodPut:
+		r.workCh <- namedVal64{"err.put.n", val}
+	case http.MethodHead:
+		r.workCh <- namedVal64{"err.head.n", val}
+	default:
+		r.workCh <- namedVal64{"err.n", val}
+	}
 }
 
 //=================
@@ -600,7 +625,9 @@ func (s *targetCoreStats) doAdd(name string, val int64) {
 	// common
 	case "get.n", "put.n", "pst.n", "del.n", "ren.n", "lst.n",
 		"get.μs", "put.μs", "lst.μs",
-		"kalive.μs", "kalive.μs.min", "kalive.μs.max", "err.n":
+		"kalive.μs", "kalive.μs.min", "kalive.μs.max",
+		"err.n", "err.get.n", "err.delete.n", "err.post.n",
+		"err.put.n", "err.head.n", "err.list.n", "err.range.n":
 		s.proxyCoreStats.doAdd(name, val)
 		return
 	// target only
@@ -612,12 +639,12 @@ func (s *targetCoreStats) doAdd(name string, val int64) {
 		s.statsdC.Send("get.cold",
 			metric{statsd.Counter, "vchanged", 1},
 			metric{statsd.Counter, "vchange.size", val})
-	case "lru.evict.size", "tx.size", "rx.size", "cksum.bad.size": // byte stats
+	case "lru.evict.size", "tx.size", "rx.size", "err.cksum.size": // byte stats
 		s.statsdC.Send(name, metric{statsd.Counter, "bytes", val})
 	case "lru.evict.n", "tx.n", "rx.n": // files stats
 		s.statsdC.Send(name, metric{statsd.Counter, "files", val})
-	case "cksum.bad.n": // counter stats
-		s.statsdC.Send("error.badchecksum", metric{statsd.Counter, "count", val})
+	case "err.cksum.n": // counter stats
+		s.statsdC.Send(name, metric{statsd.Counter, "count", val})
 	case "get.redir.μs", "put.redir.μs": // latency stats
 		s.Tracker[name].associatedVal++
 		s.statsdC.Send(name,
