@@ -1028,7 +1028,9 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 	}
 
 	// Create local bucket
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
 	checkFatal(err, t)
 
 	// Rename it
@@ -1073,7 +1075,9 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	}
 
 	// Create local bucket
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
 	checkFatal(err, t)
 
 	if usingSG {
@@ -1145,8 +1149,11 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	newBucketFQN := filepath.Join(localBucketDir, newTestLocalBucketName)
 
 	// Create local bucket
-	err = client.CreateLocalBucket(proxyurl, m.bucket)
+	createFreshLocalBucket(t, proxyurl, m.bucket)
+
+	err = client.DestroyLocalBucket(proxyurl, newTestLocalBucketName)
 	checkFatal(err, t)
+
 	if _, err := os.Stat(bucketFQN); os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not created")
 	}
@@ -1311,6 +1318,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	createFreshLocalBucket(t, proxyurl, m.bucket)
 
 	defer func() {
+		os.RemoveAll(newMountpath)
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
 		checkFatal(err, t)
 	}()
@@ -1388,6 +1396,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	createFreshLocalBucket(t, proxyurl, m.bucket)
 
 	defer func() {
+		os.RemoveAll(newMountpath)
 		err = client.DestroyLocalBucket(proxyurl, m.bucket)
 		checkFatal(err, t)
 	}()
@@ -1734,6 +1743,10 @@ func TestForwardCP(t *testing.T) {
 	// Step 2.
 	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, err := chooseNextProxy(&m.smap)
+
+	err = client.DestroyLocalBucket(proxyurl, m.bucket)
+	checkFatal(err, t)
+
 	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
 	checkFatal(err, t)
 	tlogf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
