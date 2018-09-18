@@ -47,6 +47,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [Multi-tiering](#multi-tiering)
 - [Bucket Level Configuration](#bucket-level-configuration)
   * [Checksumming](#checksumming)
+  * [LRU](#lru)
 - [Command-line Load Generator](#command-line-load-generator)
 - [Metrics with StatsD](#metrics-with-statsd)
 
@@ -729,7 +730,8 @@ Currently, the endpoints which support multi-tier policies are the following:
 * GET /v1/objects/bucket-name/object-name
 * PUT /v1/objects/bucket-name/object-name
 
-## Bucket Level Configuration
+## Bucket-specific Configuration
+Global configuration of buckets is done by default using the fields provided in `config.sh`, but certain bucket properties pertaining to checksumming and LRU can be specified at a more granular level - namely, on a per bucket basis.
 
 ### Checksumming
 
@@ -748,6 +750,28 @@ Value for the `checksum` field (see above) *must* be provided *every* time the b
 Example of setting bucket properties:
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum_config": {"checksum": "xxhash", "validate_checksum_cold_get": true, "validate_checksum_warm_get": false, "enable_read_range_checksum": false}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
+
+### LRU
+
+Overriding the global configuration can be achieved by specifying the fields of the `LRUProps` instance of the `lruconfig` struct that encompasses all LRU configuration fields.
+
+* `lru_props.lowwm`: integer in the range [0, 100], representing the capacity usage low watermark
+* `lru_props.highwm`: integer in the range [0, 100], representing the capacity usage high watermark
+* `lru_props.atime_cache_max`: positive integer representing the maximum number of entries
+* `lru_props.dont_evict_time`: string that indicates eviction-free period [atime, atime + dont]
+* `lru_props.capacity_upd_time`: string indicating the minimum time to update capacity
+* `lru_props.lru_enabled`: bool that determines whether LRU is run or not; only runs when true
+
+**NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified is defaulted to the data type's zero value.
+Example of setting bucket properties:
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum_config":{"checksum":"none","validate_checksum_cold_get":true,"validate_checksum_warm_get":true,"enable_read_range_checksum":true},"lru_props":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","lru_enabled":true}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
+
+To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
 ## Command-line Load Generator

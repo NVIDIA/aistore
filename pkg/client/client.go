@@ -166,6 +166,12 @@ type BucketProps struct {
 	ValidateColdGet string
 	ValidateWarmGet string
 	ValidateRange   string
+	LowWM           string
+	HighWM          string
+	AtimeCacheMax   string
+	DontEvictTime   string
+	CapUpdTime      string
+	LRUEnabled      string
 }
 
 type ObjectProps struct {
@@ -632,6 +638,12 @@ func HeadBucket(proxyURL, bucket string) (*BucketProps, error) {
 		ValidateColdGet: r.Header.Get(api.HeaderBucketValidateColdGet),
 		ValidateWarmGet: r.Header.Get(api.HeaderBucketValidateWarmGet),
 		ValidateRange:   r.Header.Get(api.HeaderBucketValidateRange),
+		LowWM:           r.Header.Get(api.HeaderBucketLRULowWM),
+		HighWM:          r.Header.Get(api.HeaderBucketLRUHighWM),
+		AtimeCacheMax:   r.Header.Get(api.HeaderBucketAtimeCacheMax),
+		DontEvictTime:   r.Header.Get(api.HeaderBucketDontEvictTime),
+		CapUpdTime:      r.Header.Get(api.HeaderBucketCapUpdTime),
+		LRUEnabled:      r.Header.Get(api.HeaderBucketLRUEnabled),
 	}, nil
 }
 
@@ -695,6 +707,36 @@ func SetBucketProps(proxyURL, bucket string, props dfc.BucketProps) error {
 			return fmt.Errorf("failed to read response body, err = %s", err)
 		}
 		return fmt.Errorf("failed SetBucketProps, HTTP status code: %d, HTTP response body: %s, bucket: %s",
+			resp.StatusCode, string(b), bucket)
+	}
+	return nil
+}
+
+func ResetBucketProps(proxyURL, bucket string) error {
+	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
+
+	b, err := json.Marshal(api.ActionMsg{Action: api.ActResetProps})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
+	if err != nil {
+		return fmt.Errorf("failed to create new HTTP request, err = %v", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do PUT request, err = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response body, err = %s", err)
+		}
+		return fmt.Errorf("failed ResetBucketProps, HTTP status code: %d, HTTP response body: %s, bucket: %s",
 			resp.StatusCode, string(b), bucket)
 	}
 	return nil

@@ -607,20 +607,20 @@ func TestHeadLocalBucket(t *testing.T) {
 		validateColdGetTestSetting         = false
 		validateWarmGetTestSetting         = true
 		enableReadRangeChecksumTestSetting = false
+		lowWMTestSetting                   = (uint32)(10)
+		highWMTestSetting                  = (uint32)(50)
+		atimeCacheMaxTestSetting           = (uint64)(9999)
+		dontEvictTimeTestSetting           = "1m"
+		capacityUpdTimeTestSetting         = "2m"
+		lruEnabledTestSetting              = true
+		nextTierURL                        = "http://foo.com"
 	)
-	var bucketProps dfc.BucketProps
+	var (
+		bucketProps dfc.BucketProps
+		proxyURL    = getPrimaryURL(t, proxyURLRO)
+	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
-	err := client.CreateLocalBucket(proxyURL, TestLocalBucketName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		checkFatal(client.DestroyLocalBucket(proxyURL, TestLocalBucketName), t)
-	}()
-
-	nextTierURL := "http://foo.com"
-
+	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierURL
 	bucketProps.ReadPolicy = dfc.RWPolicyNextTier
@@ -629,54 +629,43 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
 	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
 	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
+	bucketProps.LRUProps.LowWM = lowWMTestSetting
+	bucketProps.LRUProps.HighWM = highWMTestSetting
+	bucketProps.LRUProps.AtimeCacheMax = atimeCacheMaxTestSetting
+	bucketProps.LRUProps.DontEvictTimeStr = dontEvictTimeTestSetting
+	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
+	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
 
-	err = client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
+	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
 	checkFatal(err, t)
 
 	p, err := client.HeadBucket(proxyURL, TestLocalBucketName)
 	checkFatal(err, t)
 
-	if p.CloudProvider != api.ProviderDFC {
-		t.Errorf("Expected cloud provider: %s, received cloud provider: %s", api.ProviderDFC, p.CloudProvider)
-	}
-	if p.ReadPolicy != dfc.RWPolicyNextTier {
-		t.Errorf("Expected read policy: %s, received read policy: %s", dfc.RWPolicyNextTier, p.ReadPolicy)
-	}
-	if p.WritePolicy != dfc.RWPolicyNextTier {
-		t.Errorf("Expected write policy: %s, received write policy: %s", dfc.RWPolicyNextTier, p.WritePolicy)
-	}
-	if p.NextTierURL != nextTierURL {
-		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", nextTierURL, p.NextTierURL)
-	}
-	if p.ChecksumType != dfc.ChecksumXXHash {
-		t.Errorf("Expected checksum type: %s, received checksum type: %s", dfc.ChecksumXXHash, p.ChecksumType)
-	}
-	if b, _ := strconv.ParseBool(p.ValidateColdGet); b != validateColdGetTestSetting {
-		t.Errorf("Expected cold GET validation setting: %t, received: %t", validateColdGetTestSetting, b)
-	}
-	if b, _ := strconv.ParseBool(p.ValidateWarmGet); b != validateWarmGetTestSetting {
-		t.Errorf("Expected warm GET validation setting: %t, received: %t", validateWarmGetTestSetting, b)
-	}
-	if b, _ := strconv.ParseBool(p.ValidateRange); b != enableReadRangeChecksumTestSetting {
-		t.Errorf("Expected byte range validation setting: %t, received: %t", enableReadRangeChecksumTestSetting, b)
-	}
+	validateBucketProps(t, bucketProps, *p)
 }
 
 func TestHeadCloudBucket(t *testing.T) {
 	const (
+		nextTierURL                        = "http://foo.com"
 		validateColdGetTestSetting         = true
 		validateWarmGetTestSetting         = true
 		enableReadRangeChecksumTestSetting = false
+		lowWMTestSetting                   = (uint32)(10)
+		highWMTestSetting                  = (uint32)(50)
+		atimeCacheMaxTestSetting           = (uint64)(9999)
+		dontEvictTimeTestSetting           = "1m"
+		capacityUpdTimeTestSetting         = "2m"
+		lruEnabledTestSetting              = true
 	)
-	var bucketProps dfc.BucketProps
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	var (
+		bucketProps dfc.BucketProps
+		proxyURL    = getPrimaryURL(t, proxyURLRO)
+	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestHeadCloudBucket requires a cloud bucket")
 	}
-
-	nextTierURL := "http://foo.com"
-
 	bucketProps.CloudProvider = api.ProviderAmazon
 	bucketProps.NextTierURL = nextTierURL
 	bucketProps.ReadPolicy = dfc.RWPolicyCloud
@@ -685,6 +674,12 @@ func TestHeadCloudBucket(t *testing.T) {
 	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
 	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
 	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
+	bucketProps.LRUProps.LowWM = lowWMTestSetting
+	bucketProps.LRUProps.HighWM = highWMTestSetting
+	bucketProps.LRUProps.AtimeCacheMax = atimeCacheMaxTestSetting
+	bucketProps.LRUProps.DontEvictTimeStr = dontEvictTimeTestSetting
+	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
+	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
 
 	err := client.SetBucketProps(proxyURL, clibucket, bucketProps)
 	checkFatal(err, t)
@@ -699,39 +694,12 @@ func TestHeadCloudBucket(t *testing.T) {
 			clibucket, p.Versioning, strings.Join(versionModes, ", "))
 	}
 
-	if err = dfc.ValidateCloudProvider(p.CloudProvider, false); err != nil {
-		t.Error(err)
-	}
-
-	if p.ReadPolicy != dfc.RWPolicyCloud {
-		t.Errorf("Expected read policy: %s, received read policy: %s", dfc.RWPolicyCloud, p.ReadPolicy)
-	}
-	if p.WritePolicy != dfc.RWPolicyNextTier {
-		t.Errorf("Expected write policy: %s, received write policy: %s", dfc.RWPolicyNextTier, p.WritePolicy)
-	}
-	if p.NextTierURL != nextTierURL {
-		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", nextTierURL, p.NextTierURL)
-	}
-	if p.ChecksumType != dfc.ChecksumXXHash {
-		t.Errorf("Expected checksum type: %s, received checksum type: %s", dfc.ChecksumXXHash, p.ChecksumType)
-	}
-	if b, _ := strconv.ParseBool(p.ValidateColdGet); b != validateColdGetTestSetting {
-		t.Errorf("Expected cold GET validation setting: %t, received: %t", validateColdGetTestSetting, b)
-	}
-	if b, _ := strconv.ParseBool(p.ValidateWarmGet); b != validateWarmGetTestSetting {
-		t.Errorf("Expected warm GET validation setting: %t, received: %t", validateWarmGetTestSetting, b)
-	}
-	if b, _ := strconv.ParseBool(p.ValidateRange); b != enableReadRangeChecksumTestSetting {
-		t.Errorf("Expected byte range validation setting: %t, received: %t", enableReadRangeChecksumTestSetting, b)
-	}
+	validateBucketProps(t, bucketProps, *p)
 }
 
 func TestHeadObject(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if err := client.CreateLocalBucket(proxyURL, TestLocalBucketName); err != nil {
-		t.Fatalf("client.CreateLocalBucket failed, err = %v", err)
-	}
-	defer client.DestroyLocalBucket(proxyURL, TestLocalBucketName)
+	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	fileName := "headobject_test_file"
 	fileSize := 1024
@@ -1593,4 +1561,49 @@ func getPrimaryURL(t *testing.T, proxyURL string) string {
 	}
 
 	return url
+}
+
+func validateBucketProps(t *testing.T, expected dfc.BucketProps, actual client.BucketProps) {
+	if actual.CloudProvider != expected.CloudProvider {
+		t.Errorf("Expected cloud provider: %s, received cloud provider: %s", expected.CloudProvider, actual.CloudProvider)
+	}
+	if actual.ReadPolicy != expected.ReadPolicy {
+		t.Errorf("Expected read policy: %s, received read policy: %s", expected.ReadPolicy, actual.ReadPolicy)
+	}
+	if actual.WritePolicy != expected.WritePolicy {
+		t.Errorf("Expected write policy: %s, received write policy: %s", expected.WritePolicy, actual.WritePolicy)
+	}
+	if actual.NextTierURL != expected.NextTierURL {
+		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", expected.NextTierURL, actual.NextTierURL)
+	}
+	if actual.ChecksumType != expected.CksumConf.Checksum {
+		t.Errorf("Expected checksum type: %s, received checksum type: %s", expected.CksumConf.Checksum, actual.ChecksumType)
+	}
+	if b, _ := strconv.ParseBool(actual.ValidateColdGet); b != expected.CksumConf.ValidateColdGet {
+		t.Errorf("Expected cold GET validation setting: %t, received: %t", expected.CksumConf.ValidateColdGet, b)
+	}
+	if b, _ := strconv.ParseBool(actual.ValidateWarmGet); b != expected.CksumConf.ValidateWarmGet {
+		t.Errorf("Expected warm GET validation setting: %t, received: %t", expected.CksumConf.ValidateWarmGet, b)
+	}
+	if b, _ := strconv.ParseBool(actual.ValidateRange); b != expected.CksumConf.EnableReadRangeChecksum {
+		t.Errorf("Expected byte range validation setting: %t, received: %t", expected.CksumConf.EnableReadRangeChecksum, b)
+	}
+	if u, _ := strconv.ParseUint(actual.LowWM, 10, 32); uint32(u) != expected.LRUProps.LowWM {
+		t.Errorf("Expected LowWM setting: %d, received %d", expected.LRUProps.LowWM, u)
+	}
+	if u, _ := strconv.ParseUint(actual.HighWM, 10, 32); uint32(u) != expected.LRUProps.HighWM {
+		t.Errorf("Expected HighWM setting: %d, received %d", expected.LRUProps.HighWM, u)
+	}
+	if u, _ := strconv.ParseUint(actual.AtimeCacheMax, 10, 32); u != expected.LRUProps.AtimeCacheMax {
+		t.Errorf("Expected AtimeCacheMax setting: %d, received %d", expected.LRUProps.AtimeCacheMax, u)
+	}
+	if actual.DontEvictTime != expected.LRUProps.DontEvictTimeStr {
+		t.Errorf("Expected DontEvictTimeStr setting: %s, received %s", expected.LRUProps.DontEvictTimeStr, actual.DontEvictTime)
+	}
+	if actual.CapUpdTime != expected.LRUProps.CapacityUpdTimeStr {
+		t.Errorf("Expected CapacityUpdTimeStr setting: %s, received %s", expected.LRUProps.CapacityUpdTimeStr, actual.CapUpdTime)
+	}
+	if b, _ := strconv.ParseBool(actual.LRUEnabled); b != expected.LRUProps.LRUEnabled {
+		t.Errorf("Expected LRU enabled setting: %t, received: %t", expected.LRUProps.LRUEnabled, b)
+	}
 }

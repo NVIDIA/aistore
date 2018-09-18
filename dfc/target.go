@@ -1046,6 +1046,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		cksumcfg = &props.CksumConf
 	}
 
+	// include lru settings in the response
 	w.Header().Add(api.HeaderNextTierURL, props.NextTierURL)
 	w.Header().Add(api.HeaderReadPolicy, props.ReadPolicy)
 	w.Header().Add(api.HeaderWritePolicy, props.WritePolicy)
@@ -1053,6 +1054,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add(api.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
 	w.Header().Add(api.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
 	w.Header().Add(api.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
+	w.Header().Add(api.HeaderBucketLRULowWM, strconv.FormatUint(uint64(props.LRUProps.LowWM), 10))
+	w.Header().Add(api.HeaderBucketLRUHighWM, strconv.FormatUint(uint64(props.LRUProps.HighWM), 10))
+	w.Header().Add(api.HeaderBucketAtimeCacheMax, strconv.FormatUint(props.LRUProps.AtimeCacheMax, 10))
+	w.Header().Add(api.HeaderBucketDontEvictTime, props.LRUProps.DontEvictTimeStr)
+	w.Header().Add(api.HeaderBucketCapUpdTime, props.LRUProps.CapacityUpdTimeStr)
+	w.Header().Add(api.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUProps.LRUEnabled))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1961,7 +1968,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		}
 		si, errstr := HrwTarget(bucket, objname, ci.t.smapowner.get())
 		if errstr != "" || ci.t.si.DaemonID != si.DaemonID {
-			glog.Warning("Rebalanced object: %s/%s: %s", bucket, objname, errstr)
+			glog.Warningf("Rebalanced object: %s/%s: %s", bucket, objname, errstr)
 			objStatus = api.ObjStatusMoved
 		}
 	}

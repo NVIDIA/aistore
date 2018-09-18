@@ -26,6 +26,7 @@ const (
 	ActCreateLB    = "createlb"
 	ActDestroyLB   = "destroylb"
 	ActRenameLB    = "renamelb"
+	ActResetProps  = "resetprops"
 	ActSetConfig   = "setconfig"
 	ActSetProps    = "setprops"
 	ActListObjects = "listobjects"
@@ -66,6 +67,12 @@ const (
 	HeaderBucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
 	HeaderBucketValidateWarmGet = "BucketValidateWarmGet" // Warm get validation policy used for objects in the bucket
 	HeaderBucketValidateRange   = "BucketValidateRange"   // Byte range validation policy used for objects in the bucket
+	HeaderBucketLRULowWM        = "LRULowWM"              // Capacity usage low water mark
+	HeaderBucketLRUHighWM       = "LRUHighWM"             // Capacity usage high water mark
+	HeaderBucketAtimeCacheMax   = "LRUAtimeCacheMax"      // Maximum Number of Entires in the Cache
+	HeaderBucketDontEvictTime   = "LRUDontEvictTime"      // Enforces an eviction-free time period between [atime, atime+dontevicttime]
+	HeaderBucketCapUpdTime      = "LRUCapUpdTime"         // Minimum time to update the capacity
+	HeaderBucketLRUEnabled      = "LRUEnabled"            // LRU is run on a bucket only if this field is true
 	HeaderDFCChecksumType       = "HeaderDfcChecksumType" // Checksum Type (xxhash, md5, none)
 	HeaderDFCChecksumVal        = "HeaderDfcChecksumVal"  // Checksum Value
 	HeaderDFCObjVersion         = "HeaderDfcObjVersion"   // Object version/generation

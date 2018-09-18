@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
 )
 
@@ -25,6 +26,7 @@ type BucketProps struct {
 	ReadPolicy    string      `json:"read_policy,omitempty"`
 	WritePolicy   string      `json:"write_policy,omitempty"`
 	CksumConf     cksumconfig `json:"cksum_config"`
+	LRUProps      lruconfig   `json:"lru_props"`
 }
 
 type bucketMD struct {
@@ -58,6 +60,7 @@ func NewBucketProps() *BucketProps {
 		CksumConf: cksumconfig{
 			Checksum: ChecksumInherit,
 		},
+		LRUProps: ctx.config.LRU,
 	}
 }
 
@@ -128,6 +131,15 @@ func (m *bucketMD) propsAndChecksum(bucket string) (p BucketProps, checksum stri
 		return p, "", false
 	}
 	return p, p.CksumConf.Checksum, true
+}
+
+func (m *bucketMD) GetLRUConf(bucket string) *lruconfig {
+	ok, p := m.get(bucket, m.islocal(bucket))
+	if !ok {
+		glog.Errorf("Invalid Bucket: %s", bucket)
+		return &ctx.config.LRU
+	}
+	return &p.LRUProps
 }
 
 func (m *bucketMD) clone() *bucketMD {
