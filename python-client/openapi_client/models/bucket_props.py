@@ -35,23 +35,26 @@ class BucketProps(object):
         'cloud_provider': 'str',
         'next_tier_url': 'str',
         'read_policy': 'str',
-        'write_policy': 'str'
+        'write_policy': 'str',
+        'cksum_config': 'BucketPropsCksum'
     }
 
     attribute_map = {
         'cloud_provider': 'cloud_provider',
         'next_tier_url': 'next_tier_url',
         'read_policy': 'read_policy',
-        'write_policy': 'write_policy'
+        'write_policy': 'write_policy',
+        'cksum_config': 'cksum_config'
     }
 
-    def __init__(self, cloud_provider=None, next_tier_url=None, read_policy=None, write_policy=None):  # noqa: E501
+    def __init__(self, cloud_provider=None, next_tier_url=None, read_policy=None, write_policy=None, cksum_config=None):  # noqa: E501
         """BucketProps - a model defined in OpenAPI"""  # noqa: E501
 
         self._cloud_provider = None
         self._next_tier_url = None
         self._read_policy = None
         self._write_policy = None
+        self._cksum_config = None
         self.discriminator = None
 
         if cloud_provider is not None:
@@ -62,6 +65,8 @@ class BucketProps(object):
             self.read_policy = read_policy
         if write_policy is not None:
             self.write_policy = write_policy
+        if cksum_config is not None:
+            self.cksum_config = cksum_config
 
     @property
     def cloud_provider(self):
@@ -146,6 +151,27 @@ class BucketProps(object):
         """
 
         self._write_policy = write_policy
+
+    @property
+    def cksum_config(self):
+        """Gets the cksum_config of this BucketProps.  # noqa: E501
+
+
+        :return: The cksum_config of this BucketProps.  # noqa: E501
+        :rtype: BucketPropsCksum
+        """
+        return self._cksum_config
+
+    @cksum_config.setter
+    def cksum_config(self, cksum_config):
+        """Sets the cksum_config of this BucketProps.
+
+
+        :param cksum_config: The cksum_config of this BucketProps.  # noqa: E501
+        :type: BucketPropsCksum
+        """
+
+        self._cksum_config = cksum_config
 
     def to_dict(self):
         """Returns the model properties as a dict"""

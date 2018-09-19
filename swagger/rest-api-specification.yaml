@@ -271,7 +271,7 @@ paths:
       tags:
         - Bucket
       parameters:
-        - name: local
+        - name: loc
           in: query
           description: Get only local bucket names
           schema:
@@ -688,23 +688,7 @@ components:
             - $ref: '#/components/schemas/ObjectPropertiesRequestParams'
     Actions:
       type: string
-      enum:
-        - evict
-        - rename
-        - createlb
-        - destroylb
-        - renamelb
-        - setprops
-        - prefetch
-        - delete
-        - setconfig
-        - shutdown
-        - rebalance
-        - listobjects
-        - enable
-        - disable
-        - remove
-        - add
+      enum: [evict, rename, createlb, destroylb, renamelb, setprops, prefetch, delete, setconfig, shutdown, rebalance, listobjects, enable, disable, remove, add]
     ListParameters:
       properties:
         deadline:
@@ -743,6 +727,21 @@ components:
           type: string
         write_policy:
           type: string
+        cksum_config:
+          $ref: '#/components/schemas/BucketPropsCksum'
+    BucketPropsCksum:
+      type: object
+      properties:
+        checksum: 
+          type: string
+          enum: [xxhash, none, inherit]
+          default: inherit
+        validate_checksum_cold_get:
+          type: boolean
+        validate_checksum_warm_get:
+          type: boolean
+        enable_read_range_checksum:
+          type: boolean
     BucketNames:
       type: object
       properties:
@@ -802,71 +801,39 @@ components:
             $ref: '#/components/schemas/ObjectProperties'
     ObjectPropertyTypes:
       type: string
-      enum:
-        - size
-        - ctime
-        - checksum
-        - atime
-        - bucket
-        - version
-        - iscached
-        - targetURL
+      enum: [size, ctime, checksum, atime, bucket, version, iscached, targetURL]
     TimeFormat:
       type: string
-      enum:
-       - ANSIC
-       - UnixDate
-       - RubyDate
-       - RFC822
-       - RFC822Z
-       - RFC850
-       - RFC1123
-       - RFC1123Z
-       - RFC3339
-       - RFC3339Nano
-       - Kitchen
-       - Stamp
-       - StampMilli
-       - StampMicro
-       - StampNano
+      enum: [ANSIC, UnixDate, RubyDate, RFC822, RFC822Z, RFC850, RFC1123, RFC1123Z, RFC3339, RFC3339Nano, Kitchen, Stamp, StampMilli, StampMicro, StampNano]
     CloudProvider:
       type: string
-      enum:
-        - dfc
-        - aws
-        - gcp
+      enum: [dfc, aws, gcp]
     Headers:
       type: string
-      enum:
-        - CloudProvider
-        - Versioning
-        - NextTierURL
-        - ReadPolicy
-        - WritePolicy
-        - Version
-        - Size
-        - HeaderDfcChecksumType
-        - HeaderDfcChecksumVal
+      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, Version, Size, HeaderDfcChecksumType, HeaderDfcChecksumVal]
     RWPolicy:
       type: string
-      enum:
-        - cloud
-        - next_tier
+      enum: [cloud, next_tier]
     Version:
       type: string
-      enum:
-        - all
-        - cloud
-        - local
-        - none
+      enum: [all, cloud, local, none]
     DaemonInfo:
+      type: object
+      properties:
+        daemon_id:
+          type: string
+        public_net:
+          $ref: '#/components/schemas/NetInfo'
+        internal_net:
+          $ref: '#/components/schemas/NetInfo'
+        repl_net:
+          $ref: '#/components/schemas/NetInfo'
+    NetInfo:
       type: object
       properties:
         node_ip_addr:
           type: string
         daemon_port:
-          type: string
-        daemon_id:
           type: string
         direct_url:
           type: string
@@ -880,9 +847,7 @@ components:
         - mountpaths
     GetProps:
       type: string
-      enum:
-        - rebalance
-        - prefetch
+      enum: [rebalance, prefetch]
     ClusterMap:
       type: object
       properties:
@@ -1243,7 +1208,6 @@ components:
         numRecvBytes:
           type: integer
           format: int64
-
     PrefetchTargetStatistics:
       type: object
       properties:

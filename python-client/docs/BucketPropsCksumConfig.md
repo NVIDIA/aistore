@@ -1,13 +1,12 @@
-# BucketProps
+# BucketPropsCksumConfig
 
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**cloud_provider** | **str** |  | [optional] 
-**next_tier_url** | **str** |  | [optional] 
-**read_policy** | **str** |  | [optional] 
-**write_policy** | **str** |  | [optional] 
-**cksum_config** | [**BucketPropsCksum**](BucketPropsCksum.md) |  | [optional] 
+**checksum** | **str** |  | [optional] 
+**validate_checksum_cold_get** | **bool** |  | [optional] 
+**validate_checksum_warm_get** | **bool** |  | [optional] 
+**enable_read_range_checksum** | **bool** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

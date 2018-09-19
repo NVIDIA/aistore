@@ -98,6 +98,7 @@ Class | Method | HTTP request | Description
  - [Actions](docs/Actions.md)
  - [BucketNames](docs/BucketNames.md)
  - [BucketProps](docs/BucketProps.md)
+ - [BucketPropsCksum](docs/BucketPropsCksum.md)
  - [CloudProvider](docs/CloudProvider.md)
  - [ClusterMap](docs/ClusterMap.md)
  - [ClusterStatistics](docs/ClusterStatistics.md)
@@ -127,6 +128,7 @@ Class | Method | HTTP request | Description
  - [InputParameters](docs/InputParameters.md)
  - [KeepAliveTrackerConfiguration](docs/KeepAliveTrackerConfiguration.md)
  - [ListParameters](docs/ListParameters.md)
+ - [NetInfo](docs/NetInfo.md)
  - [ObjectProperties](docs/ObjectProperties.md)
  - [ObjectPropertiesRequestParams](docs/ObjectPropertiesRequestParams.md)
  - [ObjectPropertyList](docs/ObjectPropertyList.md)
@@ -153,4 +155,5 @@ Class | Method | HTTP request | Description
 ## Author
 
 dfcdev@exchange.nvidia.com
+
 

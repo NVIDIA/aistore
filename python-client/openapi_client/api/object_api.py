@@ -37,11 +37,11 @@ class ObjectApi(object):
         """Delete object  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.delete(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.delete(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param InputParameters input_parameters:
@@ -50,7 +50,7 @@ class ObjectApi(object):
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.delete_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
         else:
             (data) = self.delete_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
@@ -60,11 +60,11 @@ class ObjectApi(object):
         """Delete object  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.delete_with_http_info(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.delete_with_http_info(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param InputParameters input_parameters:
@@ -73,37 +73,38 @@ class ObjectApi(object):
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['bucket_name', 'object_name', 'input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method delete" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'bucket_name' is set
-        if ('bucket_name' not in params or
-                params['bucket_name'] is None):
+        if ('bucket_name' not in local_var_params or
+                local_var_params['bucket_name'] is None):
             raise ValueError("Missing the required parameter `bucket_name` when calling `delete`")  # noqa: E501
         # verify the required parameter 'object_name' is set
-        if ('object_name' not in params or
-                params['object_name'] is None):
+        if ('object_name' not in local_var_params or
+                local_var_params['object_name'] is None):
             raise ValueError("Missing the required parameter `object_name` when calling `delete`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'bucket_name' in params:
-            path_params['bucket-name'] = params['bucket_name']  # noqa: E501
-        if 'object_name' in params:
-            path_params['object-name'] = params['object_name']  # noqa: E501
+        if 'bucket_name' in local_var_params:
+            path_params['bucket-name'] = local_var_params['bucket_name']  # noqa: E501
+        if 'object_name' in local_var_params:
+            path_params['object-name'] = local_var_params['object_name']  # noqa: E501
 
         query_params = []
 
@@ -113,8 +114,8 @@ class ObjectApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -136,21 +137,21 @@ class ObjectApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def get(self, bucket_name, object_name, **kwargs):  # noqa: E501
         """Get object  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param int offset: Starting byte from where the read needs to be performed
@@ -160,7 +161,7 @@ class ObjectApi(object):
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.get_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
         else:
             (data) = self.get_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
@@ -170,11 +171,11 @@ class ObjectApi(object):
         """Get object  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get_with_http_info(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get_with_http_info(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param int offset: Starting byte from where the read needs to be performed
@@ -184,43 +185,44 @@ class ObjectApi(object):
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['bucket_name', 'object_name', 'offset', 'length']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method get" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'bucket_name' is set
-        if ('bucket_name' not in params or
-                params['bucket_name'] is None):
+        if ('bucket_name' not in local_var_params or
+                local_var_params['bucket_name'] is None):
             raise ValueError("Missing the required parameter `bucket_name` when calling `get`")  # noqa: E501
         # verify the required parameter 'object_name' is set
-        if ('object_name' not in params or
-                params['object_name'] is None):
+        if ('object_name' not in local_var_params or
+                local_var_params['object_name'] is None):
             raise ValueError("Missing the required parameter `object_name` when calling `get`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'bucket_name' in params:
-            path_params['bucket-name'] = params['bucket_name']  # noqa: E501
-        if 'object_name' in params:
-            path_params['object-name'] = params['object_name']  # noqa: E501
+        if 'bucket_name' in local_var_params:
+            path_params['bucket-name'] = local_var_params['bucket_name']  # noqa: E501
+        if 'object_name' in local_var_params:
+            path_params['object-name'] = local_var_params['object_name']  # noqa: E501
 
         query_params = []
-        if 'offset' in params:
-            query_params.append(('offset', params['offset']))  # noqa: E501
-        if 'length' in params:
-            query_params.append(('length', params['length']))  # noqa: E501
+        if 'offset' in local_var_params:
+            query_params.append(('offset', local_var_params['offset']))  # noqa: E501
+        if 'length' in local_var_params:
+            query_params.append(('length', local_var_params['length']))  # noqa: E501
 
         header_params = {}
 
@@ -230,7 +232,7 @@ class ObjectApi(object):
         body_params = None
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
-            ['application/octet-stream''text/plain'])  # noqa: E501
+            ['application/octet-stream', 'text/plain'])  # noqa: E501
 
         # Authentication setting
         auth_settings = []  # noqa: E501
@@ -245,21 +247,21 @@ class ObjectApi(object):
             files=local_var_files,
             response_type='str',  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def get_properties(self, bucket_name, object_name, **kwargs):  # noqa: E501
         """Query object properties  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get_properties(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get_properties(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param bool check_cached: Check if the object is cached
@@ -268,7 +270,7 @@ class ObjectApi(object):
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.get_properties_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
         else:
             (data) = self.get_properties_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
@@ -278,11 +280,11 @@ class ObjectApi(object):
         """Query object properties  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get_properties_with_http_info(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get_properties_with_http_info(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param bool check_cached: Check if the object is cached
@@ -291,41 +293,42 @@ class ObjectApi(object):
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['bucket_name', 'object_name', 'check_cached']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method get_properties" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'bucket_name' is set
-        if ('bucket_name' not in params or
-                params['bucket_name'] is None):
+        if ('bucket_name' not in local_var_params or
+                local_var_params['bucket_name'] is None):
             raise ValueError("Missing the required parameter `bucket_name` when calling `get_properties`")  # noqa: E501
         # verify the required parameter 'object_name' is set
-        if ('object_name' not in params or
-                params['object_name'] is None):
+        if ('object_name' not in local_var_params or
+                local_var_params['object_name'] is None):
             raise ValueError("Missing the required parameter `object_name` when calling `get_properties`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'bucket_name' in params:
-            path_params['bucket-name'] = params['bucket_name']  # noqa: E501
-        if 'object_name' in params:
-            path_params['object-name'] = params['object_name']  # noqa: E501
+        if 'bucket_name' in local_var_params:
+            path_params['bucket-name'] = local_var_params['bucket_name']  # noqa: E501
+        if 'object_name' in local_var_params:
+            path_params['object-name'] = local_var_params['object_name']  # noqa: E501
 
         query_params = []
-        if 'check_cached' in params:
-            query_params.append(('check_cached', params['check_cached']))  # noqa: E501
+        if 'check_cached' in local_var_params:
+            query_params.append(('check_cached', local_var_params['check_cached']))  # noqa: E501
 
         header_params = {}
 
@@ -350,21 +353,21 @@ class ObjectApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def perform_operation(self, bucket_name, object_name, input_parameters, **kwargs):  # noqa: E501
         """Perform operations on object such as rename  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.perform_operation(bucket_name, object_name, input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.perform_operation(bucket_name, object_name, input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param InputParameters input_parameters: (required)
@@ -373,7 +376,7 @@ class ObjectApi(object):
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.perform_operation_with_http_info(bucket_name, object_name, input_parameters, **kwargs)  # noqa: E501
         else:
             (data) = self.perform_operation_with_http_info(bucket_name, object_name, input_parameters, **kwargs)  # noqa: E501
@@ -383,11 +386,11 @@ class ObjectApi(object):
         """Perform operations on object such as rename  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.perform_operation_with_http_info(bucket_name, object_name, input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.perform_operation_with_http_info(bucket_name, object_name, input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param InputParameters input_parameters: (required)
@@ -396,41 +399,42 @@ class ObjectApi(object):
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['bucket_name', 'object_name', 'input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method perform_operation" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'bucket_name' is set
-        if ('bucket_name' not in params or
-                params['bucket_name'] is None):
+        if ('bucket_name' not in local_var_params or
+                local_var_params['bucket_name'] is None):
             raise ValueError("Missing the required parameter `bucket_name` when calling `perform_operation`")  # noqa: E501
         # verify the required parameter 'object_name' is set
-        if ('object_name' not in params or
-                params['object_name'] is None):
+        if ('object_name' not in local_var_params or
+                local_var_params['object_name'] is None):
             raise ValueError("Missing the required parameter `object_name` when calling `perform_operation`")  # noqa: E501
         # verify the required parameter 'input_parameters' is set
-        if ('input_parameters' not in params or
-                params['input_parameters'] is None):
+        if ('input_parameters' not in local_var_params or
+                local_var_params['input_parameters'] is None):
             raise ValueError("Missing the required parameter `input_parameters` when calling `perform_operation`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'bucket_name' in params:
-            path_params['bucket-name'] = params['bucket_name']  # noqa: E501
-        if 'object_name' in params:
-            path_params['object-name'] = params['object_name']  # noqa: E501
+        if 'bucket_name' in local_var_params:
+            path_params['bucket-name'] = local_var_params['bucket_name']  # noqa: E501
+        if 'object_name' in local_var_params:
+            path_params['object-name'] = local_var_params['object_name']  # noqa: E501
 
         query_params = []
 
@@ -440,8 +444,8 @@ class ObjectApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -463,21 +467,21 @@ class ObjectApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def put(self, bucket_name, object_name, **kwargs):  # noqa: E501
         """Put object  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.put(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.put(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param str from_id: Source target ID
@@ -488,7 +492,7 @@ class ObjectApi(object):
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.put_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
         else:
             (data) = self.put_with_http_info(bucket_name, object_name, **kwargs)  # noqa: E501
@@ -498,11 +502,11 @@ class ObjectApi(object):
         """Put object  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.put_with_http_info(bucket_name, object_name, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.put_with_http_info(bucket_name, object_name, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str bucket_name: Bucket name (required)
         :param str object_name: Object name (required)
         :param str from_id: Source target ID
@@ -513,43 +517,44 @@ class ObjectApi(object):
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['bucket_name', 'object_name', 'from_id', 'to_id', 'body']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method put" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'bucket_name' is set
-        if ('bucket_name' not in params or
-                params['bucket_name'] is None):
+        if ('bucket_name' not in local_var_params or
+                local_var_params['bucket_name'] is None):
             raise ValueError("Missing the required parameter `bucket_name` when calling `put`")  # noqa: E501
         # verify the required parameter 'object_name' is set
-        if ('object_name' not in params or
-                params['object_name'] is None):
+        if ('object_name' not in local_var_params or
+                local_var_params['object_name'] is None):
             raise ValueError("Missing the required parameter `object_name` when calling `put`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'bucket_name' in params:
-            path_params['bucket-name'] = params['bucket_name']  # noqa: E501
-        if 'object_name' in params:
-            path_params['object-name'] = params['object_name']  # noqa: E501
+        if 'bucket_name' in local_var_params:
+            path_params['bucket-name'] = local_var_params['bucket_name']  # noqa: E501
+        if 'object_name' in local_var_params:
+            path_params['object-name'] = local_var_params['object_name']  # noqa: E501
 
         query_params = []
-        if 'from_id' in params:
-            query_params.append(('from_id', params['from_id']))  # noqa: E501
-        if 'to_id' in params:
-            query_params.append(('to_id', params['to_id']))  # noqa: E501
+        if 'from_id' in local_var_params:
+            query_params.append(('from_id', local_var_params['from_id']))  # noqa: E501
+        if 'to_id' in local_var_params:
+            query_params.append(('to_id', local_var_params['to_id']))  # noqa: E501
 
         header_params = {}
 
@@ -557,8 +562,8 @@ class ObjectApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'body' in params:
-            body_params = params['body']
+        if 'body' in local_var_params:
+            body_params = local_var_params['body']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -580,8 +585,8 @@ class ObjectApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)

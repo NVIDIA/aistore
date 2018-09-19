@@ -37,11 +37,11 @@ class ClusterApi(object):
         """Get cluster related details  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get(what, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get(what, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param GetWhat what: Cluster details which need to be fetched (required)
         :param GetProps props: Additional properties describing the cluster details
         :return: object
@@ -49,7 +49,7 @@ class ClusterApi(object):
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.get_with_http_info(what, **kwargs)  # noqa: E501
         else:
             (data) = self.get_with_http_info(what, **kwargs)  # noqa: E501
@@ -59,11 +59,11 @@ class ClusterApi(object):
         """Get cluster related details  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get_with_http_info(what, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get_with_http_info(what, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param GetWhat what: Cluster details which need to be fetched (required)
         :param GetProps props: Additional properties describing the cluster details
         :return: object
@@ -71,24 +71,25 @@ class ClusterApi(object):
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['what', 'props']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method get" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'what' is set
-        if ('what' not in params or
-                params['what'] is None):
+        if ('what' not in local_var_params or
+                local_var_params['what'] is None):
             raise ValueError("Missing the required parameter `what` when calling `get`")  # noqa: E501
 
         collection_formats = {}
@@ -96,10 +97,10 @@ class ClusterApi(object):
         path_params = {}
 
         query_params = []
-        if 'what' in params:
-            query_params.append(('what', params['what']))  # noqa: E501
-        if 'props' in params:
-            query_params.append(('props', params['props']))  # noqa: E501
+        if 'what' in local_var_params:
+            query_params.append(('what', local_var_params['what']))  # noqa: E501
+        if 'props' in local_var_params:
+            query_params.append(('props', local_var_params['props']))  # noqa: E501
 
         header_params = {}
 
@@ -109,7 +110,7 @@ class ClusterApi(object):
         body_params = None
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
-            ['application/json''text/plain'])  # noqa: E501
+            ['application/json', 'text/plain'])  # noqa: E501
 
         # Authentication setting
         auth_settings = []  # noqa: E501
@@ -124,28 +125,28 @@ class ClusterApi(object):
             files=local_var_files,
             response_type='object',  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def perform_operation(self, input_parameters, **kwargs):  # noqa: E501
         """Perform cluster wide operations such as setting config value, shutting down proxy/target etc.  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.perform_operation(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.perform_operation(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.perform_operation_with_http_info(input_parameters, **kwargs)  # noqa: E501
         else:
             (data) = self.perform_operation_with_http_info(input_parameters, **kwargs)  # noqa: E501
@@ -155,35 +156,36 @@ class ClusterApi(object):
         """Perform cluster wide operations such as setting config value, shutting down proxy/target etc.  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.perform_operation_with_http_info(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.perform_operation_with_http_info(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method perform_operation" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'input_parameters' is set
-        if ('input_parameters' not in params or
-                params['input_parameters'] is None):
+        if ('input_parameters' not in local_var_params or
+                local_var_params['input_parameters'] is None):
             raise ValueError("Missing the required parameter `input_parameters` when calling `perform_operation`")  # noqa: E501
 
         collection_formats = {}
@@ -198,8 +200,8 @@ class ClusterApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -221,28 +223,28 @@ class ClusterApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def register_target(self, daemon_info, **kwargs):  # noqa: E501
         """Register storage target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.register_target(daemon_info, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.register_target(daemon_info, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param DaemonInfo daemon_info: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.register_target_with_http_info(daemon_info, **kwargs)  # noqa: E501
         else:
             (data) = self.register_target_with_http_info(daemon_info, **kwargs)  # noqa: E501
@@ -252,35 +254,36 @@ class ClusterApi(object):
         """Register storage target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.register_target_with_http_info(daemon_info, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.register_target_with_http_info(daemon_info, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param DaemonInfo daemon_info: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['daemon_info']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method register_target" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'daemon_info' is set
-        if ('daemon_info' not in params or
-                params['daemon_info'] is None):
+        if ('daemon_info' not in local_var_params or
+                local_var_params['daemon_info'] is None):
             raise ValueError("Missing the required parameter `daemon_info` when calling `register_target`")  # noqa: E501
 
         collection_formats = {}
@@ -295,8 +298,8 @@ class ClusterApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'daemon_info' in params:
-            body_params = params['daemon_info']
+        if 'daemon_info' in local_var_params:
+            body_params = local_var_params['daemon_info']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -318,28 +321,28 @@ class ClusterApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def set_primary_proxy(self, primary_proxy_id, **kwargs):  # noqa: E501
         """Set primary proxy  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.set_primary_proxy(primary_proxy_id, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.set_primary_proxy(primary_proxy_id, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str primary_proxy_id: Bucket name (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.set_primary_proxy_with_http_info(primary_proxy_id, **kwargs)  # noqa: E501
         else:
             (data) = self.set_primary_proxy_with_http_info(primary_proxy_id, **kwargs)  # noqa: E501
@@ -349,42 +352,43 @@ class ClusterApi(object):
         """Set primary proxy  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.set_primary_proxy_with_http_info(primary_proxy_id, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.set_primary_proxy_with_http_info(primary_proxy_id, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str primary_proxy_id: Bucket name (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['primary_proxy_id']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method set_primary_proxy" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'primary_proxy_id' is set
-        if ('primary_proxy_id' not in params or
-                params['primary_proxy_id'] is None):
+        if ('primary_proxy_id' not in local_var_params or
+                local_var_params['primary_proxy_id'] is None):
             raise ValueError("Missing the required parameter `primary_proxy_id` when calling `set_primary_proxy`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'primary_proxy_id' in params:
-            path_params['primary-proxy-id'] = params['primary_proxy_id']  # noqa: E501
+        if 'primary_proxy_id' in local_var_params:
+            path_params['primary-proxy-id'] = local_var_params['primary_proxy_id']  # noqa: E501
 
         query_params = []
 
@@ -411,28 +415,28 @@ class ClusterApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def unregister_target(self, daemon_id, **kwargs):  # noqa: E501
         """Unregister the storage target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.unregister_target(daemon_id, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.unregister_target(daemon_id, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str daemon_id: ID of the target daemon (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.unregister_target_with_http_info(daemon_id, **kwargs)  # noqa: E501
         else:
             (data) = self.unregister_target_with_http_info(daemon_id, **kwargs)  # noqa: E501
@@ -442,42 +446,43 @@ class ClusterApi(object):
         """Unregister the storage target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.unregister_target_with_http_info(daemon_id, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.unregister_target_with_http_info(daemon_id, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param str daemon_id: ID of the target daemon (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['daemon_id']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method unregister_target" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'daemon_id' is set
-        if ('daemon_id' not in params or
-                params['daemon_id'] is None):
+        if ('daemon_id' not in local_var_params or
+                local_var_params['daemon_id'] is None):
             raise ValueError("Missing the required parameter `daemon_id` when calling `unregister_target`")  # noqa: E501
 
         collection_formats = {}
 
         path_params = {}
-        if 'daemon_id' in params:
-            path_params['daemonId'] = params['daemon_id']  # noqa: E501
+        if 'daemon_id' in local_var_params:
+            path_params['daemonId'] = local_var_params['daemon_id']  # noqa: E501
 
         query_params = []
 
@@ -504,8 +509,8 @@ class ClusterApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)

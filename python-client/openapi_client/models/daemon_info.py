@@ -32,78 +32,36 @@ class DaemonInfo(object):
                             and the value is json key in definition.
     """
     openapi_types = {
-        'node_ip_addr': 'str',
-        'daemon_port': 'str',
         'daemon_id': 'str',
-        'direct_url': 'str'
+        'public_net': 'NetInfo',
+        'internal_net': 'NetInfo',
+        'repl_net': 'NetInfo'
     }
 
     attribute_map = {
-        'node_ip_addr': 'node_ip_addr',
-        'daemon_port': 'daemon_port',
         'daemon_id': 'daemon_id',
-        'direct_url': 'direct_url'
+        'public_net': 'public_net',
+        'internal_net': 'internal_net',
+        'repl_net': 'repl_net'
     }
 
-    def __init__(self, node_ip_addr=None, daemon_port=None, daemon_id=None, direct_url=None):  # noqa: E501
+    def __init__(self, daemon_id=None, public_net=None, internal_net=None, repl_net=None):  # noqa: E501
         """DaemonInfo - a model defined in OpenAPI"""  # noqa: E501
 
-        self._node_ip_addr = None
-        self._daemon_port = None
         self._daemon_id = None
-        self._direct_url = None
+        self._public_net = None
+        self._internal_net = None
+        self._repl_net = None
         self.discriminator = None
 
-        if node_ip_addr is not None:
-            self.node_ip_addr = node_ip_addr
-        if daemon_port is not None:
-            self.daemon_port = daemon_port
         if daemon_id is not None:
             self.daemon_id = daemon_id
-        if direct_url is not None:
-            self.direct_url = direct_url
-
-    @property
-    def node_ip_addr(self):
-        """Gets the node_ip_addr of this DaemonInfo.  # noqa: E501
-
-
-        :return: The node_ip_addr of this DaemonInfo.  # noqa: E501
-        :rtype: str
-        """
-        return self._node_ip_addr
-
-    @node_ip_addr.setter
-    def node_ip_addr(self, node_ip_addr):
-        """Sets the node_ip_addr of this DaemonInfo.
-
-
-        :param node_ip_addr: The node_ip_addr of this DaemonInfo.  # noqa: E501
-        :type: str
-        """
-
-        self._node_ip_addr = node_ip_addr
-
-    @property
-    def daemon_port(self):
-        """Gets the daemon_port of this DaemonInfo.  # noqa: E501
-
-
-        :return: The daemon_port of this DaemonInfo.  # noqa: E501
-        :rtype: str
-        """
-        return self._daemon_port
-
-    @daemon_port.setter
-    def daemon_port(self, daemon_port):
-        """Sets the daemon_port of this DaemonInfo.
-
-
-        :param daemon_port: The daemon_port of this DaemonInfo.  # noqa: E501
-        :type: str
-        """
-
-        self._daemon_port = daemon_port
+        if public_net is not None:
+            self.public_net = public_net
+        if internal_net is not None:
+            self.internal_net = internal_net
+        if repl_net is not None:
+            self.repl_net = repl_net
 
     @property
     def daemon_id(self):
@@ -127,25 +85,67 @@ class DaemonInfo(object):
         self._daemon_id = daemon_id
 
     @property
-    def direct_url(self):
-        """Gets the direct_url of this DaemonInfo.  # noqa: E501
+    def public_net(self):
+        """Gets the public_net of this DaemonInfo.  # noqa: E501
 
 
-        :return: The direct_url of this DaemonInfo.  # noqa: E501
-        :rtype: str
+        :return: The public_net of this DaemonInfo.  # noqa: E501
+        :rtype: NetInfo
         """
-        return self._direct_url
+        return self._public_net
 
-    @direct_url.setter
-    def direct_url(self, direct_url):
-        """Sets the direct_url of this DaemonInfo.
+    @public_net.setter
+    def public_net(self, public_net):
+        """Sets the public_net of this DaemonInfo.
 
 
-        :param direct_url: The direct_url of this DaemonInfo.  # noqa: E501
-        :type: str
+        :param public_net: The public_net of this DaemonInfo.  # noqa: E501
+        :type: NetInfo
         """
 
-        self._direct_url = direct_url
+        self._public_net = public_net
+
+    @property
+    def internal_net(self):
+        """Gets the internal_net of this DaemonInfo.  # noqa: E501
+
+
+        :return: The internal_net of this DaemonInfo.  # noqa: E501
+        :rtype: NetInfo
+        """
+        return self._internal_net
+
+    @internal_net.setter
+    def internal_net(self, internal_net):
+        """Sets the internal_net of this DaemonInfo.
+
+
+        :param internal_net: The internal_net of this DaemonInfo.  # noqa: E501
+        :type: NetInfo
+        """
+
+        self._internal_net = internal_net
+
+    @property
+    def repl_net(self):
+        """Gets the repl_net of this DaemonInfo.  # noqa: E501
+
+
+        :return: The repl_net of this DaemonInfo.  # noqa: E501
+        :rtype: NetInfo
+        """
+        return self._repl_net
+
+    @repl_net.setter
+    def repl_net(self, repl_net):
+        """Sets the repl_net of this DaemonInfo.
+
+
+        :param repl_net: The repl_net of this DaemonInfo.  # noqa: E501
+        :type: NetInfo
+        """
+
+        self._repl_net = repl_net
 
     def to_dict(self):
         """Returns the model properties as a dict"""

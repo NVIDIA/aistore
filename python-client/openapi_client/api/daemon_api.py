@@ -37,18 +37,18 @@ class DaemonApi(object):
         """Create mountpath on target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.create_mountpath(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.create_mountpath(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.create_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
         else:
             (data) = self.create_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
@@ -58,35 +58,36 @@ class DaemonApi(object):
         """Create mountpath on target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.create_mountpath_with_http_info(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.create_mountpath_with_http_info(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method create_mountpath" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'input_parameters' is set
-        if ('input_parameters' not in params or
-                params['input_parameters'] is None):
+        if ('input_parameters' not in local_var_params or
+                local_var_params['input_parameters'] is None):
             raise ValueError("Missing the required parameter `input_parameters` when calling `create_mountpath`")  # noqa: E501
 
         collection_formats = {}
@@ -101,8 +102,8 @@ class DaemonApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -124,28 +125,28 @@ class DaemonApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def get(self, what, **kwargs):  # noqa: E501
         """Get daemon related details  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get(what, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get(what, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param GetWhat what: Daemon details which needs to be fetched (required)
         :return: object
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.get_with_http_info(what, **kwargs)  # noqa: E501
         else:
             (data) = self.get_with_http_info(what, **kwargs)  # noqa: E501
@@ -155,35 +156,36 @@ class DaemonApi(object):
         """Get daemon related details  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.get_with_http_info(what, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.get_with_http_info(what, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param GetWhat what: Daemon details which needs to be fetched (required)
         :return: object
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['what']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method get" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'what' is set
-        if ('what' not in params or
-                params['what'] is None):
+        if ('what' not in local_var_params or
+                local_var_params['what'] is None):
             raise ValueError("Missing the required parameter `what` when calling `get`")  # noqa: E501
 
         collection_formats = {}
@@ -191,8 +193,8 @@ class DaemonApi(object):
         path_params = {}
 
         query_params = []
-        if 'what' in params:
-            query_params.append(('what', params['what']))  # noqa: E501
+        if 'what' in local_var_params:
+            query_params.append(('what', local_var_params['what']))  # noqa: E501
 
         header_params = {}
 
@@ -202,7 +204,7 @@ class DaemonApi(object):
         body_params = None
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
-            ['application/json''text/plain'])  # noqa: E501
+            ['application/json', 'text/plain'])  # noqa: E501
 
         # Authentication setting
         auth_settings = []  # noqa: E501
@@ -217,28 +219,28 @@ class DaemonApi(object):
             files=local_var_files,
             response_type='object',  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def modify_mountpath(self, input_parameters, **kwargs):  # noqa: E501
         """Perform operations on mountpath such as disable and enable  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.modify_mountpath(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.modify_mountpath(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.modify_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
         else:
             (data) = self.modify_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
@@ -248,35 +250,36 @@ class DaemonApi(object):
         """Perform operations on mountpath such as disable and enable  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.modify_mountpath_with_http_info(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.modify_mountpath_with_http_info(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method modify_mountpath" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'input_parameters' is set
-        if ('input_parameters' not in params or
-                params['input_parameters'] is None):
+        if ('input_parameters' not in local_var_params or
+                local_var_params['input_parameters'] is None):
             raise ValueError("Missing the required parameter `input_parameters` when calling `modify_mountpath`")  # noqa: E501
 
         collection_formats = {}
@@ -291,8 +294,8 @@ class DaemonApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -314,28 +317,28 @@ class DaemonApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def perform_operation(self, input_parameters, **kwargs):  # noqa: E501
         """Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.perform_operation(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.perform_operation(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.perform_operation_with_http_info(input_parameters, **kwargs)  # noqa: E501
         else:
             (data) = self.perform_operation_with_http_info(input_parameters, **kwargs)  # noqa: E501
@@ -345,35 +348,36 @@ class DaemonApi(object):
         """Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.perform_operation_with_http_info(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.perform_operation_with_http_info(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method perform_operation" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'input_parameters' is set
-        if ('input_parameters' not in params or
-                params['input_parameters'] is None):
+        if ('input_parameters' not in local_var_params or
+                local_var_params['input_parameters'] is None):
             raise ValueError("Missing the required parameter `input_parameters` when calling `perform_operation`")  # noqa: E501
 
         collection_formats = {}
@@ -388,8 +392,8 @@ class DaemonApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -411,28 +415,28 @@ class DaemonApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
     def remove_mountpath(self, input_parameters, **kwargs):  # noqa: E501
         """Remove mountpath from target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.remove_mountpath(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.remove_mountpath(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
-        if kwargs.get('async'):
+        if kwargs.get('async_req'):
             return self.remove_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
         else:
             (data) = self.remove_mountpath_with_http_info(input_parameters, **kwargs)  # noqa: E501
@@ -442,35 +446,36 @@ class DaemonApi(object):
         """Remove mountpath from target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
-        asynchronous HTTP request, please pass async=True
-        >>> thread = api.remove_mountpath_with_http_info(input_parameters, async=True)
+        asynchronous HTTP request, please pass async_req=True
+        >>> thread = api.remove_mountpath_with_http_info(input_parameters, async_req=True)
         >>> result = thread.get()
 
-        :param async bool
+        :param async_req bool
         :param InputParameters input_parameters: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
 
+        local_var_params = locals()
+
         all_params = ['input_parameters']  # noqa: E501
-        all_params.append('async')
+        all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
         all_params.append('_request_timeout')
 
-        params = locals()
-        for key, val in six.iteritems(params['kwargs']):
+        for key, val in six.iteritems(local_var_params['kwargs']):
             if key not in all_params:
                 raise TypeError(
                     "Got an unexpected keyword argument '%s'"
                     " to method remove_mountpath" % key
                 )
-            params[key] = val
-        del params['kwargs']
+            local_var_params[key] = val
+        del local_var_params['kwargs']
         # verify the required parameter 'input_parameters' is set
-        if ('input_parameters' not in params or
-                params['input_parameters'] is None):
+        if ('input_parameters' not in local_var_params or
+                local_var_params['input_parameters'] is None):
             raise ValueError("Missing the required parameter `input_parameters` when calling `remove_mountpath`")  # noqa: E501
 
         collection_formats = {}
@@ -485,8 +490,8 @@ class DaemonApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'input_parameters' in params:
-            body_params = params['input_parameters']
+        if 'input_parameters' in local_var_params:
+            body_params = local_var_params['input_parameters']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501
@@ -508,8 +513,8 @@ class DaemonApi(object):
             files=local_var_files,
             response_type=None,  # noqa: E501
             auth_settings=auth_settings,
-            async=params.get('async'),
-            _return_http_data_only=params.get('_return_http_data_only'),
-            _preload_content=params.get('_preload_content', True),
-            _request_timeout=params.get('_request_timeout'),
+            async_req=local_var_params.get('async_req'),
+            _return_http_data_only=local_var_params.get('_return_http_data_only'),  # noqa: E501
+            _preload_content=local_var_params.get('_preload_content', True),
+            _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)

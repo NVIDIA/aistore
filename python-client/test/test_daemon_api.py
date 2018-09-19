@@ -58,7 +58,7 @@ class TestDaemonApi(unittest.TestCase):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target_id = smap.tmap.keys()[0]
         target_port = target_id[-4:]
-        primary_proxy_port = smap.proxy_si.daemon_port
+        primary_proxy_port = smap.proxy_si.public_net.daemon_port
         print target_port, target_id
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
@@ -75,7 +75,7 @@ class TestDaemonApi(unittest.TestCase):
     def test_get_stats(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target_port = smap.tmap.keys()[0][-4:]
-        primary_proxy_port = smap.proxy_si.daemon_port
+        primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         stats = DictParser.parse(self.daemon.get(self.models.GetWhat.STATS))
@@ -87,7 +87,7 @@ class TestDaemonApi(unittest.TestCase):
     def test_get_mountpaths(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target_port = smap.tmap.keys()[0][-4:]
-        primary_proxy_port = smap.proxy_si.daemon_port
+        primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         mountpaths = DictParser.parse(
@@ -100,7 +100,7 @@ class TestDaemonApi(unittest.TestCase):
     def test_disable_enable_mountpath(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target_port = smap.tmap.keys()[0][-4:]
-        primary_proxy_port = smap.proxy_si.daemon_port
+        primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         localSubdir = target_port[-1]
@@ -125,7 +125,7 @@ class TestDaemonApi(unittest.TestCase):
     def test_remove_add_mountpath(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target_port = smap.tmap.keys()[0][-4:]
-        primary_proxy_port = smap.proxy_si.daemon_port
+        primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         localSubdir = target_port[-1]

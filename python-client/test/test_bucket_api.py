@@ -121,7 +121,7 @@ class TestBucketApi(unittest.TestCase):
         new_bucket_name = uuid.uuid4().hex
         input_params = self.models.InputParameters(
             self.models.Actions.RENAMELB, new_bucket_name)
-        log.info("RENAME BUCKET from [%s] to ", bucket_name, new_bucket_name)
+        log.info("RENAME BUCKET from [%s] to %s", bucket_name, new_bucket_name)
         self.bucket.perform_operation(bucket_name, input_params)
         self.assertFalse(self.__check_if_local_bucket_exists(bucket_name),
                          "Old bucket [%s] exists in local buckets"
@@ -140,11 +140,18 @@ class TestBucketApi(unittest.TestCase):
         """
         bucket_name = self.__create_local_bucket()
         input_params = self.models.InputParameters(self.models.Actions.SETPROPS)
+        cksum_conf = self.models.BucketPropsCksum(
+            checksum="inherit",
+            validate_checksum_cold_get=False,
+            validate_checksum_warm_get=False,
+            enable_read_range_checksum=False,
+        )
         input_params.value = self.models.BucketProps(
             self.models.CloudProvider.DFC,
             self.NEXT_TIER_URL,
             self.models.RWPolicy.NEXT_TIER,
-            self.models.RWPolicy.NEXT_TIER
+            self.models.RWPolicy.NEXT_TIER,
+            cksum_conf,
         )
         self.bucket.set_properties(bucket_name, input_params)
 
@@ -291,7 +298,7 @@ class TestBucketApi(unittest.TestCase):
 
     def __check_if_local_bucket_exists(self, bucket_name):
         log.info("LIST BUCKET local names [%s]", bucket_name)
-        bucket_names = self.bucket.list_names(local=True)
+        bucket_names = self.bucket.list_names(loc=True)
         self.assertTrue(len(bucket_names.cloud) == 0,
                         "Cloud buckets returned when requesting for only "
                         "local buckets")

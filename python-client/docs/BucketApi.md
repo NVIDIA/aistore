@@ -104,7 +104,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **list_names**
-> BucketNames list_names(local=local)
+> BucketNames list_names(loc=loc)
 
 Get bucket names
 
@@ -118,11 +118,11 @@ from pprint import pprint
 
 # create an instance of the API class
 api_instance = openapi_client.BucketApi()
-local = True # bool | Get only local bucket names (optional)
+loc = True # bool | Get only local bucket names (optional)
 
 try:
     # Get bucket names
-    api_response = api_instance.list_names(local=local)
+    api_response = api_instance.list_names(loc=loc)
     pprint(api_response)
 except ApiException as e:
     print("Exception when calling BucketApi->list_names: %s\n" % e)
@@ -132,7 +132,7 @@ except ApiException as e:
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **local** | **bool**| Get only local bucket names | [optional] 
+ **loc** | **bool**| Get only local bucket names | [optional] 
 
 ### Return type
 
@@ -145,7 +145,7 @@ No authorization required
 ### HTTP request headers
 
  - **Content-Type**: Not defined
- - **Accept**: application/jsontext/plain
+ - **Accept**: application/json, text/plain
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
@@ -193,7 +193,7 @@ No authorization required
 ### HTTP request headers
 
  - **Content-Type**: application/json
- - **Accept**: application/jsontext/plain
+ - **Accept**: application/json, text/plain
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 

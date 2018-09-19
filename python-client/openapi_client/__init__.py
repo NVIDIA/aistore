@@ -15,6 +15,8 @@
 
 from __future__ import absolute_import
 
+__version__ = "1.0.0"
+
 # import apis into sdk package
 from openapi_client.api.bucket_api import BucketApi
 from openapi_client.api.cluster_api import ClusterApi
@@ -28,6 +30,7 @@ from openapi_client.configuration import Configuration
 from openapi_client.models.actions import Actions
 from openapi_client.models.bucket_names import BucketNames
 from openapi_client.models.bucket_props import BucketProps
+from openapi_client.models.bucket_props_cksum import BucketPropsCksum
 from openapi_client.models.cloud_provider import CloudProvider
 from openapi_client.models.cluster_map import ClusterMap
 from openapi_client.models.cluster_statistics import ClusterStatistics
@@ -57,6 +60,7 @@ from openapi_client.models.headers import Headers
 from openapi_client.models.input_parameters import InputParameters
 from openapi_client.models.keep_alive_tracker_configuration import KeepAliveTrackerConfiguration
 from openapi_client.models.list_parameters import ListParameters
+from openapi_client.models.net_info import NetInfo
 from openapi_client.models.object_properties import ObjectProperties
 from openapi_client.models.object_properties_request_params import ObjectPropertiesRequestParams
 from openapi_client.models.object_property_list import ObjectPropertyList
