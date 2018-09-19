@@ -995,10 +995,14 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh
 
 		for _, newEntry := range rb.entries {
 			nm := newEntry.Name
-			if entry, ok := bmap[nm]; ok {
-				entry.IsCached = true
+			// Do not update the entry if it already contains up-to-date information
+			if entry, ok := bmap[nm]; ok && !entry.IsCached {
 				entry.Atime = newEntry.Atime
 				entry.Status = newEntry.Status
+				// Status not OK means the object is temporarily misplaced and
+				// the object cannot be marked as cached.
+				// Such objects will retreive data from Cloud on GET request
+				entry.IsCached = newEntry.Status == api.ObjStatusOK
 			}
 		}
 	}

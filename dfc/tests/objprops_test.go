@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/iosgl"
@@ -236,9 +235,16 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tlogf("Removing a target: %s\n", removedSid)
 	err := client.UnregisterTarget(proxyURL, removedSid)
 	checkFatal(err, t)
-	waitProgressBar("Removing: ", time.Second*10)
+	smap, err = waitForPrimaryProxy(
+		proxyURL,
+		"target is gone",
+		smap.Version, testing.Verbose(),
+		len(smap.Pmap),
+		len(smap.Tmap)-1,
+	)
+	checkFatal(err, t)
 
-	tlogf("Target %s is removed\n", removedSid)
+	tlogf("Target %s [%s] is removed\n", removedSid, removedTargetDirectURL)
 
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, isLocalBucket)
@@ -246,22 +252,15 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tlogf("Reregistering target...\n")
 	err = client.RegisterTarget(removedSid, removedTargetDirectURL, smap)
 	checkFatal(err, t)
-	for i := 0; i < 25; i++ {
-		time.Sleep(time.Second)
-		smap = getClusterMap(t, proxyURL)
-		if len(smap.Tmap) == l {
-			break
-		}
-	}
-
-	smap = getClusterMap(t, proxyURL)
-	if l != len(smap.Tmap) {
-		t.Errorf("Target failed to reregister. Current number of targets: %d (expected %d)", len(smap.Tmap), l)
-	}
-	//
-	// wait for rebalance to run its course
-	//
-	waitProgressBar("Rebalance: ", time.Second*10)
+	smap, err = waitForPrimaryProxy(
+		proxyURL,
+		"target is back",
+		smap.Version, testing.Verbose(),
+		len(smap.Pmap),
+		len(smap.Tmap)+1,
+	)
+	checkFatal(err, t)
+	waitForRebalanceToComplete(t, proxyURL)
 
 	tlogf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
@@ -368,7 +367,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		if _, ok := fileslist[m.Name]; !ok {
 			continue
 		}
-		tlogf("Intial version %s - %v\n", m.Name, m.Version)
+		tlogf("Initial version %s - %v\n", m.Name, m.Version)
 
 		if !m.IsCached && !isLocalBucket {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
