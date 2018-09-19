@@ -42,6 +42,10 @@ import (
 //
 // ================================================= Summary ===============================================
 
+// TODO
+// * "Best effort" async send object
+// * Replication config
+
 const (
 	replicationPolicyNone  = "none"
 	replicationPolicySync  = "sync"
@@ -177,8 +181,8 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 			src, dst = req.remoteDirectURL, r.directURL
 		}
 		glog.Errorf("Error occurred during object replication: "+
-			"action: %s %s, source: %s, destination: %s",
-			req.action, req.fqn, src, dst)
+			"action: %s %s, source: %s, destination: %s, err: %v",
+			req.action, req.fqn, src, dst, err)
 	}
 
 	if req.resultCh != nil {

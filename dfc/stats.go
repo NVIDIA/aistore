@@ -227,6 +227,8 @@ func (t *targetCoreStats) initStatsTracker() {
 	t.proxyCoreStats.initStatsTracker()
 
 	t.Tracker.register("put.μs", statsKindLatency)
+	t.Tracker.register("put.replication.n", statsKindCounter)
+	t.Tracker.register("put.replication.μs", statsKindLatency)
 	t.Tracker.register("get.cold.n", statsKindCounter)
 	t.Tracker.register("get.cold.size", statsKindCounter)
 	t.Tracker.register("lru.evict.size", statsKindCounter)
@@ -247,8 +249,6 @@ func (t *targetCoreStats) initStatsTracker() {
 	t.Tracker.register("reb.local.n", statsKindCounter)
 	t.Tracker.register("reb.global.size", statsKindCounter)
 	t.Tracker.register("reb.local.size", statsKindCounter)
-	t.Tracker.register("replication.put.n", statsKindCounter)
-	t.Tracker.register("replication.put.µs", statsKindLatency)
 }
 
 func (p *proxyCoreStats) MarshalJSON() ([]byte, error) {

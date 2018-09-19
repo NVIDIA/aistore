@@ -15,6 +15,10 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
+const (
+	fakeDaemonID = "fakeDaemonId"
+)
+
 func TestReplicationRunnerStop(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS()
 	tr := newFakeTargetrunner()
@@ -37,7 +41,7 @@ func TestReplicationRunnerStop(t *testing.T) {
 	}
 }
 
-func TestReplicationSendNonExistingFile(t *testing.T) {
+func TestReplicationSendNonExistingObject(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS()
 	cleanMountpaths()
 
@@ -56,6 +60,6 @@ func TestReplicationSendNonExistingFile(t *testing.T) {
 // newFakeTargetrunner returns a fake targetrunner initialized for replication tests
 func newFakeTargetrunner() *targetrunner {
 	t := &targetrunner{}
-	t.si = newDaemonInfo("fake_id", httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	t.si = newDaemonInfo(fakeDaemonID, httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	return t
 }

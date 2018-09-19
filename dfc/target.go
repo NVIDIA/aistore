@@ -198,6 +198,12 @@ func (t *targetrunner) run() error {
 		t.registerInternalNetHandler("/", invalhdlr)
 	}
 
+	// Replication network
+	if ctx.config.Net.UseRepl {
+		t.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
+		t.registerReplNetHandler("/", invalhdlr)
+	}
+
 	glog.Infof("Target %s is ready", t.si.DaemonID)
 	glog.Flush()
 	pid := int64(os.Getpid())
@@ -2080,15 +2086,16 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	}
 	err := getreplicationrunner().reqReceiveReplica(replicaSrc, fqn, r)
 
-	if err == nil {
-		delta := time.Since(started)
-		t.statsif.addMany(namedVal64{"replication.put.n", 1}, namedVal64{"replication.put.µs", int64(delta / time.Microsecond)})
-		if glog.V(4) {
-			glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
-		}
+	if err != nil {
+		return err.Error()
 	}
 
-	return err.Error()
+	delta := time.Since(started)
+	t.statsif.addMany(namedVal64{"put.replication.n", 1}, namedVal64{"put.replication.μs", int64(delta / time.Microsecond)})
+	if glog.V(4) {
+		glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
+	}
+	return ""
 }
 
 func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {

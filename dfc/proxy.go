@@ -150,6 +150,12 @@ func (p *proxyrunner) run() error {
 		}
 	}
 
+	// Replication network
+	if ctx.config.Net.UseRepl {
+		p.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
+		p.registerReplNetHandler("/", invalhdlr)
+	}
+
 	glog.Infof("%s: [public net] listening on: %s", p.si.DaemonID, p.si.PublicNet.DirectURL)
 	if p.si.PublicNet.DirectURL != p.si.InternalNet.DirectURL {
 		glog.Infof("%s: [internal net] listening on: %s", p.si.DaemonID, p.si.InternalNet.DirectURL)
