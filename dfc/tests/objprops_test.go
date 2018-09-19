@@ -279,6 +279,10 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 			continue
 		}
 
+		if m.Status != api.ObjStatusOK {
+			continue
+		}
+
 		objFound++
 
 		if !m.IsCached && !isLocalBucket {

@@ -226,6 +226,13 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 3.
+	_, newPrimaryURL, err := chooseNextProxy(&m.smap)
+	// use a new proxuURL because primaryCrashElectRestart has a side-effect:
+	// it changes the primary proxy. Without the change putRandomFiles is
+	// failing while the current primary is restarting and rejoining
+	m.proxyURL = newPrimaryURL
+	checkFatal(err, t)
+
 	m.wg.Add(1)
 	go func() {
 		primaryCrashElectRestart(t)
@@ -888,6 +895,8 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Init. metadata
 	saveClusterState(&md)
+	mdAfterRebalance.proxyURL = md.proxyURL
+
 	if md.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", md.originalTargetCount)
 	}

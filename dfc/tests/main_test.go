@@ -47,6 +47,11 @@ type workres struct {
 
 func Test_download(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
+
+	if !isCloudBucket(t, proxyURL, clibucket) {
+		t.Skip("test requires a Cloud bucket")
+	}
+
 	if err := client.Tcping(proxyURL); err != nil {
 		tlogf("%s: %v\n", proxyURL, err)
 		os.Exit(1)
