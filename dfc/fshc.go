@@ -363,7 +363,7 @@ func (f *fshc) testMountpath(filepath, mountpath string,
 	}
 
 	sgl := iosgl.NewSGL(0)
-	defer sgl.Free()
+	defer sgl.Reclaim()
 
 	totalReads, totalWrites := 0, 0
 	// first, read the file that causes the error, if it is defined

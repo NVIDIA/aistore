@@ -19,8 +19,8 @@ const (
 	minSizeUnknown     = 32 * common.KiB
 )
 
-var fixedSizes = []int64{4 * common.KiB, 16 * common.KiB, 32 * common.KiB, 64 * common.KiB, 128 * common.KiB}
-var allSlabs = []*Slab{nil, nil, nil, nil, nil} // Note: the length of allSlabs must equal the length of fixedSizes.
+var fixedSizes = []int64{4 * common.KiB, 8 * common.KiB, 16 * common.KiB, 32 * common.KiB, 64 * common.KiB, 128 * common.KiB}
+var allSlabs = []*Slab{nil, nil, nil, nil, nil, nil} // Note: the length of allSlabs must equal the length of fixedSizes.
 
 func init() {
 	for i, f := range fixedSizes {
@@ -28,6 +28,13 @@ func init() {
 	}
 }
 
+//
+// SGL: implements io.ReadWriteCloser  + Reset (see https://golang.org/pkg/io/#ReadWriteCloser)
+// NOTE:
+//	The package does not provide any mechanism to limit the sizes
+//	of allocated slabs or to react on memory pressure by dynamically shrinking slabs
+//	at runtime. The responsibility to call sgl.Reclaim (see below) lies with the caller.
+//
 type SGL struct {
 	sgl  [][]byte
 	slab *Slab
@@ -119,10 +126,29 @@ func (z *SGL) Free() {
 	for i := 0; i < len(z.sgl); i++ {
 		z.slab.Free(z.sgl[i])
 	}
-	z.sgl = nil
+	z.sgl = z.sgl[:0]
+	z.sgl, z.slab = nil, nil
 	z.woff = 0xDEADBEEF
 }
 
+// Reclaim slab-allocated memory on demand
+// Quoting https://golang.org/pkg/sync/#Pool:
+// "Any item stored in the Pool may be removed automatically at any time without notification."
+// Meaning, GC. However, when GC starts "shrinking" the Pool, it is may be already too late
+// in a certain sense.
+// Use this method to explicitly dereference buffers that belong to this SGL.
+func (z *SGL) Reclaim() {
+	for i := 0; i < len(z.sgl); i++ {
+		z.sgl[i] = nil
+	}
+	z.sgl = z.sgl[:0]
+	z.sgl, z.slab = nil, nil
+	z.woff = 0xDEADBEEF
+}
+
+//
+// SGL Reader - a wrapper on top of SGL that adds Seek() capability
+//
 type Reader struct {
 	z    *SGL
 	roff int64
@@ -170,6 +196,9 @@ func (r *Reader) Open() (io.ReadCloser, error) {
 
 func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
 
+//
+// Slab
+//
 type Slab struct {
 	pool      *sync.Pool
 	fixedSize int64
