@@ -333,7 +333,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.reverseDP(w, r, si)
 		delta := time.Since(started)
-		p.statsif.add("get.μs", int64(delta))
+		p.statsif.add(statGetLatency, int64(delta))
 	} else {
 		if glog.V(4) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
@@ -359,7 +359,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
-	p.statsif.add("get.n", 1)
+	p.statsif.add(statGetCount, 1)
 }
 
 // PUT /v1/objects
@@ -393,7 +393,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add("put.n", 1)
+	p.statsif.add(statPutCount, 1)
 }
 
 // DELETE { action } /v1/buckets
@@ -462,7 +462,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add("del.n", 1)
+	p.statsif.add(statDeleteCount, 1)
 }
 
 // [METHOD] /v1/metasync
@@ -533,9 +533,9 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
 	rr.Lock()
-	rr.Core.Tracker["uptime.μs"].Value = int64(time.Since(p.starttime) / time.Microsecond)
+	rr.Core.Tracker[statUptimeLatency].Value = int64(time.Since(p.starttime) / time.Microsecond)
 	if p.startedup(0) == 0 {
-		rr.Core.Tracker["uptime.μs"].Value = 0
+		rr.Core.Tracker[statUptimeLatency].Value = 0
 	}
 	jsbytes, err := jsoniter.Marshal(rr.Core)
 	rr.Unlock()
@@ -629,7 +629,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
-		p.statsif.addMany(namedVal64{"lst.n", 1}, namedVal64{"lst.μs", int64(delta)})
+		p.statsif.addMany(namedVal64{statListCount, 1}, namedVal64{statListLatency, int64(delta)})
 		if glog.V(3) {
 			lat := int64(delta / time.Microsecond)
 			if pagemarker != "" {
@@ -1326,7 +1326,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *api
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, lbucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add("ren.n", 1)
+	p.statsif.add(statRenameCount, 1)
 }
 
 func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *api.ActionMsg) {
@@ -2105,7 +2105,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsif.add("pst.n", 1)
+	p.statsif.add(statPostCount, 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()

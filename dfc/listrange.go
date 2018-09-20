@@ -158,7 +158,7 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 		go func() {
 			if err := operation(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done); err != nil {
 				glog.Errorf("Error performing list operation: %v", err)
-				t.statsif.add("err.list.n", 1)
+				t.statsif.add(statErrListCount, 1)
 			}
 		}()
 
@@ -192,7 +192,7 @@ func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, ra
 		if err := operation(t.contextWithAuth(r), bucket, rangeMsg.Prefix, rangeMsg.Regex,
 			min, max, rangeMsg.Deadline, done); err != nil {
 			glog.Errorf("Error performing range operation: %v", err)
-			t.statsif.add("err.range.n", 1)
+			t.statsif.add(statErrRangeCount, 1)
 		}
 	}()
 
@@ -404,11 +404,11 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	if glog.V(4) {
 		glog.Infof("PREFETCH: %s/%s", bucket, objname)
 	}
-	t.statsif.add("pre.n", 1)
-	t.statsif.add("pre.size", props.size)
+	t.statsif.add(statPrefetchCount, 1)
+	t.statsif.add(statPrefetchSize, props.size)
 	if vchanged {
-		t.statsif.add("vchange.size", props.size)
-		t.statsif.add("vchange.n", 1)
+		t.statsif.add(statVerChangeSize, props.size)
+		t.statsif.add(statVerChangeCount, 1)
 	}
 }
 

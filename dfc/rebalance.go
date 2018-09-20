@@ -425,8 +425,8 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 			}
 		}
 		if totalMovedN > 0 {
-			t.statsif.add("reb.global.n", totalMovedN)
-			t.statsif.add("reb.global.size", totalMovedBytes)
+			t.statsif.add(statRebalGlobalCount, totalMovedN)
+			t.statsif.add(statRebalGlobalSize, totalMovedBytes)
 		}
 	}
 	if newtargetid == t.si.DaemonID {
@@ -508,8 +508,8 @@ func (t *targetrunner) runLocalRebalance() {
 			}
 		}
 		if totalMovedN > 0 {
-			t.statsif.add("reb.local.n", totalMovedN)
-			t.statsif.add("reb.local.size", totalMovedBytes)
+			t.statsif.add(statRebalLocalCount, totalMovedN)
+			t.statsif.add(statRebalLocalSize, totalMovedBytes)
 		}
 	}
 

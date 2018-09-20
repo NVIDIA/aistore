@@ -35,6 +35,57 @@ const (
 	statsKindLatency = "latency"
 )
 
+// Stats common to proxyCoreStats and targetCoreStats
+const (
+	statGetCount            = "get.n"
+	statPutCount            = "put.n"
+	statPostCount           = "pst.n"
+	statDeleteCount         = "del.n"
+	statRenameCount         = "ren.n"
+	statListCount           = "lst.n"
+	statGetLatency          = "get.μs"
+	statListLatency         = "lst.μs"
+	statKeepAliveMinLatency = "kalive.μs.min"
+	statKeepAliveMaxLatency = "kalive.μs.max"
+	statKeepAliveLatency    = "kalive.μs"
+	statUptimeLatency       = "uptime.μs"
+	statErrCount            = "err.n"
+	statErrGetCount         = "err.get.n"
+	statErrDeleteCount      = "err.delete.n"
+	statErrPostCount        = "err.post.n"
+	statErrPutCount         = "err.put.n"
+	statErrHeadCount        = "err.head.n"
+	statErrListCount        = "err.list.n"
+	statErrRangeCount       = "err.range.n"
+)
+
+// Stats only found in targetCoreStats
+const (
+	statPutLatency       = "put.μs"
+	statGetColdCount     = "get.cold.n"
+	statGetColdSize      = "get.cold.size"
+	statLruEvictSize     = "lru.evict.size"
+	statLruEvictCount    = "lru.evict.n"
+	statTxCount          = "tx.n"
+	statTxSize           = "tx.size"
+	statRxCount          = "rx.n"
+	statRxSize           = "rx.size"
+	statPrefetchCount    = "pre.n"
+	statPrefetchSize     = "pre.size"
+	statVerChangeCount   = "vchange.n"
+	statVerChangeSize    = "vchange.size"
+	statErrCksumCount    = "err.cksum.n"
+	statErrCksumSize     = "err.cksum.size"
+	statGetRedirLatency  = "get.redir.μs"
+	statPutRedirLatency  = "put.redir.μs"
+	statRebalGlobalCount = "reb.global.n"
+	statRebalLocalCount  = "reb.local.n"
+	statRebalGlobalSize  = "reb.global.size"
+	statRebalLocalSize   = "reb.local.size"
+	statReplPutCount     = "replication.put.n"
+	statReplPutLatency   = "replication.put.µs"
+)
+
 //==============================
 //
 // types
@@ -195,26 +246,26 @@ func (stats statsTracker) register(key string, kind string) {
 func (stats statsTracker) registerCommonStats() {
 	common.Assert(stats != nil, "Error attempting to register stats into nil map")
 
-	stats.register("get.n", statsKindCounter)
-	stats.register("put.n", statsKindCounter)
-	stats.register("pst.n", statsKindCounter)
-	stats.register("del.n", statsKindCounter)
-	stats.register("ren.n", statsKindCounter)
-	stats.register("lst.n", statsKindCounter)
-	stats.register("get.μs", statsKindCounter)
-	stats.register("lst.μs", statsKindLatency)
-	stats.register("kalive.μs.min", statsKindLatency)
-	stats.register("kalive.μs.max", statsKindLatency)
-	stats.register("kalive.μs", statsKindLatency)
-	stats.register("uptime.μs", statsKindLatency)
-	stats.register("err.n", statsKindCounter)
-	stats.register("err.get.n", statsKindCounter)
-	stats.register("err.delete.n", statsKindCounter)
-	stats.register("err.post.n", statsKindCounter)
-	stats.register("err.put.n", statsKindCounter)
-	stats.register("err.head.n", statsKindCounter)
-	stats.register("err.list.n", statsKindCounter)
-	stats.register("err.range.n", statsKindCounter)
+	stats.register(statGetCount, statsKindCounter)
+	stats.register(statPutCount, statsKindCounter)
+	stats.register(statPostCount, statsKindCounter)
+	stats.register(statDeleteCount, statsKindCounter)
+	stats.register(statRenameCount, statsKindCounter)
+	stats.register(statListCount, statsKindCounter)
+	stats.register(statGetLatency, statsKindCounter)
+	stats.register(statListLatency, statsKindLatency)
+	stats.register(statKeepAliveMinLatency, statsKindLatency)
+	stats.register(statKeepAliveMaxLatency, statsKindLatency)
+	stats.register(statKeepAliveLatency, statsKindLatency)
+	stats.register(statUptimeLatency, statsKindLatency)
+	stats.register(statErrCount, statsKindCounter)
+	stats.register(statErrGetCount, statsKindCounter)
+	stats.register(statErrDeleteCount, statsKindCounter)
+	stats.register(statErrPostCount, statsKindCounter)
+	stats.register(statErrPutCount, statsKindCounter)
+	stats.register(statErrHeadCount, statsKindCounter)
+	stats.register(statErrListCount, statsKindCounter)
+	stats.register(statErrRangeCount, statsKindCounter)
 }
 
 func (p *proxyCoreStats) initStatsTracker() {
@@ -226,29 +277,29 @@ func (t *targetCoreStats) initStatsTracker() {
 	// Call the embedded procxyCoreStats init method then register our own stats
 	t.proxyCoreStats.initStatsTracker()
 
-	t.Tracker.register("put.μs", statsKindLatency)
-	t.Tracker.register("put.replication.n", statsKindCounter)
-	t.Tracker.register("put.replication.μs", statsKindLatency)
-	t.Tracker.register("get.cold.n", statsKindCounter)
-	t.Tracker.register("get.cold.size", statsKindCounter)
-	t.Tracker.register("lru.evict.size", statsKindCounter)
-	t.Tracker.register("lru.evict.n", statsKindCounter)
-	t.Tracker.register("tx.n", statsKindCounter)
-	t.Tracker.register("tx.size", statsKindCounter)
-	t.Tracker.register("rx.n", statsKindCounter)
-	t.Tracker.register("rx.size", statsKindCounter)
-	t.Tracker.register("pre.n", statsKindCounter)
-	t.Tracker.register("pre.size", statsKindCounter)
-	t.Tracker.register("vchange.n", statsKindCounter)
-	t.Tracker.register("vchange.size", statsKindCounter)
-	t.Tracker.register("err.cksum.n", statsKindCounter)
-	t.Tracker.register("err.cksum.size", statsKindCounter)
-	t.Tracker.register("get.redir.μs", statsKindLatency)
-	t.Tracker.register("put.redir.μs", statsKindLatency)
-	t.Tracker.register("reb.global.n", statsKindCounter)
-	t.Tracker.register("reb.local.n", statsKindCounter)
-	t.Tracker.register("reb.global.size", statsKindCounter)
-	t.Tracker.register("reb.local.size", statsKindCounter)
+	t.Tracker.register(statPutLatency, statsKindLatency)
+	t.Tracker.register(statGetColdCount, statsKindCounter)
+	t.Tracker.register(statGetColdSize, statsKindCounter)
+	t.Tracker.register(statLruEvictSize, statsKindCounter)
+	t.Tracker.register(statLruEvictCount, statsKindCounter)
+	t.Tracker.register(statTxCount, statsKindCounter)
+	t.Tracker.register(statTxSize, statsKindCounter)
+	t.Tracker.register(statRxCount, statsKindCounter)
+	t.Tracker.register(statRxSize, statsKindCounter)
+	t.Tracker.register(statPrefetchCount, statsKindCounter)
+	t.Tracker.register(statPrefetchSize, statsKindCounter)
+	t.Tracker.register(statVerChangeCount, statsKindCounter)
+	t.Tracker.register(statVerChangeSize, statsKindCounter)
+	t.Tracker.register(statErrCksumCount, statsKindCounter)
+	t.Tracker.register(statErrCksumSize, statsKindCounter)
+	t.Tracker.register(statGetRedirLatency, statsKindLatency)
+	t.Tracker.register(statPutRedirLatency, statsKindLatency)
+	t.Tracker.register(statRebalGlobalCount, statsKindCounter)
+	t.Tracker.register(statRebalLocalCount, statsKindCounter)
+	t.Tracker.register(statRebalGlobalSize, statsKindCounter)
+	t.Tracker.register(statRebalLocalSize, statsKindCounter)
+	t.Tracker.register(statReplPutCount, statsKindCounter)
+	t.Tracker.register(statReplPutLatency, statsKindLatency)
 }
 
 func (p *proxyCoreStats) MarshalJSON() ([]byte, error) {
@@ -328,17 +379,17 @@ func (r *statsrunner) add(name string, val int64) {
 func (r *statsrunner) addErrorHTTP(method string, val int64) {
 	switch method {
 	case http.MethodGet:
-		r.workCh <- namedVal64{"err.get.n", val}
+		r.workCh <- namedVal64{statErrGetCount, val}
 	case http.MethodDelete:
-		r.workCh <- namedVal64{"err.del.n", val}
+		r.workCh <- namedVal64{statErrDeleteCount, val}
 	case http.MethodPost:
-		r.workCh <- namedVal64{"err.post.n", val}
+		r.workCh <- namedVal64{statErrPostCount, val}
 	case http.MethodPut:
-		r.workCh <- namedVal64{"err.put.n", val}
+		r.workCh <- namedVal64{statErrPutCount, val}
 	case http.MethodHead:
-		r.workCh <- namedVal64{"err.head.n", val}
+		r.workCh <- namedVal64{statErrHeadCount, val}
 	default:
-		r.workCh <- namedVal64{"err.n", val}
+		r.workCh <- namedVal64{statErrCount, val}
 	}
 }
 
@@ -401,7 +452,7 @@ func (s *proxyCoreStats) doAdd(name string, val int64) {
 		val = int64(time.Duration(val) / time.Microsecond)
 	} else {
 		switch name {
-		case "pst.n", "del.n", "ren.n":
+		case statPostCount, statDeleteCount, statRenameCount:
 			s.statsdC.Send(name, metric{statsd.Counter, "count", val})
 		}
 	}
@@ -447,7 +498,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 			v.Value /= v.associatedVal
 		}
 	}
-	r.Core.Tracker["uptime.μs"].Value = int64(time.Since(r.starttime) / time.Microsecond)
+	r.Core.Tracker[statUptimeLatency].Value = int64(time.Since(r.starttime) / time.Microsecond)
 
 	b, err := jsoniter.Marshal(r.Core)
 
@@ -623,29 +674,29 @@ func (s *targetCoreStats) doAdd(name string, val int64) {
 
 	switch name {
 	// common
-	case "get.n", "put.n", "pst.n", "del.n", "ren.n", "lst.n",
-		"get.μs", "put.μs", "lst.μs",
-		"kalive.μs", "kalive.μs.min", "kalive.μs.max",
-		"err.n", "err.get.n", "err.delete.n", "err.post.n",
-		"err.put.n", "err.head.n", "err.list.n", "err.range.n":
+	case statGetCount, statPutCount, statPostCount, statDeleteCount, statRenameCount, statListCount,
+		statGetLatency, statPutLatency, statListLatency,
+		statKeepAliveLatency, statKeepAliveMinLatency, statKeepAliveMaxLatency,
+		statErrCount, statErrGetCount, statErrDeleteCount, statErrPostCount,
+		statErrPutCount, statErrHeadCount, statErrListCount, statErrRangeCount:
 		s.proxyCoreStats.doAdd(name, val)
 		return
 	// target only
-	case "get.cold.size":
+	case statGetColdSize:
 		s.statsdC.Send("get.cold",
 			metric{statsd.Counter, "count", 1},
 			metric{statsd.Counter, "get.cold.size", val})
-	case "vchange.size":
+	case statVerChangeSize:
 		s.statsdC.Send("get.cold",
 			metric{statsd.Counter, "vchanged", 1},
 			metric{statsd.Counter, "vchange.size", val})
-	case "lru.evict.size", "tx.size", "rx.size", "err.cksum.size": // byte stats
+	case statLruEvictSize, statTxSize, statRxSize, statErrCksumSize: // byte stats
 		s.statsdC.Send(name, metric{statsd.Counter, "bytes", val})
-	case "lru.evict.n", "tx.n", "rx.n": // files stats
+	case statLruEvictCount, statTxCount, statRxCount: // files stats
 		s.statsdC.Send(name, metric{statsd.Counter, "files", val})
-	case "err.cksum.n": // counter stats
+	case statErrCksumCount: // counter stats
 		s.statsdC.Send(name, metric{statsd.Counter, "count", val})
-	case "get.redir.μs", "put.redir.μs": // latency stats
+	case statGetRedirLatency, statPutRedirLatency: // latency stats
 		s.Tracker[name].associatedVal++
 		s.statsdC.Send(name,
 			metric{statsd.Counter, "count", 1},
@@ -661,8 +712,8 @@ func (p PrefetchTargetStats) getStats(allXactionDetails []XactionDetails) []byte
 	rstor.RLock()
 	prefetchXactionStats := PrefetchTargetStats{
 		Xactions:           allXactionDetails,
-		NumBytesPrefetched: rstor.Core.Tracker["pre.n"].Value,
-		NumFilesPrefetched: rstor.Core.Tracker["pre.size"].Value,
+		NumBytesPrefetched: rstor.Core.Tracker[statPrefetchCount].Value,
+		NumFilesPrefetched: rstor.Core.Tracker[statPrefetchSize].Value,
 	}
 	rstor.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
@@ -675,10 +726,10 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) []byt
 	rstor.RLock()
 	rebalanceXactionStats := RebalanceTargetStats{
 		Xactions:     allXactionDetails,
-		NumRecvBytes: rstor.Core.Tracker["rx.size"].Value,
-		NumRecvFiles: rstor.Core.Tracker["rx.n"].Value,
-		NumSentBytes: rstor.Core.Tracker["tx.size"].Value,
-		NumSentFiles: rstor.Core.Tracker["tx.n"].Value,
+		NumRecvBytes: rstor.Core.Tracker[statRxSize].Value,
+		NumRecvFiles: rstor.Core.Tracker[statRxCount].Value,
+		NumSentBytes: rstor.Core.Tracker[statTxSize].Value,
+		NumSentFiles: rstor.Core.Tracker[statTxCount].Value,
 	}
 	rstor.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)

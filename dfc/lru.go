@@ -290,8 +290,8 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 		bevicted += fi.size
 		fevicted++
 	}
-	t.statsif.add("lru.evict.size", bevicted)
-	t.statsif.add("lru.evict.n", fevicted)
+	t.statsif.add(statLruEvictSize, bevicted)
+	t.statsif.add(statLruEvictCount, fevicted)
 	return nil
 }
 

@@ -405,7 +405,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
 	}
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
-		t.statsif.add("get.redir.μs", redelta)
+		t.statsif.add(statGetRedirLatency, redelta)
 	}
 	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
@@ -575,13 +575,13 @@ existslocally:
 			rd := readers.NewRandReader(dryRun.size)
 			if _, err = io.Copy(w, rd); err != nil {
 				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
-				t.statsif.add("err.get.n", 1)
+				t.statsif.add(statErrGetCount, 1)
 				return
 			}
 		}
 
 		delta := time.Since(started)
-		t.statsif.addMany(namedVal64{"get.n", 1}, namedVal64{"get.μs", int64(delta)})
+		t.statsif.addMany(namedVal64{statGetCount, 1}, namedVal64{statGetLatency, int64(delta)})
 		return
 	}
 	if size == 0 {
@@ -661,7 +661,7 @@ send:
 		}
 		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 		t.fshc(err, fqn)
-		t.statsif.add("err.get.n", 1)
+		t.statsif.add(statErrGetCount, 1)
 		return
 	}
 	if sendMore {
@@ -682,7 +682,7 @@ send:
 	}
 
 	delta := time.Since(started)
-	t.statsif.addMany(namedVal64{"get.n", 1}, namedVal64{"get.μs", int64(delta)})
+	t.statsif.addMany(namedVal64{statGetCount, 1}, namedVal64{statGetLatency, int64(delta)})
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
@@ -760,7 +760,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if redelta := t.redirectLatency(time.Now(), query); redelta != 0 {
-			t.statsif.add("put.redir.μs", redelta)
+			t.statsif.add(statPutRedirLatency, redelta)
 		}
 		// PUT
 		pid := query.Get(api.URLParamProxyID)
@@ -955,7 +955,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		tag, ok := t.listbucket(w, r, lbucket, &msg)
 		if ok {
 			delta := time.Since(started)
-			t.statsif.addMany(namedVal64{"lst.n", 1}, namedVal64{"lst.μs", int64(delta)})
+			t.statsif.addMany(namedVal64{statListCount, 1}, namedVal64{statListLatency, int64(delta)})
 			if glog.V(3) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
@@ -1549,10 +1549,10 @@ ret:
 		t.rtnamemap.unlockname(uname, true)
 	} else {
 		if vchanged {
-			t.statsif.addMany(namedVal64{"get.cold.n", 1}, namedVal64{"get.cold.size", props.size},
-				namedVal64{"vchange.size", props.size}, namedVal64{"vchange.n", 1})
+			t.statsif.addMany(namedVal64{statGetColdCount, 1}, namedVal64{statGetColdSize, props.size},
+				namedVal64{statVerChangeSize, props.size}, namedVal64{statVerChangeCount, 1})
 		} else {
-			t.statsif.addMany(namedVal64{"get.cold.n", 1}, namedVal64{"get.cold.size", props.size})
+			t.statsif.addMany(namedVal64{statGetColdCount, 1}, namedVal64{statGetColdSize, props.size})
 		}
 		t.rtnamemap.downgradelock(uname)
 	}
@@ -2060,7 +2060,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		}
 		if errstr == "" {
 			delta := time.Since(started)
-			t.statsif.addMany(namedVal64{"put.n", 1}, namedVal64{"put.μs", int64(delta)})
+			t.statsif.addMany(namedVal64{statPutCount, 1}, namedVal64{statPutLatency, int64(delta)})
 			if glog.V(4) {
 				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 			}
@@ -2091,7 +2091,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	}
 
 	delta := time.Since(started)
-	t.statsif.addMany(namedVal64{"put.replication.n", 1}, namedVal64{"put.replication.μs", int64(delta / time.Microsecond)})
+	t.statsif.addMany(namedVal64{statReplPutCount, 1}, namedVal64{statReplPutLatency, int64(delta / time.Microsecond)})
 	if glog.V(4) {
 		glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 	}
@@ -2299,7 +2299,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
-			t.statsif.addMany(namedVal64{"rx.n", 1}, namedVal64{"rx.size", size})
+			t.statsif.addMany(namedVal64{statRxCount, 1}, namedVal64{statRxSize, size})
 		}
 	}
 	return
@@ -2328,7 +2328,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
 
-		t.statsif.add("del.n", 1)
+		t.statsif.add(statDeleteCount, 1)
 	}
 
 	finfo, err := os.Stat(fqn)
@@ -2347,7 +2347,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		if err := os.Remove(fqn); err != nil {
 			return err
 		} else if evict {
-			t.statsif.addMany(namedVal64{"lru.evict.n", 1}, namedVal64{"lru.evict.size", finfo.Size()})
+			t.statsif.addMany(namedVal64{statLruEvictCount, 1}, namedVal64{statLruEvictSize, finfo.Size()})
 		}
 	}
 	return nil
@@ -2412,7 +2412,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 		} else {
-			t.statsif.add("ren.n", 1)
+			t.statsif.add(statRenameCount, 1)
 			if glog.V(3) {
 				glog.Infof("Renamed %s => %s", fqn, newfqn)
 			}
@@ -2576,7 +2576,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	response.Body.Close()
 	// stats
-	t.statsif.addMany(namedVal64{"tx.n", 1}, namedVal64{"tx.size", size})
+	t.statsif.addMany(namedVal64{statTxCount, 1}, namedVal64{statTxSize, size})
 	return ""
 }
 
@@ -3028,7 +3028,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
 
-				t.statsif.addMany(namedVal64{"err.cksum.n", 1}, namedVal64{"err.cksum.size", written})
+				t.statsif.addMany(namedVal64{statErrCksumCount, 1}, namedVal64{statErrCksumSize, written})
 				return
 			}
 		}
@@ -3045,7 +3045,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
 				objname, ohval[:8], nhval[:8], fqn)
 
-			t.statsif.addMany(namedVal64{"err.cksum.n", 1}, namedVal64{"err.cksum.size", written})
+			t.statsif.addMany(namedVal64{statErrCksumCount, 1}, namedVal64{statErrCksumSize, written})
 			return
 		}
 	} else {
@@ -3616,7 +3616,7 @@ func (t *targetrunner) pollClusterStarted() {
 			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.PublicNet.DirectURL, err, string(res.outjson))
 			continue
 		}
-		if proxystats.Tracker["uptime.μs"].Value != 0 {
+		if proxystats.Tracker[statUptimeLatency].Value != 0 {
 			break
 		}
 	}
