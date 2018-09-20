@@ -7,6 +7,7 @@ package dfc
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -63,16 +64,24 @@ type atimemap struct {
 
 type atimerunner struct {
 	namedrunner
-	chfqn       chan string             // FIXME: consider { fqn, xxhash }
-	chstop      chan struct{}           // Control channel for stopping
-	atimemap    *atimemap               // Access time map
-	chGetAtime  chan string             // Requests for file access times
-	chSendAtime chan accessTimeResponse // Returned file access times
+	chfqn      chan string             // FIXME: consider { fqn, xxhash }
+	chstop     chan struct{}           // Control channel for stopping
+	atimemap   *atimemap               // Access time map
+	chGetAtime chan *accessTimeRequest // Requests for file access times
 }
 
-type accessTimeResponse struct {
+// Each request to getAtime is encapsulated in an
+// accessTimeRequest. The wg member variable is used
+// to ensure each request for access time gets its
+// corresponding response. The accessTime and ok fields
+// are used to return the access time of the file
+// in the atimemap and whether it actually existed in
+// the atimemap respectively
+type accessTimeRequest struct {
 	accessTime time.Time
 	ok         bool
+	wg         *sync.WaitGroup
+	fqn        string
 }
 
 func newAtimeRunner() (r *atimerunner) {
@@ -80,8 +89,7 @@ func newAtimeRunner() (r *atimerunner) {
 	r.chstop = make(chan struct{}, 4)
 	r.chfqn = make(chan string, chfqnSize)
 	r.atimemap = &atimemap{fsToFilesMap: make(map[string]map[string]time.Time, atimeCacheFlushThreshold)}
-	r.chGetAtime = make(chan string)
-	r.chSendAtime = make(chan accessTimeResponse)
+	r.chGetAtime = make(chan *accessTimeRequest)
 	return
 }
 
@@ -100,8 +108,8 @@ loop:
 			}
 		case fqn := <-r.chfqn:
 			r.updateATimeInATimeMap(fqn)
-		case fqn := <-r.chGetAtime:
-			r.chSendAtime <- r.handleInputOnGetATimeChannel(fqn)
+		case request := <-r.chGetAtime:
+			r.handleInputOnGetATimeChannel(request)
 		case <-r.chstop:
 			ticker.Stop() // NOTE: not flushing cached atimes
 			break loop
@@ -126,8 +134,12 @@ func (r *atimerunner) touch(fqn string) {
 }
 
 // atime requests the most recent access time of a given file
-func (r *atimerunner) atime(fqn string) {
-	r.chGetAtime <- fqn
+func (r *atimerunner) atime(fqn string) (time.Time, bool) {
+	request := &accessTimeRequest{wg: &sync.WaitGroup{}, fqn: fqn}
+	request.wg.Add(1)
+	r.chGetAtime <- request
+	request.wg.Wait()
+	return request.accessTime, request.ok
 }
 
 // getNumberItemsToFlush estimates the number of timestamps that must be flushed
@@ -206,19 +218,19 @@ func (r *atimerunner) flush(fileSystem string, n int) {
 	}
 }
 
-func (r *atimerunner) handleInputOnGetATimeChannel(fqn string) accessTimeResponse {
+func (r *atimerunner) handleInputOnGetATimeChannel(request *accessTimeRequest) {
+	defer request.wg.Done()
 	if !ctx.config.LRU.LRUEnabled {
-		return accessTimeResponse{}
+		return
 	}
-	fileSystem := fqn2fs(fqn)
+	fileSystem := fqn2fs(request.fqn)
 	if fileSystem == "" {
-		return accessTimeResponse{}
+		return
 	}
 	if _, ok := r.atimemap.fsToFilesMap[fileSystem]; !ok {
-		return accessTimeResponse{}
+		return
 	}
-	accessTime, ok := r.atimemap.fsToFilesMap[fileSystem][fqn]
-	return accessTimeResponse{accessTime: accessTime, ok: ok}
+	request.accessTime, request.ok = r.atimemap.fsToFilesMap[fileSystem][request.fqn]
 }
 
 func (r *atimerunner) updateATimeInATimeMap(fqn string) {

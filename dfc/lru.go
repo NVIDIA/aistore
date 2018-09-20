@@ -200,10 +200,9 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	usetime := atime
 
 	aTimeRunner := getatimerunner()
-	aTimeRunner.atime(fqn)
-	accessTimeResponse := <-aTimeRunner.chSendAtime
-	if accessTimeResponse.ok {
-		usetime = accessTimeResponse.accessTime
+	accessTime, ok := aTimeRunner.atime(fqn)
+	if ok {
+		usetime = accessTime
 	} else if mtime.After(atime) {
 		usetime = mtime
 	}

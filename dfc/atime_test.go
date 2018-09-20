@@ -62,17 +62,16 @@ func TestAtimerunnerTouch(t *testing.T) {
 	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fs]) != 1 {
 		t.Error("One file must be present in the map")
 	}
-	atimer.atime(tempFile.Name())
-	accessTimeResponse := <-atimer.chSendAtime
-	if !accessTimeResponse.ok {
+	accessTime, ok := atimer.atime(tempFile.Name())
+	if !ok {
 		t.Error("File is not present in atime map")
 	}
 
-	if accessTimeResponse.accessTime.After(time.Now()) {
+	if accessTime.After(time.Now()) {
 		t.Error("Access time exceeds current time")
 	}
 
-	if accessTimeResponse.accessTime.Before(timeBeforeTouch) {
+	if accessTime.Before(timeBeforeTouch) {
 		t.Error("Access time is too old")
 	}
 
@@ -92,9 +91,8 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 		t.Error("No files must be present in the map")
 	}
 
-	atimer.atime(fileName)
-	accessTimeResponse := <-atimer.chSendAtime
-	if accessTimeResponse.ok {
+	accessTime, ok := atimer.atime(fileName)
+	if ok {
 		t.Error("Atime should not be returned for a non existing file.")
 	}
 
@@ -118,9 +116,8 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 		t.Error("One file must be present in the map")
 	}
 
-	atimer.atime(tempFile.Name())
-	accessTimeResponse := <-atimer.chSendAtime
-	if !accessTimeResponse.ok {
+	accessTime, ok := atimer.atime(tempFile.Name())
+	if !ok {
 		t.Errorf("File [%s] is not present in atime map", tempFile.Name())
 	}
 
@@ -130,15 +127,14 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	atimer.touch(tempFile.Name())
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 
-	atimer.atime(tempFile.Name())
-	accessTimeResponseNext := <-atimer.chSendAtime
-	if !accessTimeResponseNext.ok {
+	accessTimeNext, okNext := atimer.atime(tempFile.Name())
+	if !okNext {
 		t.Errorf("File [%s] is not present in atime map", tempFile.Name())
 	}
 
-	if !accessTimeResponseNext.accessTime.After(accessTimeResponse.accessTime) {
+	if !accessTimeNext.After(accessTime) {
 		t.Errorf("Access time was not updated. First access: %v, Second access: %v",
-			accessTimeResponse.accessTime, accessTimeResponseNext.accessTime)
+			accessTime, accessTimeNext)
 	}
 
 	atimer.stop(fmt.Errorf("test"))
@@ -160,9 +156,8 @@ func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fs]) != 1 {
 		t.Error("One file must be present in the map")
 	}
-	atimer.atime(tempFile.Name())
-	accessTimeResponse := <-atimer.chSendAtime
-	if !accessTimeResponse.ok {
+	accessTime, ok := atimer.atime(tempFile.Name())
+	if !ok {
 		t.Errorf("File [%s] is not present in atime map", tempFile.Name())
 	}
 
@@ -177,9 +172,8 @@ func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 		t.Error("Two files must be present in the map")
 	}
 
-	atimer.atime(tempFile2.Name())
-	accessTimeResponse = <-atimer.chSendAtime
-	if !accessTimeResponse.ok {
+	accessTime, ok = atimer.atime(tempFile2.Name())
+	if !ok {
 		t.Errorf("File [%s] is not present in atime map", tempFile2.Name())
 	}
 
@@ -229,9 +223,8 @@ func TestAtimeNonExistingFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	atimer := newAtimeRunner()
 	go atimer.run()
-	atimer.atime("test")
-	accessTimeResponse := <-atimer.chSendAtime
-	if accessTimeResponse.ok {
+	accessTime, ok := atimer.atime("test")
+	if ok {
 		t.Errorf("Expected to fail while getting atime of a non existing file.")
 	}
 }
