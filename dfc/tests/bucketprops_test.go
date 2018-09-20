@@ -32,6 +32,8 @@ func TestResetBucketProps(t *testing.T) {
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierURL
 	bucketProps.ReadPolicy = dfc.RWPolicyNextTier

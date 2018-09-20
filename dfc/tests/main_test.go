@@ -621,6 +621,8 @@ func TestHeadLocalBucket(t *testing.T) {
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierURL
 	bucketProps.ReadPolicy = dfc.RWPolicyNextTier
@@ -700,6 +702,7 @@ func TestHeadCloudBucket(t *testing.T) {
 func TestHeadObject(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	fileName := "headobject_test_file"
 	fileSize := 1024
