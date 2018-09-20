@@ -201,7 +201,7 @@ func (stats statsTracker) registerCommonStats() {
 	stats.register("del.n", statsKindCounter)
 	stats.register("ren.n", statsKindCounter)
 	stats.register("lst.n", statsKindCounter)
-	stats.register("put.μs", statsKindLatency)
+	stats.register("get.μs", statsKindCounter)
 	stats.register("lst.μs", statsKindLatency)
 	stats.register("kalive.μs.min", statsKindLatency)
 	stats.register("kalive.μs.max", statsKindLatency)
