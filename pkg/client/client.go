@@ -381,7 +381,6 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	if wg != nil {
 		defer wg.Done()
 	}
-
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, keyname)
 	if !silent {
 		fmt.Printf("DEL: %s\n", keyname)
@@ -491,8 +490,6 @@ func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) 
 
 func Evict(proxyURL, bucket string, fname string) error {
 	var (
-		req    *http.Request
-		r      *http.Response
 		injson []byte
 		err    error
 	)
@@ -504,21 +501,7 @@ func Evict(proxyURL, bucket string, fname string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, fname)
-	req, err = http.NewRequest(http.MethodDelete, url, bytes.NewBuffer(injson))
-	if err != nil {
-		return fmt.Errorf("Failed to create request: %v", err)
-	}
-
-	r, err = client.Do(req)
-	if r != nil {
-		r.Body.Close()
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return HTTPRequest(http.MethodDelete, url, bytes.NewBuffer(injson))
 }
 
 func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}, wait bool) error {
@@ -539,11 +522,7 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 		return fmt.Errorf("Failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if wait {
-		r, err = client.Do(req)
-	} else {
-		r, err = client.Do(req)
-	}
+	r, err = client.Do(req)
 	if r != nil {
 		r.Body.Close()
 	}
@@ -687,29 +666,7 @@ func SetBucketProps(proxyURL, bucket string, props dfc.BucketProps) error {
 	if err != nil {
 		return err
 	}
-
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
-	if err != nil {
-		return fmt.Errorf("failed to create new HTTP request, err = %v", err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to do PUT request, err = %v", err)
-	}
-	defer func() {
-		resp.Body.Close()
-	}()
-
-	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read response body, err = %s", err)
-		}
-		return fmt.Errorf("failed SetBucketProps, HTTP status code: %d, HTTP response body: %s, bucket: %s",
-			resp.StatusCode, string(b), bucket)
-	}
-	return nil
+	return HTTPRequest(http.MethodPut, url, bytes.NewReader(b))
 }
 
 func ResetBucketProps(proxyURL, bucket string) error {
@@ -719,27 +676,7 @@ func ResetBucketProps(proxyURL, bucket string) error {
 	if err != nil {
 		return err
 	}
-
-	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(b))
-	if err != nil {
-		return fmt.Errorf("failed to create new HTTP request, err = %v", err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to do PUT request, err = %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to read response body, err = %s", err)
-		}
-		return fmt.Errorf("failed ResetBucketProps, HTTP status code: %d, HTTP response body: %s, bucket: %s",
-			resp.StatusCode, string(b), bucket)
-	}
-	return nil
+	return HTTPRequest(http.MethodPut, url, bytes.NewReader(b))
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
@@ -1157,38 +1094,14 @@ func GetPrimaryProxy(url string) (string, error) {
 
 // HTTPRequest sends one HTTP request and checks result
 func HTTPRequest(method string, url string, msg io.Reader) error {
-	req, err := http.NewRequest(method, url, msg)
-	if err != nil {
-		return fmt.Errorf("Failed to create request, err = %v", err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("Failed to do request, err = %v", err)
-	}
-
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("Failed to read response body, err = %v", err)
-		}
-
-		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
-	}
-
-	return nil
+	_, err := HTTPRequestWithResp(method, url, msg)
+	return err
 }
 
-// GetLocalBucketNames returns list of all local buckets.
-func GetLocalBucketNames(proxyURL string) (*api.BucketNames, error) {
-	url := proxyURL + api.URLPath(api.Version, api.Buckets, "*") + fmt.Sprintf("?%s=true", api.URLParamLocal)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+// HTTPRequestWithResp sends one HTTP request, checks result and returns body of
+// response.
+func HTTPRequestWithResp(method string, url string, msg io.Reader) ([]byte, error) {
+	req, err := http.NewRequest(method, url, msg)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request, err = %v", err)
 	}
@@ -1204,13 +1117,24 @@ func GetLocalBucketNames(proxyURL string) (*api.BucketNames, error) {
 		}
 	}()
 
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read response body, err = %v", err)
+	if resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to read response body, err = %v", err)
+		}
+
+		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	return ioutil.ReadAll(resp.Body)
+}
+
+// GetLocalBucketNames returns list of all local buckets.
+func GetLocalBucketNames(proxyURL string) (*api.BucketNames, error) {
+	url := proxyURL + api.URLPath(api.Version, api.Buckets, "*") + fmt.Sprintf("?%s=true", api.URLParamLocal)
+	b, err := HTTPRequestWithResp(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	var buckets api.BucketNames
@@ -1286,7 +1210,6 @@ func EnableTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-
 	return HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
 }
 
@@ -1296,7 +1219,6 @@ func DisableTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-
 	return HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
 }
 
@@ -1306,7 +1228,6 @@ func AddTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-
 	return HTTPRequest(http.MethodPut, url, bytes.NewBuffer(msg))
 }
 
@@ -1316,7 +1237,6 @@ func RemoveTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-
 	return HTTPRequest(http.MethodDelete, url, bytes.NewBuffer(msg))
 }
 
@@ -1333,8 +1253,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Cluster, api.Daemon, sid)
-	err = HTTPRequest(http.MethodDelete, url, nil)
-	if err != nil {
+	if err = HTTPRequest(http.MethodDelete, url, nil); err != nil {
 		return err
 	}
 
@@ -1350,8 +1269,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 func RegisterTarget(sid, targetDirectURL string, smap dfc.Smap) error {
 	_, ok := smap.Tmap[sid]
 	url := targetDirectURL + api.URLPath(api.Version, api.Daemon, api.Register)
-	err := HTTPRequest(http.MethodPost, url, nil)
-	if err != nil {
+	if err := HTTPRequest(http.MethodPost, url, nil); err != nil {
 		return err
 	}
 

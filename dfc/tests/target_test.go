@@ -31,7 +31,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	}
 
 	url := smap.Tmap[sid].PublicNet.DirectURL + api.URLPath(api.Version, api.Objects, bucket, object)
-	if err = client.HTTPRequest(http.MethodPut, url, nil); err == nil {
+	if err := client.HTTPRequest(http.MethodPut, url, nil); err == nil {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }
