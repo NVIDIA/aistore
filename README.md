@@ -706,7 +706,11 @@ At the time of this writing, only LRU and re-checksumming support throttling.
 
 ## Replication
 
-Object replication is still in its prototype phase.
+Object replication in DFC is still in its prototype stage and enables replication by sending objects using HTTP(S) PUT requests from one DFC cluster to another.
+Each worker thread (aka _replicator_) is associated with exactly one configured file system and is tasked with sequential processing of replication requests related to objects
+stored on that file system. Requesting object replication from outside of DFC by a REST API call is not yet enabled, but replication service is for now intended to be used
+only by other components of DFC (e.g. multi-tiering). Object transfer is on both send and receive side protected by checksums, ensuring every byte is correctly transferred from
+one cluster to another. Picture below illustrates on a high level how replication service is designed and how object transfer is implemented using HTTP(S) PUT requests.
 
 <img src="images/replication-overview.png" alt="Replication overview" width="800">
 

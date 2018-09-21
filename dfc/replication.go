@@ -43,8 +43,9 @@ import (
 // ================================================= Summary ===============================================
 
 // TODO
-// * "Best effort" async send object
-// * Replication config
+// * Replication configuration
+// * Add a check validating that sending and receiving targets are not inside the same cluster
+// * On the receiving side do not calculate checksum of existing file if it's stored as xattr
 
 const (
 	replicationPolicyNone  = "none"
