@@ -8,8 +8,6 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,7 +26,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/OneOfOne/xxhash"
+	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
@@ -179,15 +177,6 @@ type ObjectProps struct {
 	Version string
 }
 
-// Reader is the interface a client works with to read in data and send to a HTTP server
-type Reader interface {
-	io.ReadCloser
-	io.Seeker
-	Open() (io.ReadCloser, error)
-	XXHash() string
-	Description() string
-}
-
 func (err ReqError) Error() string {
 	return err.message
 }
@@ -242,7 +231,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 
 		bufreader := bufio.NewReader(r.Body)
 		if validate {
-			length, hash, err = ReadWriteWithHash(bufreader, w)
+			length, hash, err = readers.ReadWriteWithHash(bufreader, w)
 			if err != nil {
 				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
 			}
@@ -501,13 +490,11 @@ func Evict(proxyURL, bucket string, fname string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, fname)
-	return HTTPRequest(http.MethodDelete, url, bytes.NewBuffer(injson))
+	return HTTPRequest(http.MethodDelete, url, readers.NewBytesReader(injson))
 }
 
 func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}, wait bool) error {
 	var (
-		req    *http.Request
-		r      *http.Response
 		injson []byte
 		err    error
 	)
@@ -517,16 +504,11 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 		return fmt.Errorf("Failed to marhsal api.ActionMsg: %v", err)
 	}
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	req, err = http.NewRequest(method, url, bytes.NewBuffer(injson))
-	if err != nil {
-		return fmt.Errorf("Failed to create request: %v", err)
+	headers := map[string]string{
+		"Content-Type": "application/json",
 	}
-	req.Header.Set("Content-Type", "application/json")
-	r, err = client.Do(req)
-	if r != nil {
-		r.Body.Close()
-	}
-	return err
+
+	return HTTPRequest(method, url, readers.NewBytesReader(injson), headers)
 }
 
 func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
@@ -666,7 +648,7 @@ func SetBucketProps(proxyURL, bucket string, props dfc.BucketProps) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPut, url, bytes.NewReader(b))
+	return HTTPRequest(http.MethodPut, url, readers.NewBytesReader(b))
 }
 
 func ResetBucketProps(proxyURL, bucket string) error {
@@ -676,7 +658,7 @@ func ResetBucketProps(proxyURL, bucket string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPut, url, bytes.NewReader(b))
+	return HTTPRequest(http.MethodPut, url, readers.NewBytesReader(b))
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
@@ -705,7 +687,7 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 }
 
 // Put sends a PUT request to the given URL
-func Put(proxyURL string, reader Reader, bucket string, key string, silent bool) error {
+func Put(proxyURL string, reader readers.Reader, bucket string, key string, silent bool) error {
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, key)
 	if !silent {
 		fmt.Printf("PUT: %s/%s\n", bucket, key)
@@ -757,7 +739,7 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 }
 
 // PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string, key string,
+func PutAsync(wg *sync.WaitGroup, proxyURL string, reader readers.Reader, bucket string, key string,
 	errch chan error, silent bool) {
 	defer wg.Done()
 	err := Put(proxyURL, reader, bucket, key, silent)
@@ -778,7 +760,7 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
+	err = HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
 	if err != nil {
 		return err
 	}
@@ -856,7 +838,7 @@ func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
+	err = HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
 	if err != nil {
 		return err
 	}
@@ -877,7 +859,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodDelete, url, bytes.NewBuffer(msg))
+	err = HTTPRequest(http.MethodDelete, url, readers.NewBytesReader(msg))
 	if err != nil {
 		return err
 	}
@@ -936,36 +918,6 @@ func GetConfig(server string) (HTTPLatencies, error) {
 		Proxy:     time.Now().Sub(tr.tsProxyConn),
 	}
 	return l, err
-}
-
-// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and calculate
-// xxHash on the data.
-func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
-	var (
-		total   int64
-		bufSize = 32768
-	)
-
-	buf := make([]byte, bufSize)
-	h := xxhash.New64()
-	mw := io.MultiWriter(h, w)
-	for {
-		n, err := r.Read(buf)
-		total += int64(n)
-		if err != nil && err != io.EOF {
-			return 0, "", err
-		}
-
-		if n == 0 {
-			break
-		}
-
-		mw.Write(buf[:n])
-	}
-
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
-	return total, hex.EncodeToString(b), nil
 }
 
 // ListBuckets returns all buckets in DFC (cloud and local)
@@ -1093,19 +1045,45 @@ func GetPrimaryProxy(url string) (string, error) {
 }
 
 // HTTPRequest sends one HTTP request and checks result
-func HTTPRequest(method string, url string, msg io.Reader) error {
-	_, err := HTTPRequestWithResp(method, url, msg)
+func HTTPRequest(method string, url string, msg readers.Reader, headers ...map[string]string) error {
+	_, err := HTTPRequestWithResp(method, url, msg, headers...)
 	return err
 }
 
 // HTTPRequestWithResp sends one HTTP request, checks result and returns body of
 // response.
-func HTTPRequestWithResp(method string, url string, msg io.Reader) ([]byte, error) {
-	req, err := http.NewRequest(method, url, msg)
+func HTTPRequestWithResp(method string, url string, msg readers.Reader, headers ...map[string]string) ([]byte, error) {
+	var (
+		req *http.Request
+		err error
+	)
+	if msg == nil {
+		req, err = http.NewRequest(method, url, msg)
+	} else {
+		handle, err := msg.Open()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to open msg, err: %v", err)
+		}
+		defer handle.Close()
+
+		req, err = http.NewRequest(method, url, handle)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request, err = %v", err)
 	}
 
+	if msg != nil {
+		req.GetBody = func() (io.ReadCloser, error) {
+			return msg.Open()
+		}
+	}
+
+	if len(headers) != 0 {
+		for key, value := range headers[0] {
+			req.Header.Set(key, value)
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to do request, err = %v", err)
@@ -1125,7 +1103,6 @@ func HTTPRequestWithResp(method string, url string, msg io.Reader) ([]byte, erro
 
 		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
-
 	return ioutil.ReadAll(resp.Body)
 }
 
@@ -1210,7 +1187,7 @@ func EnableTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
+	return HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
 }
 
 func DisableTargetMountpath(daemonUrl, mpath string) error {
@@ -1219,7 +1196,7 @@ func DisableTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPost, url, bytes.NewBuffer(msg))
+	return HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
 }
 
 func AddTargetMountpath(daemonUrl, mpath string) error {
@@ -1228,7 +1205,7 @@ func AddTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPut, url, bytes.NewBuffer(msg))
+	return HTTPRequest(http.MethodPut, url, readers.NewBytesReader(msg))
 }
 
 func RemoveTargetMountpath(daemonUrl, mpath string) error {
@@ -1237,7 +1214,7 @@ func RemoveTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodDelete, url, bytes.NewBuffer(msg))
+	return HTTPRequest(http.MethodDelete, url, readers.NewBytesReader(msg))
 }
 
 func UnregisterTarget(proxyURL, sid string) error {

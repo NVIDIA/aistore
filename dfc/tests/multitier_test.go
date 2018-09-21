@@ -6,7 +6,6 @@
 package dfc_test
 
 import (
-	"bytes"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -111,16 +110,10 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	defer nextTierMock.Close()
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
-	checkFatal(err, t)
+	err := client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(data))
 
-	resp, err := http.DefaultClient.Do(req)
 	checkFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code 200, received status code %d", resp.StatusCode)
-	}
 
 	err = client.Evict(proxyURL, clibucket, object)
 	checkFatal(err, t)
@@ -259,30 +252,18 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
-	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(localData))
+	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(localData))
 	checkFatal(err, t)
 
-	resp, err := http.DefaultClient.Do(req)
-	checkFatal(err, t)
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code 200, received status code %d", resp.StatusCode)
-	}
 	if nextTierMockForLocalBucketReached != 1 {
 		t.Errorf("Expected to hit nextTierMockForLocalBucket 1 time, actual: %d",
 			nextTierMockForLocalBucketReached)
 	}
 
 	u = proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	req, err = http.NewRequest(http.MethodPut, u, bytes.NewReader(cloudData))
+	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(cloudData))
 	checkFatal(err, t)
 
-	resp, err = http.DefaultClient.Do(req)
-	checkFatal(err, t)
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code 200, received status code %d", resp.StatusCode)
-	}
 	if nextTierMockForCloudBucketReached != 1 {
 		t.Errorf("Expected to hit nextTierMockForCloudBucket 1 time, actual: %d",
 			nextTierMockForCloudBucketReached)
@@ -315,16 +296,9 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
-	checkFatal(err, t)
-
-	resp, err := http.DefaultClient.Do(req)
+	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(data))
 	checkFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code 200, received status code %d", resp.StatusCode)
-	}
 
 	err = client.Evict(proxyURL, clibucket, object)
 	checkFatal(err, t)
@@ -362,16 +336,10 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(data))
+	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(data))
 	checkFatal(err, t)
 
-	resp, err := http.DefaultClient.Do(req)
-	checkFatal(err, t)
-	defer deleteCloudObject(proxyURL, clibucket, object, t)
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code 200, received status code %d", resp.StatusCode)
-	}
+	deleteCloudObject(proxyURL, clibucket, object, t)
 }
 
 func resetBucketProps(proxyURL, bucket string, t *testing.T) {

@@ -311,6 +311,7 @@ func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 		}
 
 		glog.Errorf("Failed to http-call %s %s: error %v", method, url, err)
+
 		err = m.proxy.detectPrimary()
 		if err != nil {
 			// primary change is not detected or failed - interrupt the loop

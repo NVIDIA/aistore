@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/iosgl"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
@@ -18,7 +17,7 @@ func TestFileReader(t *testing.T) {
 	}
 }
 
-func testReaderBasic(t *testing.T, r client.Reader, size int64) {
+func testReaderBasic(t *testing.T, r readers.Reader, size int64) {
 	_, err := r.Seek(0, io.SeekStart)
 	if err != nil {
 		t.Fatal("Failed to seek", err)
@@ -92,7 +91,7 @@ func testReaderBasic(t *testing.T, r client.Reader, size int64) {
 }
 
 // Note: These are testcases that fail when running on SGReader.
-func testReaderAdv(t *testing.T, r client.Reader, size int64) {
+func testReaderAdv(t *testing.T, r readers.Reader, size int64) {
 	buf := make([]byte, size)
 	_, err := r.Seek(0, io.SeekStart)
 	if err != nil {

@@ -5,10 +5,8 @@
 package dfc_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -518,19 +516,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		}
 
 		url := v.PublicNet.DirectURL + api.URLPath(api.Version, api.Daemon, api.SyncSmap)
-		req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(jsonMap))
-		checkFatal(err, t)
-
-		r, err := httpclient.Do(req)
-		checkFatal(err, t)
-
-		defer func(r *http.Response) {
-			if r.Body != nil {
-				r.Body.Close()
-			}
-		}(r)
-
-		_, err = ioutil.ReadAll(r.Body)
+		err := client.HTTPRequest(http.MethodPut, url, readers.NewBytesReader(jsonMap))
 		checkFatal(err, t)
 
 		n--
@@ -821,12 +807,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap dfc.Smap, directURL, toID,
 	url := directURL + api.URLPath(api.Version, api.Cluster, api.Proxy, toID)
 	// http://host:8081/v1/cluster/proxy/15205:8080
 	tlogf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
-	req, err := http.NewRequest(http.MethodPut, url, nil)
-	checkFatal(err, t)
-
-	r, err := httpclient.Do(req)
-	checkFatal(err, t)
-	r.Body.Close()
+	err := client.HTTPRequest(http.MethodPut, url, nil)
 
 	smap, err = waitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
 	checkFatal(err, t)
@@ -1151,46 +1132,12 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *dfc.Smap) e
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Cluster)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonDaemonInfo))
-	if err != nil {
-		return err
-	}
-
-	r, err := httpclient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if r.Body != nil {
-			r.Body.Close()
-		}
-	}()
-
-	_, err = ioutil.ReadAll(r.Body)
-	return err
+	return client.HTTPRequest(http.MethodPost, url, readers.NewBytesReader(jsonDaemonInfo))
 }
 
 func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
 	url := proxyURL + api.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
-	if err != nil {
-		return err
-	}
-
-	r, err := httpclient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if r.Body != nil {
-			r.Body.Close()
-		}
-	}()
-
-	_, err = ioutil.ReadAll(r.Body)
-	return err
+	return client.HTTPRequest(http.MethodDelete, url, nil)
 }
 
 type voteRetryMockTarget struct {

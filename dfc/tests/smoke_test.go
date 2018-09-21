@@ -187,7 +187,7 @@ func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []
 		}
 
 		var (
-			r   client.Reader
+			r   readers.Reader
 			err error
 		)
 		if sgl != nil {

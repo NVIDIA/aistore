@@ -512,7 +512,7 @@ func TestRenameObjects(t *testing.T) {
 		}
 
 		url := proxyURL + api.URLPath(api.Version, api.Objects, RenameLocalBucketName, RenameStr, fname)
-		if err := client.HTTPRequest(http.MethodPost, url, bytes.NewBuffer(injson)); err != nil {
+		if err := client.HTTPRequest(http.MethodPost, url, readers.NewBytesReader(injson)); err != nil {
 			t.Fatalf("Failed to send request, err = %v", err)
 		}
 

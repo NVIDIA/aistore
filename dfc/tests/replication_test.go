@@ -41,18 +41,12 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s\n", TestLocalBucketName, object, proxyURLRepl)
-	statusCode := httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, xxhash, reader)
-
-	if statusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code %d, received status code %d", http.StatusOK, statusCode)
-	}
+	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, xxhash, reader)
+	checkFatal(err, t)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLRepl)
-	statusCode = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, xxhash, reader)
-
-	if statusCode >= http.StatusBadRequest {
-		t.Errorf("Expected status code %d, received status code %d", http.StatusOK, statusCode)
-	}
+	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, xxhash, reader)
+	checkFatal(err, t)
 
 	client.Del(proxyURL, clibucket, object, nil, nil, true)
 }
@@ -72,38 +66,23 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	url := proxyURLRepl + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
-	req, err := http.NewRequest(http.MethodPut, url, reader)
-	checkFatal(err, t)
-	req.GetBody = func() (io.ReadCloser, error) {
-		return reader.Open()
+	headers := map[string]string{
+		api.HeaderDFCReplicationSrc: dummySrcURL,
 	}
-
-	req.Header.Add(api.HeaderDFCReplicationSrc, dummySrcURL)
-
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
-	resp, err := http.DefaultClient.Do(req)
-	checkFatal(err, t)
-	if resp.StatusCode == http.StatusOK {
+	err = client.HTTPRequest(http.MethodPut, url, reader, headers)
+
+	if err == nil {
 		t.Errorf("Replication PUT to local bucket without checksum didn't fail")
 	}
-	resp.Body.Close()
 
 	url = proxyURLRepl + api.URLPath(api.Version, api.Objects, clibucket, object)
-	req, err = http.NewRequest(http.MethodPut, url, reader)
-	checkFatal(err, t)
-	req.GetBody = func() (io.ReadCloser, error) {
-		return reader.Open()
-	}
-
-	req.Header.Add(api.HeaderDFCReplicationSrc, dummySrcURL)
-
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-	resp, err = http.DefaultClient.Do(req)
-	checkFatal(err, t)
-	if resp.StatusCode == http.StatusOK {
-		t.Errorf("Replication PUT to cloud bucket without checksum didn't fail")
+	err = client.HTTPRequest(http.MethodPut, url, reader, headers)
+
+	if err == nil {
+		t.Errorf("Replication PUT to local bucket without checksum didn't fail")
 	}
-	resp.Body.Close()
 }
 
 func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
@@ -121,17 +100,15 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
-	statusCode := httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, badChecksum, reader)
-
-	if statusCode == http.StatusOK {
+	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, badChecksum, reader)
+	if err == nil {
 		t.Errorf("Replication PUT to local bucket with bad checksum didn't fail")
 	}
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-	statusCode = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, badChecksum, reader)
-
-	if statusCode == http.StatusOK {
-		t.Errorf("Replication PUT to cloud bucket with bad checksum didn't fail")
+	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, badChecksum, reader)
+	if err == nil {
+		t.Errorf("Replication PUT to local bucket with bad checksum didn't fail")
 	}
 }
 
@@ -145,7 +122,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		proxyURLRepl = getPrimaryReplicationURL(t, proxyURLRO)
 		bucket       = clibucket
 		size         = fileSize
-		r            client.Reader
+		r            readers.Reader
 		sgl          *iosgl.SGL
 		errCnt       int
 		err          error
@@ -189,10 +166,10 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		}
 
 		tlogf("Receiving replica: %s (%d/%d)...\n", object, idx+1, numFiles)
-		statusCode := httpReplicationPut(t, dummySrcURL, proxyURLRepl, bucket, object, r.XXHash(), r)
-		if statusCode >= http.StatusBadRequest {
+		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, bucket, object, r.XXHash(), r)
+		if err != nil {
 			errCnt++
-			t.Errorf("ERROR: Expected status code %d, received status code %d\n", http.StatusOK, statusCode)
+			t.Errorf("ERROR: %v\n", err)
 		}
 	}
 	tlogf("Successful: %d/%d. Failed: %d/%d\n", numFiles-errCnt, numFiles, errCnt, numFiles)
@@ -216,21 +193,12 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 	return xxHashVal
 }
 
-func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader client.Reader) (statusCode int) {
+func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader readers.Reader) error {
 	url := dstProxyURL + api.URLPath(api.Version, api.Objects, bucket, object)
-	req, err := http.NewRequest(http.MethodPut, url, reader)
-	checkFatal(err, t)
-	req.GetBody = func() (io.ReadCloser, error) {
-		return reader.Open()
+	headers := map[string]string{
+		api.HeaderDFCReplicationSrc: srcURL,
+		api.HeaderDFCChecksumType:   dfc.ChecksumXXHash,
+		api.HeaderDFCChecksumVal:    xxhash,
 	}
-
-	req.Header.Add(api.HeaderDFCReplicationSrc, srcURL)
-	req.Header.Add(api.HeaderDFCChecksumType, dfc.ChecksumXXHash)
-	req.Header.Add(api.HeaderDFCChecksumVal, xxhash)
-
-	resp, err := http.DefaultClient.Do(req)
-	checkFatal(err, t)
-	statusCode = resp.StatusCode
-	resp.Body.Close()
-	return
+	return client.HTTPRequest(http.MethodPut, url, reader, headers)
 }

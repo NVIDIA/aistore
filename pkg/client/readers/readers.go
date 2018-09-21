@@ -1,4 +1,4 @@
-// Package readers holds various implementations of client.Reader
+// Package readers holds various implementations of Reader
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
@@ -19,7 +19,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/iosgl"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -33,6 +32,15 @@ const (
 	// ReaderTypeInMem defines the name for inmem reader
 	ReaderTypeInMem = "inmem"
 )
+
+// Reader is the interface a client works with to read in data and send to a HTTP server
+type Reader interface {
+	io.ReadCloser
+	io.Seeker
+	Open() (io.ReadCloser, error)
+	XXHash() string
+	Description() string
+}
 
 // populateData reads data from random source and writes to a writer,
 // calculates and returns xxhash (if needed)
@@ -76,7 +84,7 @@ func description(name, hash string) string {
 	return name + " xxhash " + hash[:8] + "..."
 }
 
-// randReader implements client.Reader.
+// randReader implements Reader.
 // It doesn't not use a file or allocated memory as data backing.
 type randReader struct {
 	seed   int64
@@ -86,9 +94,9 @@ type randReader struct {
 	xxHash string
 }
 
-var _ client.Reader = &randReader{}
+var _ Reader = &randReader{}
 
-// Read implements the client.Reader interface.
+// Read implements the Reader interface.
 func (r *randReader) Read(buf []byte) (int, error) {
 	available := r.size - r.offset
 	if available == 0 {
@@ -106,7 +114,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 	return actual, nil
 }
 
-// Open implements the client.Reader interface.
+// Open implements the Reader interface.
 // Returns a new rand reader using the same seed.
 func (r *randReader) Open() (io.ReadCloser, error) {
 	return &randReader{
@@ -117,12 +125,12 @@ func (r *randReader) Open() (io.ReadCloser, error) {
 	}, nil
 }
 
-// Close implements the client.Reader interface.
+// Close implements the Reader interface.
 func (r *randReader) Close() error {
 	return nil
 }
 
-// Seek implements the client.Reader interface.
+// Seek implements the Reader interface.
 func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	var abs int64
 
@@ -160,18 +168,18 @@ func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	return abs, nil
 }
 
-// XXHash implements the client.Reader interface.
+// XXHash implements the Reader interface.
 func (r *randReader) XXHash() string {
 	return r.xxHash
 }
 
-// Description implements the client.Reader interface.
+// Description implements the Reader interface.
 func (r *randReader) Description() string {
 	return description("RandReader", r.xxHash)
 }
 
 // NewRandReader returns a new randReader
-func NewRandReader(size int64, withHash bool) (client.Reader, error) {
+func NewRandReader(size int64, withHash bool) (Reader, error) {
 	var (
 		hash string
 		err  error
@@ -199,7 +207,7 @@ type inMemReader struct {
 	xxHash string
 }
 
-var _ client.Reader = &inMemReader{}
+var _ Reader = &inMemReader{}
 
 // bytesReaderCloser is a helper for being able to do multi read on a byte buffer
 type bytesReaderCloser struct {
@@ -210,28 +218,28 @@ func (q *bytesReaderCloser) Close() error {
 	return nil
 }
 
-// Open implements the client.Reader interface.
+// Open implements the Reader interface.
 func (r *inMemReader) Open() (io.ReadCloser, error) {
 	return &bytesReaderCloser{*bytes.NewReader(r.data.Bytes())}, nil
 }
 
-// Close implements the client.Reader interface.
+// Close implements the Reader interface.
 func (r *inMemReader) Close() error {
 	return nil
 }
 
-// Description implements the client.Reader interface.
+// Description implements the Reader interface.
 func (r *inMemReader) Description() string {
 	return description("InMemReader", r.xxHash)
 }
 
-// XXHash implements the client.Reader interface.
+// XXHash implements the Reader interface.
 func (r *inMemReader) XXHash() string {
 	return r.xxHash
 }
 
 // NewInMemReader returns a new inMemReader
-func NewInMemReader(size int64, withHash bool) (client.Reader, error) {
+func NewInMemReader(size int64, withHash bool) (Reader, error) {
 	data := bytes.NewBuffer(make([]byte, size))
 	data.Reset()
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -250,25 +258,25 @@ type fileReader struct {
 	xxHash   string
 }
 
-var _ client.Reader = &fileReader{}
+var _ Reader = &fileReader{}
 
-// Open implements the client.Reader interface.
+// Open implements the Reader interface.
 func (r *fileReader) Open() (io.ReadCloser, error) {
 	return os.Open(r.fullName)
 }
 
-// XXHash implements the client.Reader interface.
+// XXHash implements the Reader interface.
 func (r *fileReader) XXHash() string {
 	return r.xxHash
 }
 
-// Description implements the client.Reader interface.
+// Description implements the Reader interface.
 func (r *fileReader) Description() string {
 	return description("FileReader "+r.name, r.xxHash)
 }
 
 // NewFileReader creates/opens the file, populates it with random data, closes it and returns a new fileReader
-func NewFileReader(path, name string, size int64, withHash bool) (client.Reader, error) {
+func NewFileReader(path, name string, size int64, withHash bool) (Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	fn := path + "/" + name
 
@@ -293,7 +301,7 @@ func NewFileReader(path, name string, size int64, withHash bool) (client.Reader,
 //       data first, then returns the file as the source for DFC put. This reader doesn't generate a
 //       file but reads an existing file to compute xxHash, then returns the same file as source for
 //       DFC put.
-func NewFileReaderFromFile(fn string, withHash bool) (client.Reader, error) {
+func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, err
@@ -302,7 +310,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (client.Reader, error) {
 
 	var hash string
 	if withHash {
-		_, hash, err = client.ReadWriteWithHash(f, ioutil.Discard)
+		_, hash, err = ReadWriteWithHash(f, ioutil.Discard)
 	}
 
 	return &fileReader{nil, fn, "" /* dfc prefix */, hash}, nil
@@ -313,20 +321,20 @@ type sgReader struct {
 	xxHash string
 }
 
-var _ client.Reader = &sgReader{}
+var _ Reader = &sgReader{}
 
-// Description implements the client.Reader interface.
+// Description implements the Reader interface.
 func (r *sgReader) Description() string {
 	return description("SGReader", r.xxHash)
 }
 
-// XXHash implements the client.Reader interface.
+// XXHash implements the Reader interface.
 func (r *sgReader) XXHash() string {
 	return r.xxHash
 }
 
 // NewSGReader returns a new sgReader
-func NewSGReader(sgl *iosgl.SGL, size int64, withHash bool) (client.Reader, error) {
+func NewSGReader(sgl *iosgl.SGL, size int64, withHash bool) (Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash, err := populateData(sgl, size, withHash, rnd)
 	if err != nil {
@@ -334,6 +342,40 @@ func NewSGReader(sgl *iosgl.SGL, size int64, withHash bool) (client.Reader, erro
 	}
 
 	return &sgReader{iosgl.NewReader(sgl), hash}, nil
+}
+
+type bytesReader struct {
+	*bytes.Buffer
+	buf []byte
+}
+
+// Open implements the Reader interface.
+func (r *bytesReader) Open() (io.ReadCloser, error) {
+	return &bytesReader{bytes.NewBuffer(r.buf), r.buf}, nil
+}
+
+// Close implements the Reader interface.
+func (r *bytesReader) Close() error {
+	return nil
+}
+
+// Description implements the Reader interface.
+func (r *bytesReader) Description() string {
+	return "not implemented"
+}
+
+// XXHash implements the Reader interface.
+func (r *bytesReader) XXHash() string {
+	return "not implemented"
+}
+
+func (r *bytesReader) Seek(offset int64, whence int) (int64, error) {
+	return 0, nil
+}
+
+// NewBytesReader returns a new bytesReader
+func NewBytesReader(buf []byte) Reader {
+	return &bytesReader{bytes.NewBuffer(buf), buf}
 }
 
 // ParamReader is used to pass in parameters when creating a new reader
@@ -345,7 +387,7 @@ type ParamReader struct {
 }
 
 // NewReader returns a data reader; type of reader returned is based on the parameters provided
-func NewReader(p ParamReader) (client.Reader, error) {
+func NewReader(p ParamReader) (Reader, error) {
 	switch p.Type {
 	case ReaderTypeSG:
 		if p.SGL == nil {
@@ -361,4 +403,34 @@ func NewReader(p ParamReader) (client.Reader, error) {
 	default:
 		return nil, fmt.Errorf("Unknown memory type for creating inmem reader")
 	}
+}
+
+// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and calculate
+// xxHash on the data.
+func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
+	var (
+		total   int64
+		bufSize = 32768
+	)
+
+	buf := make([]byte, bufSize)
+	h := xxhash.New64()
+	mw := io.MultiWriter(h, w)
+	for {
+		n, err := r.Read(buf)
+		total += int64(n)
+		if err != nil && err != io.EOF {
+			return 0, "", err
+		}
+
+		if n == 0 {
+			break
+		}
+
+		mw.Write(buf[:n])
+	}
+
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
+	return total, hex.EncodeToString(b), nil
 }
