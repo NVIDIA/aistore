@@ -44,6 +44,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
   * [Metasync](#metasync)
 - [WebDAV](#webdav)
 - [Extended Actions](#extended-actions-xactions)
+- [Replication](#replication)
 - [Multi-tiering](#multi-tiering)
 - [Bucket Level Configuration](#bucket-level-configuration)
   * [Checksumming](#checksumming)
@@ -702,6 +703,12 @@ $ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
 DFC supports throttling Xactions based on disk utilization. This is governed by two parameters in the [configuration file](dfc/setup/config.sh) - 'disk_util_low_wm' and 'disk_util_high_wm'. If the disk utilization is below the low watermark then the xaction is not throttled; if it is above the watermark, the xaction is throttled with a sleep duration which increases or decreases linearly with the disk utilization. The throttle duration maxes out at 1 second.
 
 At the time of this writing, only LRU and re-checksumming support throttling.
+
+## Replication
+
+Object replication is still in its prototype phase.
+
+<img src="images/replication-overview.png" alt="Replication overview" width="800">
 
 ## Multi-tiering
 
