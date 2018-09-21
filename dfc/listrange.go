@@ -132,8 +132,8 @@ type listf func(ct context.Context, objects []string, bucket string, deadline ti
 type rangef func(ct context.Context, bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error
 
 func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg *api.ListMsg, operation listf) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -170,9 +170,8 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 }
 
 func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg *api.RangeMsg, operation rangef) {
-	var err error
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]

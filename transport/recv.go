@@ -29,8 +29,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -111,12 +109,12 @@ func Register(trname string, callback Receive) (path string) {
 func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	var numcur, sizecur int64 // TODO: add stream session ID to support numtot and sizetot
 	if r.Method != http.MethodPut {
-		invalmsghdlr(w, r, fmt.Sprintf("Invalid http method %s", r.Method))
+		common.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid http method %s", r.Method))
 		return
 	}
 	trname := path.Base(r.URL.Path)
 	if trname != h.trname {
-		invalmsghdlr(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
+		common.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
 		return
 	}
 	it := iterator{trname: trname, body: r.Body, headerBuf: make([]byte, MaxHeaderSize)}
@@ -136,7 +134,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err != nil {
-			invalmsghdlr(w, r, err.Error())
+			common.InvalidHandlerDetailed(w, r, err.Error())
 			return
 		}
 	}
@@ -199,32 +197,6 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 		glog.Errorf("err %v", err)
 	}
 	return
-}
-
-//////////////////////////////////////////////////
-//
-// COPY-PASTE
-//
-//////////////////////////////////////////////////
-func errHTTP(r *http.Request, msg string, status int) string {
-	return http.StatusText(status) + ": " + msg + ": " + r.Method + " " + r.URL.Path
-}
-
-func invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, other ...interface{}) {
-	status := http.StatusBadRequest
-	if len(other) > 0 {
-		status = other[0].(int)
-	}
-	s := errHTTP(r, msg, status)
-	if _, file, line, ok := runtime.Caller(1); ok {
-		if !strings.Contains(msg, ".go, #") {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-	}
-	glog.Errorln(s)
-	http.Error(w, s, status)
-	// h.statsif.add("err.n", 1)
 }
 
 //

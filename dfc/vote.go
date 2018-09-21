@@ -64,8 +64,8 @@ type (
 
 // [METHOD] /v1/vote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Vote); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Vote)
+	if err != nil {
 		return
 	}
 
@@ -82,8 +82,8 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Vote); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Vote)
+	if err != nil {
 		return
 	}
 
@@ -102,14 +102,12 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/vote/proxy
 func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
-	apitems := h.restAPIItems(r.URL.Path, 5)
-	if apitems = h.checkRestAPI(w, r, apitems, 0, api.Version, api.Vote, api.Proxy); apitems == nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, api.Version, api.Vote, api.Proxy); err != nil {
 		return
 	}
 
 	msg := VoteMessage{}
-	err := h.readJSON(w, r, &msg)
-	if err != nil {
+	if err := h.readJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Error reading Vote Request body: %v", err)
 		h.invalmsghdlr(w, r, s)
 		return
@@ -143,8 +141,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 	if s := h.smapowner.synchronize(newsmap, isproxy /*saveSmap*/, false /* lesserIsErr */); s != "" {
 		glog.Errorf("Failed to synchronize VoteRecord Smap v%d, err %s - voting No", newsmap.version(), s)
-		_, err = w.Write([]byte(VoteNo))
-		if err != nil {
+		if _, err := w.Write([]byte(VoteNo)); err != nil {
 			glog.Errorf("Error writing a No vote: %v", err)
 		}
 		return
@@ -176,14 +173,12 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/result
 func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	apitems := h.restAPIItems(r.URL.Path, 5)
-	if apitems = h.checkRestAPI(w, r, apitems, 0, api.Version, api.Vote, api.Voteres); apitems == nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, api.Version, api.Vote, api.Voteres); err != nil {
 		return
 	}
 
 	msg := VoteResultMessage{}
-	err := h.readJSON(w, r, &msg)
-	if err != nil {
+	if err := h.readJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Error reading Vote Message body: %v", err)
 		h.invalmsghdlr(w, r, s)
 		return
@@ -220,14 +215,12 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 
 // PUT /v1/vote/init
 func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Vote, api.VoteInit); apitems == nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, api.Version, api.Vote, api.VoteInit); err != nil {
 		return
 	}
 
 	msg := VoteInitiationMessage{}
-	err := p.readJSON(w, r, &msg)
-	if err != nil {
+	if err := p.readJSON(w, r, &msg); err != nil {
 		s := fmt.Sprintf("Error reading Vote Request body: %v", err)
 		p.invalmsghdlr(w, r, s)
 		return

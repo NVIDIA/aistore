@@ -925,9 +925,8 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 }
 
 func testListBucket(t *testing.T, proxyURL, bucket string, msg *api.GetMsg, limit int) *api.BucketList {
-	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	tlogf("LIST bucket %s (%s)\n", bucket, url)
-	reslist, err := client.ListBucket(url, bucket, msg, limit)
+	tlogf("LIST bucket %s (%s)\n", bucket, proxyURL)
+	reslist, err := client.ListBucket(proxyURL, bucket, msg, limit)
 	if err != nil {
 		t.Errorf("List bucket %s failed, err = %v", bucket, err)
 		return nil

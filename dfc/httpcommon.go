@@ -9,8 +9,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
-	"html"
 	"io"
 	"io/ioutil"
 	"log"
@@ -133,12 +133,6 @@ func (u reqArgs) url() string {
 // generic bad-request http handler
 //
 //===========
-func invalhdlr(w http.ResponseWriter, r *http.Request) {
-	s := http.StatusText(http.StatusBadRequest)
-	s += ": " + r.Method + " " + r.Host + "" + r.URL.Path + " from " + r.RemoteAddr
-	glog.Errorln(s)
-	http.Error(w, s, http.StatusBadRequest)
-}
 
 // Copies headers from original request(from client) to
 // a new one(inter-cluster call)
@@ -600,51 +594,21 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 // http request parsing helpers
 //
 //=============================
-func (h *httprunner) restAPIItems(unescapedpath string, maxsplit int) []string {
-	escaped := html.EscapeString(unescapedpath)
-	split := strings.SplitN(escaped, "/", maxsplit)
-	apitems := make([]string, 0, len(split))
-	for _, item := range split {
-		if item != "" { // omit empty
-			apitems = append(apitems, item)
-		}
-	}
-	return apitems
-}
 
 // remove validated fields and return the resulting slice
-func (h *httprunner) checkRestAPI(w http.ResponseWriter, r *http.Request, apitems []string, n int, expectedAPIs ...string) []string {
-	invalidItem := func(got, expected string) {
-		s := fmt.Sprintf("Invalid API item: %s (expecting %s)", got, expected)
-		if _, file, line, ok := runtime.Caller(2); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		h.invalmsghdlr(w, r, s)
-	}
-	for _, expectedAPI := range expectedAPIs {
-		if len(apitems) > 0 {
-			if apitems[0] != expectedAPI {
-				invalidItem(apitems[0], expectedAPI)
-				return nil
-			}
-		} else {
-			invalidItem("[empty]", expectedAPI)
-			return nil
-		}
-
-		apitems = apitems[1:]
-	}
-	if len(apitems) < n {
-		s := fmt.Sprintf("Invalid API request: num elements %d (expecting at least %d [%v])", len(apitems), n, apitems)
+func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
+	items, err := common.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items...)
+	if err != nil {
+		s := err.Error()
 		if _, file, line, ok := runtime.Caller(1); ok {
 			f := filepath.Base(file)
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
-		h.invalmsghdlr(w, r, s)
-		return nil
+		h.invalmsghdlr(w, r, s, http.StatusBadRequest)
+		return nil, errors.New(s)
 	}
-	return apitems
+
+	return items, nil
 }
 
 func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
@@ -933,25 +897,8 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 //
 //=================
 
-// errHTTP returns a formatted error string for an HTTP request.
-func (h *httprunner) errHTTP(r *http.Request, msg string, status int) string {
-	return http.StatusText(status) + ": " + msg + ": " + r.Method + " " + r.URL.Path
-}
-
-func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, other ...interface{}) {
-	status := http.StatusBadRequest
-	if len(other) > 0 {
-		status = other[0].(int)
-	}
-	s := h.errHTTP(r, msg, status)
-	if _, file, line, ok := runtime.Caller(1); ok {
-		if !strings.Contains(msg, ".go, #") {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-	}
-	glog.Errorln(s)
-	http.Error(w, s, status)
+func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
+	common.InvalidHandlerDetailed(w, r, msg, errCode...)
 	h.statsif.addErrorHTTP(r.Method, 1)
 }
 

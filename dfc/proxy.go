@@ -135,7 +135,7 @@ func (p *proxyrunner) run() error {
 	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
 	} else {
-		p.registerPublicNetHandler("/", invalhdlr)
+		p.registerPublicNetHandler("/", common.InvalidHandler)
 	}
 
 	// Internal network
@@ -146,14 +146,14 @@ func (p *proxyrunner) run() error {
 		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 			p.registerInternalNetHandler("/", p.reverseProxyHandler)
 		} else {
-			p.registerInternalNetHandler("/", invalhdlr)
+			p.registerInternalNetHandler("/", common.InvalidHandler)
 		}
 	}
 
 	// Replication network
 	if ctx.config.Net.UseRepl {
 		p.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
-		p.registerReplNetHandler("/", invalhdlr)
+		p.registerReplNetHandler("/", common.InvalidHandler)
 	}
 
 	glog.Infof("%s: [public net] listening on: %s", p.si.DaemonID, p.si.PublicNet.DirectURL)
@@ -245,7 +245,7 @@ func (p *proxyrunner) stop(err error) {
 
 //==================================
 //
-// http /bucket and /object handlers
+// http /bucket and /objects handlers
 //
 //==================================
 
@@ -263,11 +263,11 @@ func (p *proxyrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		p.httpbckput(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /buckets path")
 	}
 }
 
-// verb /v1/buckets/
+// verb /v1/objects/
 func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -281,7 +281,7 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		p.httpobjhead(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /objects path")
 	}
 }
 
@@ -291,8 +291,8 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -311,8 +311,8 @@ func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // GET /v1/objects/bucket-name/object-name
 func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
@@ -365,15 +365,14 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/objects
 func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Objects); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
-	bucket := apitems[0]
 	//
 	// FIXME: add protection against putting into non-existing local bucket
 	//
-	objname := strings.Join(apitems[1:], "/")
+	bucket, objname := apitems[0], apitems[1]
 	smap := p.smapowner.get()
 	si, errstr := HrwTarget(bucket, objname, smap)
 	if errstr != "" {
@@ -399,8 +398,8 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 // DELETE { action } /v1/buckets
 func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 	var msg api.ActionMsg
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -444,12 +443,11 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 // DELETE /v1/objects/object-name
 func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
-	bucket := apitems[0]
-	objname := strings.Join(apitems[1:], "/")
+	bucket, objname := apitems[0], apitems[1]
 	smap := p.smapowner.get()
 	si, errstr := HrwTarget(bucket, objname, smap)
 	if errstr != "" {
@@ -471,7 +469,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		p.metasyncHandlerPut(w, r)
 	default:
-		invalhdlr(w, r)
+		p.invalmsghdlr(w, r, "invalid method for metasync", http.StatusBadRequest)
 	}
 }
 
@@ -548,8 +546,8 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	var msg api.ActionMsg
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	lbucket := apitems[0]
@@ -644,8 +642,8 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 // POST { action } /v1/objects/bucket-name
 func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	var msg api.ActionMsg
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Objects); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, true, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
 	lbucket := apitems[0]
@@ -669,8 +667,8 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 // HEAD /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -692,11 +690,10 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
-
 	bucket := apitems[0]
 	if !p.validatebckname(w, r, bucket) {
 		return
@@ -748,8 +745,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	checkCached, _ := parsebool(r.URL.Query().Get(api.URLParamCheckCached))
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
 	bucket, objname := apitems[0], apitems[1]
@@ -1299,11 +1296,11 @@ func (p *proxyrunner) savebmdconf(bucketmd *bucketMD) (errstr string) {
 
 func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *api.ActionMsg) {
 	started := time.Now()
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
-	lbucket, objname := apitems[0], strings.Join(apitems[1:], "/")
+	lbucket, objname := apitems[0], apitems[1]
 	if !p.bmdowner.get().islocal(lbucket) {
 		s := fmt.Sprintf("Rename/move is supported only for cache-only buckets (%s does not appear to be local)", lbucket)
 		p.invalmsghdlr(w, r, s)
@@ -1335,8 +1332,8 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		method string
 	)
 
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -1416,8 +1413,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 //============
 func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Tokens); apitems == nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, api.Version, api.Tokens); err != nil {
 		return
 	}
 
@@ -1495,7 +1491,7 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 //
 //======================
 
-// "/"+api.Version+"/"+Rdaemon
+// [METHOD] /v1/daemon
 func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1503,7 +1499,7 @@ func (p *proxyrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		p.httpdaeput(w, r)
 	default:
-		invalhdlr(w, r)
+		p.invalmsghdlr(w, r, "invalid method for /daemon path", http.StatusBadRequest)
 	}
 }
 
@@ -1540,8 +1536,8 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Daemon); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 0, true, api.Version, api.Daemon)
+	if err != nil {
 		return
 	}
 	if len(apitems) > 0 {
@@ -1699,11 +1695,10 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Request) {
 	var (
 		prepare bool
-		err     error
 	)
 
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Daemon); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Daemon)
+	if err != nil {
 		return
 	}
 
@@ -1802,11 +1797,11 @@ func (p *proxyrunner) becomeNewPrimary(proxyidToRemove string) (errstr string) {
 }
 
 func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Cluster); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Cluster, api.Proxy)
+	if err != nil {
 		return
 	}
-	proxyid := apitems[1]
+	proxyid := apitems[0]
 	s := "designate new primary proxy '" + proxyid + "'"
 	if p.forwardCP(w, r, &api.ActionMsg{}, s, nil) {
 		return
@@ -1888,7 +1883,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 //
 //=======================
 
-// handler for: "/"+api.Version+"/"+Rcluster
+// [METHOD] /v1/cluster
 func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1897,22 +1892,20 @@ func (p *proxyrunner) clusterHandler(w http.ResponseWriter, r *http.Request) {
 		p.httpclupost(w, r)
 	case http.MethodDelete:
 		p.httpcludel(w, r)
-		glog.Flush()
 	case http.MethodPut:
 		p.httpcluput(w, r)
-		glog.Flush()
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /cluster path")
 	}
 }
 
-// handler for: "/"+api.Version+"/"+Rtokens
+// [METHOD] /v1/tokens
 func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodDelete:
 		p.httpTokenDelete(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /token path")
 	}
 }
 
@@ -1921,7 +1914,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
 	if baseURL == gcsURL && r.Method == http.MethodGet {
-		s := p.restAPIItems(r.URL.Path, -1)
+		s := common.RESTItems(r.URL.Path)
 		if len(s) == 2 {
 			r.URL.Path = api.URLPath(api.Version, api.Objects) + r.URL.Path
 			p.httpobjget(w, r)
@@ -1955,7 +1948,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
-		p.invalmsghdlr(w, r, s)
+		common.InvalidHandlerWithMsg(w, r, s)
 	}
 }
 
@@ -2067,8 +2060,8 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		msg                   *api.ActionMsg
 		s                     string
 	)
-	apitems := p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Cluster); apitems == nil {
+	apitems, err := p.checkRESTItems(w, r, 0, true, api.Version, api.Cluster)
+	if err != nil {
 		return
 	}
 	if p.readJSON(w, r, &nsi) != nil {
@@ -2241,13 +2234,8 @@ func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepaliv
 
 // unregisters a target/proxy
 func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
-	apitems := p.restAPIItems(r.URL.Path, 6)
-	if apitems = p.checkRestAPI(w, r, apitems, 2, api.Version, api.Cluster); apitems == nil {
-		return
-	}
-	if apitems[0] != api.Daemon {
-		s := fmt.Sprintf("Invalid API element: %s (expecting %s)", apitems[0], api.Daemon)
-		p.invalmsghdlr(w, r, s)
+	apitems, err := p.checkRESTItems(w, r, 1, true, api.Version, api.Cluster, api.Daemon)
+	if err != nil {
 		return
 	}
 	var (
@@ -2255,13 +2243,13 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		msg     *api.ActionMsg
 		osi     *daemonInfo
 		psi     *daemonInfo
-		sid     = apitems[1]
+		sid     = apitems[0]
 	)
 	msg = &api.ActionMsg{Action: api.ActUnregTarget}
 	if sid == api.Proxy {
 		msg = &api.ActionMsg{Action: api.ActUnregProxy}
 		isproxy = true
-		sid = apitems[2]
+		sid = apitems[1]
 	}
 	if p.forwardCP(w, r, msg, sid, nil) {
 		return
@@ -2333,12 +2321,9 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 // '{"action": "rebalance"}' /v1/cluster => (proxy) => PUT '{Smap}' /v1/daemon/rebalance => target(s)
 // '{"action": "setconfig"}' /v1/cluster => (proxy) =>
 func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
-	var (
-		apitems []string
-		msg     api.ActionMsg
-	)
-	apitems = p.restAPIItems(r.URL.Path, 5)
-	if apitems = p.checkRestAPI(w, r, apitems, 0, api.Version, api.Cluster); apitems == nil {
+	var msg api.ActionMsg
+	apitems, err := p.checkRESTItems(w, r, 0, true, api.Version, api.Cluster)
+	if err != nil {
 		return
 	}
 	// cluster-wide: designate a new primary proxy administratively

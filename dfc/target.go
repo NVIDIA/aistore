@@ -190,20 +190,20 @@ func (t *targetrunner) run() error {
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Push)+"/", t.pushHandler)
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), t.tokenHandler)
 	transport.SetMux(t.publicServer.mux) // to register transport handlers at runtime
-	t.registerPublicNetHandler("/", invalhdlr)
+	t.registerPublicNetHandler("/", common.InvalidHandler)
 
 	// Internal network
 	t.registerInternalNetHandler(api.URLPath(api.Version, api.Metasync), t.metasyncHandler)
 	t.registerInternalNetHandler(api.URLPath(api.Version, api.Health), t.healthHandler)
 	t.registerInternalNetHandler(api.URLPath(api.Version, api.Vote), t.voteHandler)
 	if ctx.config.Net.UseIntra {
-		t.registerInternalNetHandler("/", invalhdlr)
+		t.registerInternalNetHandler("/", common.InvalidHandler)
 	}
 
 	// Replication network
 	if ctx.config.Net.UseRepl {
 		t.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
-		t.registerReplNetHandler("/", invalhdlr)
+		t.registerReplNetHandler("/", common.InvalidHandler)
 	}
 
 	glog.Infof("Target %s is ready", t.si.DaemonID)
@@ -312,7 +312,7 @@ func (t *targetrunner) bucketHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		t.httpbckhead(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /buckets path")
 	}
 }
 
@@ -330,14 +330,14 @@ func (t *targetrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodHead:
 		t.httpobjhead(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /objects path")
 	}
 }
 
 // GET /v1/buckets/bucket-name
 func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -375,8 +375,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// 1. start, validate, readahead
 	//
 	started = time.Now()
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
 	bucket, objname = apitems[0], apitems[1]
@@ -637,7 +637,6 @@ send:
 			var cksum string
 			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
 			if errstr != "" {
-				glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				return
 
@@ -661,7 +660,6 @@ send:
 		} else {
 			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", fqn, err)
 		}
-		glog.Errorln(t.errHTTP(r, errstr, http.StatusInternalServerError))
 		t.fshc(err, fqn)
 		t.statsif.add(statErrGetCount, 1)
 		return
@@ -739,17 +737,16 @@ func (t *targetrunner) offsetAndLength(query url.Values) (offset, length int64, 
 
 // PUT /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
-	bucket := apitems[0]
+	bucket, objname := apitems[0], apitems[1]
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
 	query := r.URL.Query()
 	from, to := query.Get(api.URLParamFromID), query.Get(api.URLParamToID)
-	objname := strings.Join(apitems[1:], "/")
 	if from != "" && to != "" {
 		// REBALANCE "?from_id="+from_id+"&to_id="+to_id
 		if objname == "" {
@@ -805,8 +802,8 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		started = time.Now()
 		ok      = true
 	)
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket = apitems[0]
@@ -845,21 +842,19 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 // DELETE [ { action } ] /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	var (
-		bucket, objname string
-		msg             api.ActionMsg
-		evict           bool
-		started         = time.Now()
-		ok              = true
+		msg     api.ActionMsg
+		evict   bool
+		started = time.Now()
+		ok      = true
 	)
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
-	bucket = apitems[0]
+	bucket, objname := apitems[0], apitems[1]
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	objname = strings.Join(apitems[1:], "/")
 
 	b, err := ioutil.ReadAll(r.Body)
 	defer func() {
@@ -907,8 +902,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case api.ActPrefetch:
 		t.prefetchfiles(w, r, msg)
 	case api.ActRenameLB:
-		apitems := t.restAPIItems(r.URL.Path, 5)
-		if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+		apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+		if err != nil {
 			return
 		}
 		lbucket := apitems[0]
@@ -945,8 +940,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
 	case api.ActListObjects:
-		apitems := t.restAPIItems(r.URL.Path, 5)
-		if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+		apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+		if err != nil {
 			return
 		}
 		lbucket := apitems[0]
@@ -963,8 +958,8 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case api.ActRechecksum:
-		apitems := t.restAPIItems(r.URL.Path, 5)
-		if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+		apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+		if err != nil {
 			return
 		}
 		bucket := apitems[0]
@@ -1002,8 +997,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketprops common.SimpleKVs
 		cksumcfg    *cksumconfig
 	)
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Buckets); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
 		return
 	}
 	bucket = apitems[0]
@@ -1079,8 +1074,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		objmeta                 common.SimpleKVs
 	)
 	checkCached, _ = parsebool(r.URL.Query().Get(api.URLParamCheckCached))
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
 	bucket, objname = apitems[0], apitems[1]
@@ -1142,7 +1137,7 @@ func (t *targetrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpTokenDelete(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /tokens path")
 	}
 }
 
@@ -1152,7 +1147,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		t.metasyncHandlerPut(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /metasync path")
 	}
 }
 
@@ -1221,8 +1216,8 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/push/bucket-name
 func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 1, api.Version, api.Push); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Push)
+	if err != nil {
 		return
 	}
 	bucket := apitems[0]
@@ -1263,10 +1258,9 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := w.Write([]byte("Pushed Object List "))
-	if err != nil {
+	if _, err = w.Write([]byte("Pushed Object List")); err != nil {
 		s := fmt.Sprintf("Error writing response: %v", err)
-		t.invalmsghdlr(w, r, s)
+		glog.Error(s)
 	}
 }
 
@@ -1840,22 +1834,23 @@ func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 
 	// A small optimization: set boolean variables need* to avoid
 	// doing string search(strings.Contains) for every entry.
-	ci := &allfinfos{t, // targetrunner
-		make([]*api.BucketEntry, 0, api.DefaultPageSize),     // ls
-		msg.GetPrefix,                                        // prefix
-		msg.GetPageMarker,                                    // marker
-		markerDir,                                            // markerDir
-		msg,                                                  // GetMsg
-		"",                                                   // lastFilePath - next page marker
-		bucket,                                               // bucket
-		0,                                                    // fileCount
-		0,                                                    // rootLength
-		api.DefaultPageSize,                                  // limit - maximun number of objects to return
-		strings.Contains(msg.GetProps, api.GetPropsAtime),    // needAtime
-		strings.Contains(msg.GetProps, api.GetPropsCtime),    // needCtime
-		strings.Contains(msg.GetProps, api.GetPropsChecksum), // needChkSum
-		strings.Contains(msg.GetProps, api.GetPropsVersion),  // needVersion
-		strings.Contains(msg.GetProps, api.GetPropsStatus),   // needStatus
+	ci := &allfinfos{
+		t:            t, // targetrunner
+		files:        make([]*api.BucketEntry, 0, api.DefaultPageSize),
+		prefix:       msg.GetPrefix,
+		marker:       msg.GetPageMarker,
+		markerDir:    markerDir,
+		msg:          msg,
+		lastFilePath: "",
+		bucket:       bucket,
+		fileCount:    0,
+		rootLength:   0,
+		limit:        api.DefaultPageSize, // maximum number files to return
+		needAtime:    strings.Contains(msg.GetProps, api.GetPropsAtime),
+		needCtime:    strings.Contains(msg.GetProps, api.GetPropsCtime),
+		needChkSum:   strings.Contains(msg.GetProps, api.GetPropsChecksum),
+		needVersion:  strings.Contains(msg.GetProps, api.GetPropsVersion),
+		needStatus:   strings.Contains(msg.GetProps, api.GetPropsStatus),
 	}
 
 	if msg.GetPageSize != 0 {
@@ -2363,11 +2358,11 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
 	var errstr string
 
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 2, api.Version, api.Objects); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], strings.Join(apitems[1:], "/")
+	bucket, objname := apitems[0], apitems[1]
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
@@ -2706,14 +2701,14 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		t.httpdaedelete(w, r)
 	default:
-		invalhdlr(w, r)
+		common.InvalidHandlerWithMsg(w, r, "invalid method for /daemon path")
 	}
 	glog.Flush()
 }
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 0, api.Version, api.Daemon); apitems == nil {
+	apitems, err := t.checkRESTItems(w, r, 0, true, api.Version, api.Daemon)
+	if err != nil {
 		return
 	}
 	if len(apitems) > 0 {
@@ -2910,8 +2905,8 @@ func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 // register target
 // enable/disable mountpath
 func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
-	apiItems := t.restAPIItems(r.URL.Path, 5)
-	if apiItems = t.checkRestAPI(w, r, apiItems, 0, api.Version, api.Daemon); apiItems == nil {
+	apiItems, err := t.checkRESTItems(w, r, 0, true, api.Version, api.Daemon)
+	if err != nil {
 		return
 	}
 
@@ -2946,8 +2941,8 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 // unregister
 // remove mountpath
 func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
-	apiItems := t.restAPIItems(r.URL.Path, 5)
-	if apiItems = t.checkRestAPI(w, r, apiItems, 1, api.Version, api.Daemon); apiItems == nil {
+	apiItems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Daemon)
+	if err != nil {
 		return
 	}
 
@@ -3686,8 +3681,7 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	tokenList := &TokenList{}
-	apitems := t.restAPIItems(r.URL.Path, 5)
-	if apitems = t.checkRestAPI(w, r, apitems, 0, api.Version, api.Tokens); apitems == nil {
+	if _, err := t.checkRESTItems(w, r, 0, false, api.Version, api.Tokens); err != nil {
 		return
 	}
 
