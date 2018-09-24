@@ -200,12 +200,15 @@ func Test_matchdelete(t *testing.T) {
 }
 
 func Test_putdeleteRange(t *testing.T) {
+	if numfiles < 10 || numfiles%10 != 0 {
+		t.Skip("numfiles must be a positive multiple of 10")
+	}
+
 	if testing.Short() {
 		t.Skip("Long run only")
 	}
 
 	const (
-		numFiles     = 100
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
 	)
 	var sgl *iosgl.SGL
@@ -256,32 +259,27 @@ func Test_putdeleteRange(t *testing.T) {
 		},
 		{
 			"Trying to delete files out of range",
-			commonPrefix + "/a-", "\\d+", fmt.Sprintf("%d:%d", numFiles+10, numFiles+110),
+			commonPrefix + "/a-", "\\d+", fmt.Sprintf("%d:%d", numfiles+10, numfiles+110),
 			0,
 		},
 		{
-			"Deleting 10 files with prefix 'a-'",
-			commonPrefix + "/a-", "\\d+", "10:19",
-			10,
+			fmt.Sprintf("Deleting %d files with prefix 'a-'", numfiles/10),
+			commonPrefix + "/a-", "\\d+", fmt.Sprintf("%d:%d", (numfiles-numfiles/5)/2, numfiles/2),
+			numfiles / 10,
 		},
 		{
-			"Deleting 20 files (short range)",
-			commonPrefix + "/", "\\d+", "30:39",
-			20,
-		},
-		{
-			"Deleting 20 more files (wide range)",
-			commonPrefix + "/", "2\\d+", "10:90",
-			20,
+			fmt.Sprintf("Deleting %d files (short range)", numfiles/5),
+			commonPrefix + "/", "\\d+", fmt.Sprintf("%d:%d", 1, numfiles/10),
+			numfiles / 5,
 		},
 		{
 			"Deleting files with empty range",
 			commonPrefix + "/b-", "", "",
-			30,
+			(numfiles - numfiles/5) / 2,
 		},
 	}
 
-	totalFiles := numFiles
+	totalFiles := numfiles
 	for idx, test := range tests {
 		msg := &api.GetMsg{GetPrefix: commonPrefix + "/"}
 		tlogf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
