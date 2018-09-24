@@ -208,12 +208,12 @@ func getPrimaryReplicationURL(t *testing.T, proxyURL string) string {
 
 func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 	buf, slab := iosgl.AllocFromSlab(0)
-	xxhashval, errstr := dfc.ComputeXXHash(reader, buf)
+	xxHashVal, errstr := dfc.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 	if errstr != "" {
 		t.Fatal("Failed to compute xxhash checksum")
 	}
-	return xxhashval
+	return xxHashVal
 }
 
 func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader client.Reader) (statusCode int) {

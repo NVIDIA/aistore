@@ -557,9 +557,9 @@ existslocally:
 
 	cksumRange := cksumcfg.Checksum != ChecksumNone && rangeLen > 0 && cksumcfg.EnableReadRangeChecksum
 	if !coldget && !cksumRange && cksumcfg.Checksum != ChecksumNone {
-		hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
-		if errstr == "" && hashbinary != nil {
-			nhobj = newcksumvalue(cksumcfg.Checksum, string(hashbinary))
+		xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
+		if errstr == "" && xxHashBinary != nil {
+			nhobj = newcksumvalue(cksumcfg.Checksum, string(xxHashBinary))
 		}
 	}
 	if nhobj != nil && !cksumRange {
@@ -1499,9 +1499,9 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	if !coldget && eexists == "" {
 		props = &objectProps{version: version, size: size}
-		xxhashval, _ := Getxattr(fqn, XattrXXHashVal)
-		if xxhashval != nil {
-			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxhashval))
+		xxHashBinary, _ := Getxattr(fqn, XattrXXHashVal)
+		if xxHashBinary != nil {
+			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxHashBinary))
 		}
 		glog.Infof("cold GET race: %s/%s, size=%d, version=%s - nothing to do", bucket, objname, size, version)
 		goto ret
@@ -1932,9 +1932,9 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		}
 	}
 	if ci.needChkSum {
-		xxhex, errstr := Getxattr(fqn, XattrXXHashVal)
+		xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
 		if errstr == "" {
-			fileInfo.Checksum = hex.EncodeToString(xxhex)
+			fileInfo.Checksum = hex.EncodeToString(xxHashBinary)
 		}
 	}
 	if ci.needVersion {
@@ -1995,7 +1995,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		file                       *os.File
 		err                        error
 		hdhobj, nhobj              cksumvalue
-		xxhashval                  string
+		xxHashVal                  string
 		htype, hval, nhtype, nhval string
 		sgl                        *iosgl.SGL
 		started                    time.Time
@@ -2023,7 +2023,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		if err == nil {
 			buf, slab := iosgl.AllocFromSlab(0)
 			if htype == ChecksumXXHash {
-				xxhashval, errstr = ComputeXXHash(file, buf)
+				xxHashVal, errstr = ComputeXXHash(file, buf)
 			} else {
 				errstr = fmt.Sprintf("Unsupported checksum type %s", htype)
 			}
@@ -2036,7 +2036,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			if err = file.Close(); err != nil {
 				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
 			}
-			if errstr == "" && xxhashval == hval {
+			if errstr == "" && xxHashVal == hval {
 				glog.Infof("Existing %s/%s is valid: PUT is a no-op", bucket, objname)
 				return
 			}
@@ -2491,7 +2491,7 @@ func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg a
 // reads version from headers and set xattrs if the version is not empty
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newbucket, newobjname string) string {
 	var (
-		xxhashval string
+		xxHashVal string
 		errstr    string
 		version   []byte
 	)
@@ -2548,7 +2548,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if cksumcfg.Checksum != ChecksumNone {
 		common.Assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
 		buf, slab := iosgl.AllocFromSlab(size)
-		if xxhashval, errstr = ComputeXXHash(file, buf); errstr != "" {
+		if xxHashVal, errstr = ComputeXXHash(file, buf); errstr != "" {
 			slab.Free(buf)
 			return errstr
 		}
@@ -2564,9 +2564,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	if err != nil {
 		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)
 	}
-	if xxhashval != "" {
+	if xxHashVal != "" {
 		request.Header.Set(api.HeaderDFCChecksumType, ChecksumXXHash)
-		request.Header.Set(api.HeaderDFCChecksumVal, xxhashval)
+		request.Header.Set(api.HeaderDFCChecksumVal, xxHashVal)
 	}
 	if len(version) != 0 {
 		request.Header.Set(api.HeaderDFCObjVersion, string(version))
@@ -3706,13 +3706,13 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 		return false, errstr
 	}
 
-	hashbinary, errstr := Getxattr(fqn, XattrXXHashVal)
+	xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
 	if errstr != "" {
 		errstr = fmt.Sprintf("Unable to read checksum of object [%s], err: %s", fqn, errstr)
 		return false, errstr
 	}
 
-	if hashbinary == nil {
+	if xxHashBinary == nil {
 		glog.Warningf("%s has no checksum - cannot validate", fqn)
 		return true, ""
 	}
@@ -3724,7 +3724,7 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 	}
 
 	buf, slab := iosgl.AllocFromSlab(slabSize)
-	xxHashValue, errstr := ComputeXXHash(file, buf)
+	xxHashVal, errstr := ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)
 
@@ -3733,7 +3733,7 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 		return false, errstr
 	}
 
-	return string(hashbinary) == xxHashValue, ""
+	return string(xxHashBinary) == xxHashVal, ""
 }
 
 // unregisters the target and marks it as disabled by an internal event

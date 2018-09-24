@@ -222,11 +222,11 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	}
 	defer file.Close()
 
-	xxhashbinary, errstr := Getxattr(req.fqn, XattrXXHashVal)
-	xxhashval := ""
+	xxHashBinary, errstr := Getxattr(req.fqn, XattrXXHashVal)
+	xxHashVal := ""
 	if errstr != "" {
 		buf, slab := iosgl.AllocFromSlab(0)
-		xxhashval, errstr = ComputeXXHash(file, buf)
+		xxHashVal, errstr = ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if errstr != "" {
 			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", req.fqn, errstr)
@@ -236,7 +236,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 			return fmt.Errorf("Unexpected fseek failure when replicating (sending) %q, err: %v", req.fqn, err)
 		}
 	} else {
-		xxhashval = string(xxhashbinary)
+		xxHashVal = string(xxHashBinary)
 	}
 
 	httpReq, err := http.NewRequest(http.MethodPut, url, file)
@@ -249,7 +249,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	httpReq.Header.Add(api.HeaderDFCReplicationSrc, r.directURL)
 
 	httpReq.Header.Add(api.HeaderDFCChecksumType, ChecksumXXHash)
-	httpReq.Header.Add(api.HeaderDFCChecksumVal, xxhashval)
+	httpReq.Header.Add(api.HeaderDFCChecksumVal, xxHashVal)
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
 	if err != nil {
@@ -310,15 +310,21 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 
-	// optimize out if checksums from header and existing file match
+	// Avoid replication by checking if cheksums from header and existing file match
+	// Attempt to access the checksum Xattr if it already exists
+	if xxHashBinary, errstr := Getxattr(req.fqn, XattrXXHashVal); errstr != "" && xxHashBinary != nil && string(xxHashBinary) == hdhval {
+		glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
+		return nil
+	}
+	// Calculate the checksum when the Xattr does not exit
 	if file, err := os.Open(req.fqn); err == nil {
 		buf, slab := iosgl.AllocFromSlab(0)
-		xxhashval, errstr := ComputeXXHash(file, buf)
+		xxHashVal, errstr := ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if err = file.Close(); err != nil {
 			glog.Warningf("Unexpected failure to close %s once xxhash has been computed, error: %v", req.fqn, err)
 		}
-		if errstr == "" && xxhashval == hdhval {
+		if errstr == "" && xxHashVal == hdhval {
 			glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
 			return nil
 		}

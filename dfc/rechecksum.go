@@ -115,8 +115,8 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 	}
 	defer file.Close()
 
-	xxHash, errstr := Getxattr(fqn, XattrXXHashVal)
-	if xxHash != nil && errstr != "" {
+	xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
+	if xxHashBinary != nil && errstr != "" {
 		// checksum already there, no need to compute a new one
 		return nil
 	} else if errstr != "" {
