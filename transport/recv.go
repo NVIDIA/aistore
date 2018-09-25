@@ -2,23 +2,11 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-// Package transport provides L5.5 transport over http for intra-DFC or DFC-to-DFC rebalancing,
-// replication, and more.
 //
-// * On the wire, each transmitted object will have the layout:
+// Package transport provides streaming object-based transport over http for
+// massive intra-DFC or DFC-to-DFC data transfers.
 //
-//   [header length] [header fields including object size}] [object bytes])
-//
-// * The size must be known upfront, which is the current limitation.
-//
-// * A stream (the Stream type below) carries a sequence of objects of arbitrary length
-//   and overall looks as follows:
-//
-//   object1 = ([header1], [data1]) object2 = ([header2], [data2]), etc.
-//
-// * Stream termination is denoted by a special marker in the data-size field of the header:
-//
-//   header = [object size=^uint64(0) >> 1 (7fffffffffffffff)]
+// See README for details and usage examples.
 //
 package transport
 
@@ -36,8 +24,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 )
-
-// FIXME: copy-paste invalmsghdlr
 
 //
 // API types
