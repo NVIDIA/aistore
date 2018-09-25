@@ -657,6 +657,9 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	case api.ActRename:
 		p.filrename(w, r, &msg)
 		return
+	case api.ActReplicate:
+		p.replicate(w, r, &msg)
+		return
 	default:
 		s := fmt.Sprintf("Unexpected api.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
@@ -1324,6 +1327,30 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *api
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
 	p.statsif.add(statRenameCount, 1)
+}
+
+func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *api.ActionMsg) {
+	started := time.Now()
+	apitems, err := p.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
+		return
+	}
+	bucket, object := apitems[0], apitems[1]
+	smap := p.smapowner.get()
+	si, errstr := HrwTarget(bucket, object, smap)
+	if errstr != "" {
+		p.invalmsghdlr(w, r, errstr)
+		return
+	}
+	if glog.V(3) {
+		glog.Infof("REPLICATE %s %s/%s", r.Method, bucket, object)
+	}
+
+	// NOTE:
+	//       code 307 is the only way to http-redirect with the
+	//       original JSON payload (GetMsg - see pkg/api/constant.go)
+	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
+	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *api.ActionMsg) {

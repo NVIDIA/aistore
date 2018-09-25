@@ -9,6 +9,7 @@ package dfc
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -243,6 +244,9 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to create HTTP request, err: %v", err)
 		return errors.New(errstr)
+	}
+	httpReq.GetBody = func() (io.ReadCloser, error) {
+		return os.Open(req.fqn)
 	}
 
 	// specify source direct URL in request header

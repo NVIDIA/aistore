@@ -78,7 +78,8 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, object, fqn string
 	return
 }
 
-func (t *targetrunner) putObjectNextTier(nextTierURL, bucket, object string, body io.Reader) (errstr string, errcode int) {
+func (t *targetrunner) putObjectNextTier(nextTierURL, bucket, object string, body io.ReadCloser,
+	reopenBody func() (io.ReadCloser, error)) (errstr string, errcode int) {
 	var url = nextTierURL + api.URLPath(api.Version, api.Objects, bucket, object)
 
 	req, err := http.NewRequest(http.MethodPut, url, body)
@@ -86,7 +87,7 @@ func (t *targetrunner) putObjectNextTier(nextTierURL, bucket, object string, bod
 		errstr = fmt.Sprintf("failed to create new HTTP request, err: %v", err)
 		return
 	}
-
+	req.GetBody = reopenBody
 	resp, err := t.httprunner.httpclientLongTimeout.Do(req)
 	if err != nil {
 		errstr = err.Error()

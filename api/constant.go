@@ -31,6 +31,7 @@ const (
 	ActSetProps    = "setprops"
 	ActListObjects = "listobjects"
 	ActRename      = "rename"
+	ActReplicate   = "replicate"
 	ActEvict       = "evict"
 	ActDelete      = "delete"
 	ActPrefetch    = "prefetch"

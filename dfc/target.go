@@ -982,6 +982,8 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	switch msg.Action {
 	case api.ActRename:
 		t.renamefile(w, r, msg)
+	case api.ActReplicate:
+		t.replicate(w, r, msg)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -2162,6 +2164,9 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 		bucketmd = t.bmdowner.get()
 		islocal  = bucketmd.islocal(bucket)
 	)
+	reopenFile := func() (io.ReadCloser, error) {
+		return os.Open(putfqn)
+	}
 
 	if !islocal && !rebalance {
 		if file, err = os.Open(putfqn); err != nil {
@@ -2170,7 +2175,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 		}
 		_, p := bucketmd.get(bucket, islocal)
 		if p.NextTierURL != "" && p.WritePolicy == RWPolicyNextTier {
-			if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file); errstr != "" {
+			if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file, reopenFile); errstr != "" {
 				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
 					bucket, objname, errstr, errcode)
 				file, err = os.Open(putfqn)
@@ -2193,7 +2198,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 		if p.NextTierURL != "" {
 			if file, err = os.Open(putfqn); err != nil {
 				errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
-			} else if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file); errstr != "" {
+			} else if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file, reopenFile); errstr != "" {
 				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
 					bucket, objname, errstr, errcode)
 			}
@@ -2380,6 +2385,44 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ap
 		t.invalmsghdlr(w, r, errstr)
 	}
 	t.rtnamemap.unlockname(uname, true)
+}
+
+func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
+	apitems, err := t.checkRESTItems(w, r, 2, false, api.Version, api.Objects)
+	if err != nil {
+		return
+	}
+	bucket, object := apitems[0], apitems[1]
+	if !t.validatebckname(w, r, bucket) {
+		return
+	}
+	bucketmd := t.bmdowner.get()
+	islocal := bucketmd.islocal(bucket)
+	fqn, errstr := t.fqn(bucket, object, islocal)
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+	ok, props := bucketmd.get(bucket, islocal)
+	if !ok {
+		errstr = fmt.Sprintf("Failed to get bucket properties for bucket %q", bucket)
+	} else if props.NextTierURL == "" {
+		errstr = fmt.Sprintf("Bucket %q is not configured with next tier URL", bucket)
+	} else if props.CloudProvider != api.ProviderDFC {
+		errstr = fmt.Sprintf("Bucket %q is configured with invalid cloud provider: %q, expected provider: %q",
+			bucket, props.CloudProvider, api.ProviderDFC)
+	}
+	if errstr != "" {
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
+
+	rr := getreplicationrunner()
+	if err = rr.reqSendReplica(props.NextTierURL, fqn, false, replicationPolicySync); err != nil {
+		errstr = fmt.Sprintf("Failed to replicate bucket/object: %s/%s, error: %v", bucket, object, err)
+		t.invalmsghdlr(w, r, errstr)
+		return
+	}
 }
 
 func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
