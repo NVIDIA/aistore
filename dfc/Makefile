@@ -62,6 +62,9 @@ clean:
 deploy:
 	@./setup/deploy.sh
 
+deploy_next_tier:
+	@DEPLOY_AS_NEXT_TIER=1 ./setup/deploy.sh
+
 # example extracting 'numget' stats out of all local logs
 numget:
 	@./setup/numget.sh

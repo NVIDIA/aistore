@@ -71,7 +71,7 @@ cat > $CONFFILE <<EOL
 		$FSPATHS
 	},
 	"test_fspaths": {
-		"root":			"/tmp/dfc/",
+		"root":			"/tmp/dfc$NEXT_TIER/",
 		"count":		$TESTFSPATHCOUNT,
 		"instance":		$c
 	},
