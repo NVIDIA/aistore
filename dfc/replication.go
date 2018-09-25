@@ -43,7 +43,7 @@ import (
 // ================================================= Summary ===============================================
 
 // TODO
-// * Replication configuration
+// * Replication bucket-specific configuration
 // * Add a check validating that sending and receiving targets are not inside the same cluster
 // * On the receiving side do not calculate checksum of existing file if it's stored as xattr
 
@@ -231,6 +231,9 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		if errstr != "" {
 			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", req.fqn, errstr)
 			return errors.New(errstr)
+		}
+		if _, err = file.Seek(0, os.SEEK_SET); err != nil {
+			return fmt.Errorf("Unexpected fseek failure when replicating (sending) %q, err: %v", req.fqn, err)
 		}
 	} else {
 		xxhashval = string(xxhashbinary)

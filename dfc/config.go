@@ -66,6 +66,7 @@ type dfconfig struct {
 	LRU              lruconfig         `json:"lru_config"`
 	Xaction          xactionConfig     `json:"xaction_config"`
 	Rebalance        rebalanceconf     `json:"rebalance_conf"`
+	Replication      replicationconfig `json:"replication"`
 	Cksum            cksumconfig       `json:"cksum_config"`
 	Ver              versionconfig     `json:"version_config"`
 	FSpaths          common.SimpleKVs  `json:"fspaths"`
@@ -144,6 +145,12 @@ type rebalanceconf struct {
 	DestRetryTimeStr string        `json:"dest_retry_time"`
 	DestRetryTime    time.Duration `json:"-"` //
 	Enabled          bool          `json:"rebalancing_enabled"`
+}
+
+type replicationconfig struct {
+	ReplicateOnColdGet     bool `json:"replicate_on_cold_get"`     // object replication on cold GET request
+	ReplicateOnPut         bool `json:"replicate_on_put"`          // object replication on PUT request
+	ReplicateOnLRUEviction bool `json:"replicate_on_lru_eviction"` // object replication on LRU eviction
 }
 
 type testfspathconf struct {

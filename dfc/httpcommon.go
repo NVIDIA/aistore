@@ -854,6 +854,24 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		} else {
 			ctx.config.Rebalance.Enabled = v
 		}
+	case "replicate_on_cold_get":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse replicate_on_cold_get, err: %v", err)
+		} else {
+			ctx.config.Replication.ReplicateOnColdGet = v
+		}
+	case "replicate_on_put":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse replicate_on_put, err: %v", err)
+		} else {
+			ctx.config.Replication.ReplicateOnPut = v
+		}
+	case "replicate_on_lru_eviction":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse replicate_on_lru_eviction, err: %v", err)
+		} else {
+			ctx.config.Replication.ReplicateOnLRUEviction = v
+		}
 	case "validate_checksum_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_checksum_cold_get, err: %v", err)
