@@ -6,6 +6,10 @@
 // Package common provides common low-level types and utilities for all dfcpub projects
 package common
 
+import "math"
+
+const MaxInt64 = int64(math.MaxInt64)
+
 // MinU64 returns min value of a and b for uint64 types
 func MinU64(a, b uint64) uint64 {
 	if a < b {

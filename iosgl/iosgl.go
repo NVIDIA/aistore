@@ -19,6 +19,11 @@ const (
 	minSizeUnknown     = 32 * common.KiB
 )
 
+//====================
+//
+// globals
+//
+//====================
 var fixedSizes = []int64{4 * common.KiB, 8 * common.KiB, 16 * common.KiB, 32 * common.KiB, 64 * common.KiB, 128 * common.KiB}
 var allSlabs = []*Slab{nil, nil, nil, nil, nil, nil} // Note: the length of allSlabs must equal the length of fixedSizes.
 

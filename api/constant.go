@@ -240,25 +240,29 @@ const (
 	DefaultPageSize = 1000
 )
 
-// RESTful URL path: /v1/....
+// RESTful URL path: l1/l2/l3
 const (
-	Version    = "v1"
-	Buckets    = "buckets"
-	Objects    = "objects"
-	Cluster    = "cluster"
-	Daemon     = "daemon"
+	// l1
+	Version = "v1"
+	// l2
+	Buckets   = "buckets"
+	Objects   = "objects"
+	Daemon    = "daemon"
+	Cluster   = "cluster"
+	Push      = "push"
+	Tokens    = "tokens"
+	Metasync  = "metasync"
+	Health    = "health"
+	Vote      = "vote"
+	Transport = "transport"
+	// l3
 	SyncSmap   = "syncsmap"
-	Push       = "push"
 	Keepalive  = "keepalive"
 	Register   = "register"
 	Unregister = "unregister"
-	Health     = "health"
-	Vote       = "vote"
 	Proxy      = "proxy"
 	Voteres    = "result"
 	VoteInit   = "init"
-	Tokens     = "tokens"
-	Metasync   = "metasync"
 	Mountpaths = "mountpaths"
 )
 

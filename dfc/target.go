@@ -35,6 +35,7 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
@@ -188,6 +189,7 @@ func (t *targetrunner) run() error {
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Daemon), t.daemonHandler)
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Push)+"/", t.pushHandler)
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), t.tokenHandler)
+	transport.SetMux(t.publicServer.mux) // to register transport handlers at runtime
 	t.registerPublicNetHandler("/", invalhdlr)
 
 	// Internal network
@@ -2551,10 +2553,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 			return errstr
 		}
 		slab.Free(buf)
-	}
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si.DaemonID, err)
+		if _, err = file.Seek(0, 0); err != nil {
+			return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si.DaemonID, err)
+		}
 	}
 	//
 	// http request
