@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
@@ -58,13 +59,14 @@ func main() {
 			}()
 			shardNumStr := fmt.Sprintf("%0*d", 10, i)
 			name := fmt.Sprintf("shard-%s.tar", shardNumStr)
-			sgl := iosgl.NewSGL(uint64(1024 * 300))
+			sgl := iosgl.NewSGL(uint64(1024 * 64))
 			slab := sgl.Slab()
 			buf1 := slab.Alloc()
-			if _, err := io.CopyBuffer(sgl, bytes.NewReader(rbuf[:1024*400]), buf1); err != nil {
+			if _, err := io.CopyBuffer(sgl, bytes.NewReader(rbuf[:1024*64]), buf1); err != nil {
 				fmt.Print(err)
 				return
 			}
+			fmt.Fprintf(os.Stdout, "%p, %d\n", sgl, sgl.Size())
 			reader, _ := sgl.Open()
 			clientReader := reader.(client.Reader) // FIXME: hack to satisfy client.Put
 			if err := client.Put(proxyURL, clientReader, bucket, name, false); err != nil {

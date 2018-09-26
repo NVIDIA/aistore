@@ -8,6 +8,7 @@ package iosgl
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -103,6 +104,7 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64
 		err = io.EOF
 		return
 	}
+	common.Assert(z.slab != nil, fmt.Sprintf("%p", z))
 	idx, off := int(roff/z.slab.Size()), roff%z.slab.Size()
 	buf := z.sgl[idx]
 	size := common.MinI64(int64(len(b)), z.woff-roff)
@@ -125,6 +127,8 @@ func (z *SGL) Reset() {
 }
 
 func (z *SGL) Free() {
+	glog.Infof("Freeing %p", z)
+	glog.Flush()
 	for i := 0; i < len(z.sgl); i++ {
 		z.slab.Free(z.sgl[i])
 	}
@@ -219,12 +223,14 @@ type Slab struct {
 }
 
 func newSlab(fixedSize int64) *Slab {
-	pool := &sync.Pool{
-		New: func() interface{} {
-			return make([]byte, fixedSize)
-		},
-	}
-	return &Slab{pool, fixedSize}
+	pool := &sync.Pool{}
+	s := &Slab{pool, fixedSize}
+	s.pool.New = s.New
+	return s
+}
+
+func (s *Slab) New() interface{} {
+	return make([]byte, s.fixedSize)
 }
 
 func SelectSlab(osize int64) *Slab {
