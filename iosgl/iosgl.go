@@ -11,6 +11,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
 )
 
@@ -123,10 +124,6 @@ func (z *SGL) Reset() {
 	z.woff, z.roff = 0, 0
 }
 
-func (z *SGL) Close() error {
-	return nil
-}
-
 func (z *SGL) Free() {
 	for i := 0; i < len(z.sgl); i++ {
 		z.slab.Free(z.sgl[i])
@@ -151,6 +148,10 @@ func (z *SGL) Reclaim() {
 	z.woff = 0xDEADBEEF
 }
 
+func (z *SGL) Open() (io.ReadCloser, error) {
+	return NewReader(z), nil
+}
+
 //
 // SGL Reader - a wrapper on top of SGL that adds Seek() capability
 //
@@ -167,9 +168,17 @@ func (r *Reader) Len() int {
 }
 
 func (r *Reader) Close() error {
+	glog.Infof("Closing and freeing size=%d", r.z.Size())
+	r.z.Free()
 	return nil
 }
 
+func (r *Reader) Description() string { // FIXME: to satisfy client.Reader
+	return "SGL"
+}
+func (r *Reader) XXHash() string { // FIXME: to satisfy client.Reader
+	return "foobar"
+}
 func (r *Reader) Size() int64 { return r.z.Cap() }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
@@ -196,7 +205,7 @@ func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {
 }
 
 func (r *Reader) Open() (io.ReadCloser, error) {
-	return NewReader(r.z), nil
+	return r, nil
 }
 
 func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
