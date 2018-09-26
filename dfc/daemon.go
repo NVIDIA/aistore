@@ -38,6 +38,7 @@ const (
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
 	xreplication     = "replication" // TODO: fix replication
+	xec              = "ec"
 )
 
 type (

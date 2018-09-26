@@ -164,6 +164,22 @@
   version = "v1.1.5"
 
 [[projects]]
+  digest = "1:2d643962fac133904694fffa959bc3c5dcfdcee38c6f5ffdd99a3c93eb9c835c"
+  name = "github.com/klauspost/cpuid"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e7e905edc00ea8827e58662220139109efea09db"
+  version = "v1.2.0"
+
+[[projects]]
+  digest = "1:ab87b43000fa5fa39a5366836a8e45c56238f16d56c7ae48b0c7b3e2ce10c659"
+  name = "github.com/klauspost/reedsolomon"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "8885f3a1c73882e6f11b766242c69a1eb8f44b28"
+  version = "v1.8.0"
+
+[[projects]]
   digest = "1:33422d238f147d247752996a26574ac48dcf472976eda7f5134015f06bf16563"
   name = "github.com/modern-go/concurrent"
   packages = ["."]
@@ -482,6 +498,7 @@
     "github.com/dgrijalva/jwt-go",
     "github.com/google/uuid",
     "github.com/json-iterator/go",
+    "github.com/klauspost/reedsolomon",
     "github.com/nanobox-io/golang-scribble",
     "github.com/onsi/ginkgo",
     "github.com/onsi/ginkgo/extensions/table",

@@ -6,6 +6,7 @@ package cluster
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
@@ -37,6 +38,42 @@ func HrwTarget(bucket, objname string, smap *Smap) (si *Snode, errstr string) {
 			si = sinfo
 		}
 	}
+	return
+}
+
+// Returns count number of first targets with highest random weight. The list
+// of targets is sorted from the greatest to least.
+// Returns error if the cluster does not have enough targets
+func HrwTargetList(bucket, objname string, smap *Smap, count int) (si []*Snode, errstr string) {
+	if count <= 0 {
+		return nil, fmt.Sprintf("invalid number of targets requested: %d", count)
+	}
+	if smap.CountTargets() < count {
+		errstr = fmt.Sprintf("Number of targets %d is fewer than requested %d", smap.CountTargets(), count)
+		return
+	}
+
+	type tsi struct {
+		node *Snode
+		hash uint64
+	}
+	arr := make([]tsi, len(smap.Tmap), len(smap.Tmap))
+	si = make([]*Snode, count, count)
+	name := Uname(bucket, objname)
+	digest := xxhash.ChecksumString64S(name, MLCG32)
+
+	i := 0
+	for _, sinfo := range smap.Tmap {
+		cs := xoshiro256.Hash(sinfo.idDigest ^ digest)
+		arr[i] = tsi{sinfo, cs}
+		i++
+	}
+
+	sort.Slice(arr, func(i, j int) bool { return arr[i].hash > arr[j].hash })
+	for i := 0; i < count; i++ {
+		si[i] = arr[i].node
+	}
+
 	return
 }
 

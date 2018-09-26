@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/dsort"
+	"github.com/NVIDIA/dfcpub/ec"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/lru"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -101,13 +102,13 @@ type (
 		fsprg          fsprungroup
 		readahead      readaheader
 		xcopy          *mirror.XactCopy
+		ecmanager      *ecManager
 	}
 )
 
 //
 // target runner
 //
-
 func (t *targetrunner) Run() error {
 	config := cmn.GCO.Get()
 
@@ -126,6 +127,7 @@ func (t *targetrunner) Run() error {
 	smap := newSmap()
 	smap.Tmap[t.si.DaemonID] = t.si
 	t.smapowner.put(smap)
+
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
@@ -220,6 +222,9 @@ func (t *targetrunner) Run() error {
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
 
 	getfshealthchecker().SetDispatcher(t)
+
+	ec.Init()
+	t.ecmanager = NewECM(t)
 
 	aborted, _ := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted {
@@ -591,7 +596,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 //
 // 3a. attempt to restore an object that is missing in the LOCAL BUCKET - from:
-//     1) local FS, 2) this cluster, 3) other tiers in the DC
+//     1) local FS, 2) this cluster, 3) other tiers in the DC 4) from other
+//		targets using erasure coding(if it is on)
 // FIXME: must be done => (getfqn, and under write lock)
 //
 func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
@@ -635,6 +641,19 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 			}
 		}
 	}
+
+	// restore from existing EC slices if possible
+	if ecErr := t.ecmanager.RestoreObject(lom); ecErr == nil {
+		if glog.V(4) {
+			glog.Infof("%s/%s is restored successfully", lom.Bucket, lom.Objname)
+		}
+		lom.Fill(cluster.LomFstat | cluster.LomAtime)
+		lom.Doesnotexist = false
+		return
+	} else if ecErr != ec.ErrorECDisabled {
+		errstr = fmt.Sprintf("Failed to restore object %s/%s: %v", lom.Bucket, lom.Objname, ecErr)
+	}
+
 	s := fmt.Sprintf("GET local: %s(%s) %s", lom, lom.Fqn, cmn.DoesNotExist)
 	if errstr != "" {
 		errstr = s + " => [" + errstr + "]"
@@ -961,11 +980,21 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if objname != "" {
+		lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
+		if errstr := lom.Fill(0); errstr != "" {
+			t.invalmsghdlr(w, r, errstr)
+			return
+		}
+
 		err := t.fildelete(t.contextWithAuth(r), bucket, objname, evict)
 		if err != nil {
 			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
 			t.invalmsghdlr(w, r, s)
+			return
 		}
+
+		// EC cleanup if EC is enabled
+		t.ecmanager.CleanupObject(lom)
 		return
 	}
 	s := fmt.Sprintf("Invalid API request: No object name or message body.")
@@ -1157,6 +1186,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hdr.Add(cmn.HeaderBucketCopies, "0")
 	}
+
+	hdr.Add(cmn.HeaderBucketECEnabled, strconv.FormatBool(props.ECEnabled))
+	hdr.Add(cmn.HeaderBucketECMinSize, strconv.FormatUint(uint64(props.ECObjSizeLimit), 10))
+	hdr.Add(cmn.HeaderBucketECData, strconv.FormatUint(uint64(props.DataSlices), 10))
+	hdr.Add(cmn.HeaderBucketECParity, strconv.FormatUint(uint64(props.ParitySlices), 10))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -2134,6 +2168,13 @@ func (t *targetrunner) putCommit(ct context.Context, lom *cluster.LOM, putfqn st
 		}
 	}
 	lom.Doesnotexist = false
+
+	if !rebalance && errstr == "" {
+		if err := t.ecmanager.EncodeObject(lom); err != nil {
+			errstr = err.Error()
+		}
+	}
+
 	return
 }
 
@@ -3207,6 +3248,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 		s = ", action " + msg.Action
 	}
 	glog.Infof("receive Smap: v%d, ntargets %d, primary %s%s", newsmap.version(), newsmap.CountTargets(), pid, s)
+
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
@@ -3233,6 +3275,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	if newtargetid == "" {
 		return
 	}
+
 	glog.Infof("receiveSmap: newtargetid=%s", newtargetid)
 	if atomic.LoadInt64(&t.clusterStarted) != 0 {
 		go t.runRebalance(newsmap, newtargetid) // auto-rebalancing xaction

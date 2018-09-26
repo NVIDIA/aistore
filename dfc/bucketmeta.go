@@ -81,6 +81,13 @@ func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 	mm[b] = p
 }
 
+// ecEnabled returns whether or not erasure coding is enabled
+// for the bucket. Returns false if bucket not found
+func (m *bucketMD) ecEnabled(bucket string) bool {
+	p, ok := m.Get(bucket, m.IsLocal(bucket))
+	return ok && p.ECEnabled
+}
+
 func (m *bucketMD) clone() *bucketMD {
 	dst := &bucketMD{}
 	m.deepcopy(dst)

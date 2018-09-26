@@ -63,6 +63,7 @@ const (
 	ActElection    = "election"
 	ActPutCopies   = "putcopies"
 	ActEraseCopies = "erasecopies"
+	ActEC          = "ec"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -99,12 +100,16 @@ const (
 	HeaderBucketLRUEnabled      = "LRUEnabled"            // LRU is run on a bucket only if this field is true
 	HeaderBucketCopies          = "Copies"                // # local copies
 	// object meta
-	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
-	HeaderObjCksumVal  = "ObjCksumVal"  // Checksum Value
-	HeaderObjAtime     = "ObjAtime"     // Object access time
-	HeaderObjReplicSrc = "ObjReplicSrc" // In replication PUT request specifies the source target
-	HeaderObjSize      = "size"         // Object size (bytes)
-	HeaderObjVersion   = "version"      // Object version/generation - local or Cloud
+	HeaderObjCksumType    = "ObjCksumType" // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumVal     = "ObjCksumVal"  // Checksum Value
+	HeaderObjAtime        = "ObjAtime"     // Object access time
+	HeaderObjReplicSrc    = "ObjReplicSrc" // In replication PUT request specifies the source target
+	HeaderObjSize         = "size"         // Object size (bytes)
+	HeaderObjVersion      = "version"      // Object version/generation - local or Cloud
+	HeaderBucketECEnabled = "ECEnabled"    // EC is on for a bucket
+	HeaderBucketECMinSize = "ECMinSize"    // Objects under MinSize copied instead of being EC'ed
+	HeaderBucketECData    = "ECData"       // number of data chunks for EC
+	HeaderBucketECParity  = "ECParity"     // number of parity chunks for EC/copies for small files
 )
 
 // URL Query "?name1=val1&name2=..."
@@ -358,6 +363,17 @@ type BucketProps struct {
 
 	// MirrorConf defines local-mirroring policy for the bucket
 	MirrorConf `json:"mirror"`
+
+	// Erasure coding setting for the bucket
+	ECConf `json:"ec_config"`
+}
+
+// ECConfig - per-bucket erasure coding configuration
+type ECConf struct {
+	ECObjSizeLimit int64 `json:"objsize_limit"` // objects below this size are replicated instead of EC'ed
+	DataSlices     int   `json:"data_slices"`   // number of data slices
+	ParitySlices   int   `json:"parity_slices"` // number of parity slices/replicas
+	ECEnabled      bool  `json:"enabled"`       // EC is enabled
 }
 
 // ObjectProps

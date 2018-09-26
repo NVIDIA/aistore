@@ -61,6 +61,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [Bucket-specific Configuration](#bucket-specific-configuration)
     - [Checksumming](#checksumming)
     - [LRU](#lru)
+    - [Erasure coding](#erasure-coding)
 - [Object checksums: brief theory of operations](#object-checksums-brief-theory-of-operations)
 - [Command-line Load Generator](#command-line-load-generator)
 - [Metrics with StatsD](#metrics-with-statsd)
@@ -824,6 +825,30 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","v
 To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
+
+### Erasure coding
+
+DFC provides data protection for local buckets. It comes in two flavors: replication (for small objects) and erasure coding(EC) for big objects. EC is a method of data protection in which data is broken into fragments, expanded with redundant data pieces and stored across a set of different storage targets.
+
+After creation data protection for a new local is disabled. Configure EC prior to putting objects by setting bucket properties:
+
+* `ec_config.enabled`: bool - enables or disabled data protection the bucket
+* `ec_config.data_slices`: integer in the range [2, 100], representing the number of fragments the object is broken into
+* `ec_config.parity_slices`: integer in the range [2, 32], representing the number of redundant fragments to provide prtection from failures. The value defines the maximum number of storage targets a cluster can lose but it is still able to restore the original object
+* `ec_config.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated. The field can be 0 - in this case the default value is used (as of version 1.3 it is 256KiB)
+
+Choose the number data and parity slices depending on required level of protection and the cluster configuration. The number of storage targets must be greater than sum of the number of data and parity slices. If the cluster uses only replication (by setting objsize_limit to a very high value), the number of storage targets must exceed the number of parity slices.
+
+Notes:
+
+- Every data and parity slice is stored on a separate storage target. To reconstruct damaged object, DFC requires at least `ec_config.data_slices` slices in total out of data and parity sets
+- Small objects are replicated `ec_config.parity_slices` times to have the same level of data protection that big objects do
+- Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
+
+Example of setting bucket properties:
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru_props":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","lru_enabled":true}, "ec_config": {"enabled": true, "data": 4, "parity": 2}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
 
 ## Object checksums: brief theory of operations

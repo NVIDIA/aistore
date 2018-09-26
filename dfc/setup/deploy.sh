@@ -51,7 +51,7 @@ PROXYURL="http://localhost:$PORT"
 if $USE_HTTPS; then
 	PROXYURL="https://localhost:$PORT"
 fi
-LOGLEVEL="3" # Verbosity: 0 (minimal) to 4 (max)
+LOGLEVEL=${LOGLEVEL:-3} # Verbosity: 0 (minimal) to 4 (max)
 LOGROOT="/tmp/dfc$NEXT_TIER"
 #### Authentication setup #########
 SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"

@@ -406,7 +406,9 @@ func (s *Stream) objDone(obj *obj, err error) {
 			s.callback(obj.hdr, obj.reader, err)
 		}
 	}
-	obj.reader.Close() // NOTE: always closing
+	if obj.reader != nil {
+		obj.reader.Close() // NOTE: always closing
+	}
 }
 
 func (s *Stream) isNextReq(ctx context.Context) (next bool) {

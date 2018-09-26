@@ -288,6 +288,49 @@ func PathWalkErr(err error) string {
 	return fmt.Sprintf("filepath-walk invoked with err: %v", err)
 }
 
+// Saves the reader directly to a local file
+// `size` is an optional argument, if it is set only first `size` bytes
+// are saved to the file
+func SaveReader(fqn string, reader io.Reader, buf []byte, size ...int64) error {
+	file, err := CreateFile(fqn)
+	if err != nil {
+		return err
+	}
+
+	if len(size) != 0 {
+		sz := size[0]
+		_, err = io.CopyBuffer(file, io.LimitReader(reader, sz), buf)
+	} else {
+		_, err = io.CopyBuffer(file, reader, buf)
+	}
+
+	file.Close()
+	if err != nil {
+		return fmt.Errorf("Failed to save to %q: %v", fqn, err)
+	}
+
+	return nil
+}
+
+// Saves the reader to a temporary file `tmpfqn`, and if everything is OK
+// it moves the temporary file to a given `fqn`
+// `size` is an optional argument, if it is set only first `size` bytes
+// are saved to the file
+func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, size ...int64) error {
+	if fqn == "" {
+		return nil
+	}
+
+	if err := SaveReader(tmpfqn, reader, buf, size...); err != nil {
+		return err
+	}
+
+	if err := MvFile(tmpfqn, fqn); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
 // xxHash on the data.
 func ReadWriteWithHash(r io.Reader, w io.Writer, buf []byte) (int64, string, error) {

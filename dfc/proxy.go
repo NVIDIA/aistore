@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dsort"
+	"github.com/NVIDIA/dfcpub/ec"
 	"github.com/NVIDIA/dfcpub/stats"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -744,8 +745,27 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		// forbid changing EC properites if EC is already enabled (for now)
+		if bprops.ECEnabled &&
+			(bprops.ECEnabled != nprops.ECEnabled ||
+				bprops.ParitySlices != nprops.ParitySlices ||
+				bprops.DataSlices != nprops.DataSlices ||
+				bprops.ECObjSizeLimit != nprops.ECObjSizeLimit) {
+			p.bmdowner.Unlock()
+			p.invalmsghdlr(w, r, "Cannot change EC configuration after it is enabled",
+				http.StatusBadRequest)
+			return
+		}
+
 		p.copyBucketProps(bprops /*to*/, nprops /*from*/, bucket)
 	case cmn.ActResetProps:
+		if bprops.ECEnabled {
+			p.bmdowner.Unlock()
+			p.invalmsghdlr(w, r, "Cannot reset bucket properties after EC is enabled",
+				http.StatusBadRequest)
+			return
+		}
 		bprops = &cmn.BucketProps{
 			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 			LRUConf:    config.LRU,
@@ -1200,7 +1220,11 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	}
 
 	// return the list always sorted in alphabetical order
+	// prioritize items with Status=OK
 	entryLess := func(i, j int) bool {
+		if allEntries.Entries[i].Name == allEntries.Entries[j].Name {
+			return allEntries.Entries[i].Status < allEntries.Entries[j].Status
+		}
 		return allEntries.Entries[i].Name < allEntries.Entries[j].Name
 	}
 	sort.Slice(allEntries.Entries, entryLess)
@@ -2527,6 +2551,36 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 		}
 		props.CapacityUpdTime = capacityUpdTime
 	}
+
+	if props.ECEnabled {
+		if !isLocal {
+			return fmt.Errorf("Erasure coding does not support Cloud buckets")
+		}
+
+		if props.ECObjSizeLimit < 0 {
+			return fmt.Errorf("Bad EC file size %d: must be 0(default) or greater than 0", props.ECObjSizeLimit)
+		}
+		if props.DataSlices < ec.MinSliceCount || props.DataSlices > ec.MaxSliceCount {
+			return fmt.Errorf("Bad number of data slices %d: must be between %d and %d",
+				props.DataSlices, ec.MinSliceCount, ec.MaxSliceCount)
+		}
+		// TODO: warn about performance if number is OK but large?
+		if props.ParitySlices < ec.MinSliceCount || props.ParitySlices > ec.MaxSliceCount {
+			return fmt.Errorf("Bad number of parity slices %d: must be between %d and %d",
+				props.ParitySlices, ec.MinSliceCount, ec.MaxSliceCount)
+		}
+
+		// data slices + parity slices + original object
+		requried := props.DataSlices + props.ParitySlices + 1
+		targetCnt := len(p.smapowner.get().Tmap)
+		if targetCnt < requried {
+			return fmt.Errorf(
+				"It requires %d targets to use %d data and %d parity slices"+
+					"The cluster has only %d targets",
+				requried, props.DataSlices, props.ParitySlices, targetCnt)
+		}
+	}
+
 	return nil
 }
 
@@ -2638,4 +2692,9 @@ func (p *proxyrunner) copyBucketProps(bprops /*to*/, nprops /*from*/ *cmn.Bucket
 	}
 	bprops.MirrorBurst = nprops.MirrorBurst
 	bprops.MirrorUtilThresh = nprops.MirrorUtilThresh
+
+	bprops.ECEnabled = nprops.ECEnabled
+	bprops.ECObjSizeLimit = nprops.ECObjSizeLimit
+	bprops.DataSlices = nprops.DataSlices
+	bprops.ParitySlices = nprops.ParitySlices
 }

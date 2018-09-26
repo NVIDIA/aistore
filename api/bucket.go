@@ -107,6 +107,21 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
 		mirror.Copies = b
 	}
+
+	ecprops := cmn.ECConf{}
+	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketECEnabled)); err == nil {
+		ecprops.ECEnabled = b
+	}
+	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECMinSize), 10, 64); err == nil {
+		ecprops.ECObjSizeLimit = n
+	}
+	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECData), 10, 32); err == nil {
+		ecprops.DataSlices = int(n)
+	}
+	if n, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketECParity), 10, 32); err == nil {
+		ecprops.ParitySlices = int(n)
+	}
+
 	return &cmn.BucketProps{
 		CloudProvider: r.Header.Get(cmn.HeaderCloudProvider),
 		Versioning:    r.Header.Get(cmn.HeaderVersioning),
@@ -116,6 +131,7 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 		CksumConf:     cksumconf,
 		LRUConf:       lruprops,
 		MirrorConf:    mirror,
+		ECConf:        ecprops,
 	}, nil
 }
 

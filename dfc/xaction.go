@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/ec"
 	"github.com/NVIDIA/dfcpub/mirror"
 )
 
@@ -380,4 +381,25 @@ func (xs *xactions) abortAll() (sleep bool) {
 	}
 	xs.Unlock()
 	return
+}
+
+func (xs *xactions) renewEC() *ec.XactEC {
+	kind := cmn.ActEC
+	xs.Lock()
+	xx := xs.findU(cmn.ActEC)
+	if xx != nil {
+		xec := xx.(*ec.XactEC)
+		xec.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+		glog.Infof("%s already running, nothing to do", xec)
+		xs.Unlock()
+		return xec
+	}
+
+	id := xs.uniqueid()
+	xec := ECM.newXact()
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, ec.IdleTimeout)
+	go xec.Run()
+	xs.add(xec)
+	xs.Unlock()
+	return xec
 }
