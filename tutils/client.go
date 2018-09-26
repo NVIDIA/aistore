@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -508,6 +509,35 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string,
 			errCh <- err
 		}
 	}
+}
+
+// ReplicateObject replicates given objectName in bucketName using
+// targetrunner's replicate endpoint.
+func ReplicateObject(proxyURL, bucketName, objectName string) error {
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
+	if err != nil {
+		return err
+	}
+
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucketName, objectName)
+	return HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
+}
+
+// ReplicateMultipleObjects replicates all the objects in the map bucketToObjects.
+// bucketsToObjects is a key value pairing where the keys are bucket names and the
+// corresponding value is a slice of objects.
+// ReplicateMultipleObjects returns a map of errors where the key is bucket+"/"+object and the
+// corresponding value is the error that caused replication to fail.
+func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]string) map[string]error {
+	objectsWithErrors := make(map[string]error)
+	for bucket, objectList := range bucketToObjects {
+		for _, object := range objectList {
+			if err := ReplicateObject(proxyURL, bucket, object); err != nil {
+				objectsWithErrors[filepath.Join(bucket, object)] = err
+			}
+		}
+	}
+	return objectsWithErrors
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket

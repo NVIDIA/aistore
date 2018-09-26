@@ -1292,13 +1292,13 @@ func Test_checksum(t *testing.T) {
 
 	const filesize = largefilesize * 1024 * 1024
 	var (
-		filesPutCh  = make(chan string, 100)
-		fileslist   = make([]string, 0, 100)
-		errCh       = make(chan error, 100)
+		numPuts     = 5
+		filesPutCh  = make(chan string, numPuts)
+		fileslist   = make([]string, 0, numPuts)
+		errCh       = make(chan error, numPuts*2)
 		bucket      = clibucket
 		start, curr time.Time
 		duration    time.Duration
-		numPuts     = 5
 		sgl         *memsys.SGL
 		totalio     = numPuts * largefilesize
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
@@ -1388,7 +1388,9 @@ func Test_checksum(t *testing.T) {
 	tutils.Logf("GET %d MB and validate checksum (%s): %v\n", totalio, clichecksum, duration)
 	selectErr(errCh, "get", t, false)
 cleanup:
-	deletefromfilelist(t, proxyURL, bucket, errCh, fileslist)
+	deletefromfilelist(proxyURL, bucket, errCh, fileslist)
+	selectErr(errCh, "delete", t, false)
+	close(errCh)
 	// restore old config
 	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
@@ -1400,14 +1402,16 @@ cleanup:
 	return
 }
 
-func deletefromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fileslist []string) {
+// deletefromfilelist requires that errCh be twice the size of len(fileslist) as each
+// file can produce upwards of two errors.
+func deletefromfilelist(proxyURL, bucket string, errCh chan error, fileslist []string) {
 	wg := &sync.WaitGroup{}
 	// Delete local file and objects from bucket
 	for _, fn := range fileslist {
 		if usingFile {
 			err := os.Remove(LocalSrcDir + "/" + fn)
 			if err != nil {
-				t.Error(err)
+				errCh <- err
 			}
 		}
 
@@ -1416,8 +1420,6 @@ func deletefromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error,
 	}
 
 	wg.Wait()
-	selectErr(errCh, "delete", t, false)
-	close(errCh)
 }
 
 func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fileslist []string, validate bool) {

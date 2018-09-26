@@ -154,6 +154,23 @@ To open an interactive shell for a daemon with container name CONTAINER_NAME, us
 ```
 * Note: The command currently defaults to open the /tmp/dfc/log working directory. To view the list of running containers and obtain a container name, use the command: `docker ps`
 
+### Accessing These Scripts From Anywhere
+Add the following to the end of your `~/.profile`:
+```
+if [ -d "$GOPATH/src/github.com/NVIDIA/dfcpub/docker/dev" ] ; then
+  PATH="$PATH:$GOPATH/src/github.com/NVIDIA/dfcpub/docker/dev"
+fi
+```
+After that, execute the following to update your $PATH variable:
+```
+$source ~/.profile
+```
+Then, you can just execute the script name from any working directory. Example:
+```
+$container_logs.sh CONTAINER_NAME
+```
+
+
 ## Limitations
 
 Certain tests require the ability to modify files/directories or set Xattributes directly onto the filesystem of a container. These tests are currently skipped when using docker because of docker's write protection of container volumes.
