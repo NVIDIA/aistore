@@ -623,7 +623,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	const (
 		num       = 20000
-		filesize  = uint64(1024 * 128)
+		filesize  = uint64(1024)
 		seed      = int64(112)
 		maxErrPct = 0
 	)
@@ -758,7 +758,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	const (
 		num       = 20000
-		filesize  = uint64(1024 * 128)
+		filesize  = uint64(1024)
 		seed      = int64(112)
 		maxErrPct = 0
 	)

@@ -182,7 +182,6 @@ func (y *metasyncer) stop(err error) {
 
 	y.stopCh <- struct{}{}
 	close(y.stopCh)
-	close(y.workCh)
 }
 
 //

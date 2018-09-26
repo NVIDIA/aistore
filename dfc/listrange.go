@@ -232,8 +232,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 	}
 	defer func() {
 		if done != nil {
-			var v struct{}
-			done <- v
+			done <- struct{}{}
 		}
 		t.xactinp.del(xdel.id)
 	}()
@@ -350,8 +349,7 @@ loop:
 
 			// Signal completion of prefetch
 			if fwd.done != nil {
-				var v struct{}
-				fwd.done <- v
+				fwd.done <- struct{}{}
 			}
 		default:
 			// When there is nothing left to fetch, the prefetch routine ends

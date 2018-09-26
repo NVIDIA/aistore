@@ -106,8 +106,7 @@ func (xact *xactBase) tostring() string { common.Assert(false, "must be implemen
 
 func (xact *xactBase) abort() {
 	xact.etime = time.Now()
-	var e struct{}
-	xact.abrt <- e
+	xact.abrt <- struct{}{}
 	close(xact.abrt)
 }
 

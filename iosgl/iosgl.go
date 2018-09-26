@@ -205,17 +205,18 @@ func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
 // Slab
 //
 type Slab struct {
-	pool      *sync.Pool
+	sync.Pool
 	fixedSize int64
 }
 
 func newSlab(fixedSize int64) *Slab {
-	pool := &sync.Pool{
-		New: func() interface{} {
-			return make([]byte, fixedSize)
-		},
-	}
-	return &Slab{pool, fixedSize}
+	s := &Slab{fixedSize: fixedSize}
+	s.Pool.New = s.New
+	return s
+}
+
+func (s *Slab) New() interface{} {
+	return make([]byte, s.fixedSize)
 }
 
 func SelectSlab(osize int64) *Slab {
@@ -234,11 +235,11 @@ func SelectSlab(osize int64) *Slab {
 }
 
 func (s *Slab) Alloc() []byte {
-	return s.pool.Get().([]byte)
+	return s.Get().([]byte)
 }
 
 func (s *Slab) Free(buf []byte) {
-	s.pool.Put(buf)
+	s.Put(buf)
 }
 
 func (s *Slab) Size() int64 {

@@ -356,8 +356,7 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 
 func (r *statsrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
-	var v struct{}
-	r.stopCh <- v
+	r.stopCh <- struct{}{}
 	close(r.stopCh)
 }
 

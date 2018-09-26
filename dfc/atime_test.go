@@ -33,8 +33,7 @@ func TestAtimerunnerStop(t *testing.T) {
 	waitChan := make(chan struct{})
 	go func() {
 		atimer.touch("/tmp/fqn1")
-		var v struct{}
-		waitChan <- v
+		waitChan <- struct{}{}
 	}()
 
 	select {

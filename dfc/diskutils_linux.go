@@ -112,8 +112,7 @@ func (r *iostatrunner) run() error {
 
 func (r *iostatrunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
-	var v struct{}
-	r.stopCh <- v
+	r.stopCh <- struct{}{}
 	close(r.stopCh)
 
 	// Kill process if started

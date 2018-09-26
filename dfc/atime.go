@@ -121,8 +121,7 @@ loop:
 // stop aborts the receiving atimerunner
 func (r *atimerunner) stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.name, err)
-	var v struct{}
-	r.chstop <- v
+	r.chstop <- struct{}{}
 	close(r.chstop)
 }
 
