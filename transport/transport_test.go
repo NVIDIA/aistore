@@ -153,7 +153,7 @@ func Test_MultiStream(t *testing.T) {
 	defer ts.Close()
 
 	wg := &sync.WaitGroup{}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 16; i++ {
 		wg.Add(1)
 		go streamWrite10GB(i, wg, ts)
 	}
@@ -182,13 +182,13 @@ func streamWrite10GB(ii int, wg *sync.WaitGroup, ts *httptest.Server) {
 		stream.SendAsync(hdr, reader)
 		size += hdr.Dsize
 		if size-prevsize >= common.GiB {
-			fmt.Fprintf(os.Stdout, "[%d]: sent so far %d GiB\n", ii, size/common.GiB)
+			fmt.Fprintf(os.Stdout, "[%2d]: %d GiB\n", ii, size/common.GiB)
 			prevsize = size
 		}
 		num++
 	}
 	stream.Fin()
-	fmt.Fprintf(os.Stdout, "[%d]: sent num=%d, size=%d(%d MiB)\n", ii, num, size, size/common.MiB)
+	fmt.Fprintf(os.Stdout, "[%2d]: objects: %d, total size: %d(%d MiB)\n", ii, num, size, size/common.MiB)
 }
 
 func testReceive(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
@@ -212,12 +212,18 @@ func newRand(seed int64) *rand.Rand {
 
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	hdr.Bucket = strconv.FormatInt(random.Int63(), 16)
-	hdr.Objname = strconv.FormatInt(random.Int63(), 10)
+	hdr.Objname = hdr.Bucket + "/" + strconv.FormatInt(random.Int63(), 10)
 	x := random.Int63()
-	if x%1 == 0 {
+	y := x & 3
+	switch y {
+	case 0:
 		hdr.Dsize = (x & 0xffffff) + 1
-	} else {
+	case 1:
+		hdr.Dsize = (x & 0xfffff) + 1
+	case 2:
 		hdr.Dsize = (x & 0xffff) + 1
+	default:
+		hdr.Dsize = (x & 0xfff) + 1
 	}
 	return
 }

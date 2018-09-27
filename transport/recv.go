@@ -78,11 +78,11 @@ func SetMux(x *http.ServeMux) { mux = x }
 func Register(trname string, callback Receive) (path string) {
 	path = api.URLPath(api.Version, api.Transport, trname)
 	h := &handler{trname, callback}
+	mu.Lock()
 	mux.HandleFunc(path, h.receive)
 	if !strings.HasSuffix(path, "/") {
 		mux.HandleFunc(path+"/", h.receive)
 	}
-	mu.Lock()
 	_, ok := handlers[trname]
 	if ok {
 		glog.Errorf("Warning: re-registering transport handler '%s'", trname)

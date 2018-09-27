@@ -305,6 +305,9 @@ func (s *Stream) eoObj() {
 // stream helpers
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
+	if debug {
+		common.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < MaxHeaderSize-8*sizeofI64)
+	}
 	l = sizeofI64
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.Objname)
