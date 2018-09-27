@@ -118,21 +118,21 @@ type GetMsg struct {
 	GetPageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
 }
 
-// RangeListMsgBase contains fields common to Range and List operations
-type RangeListMsgBase struct {
+// ListRangeMsgBase contains fields common to Range and List operations
+type ListRangeMsgBase struct {
 	Deadline time.Duration `json:"deadline,omitempty"`
 	Wait     bool          `json:"wait,omitempty"`
 }
 
 // ListMsg contains a list of files and a duration within which to get them
 type ListMsg struct {
-	RangeListMsgBase
+	ListRangeMsgBase
 	Objnames []string `json:"objnames"`
 }
 
 // RangeMsg contains a Prefix, Regex, and Range for a Range Operation
 type RangeMsg struct {
-	RangeListMsgBase
+	ListRangeMsgBase
 	Prefix string `json:"prefix"`
 	Regex  string `json:"regex"`
 	Range  string `json:"range"`

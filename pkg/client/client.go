@@ -511,38 +511,38 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 }
 
 func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	rangeListMsgBase := api.RangeListMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := api.ListMsg{Objnames: fileslist, RangeListMsgBase: rangeListMsgBase}
+	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg, wait)
 }
 
 func PrefetchRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	prefetchMsgBase := api.RangeListMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, RangeListMsgBase: prefetchMsgBase}
+	prefetchMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
 	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg, wait)
 }
 
 func DeleteList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	rangeListMsgBase := api.RangeListMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := api.ListMsg{Objnames: fileslist, RangeListMsgBase: rangeListMsgBase}
+	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg, wait)
 }
 
 func DeleteRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	rangeListMsgBase := api.RangeListMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, RangeListMsgBase: rangeListMsgBase}
+	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg, wait)
 }
 
 func EvictList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	rangeListMsgBase := api.RangeListMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := api.ListMsg{Objnames: fileslist, RangeListMsgBase: rangeListMsgBase}
+	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg, wait)
 }
 
 func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	rangeListMsgBase := api.RangeListMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, RangeListMsgBase: rangeListMsgBase}
+	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
 	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg, wait)
 }
 

@@ -833,7 +833,9 @@ func (t *targetrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(b) > 0 { // must be a List/Range request
-		t.deletefiles(w, r, msg) // FIXME: must return ok or err
+		if err := t.listRangeOperation(r, apitems, msg); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to delete files: %v", err))
+		}
 		return
 	}
 	s := fmt.Sprintf("Invalid API request: no message body")
@@ -900,14 +902,17 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if t.readJSON(w, r, &msg) != nil {
 		return
 	}
+	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
+	if err != nil {
+		return
+	}
+
 	switch msg.Action {
 	case api.ActPrefetch:
-		t.prefetchfiles(w, r, msg)
-	case api.ActRenameLB:
-		apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
-		if err != nil {
-			return
+		if err := t.listRangeOperation(r, apitems, msg); err != nil {
+			t.invalmsghdlr(w, r, fmt.Sprintf("Failed to prefetch files: %v", err))
 		}
+	case api.ActRenameLB:
 		lbucket := apitems[0]
 		if !t.validatebckname(w, r, lbucket) {
 			return
@@ -942,10 +947,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
 	case api.ActListObjects:
-		apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
-		if err != nil {
-			return
-		}
 		lbucket := apitems[0]
 		if !t.validatebckname(w, r, lbucket) {
 			return
@@ -960,10 +961,6 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case api.ActRechecksum:
-		apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
-		if err != nil {
-			return
-		}
 		bucket := apitems[0]
 		if !t.validatebckname(w, r, bucket) {
 			return
@@ -2471,59 +2468,6 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 
 	errstr = t.sendfile(http.MethodPut, bucketFrom, objnameFrom, si, finfo.Size(), bucketTo, objnameTo)
 	return
-}
-
-func (t *targetrunner) prefetchfiles(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
-	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
-	jsmap, ok := msg.Value.(map[string]interface{})
-	if !ok {
-		t.invalmsghdlr(w, r, "Unexpected api.ActionMsg.Value format"+detail)
-		return
-	}
-	if _, ok := jsmap["objnames"]; ok {
-		// Prefetch with List
-		if prefetchMsg, errstr := parseListMsg(jsmap); errstr != "" {
-			t.invalmsghdlr(w, r, errstr+detail)
-		} else {
-			t.prefetchList(w, r, prefetchMsg)
-		}
-	} else {
-		// Prefetch with Range
-		if prefetchRangeMsg, errstr := parseRangeMsg(jsmap); errstr != "" {
-			t.invalmsghdlr(w, r, errstr+detail)
-		} else {
-			t.prefetchRange(w, r, prefetchRangeMsg)
-		}
-	}
-}
-
-func (t *targetrunner) deletefiles(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
-	evict := msg.Action == api.ActEvict
-	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
-	jsmap, ok := msg.Value.(map[string]interface{})
-	if !ok {
-		t.invalmsghdlr(w, r, "deletefiles: invalid api.ActionMsg.Value format"+detail)
-		return
-	}
-	if _, ok := jsmap["objnames"]; ok {
-		// Delete with List
-		if deleteMsg, errstr := parseListMsg(jsmap); errstr != "" {
-			t.invalmsghdlr(w, r, errstr+detail)
-		} else if evict {
-			t.evictList(w, r, deleteMsg)
-		} else {
-			t.deleteList(w, r, deleteMsg)
-		}
-	} else {
-		// Delete with Range
-		if deleteMsg, errstr := parseRangeMsg(jsmap); errstr != "" {
-			t.invalmsghdlr(w, r, errstr+detail)
-		} else if evict {
-			t.evictRange(w, r, deleteMsg)
-		} else {
-			t.deleteRange(w, r, deleteMsg)
-		}
-	}
 }
 
 // Rebalancing supports versioning. If an object in DFC cache has version in

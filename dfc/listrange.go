@@ -24,6 +24,11 @@ const (
 	defaultDeadline  = 0
 	defaultWait      = false
 	maxPrefetchPages = 10 // FIXME: Pagination for PREFETCH
+
+	//list range message keys
+	rangePrefix = "prefix"
+	rangeRegex  = "regex"
+	rangeKey    = "range"
 )
 
 type filesWithDeadline struct {
@@ -39,7 +44,7 @@ type xactPrefetch struct {
 	targetrunner *targetrunner
 }
 
-type xactDeleteEvict struct {
+type xactEvictDelete struct {
 	xactBase
 	targetrunner *targetrunner
 }
@@ -129,20 +134,14 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 }
 
 type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
-type rangef func(ct context.Context, bucket, prefix, regex string, min, max int64, deadline time.Duration, done chan struct{}) error
 
-func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, listMsg *api.ListMsg, operation listf) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
-	if err != nil {
-		return
-	}
+func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg *api.ListMsg, operation listf) error {
 	bucket := apitems[0]
 	objs := make([]string, 0, len(listMsg.Objnames))
 	for _, obj := range listMsg.Objnames {
 		si, errstr := HrwTarget(bucket, obj, t.smapowner.get())
 		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-			return
+			return fmt.Errorf(errstr)
 		}
 		if si.DaemonID == t.si.DaemonID {
 			objs = append(objs, obj)
@@ -167,69 +166,17 @@ func (t *targetrunner) listOperation(w http.ResponseWriter, r *http.Request, lis
 			close(done)
 		}
 	}
+	return nil
 }
 
-func (t *targetrunner) rangeOperation(w http.ResponseWriter, r *http.Request, rangeMsg *api.RangeMsg, operation rangef) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
-	if err != nil {
-		return
-	}
-	bucket := apitems[0]
-	min, max, err := parseRange(rangeMsg.Range)
-	if err != nil {
-		s := fmt.Sprintf("Error parsing range string (%s): %v", rangeMsg.Range, err)
-		t.invalmsghdlr(w, r, s)
-	}
-
-	var done chan struct{}
-	if rangeMsg.Wait {
-		done = make(chan struct{}, 1)
-	}
-
-	// Asynchronously perform operation
-	go func() {
-		if err := operation(t.contextWithAuth(r), bucket, rangeMsg.Prefix, rangeMsg.Regex,
-			min, max, rangeMsg.Deadline, done); err != nil {
-			glog.Errorf("Error performing range operation: %v", err)
-			t.statsif.add(statErrRangeCount, 1)
-		}
-	}()
-
-	if rangeMsg.Wait {
-		<-done
-		close(done)
-	}
-}
-
-//============
+//=============
 //
 // Delete/Evict
 //
 //=============
 
-func (t *targetrunner) deleteList(w http.ResponseWriter, r *http.Request, deleteMsg *api.ListMsg) {
-	t.listOperation(w, r, deleteMsg, t.doListDelete)
-}
-
-func (t *targetrunner) evictList(w http.ResponseWriter, r *http.Request, evictMsg *api.ListMsg) {
-	t.listOperation(w, r, evictMsg, t.doListEvict)
-}
-
-func (t *targetrunner) deleteRange(w http.ResponseWriter, r *http.Request, deleteRangeMsg *api.RangeMsg) {
-	t.rangeOperation(w, r, deleteRangeMsg, t.doRangeDelete)
-}
-
-func (t *targetrunner) evictRange(w http.ResponseWriter, r *http.Request, evictMsg *api.RangeMsg) {
-	t.rangeOperation(w, r, evictMsg, t.doRangeEvict)
-}
-
 func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	var xdel *xactDeleteEvict
-	if evict {
-		xdel = t.xactinp.newEvict()
-	} else {
-		xdel = t.xactinp.newDelete()
-	}
+	xdel := t.xactinp.newEvictDelete(evict)
 	defer func() {
 		if done != nil {
 			done <- struct{}{}
@@ -249,6 +196,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 			return nil
 		default:
 		}
+		// skip when deadline has expired
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
@@ -261,17 +209,6 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 	return nil
 }
 
-func (t *targetrunner) doRangeEvictDelete(ct context.Context, evict bool, bucket, prefix, regex string, min, max int64,
-	deadline time.Duration, done chan struct{}) error {
-
-	objs, err := t.getListFromRange(ct, bucket, prefix, regex, min, max)
-	if err != nil {
-		return err
-	}
-
-	return t.doListEvictDelete(ct, evict, objs, bucket, deadline, done)
-}
-
 func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
 	return t.doListEvictDelete(ct, false /* evict */, objs, bucket, deadline, done)
 }
@@ -280,34 +217,23 @@ func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket str
 	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, deadline, done)
 }
 
-func (t *targetrunner) doRangeDelete(ct context.Context, bucket, prefix, regex string, min, max int64,
-	deadline time.Duration, done chan struct{}) error {
-	return t.doRangeEvictDelete(ct, false /* evict */, bucket, prefix, regex, min, max, deadline, done)
-}
-func (t *targetrunner) doRangeEvict(ct context.Context, bucket, prefix, regex string, min, max int64,
-	deadline time.Duration, done chan struct{}) error {
-	return t.doRangeEvictDelete(ct, true /* evict */, bucket, prefix, regex, min, max, deadline, done)
-}
-
-func (q *xactInProgress) newDelete() *xactDeleteEvict {
+// Creates and returns a new extended action after appending it to an array of extended actions in progress
+func (q *xactInProgress) newEvictDelete(evict bool) *xactEvictDelete {
 	q.lock.Lock()
 	defer q.lock.Unlock()
+
+	xact := api.ActDelete
+	if evict {
+		xact = api.ActEvict
+	}
+
 	id := q.uniqueid()
-	xpre := &xactDeleteEvict{xactBase: *newxactBase(id, api.ActDelete)}
+	xpre := &xactEvictDelete{xactBase: *newxactBase(id, xact)}
 	q.add(xpre)
 	return xpre
 }
 
-func (q *xactInProgress) newEvict() *xactDeleteEvict {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	id := q.uniqueid()
-	xpre := &xactDeleteEvict{xactBase: *newxactBase(id, api.ActEvict)}
-	q.add(xpre)
-	return xpre
-}
-
-func (xact *xactDeleteEvict) tostring() string {
+func (xact *xactEvictDelete) tostring() string {
 	start := xact.stime.Sub(xact.targetrunner.starttime())
 	if !xact.finished() {
 		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
@@ -321,14 +247,6 @@ func (xact *xactDeleteEvict) tostring() string {
 // Prefetch
 //
 //=========
-
-func (t *targetrunner) prefetchList(w http.ResponseWriter, r *http.Request, prefetchMsg *api.ListMsg) {
-	t.listOperation(w, r, prefetchMsg, t.addPrefetchList)
-}
-
-func (t *targetrunner) prefetchRange(w http.ResponseWriter, r *http.Request, prefetchRangeMsg *api.RangeMsg) {
-	t.rangeOperation(w, r, prefetchRangeMsg, t.addPrefetchRange)
-}
 
 func (t *targetrunner) doPrefetch() {
 	xpre := t.xactinp.renewPrefetch(t)
@@ -423,20 +341,6 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket
 	return nil
 }
 
-func (t *targetrunner) addPrefetchRange(ct context.Context, bucket, prefix, regex string,
-	min, max int64, deadline time.Duration, done chan struct{}) error {
-	if t.bmdowner.get().islocal(bucket) {
-		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
-	}
-
-	objs, err := t.getListFromRange(ct, bucket, prefix, regex, min, max)
-	if err != nil {
-		return err
-	}
-
-	return t.addPrefetchList(ct, objs, bucket, deadline, done)
-}
-
 func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
 	q.lock.Lock()
 	defer q.lock.Unlock()
@@ -468,33 +372,45 @@ func (xact *xactPrefetch) tostring() string {
 //
 //================
 
-func parseRangeListMsgBase(jsmap map[string]interface{}) (pmb *api.RangeListMsgBase, errstr string) {
-	const s = "Error parsing PrefetchMsgBase:"
-	pmb = &api.RangeListMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
+func unmarshalMsgValue(jsmap map[string]interface{}, key string) (val string, errstr string) {
+	v, ok := jsmap[key]
+	if !ok {
+		errstr = fmt.Sprintf("no %s field in map", key)
+		return
+	}
+	if val, ok = v.(string); !ok {
+		errstr = fmt.Sprintf("value ((%+v, %T) corresponding to key (%s) in map is not of string type", v, v, key)
+	}
+	return
+}
+
+func parseBaseMsg(jsmap map[string]interface{}) (pbm *api.ListRangeMsgBase, errstr string) {
+	const s = "Error parsing BaseMsg:"
+	pbm = &api.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
 	if v, ok := jsmap["deadline"]; ok {
 		deadline, err := time.ParseDuration(v.(string))
 		if err != nil {
-			return pmb, fmt.Sprintf("%s (Deadline: %v, %T, %v)", s, v, v, err)
+			return pbm, fmt.Sprintf("%s (Deadline: %v, %T, %v)", s, v, v, err)
 		}
-		pmb.Deadline = deadline
+		pbm.Deadline = deadline
 	}
 	if v, ok := jsmap["wait"]; ok {
 		wait, ok := v.(bool)
 		if !ok {
-			return pmb, fmt.Sprintf("%s (Wait: %v, %T)", s, v, v)
+			return pbm, fmt.Sprintf("%s (Wait: %v, %T)", s, v, v)
 		}
-		pmb.Wait = wait
+		pbm.Wait = wait
 	}
 	return
 }
 
 func parseListMsg(jsmap map[string]interface{}) (pm *api.ListMsg, errstr string) {
-	const s = "Error parsing PrefetchMsg: "
-	pmb, errstr := parseRangeListMsgBase(jsmap)
+	const s = "Error parsing ListMsg: "
+	pbm, errstr := parseBaseMsg(jsmap)
 	if errstr != "" {
 		return
 	}
-	pm = &api.ListMsg{RangeListMsgBase: *pmb}
+	pm = &api.ListMsg{ListRangeMsgBase: *pbm}
 	v, ok := jsmap["objnames"]
 	if !ok {
 		return pm, s + "No objnames field"
@@ -515,41 +431,31 @@ func parseListMsg(jsmap map[string]interface{}) (pm *api.ListMsg, errstr string)
 }
 
 func parseRangeMsg(jsmap map[string]interface{}) (pm *api.RangeMsg, errstr string) {
-	const s = "Error parsing PrefetchRangeMsg:"
-	pmb, errstr := parseRangeListMsgBase(jsmap)
+	const s = "Error parsing RangeMsg: %s"
+	pbm, errstr := parseBaseMsg(jsmap)
 	if errstr != "" {
 		return
 	}
-	pm = &api.RangeMsg{RangeListMsgBase: *pmb}
-	v, ok := jsmap["prefix"]
-	if !ok {
-		return pm, s + " no prefix"
-	}
-	if prefix, ok := v.(string); ok {
-		pm.Prefix = prefix
-	} else {
-		return pm, fmt.Sprintf("%s couldn't parse prefix (%v, %T)", s, v, v)
-	}
+	pm = &api.RangeMsg{ListRangeMsgBase: *pbm}
 
-	v, ok = jsmap["regex"]
-	if !ok {
-		return pm, s + " no regex"
+	prefix, errstr := unmarshalMsgValue(jsmap, rangePrefix)
+	if errstr != "" {
+		return pm, fmt.Sprintf(s, errstr)
 	}
-	if regex, ok := v.(string); ok {
-		pm.Regex = regex
-	} else {
-		return pm, fmt.Sprintf("%s couldn't parse regex (%v, %T)", s, v, v)
-	}
+	pm.Prefix = prefix
 
-	v, ok = jsmap["range"]
-	if !ok {
-		return pm, s + " no range"
+	regex, errstr := unmarshalMsgValue(jsmap, rangeRegex)
+	if errstr != "" {
+		return pm, fmt.Sprintf(s, errstr)
 	}
-	if rng, ok := v.(string); ok {
-		pm.Range = rng
-	} else {
-		return pm, fmt.Sprintf("%s couldn't parse range (%v, %T)", s, v, v)
+	pm.Regex = regex
+
+	r, errstr := unmarshalMsgValue(jsmap, rangeKey)
+	if errstr != "" {
+		return pm, fmt.Sprintf(s, errstr)
 	}
+	pm.Range = r
+
 	return
 }
 
@@ -580,4 +486,74 @@ func parseRange(rangestr string) (min, max int64, err error) {
 		max = 0
 	}
 	return
+}
+
+// Converts a parsed rangeMsg to a listMsg to reduce redundancy of methods
+func (t *targetrunner) convertMsg(r *http.Request, apitems []string, rangeMsg *api.RangeMsg) (listMsg *api.ListMsg, err error) {
+	bucket := apitems[0]
+	min, max, err := parseRange(rangeMsg.Range)
+	if err != nil {
+		err = fmt.Errorf("Error parsing range string (%s): %v", rangeMsg.Range, err)
+		return
+	}
+
+	objs, err := t.getListFromRange(t.contextWithAuth(r), bucket, rangeMsg.Prefix, rangeMsg.Regex, min, max)
+	if err != nil {
+		err = fmt.Errorf("Error converting range to list: %v", err)
+		return
+	}
+
+	listMsg = &api.ListMsg{
+		ListRangeMsgBase: rangeMsg.ListRangeMsgBase,
+		Objnames:         objs,
+	}
+	return
+}
+
+//=======================================================================
+//
+// Method called by target to execute 1) prefetch, 2) evict, or 3) delete
+//
+//=======================================================================
+
+func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg api.ActionMsg) error {
+	var listMsg *api.ListMsg
+
+	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
+	jsmap, ok := msg.Value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid api.ActionMsg.Value format" + detail)
+	}
+	if _, ok := jsmap["objnames"]; !ok {
+		// Parse map into RangeMsg and convert to ListMsg
+		actionMsg, errstr := parseRangeMsg(jsmap)
+		if errstr != "" {
+			return fmt.Errorf(errstr + detail)
+		}
+		lm, err := t.convertMsg(r, apitems, actionMsg)
+		if err != nil {
+			return err
+		}
+		listMsg = lm
+	} else {
+		// Parse map into ListMsg
+		actionMsg, errstr := parseListMsg(jsmap)
+		if errstr != "" {
+			return fmt.Errorf(errstr + detail)
+		}
+		listMsg = actionMsg
+	}
+
+	// Execute prefetch operation
+	if msg.Action == api.ActPrefetch {
+		return t.listOperation(r, apitems, listMsg, t.addPrefetchList)
+	}
+
+	// Assigns the operation type based on evict flag and executes the listOperation
+	operation := t.doListDelete
+	if msg.Action == api.ActEvict {
+		operation = t.doListEvict
+	}
+	// Execute evict/delete operation
+	return t.listOperation(r, apitems, listMsg, operation)
 }
