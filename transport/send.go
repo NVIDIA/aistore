@@ -67,13 +67,16 @@ type (
 		Opaque          []byte // custom control (optional)
 		Dsize           int64  // size of the object (size=0 (unknown) not supported yet)
 	}
+
+	SendCallback func(error) // callback function type used in async send
 )
 
 // internal
 type (
 	obj struct {
-		hdr    Header
-		reader io.ReadCloser // reader, to read the object, and close when done
+		hdr      Header
+		reader   io.ReadCloser // reader, to read the object, and close when done
+		callback SendCallback  // callback fired when send has finished either successfully or with error
 	}
 	sendoff struct {
 		obj obj
@@ -120,7 +123,7 @@ func NewStream(client *http.Client, toURL string, idleTimeout ...time.Duration) 
 	return
 }
 
-func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser) {
+func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser, callbacks ...SendCallback) {
 	if glog.V(4) {
 		glog.Infof("%s send-async [%+v]", s.lid, hdr)
 	}
@@ -128,7 +131,11 @@ func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser) {
 	if atomic.CompareAndSwapInt64(&s.time.expired, lastMarker, 0) {
 		glog.Infof("%s wake-up", s.lid)
 	}
-	s.workCh <- obj{hdr, reader}
+	var callback SendCallback
+	if len(callbacks) > 0 {
+		callback = callbacks[0]
+	}
+	s.workCh <- obj{hdr, reader, callback}
 	return
 }
 
@@ -274,30 +281,47 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 	}
 	if err != nil {
 		if err == io.EOF {
-			s.eoObj()
 			err = nil
+			s.eoObj(err)
 		}
 	} else if s.sendoff.off >= s.sendoff.obj.hdr.Dsize {
-		s.eoObj()
+		s.eoObj(err)
 	}
 	return
 }
 
-func (s *Stream) eoObj() {
+func (s *Stream) eoObj(err error) {
 	s.stats.numtot++
 	s.stats.numcur++
 	s.stats.sizetot += s.sendoff.off
 	s.stats.sizecur += s.sendoff.off
 	if s.sendoff.off != s.sendoff.obj.hdr.Dsize {
-		glog.Errorf("%s offset %d != %d size", s.lid, s.sendoff.off, s.sendoff.obj.hdr.Dsize)
+		if debug {
+			common.Assert(false, fmt.Sprintf("%s: hdr: %v; offset %d != %d size", s.lid, string(s.header), s.sendoff.off, s.sendoff.obj.hdr.Dsize))
+		} else {
+			glog.Errorf("%s offset %d != %d size", s.lid, s.sendoff.off, s.sendoff.obj.hdr.Dsize)
+		}
 	} else {
 		if glog.V(4) {
 			glog.Infof("%s sent size=%d (%d/%d)", s.lid, s.sendoff.obj.hdr.Dsize, s.stats.numcur, s.stats.numtot)
 		}
 	}
 
-	_ = s.sendoff.obj.reader.Close()
+	if closeErr := s.sendoff.obj.reader.Close(); closeErr != nil {
+		if debug {
+			common.Assert(false, fmt.Sprintf("%s: hdr: %v; failed to close reader %v", s.lid, string(s.header), closeErr))
+		} else {
+			glog.Errorf("%s: failed to close reader %v", s.lid, closeErr)
+		}
+
+		if err == nil {
+			err = closeErr
+		}
+	}
 	s.time.idle.Reset(s.time.idleOut)
+	if s.sendoff.obj.callback != nil {
+		s.sendoff.obj.callback(err)
+	}
 	s.sendoff = sendoff{}
 }
 

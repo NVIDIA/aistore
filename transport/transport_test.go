@@ -192,6 +192,50 @@ func Test_MultipleNetworks(t *testing.T) {
 	}
 }
 
+func Test_OnSendCallback(t *testing.T) {
+	mux := http.NewServeMux()
+
+	transport.SetMux("n1", mux)
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	totalRecv, recvFunc := makeRecvFunc(t)
+	path := transport.Register("n1", "callback", recvFunc)
+	client := &http.Client{Transport: &http.Transport{}}
+	url := ts.URL + path
+	stream := transport.NewStream(client, url)
+
+	totalSend := int64(0)
+	var fired []bool
+	for idx := 0; idx < 100; idx++ {
+		fired = append(fired, false)
+		hdr, reader := makeRandReader()
+		callback := func(idx int) transport.SendCallback {
+			return func(err error) {
+				if err != nil {
+					t.Errorf("callback %d returned an error: %v", idx, err)
+				}
+				fired[idx] = true
+				reader.slab.Free(reader.buf)
+			}
+		}(idx)
+		stream.SendAsync(hdr, reader, callback)
+		totalSend += hdr.Dsize
+	}
+	stream.Fin()
+
+	for idx, f := range fired {
+		if !f {
+			t.Errorf("callback %d not fired", idx)
+		}
+	}
+
+	if *totalRecv != totalSend {
+		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)
+	}
+}
+
 //
 // test helpers
 //
