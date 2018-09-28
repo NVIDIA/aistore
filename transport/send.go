@@ -136,7 +136,6 @@ func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser, callbacks ...SendCa
 		callback = callbacks[0]
 	}
 	s.workCh <- obj{hdr, reader, callback}
-	return
 }
 
 func (s *Stream) Fin() {
