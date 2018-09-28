@@ -1631,7 +1631,7 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 			lbNames, err := client.GetLocalBucketNames(targetDirectURL)
 			checkFatal(err, m.t)
 			// T3
-			if stringInSlice(m.bucket, lbNames.Local) {
+			if common.StringInSlice(m.bucket, lbNames.Local) {
 				s := atomic.CompareAndSwapUint64(&m.reregistered, 0, 1)
 				if !s {
 					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)

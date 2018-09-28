@@ -267,7 +267,9 @@ Please see [FSHC readme](./fshc.md) for further details.
 
 ### Networking
 
-In addition to user-accessible (public) network, DFC cluster will optionally make use of a 2nd network that we call "internal" or intra-cluster. If configured via the [netconfig section of the configuration](dfc/setup/config.sh), this network will be utilized for latency-sensitive control plane communications including keep-alive and [metasync](#metasync).
+In addition to user-accessible public network, DFC will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [netconfig section of the configuration](dfc/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
+
+All the 3 (three) networking options are enumerated [here](common/network.go).
 
 ### Reverse proxy
 

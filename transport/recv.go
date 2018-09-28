@@ -57,37 +57,52 @@ type (
 //
 //====================
 var (
-	mux      *http.ServeMux
-	handlers map[string]*handler
+	muxers   map[string]*http.ServeMux // "mux" stands for HTTP request multiplexer
+	handlers map[string]map[string]*handler
 	mu       *sync.Mutex
 	debug    bool
 )
 
 func init() {
 	mu = &sync.Mutex{}
-	handlers = make(map[string]*handler)
+	muxers = make(map[string]*http.ServeMux)
+	handlers = make(map[string]map[string]*handler)
 	debug = os.Getenv("DFC_STREAM_DEBUG") != ""
 }
 
 //
 // API
 //
-func SetMux(x *http.ServeMux) { mux = x }
+func SetMux(network string, x *http.ServeMux) {
+	knownNetworks := []string{common.NetworkPublic, common.NetworkIntra, common.NetworkReplication}
+	if !common.StringInSlice(network, knownNetworks) {
+		glog.Warningf("unknown network: %s, expected: %v", network, knownNetworks)
+	}
+
+	mu.Lock()
+	muxers[network] = x
+	handlers[network] = make(map[string]*handler)
+	mu.Unlock()
+}
 
 // examples resulting URL.Path: /v1/transport/replication, /v1/transport/rebalance, etc.
-func Register(trname string, callback Receive) (path string) {
+func Register(network, trname string, callback Receive) (path string) {
 	path = api.URLPath(api.Version, api.Transport, trname)
 	h := &handler{trname, callback}
 	mu.Lock()
+	mux, ok := muxers[network]
+	if !ok {
+		glog.Errorf("no mux was set for this network: %s; registering was not successful for: %s", network, trname)
+		return
+	}
 	mux.HandleFunc(path, h.receive)
 	if !strings.HasSuffix(path, "/") {
 		mux.HandleFunc(path+"/", h.receive)
 	}
-	_, ok := handlers[trname]
-	if ok {
+	if _, ok = handlers[network][trname]; ok {
 		glog.Errorf("Warning: re-registering transport handler '%s'", trname)
 	}
-	handlers[trname] = h
+	handlers[network][trname] = h
 	mu.Unlock()
 	return
 }

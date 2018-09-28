@@ -689,7 +689,7 @@ func TestHeadCloudBucket(t *testing.T) {
 	checkFatal(err, t)
 
 	versionModes := []string{dfc.VersionAll, dfc.VersionCloud, dfc.VersionLocal, dfc.VersionNone}
-	if !stringInSlice(p.Versioning, versionModes) {
+	if !common.StringInSlice(p.Versioning, versionModes) {
 		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
 			clibucket, p.Versioning, strings.Join(versionModes, ", "))
 	}
@@ -1533,7 +1533,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
 
-	if stringInSlice(bucket, buckets.Local) || stringInSlice(bucket, buckets.Cloud) {
+	if common.StringInSlice(bucket, buckets.Local) || common.StringInSlice(bucket, buckets.Cloud) {
 		return false
 	}
 
@@ -1551,7 +1551,7 @@ func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
 		t.Fatalf("Failed to read bucket names: %v", err)
 	}
 
-	return stringInSlice(bucket, buckets.Cloud)
+	return common.StringInSlice(bucket, buckets.Cloud)
 }
 
 func getPrimaryURL(t *testing.T, proxyURL string) string {

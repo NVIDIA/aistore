@@ -57,6 +57,15 @@ func Assert(cond bool, args ...interface{}) {
 	glog.Fatalln(message)
 }
 
+func StringInSlice(s string, arr []string) bool {
+	for _, el := range arr {
+		if el == s {
+			return true
+		}
+	}
+	return false
+}
+
 func CreateDir(dirname string) error {
 	stat, err := os.Stat(dirname)
 	if err == nil && stat.IsDir() {

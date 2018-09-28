@@ -40,6 +40,7 @@ Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deseru
 eligendi optio, cumque nihil impedit, quo minus id, quod maxime placeat, facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.`
 	text4 = `Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet,
 ut et voluptates repudiandae sint et molestiae non-recusandae.`
+	text = text1 + text2 + text3 + text4
 )
 
 func Example_Headers() {
@@ -102,12 +103,12 @@ func Example_Mux() {
 	}
 	mux := http.NewServeMux()
 
-	transport.SetMux(mux)
+	transport.SetMux("n1", mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	path := transport.Register("dummy-rx", receive)
+	path := transport.Register("n1", "dummy-rx", receive)
 	client := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	stream := transport.NewStream(client, url)
@@ -133,12 +134,12 @@ func Test_OneStream(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 
-	transport.SetMux(mux)
+	transport.SetMux("n1", mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	streamWrite10GB(99, nil, ts)
+	streamWrite10GB(t, 99, nil, ts)
 }
 
 func Test_MultiStream(t *testing.T) {
@@ -146,8 +147,7 @@ func Test_MultiStream(t *testing.T) {
 		t.Skip("Skipping not short")
 	}
 	mux := http.NewServeMux()
-
-	transport.SetMux(mux)
+	transport.SetMux("n1", mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -155,20 +155,53 @@ func Test_MultiStream(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
-		go streamWrite10GB(i, wg, ts)
+		go streamWrite10GB(t, i, wg, ts)
 	}
 	wg.Wait()
+}
+
+func Test_MultipleNetworks(t *testing.T) {
+	totalRecv, recvFunc := makeRecvFunc(t)
+
+	var streams []*transport.Stream
+	for idx := 0; idx < 10; idx++ {
+		network := fmt.Sprintf("network-%d", idx)
+		mux := http.NewServeMux()
+		transport.SetMux(network, mux)
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+		path := transport.Register(network, "endpoint", recvFunc)
+		client := &http.Client{Transport: &http.Transport{}}
+		url := ts.URL + path
+		streams = append(streams, transport.NewStream(client, url))
+	}
+
+	totalSend := int64(0)
+	for _, stream := range streams {
+		hdr, reader := makeRandReader()
+		stream.SendAsync(hdr, reader)
+		totalSend += hdr.Dsize
+	}
+
+	for _, stream := range streams {
+		stream.Fin()
+	}
+
+	if *totalRecv != totalSend {
+		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)
+	}
 }
 
 //
 // test helpers
 //
 
-func streamWrite10GB(ii int, wg *sync.WaitGroup, ts *httptest.Server) {
+func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server) {
 	if wg != nil {
 		defer wg.Done()
 	}
-	path := transport.Register(fmt.Sprintf("rand-rx-%d", ii), testReceive)
+	totalRecv, recvFunc := makeRecvFunc(t)
+	path := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
 	client := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	stream := transport.NewStream(client, url)
@@ -189,19 +222,27 @@ func streamWrite10GB(ii int, wg *sync.WaitGroup, ts *httptest.Server) {
 	}
 	stream.Fin()
 	fmt.Fprintf(os.Stdout, "[%2d]: objects: %d, total size: %d(%d MiB)\n", ii, num, size, size/common.MiB)
+
+	if *totalRecv != size {
+		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, size)
+	}
 }
 
-func testReceive(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
-	slab := iosgl.SelectSlab(32 * common.KiB)
-	buf := slab.Alloc()
-	written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
-	if err != nil && err != io.EOF {
-		panic(err)
+func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
+	totalReceived := new(int64)
+	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+		slab := iosgl.SelectSlab(32 * common.KiB)
+		buf := slab.Alloc()
+		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
+		if err != nil && err != io.EOF {
+			t.Fatal(err)
+		}
+		if written != hdr.Dsize {
+			t.Fatalf("size %d != %d", written, hdr.Dsize)
+		}
+		*totalReceived += written
+		slab.Free(buf)
 	}
-	if written != hdr.Dsize {
-		panic(fmt.Sprintf("size %d != %d", written, hdr.Dsize))
-	}
-	slab.Free(buf)
 }
 
 func newRand(seed int64) *rand.Rand {
@@ -211,9 +252,11 @@ func newRand(seed int64) *rand.Rand {
 }
 
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
-	hdr.Bucket = strconv.FormatInt(random.Int63(), 16)
-	hdr.Objname = hdr.Bucket + "/" + strconv.FormatInt(random.Int63(), 10)
 	x := random.Int63()
+	hdr.Bucket = strconv.FormatInt(x, 10)
+	hdr.Objname = hdr.Bucket + "/" + strconv.FormatInt(common.MaxInt64-x, 10)
+	pos := x % int64(len(text))
+	hdr.Opaque = []byte(text[int(pos):])
 	y := x & 3
 	switch y {
 	case 0:
@@ -242,6 +285,14 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *iosgl.Slab) *r
 		panic("Failed read rand: " + err.Error())
 	}
 	return &randReader{buf: buf, hdr: hdr, slab: slab}
+}
+
+func makeRandReader() (transport.Header, *randReader) {
+	slab := iosgl.SelectSlab(32 * common.KiB)
+	random := newRand(time.Now().UnixNano())
+	hdr := genRandomHeader(random)
+	reader := newRandReader(random, hdr, slab)
+	return hdr, reader
 }
 
 func (r *randReader) Read(p []byte) (n int, err error) {

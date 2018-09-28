@@ -189,7 +189,7 @@ func (t *targetrunner) run() error {
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Daemon), t.daemonHandler)
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Push)+"/", t.pushHandler)
 	t.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), t.tokenHandler)
-	transport.SetMux(t.publicServer.mux) // to register transport handlers at runtime
+	transport.SetMux(common.NetworkPublic, t.publicServer.mux) // to register transport handlers at runtime
 	t.registerPublicNetHandler("/", common.InvalidHandler)
 
 	// Internal network
@@ -197,12 +197,14 @@ func (t *targetrunner) run() error {
 	t.registerInternalNetHandler(api.URLPath(api.Version, api.Health), t.healthHandler)
 	t.registerInternalNetHandler(api.URLPath(api.Version, api.Vote), t.voteHandler)
 	if ctx.config.Net.UseIntra {
+		transport.SetMux(common.NetworkIntra, t.internalServer.mux) // to register transport handlers at runtime
 		t.registerInternalNetHandler("/", common.InvalidHandler)
 	}
 
 	// Replication network
 	if ctx.config.Net.UseRepl {
 		t.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
+		transport.SetMux(common.NetworkReplication, t.replServer.mux) // to register transport handlers at runtime
 		t.registerReplNetHandler("/", common.InvalidHandler)
 	}
 
