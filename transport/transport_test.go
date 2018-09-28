@@ -55,8 +55,8 @@ func Example_Headers() {
 		)
 		for {
 			hlen = int(binary.BigEndian.Uint64(body[off:]))
-			off += 8
-			hdr = transport.ExtHeader(body[off:], hlen)
+			off += 16 // hlen and hlen-checksum
+			hdr, _ = transport.ExtHeader(body[off:], hlen)
 			if !hdr.IsLast() {
 				fmt.Fprintf(os.Stdout, "%+v (%d)\n", hdr, hlen)
 				off += hlen + int(hdr.Dsize)
@@ -76,8 +76,8 @@ func Example_Headers() {
 	sendText(stream, text1, text2)
 	stream.Fin()
 	// Output:
-	// {Bucket:abc Objname:X Opaque:[] Dsize:231} (36)
-	// {Bucket:abracadabra Objname:p/q/s Opaque:[49 50 51] Dsize:213} (51)
+	// {Bucket:abc Objname:X Opaque:[] Dsize:231} (44)
+	// {Bucket:abracadabra Objname:p/q/s Opaque:[49 50 51] Dsize:213} (59)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {

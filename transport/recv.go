@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/xoshiro256"
 )
 
 //
@@ -108,7 +109,7 @@ func Register(network, trname string, callback Receive) (path string) {
 }
 
 func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
-	var numcur, sizecur int64 // TODO: add stream session ID to support numtot and sizetot
+	var numcur, sizecur int64 // TODO: use session ID to track numtot and sizetot
 	if r.Method != http.MethodPut {
 		common.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid http method %s", r.Method))
 		return
@@ -146,16 +147,24 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 //
 
 func (it iterator) next() (obj *objReader, err error) {
-	n, err := it.body.Read(it.headerBuf[:sizeofI64])
-	if n == 0 {
+	n, err := it.body.Read(it.headerBuf[:sizeofI64*2])
+	if n < sizeofI64*2 {
 		glog.Infof("%s: next %v", it.trname, err)
 		return nil, err
 	}
-	if debug {
-		common.Assert(n == sizeofI64)
-	}
-	_, hl64 := extInt64(0, it.headerBuf[:sizeofI64])
+
+	// extract and validate hlen
+	_, hl64 := extInt64(0, it.headerBuf)
 	hlen := int(hl64)
+	if hlen > len(it.headerBuf) {
+		return nil, fmt.Errorf("%s: stream breakage type #1: header length %d", it.trname, hlen)
+	}
+	_, checksum := extUint64(0, it.headerBuf[sizeofI64:])
+	chc := xoshiro256.Hash(uint64(hl64))
+	if checksum != chc {
+		return nil, fmt.Errorf("%s: stream breakage type #2: header length %d checksum %x != %x", it.trname, hlen, checksum, chc)
+	}
+
 	if debug {
 		common.Assert(hlen < len(it.headerBuf))
 	}
@@ -164,10 +173,13 @@ func (it iterator) next() (obj *objReader, err error) {
 		if debug {
 			common.Assert(n == hlen)
 		}
-		hdr := ExtHeader(it.headerBuf, hlen)
+		hdr, sessid := ExtHeader(it.headerBuf, hlen)
 		if hdr.IsLast() {
-			glog.Infof("%s: last", it.trname)
+			glog.Infof("%s[%d]: last", sessid, it.trname)
 			return nil, io.EOF
+		}
+		if glog.V(4) {
+			glog.Infof("%s[%d]: new object size=%d", sessid, it.trname, hdr.Dsize)
 		}
 		obj = &objReader{body: it.body, hdr: hdr}
 		return
@@ -203,11 +215,12 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 //
 // helpers
 //
-func ExtHeader(body []byte, hlen int) (hdr Header) {
+func ExtHeader(body []byte, hlen int) (hdr Header, sessid int64) {
 	var off int
 	off, hdr.Bucket = extString(0, body)
 	off, hdr.Objname = extString(off, body)
 	off, hdr.Opaque = extByte(off, body)
+	off, sessid = extInt64(off, body)
 	off, hdr.Dsize = extInt64(off, body)
 	if debug {
 		common.Assert(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
@@ -229,6 +242,12 @@ func extByte(off int, from []byte) (int, []byte) {
 
 func extInt64(off int, from []byte) (int, int64) {
 	size := int64(binary.BigEndian.Uint64(from[off:]))
+	off += sizeofI64
+	return off, size
+}
+
+func extUint64(off int, from []byte) (int, uint64) {
+	size := binary.BigEndian.Uint64(from[off:])
 	off += sizeofI64
 	return off, size
 }

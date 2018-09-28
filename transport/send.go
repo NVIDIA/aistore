@@ -25,6 +25,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/xoshiro256"
 )
 
 const (
@@ -42,7 +43,7 @@ type (
 		client        *http.Client // http client thios send-stream will use
 		toURL, trname string       // http endpoint
 		// internals
-		sid       int64         // stream session ID
+		sessid    int64         // stream sessid ID
 		lid       string        // log prefix
 		workCh    chan obj      // next object to stream
 		lastCh    chan struct{} // end of stream
@@ -105,9 +106,9 @@ func NewStream(client *http.Client, toURL string, idleTimeout ...time.Duration) 
 	if len(idleTimeout) > 0 {
 		s.time.idleOut = idleTimeout[0]
 	}
-	s.sid = time.Now().UnixNano() & 0xfff // FIXME: xorshift(daemon-id, time)
+	s.sessid = time.Now().UnixNano() & 0xfff // FIXME: xorshift(daemon-id, time)
 	s.trname = path.Base(u.Path)
-	s.lid = fmt.Sprintf("%s[%d]:", s.trname, s.sid)
+	s.lid = fmt.Sprintf("%s[%d]:", s.trname, s.sessid)
 
 	s.workCh = make(chan obj, 128)
 	s.lastCh = make(chan struct{}, 1)
@@ -329,14 +330,18 @@ func (s *Stream) eoObj(err error) {
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
 	if debug {
-		common.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < MaxHeaderSize-8*sizeofI64)
+		common.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < MaxHeaderSize-12*sizeofI64)
 	}
-	l = sizeofI64
+	l = sizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.Objname)
 	l = insByte(l, s.maxheader, hdr.Opaque)
+	l = insInt64(l, s.maxheader, s.sessid)
 	l = insInt64(l, s.maxheader, hdr.Dsize)
-	insInt64(0, s.maxheader, int64(l-sizeofI64))
+	hlen := l - sizeofI64*2
+	insInt64(0, s.maxheader, int64(hlen))
+	checksum := xoshiro256.Hash(uint64(hlen))
+	insUint64(sizeofI64, s.maxheader, checksum)
 	return
 }
 
@@ -363,9 +368,11 @@ func insByte(off int, to []byte, b []byte) int {
 }
 
 func insInt64(off int, to []byte, i int64) int {
-	if debug {
-		common.Assert(len(to) >= off+sizeofI64)
-	}
 	binary.BigEndian.PutUint64(to[off:], uint64(i))
+	return off + sizeofI64
+}
+
+func insUint64(off int, to []byte, i uint64) int {
+	binary.BigEndian.PutUint64(to[off:], i)
 	return off + sizeofI64
 }
