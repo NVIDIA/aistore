@@ -282,8 +282,8 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 	if err != nil {
 		if err == io.EOF {
 			err = nil
-			s.eoObj(err)
 		}
+		s.eoObj(err)
 	} else if s.sendoff.off >= s.sendoff.obj.hdr.Dsize {
 		s.eoObj(err)
 	}
