@@ -234,7 +234,7 @@ func TestSGReader(t *testing.T) {
 	{
 		// Basic read
 		size := int64(1024)
-		sgl := iosgl.NewSGL(uint64(size))
+		sgl := iosgl.NewSGL(size)
 		defer sgl.Free()
 
 		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
@@ -244,7 +244,7 @@ func TestSGReader(t *testing.T) {
 
 		buf := make([]byte, size)
 		n, err := r.Read(buf[:512])
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
 
@@ -253,7 +253,7 @@ func TestSGReader(t *testing.T) {
 		}
 
 		n, err = r.Read(buf)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			t.Fatal(err)
 		}
 
@@ -266,7 +266,7 @@ func TestSGReader(t *testing.T) {
 
 	{
 		size := int64(1024)
-		sgl := iosgl.NewSGL(uint64(size))
+		sgl := iosgl.NewSGL(size)
 		defer sgl.Free()
 
 		r, err := readers.NewSGReader(sgl, size, true /* withHash */)
