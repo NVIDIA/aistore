@@ -74,7 +74,7 @@ var (
 func TestLocalListBucketGetTargetURL(t *testing.T) {
 	const (
 		num      = 1000
-		filesize = uint64(1024)
+		filesize = 1024
 		seed     = int64(111)
 		bucket   = TestLocalBucketName
 	)
@@ -152,7 +152,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 func TestCloudListBucketGetTargetURL(t *testing.T) {
 	const (
 		numberOfFiles = 100
-		fileSize      = uint64(1024)
+		fileSize      = 1024
 		seed          = int64(111)
 	)
 
@@ -247,12 +247,12 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 // 2. Corrupt the file
 // 3. GET file
 func TestGetCorruptFileAfterPut(t *testing.T) {
+	const filesize = 1024
 	var (
 		num        = 2
 		filenameCh = make(chan string, num)
 		errch      = make(chan error, 100)
 		sgl        *iosgl.SGL
-		filesize   = uint64(1024)
 		seed       = int64(111)
 		fqn        string
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
@@ -347,16 +347,16 @@ func TestRenameLocalBuckets(t *testing.T) {
 }
 
 func TestListObjects(t *testing.T) {
+	const fileSize = 1024
 	var (
-		numFiles        = 20
-		prefix          = "regressionList"
-		fileSize uint64 = 1024
-		bucket          = clibucket
-		seed            = baseseed + 101
-		errch           = make(chan error, numFiles*5)
-		filesput        = make(chan string, numfiles)
-		dir             = DeleteDir
-		proxyURL        = getPrimaryURL(t, proxyURLRO)
+		numFiles = 20
+		prefix   = "regressionList"
+		bucket   = clibucket
+		seed     = baseseed + 101
+		errch    = make(chan error, numFiles*5)
+		filesput = make(chan string, numfiles)
+		dir      = DeleteDir
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 		sgl      *iosgl.SGL
 	)
 	if usingSG {
@@ -562,6 +562,7 @@ func TestRebalance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+	const filesize = 1024 * 128
 	var (
 		sid             string
 		targetDirectURL string
@@ -570,7 +571,6 @@ func TestRebalance(t *testing.T) {
 		errch           = make(chan error, 100)
 		wg              = &sync.WaitGroup{}
 		sgl             *iosgl.SGL
-		filesize        = uint64(1024 * 128)
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 	)
 	filesSentOrig := make(map[string]int64)
@@ -1226,13 +1226,13 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 }
 
 func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
+	const filesize = 1024
 	var (
 		numPuts  = 64
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
 		sgl      *iosgl.SGL
-		filesize = uint64(1024)
 		bucket   = rtd.bucket
 	)
 

@@ -114,14 +114,14 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 
 func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	const (
-		fileSize  = uint64(1024)
+		fileSize  = 1024
 		numFiles  = 100
 		seedValue = int64(111)
 	)
 	var (
 		proxyURLRepl = getPrimaryReplicationURL(t, proxyURLRO)
 		bucket       = clibucket
-		size         = fileSize
+		size         = int64(fileSize)
 		r            readers.Reader
 		sgl          *iosgl.SGL
 		errCnt       int
@@ -143,7 +143,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	}
 
 	if size == 0 {
-		size = uint64(random.Intn(1024)+1) * 1024
+		size = int64(random.Intn(1024)+1) * 1024
 	}
 
 	if usingSG {

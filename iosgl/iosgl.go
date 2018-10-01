@@ -9,51 +9,41 @@ package iosgl
 import (
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/NVIDIA/dfcpub/common"
 )
 
-const (
-	largeSizeUseThresh = common.MiB / 2
-	minSizeUnknown     = 32 * common.KiB
+type (
+	// implements io.ReadWriteCloser  + Reset
+	SGL struct {
+		sgl  [][]byte
+		slab *Slab
+		woff int64 // stream
+		roff int64
+	}
+	// uses the underlying SGL to implement io.ReadWriteCloser + io.Seeker
+	Reader struct {
+		z    *SGL
+		roff int64
+	}
+	// uses the underlying SGL to implement io.ReadWriteCloser + io.Seeker
+	SliceReader struct {
+		z          *SGL
+		roff       int64
+		soff, slen int64
+	}
 )
 
-//====================
+// SGL implements io.ReadWriteCloser  + Reset (see https://golang.org/pkg/io/#ReadWriteCloser)
 //
-// globals
-//
-//====================
-var fixedSizes = []int64{4 * common.KiB, 8 * common.KiB, 16 * common.KiB, 32 * common.KiB, 64 * common.KiB, 128 * common.KiB}
-var allSlabs = []*Slab{nil, nil, nil, nil, nil, nil} // Note: the length of allSlabs must equal the length of fixedSizes.
+// SGL grows "automatically" and on demand upon writing.
+// The package does not provide any mechanism to limit the sizes
+// of allocated slabs or to react on memory pressure by dynamically shrinking slabs
+// at runtime. The responsibility to call sgl.Reclaim (see below) lies with the user.
 
-func init() {
-	for i, f := range fixedSizes {
-		allSlabs[i] = newSlab(f)
-	}
-}
-
-//
-// SGL: implements io.ReadWriteCloser  + Reset (see https://golang.org/pkg/io/#ReadWriteCloser)
-// NOTE:
-//	The package does not provide any mechanism to limit the sizes
-//	of allocated slabs or to react on memory pressure by dynamically shrinking slabs
-//	at runtime. The responsibility to call sgl.Reclaim (see below) lies with the caller.
-//
-type SGL struct {
-	sgl  [][]byte
-	slab *Slab
-	woff int64 // stream
-	roff int64
-}
-
-func NewSGL(oosize uint64) *SGL {
-	osize := int64(oosize)
-	if osize == 0 {
-		osize = minSizeUnknown
-	}
-	slab := SelectSlab(osize)
-	n := common.DivCeil(osize, slab.Size())
+func NewSGL(immediateSize int64 /* the size to allocate at contrustion time */) *SGL {
+	slab := SelectSlab(immediateSize)
+	n := common.DivCeil(immediateSize, slab.Size())
 	sgl := make([][]byte, n)
 	for i := 0; i < int(n); i++ {
 		sgl[i] = slab.Alloc()
@@ -115,17 +105,16 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64
 		roff += int64(n1)
 		n += n1
 	}
+	if n < len(b) {
+		err = io.EOF
+	}
 	return
 }
 
 // reuse already allocated SGL
-func (z *SGL) Reset() {
-	z.woff, z.roff = 0, 0
-}
+func (z *SGL) Reset() { z.woff, z.roff = 0, 0 }
 
-func (z *SGL) Close() error {
-	return nil
-}
+func (z *SGL) Close() error { return nil }
 
 func (z *SGL) Free() {
 	for i := 0; i < len(z.sgl); i++ {
@@ -141,6 +130,7 @@ func (z *SGL) Free() {
 // "Any item stored in the Pool may be removed automatically at any time without notification."
 // Meaning, GC. However, when GC starts "shrinking" the Pool, it is may be already too late
 // in a certain sense.
+//
 // Use this method to explicitly dereference buffers that belong to this SGL.
 func (z *SGL) Reclaim() {
 	for i := 0; i < len(z.sgl); i++ {
@@ -152,25 +142,15 @@ func (z *SGL) Reclaim() {
 }
 
 //
-// SGL Reader - a wrapper on top of SGL that adds Seek() capability
+// SGL Reader - implements io.ReadWriteCloser + io.Seeker
+// A given SGL can be simultaneously utilized by multiple Readers
 //
-type Reader struct {
-	z    *SGL
-	roff int64
-}
 
-func (r *Reader) Len() int {
-	if r.roff >= r.z.Cap() {
-		return 0
-	}
-	return int(r.z.Cap() - r.roff)
-}
+func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
 
-func (r *Reader) Close() error {
-	return nil
-}
+func (r *Reader) Open() (io.ReadCloser, error) { return NewReader(r.z), nil }
 
-func (r *Reader) Size() int64 { return r.z.Cap() }
+func (r *Reader) Close() error { return nil }
 
 func (r *Reader) Read(b []byte) (n int, err error) {
 	n, err, r.roff = r.z.readAtOffset(b, r.roff)
@@ -182,75 +162,59 @@ func (r *Reader) Seek(from int64, whence int) (offset int64, err error) {
 	case io.SeekStart:
 		offset = from
 	case io.SeekCurrent:
-		offset = r.z.roff + from
+		offset = r.roff + from
 	case io.SeekEnd:
 		offset = r.z.woff + from
 	default:
-		return 0, errors.New("invalid whence from *Reader.Seek")
+		return 0, errors.New("invalid whence")
 	}
 	if offset < 0 {
-		return 0, errors.New("negative position from *Reader.Seek")
+		return 0, errors.New("negative position")
 	}
 	r.roff = offset
 	return
 }
 
-func (r *Reader) Open() (io.ReadCloser, error) {
-	return NewReader(r.z), nil
-}
-
-func NewReader(z *SGL) *Reader { return &Reader{z, 0} }
-
 //
-// Slab
+// SGL Slice Reader - implements io.ReadWriteCloser + io.Seeker within given bounds
 //
-type Slab struct {
-	sync.Pool
-	fixedSize int64
+
+func NewSliceReader(z *SGL, soff, slen int64) *SliceReader {
+	return &SliceReader{z: z, roff: 0, soff: soff, slen: slen}
 }
 
-func newSlab(fixedSize int64) *Slab {
-	s := &Slab{fixedSize: fixedSize}
-	s.Pool.New = s.New
-	return s
-}
+func (r *SliceReader) Close() error { return nil }
 
-func (s *Slab) New() interface{} {
-	return make([]byte, s.fixedSize)
-}
-
-func SelectSlab(osize int64) *Slab {
-	if osize >= largeSizeUseThresh { // precondition to use the largest slab
-		return allSlabs[len(allSlabs)-1]
+func (r *SliceReader) Read(b []byte) (n int, err error) {
+	var (
+		offout int64
+		offin  = r.roff + r.soff
+		rem    = common.MinI64(r.z.woff-offin, r.slen-r.roff)
+	)
+	if rem < int64(len(b)) {
+		b = b[:int(rem)]
+		err = io.EOF
 	}
-	if osize == 0 { // when the size is unknown
-		return allSlabs[len(allSlabs)-2]
+
+	n, _, offout = r.z.readAtOffset(b, offin)
+	r.roff = offout - r.soff
+	return
+}
+
+func (r *SliceReader) Seek(from int64, whence int) (offset int64, err error) {
+	switch whence {
+	case io.SeekStart:
+		offset = from
+	case io.SeekCurrent:
+		offset = r.roff + from
+	case io.SeekEnd:
+		offset = common.MinI64(r.z.woff, r.roff+r.soff+r.slen) + from
+	default:
+		return 0, errors.New("invalid whence")
 	}
-	for i := len(allSlabs) - 2; i >= 0; i-- {
-		if osize >= fixedSizes[i] {
-			return allSlabs[i]
-		}
+	if offset < 0 {
+		return 0, errors.New("negative position")
 	}
-	return allSlabs[0]
-}
-
-func (s *Slab) Alloc() []byte {
-	return s.Get().([]byte)
-}
-
-func (s *Slab) Free(buf []byte) {
-	s.Put(buf)
-}
-
-func (s *Slab) Size() int64 {
-	return s.fixedSize
-}
-
-func AllocFromSlab(desiredSize int64) ([]byte, *Slab) {
-	slab := SelectSlab(desiredSize)
-	return slab.Alloc(), slab
-}
-
-func FreeToSlab(buf []byte, s *Slab) {
-	s.Free(buf)
+	r.roff = offset
+	return
 }

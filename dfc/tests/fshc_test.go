@@ -105,9 +105,9 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 
 func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
 	chstop chan struct{}, sgl *iosgl.SGL, bucket string) {
+	const filesize = 64 * 1024
 	var (
 		seed     = baseseed + 300
-		filesize = uint64(64 * 1024)
 		ldir     = LocalSrcDir + "/" + fshcDir
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
@@ -163,12 +163,12 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 }
 
 func TestFSCheckerDetection(t *testing.T) {
+	const filesize = 64 * 1024
 	var (
 		err      error
 		sgl      *iosgl.SGL
 		seed     = baseseed + 300
 		numObjs  = 100
-		filesize = uint64(64 * 1024)
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 

@@ -221,11 +221,10 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 	if err == nil {
 		if r.StatusCode >= http.StatusBadRequest {
 			bytes, err := ioutil.ReadAll(r.Body)
-			if err != nil || len(bytes) == 0 || len(bytes) > maxBodyErrorLength {
-				// it seems the body is empty or it contains an object instead of error text
-				return 0, "", fmt.Errorf("Bad status code from %s: http status %d", src, r.StatusCode)
+			if err == nil {
+				return 0, "", fmt.Errorf("Bad status %d from %s, response: %s", r.StatusCode, src, string(bytes))
 			} else {
-				return 0, "", fmt.Errorf("Bad status code from %s: http status %d, error: %s", src, r.StatusCode, string(bytes))
+				return 0, "", fmt.Errorf("Bad status %d from %s, err: %v", r.StatusCode, src, err)
 			}
 		}
 
@@ -233,11 +232,11 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		if validate {
 			length, hash, err = readers.ReadWriteWithHash(bufreader, w)
 			if err != nil {
-				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
+				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
 		} else {
 			if length, err = io.Copy(w, bufreader); err != nil {
-				return 0, "", fmt.Errorf("Failed to read http response, err: %v", err)
+				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
 		}
 	} else {
@@ -376,7 +375,7 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	}
 	req, httperr := http.NewRequest(http.MethodDelete, url, nil)
 	if httperr != nil {
-		err = fmt.Errorf("Failed to create new http request, err: %v", httperr)
+		err = fmt.Errorf("Failed to create new HTTP request, err: %v", httperr)
 		emitError(nil, err, errch)
 		return err
 	}
@@ -447,7 +446,7 @@ func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) 
 		page.Entries = make([]*api.BucketEntry, 0, 1000)
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read http response body, err = %v", err)
+			return nil, fmt.Errorf("Failed to read http response body, err: %v", err)
 		}
 
 		if resp.StatusCode >= http.StatusBadRequest {
@@ -486,7 +485,7 @@ func Evict(proxyURL, bucket string, fname string) error {
 	EvictMsg.Name = bucket + "/" + fname
 	injson, err = json.Marshal(EvictMsg)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal EvictMsg: %v", err)
+		return fmt.Errorf("Failed to marshal EvictMsg, err: %v", err)
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, fname)
@@ -501,7 +500,7 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 	actionMsg := api.ActionMsg{Action: action, Value: listrangemsg}
 	injson, err = json.Marshal(actionMsg)
 	if err != nil {
-		return fmt.Errorf("Failed to marhsal api.ActionMsg: %v", err)
+		return fmt.Errorf("Failed to marhsal api.ActionMsg, err: %v", err)
 	}
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
 	headers := map[string]string{
@@ -620,10 +619,10 @@ func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err er
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
 		b, ioErr := ioutil.ReadAll(r.Body)
 		if ioErr != nil {
-			err = fmt.Errorf("failed to read response body, err = %s", ioErr)
+			err = fmt.Errorf("Failed to read response, err: %v", ioErr)
 			return
 		}
-		err = fmt.Errorf("head bucket/object: %s/%s failed, HTTP status code: %d, HTTP response body: %s",
+		err = fmt.Errorf("HEAD bucket/object: %s/%s failed, HTTP status: %d, HTTP response: %s",
 			bucket, objname, r.StatusCode, string(b))
 		return
 	}
@@ -676,10 +675,10 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 		}
 		b, ioErr := ioutil.ReadAll(r.Body)
 		if ioErr != nil {
-			err = fmt.Errorf("failed to read response body, err = %s", ioErr)
+			err = fmt.Errorf("Failed to read response body, err: %v", ioErr)
 			return false, err
 		}
-		err = fmt.Errorf("IsCached failed: bucket/object: %s/%s, HTTP status code: %d, HTTP response body: %s",
+		err = fmt.Errorf("IsCached failed: bucket/object: %s/%s, HTTP status: %d, HTTP response: %s",
 			bucket, objname, r.StatusCode, string(b))
 		return false, err
 	}
@@ -693,7 +692,7 @@ func Put(proxyURL string, reader readers.Reader, bucket string, key string, sile
 		fmt.Printf("PUT: %s/%s\n", bucket, key)
 	}
 
-	handle, err := reader.Open()
+	handle, err := reader.Open() // FIXME: wrong semantics for in-mem readers
 	if err != nil {
 		return fmt.Errorf("Failed to open reader, err: %v", err)
 	}
@@ -717,24 +716,16 @@ func Put(proxyURL string, reader readers.Reader, bucket string, key string, sile
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Failed to send put request, err = %v", err)
+		return fmt.Errorf("Failed to PUT, err: %v", err)
 	}
-
 	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
+		resp.Body.Close()
 	}()
 
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("Failed to read response body, err = %v", err)
-		}
-
-		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	_, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Failed to read HTTP response, err: %v", err)
 	}
-
 	return nil
 }
 
@@ -970,7 +961,7 @@ func GetClusterMap(url string) (dfc.Smap, error) {
 	}
 
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return dfc.Smap{}, fmt.Errorf("get Smap, http status %d", r.StatusCode)
+		return dfc.Smap{}, fmt.Errorf("get Smap, HTTP status %d", r.StatusCode)
 	}
 
 	var (
@@ -979,12 +970,12 @@ func GetClusterMap(url string) (dfc.Smap, error) {
 	)
 	b, err = ioutil.ReadAll(r.Body)
 	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to read response body")
+		return dfc.Smap{}, fmt.Errorf("Failed to read response, err: %v", err)
 	}
 
 	err = json.Unmarshal(b, &smap)
 	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal Smap: %v", err)
+		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal Smap, err: %v", err)
 	}
 
 	return smap, nil
@@ -1028,7 +1019,7 @@ func getXactionResponse(proxyURL string, kind string) ([]byte, error) {
 	var response []byte
 	response, err = ioutil.ReadAll(r.Body)
 	if err != nil {
-		return []byte{}, fmt.Errorf("Failed to read response body")
+		return []byte{}, fmt.Errorf("Failed to read response, err: %v", err)
 	}
 
 	return response, nil
@@ -1070,7 +1061,7 @@ func HTTPRequestWithResp(method string, url string, msg readers.Reader, headers 
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request, err = %v", err)
+		return nil, fmt.Errorf("Failed to create request, err: %v", err)
 	}
 
 	if msg != nil {
@@ -1086,7 +1077,7 @@ func HTTPRequestWithResp(method string, url string, msg readers.Reader, headers 
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to do request, err = %v", err)
+		return nil, fmt.Errorf("Failed to %s, err: %v", method, err)
 	}
 
 	defer func() {
@@ -1098,7 +1089,7 @@ func HTTPRequestWithResp(method string, url string, msg readers.Reader, headers 
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read response body, err = %v", err)
+			return nil, fmt.Errorf("Failed to read response, err: %v", err)
 		}
 
 		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
@@ -1168,12 +1159,12 @@ func TargetMountpaths(targetUrl string) (*api.MountpathList, error) {
 		return nil, err
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("Target mountpath list, HTTP error code = %d", resp.StatusCode)
+		return nil, fmt.Errorf("Target mountpath list, HTTP status = %d", resp.StatusCode)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read response body, err = %v", err)
+		return nil, fmt.Errorf("Failed to read response, err: %v", err)
 	}
 
 	mp := &api.MountpathList{}
@@ -1220,7 +1211,7 @@ func RemoveTargetMountpath(daemonUrl, mpath string) error {
 func UnregisterTarget(proxyURL, sid string) error {
 	smap, err := GetClusterMap(proxyURL)
 	if err != nil {
-		return fmt.Errorf("GetClusterMap() failed, err = %v", err)
+		return fmt.Errorf("GetClusterMap() failed, err: %v", err)
 	}
 
 	target, ok := smap.Tmap[sid]

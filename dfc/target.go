@@ -692,7 +692,7 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int6
 	rangeReader = io.NewSectionReader(file, offset, length)
 	xx := xxhash.New64()
 	if length <= maxBytesInMem {
-		sgl = iosgl.NewSGL(uint64(length))
+		sgl = iosgl.NewSGL(length)
 		_, err := ReceiveAndChecksum(sgl, rangeReader, buf, xx)
 		if err != nil {
 			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)

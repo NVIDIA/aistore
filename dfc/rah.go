@@ -300,7 +300,7 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		reader = io.NewSectionReader(file, rahfcache.rangeOff, rahfcache.rangeLen)
 	}
 	if !ctx.config.Readahead.Discard {
-		rahfcache.sgl = iosgl.NewSGL(uint64(fsize))
+		rahfcache.sgl = iosgl.NewSGL(fsize)
 	}
 	// 3. read
 	for size < fsize {

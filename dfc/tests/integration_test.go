@@ -67,7 +67,7 @@ type metadata struct {
 func TestGetAndReRegisterInParallel(t *testing.T) {
 	const (
 		num       = 20000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 5
 	)
@@ -163,7 +163,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	const (
 		num                 = 20000
 		otherTasksToTrigger = 1
-		filesize            = uint64(1024)
+		filesize            = 1024
 		seed                = int64(111)
 		maxErrPct           = 5
 	)
@@ -322,7 +322,7 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	const (
 		num       = 10000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 5
 	)
@@ -426,7 +426,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	const (
 		num       = 10000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 0
 	)
@@ -530,7 +530,7 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	const (
 		num       = 10000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 0
 	)
@@ -623,7 +623,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	const (
 		num       = 20000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(112)
 		maxErrPct = 0
 	)
@@ -734,7 +734,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// make sure that the cluster has all targets enabled
 	_, err = waitForPrimaryProxy(
 		md.proxyURL,
-		"target is back",
+		"to join target back",
 		smap.Version, testing.Verbose(),
 		md.originalProxyCount,
 		md.originalTargetCount,
@@ -758,7 +758,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	const (
 		num       = 20000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(112)
 		maxErrPct = 0
 	)
@@ -861,7 +861,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	const (
 		num       = 10000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 0
 	)
@@ -1053,7 +1053,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	const (
 		newTestLocalBucketName = TestLocalBucketName + "_new"
 		num                    = 1000
-		filesize               = uint64(1024)
+		filesize               = 1024
 		seed                   = int64(111)
 		maxErrPct              = 0
 	)
@@ -1183,7 +1183,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 func TestAddAndRemoveMountpath(t *testing.T) {
 	const (
 		num       = 5000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 0
 	)
@@ -1282,7 +1282,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	const (
 		num          = 5000
-		filesize     = uint64(1024)
+		filesize     = 1024
 		seed         = int64(111)
 		maxErrPct    = 0
 		newMountpath = "/tmp/dfc"
@@ -1360,7 +1360,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	const (
 		num          = 10000
-		filesize     = uint64(1024)
+		filesize     = 1024
 		seed         = int64(111)
 		maxErrPct    = 0
 		newMountpath = "/tmp/dfc/mountpath"
@@ -1442,7 +1442,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 func TestDisableAndEnableMountpath(t *testing.T) {
 	const (
 		num       = 5000
-		filesize  = uint64(1024)
+		filesize  = 1024
 		seed      = int64(111)
 		maxErrPct = 0
 	)
@@ -1723,7 +1723,7 @@ func checkObjectDistribution(t *testing.T, m *metadata) {
 func TestForwardCP(t *testing.T) {
 	const (
 		num      = 10000
-		filesize = uint64(128)
+		filesize = 128
 		seed     = int64(555)
 	)
 	var (
@@ -1802,7 +1802,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	const (
 		num      = 50
-		filesize = uint64(1024)
+		filesize = 1024
 		seed     = int64(141)
 	)
 
@@ -1874,7 +1874,7 @@ func TestAtimeRebalance(t *testing.T) {
 	// make sure that the cluster has all targets enabled
 	_, err = waitForPrimaryProxy(
 		m.proxyURL,
-		"target is back",
+		"to join target back",
 		smap.Version, testing.Verbose(),
 		m.originalProxyCount,
 		m.originalTargetCount,

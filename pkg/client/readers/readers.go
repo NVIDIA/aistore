@@ -317,7 +317,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 }
 
 type sgReader struct {
-	*iosgl.Reader
+	iosgl.Reader
 	xxHash string
 }
 
@@ -341,7 +341,8 @@ func NewSGReader(sgl *iosgl.SGL, size int64, withHash bool) (Reader, error) {
 		return nil, err
 	}
 
-	return &sgReader{iosgl.NewReader(sgl), hash}, nil
+	r := iosgl.NewReader(sgl)
+	return &sgReader{*r, hash}, nil
 }
 
 type bytesReader struct {

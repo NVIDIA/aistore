@@ -210,6 +210,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
+		filesize     = 16 * 1024
 	)
 	var sgl *iosgl.SGL
 	proxyURL := getPrimaryURL(t, proxyURLRO)
@@ -220,7 +221,6 @@ func Test_putdeleteRange(t *testing.T) {
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	errch := make(chan error, numfiles*5)
 	filesput := make(chan string, numfiles)
-	filesize := uint64(16 * 1024)
 
 	if usingSG {
 		sgl = iosgl.NewSGL(filesize)
@@ -362,7 +362,7 @@ func Test_putdelete(t *testing.T) {
 
 	errch := make(chan error, numfiles)
 	filesput := make(chan string, numfiles)
-	filesize := uint64(512 * 1024)
+	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
@@ -520,6 +520,7 @@ func printbucketnames(t *testing.T, r *http.Response) {
 }
 
 func Test_coldgetmd5(t *testing.T) {
+	const filesize = largefilesize * 1024 * 1024
 	var (
 		numPuts   = 5
 		filesput  = make(chan string, numPuts)
@@ -528,7 +529,6 @@ func Test_coldgetmd5(t *testing.T) {
 		wg        = &sync.WaitGroup{}
 		bucket    = clibucket
 		totalsize = numPuts * largefilesize
-		filesize  = uint64(largefilesize * 1024 * 1024)
 		sgl       *iosgl.SGL
 		proxyURL  = getPrimaryURL(t, proxyURLRO)
 	)
@@ -942,12 +942,12 @@ func testListBucket(t *testing.T, proxyURL, bucket string, msg *api.GetMsg, limi
 // (targets are co-located with where this test is running from, because
 // it searches a local oldFileIfo system)
 func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
+	const fileSize = 1024
 	var (
-		numFiles               = 3
-		fileSize        uint64 = 1024
-		seed                   = baseseed + 111
-		errorChannel           = make(chan error, numFiles*5)
-		fileNameChannel        = make(chan string, numfiles)
+		numFiles        = 3
+		seed            = baseseed + 111
+		errorChannel    = make(chan error, numFiles*5)
+		fileNameChannel = make(chan string, numfiles)
 		sgl             *iosgl.SGL
 		fqn             string
 		fileName        string
@@ -1088,12 +1088,12 @@ func validateGETUponFileChangeForChecksumValidation(
 // (targets are co-located with where this test is running from, because
 // it searches a local file system)
 func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
+	const fileSize = 1024
 	var (
 		numFiles        = 3
 		fileNameChannel = make(chan string, numFiles)
 		errorChannel    = make(chan error, 100)
 		sgl             *iosgl.SGL
-		fileSize        = uint64(1024)
 		seed            = int64(111)
 		bucketName      = TestLocalBucketName
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
@@ -1188,25 +1188,25 @@ func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, 
 	_, _, err := client.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
-	} else if !strings.Contains(err.Error(), "http status 500") {
+	} else if !strings.Contains(err.Error(), "status 500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
 	_, _, err = client.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
-	} else if !strings.Contains(err.Error(), "http status 404") {
+	} else if !strings.Contains(err.Error(), "status 404") {
 		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%s]", err.Error())
 	}
 }
 
 func TestRangeRead(t *testing.T) {
+	const fileSize = 1024
 	var (
 		numFiles        = 1
 		fileNameChannel = make(chan string, numFiles)
 		errorChannel    = make(chan error, numFiles)
 		sgl             *iosgl.SGL
-		fileSize        = uint64(1024)
 		seed            = int64(131)
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 		bucketName      = clibucket
@@ -1376,6 +1376,7 @@ func Test_checksum(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
+	const filesize = largefilesize * 1024 * 1024
 	var (
 		filesput    = make(chan string, 100)
 		fileslist   = make([]string, 0, 100)
@@ -1384,7 +1385,6 @@ func Test_checksum(t *testing.T) {
 		start, curr time.Time
 		duration    time.Duration
 		numPuts     = 5
-		filesize    = uint64(largefilesize * 1024 * 1024)
 		sgl         *iosgl.SGL
 		totalio     = numPuts * largefilesize
 		proxyURL    = getPrimaryURL(t, proxyURLRO)

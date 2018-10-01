@@ -254,7 +254,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	checkFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
-		"target is back",
+		"to join target back",
 		smap.Version, testing.Verbose(),
 		len(smap.Pmap),
 		len(smap.Tmap)+1,
@@ -320,11 +320,11 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 
 func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	const objCountToTest = 15
+	const filesize = 1024 * 1024
 	var (
 		filesput   = make(chan string, objCountToTest)
 		fileslist  = make(map[string]string, objCountToTest)
 		errch      = make(chan error, objCountToTest)
-		filesize   = uint64(1024 * 1024)
 		numPuts    = objCountToTest
 		bucket     = clibucket
 		versionDir = "versionid"

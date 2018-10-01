@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	filesizes = [3]int{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
-	ratios    = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}         // #gets / #puts
+	filesizes = [3]int64{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
+	ratios    = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}           // #gets / #puts
 )
 
 func Test_smoke(t *testing.T) {
@@ -76,7 +76,7 @@ func Test_smoke(t *testing.T) {
 	}
 }
 
-func oneSmoke(t *testing.T, proxyURL string, filesize int, ratio float32, bseed int64, filesput chan string) {
+func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bseed int64, filesput chan string) {
 	// Start the worker pools
 	errch := make(chan error, 100)
 	var wg = &sync.WaitGroup{}
@@ -90,7 +90,7 @@ func oneSmoke(t *testing.T, proxyURL string, filesize int, ratio float32, bseed 
 	// Get the workers started
 	if usingSG {
 		for i := 0; i < numworkers; i++ {
-			sgls[i] = iosgl.NewSGL(uint64(filesize))
+			sgls[i] = iosgl.NewSGL(filesize)
 		}
 		defer func() {
 			for _, sgl := range sgls {
