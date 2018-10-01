@@ -19,7 +19,7 @@ import (
 func doPut(wo *workOrder) {
 	var sgl *iosgl.SGL
 	if runParams.usingSG {
-		sgl = iosgl.NewSGL(uint64(wo.size))
+		sgl = iosgl.NewSGL(wo.size)
 		defer sgl.Free()
 	}
 
