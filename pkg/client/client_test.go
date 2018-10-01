@@ -33,10 +33,10 @@ func TestPutFile(t *testing.T) {
 }
 
 func TestPutSG(t *testing.T) {
-	size := 10
-	sgl := iosgl.NewSGL(uint64(size))
+	size := int64(10)
+	sgl := iosgl.NewSGL(size)
 	defer sgl.Free()
-	err := putSG(sgl, int64(size), false /* withHash */)
+	err := putSG(sgl, size, false /* withHash */)
 	if err != nil {
 		t.Fatal(err)
 	}
