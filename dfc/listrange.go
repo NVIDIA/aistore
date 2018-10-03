@@ -23,7 +23,6 @@ const (
 	prefetchChanSize = 200
 	defaultDeadline  = 0
 	defaultWait      = false
-	maxPrefetchPages = 10 // FIXME: Pagination for PREFETCH
 
 	//list range message keys
 	rangePrefix = "prefix"
@@ -49,70 +48,38 @@ type xactEvictDelete struct {
 	targetrunner *targetrunner
 }
 
-//===========================
-//
-// Generic List/Range Methods
-//
-//===========================
+type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
 
-func (t *targetrunner) getListFromRangeCloud(ct context.Context, bucket string, msg *api.GetMsg) (bucketList *api.BucketList, err error) {
-	bucketList = &api.BucketList{Entries: make([]*api.BucketEntry, 0)}
-	for i := 0; i < maxPrefetchPages; i++ {
-		jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
-		if errstr != "" {
-			return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
-		}
-		reslist := &api.BucketList{}
-		if err := jsoniter.Unmarshal(jsbytes, reslist); err != nil {
-			return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
-		}
-		bucketList.Entries = append(bucketList.Entries, reslist.Entries...)
-		if reslist.PageMarker == "" {
-			break
-		} else if i == maxPrefetchPages-1 {
-			glog.Warningf("Did not prefetch all keys (More than %d pages)", maxPrefetchPages)
-		}
-		msg.GetPageMarker = reslist.PageMarker
+func getCloudBucketPage(ct context.Context, bucket string, msg *api.GetMsg) (bucketList *api.BucketList, err error) {
+	jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
+	if errstr != "" {
+		return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
 	}
-
+	bucketList = &api.BucketList{}
+	if err := jsoniter.Unmarshal(jsbytes, bucketList); err != nil {
+		return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
+	}
 	return
 }
 
-func (t *targetrunner) getListFromRange(ct context.Context, bucket, prefix, regex string, min, max int64) ([]string, error) {
-	msg := &api.GetMsg{GetPrefix: prefix}
-	var (
-		fullbucketlist *api.BucketList
-		err            error
-	)
-	islocal := t.bmdowner.get().islocal(bucket)
-	if islocal {
-		fullbucketlist, err = t.prepareLocalObjectList(bucket, msg)
-	} else {
-		fullbucketlist, err = t.getListFromRangeCloud(ct, bucket, msg)
+func (t *targetrunner) getOpFromActionMsg(action string) listf {
+	switch action {
+	case api.ActPrefetch:
+		return t.addPrefetchList
+	case api.ActEvict:
+		return t.doListEvict
+	case api.ActDelete:
+		return t.doListDelete
+	default:
+		return nil
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	objs := make([]string, 0, len(fullbucketlist.Entries))
-	re, err := regexp.Compile(regex)
-	if err != nil {
-		return nil, fmt.Errorf("Could not compile regex: %v", err)
-	}
-	for _, be := range fullbucketlist.Entries {
-		if !acceptRegexRange(be.Name, prefix, re, min, max) {
-			continue
-		}
-		if si, errstr := HrwTarget(bucket, be.Name, t.smapowner.get()); si == nil || si.DaemonID == t.si.DaemonID {
-			if errstr != "" {
-				return nil, fmt.Errorf(errstr)
-			}
-			objs = append(objs, be.Name)
-		}
-	}
-
-	return objs, nil
 }
+
+//======================
+//
+// Regex Matching Method
+//
+//======================
 
 func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64) bool {
 	oname := strings.TrimPrefix(name, prefix)
@@ -131,42 +98,6 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 		return true
 	}
 	return false
-}
-
-type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
-
-func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg *api.ListMsg, operation listf) error {
-	bucket := apitems[0]
-	objs := make([]string, 0, len(listMsg.Objnames))
-	for _, obj := range listMsg.Objnames {
-		si, errstr := HrwTarget(bucket, obj, t.smapowner.get())
-		if errstr != "" {
-			return fmt.Errorf(errstr)
-		}
-		if si.DaemonID == t.si.DaemonID {
-			objs = append(objs, obj)
-		}
-	}
-	if len(objs) != 0 {
-		var done chan struct{}
-		if listMsg.Wait {
-			done = make(chan struct{}, 1)
-		}
-
-		// Asynchronously perform operation
-		go func() {
-			if err := operation(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done); err != nil {
-				glog.Errorf("Error performing list operation: %v", err)
-				t.statsif.add(statErrListCount, 1)
-			}
-		}()
-
-		if listMsg.Wait {
-			<-done
-			close(done)
-		}
-	}
-	return nil
 }
 
 //=============
@@ -488,28 +419,6 @@ func parseRange(rangestr string) (min, max int64, err error) {
 	return
 }
 
-// Converts a parsed rangeMsg to a listMsg to reduce redundancy of methods
-func (t *targetrunner) convertMsg(r *http.Request, apitems []string, rangeMsg *api.RangeMsg) (listMsg *api.ListMsg, err error) {
-	bucket := apitems[0]
-	min, max, err := parseRange(rangeMsg.Range)
-	if err != nil {
-		err = fmt.Errorf("Error parsing range string (%s): %v", rangeMsg.Range, err)
-		return
-	}
-
-	objs, err := t.getListFromRange(t.contextWithAuth(r), bucket, rangeMsg.Prefix, rangeMsg.Regex, min, max)
-	if err != nil {
-		err = fmt.Errorf("Error converting range to list: %v", err)
-		return
-	}
-
-	listMsg = &api.ListMsg{
-		ListRangeMsgBase: rangeMsg.ListRangeMsgBase,
-		Objnames:         objs,
-	}
-	return
-}
-
 //=======================================================================
 //
 // Method called by target to execute 1) prefetch, 2) evict, or 3) delete
@@ -517,7 +426,10 @@ func (t *targetrunner) convertMsg(r *http.Request, apitems []string, rangeMsg *a
 //=======================================================================
 
 func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg api.ActionMsg) error {
-	var listMsg *api.ListMsg
+	operation := t.getOpFromActionMsg(msg.Action)
+	if operation == nil {
+		return fmt.Errorf("Invalid Operation")
+	}
 
 	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
 	jsmap, ok := msg.Value.(map[string]interface{})
@@ -525,35 +437,124 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg
 		return fmt.Errorf("invalid api.ActionMsg.Value format" + detail)
 	}
 	if _, ok := jsmap["objnames"]; !ok {
-		// Parse map into RangeMsg and convert to ListMsg
-		actionMsg, errstr := parseRangeMsg(jsmap)
+		// Parse map into RangeMsg, convert to and process ListMsg page-by-page
+		rangeMsg, errstr := parseRangeMsg(jsmap)
 		if errstr != "" {
 			return fmt.Errorf(errstr + detail)
 		}
-		lm, err := t.convertMsg(r, apitems, actionMsg)
+		return t.iterateBucketListPages(r, apitems, rangeMsg, operation)
+	}
+	// Parse map into ListMsg
+	listMsg, errstr := parseListMsg(jsmap)
+	if errstr != "" {
+		return fmt.Errorf(errstr + detail)
+	}
+	return t.listOperation(r, apitems, listMsg, operation)
+}
+
+func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg *api.ListMsg, f listf) error {
+	var err error
+	bucket := apitems[0]
+	objs := make([]string, 0, len(listMsg.Objnames))
+	for _, obj := range listMsg.Objnames {
+		si, errstr := HrwTarget(bucket, obj, t.smapowner.get())
+		if errstr != "" {
+			return fmt.Errorf(errstr)
+		}
+		if si.DaemonID == t.si.DaemonID {
+			objs = append(objs, obj)
+		}
+	}
+
+	if len(objs) != 0 {
+		done := make(chan struct{}, 1)
+		defer close(done)
+
+		errch := make(chan error)
+		defer close(errch)
+
+		// Asynchronously perform function
+		go func() {
+			err := f(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done)
+			if err != nil {
+				glog.Errorf("Error performing list function: %v", err)
+				t.statsif.add(statErrListCount, 1)
+			}
+			errch <- err
+		}()
+
+		if listMsg.Wait {
+			<-done
+			err = <-errch
+		}
+	}
+	return err
+}
+
+func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, rangeMsg *api.RangeMsg, operation listf) error {
+	var (
+		bucketListPage *api.BucketList
+		err            error
+		bucket         = apitems[0]
+		prefix         = rangeMsg.Prefix
+		ct             = t.contextWithAuth(r)
+		msg            = &api.GetMsg{GetPrefix: prefix, GetProps: api.GetPropsStatus}
+		islocal        = t.bmdowner.get().islocal(bucket)
+	)
+
+	min, max, err := parseRange(rangeMsg.Range)
+	if err != nil {
+		return fmt.Errorf("Error parsing range string (%s): %v", rangeMsg.Range, err)
+	}
+
+	re, err := regexp.Compile(rangeMsg.Regex)
+	if err != nil {
+		return fmt.Errorf("Could not compile regex: %v", err)
+	}
+
+	for {
+		if islocal {
+			bucketListPage, err = t.prepareLocalObjectList(bucket, msg)
+		} else {
+			bucketListPage, err = getCloudBucketPage(ct, bucket, msg)
+		}
 		if err != nil {
 			return err
 		}
-		listMsg = lm
-	} else {
-		// Parse map into ListMsg
-		actionMsg, errstr := parseListMsg(jsmap)
-		if errstr != "" {
-			return fmt.Errorf(errstr + detail)
+		if len(bucketListPage.Entries) == 0 {
+			break
 		}
-		listMsg = actionMsg
-	}
 
-	// Execute prefetch operation
-	if msg.Action == api.ActPrefetch {
-		return t.listOperation(r, apitems, listMsg, t.addPrefetchList)
-	}
+		matchingEntries := make([]string, 0, len(bucketListPage.Entries))
+		for _, be := range bucketListPage.Entries {
+			if !acceptRegexRange(be.Name, prefix, re, min, max) {
+				continue
+			}
+			if be.Status != api.ObjStatusOK {
+				continue
+			}
+			matchingEntries = append(matchingEntries, be.Name)
+		}
 
-	// Assigns the operation type based on evict flag and executes the listOperation
-	operation := t.doListDelete
-	if msg.Action == api.ActEvict {
-		operation = t.doListEvict
+		if len(matchingEntries) != 0 {
+			// Create a ListMsg with a single page of BucketList containing BucketEntries
+			listMsg := &api.ListMsg{
+				ListRangeMsgBase: rangeMsg.ListRangeMsgBase,
+				Objnames:         matchingEntries,
+			}
+
+			// Call listrange function with paged chunk of entries
+			if err := t.listOperation(r, apitems, listMsg, operation); err != nil {
+				return err
+			}
+		}
+		// Stop when the last page of BucketList is reached
+		if bucketListPage.PageMarker == "" {
+			break
+		}
+
+		// Update PageMarker for the next request
+		msg.GetPageMarker = bucketListPage.PageMarker
 	}
-	// Execute evict/delete operation
-	return t.listOperation(r, apitems, listMsg, operation)
+	return nil
 }

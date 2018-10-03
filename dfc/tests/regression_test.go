@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -979,7 +980,7 @@ func TestDeleteList(t *testing.T) {
 	)
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
-	// 1. Put files to delete:
+	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
 		r, err := client.NewRandReader(fileSize, true /* withHash */)
 		checkFatal(err, t)
@@ -1000,9 +1001,10 @@ func TestDeleteList(t *testing.T) {
 		t.Error(err)
 	}
 
-	// 3. Check to see that all the files have been deleted.
+	// 3. Check to see that all the files have been deleted
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	checkFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
@@ -1019,11 +1021,13 @@ func TestPrefetchRange(t *testing.T) {
 		t.Skip("skipping test in short mode.")
 	}
 	var (
-		netprefetches = int64(0)
-		err           error
-		rmin, rmax    int64
-		re            *regexp.Regexp
-		proxyURL      = getPrimaryURL(t, proxyURLRO)
+		netprefetches  = int64(0)
+		err            error
+		rmin, rmax     int64
+		re             *regexp.Regexp
+		proxyURL       = getPrimaryURL(t, proxyURLRO)
+		prefetchPrefix = "regressionList/obj"
+		prefetchRegex  = "\\d*"
 	)
 
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
@@ -1077,7 +1081,7 @@ func TestPrefetchRange(t *testing.T) {
 		}
 	}
 
-	// 4. Evict those objects from the cache, and then prefetch them.
+	// 4. Evict those objects from the cache, and then prefetch them
 	tlogf("Evicting and Prefetching %d objects\n", len(files))
 	err = client.EvictRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
@@ -1088,7 +1092,7 @@ func TestPrefetchRange(t *testing.T) {
 		t.Error(err)
 	}
 
-	// 5. Ensure that all the prefetches occurred.
+	// 5. Ensure that all the prefetches occurred
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
@@ -1121,7 +1125,7 @@ func TestDeleteRange(t *testing.T) {
 
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
-	// 1. Put files to delete:
+	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
 		r, err := client.NewRandReader(fileSize, true /* withHash */)
 		checkFatal(err, t)
@@ -1133,7 +1137,7 @@ func TestDeleteRange(t *testing.T) {
 	wg.Wait()
 	selectErr(errch, "put", t, true)
 
-	// 2. Delete the small range of objects:
+	// 2. Delete the small range of objects
 	err = client.DeleteRange(proxyURL, clibucket, prefix, regex, smallrange, true, 0)
 	if err != nil {
 		t.Error(err)
@@ -1142,6 +1146,7 @@ func TestDeleteRange(t *testing.T) {
 	// 3. Check to see that the correct files have been deleted
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	checkFatal(err, t)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
 	}
@@ -1159,7 +1164,7 @@ func TestDeleteRange(t *testing.T) {
 		}
 	}
 
-	// 4. Delete the big range of objects:
+	// 4. Delete the big range of objects
 	err = client.DeleteRange(proxyURL, clibucket, prefix, regex, bigrange, true, 0)
 	if err != nil {
 		t.Error(err)
@@ -1167,15 +1172,112 @@ func TestDeleteRange(t *testing.T) {
 
 	// 5. Check to see that all the files have been deleted
 	bktlst, err = client.ListBucket(proxyURL, clibucket, msg, 0)
+	checkFatal(err, t)
+	if len(bktlst.Entries) != 0 {
+		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
+	}
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
+}
+
+// Testing only local bucket objects since generally not concerned with cloud bucket object deletion
+func TestStressDeleteRange(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	const (
+		fileSize   = int64(10)
+		numFiles   = 20000 // currently, some files are not created if numFiles % numreaders != 0
+		numReaders = 200   // hardcoded value
+	)
+	var (
+		err          error
+		prefix       = ListRangeStr + "/tstf-"
+		wg           = &sync.WaitGroup{}
+		errch        = make(chan error, numFiles)
+		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		regex        = "\\d*"
+		tenth        = numFiles / 10
+		partial_rnge = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) //numFiles must be divisible by 10 and -1 since upper limit is inclusive
+		rnge         = fmt.Sprintf("0:%d", numFiles)
+		readersList  [numReaders]client.Reader
+	)
+
+	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+
+	tlogf("Local bucket %s added\n", TestLocalBucketName)
+
+	// 1. Put files to delete
+	for i := 0; i < numReaders; i++ {
+		r, err := client.NewRandReader(fileSize, false /* withoutHash */)
+		checkFatal(err, t)
+		readersList[i] = r
+
+		go func(i int) {
+			wg.Add(1)
+			for j := 0; j < numFiles/numReaders; j++ {
+				err := client.Put(proxyURL, readersList[i], TestLocalBucketName, fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j), !testing.Verbose())
+				if err != nil {
+					errch <- err
+				}
+				readersList[i].Seek(0, io.SeekStart)
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+	selectErr(errch, "put", t, true)
+
+	// 2. Delete a range of objects
+	tlogf("Deleting objects in range: %s\n", partial_rnge)
+	err = client.DeleteRange(proxyURL, TestLocalBucketName, prefix, regex, partial_rnge, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 3. Check to see that correct files in the range have been deleted
+	expectedRemaining := tenth
+	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	bktlst, err := client.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
+	checkFatal(err, t)
+	if len(bktlst.Entries) != expectedRemaining {
+		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), expectedRemaining)
+	}
+
+	filemap := make(map[string]*api.BucketEntry)
+	for _, entry := range bktlst.Entries {
+		filemap[entry.Name] = entry
+	}
+	for i := 0; i < numFiles; i++ {
+		keyname := fmt.Sprintf("%s%d", prefix, i)
+		_, ok := filemap[keyname]
+		if ok && i < numFiles-tenth {
+			t.Errorf("File exists that should have been deleted: %s", keyname)
+		} else if !ok && i >= numFiles-tenth {
+			t.Errorf("File does not exist that should not have been deleted: %s", keyname)
+		}
+	}
+
+	// 4. Delete the entire range of objects
+	tlogf("Deleting objects in range: %s\n", rnge)
+	err = client.DeleteRange(proxyURL, TestLocalBucketName, prefix, regex, rnge, true, 0)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// 5. Check to see that all files have been deleted
+	msg = &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	bktlst, err = client.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
+	checkFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
 	}
 
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
+	destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 }
 
 func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesput chan string) {

@@ -540,7 +540,7 @@ func Evict(proxyURL, bucket string, fname string) error {
 	return HTTPRequest(http.MethodDelete, url, NewBytesReader(injson))
 }
 
-func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}, wait bool) error {
+func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}) error {
 	var (
 		injson []byte
 		err    error
@@ -561,37 +561,37 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg, wait)
+	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 func PrefetchRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	prefetchMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	prefetchMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg, wait)
+	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 func DeleteList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg, wait)
+	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 func DeleteRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	deleteMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg, wait)
+	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 func EvictList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg, wait)
+	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg)
 }
 
 func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
 	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
 	evictMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg, wait)
+	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg)
 }
 
 // fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
@@ -784,7 +784,7 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string,
 	err := Put(proxyURL, reader, bucket, key, silent)
 	if err != nil {
 		if errch == nil {
-			fmt.Println("Error channel is not given, do know how to report error", err)
+			fmt.Println("Error channel is not given, do not know how to report error", err)
 		} else {
 			errch <- err
 		}
