@@ -243,11 +243,14 @@ Warning: as of the version 1.2, all changes done via REST API(below) are not per
 
 ### Managing filesystems
 
-A target uses the configuration option `fspaths` as the list of local directories where the targets stores objects. A `fspath` aka `mountpath` (both terms are used interchangeably) is, simply, a local directory that is serviced by a local filesystem. NOTE: there must be a 1-to-1 relationship between a `fspath` and an underlying local filesystem.
+A target uses the configuration option `fspaths` as the list of local directories where the targets stores objects. A `fspath` aka `mountpath` (both terms are used interchangeably) is, simply, a local directory that is serviced by a local filesystem. NOTE: there must be a 1-to-1 relationship between a `fspath` and an underlying local filesystem. Note this is not the case in dev environments where multiple mountpaths
+can exist on a single filesystem.
 
 DFC REST API makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the DFC built-in mechanism of object distribution. For further details about FSHC and filesystem REST API, please [see FSHC readme](./fshc.md).
 
-Warning: as of the version 1.2, all changes done via REST API are not persistent.
+Warning: as of the version 1.2, all changes done via REST API are not persistent.  
+Note mountpaths that contain "/local/" or "/cloud/" anywhere in their path are not valid and cannot be added. This also applies to mountpaths that end in "/local" or "/cloud".
+
 
 ### Disabling extended attributes
 

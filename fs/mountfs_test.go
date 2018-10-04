@@ -18,6 +18,31 @@ func TestAddNonExistingMountpath(t *testing.T) {
 	assertMountpathCount(t, mfs, 0, 0)
 }
 
+func TestAddInvalidMountpaths(t *testing.T) {
+	mfs := NewMountedFS()
+
+	err := mfs.AddMountpath("/local")
+	if err == nil {
+		t.Error("adding invalid mountpath succeeded")
+	}
+
+	err = mfs.AddMountpath("/cloud")
+	if err == nil {
+		t.Error("adding invalid mountpath succeeded")
+	}
+
+	err = mfs.AddMountpath("/tmp/local/abcd")
+	if err == nil {
+		t.Error("adding invalid mountpath succeeded")
+	}
+
+	err = mfs.AddMountpath("/tmp/cloud/abcd")
+	if err == nil {
+		t.Error("adding invalid mountpath succeeded")
+	}
+	assertMountpathCount(t, mfs, 0, 0)
+}
+
 func TestAddExistingMountpath(t *testing.T) {
 	mfs := NewMountedFS()
 	err := mfs.AddMountpath("/tmp")

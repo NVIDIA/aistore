@@ -369,22 +369,25 @@ func splitFQN(fqn string) (mpath, bucket, objName string, isLocal bool, err erro
 	var bucketType string
 	path := fqn
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	found := false
-OUTER:
-	for mpath = range availablePaths {
-		for _, bucketType = range []string{"local", "cloud"} {
-			prefix := filepath.Join(mpath, bucketType) + string(filepath.Separator)
-			if strings.HasPrefix(path, prefix) {
-				path = strings.TrimPrefix(path, prefix)
-				found = true
-				break OUTER
-			}
-		}
-	}
-
-	if !found {
+	mpath = fqn2mountPath(fqn)
+	if mpath == "" {
 		err = fmt.Errorf("fqn: %s does not belong to any mountpath", fqn)
+		return
+	}
+	path = strings.TrimPrefix(path, mpath)
+
+	sep := string(filepath.Separator)
+	path = strings.TrimPrefix(path, sep)
+	fqnCloudPrefix := ctx.config.CloudBuckets + sep
+	fqnLocalPrefix := ctx.config.LocalBuckets + sep
+	if strings.HasPrefix(path, fqnCloudPrefix) {
+		path = strings.TrimPrefix(path, fqnCloudPrefix)
+		bucketType = ctx.config.CloudBuckets
+	} else if strings.HasPrefix(path, fqnLocalPrefix) {
+		path = strings.TrimPrefix(path, fqnLocalPrefix)
+		bucketType = ctx.config.LocalBuckets
+	} else {
+		err = fmt.Errorf("fqn: %s does not belong to any valid bucket type", fqn)
 		return
 	}
 
@@ -404,7 +407,7 @@ OUTER:
 		return
 	}
 
-	isLocal = bucketType == "local"
+	isLocal = bucketType == ctx.config.LocalBuckets
 	return
 }
 

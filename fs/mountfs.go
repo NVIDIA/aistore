@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -92,6 +93,11 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 
 // AddMountpath adds new mountpath to the target's mountpaths.
 func (mfs *MountedFS) AddMountpath(mpath string) error {
+	if strings.HasSuffix(mpath, "/local") || strings.HasSuffix(mpath, "/cloud") ||
+		strings.Contains(mpath, "/local/") || strings.Contains(mpath, "/cloud/") {
+		return fmt.Errorf("Cannot add fspath %q with suffix /local or /cloud. "+
+			"Fspath also cannot contain /local/ or /cloud/ anywhere in its path.", mpath)
+	}
 	if _, err := os.Stat(mpath); err != nil {
 		return fmt.Errorf("fspath %q does not exists, err: %v", mpath, err)
 	}
