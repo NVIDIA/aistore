@@ -83,3 +83,50 @@ func TestResetBucketProps(t *testing.T) {
 	// check that bucket props are reset
 	validateBucketProps(t, globalProps, *p)
 }
+
+func TestSetBucketNextTierURLInvalid(t *testing.T) {
+	var (
+		proxyURL          = getPrimaryURL(t, proxyURLRO)
+		bucketProps       dfc.BucketProps
+		invalidDaemonURLs []string
+	)
+
+	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+
+	smap, err := client.GetClusterMap(proxyURL)
+	tutils.CheckFatal(err, t)
+
+	if len(smap.Tmap) < 1 || len(smap.Pmap) < 1 {
+		t.Fatal("This test requires there to be at least one target and one proxy in the current cluster")
+	}
+
+	// Test Invalid Proxy URLs for NextTierURL property
+	for _, proxyInfo := range smap.Pmap {
+		invalidDaemonURLs = append(invalidDaemonURLs,
+			proxyInfo.InternalNet.DirectURL,
+			proxyInfo.PublicNet.DirectURL,
+			proxyInfo.ReplNet.DirectURL,
+		)
+		// Break early to avoid flooding the logs with too many error messages.
+		break
+	}
+
+	// Test Invalid Target URLs for NextTierURL property
+	for _, targetInfo := range smap.Tmap {
+		invalidDaemonURLs = append(invalidDaemonURLs,
+			targetInfo.InternalNet.DirectURL,
+			targetInfo.PublicNet.DirectURL,
+			targetInfo.ReplNet.DirectURL,
+		)
+		// Break early to avoid flooding the logs with too many error messages.
+		break
+	}
+
+	for _, url := range invalidDaemonURLs {
+		bucketProps.NextTierURL = url
+		if err = client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps); err == nil {
+			t.Fatalf("Setting the bucket's nextTierURL to daemon %q should fail, it is in the current cluster.", url)
+		}
+	}
+}

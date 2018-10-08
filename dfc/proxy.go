@@ -725,7 +725,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	switch msg.Action {
 	case api.ActSetProps:
-		if err := validateBucketProps(props, isLocal); err != nil {
+		if err := p.validateBucketProps(props, isLocal); err != nil {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
@@ -2487,11 +2487,32 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 	return p.broadcast(bcastArgs)
 }
 
-func validateBucketProps(props *BucketProps, isLocal bool) error {
+func (p *proxyrunner) urlOutsideCluster(url string) bool {
+	smap := p.smapowner.get()
+	for _, proxyInfo := range smap.Pmap {
+		if proxyInfo.InternalNet.DirectURL == url || proxyInfo.PublicNet.DirectURL == url ||
+			proxyInfo.ReplNet.DirectURL == url {
+			return false
+		}
+	}
+	for _, targetInfo := range smap.Tmap {
+		if targetInfo.InternalNet.DirectURL == url || targetInfo.PublicNet.DirectURL == url ||
+			targetInfo.ReplNet.DirectURL == url {
+			return false
+		}
+	}
+	return true
+}
+
+func (p *proxyrunner) validateBucketProps(props *BucketProps, isLocal bool) error {
 	if props.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(props.NextTierURL); err != nil {
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
 		}
+		if !p.urlOutsideCluster(props.NextTierURL) {
+			return fmt.Errorf("Invalid next tier URL: %s, URL is in current cluster", props.NextTierURL)
+		}
+
 	}
 	if err := validateCloudProvider(props.CloudProvider, isLocal); err != nil {
 		return err
