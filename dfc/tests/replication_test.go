@@ -38,7 +38,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	xxhash := getXXHashChecksum(t, reader)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s\n", TestLocalBucketName, object, proxyURLRepl)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, xxhash, reader)
@@ -63,7 +63,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	url := proxyURLRepl + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
 	headers := map[string]string{
@@ -97,7 +97,7 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, badChecksum, reader)

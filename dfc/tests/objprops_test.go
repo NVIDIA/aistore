@@ -427,7 +427,9 @@ func propsMainTest(t *testing.T, versioning string) {
 	if oldVersioning != versioning {
 		setConfig("versioning", versioning, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	defer func() {
 		// restore configuration
@@ -436,11 +438,6 @@ func propsMainTest(t *testing.T, versioning string) {
 		}
 		if oldVersioning != versioning {
 			setConfig("versioning", oldVersioning, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
-		}
-		if created {
-			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-				t.Errorf("Failed to delete local bucket: %v", err)
-			}
 		}
 	}()
 

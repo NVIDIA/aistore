@@ -311,7 +311,9 @@ func rwstress(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 	filelock.files = make([]fileLock, numFiles, numFiles)
 
 	generateRandomData(t, baseseed+10000, numFiles)
@@ -330,12 +332,6 @@ func rwstress(t *testing.T) {
 	wg.Wait()
 	rwDelLoop(t, proxyURL, fileNames, nil, doneCh, rwRunCleanUp)
 	rwstressCleanup(t)
-
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func rwstressCleanup(t *testing.T) {

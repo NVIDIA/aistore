@@ -36,8 +36,10 @@ func Test_smoke(t *testing.T) {
 	if err := common.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
@@ -67,12 +69,6 @@ func Test_smoke(t *testing.T) {
 	case err := <-errch:
 		t.Error(err)
 	default:
-	}
-
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
 	}
 }
 

@@ -170,25 +170,16 @@ func TestFSCheckerDetection(t *testing.T) {
 		seed     = baseseed + 300
 		numObjs  = 100
 		proxyURL = getPrimaryURL(t, proxyURLRO)
+		bucket   = TestLocalBucketName
 	)
 
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
-	bucket := clibucket
-	if isCloudBucket(t, proxyURL, bucket) {
-		bucket = TestLocalBucketName
-	}
-	// create local bucket to write to, or use an existing one
-	if createLocalBucketIfNotExists(t, proxyURL, bucket) {
-		tlogf("created local bucket %s\n", bucket)
-	}
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyURL, bucket)
-		checkFatal(err, t)
-	}()
+	// create local bucket to write to
+	createFreshLocalBucket(t, proxyURL, bucket)
+	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
@@ -332,10 +323,6 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	bucket := clibucket
-	if isCloudBucket(t, proxyURL, bucket) {
-		bucket = TestLocalBucketName
-	}
 
 	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)

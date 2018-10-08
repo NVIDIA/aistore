@@ -139,7 +139,9 @@ func Test_download(t *testing.T) {
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
@@ -191,12 +193,6 @@ func Test_matchdelete(t *testing.T) {
 		t.Fail()
 	default:
 	}
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func Test_putdeleteRange(t *testing.T) {
@@ -218,7 +214,10 @@ func Test_putdeleteRange(t *testing.T) {
 	if err := common.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
+
 	errch := make(chan error, numfiles*5)
 	filesput := make(chan string, numfiles)
 
@@ -341,12 +340,6 @@ func Test_putdeleteRange(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 // PUT, then delete
@@ -364,7 +357,9 @@ func Test_putdelete(t *testing.T) {
 	filesput := make(chan string, numfiles)
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	if usingSG {
 		sgl = iosgl.NewSGL(filesize)
@@ -407,11 +402,6 @@ func Test_putdelete(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func listObjects(t *testing.T, proxyURL string, msg *api.GetMsg, bucket string, objLimit int) (*api.BucketList, error) {
@@ -612,14 +602,15 @@ func TestHeadLocalBucket(t *testing.T) {
 		capacityUpdTimeTestSetting         = "2m"
 		lruEnabledTestSetting              = true
 		nextTierURL                        = "http://foo.com"
+		bucket                             = TestLocalBucketName
 	)
 	var (
 		bucketProps dfc.BucketProps
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	createFreshLocalBucket(t, proxyURL, bucket)
+	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierURL
@@ -636,10 +627,10 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
 	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
 
-	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
+	err := client.SetBucketProps(proxyURL, bucket, bucketProps)
 	checkFatal(err, t)
 
-	p, err := client.HeadBucket(proxyURL, TestLocalBucketName)
+	p, err := client.HeadBucket(proxyURL, bucket)
 	checkFatal(err, t)
 
 	validateBucketProps(t, bucketProps, *p)
@@ -733,7 +724,10 @@ func TestHeadObject(t *testing.T) {
 
 func TestHeadObjectCheckCached(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
+
 	fileName := "headobject_check_cached_test_file"
 	fileSize := 1024
 	r, err := readers.NewRandReader(int64(fileSize), false)
@@ -759,12 +753,6 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	checkFatal(err, t)
 	if b {
 		t.Error("Expected object to NOT be cached after deleting object, got true from client.IsCached")
-	}
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
 	}
 }
 
@@ -1099,15 +1087,11 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 		fqn             string
 		errstr          string
+		err             error
 	)
 
-	err := client.CreateLocalBucket(proxyURL, bucketName)
-	checkFatal(err, t)
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyURL, bucketName)
-		checkFatal(err, t)
-	}()
+	createFreshLocalBucket(t, proxyURL, bucketName)
+	defer destroyLocalBucket(t, proxyURL, bucketName)
 
 	if usingSG {
 		sgl = iosgl.NewSGL(fileSize)
@@ -1218,7 +1202,10 @@ func TestRangeRead(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
+
 	putRandomFiles(proxyURL, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, false, sgl)
 	selectErr(errorChannel, "put", t, false)
 
@@ -1269,12 +1256,6 @@ cleanup:
 	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	close(errorChannel)
 	close(fileNameChannel)
-
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func testValidCases(fileSize uint64, t *testing.T, proxyURL, bucketName string, fileName string, checkEntireObjCkSum bool, checkDir string) {
@@ -1390,7 +1371,10 @@ func Test_checksum(t *testing.T) {
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	created := createLocalBucketIfNotExists(t, proxyURL, bucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, bucket); created {
+		defer destroyLocalBucket(t, proxyURL, bucket)
+	}
+
 	ldir := LocalSrcDir + "/" + ChksumValidStr
 	if err := common.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
@@ -1480,12 +1464,6 @@ cleanup:
 	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, bucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
-
 	return
 }
 
@@ -1537,8 +1515,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		return false
 	}
 
-	err = client.CreateLocalBucket(proxyURL, bucket)
-	if err != nil {
+	if err := client.CreateLocalBucket(proxyURL, bucket); err != nil {
 		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
 	}
 

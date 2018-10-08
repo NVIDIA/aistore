@@ -551,11 +551,8 @@ func concurrentPutGetDel(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	smap := getClusterMap(t, proxyURL)
 
-	exists, err := client.DoesLocalBucketExist(proxyURL, clibucket)
-	checkFatal(err, t)
-	if !exists {
-		err := client.CreateLocalBucket(proxyURL, clibucket)
-		checkFatal(err, t)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
 	}
 
 	var (
@@ -583,7 +580,6 @@ func concurrentPutGetDel(t *testing.T) {
 	for err := range errch {
 		checkFatal(err, t)
 	}
-	client.DestroyLocalBucket(proxyURL, clibucket)
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
@@ -743,12 +739,8 @@ func proxyStress(t *testing.T) {
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	exists, err := client.DoesLocalBucketExist(proxyURL, localBucketName)
-	checkFatal(err, t)
-	if !exists {
-		err := client.CreateLocalBucket(proxyURL, localBucketName)
-		checkFatal(err, t)
-	}
+	createFreshLocalBucket(t, proxyURL, localBucketName)
+	defer destroyLocalBucket(t, proxyURL, localBucketName)
 
 	// start all workers
 	for i := 0; i < numworkers; i++ {
@@ -793,7 +785,6 @@ loop:
 	}
 
 	wg.Wait()
-	client.DestroyLocalBucket(proxyURL, localBucketName)
 }
 
 // smap 	- current Smap
