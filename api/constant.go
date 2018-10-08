@@ -231,12 +231,12 @@ const (
 type BucketEntry struct {
 	Name      string `json:"name"`                // name of the object - note: does not include the bucket name
 	Size      int64  `json:"size"`                // size in bytes
-	Ctime     string `json:"ctime"`               // formatted as per GetMsg.GetTimeFormat
-	Checksum  string `json:"checksum"`            // checksum
-	Type      string `json:"type"`                // "file" OR "directory"
-	Atime     string `json:"atime"`               // formatted as per GetMsg.GetTimeFormat
-	Bucket    string `json:"bucket"`              // parent bucket name
-	Version   string `json:"version"`             // version/generation ID. In GCP it is int64, in AWS it is a string
+	Ctime     string `json:"ctime,omitempty"`     // formatted as per GetMsg.GetTimeFormat
+	Checksum  string `json:"checksum,omitempty"`  // checksum
+	Type      string `json:"type,omitempty"`      // "file" OR "directory"
+	Atime     string `json:"atime,omitempty"`     // formatted as per GetMsg.GetTimeFormat
+	Bucket    string `json:"bucket,omitempty"`    // parent bucket name
+	Version   string `json:"version,omitempty"`   // version/generation ID. In GCP it is int64, in AWS it is a string
 	IsCached  bool   `json:"iscached"`            // if the file is cached on one of targets
 	TargetURL string `json:"targetURL,omitempty"` // URL of target which has the entry
 	Status    string `json:"status,omitempty"`    // empty - normal object, it can be "moved", "deleted" etc
