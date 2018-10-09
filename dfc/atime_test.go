@@ -7,8 +7,6 @@ package dfc
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -18,22 +16,25 @@ import (
 )
 
 func TestAtimerunnerStop(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	atimer := &atimerunner{
-		chfqn:  make(chan string),
-		chstop: make(chan struct{}),
-		atimemap: &atimemap{
-			fsToFilesMap: make(map[string]map[string]time.Time),
-		},
-	}
-	go atimer.Run()
+	mpath := "/tmp"
+	fileName := "/tmp/local/bck1/fqn1"
 
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	ctx.mountpaths.DisableFsIDCheck()
+	ctx.mountpaths.AddMountpath(mpath)
+
+	target := newFakeTargetRunner()
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+
+	go atimer.Run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 	atimer.Stop(fmt.Errorf("test"))
 
 	waitCh := make(chan struct{})
 	go func() {
-		atimer.touch("/tmp/fqn1")
-		waitCh <- struct{}{}
+		atimer.touch(fileName)
+		waitChan <- struct{}{}
 	}()
 
 	select {
@@ -45,23 +46,26 @@ func TestAtimerunnerStop(t *testing.T) {
 }
 
 func TestAtimerunnerTouch(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	atimer := newAtimeRunner()
-	go atimer.Run()
+	mpath := "/tmp"
+	fileName := "/tmp/local/bck1/fqn1"
 
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	ctx.mountpaths.AddMountpath(mpath)
+	target := newFakeTargetRunner()
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+
+	go atimer.Run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
+
 	timeBeforeTouch := time.Now()
-	atimer.touch(tempFile.Name())
+	atimer.touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fs]) != 1 {
+	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
 	}
-	accessTime, ok := atimer.atime(tempFile.Name())
+	atimeResponse := <-atimer.atime(fileName)
+	accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
 	if !ok {
 		t.Error("File is not present in atime map")
 	}
@@ -77,20 +81,41 @@ func TestAtimerunnerTouch(t *testing.T) {
 	atimer.Stop(fmt.Errorf("test"))
 }
 
-func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
+func TestAtimerunnerTouchNoMpath(t *testing.T) {
+	fileName := "/tmp/local/bck1/fqn1"
+
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	atimer := newAtimeRunner()
+	target := newFakeTargetRunner()
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+
 	go atimer.Run()
+	time.Sleep(50 * time.Millisecond)
+
+	atimer.touch(fileName)
+	time.Sleep(50 * time.Millisecond) // wait for runner to process
+	if len(atimer.mpathRunners) != 0 {
+		t.Error("No files must be present in the map when the file's bucket has LRU Disabled")
+	}
+
+	atimer.Stop(fmt.Errorf("test"))
+}
+
+func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	ctx.mountpaths.AddMountpath("/tmp")
+	atimer := newAtimeRunner(newFakeTargetRunner(), ctx.mountpaths)
+	go atimer.Run()
+	atimer.reqAddMountpath("/tmp")
 
 	fileName := "test"
 	atimer.touch(fileName)
-	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.atimemap.fsToFilesMap) != 0 {
-		t.Error("No files must be present in the map")
+	time.Sleep(50 * time.Millisecond) // wait for mpathAtimeRunner to process
+	if len(atimer.mpathRunners) != 1 {
+		t.Error("One mpathAtimeRunners should be present because one mountpath was added")
 	}
 
-	_, ok := atimer.atime(fileName)
+	atimeResponse := <-atimer.atime(fileName)
+	ok := atimeResponse.ok
 	if ok {
 		t.Error("Atime should not be returned for a non existing file.")
 	}
@@ -98,37 +123,43 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 	atimer.Stop(fmt.Errorf("test"))
 }
 
+// TestAtimerunnerMultipleTouchSameFile touches the same
+// file belonging to a local bucket where LRU is enabled multiple times.
 func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	atimer := newAtimeRunner()
-	go atimer.Run()
+	mpath := "/tmp"
+	fileName := "/tmp/local/bck1/fqn1"
 
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
-	atimer.touch(tempFile.Name())
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	target := newFakeTargetRunner()
+	ctx.mountpaths.AddMountpath(mpath)
+
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	go atimer.Run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
+
+	atimer.touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fs]) != 1 {
-		t.Error("One file must be present in the map")
+	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 1 {
+		t.Error("One mpathAtimeRunner and one file must be present in the atimemap")
 	}
 
-	accessTime, ok := atimer.atime(tempFile.Name())
+	atimeResponse := <-atimer.atime(fileName)
+	accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
 	if !ok {
-		t.Errorf("File [%s] is not present in atime map", tempFile.Name())
+		t.Errorf("File [%s] is not present in %s's atime map", fileName, mpath)
 	}
 
 	// Make sure that the access time will be a little different
 	time.Sleep(50 * time.Millisecond)
 
-	atimer.touch(tempFile.Name())
+	atimer.touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 
-	accessTimeNext, okNext := atimer.atime(tempFile.Name())
+	atimeResponse = <-atimer.atime(fileName)
+	accessTimeNext, okNext := atimeResponse.accessTime, atimeResponse.ok
 	if !okNext {
-		t.Errorf("File [%s] is not present in atime map", tempFile.Name())
+		t.Errorf("File [%s] is not present in atime map", fileName)
 	}
 
 	if !accessTimeNext.After(accessTime) {
@@ -139,173 +170,129 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	atimer.Stop(fmt.Errorf("test"))
 }
 
-func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	atimer := newAtimeRunner()
-	go atimer.Run()
+func TestAtimerunnerTouchMultipleFile(t *testing.T) {
+	mpath := "/tmp"
+	fileName1 := "/tmp/cloud/bck1/fqn1"
+	fileName2 := "/tmp/local/bck2/fqn2"
 
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
-	atimer.touch(tempFile.Name())
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	target := newFakeTargetRunner()
+	ctx.mountpaths.AddMountpath(mpath)
+
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	go atimer.Run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
+
+	atimer.touch(fileName1)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fs]) != 1 {
+	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
 	}
-	_, ok := atimer.atime(tempFile.Name())
-	if !ok {
-		t.Errorf("File [%s] is not present in atime map", tempFile.Name())
+	atimeResponse := <-atimer.atime(fileName1)
+	if !atimeResponse.ok {
+		t.Errorf("File [%s] is not present in atime map", fileName1)
 	}
 
-	tempFile2, _ := getTempFile(t, "2")
-	defer func() {
-		tempFile2.Close()
-		os.Remove(tempFile2.Name())
-	}()
-	atimer.touch(tempFile2.Name())
+	atimer.touch(fileName2)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fs]) != 2 {
+	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 2 {
 		t.Error("Two files must be present in the map")
 	}
 
-	_, ok = atimer.atime(tempFile2.Name())
-	if !ok {
-		t.Errorf("File [%s] is not present in atime map", tempFile2.Name())
+	atimeResponse = <-atimer.atime(fileName2)
+	if !atimeResponse.ok {
+		t.Errorf("File [%s] is not present in atime map", fileName2)
 	}
 
 	atimer.Stop(fmt.Errorf("test"))
 }
 
 func TestAtimerunnerFlush(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	atimer := newAtimeRunner()
-	go atimer.Run()
+	mpath := "/tmp"
+	fileName1 := "/tmp/cloud/bck1/fqn1"
+	fileName2 := "/tmp/local/bck2/fqn2"
+	fileName3 := "/tmp/local/bck2/fqn3"
 
-	file1, _ := getTempFile(t, "1")
-	atimer.touch(file1.Name())
-	defer func() {
-		file1.Close()
-		os.Remove(file1.Name())
-	}()
-	file2, _ := getTempFile(t, "2")
-	atimer.touch(file2.Name())
-	defer func() {
-		file2.Close()
-		os.Remove(file2.Name())
-	}()
-	file3, fileSystem := getTempFile(t, "3")
-	atimer.touch(file3.Name())
-	defer func() {
-		file3.Close()
-		os.Remove(file3.Name())
-	}()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	target := newFakeTargetRunner()
+	ctx.mountpaths.AddMountpath(mpath)
+
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	go atimer.Run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
+
+	atimer.touch(fileName1)
+	atimer.touch(fileName2)
+	atimer.touch(fileName3)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 
-	atimer.flush(fileSystem, 1)
-	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fileSystem]) != 2 {
+	atimer.mpathRunners[mpath].flush(1)
+	time.Sleep(50 * time.Millisecond) // wait for runner to process
+	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 2 {
 		t.Error("Invalid number of files in atimerunner")
 	}
 
-	atimer.flush(fileSystem, 2)
-	if len(atimer.atimemap.fsToFilesMap) != 1 || len(atimer.atimemap.fsToFilesMap[fileSystem]) != 0 {
+	atimer.mpathRunners[mpath].flush(2)
+	time.Sleep(50 * time.Millisecond) // wait for runner to process
+	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 0 {
 		t.Error("Invalid number of files in atimerunner")
 	}
 
 	atimer.Stop(fmt.Errorf("test"))
 }
 
-func TestAtimeNonExistingFile(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	atimer := newAtimeRunner()
-	go atimer.Run()
-	_, ok := atimer.atime("test")
-	if ok {
-		t.Errorf("Expected to fail while getting atime of a non existing file.")
-	}
-}
-
-func TestTouchNonExistingFile(t *testing.T) {
-	ctx.config.LRU.LRUEnabled = true
-	atimer := newAtimeRunner()
-	go atimer.Run()
-	atimer.touch("test")
-	if len(atimer.atimemap.fsToFilesMap) != 0 {
-		t.Errorf("No file system should be present in the map.")
-	}
-}
-
+// TestAtimerunnerGetNumberItemsToFlushSimple test the number of items to
+// flush.
 func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
+	mpath := "/tmp"
+	fileName1 := "/tmp/local/bck1/fqn1"
+	fileName2 := "/tmp/cloud/bck2/fqn2"
+
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
 		runarr: make([]common.Runner, 0, 4),
 		runmap: make(map[string]common.Runner),
 	}
+
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-
 	cleanMountpaths()
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths.AddMountpath(mpath)
+	target := newFakeTargetRunner()
 
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	ctx.rg.add(atimer, xatime)
 	ctx.rg.add(newIostatRunner(), xiostat)
 	go ctx.rg.run()
-
-	// When LRU is not enabled, function should return 0
-	{
-		ctx.config.LRU.LRUEnabled = false
-		atimer := newAtimeRunner()
-		go atimer.Run()
-		n := atimer.getNumberItemsToFlush(fs)
-		if n != 0 {
-			t.Error("number items to flush should be 0 when LRU not enabled")
-		}
-
-		atimer.Stop(fmt.Errorf("test"))
-	}
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 
 	// When the initial capacity was not achieved, function should return 0
-	{
-		ctx.config.LRU.LRUEnabled = true
-		atimer := newAtimeRunner()
-		go atimer.Run()
+	atimer.touch(fileName1)
+	atimer.touch(fileName2)
+	time.Sleep(time.Millisecond) // wait for runner to process
 
-		atimer.touch("/tmp/fqn1")
-		atimer.touch("/tmp/fqn2")
-		time.Sleep(time.Millisecond) // wait for runner to process
-
-		n := atimer.getNumberItemsToFlush(fs)
-		if n != 0 {
-			t.Error("number items to flush should be 0 when capacity not achieved")
-		}
-
-		atimer.Stop(fmt.Errorf("test"))
+	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
+	if n != 0 {
+		t.Error("number items to flush should be 0 when capacity not achieved")
 	}
 
 	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
+	mpath := "/tmp"
 	ctx.config.LRU.AtimeCacheMax = 1
-	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	cleanMountpaths()
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	iostatr.Disk = map[string]common.SimpleKVs{
@@ -314,229 +301,244 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		},
 	}
 	ctx.rg.add(iostatr, xiostat)
-	go ctx.rg.run()
 
-	atimer := newAtimeRunner()
-	go atimer.Run()
+	target := newFakeTargetRunner()
+	target.fsprg.addMountpath(mpath)
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	ctx.rg.add(atimer, xatime)
+
+	go ctx.rg.run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 
 	itemCount := atimeCacheFlushThreshold * 2
+	// split files between the two types of buckets
 	for i := 0; i < itemCount; i++ {
-		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
+		if i%2 == 0 {
+			atimer.touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
+		} else {
+			atimer.touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
+		}
 	}
 
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
-	n := atimer.getNumberItemsToFlush(fs)
+	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
 	if n != itemCount/4 {
 		t.Error("when idle we should flush 25% of the cache")
 	}
 
-	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
+	mpath := "/tmp"
 	itemCount := atimeCacheFlushThreshold * 2
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount)
-	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	cleanMountpaths()
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
+
+	target := newFakeTargetRunner()
+	target.fsprg.addMountpath(mpath)
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	ctx.rg.add(atimer, xatime)
+
 	go ctx.rg.run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 
-	atimer := newAtimeRunner()
-	go atimer.Run()
-
+	// split files between the two types of buckets
 	for i := 0; i < itemCount; i++ {
-		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
+		if i%2 == 0 {
+			atimer.touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
+		} else {
+			atimer.touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
+		}
 	}
 
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(fs)
+	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
-	n := atimer.getNumberItemsToFlush(fs)
+	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
 	if n != itemCount/2 {
 		t.Error("when filling is 100% we should flush 50% of the cache")
 	}
 
-	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
+	mpath := "/tmp"
 	itemCount := atimeCacheFlushThreshold * 2
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount*(200-atimeHWM)/100) + 10
-	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-
 	cleanMountpaths()
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
+
+	target := newFakeTargetRunner()
+	target.fsprg.addMountpath(mpath)
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	ctx.rg.add(atimer, xatime)
+
 	go ctx.rg.run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 
-	atimer := newAtimeRunner()
-	go atimer.Run()
-
+	// split files between the two types of buckets
 	for i := 0; i < itemCount; i++ {
-		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
+		if i%2 == 0 {
+			atimer.touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
+		} else {
+			atimer.touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
+		}
 	}
 
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(fs)
+	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
-	n := atimer.getNumberItemsToFlush(fs)
+	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
 	if n != itemCount/4 {
 		t.Error("when filling is above high watermark we should flush 25% of the cache")
 	}
 
-	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
+	mpath := "/tmp"
 	itemCount := atimeCacheFlushThreshold * 2
 
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount*(200-atimeLWM)/100) + 10
-	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	cleanMountpaths()
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
+
+	target := newFakeTargetRunner()
+	target.fsprg.addMountpath(mpath)
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	ctx.rg.add(atimer, xatime)
+
 	go ctx.rg.run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 
-	atimer := newAtimeRunner()
-	go atimer.Run()
-
+	// split files between the two types of buckets
 	for i := 0; i < itemCount; i++ {
-		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
+		if i%2 == 0 {
+			atimer.touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
+		} else {
+			atimer.touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
+		}
 	}
 
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(fs)
+	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
-	n := atimer.getNumberItemsToFlush(fs)
+	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
 	if n == 0 {
 		t.Error("when filling is above low watermark we should flush some of the cache")
 	}
 
-	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
 func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
+	mpath := "/tmp"
 	itemCount := atimeCacheFlushThreshold * 2
 
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount * 1000)
-	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	cleanMountpaths()
-	tempFile, fs := getTempFile(t, "1")
-	defer func() {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-	}()
+	ctx.mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 
 	ctx.rg.add(iostatr, xiostat)
+
+	target := newFakeTargetRunner()
+	target.fsprg.addMountpath(mpath)
+	atimer := newAtimeRunner(target, ctx.mountpaths)
+	ctx.rg.add(atimer, xatime)
+
 	go ctx.rg.run()
+	atimer.reqAddMountpath(mpath)
+	time.Sleep(50 * time.Millisecond)
 
-	atimer := newAtimeRunner()
-	go atimer.Run()
-
+	// split files between the two types of buckets
 	for i := 0; i < itemCount; i++ {
-		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
+		if i%2 == 0 {
+			atimer.touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
+		} else {
+			atimer.touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
+		}
 	}
 
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(fs)
+	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.34"
 	}
-	n := atimer.getNumberItemsToFlush(fs)
+	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
 	if n != 0 {
 		t.Error("when filling is low and disk is busy we should not flush at all")
 	}
 
-	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
-}
-
-func getTempFile(t *testing.T, prefix string) (*os.File, string) {
-	tempFile, err := ioutil.TempFile("", "fqn"+prefix)
-	if err != nil {
-		t.Fatalf("Unable to create temp file.")
-	}
-
-	fileSystem, _ := fs.Fqn2fsAtStartup(tempFile.Name())
-	tempRoot := "/tmp"
-	ctx.mountpaths.AddMountpath(tempRoot)
-
-	return tempFile, fileSystem
 }
 
 func cleanMountpaths() {

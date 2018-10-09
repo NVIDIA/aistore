@@ -247,6 +247,15 @@ func (mfs *MountedFS) Mountpaths() (map[string]*MountpathInfo, map[string]*Mount
 	return *available, *disabled
 }
 
+// MountpathToFS returns the mpath's associated filesystem
+func (mfs *MountedFS) MountpathToFS(mpath string) string {
+	available, _ := mfs.Mountpaths()
+	if m, ok := available[mpath]; ok {
+		return m.FileSystem
+	}
+	return ""
+}
+
 // DisableFsIDCheck disables fsid checking when adding new mountpath
 func (mfs *MountedFS) DisableFsIDCheck() {
 	mfs.checkFsID = false

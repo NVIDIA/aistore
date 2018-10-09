@@ -21,7 +21,7 @@ const (
 
 func TestReplicationRunnerStop(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	tr := newFakeTargetrunner()
+	tr := newFakeTargetRunner()
 	rr := newReplicationRunner(tr, ctx.mountpaths)
 	go rr.Run()
 
@@ -45,7 +45,7 @@ func TestReplicationSendNonExistingObject(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	cleanMountpaths()
 
-	tr := newFakeTargetrunner()
+	tr := newFakeTargetRunner()
 	rr := newReplicationRunner(tr, ctx.mountpaths)
 	go rr.Run()
 
@@ -57,8 +57,8 @@ func TestReplicationSendNonExistingObject(t *testing.T) {
 	rr.Stop(fmt.Errorf("Testing replicationRunner.sendReplica sync"))
 }
 
-// newFakeTargetrunner returns a fake targetrunner initialized for replication tests
-func newFakeTargetrunner() *targetrunner {
+// newFakeTargetRunner returns a fake targetrunner initialized for replication tests
+func newFakeTargetRunner() *targetrunner {
 	t := &targetrunner{}
 	t.si = newDaemonInfo(fakeDaemonID, httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	return t

@@ -1774,9 +1774,10 @@ func TestAtimeRebalance(t *testing.T) {
 			wg:              &sync.WaitGroup{},
 			bucket:          TestLocalBucketName,
 		}
-		filenameCh = make(chan string, m.num)
-		errCh      = make(chan error, m.num)
-		sgl        *memsys.SGL
+		filenameCh  = make(chan string, m.num)
+		errCh       = make(chan error, m.num)
+		sgl         *memsys.SGL
+		bucketProps dfc.BucketProps
 	)
 
 	if usingSG {
@@ -1793,6 +1794,11 @@ func TestAtimeRebalance(t *testing.T) {
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
 	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	// Enable bucket level LRU properties
+	bucketProps.LRUProps.LRUEnabled = true
+	err = client.SetBucketProps(m.proxyURL, m.bucket, bucketProps)
+	tutils.CheckFatal(err, t)
 
 	target := extractTargetsInfo(m.smap)[0]
 

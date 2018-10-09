@@ -199,8 +199,8 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	// object eviction: access time
 	usetime := atime
 
-	aTimeRunner := getatimerunner()
-	accessTime, ok := aTimeRunner.atime(fqn)
+	atimeResponse := <-getatimerunner().atime(fqn)
+	accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
 	if ok {
 		usetime = accessTime
 	} else if mtime.After(atime) {

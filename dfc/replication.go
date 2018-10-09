@@ -248,12 +248,39 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	httpReq.GetBody = func() (io.ReadCloser, error) {
 		return os.Open(req.fqn)
 	}
+	var accessTime time.Time
+	okAccessTime := r.t.bucketLRUEnabled(bucket)
+	if okAccessTime {
+		// obtain the access time of the obkect from the atimemap
+		atimeResponse := <-getatimerunner().atime(req.fqn)
+		accessTime, okAccessTime = atimeResponse.accessTime, atimeResponse.ok
+	}
+
+	// Read from storage if it doesn't exist
+	if !okAccessTime {
+		if fileInfo, err := os.Stat(req.fqn); err == nil {
+			accessTime, _, _ = getAmTimes(fileInfo)
+			okAccessTime = true
+		} else {
+			glog.Errorf("Failed to get %q access time upon replication", req.fqn)
+		}
+	}
+
+	// obtain the version of the file
+	if version, errstr := Getxattr(req.fqn, api.XattrObjVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, api.XattrObjVersion, errstr)
+	} else if len(version) != 0 {
+		httpReq.Header.Add(api.HeaderDFCObjVersion, string(version))
+	}
 
 	// specify source direct URL in request header
 	httpReq.Header.Add(api.HeaderDFCReplicationSrc, r.directURL)
 
 	httpReq.Header.Add(api.HeaderDFCChecksumType, api.ChecksumXXHash)
 	httpReq.Header.Add(api.HeaderDFCChecksumVal, xxHashVal)
+	if okAccessTime {
+		httpReq.Header.Add(api.HeaderDFCObjAtime, string(accessTime.Format(api.RFC822)))
+	}
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
 	if err != nil {
@@ -294,6 +321,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		nhtype, nhval string
 		sgl           *memsys.SGL
 		errstr        string
+		accessTime    time.Time
 	)
 	httpr := req.httpReq
 	putfqn := r.t.fqn2workfile(req.fqn)
@@ -308,6 +336,13 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		errstr = fmt.Sprintf("Failed to extract checksum from replication PUT request for %s/%s", bucket, object)
 		return errors.New(errstr)
 	}
+
+	if accessTimeStr := httpr.Header.Get(api.HeaderDFCObjAtime); accessTimeStr != "" {
+		if parsedTime, err := time.Parse(time.RFC822, accessTimeStr); err == nil {
+			accessTime = parsedTime
+		}
+	}
+
 	hdhtype, hdhval := hdhobj.get()
 	if hdhtype != api.ChecksumXXHash {
 		errstr = fmt.Sprintf("Unsupported checksum type: %q", hdhtype)
@@ -358,7 +393,10 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return nil
 	}
 
-	props := &objectProps{nhobj: nhobj}
+	props := &objectProps{nhobj: nhobj, version: httpr.Header.Get(api.HeaderDFCObjVersion)}
+	if !accessTime.IsZero() {
+		props.atime = accessTime
+	}
 	errstr, _ = r.t.putCommit(r.t.contextWithAuth(httpr), bucket, object, putfqn, req.fqn, props, false /* rebalance */)
 	if errstr != "" {
 		return errors.New(errstr)
@@ -451,13 +489,13 @@ func (rr *replicationRunner) reqReceiveReplica(srcDirectURL, fqn string, r *http
 	return <-req.resultCh // block until replication finishes
 }
 
-func (rr *replicationRunner) reqAddMountpath(mpath string) {
-	rr.mpathReqCh <- mpathReq{action: replicationAddMountpath, mpath: mpath}
-}
-
 /*
  * fsprunner methods
  */
+
+func (rr *replicationRunner) reqAddMountpath(mpath string) {
+	rr.mpathReqCh <- mpathReq{action: replicationAddMountpath, mpath: mpath}
+}
 
 func (rr *replicationRunner) reqRemoveMountpath(mpath string) {
 	rr.mpathReqCh <- mpathReq{action: replicationRemoveMountpath, mpath: mpath}

@@ -235,9 +235,6 @@ func dfcinit() {
 		ctx.rg.add(iostat, xiostat)
 		t.fsprg.add(iostat)
 
-		atime := newAtimeRunner()
-		ctx.rg.add(atime, xatime)
-
 		// for mountpath definition, see fs/mountfs.go
 		if testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
@@ -270,6 +267,10 @@ func dfcinit() {
 		replRunner := newReplicationRunner(t, ctx.mountpaths)
 		ctx.rg.add(replRunner, xreplication)
 		t.fsprg.add(replRunner)
+
+		atime := newAtimeRunner(t, ctx.mountpaths)
+		ctx.rg.add(atime, xatime)
+		t.fsprg.add(atime)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }

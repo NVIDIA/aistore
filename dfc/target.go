@@ -296,6 +296,14 @@ func (t *targetrunner) unregister() (int, error) {
 	return res.status, res.err
 }
 
+// bucketLRUEnabled returns whether or not LRU is enabled
+// for the bucket that fqn belongs to. If no bucket
+// LRU configuration exists, it returns the global setting
+func (t *targetrunner) bucketLRUEnabled(bucket string) bool {
+	bucketmd := t.bmdowner.get()
+	return bucketmd.GetLRUConf(bucket).LRUEnabled
+}
+
 //===========================================================================================
 //
 // http handlers: data and metadata
@@ -673,7 +681,7 @@ send:
 		goto send
 	}
 
-	if !coldget {
+	if !coldget && t.bucketLRUEnabled(bucket) {
 		getatimerunner().touch(fqn)
 	}
 	if glog.V(4) {
@@ -1428,7 +1436,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		return
 	}
 	props = &objectProps{version: version, size: size, nhobj: nhobj}
-	if errstr = t.finalizeobj(fqn, props); errstr != "" {
+	if errstr = t.finalizeobj(fqn, bucket, props); errstr != "" {
 		glog.Errorf("finalizeobj %s/%s: %s (%+v)", bucket, objname, errstr, props)
 		props = nil
 		return
@@ -1536,7 +1544,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		t.fshc(err, fqn)
 		return
 	}
-	if errstr = t.finalizeobj(fqn, props); errstr != "" {
+	if errstr = t.finalizeobj(fqn, bucket, props); errstr != "" {
 		return
 	}
 ret:
@@ -2219,7 +2227,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 		return
 	}
 	renamed = true
-	if errstr = t.finalizeobj(fqn, objprops); errstr != "" {
+	if errstr = t.finalizeobj(fqn, bucket, objprops); errstr != "" {
 		t.rtnamemap.unlockname(uname, true)
 		glog.Errorf("finalizeobj %s/%s: %s (%+v)", bucket, objname, errstr, objprops)
 		return
@@ -2502,8 +2510,12 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return errstr
 	}
 
-	atimeRunner := getatimerunner()
-	accessTime, ok := atimeRunner.atime(fqn)
+	var accessTime time.Time
+	var ok bool
+	if t.bucketLRUEnabled(bucket) {
+		atimeResponse := <-getatimerunner().atime(fqn)
+		accessTime, ok = atimeResponse.accessTime, atimeResponse.ok
+	}
 
 	// must read a file access before any operation: the next Open changes atime
 	accessTimeStr := ""
@@ -3289,7 +3301,7 @@ func (t *targetrunner) versioningConfigured(bucket string) bool {
 }
 
 // xattrs
-func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr string) {
+func (t *targetrunner) finalizeobj(fqn, bucket string, objprops *objectProps) (errstr string) {
 	if objprops.nhobj != nil {
 		htype, hval := objprops.nhobj.get()
 		common.Assert(htype == api.ChecksumXXHash)
@@ -3301,10 +3313,8 @@ func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr st
 		errstr = Setxattr(fqn, api.XattrObjVersion, []byte(objprops.version))
 	}
 
-	if !objprops.atime.IsZero() {
-		if err := os.Chtimes(fqn, objprops.atime, objprops.atime); err != nil {
-			errstr = fmt.Sprintf("Failed to set atime for %s: %v", fqn, err)
-		}
+	if !objprops.atime.IsZero() && t.bucketLRUEnabled(bucket) {
+		getatimerunner().touch(fqn, objprops.atime)
 	}
 
 	return
