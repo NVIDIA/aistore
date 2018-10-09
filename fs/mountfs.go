@@ -52,6 +52,10 @@ type (
 		// Disabled mountpaths - mountpaths which for some reason did not pass
 		// the health check and cannot be used for a moment.
 		disabled unsafe.Pointer
+		// The following correspond to the values in config.sh for "cloud_buckets"
+		// and "local_buckets", used for mpath validation
+		cloudBucketName string
+		localBucketName string
 	}
 )
 
@@ -67,10 +71,12 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 }
 
 // NewMountedFS returns initialized instance of MountedFS struct.
-func NewMountedFS() *MountedFS {
+func NewMountedFS(cloudBucketName, localBucketName string) *MountedFS {
 	return &MountedFS{
-		fsIDs:     make(map[syscall.Fsid]string),
-		checkFsID: true,
+		fsIDs:           make(map[syscall.Fsid]string),
+		checkFsID:       true,
+		cloudBucketName: cloudBucketName,
+		localBucketName: localBucketName,
 	}
 }
 
@@ -93,11 +99,24 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 
 // AddMountpath adds new mountpath to the target's mountpaths.
 func (mfs *MountedFS) AddMountpath(mpath string) error {
-	if strings.HasSuffix(mpath, "/local") || strings.HasSuffix(mpath, "/cloud") ||
-		strings.Contains(mpath, "/local/") || strings.Contains(mpath, "/cloud/") {
-		return fmt.Errorf("Cannot add fspath %q with suffix /local or /cloud. "+
-			"Fspath also cannot contain /local/ or /cloud/ anywhere in its path.", mpath)
+	seperator := string(filepath.Separator)
+	invalidMpath := seperator + mfs.localBucketName
+	if strings.HasSuffix(mpath, invalidMpath) {
+		return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
 	}
+	invalidMpath += seperator
+	if strings.Contains(mpath, invalidMpath) {
+		return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
+	}
+	invalidMpath = seperator + mfs.cloudBucketName
+	if strings.HasSuffix(mpath, invalidMpath) {
+		return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
+	}
+	invalidMpath += seperator
+	if strings.Contains(mpath, invalidMpath) {
+		return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
+	}
+
 	if _, err := os.Stat(mpath); err != nil {
 		return fmt.Errorf("fspath %q does not exists, err: %v", mpath, err)
 	}

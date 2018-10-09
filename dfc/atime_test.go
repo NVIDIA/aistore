@@ -46,7 +46,7 @@ func TestAtimerunnerStop(t *testing.T) {
 
 func TestAtimerunnerTouch(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	atimer := newAtimeRunner()
 	go atimer.Run()
 
@@ -79,7 +79,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	atimer := newAtimeRunner()
 	go atimer.Run()
 
@@ -100,7 +100,7 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 
 func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	atimer := newAtimeRunner()
 	go atimer.Run()
 
@@ -141,7 +141,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 
 func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	atimer := newAtimeRunner()
 	go atimer.Run()
 
@@ -181,7 +181,7 @@ func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 
 func TestAtimerunnerFlush(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	atimer := newAtimeRunner()
 	go atimer.Run()
 
@@ -244,7 +244,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		runarr: make([]common.Runner, 0, 4),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -298,7 +298,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -344,7 +344,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -391,7 +391,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -439,7 +439,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")
@@ -487,7 +487,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 
 	cleanMountpaths()
 	tempFile, fs := getTempFile(t, "1")

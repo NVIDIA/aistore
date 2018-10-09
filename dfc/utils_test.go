@@ -8,7 +8,7 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
-func TestSplitFQN(t *testing.T) {
+func TestFqn2Info(t *testing.T) {
 	tests := []struct {
 		testName    string
 		fqn         string
@@ -84,9 +84,12 @@ func TestSplitFQN(t *testing.T) {
 		},
 	}
 
+	ctx.config.CloudBuckets = "cloud"
+	ctx.config.LocalBuckets = "local"
+
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			mfs := fs.NewMountedFS()
+			mfs := fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 			if _, err := os.Stat(tt.mpath); os.IsNotExist(err) {
 				common.CreateDir(tt.mpath)
 				defer os.RemoveAll(tt.mpath)
@@ -98,25 +101,26 @@ func TestSplitFQN(t *testing.T) {
 			}
 			ctx.mountpaths = mfs
 
-			gotMPath, gotBucket, gotObjName, gotIsLocal, err := splitFQN(tt.fqn)
+			mpathInfo, gotBucket, gotObjName, gotIsLocal, err := fqn2info(tt.fqn)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("splitFQN() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("fqn2info() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if err != nil {
 				return
 			}
+			gotMPath := mpathInfo.Path
 			if gotMPath != tt.wantMPath {
-				t.Errorf("splitFQN() gotMPath = %v, want %v", gotMPath, tt.wantMPath)
+				t.Errorf("fqn2info() gotMPath = %v, want %v", gotMPath, tt.wantMPath)
 			}
 			if gotBucket != tt.wantBucket {
-				t.Errorf("splitFQN() gotBucket = %v, want %v", gotBucket, tt.wantBucket)
+				t.Errorf("fqn2info() gotBucket = %v, want %v", gotBucket, tt.wantBucket)
 			}
 			if gotObjName != tt.wantObjName {
-				t.Errorf("splitFQN() gotObjName = %v, want %v", gotObjName, tt.wantObjName)
+				t.Errorf("fqn2info() gotObjName = %v, want %v", gotObjName, tt.wantObjName)
 			}
 			if gotIsLocal != tt.wantIsLocal {
-				t.Errorf("splitFQN() gotIsLocal = %v, want %v", gotIsLocal, tt.wantIsLocal)
+				t.Errorf("fqn2info() gotIsLocal = %v, want %v", gotIsLocal, tt.wantIsLocal)
 			}
 		})
 	}

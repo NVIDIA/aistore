@@ -151,11 +151,11 @@ func (r *iostatrunner) updateFSDisks() {
 }
 
 func (r *iostatrunner) diskUtilFromFQN(fqn string) (util float32, ok bool) {
-	fs := fqn2fs(fqn)
-	if fs == "" {
+	mpathInfo, _, _, _, _ := fqn2info(fqn)
+	if mpathInfo == nil {
 		return
 	}
-	return r.maxUtilFS(fs)
+	return r.maxUtilFS(mpathInfo.FileSystem)
 }
 
 func (r *iostatrunner) maxUtilFS(fs string) (util float32, ok bool) {

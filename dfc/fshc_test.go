@@ -34,7 +34,7 @@ func testCheckerMountPaths() *fs.MountedFS {
 	common.CreateDir(fsCheckerTmpDir + "/3")
 	common.CreateDir(fsCheckerTmpDir + "/4")
 
-	mountedFS := fs.NewMountedFS()
+	mountedFS := fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	mountedFS.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)

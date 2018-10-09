@@ -222,10 +222,11 @@ func (r *atimerunner) handleInputOnGetATimeChannel(request *accessTimeRequest) {
 	if !ctx.config.LRU.LRUEnabled {
 		return
 	}
-	fileSystem := fqn2fs(request.fqn)
-	if fileSystem == "" {
+	mpathInfo, _, _, _, _ := fqn2info(request.fqn)
+	if mpathInfo == nil {
 		return
 	}
+	fileSystem := mpathInfo.FileSystem
 	if _, ok := r.atimemap.fsToFilesMap[fileSystem]; !ok {
 		return
 	}
@@ -233,10 +234,11 @@ func (r *atimerunner) handleInputOnGetATimeChannel(request *accessTimeRequest) {
 }
 
 func (r *atimerunner) updateATimeInATimeMap(fqn string) {
-	fileSystem := fqn2fs(fqn)
-	if fileSystem == "" {
+	mpathInfo, _, _, _, _ := fqn2info(fqn)
+	if mpathInfo == nil {
 		return
 	}
+	fileSystem := mpathInfo.FileSystem
 	if _, ok := r.atimemap.fsToFilesMap[fileSystem]; !ok {
 		r.atimemap.fsToFilesMap[fileSystem] = make(map[string]time.Time)
 	}

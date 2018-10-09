@@ -189,11 +189,13 @@ func (rahfcache *rahfcache) got() {
 
 // external API helper: route to the appropriate (jogger) child
 func (r *readahead) demux(fqn string) *rahjogger {
-	mpath := fqn2mountPath(fqn)
-	if mpath == "" {
+	mpathInfo, _, _, _, _ := fqn2info(fqn)
+	if mpathInfo == nil {
 		glog.Errorf("Failed to get mountpath for %s", fqn)
 		return nil
 	}
+	mpath := mpathInfo.Path
+
 	r.Lock()
 	rj, ok := r.joggers[mpath]
 	if !ok {

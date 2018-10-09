@@ -3114,7 +3114,7 @@ func (t *targetrunner) fqn(bucket, objname string, islocal bool) (string, string
 func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error) {
 	var isLocal bool
 
-	_, bucket, objName, isLocal, err = splitFQN(fqn)
+	_, bucket, objName, isLocal, err = fqn2info(fqn)
 	if err != nil {
 		return
 	}
@@ -3136,7 +3136,7 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error
 // situation can happen when new mountpath is added or mountpath is moved from
 // disabled to enabled.
 func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
-	_, bucket, objName, isLocal, err := splitFQN(fqn)
+	_, bucket, objName, isLocal, err := fqn2info(fqn)
 	if err != nil {
 		return false, "", err
 	}
@@ -3348,12 +3348,13 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	if !isIOError(err) {
 		return
 	}
-
-	keyName := fqn2mountPath(filepath)
-	if keyName != "" {
+	mpathInfo, _, _, _, err := fqn2info(filepath)
+	if mpathInfo != nil {
+		keyName := mpathInfo.Path
 		// keyName is the mountpath is the fspath - counting IO errors on a per basis..
 		t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
 	}
+
 	if ctx.config.FSHC.Enabled {
 		getfshealthchecker().onerr(filepath)
 	}

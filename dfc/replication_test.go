@@ -20,7 +20,7 @@ const (
 )
 
 func TestReplicationRunnerStop(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	tr := newFakeTargetrunner()
 	rr := newReplicationRunner(tr, ctx.mountpaths)
 	go rr.Run()
@@ -42,7 +42,7 @@ func TestReplicationRunnerStop(t *testing.T) {
 }
 
 func TestReplicationSendNonExistingObject(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS()
+	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	cleanMountpaths()
 
 	tr := newFakeTargetrunner()

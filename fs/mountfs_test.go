@@ -9,7 +9,8 @@ import (
 )
 
 func TestAddNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/nonexistingpath")
 	if err == nil {
 		t.Error("adding non-existing mountpath succeded")
@@ -19,7 +20,8 @@ func TestAddNonExistingMountpath(t *testing.T) {
 }
 
 func TestAddInvalidMountpaths(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 
 	err := mfs.AddMountpath("/local")
 	if err == nil {
@@ -44,7 +46,8 @@ func TestAddInvalidMountpaths(t *testing.T) {
 }
 
 func TestAddExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -54,7 +57,8 @@ func TestAddExistingMountpath(t *testing.T) {
 }
 
 func TestAddAlreadyAddedMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -71,7 +75,8 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 }
 
 func TestRemoveNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.RemoveMountpath("/nonexistingpath")
 	if err == nil {
 		t.Error("removing non-existing mountpath succeded")
@@ -81,7 +86,8 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -96,7 +102,8 @@ func TestRemoveExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -114,7 +121,8 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 }
 
 func TestDisableNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	disabled, exists := mfs.DisableMountpath("/tmp")
 	if disabled || exists {
 		t.Error("disabling was successful or mountpath exists")
@@ -124,7 +132,8 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 }
 
 func TestDisableExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -139,7 +148,8 @@ func TestDisableExistingMountpath(t *testing.T) {
 }
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -159,7 +169,8 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableNonExistingMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	enabled, exists := mfs.EnableMountpath("/tmp")
 	if enabled || exists {
 		t.Error("enabling was successful or mountpath exists")
@@ -169,7 +180,8 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 }
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -184,7 +196,8 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -204,7 +217,8 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -231,7 +245,8 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 }
 
 func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -246,7 +261,8 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 }
 
 func TestAddAndDisableMultipleMountpath(t *testing.T) {
-	mfs := NewMountedFS()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")

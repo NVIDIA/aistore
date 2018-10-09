@@ -404,8 +404,8 @@ func (rr *replicationRunner) Stop(err error) {
 }
 
 func (rr *replicationRunner) dispatchRequest(req *replRequest) {
-	mpath := fqn2mountPath(req.fqn)
-	if mpath == "" {
+	mpathInfo, _, _, _, _ := fqn2info(req.fqn)
+	if mpathInfo == nil {
 		errmsg := fmt.Sprintf("Failed to get mountpath for file %q", req.fqn)
 		glog.Error(errmsg)
 		if req.resultCh != nil {
@@ -413,6 +413,7 @@ func (rr *replicationRunner) dispatchRequest(req *replRequest) {
 		}
 		return
 	}
+	mpath := mpathInfo.Path
 
 	r, ok := rr.mpathReplicators[mpath]
 	common.Assert(ok, "Invalid mountpath given in replication request")

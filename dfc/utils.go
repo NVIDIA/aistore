@@ -324,89 +324,44 @@ func parsebool(s string) (value bool, err error) {
 	return
 }
 
-func fqn2mpathInfo(fqn string) *fs.MountpathInfo {
+// mpathInfo, bucket, objname, isLocal, err
+func fqn2info(fqn string) (info *fs.MountpathInfo, bucket, objname string, islocal bool, err error) {
 	var (
-		max    int
-		result *fs.MountpathInfo
+		max int
+		rel string
 	)
 
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	for _, mpathInfo := range availablePaths {
-		rel, err := filepath.Rel(mpathInfo.Path, fqn)
-		if err != nil || strings.HasPrefix(rel, "..") {
+		tempRel, err := filepath.Rel(mpathInfo.Path, fqn)
+		if err != nil || strings.HasPrefix(tempRel, "..") {
 			continue
 		}
 		if len(mpathInfo.Path) > max {
 			max = len(mpathInfo.Path)
-			result = mpathInfo
+			info = mpathInfo
+			rel = tempRel
 		}
 	}
-	return result
-}
-
-func fqn2fs(fqn string) (fs string) {
-	mpathInfo := fqn2mpathInfo(fqn)
-	if mpathInfo == nil {
+	if info == nil {
+		err = fmt.Errorf("fqn %s is invalid", fqn)
 		return
 	}
-
-	fs = mpathInfo.FileSystem
-	return
-}
-
-func fqn2mountPath(fqn string) (mpath string) {
-	mpathInfo := fqn2mpathInfo(fqn)
-	if mpathInfo == nil {
-		return
-	}
-
-	mpath = mpathInfo.Path
-	return
-}
-
-func splitFQN(fqn string) (mpath, bucket, objName string, isLocal bool, err error) {
-	var bucketType string
-	path := fqn
-
-	mpath = fqn2mountPath(fqn)
-	if mpath == "" {
-		err = fmt.Errorf("fqn: %s does not belong to any mountpath", fqn)
-		return
-	}
-	path = strings.TrimPrefix(path, mpath)
 
 	sep := string(filepath.Separator)
-	path = strings.TrimPrefix(path, sep)
-	fqnCloudPrefix := ctx.config.CloudBuckets + sep
-	fqnLocalPrefix := ctx.config.LocalBuckets + sep
-	if strings.HasPrefix(path, fqnCloudPrefix) {
-		path = strings.TrimPrefix(path, fqnCloudPrefix)
-		bucketType = ctx.config.CloudBuckets
-	} else if strings.HasPrefix(path, fqnLocalPrefix) {
-		path = strings.TrimPrefix(path, fqnLocalPrefix)
-		bucketType = ctx.config.LocalBuckets
+	items := strings.SplitN(rel, sep, 3)
+
+	if len(items) < 3 {
+		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
+	} else if items[1] == "" {
+		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
+	} else if items[2] == "" {
+		err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
+	} else if items[0] != ctx.config.LocalBuckets && items[0] != ctx.config.CloudBuckets {
+		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[0], fqn)
 	} else {
-		err = fmt.Errorf("fqn: %s does not belong to any valid bucket type", fqn)
-		return
+		islocal, bucket, objname = (items[0] == ctx.config.LocalBuckets), items[1], items[2]
 	}
-
-	items := strings.SplitN(path, "/", 2)
-	// It must contain at least: bucket/objName
-	if len(items) < 2 {
-		err = fmt.Errorf("fqn: %s is not valid", fqn)
-		return
-	}
-	bucket, objName = items[0], items[1]
-	if len(objName) == 0 {
-		err = fmt.Errorf("fqn: %s has empty object name", fqn)
-		return
-	}
-	if len(bucket) == 0 {
-		err = fmt.Errorf("fqn: %s has empty bucket name", fqn)
-		return
-	}
-
-	isLocal = bucketType == ctx.config.LocalBuckets
 	return
 }
 
