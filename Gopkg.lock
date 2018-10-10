@@ -68,6 +68,15 @@
   version = "v1.15.33"
 
 [[projects]]
+  name = "github.com/cloudfoundry/gosigar"
+  packages = [
+    ".",
+    "sys/windows"
+  ]
+  revision = "dcb1afc219e4c99f21c37fb1ec22ed9ffe443317"
+  version = "v1.1.0"
+
+[[projects]]
   name = "github.com/dgrijalva/jwt-go"
   packages = ["."]
   revision = "06ea1031745cb8b3dab3f6a236daf2b0aa468b7e"
@@ -122,6 +131,12 @@
   version = "1.0.1"
 
 [[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   name = "go.opencensus.io"
   packages = [
     ".",
@@ -172,7 +187,10 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
-  packages = ["unix"]
+  packages = [
+    "unix",
+    "windows"
+  ]
   revision = "d0be0721c37eeb5299f245a996a483160fc36940"
 
 [[projects]]
@@ -276,6 +294,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c4814a0d5948bbe9a265edfac857a93de7fdedf90e156144e7045c7dcdc13f6a"
+  inputs-digest = "edc8d0b1bb0d02aac3458bc90ffbdef3bd1710306373fb5c788d254e81681d43"
   solver-name = "gps-cdcl"
   solver-version = 1
