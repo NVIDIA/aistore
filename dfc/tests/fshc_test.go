@@ -177,19 +177,9 @@ func TestFSCheckerDetection(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	bucket := clibucket
-	if isCloudBucket(t, proxyURL, bucket) {
-		bucket = TestLocalBucketName
-	}
-	// create local bucket to write to, or use an existing one
-	if createLocalBucketIfNotExists(t, proxyURL, bucket) {
-		tutils.Logf("created local bucket %s\n", bucket)
-	}
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyURL, bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	bucket := TestLocalBucketName
+	createFreshLocalBucket(t, proxyURL, bucket)
+	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	smap, err := client.GetClusterMap(proxyURL)
 	tutils.CheckFatal(err, t)

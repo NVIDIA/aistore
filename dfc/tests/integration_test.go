@@ -112,11 +112,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	// Step 2.
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -213,13 +209,8 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	tutils.Logf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
 
 	// Step 2.
-	m.bucket = TestLocalBucketName
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -360,11 +351,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	// Create local bucket
 	m.bucket = TestLocalBucketName
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -458,11 +445,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -562,10 +545,7 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -654,10 +634,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer func() {
-		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -789,10 +766,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer func() {
-		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -905,10 +879,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer func() {
-		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -1003,17 +974,12 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	m.wg.Add(newLocalBucketCount)
 	for i := 0; i < newLocalBucketCount; i++ {
 		go func(number int) {
-			err = client.CreateLocalBucket(m.proxyURL, TestLocalBucketName+strconv.Itoa(number))
-			tutils.CheckFatal(err, t)
+			createFreshLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
 			m.wg.Done()
 		}(i)
 
-		defer func(number int) {
-			err := client.DestroyLocalBucket(m.proxyURL, TestLocalBucketName+strconv.Itoa(number))
-			tutils.CheckFatal(err, t)
-		}(i)
+		defer destroyLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(i))
 	}
-
 	m.wg.Wait()
 	assertClusterState(&m)
 }
@@ -1046,8 +1012,7 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Destroy renamed local bucket
-	err = client.DestroyLocalBucket(m.proxyURL, newTestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 }
 
 func TestRenameNonEmptyLocalBucket(t *testing.T) {
@@ -1116,8 +1081,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	resultsBeforeAfter(&m, num, maxErrPct)
 
 	// Destroy renamed local bucket
-	err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-	tutils.CheckFatal(err, t)
+	destroyLocalBucket(t, m.proxyURL, m.bucket)
 }
 
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
@@ -1174,8 +1138,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	}
 
 	// Destroy renamed local bucket
-	err = client.DestroyLocalBucket(m.proxyURL, newTestLocalBucketName)
-	tutils.CheckFatal(err, t)
+	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 	if _, err := os.Stat(newBucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("new local bucket folder was not deleted")
 	}
@@ -1241,11 +1204,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1323,8 +1282,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	defer func() {
 		os.RemoveAll(newMountpath)
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
+		destroyLocalBucket(t, m.proxyURL, m.bucket)
 	}()
 
 	// Put random files
@@ -1401,8 +1359,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	defer func() {
 		os.RemoveAll(newMountpath)
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
+		destroyLocalBucket(t, m.proxyURL, m.bucket)
 	}()
 
 	// Put random files
@@ -1504,11 +1461,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1724,7 +1677,6 @@ func TestForwardCP(t *testing.T) {
 		seed     = int64(555)
 	)
 	var (
-		err    error
 		random = rand.New(rand.NewSource(seed))
 		m      = metadata{
 			t:               t,
@@ -1748,12 +1700,11 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 2.
 	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
-	nextProxyID, nextProxyURL, err := chooseNextProxy(&m.smap)
+	nextProxyID, nextProxyURL, _ := chooseNextProxy(&m.smap)
 
 	destroyLocalBucket(t, m.proxyURL, m.bucket)
 
-	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
-	tutils.CheckFatal(err, t)
+	createFreshLocalBucket(t, nextProxyURL, m.bucket)
 	tutils.Logf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
 
 	if usingSG {
@@ -1787,8 +1738,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 5. destroy local bucket via original primary which is not primary at this point
-	err = client.DestroyLocalBucket(origURL, m.bucket)
-	tutils.CheckFatal(err, t)
+	destroyLocalBucket(t, origURL, m.bucket)
 	tutils.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
 }
 

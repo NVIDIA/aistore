@@ -66,7 +66,6 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.LRUProps.DontEvictTimeStr = lruConfig["dont_evict_time"].(string)
 	globalProps.LRUProps.CapacityUpdTimeStr = lruConfig["capacity_upd_time"].(string)
 	globalProps.LRUProps.LRUEnabled = lruConfig["lru_enabled"].(bool)
-
 	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
@@ -75,7 +74,6 @@ func TestResetBucketProps(t *testing.T) {
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
-
 	err = client.ResetBucketProps(proxyURL, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 

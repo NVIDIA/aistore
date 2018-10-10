@@ -437,9 +437,7 @@ func propsMainTest(t *testing.T, versioning string) {
 			setConfig("versioning", oldVersioning, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 		}
 		if created {
-			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-				t.Errorf("Failed to delete local bucket: %v", err)
-			}
+			destroyLocalBucket(t, proxyURL, clibucket)
 		}
 	}()
 

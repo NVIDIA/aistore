@@ -98,11 +98,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	}
 
 	createFreshLocalBucket(t, proxyURL, bucket)
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyURL, bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	putRandomFiles(proxyURL, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, true)
@@ -259,11 +255,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	)
 	bucket := TestLocalBucketName
 	createFreshLocalBucket(t, proxyURL, bucket)
-
-	defer func() {
-		err := client.DestroyLocalBucket(proxyURL, bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -314,11 +306,7 @@ func TestRegressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	createFreshLocalBucket(t, proxyURL, bucket)
-
-	defer func() {
-		err := client.DestroyLocalBucket(proxyURL, bucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, proxyURL, bucket)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: bucket})
 
 }
@@ -332,11 +320,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 	renamedBucket := bucket + "_renamed"
 	createFreshLocalBucket(t, proxyURL, bucket)
 	destroyLocalBucket(t, proxyURL, renamedBucket)
-
-	defer func() {
-		err := client.DestroyLocalBucket(proxyURL, renamedBucket)
-		tutils.CheckFatal(err, t)
-	}()
+	defer destroyLocalBucket(t, proxyURL, renamedBucket)
 
 	b, err := client.ListBuckets(proxyURL, true)
 	tutils.CheckFatal(err, t)
@@ -364,7 +348,9 @@ func TestListObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 	tutils.Logf("Create a list of %d objects", numFiles)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 	fileList := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
 		fname := fmt.Sprintf("obj%d", i+1)
@@ -433,12 +419,6 @@ func TestListObjects(t *testing.T) {
 			os.Remove(dir + "/" + name)
 		}
 	}
-
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func TestRenameObjects(t *testing.T) {
@@ -479,8 +459,7 @@ func TestRenameObjects(t *testing.T) {
 		wg.Wait()
 		selectErr(errch, "delete", t, false)
 		close(errch)
-		err = client.DestroyLocalBucket(proxyURL, RenameLocalBucketName)
-		tutils.CheckFatal(err, t)
+		destroyLocalBucket(t, proxyURL, RenameLocalBucketName)
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -530,18 +509,14 @@ func TestRenameObjects(t *testing.T) {
 
 func TestObjectPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
 	prefixLookup(t, proxyURL)
 	prefixCleanup(t, proxyURL)
-
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func TestObjectsVersions(t *testing.T) {
@@ -584,18 +559,12 @@ func TestRebalance(t *testing.T) {
 			v.Core.Tracker["rx.size"].Value, v.Core.Tracker["rx.n"].Value
 	}
 
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
-
 	//
 	// step 1. config
 	//
-	defer func() {
-		if created {
-			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-				t.Errorf("Failed to delete local bucket: %v", err)
-			}
-		}
-	}()
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	//
 	// cluster-wide reduce startup_delay_time
@@ -978,7 +947,9 @@ func TestDeleteList(t *testing.T) {
 		files    = make([]string, 0, numfiles)
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
@@ -1008,12 +979,6 @@ func TestDeleteList(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
-	}
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
 	}
 }
 
@@ -1124,7 +1089,9 @@ func TestDeleteRange(t *testing.T) {
 		proxyURL       = getPrimaryURL(t, proxyURLRO)
 	)
 
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
@@ -1176,11 +1143,6 @@ func TestDeleteRange(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
-	}
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
 	}
 }
 

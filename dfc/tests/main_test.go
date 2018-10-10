@@ -138,7 +138,9 @@ func Test_download(t *testing.T) {
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
@@ -190,12 +192,6 @@ func Test_matchdelete(t *testing.T) {
 		t.Fail()
 	default:
 	}
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func Test_putdeleteRange(t *testing.T) {
@@ -217,7 +213,10 @@ func Test_putdeleteRange(t *testing.T) {
 	if err := common.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
+
 	errch := make(chan error, numfiles*5)
 	filesput := make(chan string, numfiles)
 
@@ -340,12 +339,6 @@ func Test_putdeleteRange(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 // PUT, then delete
@@ -363,7 +356,9 @@ func Test_putdelete(t *testing.T) {
 	filesput := make(chan string, numfiles)
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -406,11 +401,6 @@ func Test_putdelete(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func listObjects(t *testing.T, proxyURL string, msg *api.GetMsg, bucket string, objLimit int) (*api.BucketList, error) {
@@ -732,7 +722,9 @@ func TestHeadObject(t *testing.T) {
 
 func TestHeadObjectCheckCached(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 	fileName := "headobject_check_cached_test_file"
 	fileSize := 1024
 	r, err := client.NewRandReader(int64(fileSize), false)
@@ -758,12 +750,6 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	if b {
 		t.Error("Expected object to NOT be cached after deleting object, got true from client.IsCached")
-	}
-
-	if created {
-		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
 	}
 }
 
@@ -1098,15 +1084,10 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 		fqn             string
 		errstr          string
+		err             error
 	)
 
-	err := client.CreateLocalBucket(proxyURL, bucketName)
-	tutils.CheckFatal(err, t)
-
-	defer func() {
-		err = client.DestroyLocalBucket(proxyURL, bucketName)
-		tutils.CheckFatal(err, t)
-	}()
+	createFreshLocalBucket(t, proxyURL, bucketName)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(fileSize)
@@ -1177,6 +1158,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
+	destroyLocalBucket(t, proxyURL, bucketName)
 	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	close(errorChannel)
@@ -1270,9 +1252,7 @@ cleanup:
 	close(fileNameChannel)
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
+		destroyLocalBucket(t, proxyURL, clibucket)
 	}
 }
 
@@ -1480,9 +1460,7 @@ cleanup:
 	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyURL, bucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
+		destroyLocalBucket(t, proxyURL, bucket)
 	}
 
 	return

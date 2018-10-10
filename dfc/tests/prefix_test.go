@@ -37,17 +37,13 @@ func TestPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	tutils.Logf("Looking for files with prefix [%s]\n", prefix)
-	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
+		defer destroyLocalBucket(t, proxyURL, clibucket)
+	}
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
 	prefixLookup(t, proxyURL)
 	prefixCleanup(t, proxyURL)
-
-	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
-	}
 }
 
 func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir string) int {

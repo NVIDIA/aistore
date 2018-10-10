@@ -71,9 +71,7 @@ func Test_smoke(t *testing.T) {
 	}
 
 	if created {
-		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
-			t.Errorf("Failed to delete local bucket: %v", err)
-		}
+		destroyLocalBucket(t, proxyURL, clibucket)
 	}
 }
 
