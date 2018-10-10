@@ -148,9 +148,12 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 		err  error
 	)
 
-	seed := time.Now().UnixNano()
+	// FIXME, TODO: must be redone, along with populateData() - use SGL and io.MultiWriter
+	seed := int64(1)
+	rand1 := rand.New(rand.NewSource(seed))
+	rand1dup := rand.New(rand.NewSource(seed))
 	if withHash {
-		hash, err = populateData(ioutil.Discard, size, true, rand.New(rand.NewSource(seed)))
+		hash, err = populateData(ioutil.Discard, size, true, rand1)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +161,7 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 
 	return &randReader{
 		seed:   seed,
-		rnd:    rand.New(rand.NewSource(seed)),
+		rnd:    rand1dup,
 		size:   size,
 		xxHash: hash,
 	}, nil
