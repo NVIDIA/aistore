@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package main
 
 import (
@@ -8,7 +12,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
@@ -63,7 +66,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 	common.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
-		r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
+		r, err := client.NewRandReader(int64(fileSize), true /* withHash */)
 		if err != nil {
 			return err
 		}

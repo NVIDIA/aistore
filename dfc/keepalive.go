@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 const (
@@ -58,7 +59,7 @@ type proxyKeepaliveRunner struct {
 }
 
 type keepalive struct {
-	namedrunner
+	common.Named
 	k                          keepaliver
 	kt                         KeepaliveTracker
 	tt                         *timeoutTracker
@@ -329,8 +330,8 @@ func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, args callArgs) (ok, stopp
 	}
 }
 
-func (k *keepalive) run() error {
-	glog.Infof("Starting %s", k.name)
+func (k *keepalive) Run() error {
+	glog.Infof("Starting %s", k.Getname())
 	ticker := time.NewTicker(k.interval)
 	lastCheck := time.Time{}
 
@@ -458,8 +459,8 @@ func (k *keepalive) isTimeToPing(sid string) bool {
 	return k.kt.TimedOut(sid)
 }
 
-func (k *keepalive) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", k.name, err)
+func (k *keepalive) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", k.Getname(), err)
 	k.controlCh <- controlSignal{msg: stop}
 	close(k.controlCh)
 }

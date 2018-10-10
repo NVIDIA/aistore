@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 type signalError struct {
@@ -28,12 +29,12 @@ func (se *signalError) Error() string {
 //
 //===========================================================================
 type sigrunner struct {
-	namedrunner
+	common.Named
 	chsig chan os.Signal
 }
 
 // signal handler
-func (r *sigrunner) run() error {
+func (r *sigrunner) Run() error {
 	r.chsig = make(chan os.Signal, 1)
 	signal.Notify(r.chsig,
 		syscall.SIGHUP,
@@ -55,9 +56,8 @@ func (r *sigrunner) run() error {
 	return nil
 }
 
-func (r *sigrunner) stop(err error) {
-	glog.Infof("Stopping sigrunner, err: %v", err)
-	glog.Flush()
+func (r *sigrunner) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	signal.Stop(r.chsig)
 	close(r.chsig)
 }

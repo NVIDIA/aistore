@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
@@ -48,7 +47,7 @@ var (
 	objlimit               int64
 	prefix                 string
 	abortonerr             = false
-	readerType             = readers.ReaderTypeSG
+	readerType             = client.ReaderTypeSG
 	prefetchPrefix         = "__bench/test-"
 	prefetchRegex          = "^\\d22\\d?"
 	prefetchRange          = "0:2000"
@@ -80,9 +79,9 @@ func init() {
 	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
-	flag.StringVar(&readerType, "readertype", readers.ReaderTypeSG,
-		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", readers.ReaderTypeSG,
-			readers.ReaderTypeFile, readers.ReaderTypeInMem, readers.ReaderTypeRand))
+	flag.StringVar(&readerType, "readertype", client.ReaderTypeSG,
+		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", client.ReaderTypeSG,
+			client.ReaderTypeFile, client.ReaderTypeInMem, client.ReaderTypeRand))
 	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
 	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
 	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
@@ -100,8 +99,8 @@ func init() {
 
 	flag.Parse()
 
-	usingSG = readerType == readers.ReaderTypeSG
-	usingFile = readerType == readers.ReaderTypeFile
+	usingSG = readerType == client.ReaderTypeSG
+	usingFile = readerType == client.ReaderTypeFile
 	checkMemory()
 
 	if util.DockerRunning() && proxyURLRO == ProxyURL {
@@ -110,7 +109,7 @@ func init() {
 }
 
 func checkMemory() {
-	if readerType == readers.ReaderTypeSG || readerType == readers.ReaderTypeInMem {
+	if readerType == client.ReaderTypeSG || readerType == client.ReaderTypeInMem {
 		megabytes, _ := dfc.TotalMemory()
 		if megabytes < PhysMemSizeWarn {
 			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider use other reader type\n", megabytes)

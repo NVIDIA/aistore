@@ -170,7 +170,7 @@ type netServer struct {
 }
 
 type httprunner struct {
-	namedrunner
+	common.Named
 	publicServer          *netServer
 	internalServer        *netServer
 	replServer            *netServer
@@ -408,7 +408,7 @@ func (h *httprunner) run() error {
 
 // stop gracefully
 func (h *httprunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", h.name, err)
+	glog.Infof("Stopping %s, err: %v", h.Getname(), err)
 
 	h.statsdC.Close()
 	if h.publicServer.s == nil {

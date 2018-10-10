@@ -13,9 +13,8 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 var (
@@ -36,10 +35,8 @@ func Test_smoke(t *testing.T) {
 	if err := common.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
 
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fp := make(chan string, len(filesizes)*len(ratios)*numops*numworkers)
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
@@ -70,6 +67,12 @@ func Test_smoke(t *testing.T) {
 		t.Error(err)
 	default:
 	}
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bseed int64, filesput chan string) {
@@ -80,13 +83,13 @@ func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bsee
 	var (
 		nGet = int(float32(numworkers) * ratio)
 		nPut = numworkers - nGet
-		sgls = make([]*iosgl.SGL, numworkers, numworkers)
+		sgls = make([]*memsys.SGL, numworkers, numworkers)
 	)
 
 	// Get the workers started
 	if usingSG {
 		for i := 0; i < numworkers; i++ {
-			sgls[i] = iosgl.NewSGL(filesize)
+			sgls[i] = client.Mem2.NewSGL(filesize)
 		}
 		defer func() {
 			for _, sgl := range sgls {
@@ -99,7 +102,7 @@ func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bsee
 		if (i%2 == 0 && nPut > 0) || nGet == 0 {
 			wg.Add(1)
 			go func(i int) {
-				var sgl *iosgl.SGL
+				var sgl *memsys.SGL
 				if usingSG {
 					sgl = sgls[i]
 				}
@@ -173,7 +176,7 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 
 func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []string, bucket string,
 	t *testing.T, errch chan error, filesput chan string,
-	dir, keystr string, silent bool, sgl *iosgl.SGL) {
+	dir, keystr string, silent bool, sgl *memsys.SGL) {
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	for _, fname := range objList {
@@ -183,14 +186,14 @@ func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []
 		}
 
 		var (
-			r   readers.Reader
+			r   client.Reader
 			err error
 		)
 		if sgl != nil {
 			sgl.Reset()
-			r, err = readers.NewSGReader(sgl, int64(size), true /* with Hash */)
+			r, err = client.NewSGReader(sgl, int64(size), true /* with Hash */)
 		} else {
-			r, err = readers.NewReader(readers.ParamReader{
+			r, err = client.NewReader(client.ParamReader{
 				Type: readerType,
 				SGL:  nil,
 				Path: dir,
@@ -224,7 +227,7 @@ func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []
 
 func putRandomFiles(proxyURL string, seed int64, fileSize uint64, numPuts int, bucket string,
 	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
-	dir, keystr string, silent bool, sgl *iosgl.SGL) {
+	dir, keystr string, silent bool, sgl *memsys.SGL) {
 	if wg != nil {
 		defer wg.Done()
 	}

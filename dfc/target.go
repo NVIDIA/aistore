@@ -34,7 +34,7 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -114,7 +114,7 @@ type targetrunner struct {
 }
 
 // start target runner
-func (t *targetrunner) run() error {
+func (t *targetrunner) Run() error {
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.keepalive = gettargetkeepalive()
@@ -233,8 +233,8 @@ func (t *targetrunner) run() error {
 }
 
 // stop gracefully
-func (t *targetrunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", t.name, err)
+func (t *targetrunner) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", t.Getname(), err)
 	sleep := t.xactinp.abortAll()
 	t.rtnamemap.stop()
 	if t.publicServer.s != nil {
@@ -446,7 +446,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 				oldFQN, oldSize := t.getFromNeighborFS(bucket, objname, islocal)
 				if oldFQN != "" {
 					if glog.V(4) {
-						glog.Infof("Local rebalance is not completed: file found at %s [size %s]", oldFQN, bytesToStr(oldSize, 1))
+						glog.Infof("Local rebalance is not completed: file found at %s [size %s]",
+							oldFQN, common.B2S(oldSize, 1))
 					}
 					fqn = oldFQN
 					size = oldSize
@@ -460,7 +461,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 				if props := t.getFromNeighbor(bucket, objname, r, islocal); props != nil {
 					size, nhobj = props.size, props.nhobj
 					if glog.V(4) {
-						glog.Infof("Rebalance is not completed: found somewhere [size %s]", bytesToStr(size, 1))
+						glog.Infof("Rebalance is not completed: found somewhere [size %s]", common.B2S(size, 1))
 					}
 					goto existslocally
 				}
@@ -534,8 +535,8 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	//
 existslocally:
 	var (
-		sgl                *iosgl.SGL
-		slab               *iosgl.Slab
+		sgl                *memsys.SGL
+		slab               *memsys.Slab2
 		buf                []byte
 		rangeReader        io.ReadSeeker
 		reader             io.Reader
@@ -617,7 +618,7 @@ existslocally:
 
 send:
 	if rahsgl != nil && rahSize > 0 {
-		// reader = iosgl.NewReader(rahsgl) - NOTE
+		// reader = memsys.NewReader(rahsgl) - NOTE
 		reader = rahsgl
 		slab = rahsgl.Slab()
 		buf = slab.Alloc()
@@ -627,13 +628,13 @@ send:
 			file.Seek(rahSize, io.SeekStart)
 		}
 		reader = file
-		buf, slab = iosgl.AllocFromSlab(size)
+		buf, slab = gmem2.AllocFromSlab2(size)
 	} else {
 		if rahSize > 0 {
 			rangeOff += rahSize
 			rangeLen -= rahSize
 		}
-		buf, slab = iosgl.AllocFromSlab(rangeLen)
+		buf, slab = gmem2.AllocFromSlab2(rangeLen)
 		if cksumRange {
 			common.Assert(rahSize == 0, "NOT IMPLEMENTED YET") // TODO
 			var cksum string
@@ -688,11 +689,11 @@ send:
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
-	cksum string, sgl *iosgl.SGL, rangeReader io.ReadSeeker, errstr string) {
+	cksum string, sgl *memsys.SGL, rangeReader io.ReadSeeker, errstr string) {
 	rangeReader = io.NewSectionReader(file, offset, length)
 	xx := xxhash.New64()
 	if length <= maxBytesInMem {
-		sgl = iosgl.NewSGL(length)
+		sgl = gmem2.NewSGL(length)
 		_, err := ReceiveAndChecksum(sgl, rangeReader, buf, xx)
 		if err != nil {
 			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
@@ -700,7 +701,7 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int6
 			return
 		}
 		// overriding rangeReader here to read from the sgl
-		rangeReader = iosgl.NewReader(sgl)
+		rangeReader = memsys.NewReader(sgl)
 	}
 
 	_, err := rangeReader.Seek(0, io.SeekStart)
@@ -1993,7 +1994,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		hdhobj, nhobj              cksumvalue
 		xxHashVal                  string
 		htype, hval, nhtype, nhval string
-		sgl                        *iosgl.SGL
+		sgl                        *memsys.SGL
 		started                    time.Time
 	)
 	started = time.Now()
@@ -2017,7 +2018,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		file, err = os.Open(fqn)
 		// exists - compute checksum and compare with the caller's
 		if err == nil {
-			buf, slab := iosgl.AllocFromSlab(0)
+			buf, slab := gmem2.AllocFromSlab2(0)
 			if htype == ChecksumXXHash {
 				xxHashVal, errstr = ComputeXXHash(file, buf)
 			} else {
@@ -2096,7 +2097,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	return ""
 }
 
-func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {
+func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *memsys.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {
 	slab := sgl.Slab()
 	buf := slab.Alloc()
 	defer func() {
@@ -2110,7 +2111,7 @@ func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *iosgl.SGL, bucke
 		glog.Errorln("sglToCloudAsync: create", putfqn, err)
 		return
 	}
-	reader := iosgl.NewReader(sgl)
+	reader := memsys.NewReader(sgl)
 	written, err := io.CopyBuffer(file, reader, buf)
 	if err != nil {
 		t.fshc(err, putfqn)
@@ -2531,7 +2532,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 
 	if cksumcfg.Checksum != ChecksumNone {
 		common.Assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
-		buf, slab := iosgl.AllocFromSlab(size)
+		buf, slab := gmem2.AllocFromSlab2(size)
 		if xxHashVal, errstr = ComputeXXHash(file, buf); errstr != "" {
 			slab.Free(buf)
 			return errstr
@@ -2959,7 +2960,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 //
 //==============================================================================================
 func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalue,
-	reader io.Reader) (sgl *iosgl.SGL, nhobj cksumvalue, written int64, errstr string) {
+	reader io.Reader) (sgl *memsys.SGL, nhobj cksumvalue, written int64, errstr string) {
 	var (
 		err                  error
 		file                 *os.File
@@ -2992,7 +2993,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		filewriter = ioutil.Discard
 	}
 
-	buf, slab := iosgl.AllocFromSlab(0)
+	buf, slab := gmem2.AllocFromSlab2(0)
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
 		if errstr == "" {
@@ -3706,7 +3707,7 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 		return false, errstr
 	}
 
-	buf, slab := iosgl.AllocFromSlab(slabSize)
+	buf, slab := gmem2.AllocFromSlab2(slabSize)
 	xxHashVal, errstr := ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)

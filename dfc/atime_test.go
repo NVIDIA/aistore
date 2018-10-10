@@ -26,9 +26,9 @@ func TestAtimerunnerStop(t *testing.T) {
 			fsToFilesMap: make(map[string]map[string]time.Time),
 		},
 	}
-	go atimer.run()
+	go atimer.Run()
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 
 	waitChan := make(chan struct{})
 	go func() {
@@ -48,7 +48,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
@@ -74,14 +74,14 @@ func TestAtimerunnerTouch(t *testing.T) {
 		t.Error("Access time is too old")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 }
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	fileName := "test"
 	atimer.touch(fileName)
@@ -95,14 +95,14 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 		t.Error("Atime should not be returned for a non existing file.")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 }
 
 func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
@@ -136,14 +136,14 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 			accessTime, accessTimeNext)
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 }
 
 func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	tempFile, fs := getTempFile(t, "1")
 	defer func() {
@@ -176,14 +176,14 @@ func TestAtimerunnerMultipleTouchMultipleFile(t *testing.T) {
 		t.Errorf("File [%s] is not present in atime map", tempFile2.Name())
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 }
 
 func TestAtimerunnerFlush(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.mountpaths = fs.NewMountedFS()
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	file1, _ := getTempFile(t, "1")
 	atimer.touch(file1.Name())
@@ -215,13 +215,13 @@ func TestAtimerunnerFlush(t *testing.T) {
 		t.Error("Invalid number of files in atimerunner")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 }
 
 func TestAtimeNonExistingFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 	_, ok := atimer.atime("test")
 	if ok {
 		t.Errorf("Expected to fail while getting atime of a non existing file.")
@@ -231,7 +231,7 @@ func TestAtimeNonExistingFile(t *testing.T) {
 func TestTouchNonExistingFile(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 	atimer.touch("test")
 	if len(atimer.atimemap.fsToFilesMap) != 0 {
 		t.Errorf("No file system should be present in the map.")
@@ -241,8 +241,8 @@ func TestTouchNonExistingFile(t *testing.T) {
 func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 4),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 4),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS()
 
@@ -260,20 +260,20 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	{
 		ctx.config.LRU.LRUEnabled = false
 		atimer := newAtimeRunner()
-		go atimer.run()
+		go atimer.Run()
 		n := atimer.getNumberItemsToFlush(fs)
 		if n != 0 {
 			t.Error("number items to flush should be 0 when LRU not enabled")
 		}
 
-		atimer.stop(fmt.Errorf("test"))
+		atimer.Stop(fmt.Errorf("test"))
 	}
 
 	// When the initial capacity was not achieved, function should return 0
 	{
 		ctx.config.LRU.LRUEnabled = true
 		atimer := newAtimeRunner()
-		go atimer.run()
+		go atimer.Run()
 
 		atimer.touch("/tmp/fqn1")
 		atimer.touch("/tmp/fqn2")
@@ -284,7 +284,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 			t.Error("number items to flush should be 0 when capacity not achieved")
 		}
 
-		atimer.stop(fmt.Errorf("test"))
+		atimer.Stop(fmt.Errorf("test"))
 	}
 
 	getiostatrunner().stopCh <- struct{}{}
@@ -295,8 +295,8 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 1),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 1),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS()
 
@@ -317,7 +317,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	go ctx.rg.run()
 
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	itemCount := atimeCacheFlushThreshold * 2
 	for i := 0; i < itemCount; i++ {
@@ -331,7 +331,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		t.Error("when idle we should flush 25% of the cache")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
@@ -341,8 +341,8 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 1),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 1),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS()
 
@@ -358,7 +358,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	go ctx.rg.run()
 
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	for i := 0; i < itemCount; i++ {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
@@ -378,7 +378,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		t.Error("when filling is 100% we should flush 50% of the cache")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
@@ -388,8 +388,8 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 1),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 1),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS()
 
@@ -405,7 +405,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	go ctx.rg.run()
 
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	for i := 0; i < itemCount; i++ {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
@@ -425,7 +425,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		t.Error("when filling is above high watermark we should flush 25% of the cache")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
@@ -436,8 +436,8 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 1),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 1),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS()
 
@@ -453,7 +453,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	go ctx.rg.run()
 
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	for i := 0; i < itemCount; i++ {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
@@ -473,7 +473,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		t.Error("when filling is above low watermark we should flush some of the cache")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 
@@ -484,8 +484,8 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	ctx.config.LRU.LRUEnabled = true
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 1),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 1),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.mountpaths = fs.NewMountedFS()
 
@@ -502,7 +502,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	go ctx.rg.run()
 
 	atimer := newAtimeRunner()
-	go atimer.run()
+	go atimer.Run()
 
 	for i := 0; i < itemCount; i++ {
 		atimer.touch("/tmp/fqn" + strconv.Itoa(i))
@@ -522,7 +522,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		t.Error("when filling is low and disk is busy we should not flush at all")
 	}
 
-	atimer.stop(fmt.Errorf("test"))
+	atimer.Stop(fmt.Errorf("test"))
 	getiostatrunner().stopCh <- struct{}{}
 }
 

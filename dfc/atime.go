@@ -63,7 +63,7 @@ type atimemap struct {
 }
 
 type atimerunner struct {
-	namedrunner
+	common.Named
 	chfqn      chan string             // FIXME: consider { fqn, xxhash }
 	chstop     chan struct{}           // Control channel for stopping
 	atimemap   *atimemap               // Access time map
@@ -94,8 +94,8 @@ func newAtimeRunner() (r *atimerunner) {
 }
 
 // run initiates the work of the receiving atimerunner
-func (r *atimerunner) run() error {
-	glog.Infof("Starting %s", r.name)
+func (r *atimerunner) Run() error {
+	glog.Infof("Starting %s", r.Getname())
 	ticker := time.NewTicker(atimeSyncTime)
 loop:
 	for {
@@ -119,8 +119,8 @@ loop:
 }
 
 // stop aborts the receiving atimerunner
-func (r *atimerunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
+func (r *atimerunner) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	r.chstop <- struct{}{}
 	close(r.chstop)
 }

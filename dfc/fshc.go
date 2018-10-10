@@ -14,8 +14,9 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 )
 
 const (
@@ -37,7 +38,7 @@ const (
 // for mountpath definition, see fs/mountfs.go
 type (
 	fshc struct {
-		namedrunner
+		common.Named
 		controlCh     chan struct{}
 		fileListCh    chan string
 		reqCh         chan fshcReq
@@ -77,8 +78,8 @@ func (f *fshc) reqRemoveMountpath(mpath string) {
 }
 
 // as a runner
-func (f *fshc) run() error {
-	glog.Infof("Starting %s", f.name)
+func (f *fshc) Run() error {
+	glog.Infof("Starting %s", f.Getname())
 	f.init()
 
 	for {
@@ -98,8 +99,8 @@ func (f *fshc) run() error {
 	}
 }
 
-func (f *fshc) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", f.name, err)
+func (f *fshc) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", f.Getname(), err)
 	for _, r := range f.mpathCheckers {
 		r.controlCh <- struct{}{}
 	}
@@ -273,7 +274,7 @@ func (f *fshc) checkFile(filepath string) {
 }
 
 // reads the entire file content
-func (f *fshc) tryReadFile(fqn string, sgl *iosgl.SGL) error {
+func (f *fshc) tryReadFile(fqn string, sgl *memsys.SGL) error {
 	stat, err := os.Stat(fqn)
 	if err != nil {
 		return err
@@ -297,7 +298,7 @@ func (f *fshc) tryReadFile(fqn string, sgl *iosgl.SGL) error {
 }
 
 // creates a random file in a random directory inside a mountpath
-func (f *fshc) tryWriteFile(mountpath string, fileSize int, sgl *iosgl.SGL) error {
+func (f *fshc) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) error {
 	tmpdir, err := ioutil.TempDir(mountpath, fshcNameTemplate)
 	if err != nil {
 		glog.Errorf("Failed to create temporary directory: %v", err)
@@ -362,8 +363,8 @@ func (f *fshc) testMountpath(filepath, mountpath string,
 		return 0, 0, false
 	}
 
-	sgl := iosgl.NewSGL(0)
-	defer sgl.Reclaim()
+	sgl := gmem2.NewSGL(0)
+	defer sgl.Free()
 
 	totalReads, totalWrites := 0, 0
 	// first, read the file that causes the error, if it is defined

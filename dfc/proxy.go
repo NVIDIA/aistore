@@ -81,7 +81,7 @@ type proxyrunner struct {
 }
 
 // start proxy runner
-func (p *proxyrunner) run() error {
+func (p *proxyrunner) Run() error {
 	p.httprunner.init(getproxystatsrunner(), true)
 	p.httprunner.keepalive = getproxykeepalive()
 
@@ -210,13 +210,13 @@ func (p *proxyrunner) unregister() (int, error) {
 }
 
 // stop gracefully
-func (p *proxyrunner) stop(err error) {
+func (p *proxyrunner) Stop(err error) {
 	var isPrimary bool
 	smap := p.smapowner.get()
 	if smap != nil { // in tests
 		isPrimary = smap.isPrimary(p.si)
 	}
-	glog.Infof("Stopping %s (ID %s, primary=%t), err: %v", p.name, p.si.DaemonID, isPrimary, err)
+	glog.Infof("Stopping %s (ID %s, primary=%t), err: %v", p.Getname(), p.si.DaemonID, isPrimary, err)
 	p.xactinp.abortAll()
 
 	if isPrimary {

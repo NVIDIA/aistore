@@ -10,20 +10,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/iosgl"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
 func doPut(wo *workOrder) {
-	var sgl *iosgl.SGL
+	var sgl *memsys.SGL
 	if runParams.usingSG {
-		sgl = iosgl.NewSGL(wo.size)
+		sgl = client.Mem2.NewSGL(wo.size)
 		defer sgl.Free()
 	}
 
-	r, err := readers.NewReader(readers.ParamReader{
+	r, err := client.NewReader(client.ParamReader{
 		Type: runParams.readerType,
 		SGL:  sgl,
 		Path: runParams.tmpDir,

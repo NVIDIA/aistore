@@ -3,6 +3,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/json-iterator/go"
 )
 
@@ -22,6 +24,7 @@ import (
 const (
 	xproxy           = "proxy"
 	xtarget          = "target"
+	xmem             = "mem"
 	xsignal          = "signal"
 	xproxystats      = "proxystats"
 	xstorstats       = "storstats"
@@ -41,8 +44,8 @@ type (
 		conffile  string
 		loglevel  string
 		statstime time.Duration
-		ntargets  int
 		proxyurl  string
+		ntargets  int
 	}
 
 	// daemon instance: proxy or storage target
@@ -52,27 +55,13 @@ type (
 		rg         *rungroup
 	}
 
-	namedrunner struct {
-		name string
-	}
-
 	rungroup struct {
-		runarr []runner
-		runmap map[string]runner // redundant, named
+		runarr []common.Runner
+		runmap map[string]common.Runner // redundant, named
 		errch  chan error
 		stpch  chan error
 	}
-
-	runner interface {
-		run() error
-		stop(error)
-		setname(string)
-		getName() string
-	}
 )
-
-func (r *namedrunner) setname(n string) { r.name = n }
-func (r *namedrunner) getName() string  { return r.name }
 
 // - selective disabling of a disk and/or network IO.
 // - dry-run is initialized at startup and cannot be changed.
@@ -92,6 +81,7 @@ type dryRunConfig struct {
 //====================
 var (
 	build      string
+	gmem2      *memsys.Mem2 // gen-purpose system-wide memory manager and slab/SGL allocator (instance, runner)
 	ctx        = &daemon{}
 	clivars    = &cliVars{}
 	jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -103,8 +93,8 @@ var (
 // rungroup
 //
 //====================
-func (g *rungroup) add(r runner, name string) {
-	r.setname(name)
+func (g *rungroup) add(r common.Runner, name string) {
+	r.Setname(name)
 	g.runarr = append(g.runarr, r)
 	g.runmap[name] = r
 }
@@ -116,9 +106,9 @@ func (g *rungroup) run() error {
 	g.errch = make(chan error, len(g.runarr))
 	g.stpch = make(chan error, 1)
 	for i, r := range g.runarr {
-		go func(i int, r runner) {
-			err := r.run()
-			glog.Warningf("Runner [%s] threw error [%v].", r.getName(), err)
+		go func(i int, r common.Runner) {
+			err := r.Run()
+			glog.Warningf("Runner [%s] threw error [%v].", r.Getname(), err)
 			g.errch <- err
 		}(i, r)
 	}
@@ -126,7 +116,7 @@ func (g *rungroup) run() error {
 	// wait here for (any/first) runner termination
 	err := <-g.errch
 	for _, r := range g.runarr {
-		r.stop(err)
+		r.Stop(err)
 	}
 	for i := 0; i < cap(g.errch)-1; i++ {
 		<-g.errch
@@ -162,14 +152,14 @@ func dryinit() {
 	}
 	str = os.Getenv("DFCDRYOBJSIZE")
 	if str != "" {
-		if size, err := strToBytes(str); size > 0 && err == nil {
+		if size, err := common.S2B(str); size > 0 && err == nil {
 			dryRun.size = size
 		}
 	}
 	if dryRun.disk {
 		warning := "Dry-run: disk IO will be disabled"
 		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, bytesToStr(dryRun.size, 0))
+		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, common.B2S(dryRun.size, 0))
 	}
 	if dryRun.network {
 		warning := "Dry-run: GET won't return objects, PUT won't send objects"
@@ -189,7 +179,7 @@ func dfcinit() {
 	flag.Parse()
 	common.Assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 
-	dryRun.size, err = strToBytes(dryRun.sizeStr)
+	dryRun.size, err = common.S2B(dryRun.sizeStr)
 	if dryRun.size < 1 || err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid object size: %d [%s]\n", dryRun.size, dryRun.sizeStr)
 	}
@@ -208,8 +198,8 @@ func dfcinit() {
 	// NOTE: proxy and, respectively, target terminations are executed in the same
 	//       exact order as the initializations below
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 8),
-		runmap: make(map[string]runner, 8),
+		runarr: make([]common.Runner, 0, 8),
+		runmap: make(map[string]common.Runner, 8),
 	}
 	if clivars.role == xproxy {
 		p := &proxyrunner{}
@@ -231,6 +221,15 @@ func dfcinit() {
 		}
 
 		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
+
+		// system-wide gen-purpose memory manager and slab/SGL allocator
+		mem := &memsys.Mem2{Name: "gmem2", MinPctFree: 50 /* % of current free mem */}
+		err := mem.Init()
+		if err != nil {
+			glog.Exit(err)
+		}
+		ctx.rg.add(mem, xmem)
+		gmem2 = getmem2() // making it global; getmem2() can still be used
 
 		iostat := newIostatRunner()
 		ctx.rg.add(iostat, xiostat)
@@ -318,6 +317,13 @@ func getproxykeepalive() *proxyKeepaliveRunner {
 func gettarget() *targetrunner {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
+	common.Assert(ok)
+	return rr
+}
+
+func getmem2() *memsys.Mem2 {
+	r := ctx.rg.runmap[xmem]
+	rr, ok := r.(*memsys.Mem2)
 	common.Assert(ok)
 	return rr
 }

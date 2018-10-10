@@ -15,7 +15,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/iosgl"
 )
 
 type recksumctx struct {
@@ -126,7 +125,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 		return ioerr
 	}
 
-	buf, slab := iosgl.AllocFromSlab(osfi.Size())
+	buf, slab := gmem2.AllocFromSlab2(osfi.Size())
 	xxHashVal, errstr := ComputeXXHash(file, buf)
 	slab.Free(buf)
 	if errstr != "" {

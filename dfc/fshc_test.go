@@ -11,11 +11,17 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/memsys"
 )
 
 const (
 	fsCheckerTmpDir = "/tmp/fshc"
 )
+
+func testMemInit(name string) {
+	gmem2 = &memsys.Mem2{Name: name}
+	gmem2.Init()
+}
 
 func testTmpFileName(fname string) string {
 	return fname + "-tmp"
@@ -68,6 +74,7 @@ func testCheckerCleanup() {
 }
 
 func TestFSCheckerMain(t *testing.T) {
+	testMemInit("fshctest")
 	fshc := newFSHC(testCheckerMountPaths(), testCheckerConfig(), testTmpFileName)
 
 	if fshc == nil {

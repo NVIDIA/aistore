@@ -20,7 +20,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
@@ -152,7 +151,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 
 			// Note: This test depends on the files it creates, so ignore reader type, always use file reader
-			r, err := readers.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
+			r, err := client.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "PUT write FAIL: %v\n", err)
 				t.Error(err)
@@ -311,9 +310,7 @@ func rwstress(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	filelock.files = make([]fileLock, numFiles, numFiles)
 
 	generateRandomData(t, baseseed+10000, numFiles)
@@ -332,6 +329,12 @@ func rwstress(t *testing.T) {
 	wg.Wait()
 	rwDelLoop(t, proxyURL, fileNames, nil, doneCh, rwRunCleanUp)
 	rwstressCleanup(t)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func rwstressCleanup(t *testing.T) {

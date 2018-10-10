@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
@@ -516,7 +515,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		}
 
 		url := v.PublicNet.DirectURL + api.URLPath(api.Version, api.Daemon, api.SyncSmap)
-		err := client.HTTPRequest(http.MethodPut, url, readers.NewBytesReader(jsonMap))
+		err := client.HTTPRequest(http.MethodPut, url, client.NewBytesReader(jsonMap))
 		checkFatal(err, t)
 
 		n--
@@ -551,8 +550,11 @@ func concurrentPutGetDel(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	smap := getClusterMap(t, proxyURL)
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
+	exists, err := client.DoesLocalBucketExist(proxyURL, clibucket)
+	checkFatal(err, t)
+	if !exists {
+		err := client.CreateLocalBucket(proxyURL, clibucket)
+		checkFatal(err, t)
 	}
 
 	var (
@@ -580,13 +582,14 @@ func concurrentPutGetDel(t *testing.T) {
 	for err := range errch {
 		checkFatal(err, t)
 	}
+	client.DestroyLocalBucket(proxyURL, clibucket)
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
 func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 	random := rand.New(rand.NewSource(seed))
 	for i := 0; i < count; i++ {
-		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
+		reader, err := client.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			return fmt.Errorf("Error creating reader: %v", err)
 		}
@@ -648,7 +651,7 @@ loop:
 		default:
 		}
 
-		reader, err := readers.NewRandReader(fileSize, true /* withHash */)
+		reader, err := client.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			errch <- err
 			continue
@@ -739,8 +742,12 @@ func proxyStress(t *testing.T) {
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	createFreshLocalBucket(t, proxyURL, localBucketName)
-	defer destroyLocalBucket(t, proxyURL, localBucketName)
+	exists, err := client.DoesLocalBucketExist(proxyURL, localBucketName)
+	checkFatal(err, t)
+	if !exists {
+		err := client.CreateLocalBucket(proxyURL, localBucketName)
+		checkFatal(err, t)
+	}
 
 	// start all workers
 	for i := 0; i < numworkers; i++ {
@@ -785,6 +792,7 @@ loop:
 	}
 
 	wg.Wait()
+	client.DestroyLocalBucket(proxyURL, localBucketName)
 }
 
 // smap 	- current Smap
@@ -1123,7 +1131,7 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *dfc.Smap) e
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Cluster)
-	return client.HTTPRequest(http.MethodPost, url, readers.NewBytesReader(jsonDaemonInfo))
+	return client.HTTPRequest(http.MethodPost, url, client.NewBytesReader(jsonDaemonInfo))
 }
 
 func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {

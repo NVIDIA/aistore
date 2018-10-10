@@ -13,7 +13,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 )
 
 // TODO	1) readahead IFF utilization < (50%(or configured) || average across mountpaths)
@@ -22,7 +22,7 @@ import (
 //	4) ctx.config.Readahead.TotalMem as long as < sigar.FreeMem
 //	5) proxy AIMD, target to decide
 //	6) rangeOff/len
-//	7) utilize iosgl
+//	7) utilize memsys
 const (
 	rahChanSize    = 256
 	rahMapInitSize = 256
@@ -32,16 +32,16 @@ const (
 type (
 	readaheader interface {
 		ahead(fqn string, rangeOff, rangeLen int64)
-		get(fqn string) (rahfcacher, *iosgl.SGL)
+		get(fqn string) (rahfcacher, *memsys.SGL)
 	}
 	rahfcacher interface {
 		got()
 	}
 	readahead struct {
 		sync.Mutex
-		namedrunner                       // to be a runner
-		joggers     map[string]*rahjogger // mpath => jogger
-		stopCh      chan struct{}         // to stop
+		common.Named                       // to be a runner
+		joggers      map[string]*rahjogger // mpath => jogger
+		stopCh       chan struct{}         // to stop
 	}
 	rahjogger struct {
 		sync.Mutex
@@ -50,14 +50,14 @@ type (
 		aheadCh chan *rahfcache       // to start readahead(fqn)
 		getCh   chan *rahfcache       // to get readahead context for fqn
 		stopCh  chan struct{}         // to stop
-		slab    *iosgl.Slab           // to read files
+		slab    *memsys.Slab2         // to read files
 		buf     []byte                // ditto
 	}
 	rahfcache struct {
 		sync.Mutex
 		fqn                string
 		rangeOff, rangeLen int64
-		sgl                *iosgl.SGL
+		sgl                *memsys.SGL
 		ts                 struct {
 			head, tail, get, got time.Time
 		}
@@ -121,14 +121,14 @@ func newRahJogger(mpath string) (rj *rahjogger) {
 	rj.getCh = make(chan *rahfcache, rahChanSize)
 	rj.stopCh = make(chan struct{}, 4)
 
-	rj.slab = iosgl.SelectSlab(ctx.config.Readahead.ObjectMem)
+	rj.slab = gmem2.SelectSlab2(ctx.config.Readahead.ObjectMem)
 	rj.buf = rj.slab.Alloc()
 	return
 }
 
 // as a runner
-func (r *readahead) run() error {
-	glog.Infof("Starting %s", r.name)
+func (r *readahead) Run() error {
+	glog.Infof("Starting %s", r.Getname())
 	availablePaths, _ := ctx.mountpaths.Mountpaths()
 	for mpath := range availablePaths {
 		r.addmp(mpath, "added")
@@ -136,8 +136,8 @@ func (r *readahead) run() error {
 	_ = <-r.stopCh // forever
 	return nil
 }
-func (r *readahead) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
+func (r *readahead) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	for mpath := range r.joggers {
 		r.delmp(mpath, "stopped")
 	}
@@ -146,9 +146,9 @@ func (r *readahead) stop(err error) {
 }
 
 // external API, dummies first
-func (r *dummyreadahead) ahead(string, int64, int64)          {}
-func (r *dummyreadahead) get(string) (rahfcacher, *iosgl.SGL) { return pdummyrahfcache, nil }
-func (*dummyrahfcache) got()                                  {}
+func (r *dummyreadahead) ahead(string, int64, int64)           {}
+func (r *dummyreadahead) get(string) (rahfcacher, *memsys.SGL) { return pdummyrahfcache, nil }
+func (*dummyrahfcache) got()                                   {}
 
 func (r *readahead) ahead(fqn string, rangeOff, rangeLen int64) {
 	if rj := r.demux(fqn); rj != nil {
@@ -156,7 +156,7 @@ func (r *readahead) ahead(fqn string, rangeOff, rangeLen int64) {
 	}
 }
 
-func (r *readahead) get(fqn string) (rahfcacher, *iosgl.SGL) {
+func (r *readahead) get(fqn string) (rahfcacher, *memsys.SGL) {
 	var rj *rahjogger
 	if rj = r.demux(fqn); rj == nil {
 		return pdummyrahfcache, nil
@@ -300,7 +300,7 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		reader = io.NewSectionReader(file, rahfcache.rangeOff, rahfcache.rangeLen)
 	}
 	if !ctx.config.Readahead.Discard {
-		rahfcache.sgl = iosgl.NewSGL(fsize)
+		rahfcache.sgl = gmem2.NewSGL(fsize)
 	}
 	// 3. read
 	for size < fsize {

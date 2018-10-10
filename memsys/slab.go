@@ -2,8 +2,10 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-// Package iosgl provides Reader and (streaming) Writer on top of a Scatter Gather List (SGL) of reusable buffers.
-package iosgl
+// Package memsys provides memory management and Slab allocation
+// with io.Reader and io.Writer interfaces on top of a scatter-gather lists
+// (of reusable buffers)
+package memsys
 
 import (
 	"sync"
@@ -45,24 +47,24 @@ func SelectSlab(estimatedSize int64) *Slab {
 	if estimatedSize == 0 {
 		estimatedSize = minSizeUnknown
 	}
-	for i, slab := range allSlabs {
-		n := common.DivCeil(estimatedSize, slab.Size())
-		if n <= countThreshold {
-			return allSlabs[i]
+	size := common.DivCeil(estimatedSize, countThreshold)
+	for _, slab := range allSlabs {
+		if slab.Size() >= size {
+			return slab
 		}
 	}
 	return allSlabs[len(allSlabs)-1]
 }
+
+func AllocFromSlab(estimSize int64) ([]byte, *Slab) {
+	slab := SelectSlab(estimSize)
+	return slab.Alloc(), slab
+}
+
+func FreeToSlab(buf []byte, s *Slab) { s.Free(buf) }
 
 func (s *Slab) Alloc() []byte { return s.Get().([]byte) }
 
 func (s *Slab) Free(buf []byte) { s.Put(buf) }
 
 func (s *Slab) Size() int64 { return s.fixedSize }
-
-func AllocFromSlab(desiredSize int64) ([]byte, *Slab) {
-	slab := SelectSlab(desiredSize)
-	return slab.Alloc(), slab
-}
-
-func FreeToSlab(buf []byte, s *Slab) { s.Free(buf) }

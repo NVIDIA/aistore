@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 package client_test
 
 import (
@@ -16,14 +20,17 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
 )
 
-var server *httptest.Server
+var (
+	server *httptest.Server
+	mem2   *memsys.Mem2
+)
 
 func TestPutFile(t *testing.T) {
 	err := putFile(1024, true /* withHash */)
@@ -34,7 +41,7 @@ func TestPutFile(t *testing.T) {
 
 func TestPutSG(t *testing.T) {
 	size := int64(10)
-	sgl := iosgl.NewSGL(size)
+	sgl := client.Mem2.NewSGL(size)
 	defer sgl.Free()
 	err := putSG(sgl, size, false /* withHash */)
 	if err != nil {
@@ -45,7 +52,7 @@ func TestPutSG(t *testing.T) {
 func putFile(size int64, withHash bool) error {
 	fn := "dfc-client-test-" + client.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32)
 	dir := "/tmp"
-	r, err := readers.NewFileReader(dir, fn, size, withHash)
+	r, err := client.NewFileReader(dir, fn, size, withHash)
 	if err != nil {
 		return err
 	}
@@ -58,7 +65,7 @@ func putFile(size int64, withHash bool) error {
 }
 
 func putInMem(size int64, withHash bool) error {
-	r, err := readers.NewInMemReader(size, withHash)
+	r, err := client.NewInMemReader(size, withHash)
 	if err != nil {
 		return err
 	}
@@ -68,7 +75,7 @@ func putInMem(size int64, withHash bool) error {
 }
 
 func putRand(size int64, withHash bool) error {
-	r, err := readers.NewRandReader(size, withHash)
+	r, err := client.NewRandReader(size, withHash)
 	if err != nil {
 		return err
 	}
@@ -77,9 +84,9 @@ func putRand(size int64, withHash bool) error {
 	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
-func putSG(sgl *iosgl.SGL, size int64, withHash bool) error {
+func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 	sgl.Reset()
-	r, err := readers.NewSGReader(sgl, size, true /* withHash */)
+	r, err := client.NewSGReader(sgl, size, true /* withHash */)
 	if err != nil {
 		return err
 	}
@@ -116,7 +123,7 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := iosgl.NewSGL(1024 * 1024)
+	sgl := client.Mem2.NewSGL(common.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -155,7 +162,7 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := iosgl.NewSGL(1024 * 1024)
+	sgl := client.Mem2.NewSGL(common.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -201,7 +208,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := iosgl.NewSGL(1024 * 1024)
+		sgl := client.Mem2.NewSGL(common.MiB)
 		defer sgl.Free()
 
 		for pb.Next() {

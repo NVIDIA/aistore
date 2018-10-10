@@ -49,7 +49,7 @@ func (r *iostatrunner) reqAddMountpath(mpath string)     { r.updateFSDisks() }
 func (r *iostatrunner) reqRemoveMountpath(mpath string)  { r.updateFSDisks() }
 
 // iostat -cdxtm 10
-func (r *iostatrunner) run() error {
+func (r *iostatrunner) Run() error {
 	r.updateFSDisks()
 	refreshPeriod := int(ctx.config.Periodic.StatsTime / time.Second)
 	cmd := exec.Command("iostat", "-cdxtm", strconv.Itoa(refreshPeriod))
@@ -65,7 +65,7 @@ func (r *iostatrunner) run() error {
 	// Assigning started process
 	r.process = cmd.Process
 
-	glog.Infof("Starting %s", r.name)
+	glog.Infof("Starting %s", r.Getname())
 
 	for {
 		b, err := reader.ReadBytes('\n')
@@ -110,8 +110,8 @@ func (r *iostatrunner) run() error {
 	}
 }
 
-func (r *iostatrunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
+func (r *iostatrunner) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
 

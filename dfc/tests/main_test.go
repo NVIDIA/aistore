@@ -32,9 +32,8 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
@@ -139,9 +138,7 @@ func Test_download(t *testing.T) {
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	// Declare one channel per worker to pass the keyname
 	keyname_chans := make([]chan string, numworkers)
@@ -193,6 +190,12 @@ func Test_matchdelete(t *testing.T) {
 		t.Fail()
 	default:
 	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func Test_putdeleteRange(t *testing.T) {
@@ -208,21 +211,18 @@ func Test_putdeleteRange(t *testing.T) {
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
 		filesize     = 16 * 1024
 	)
-	var sgl *iosgl.SGL
+	var sgl *memsys.SGL
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	if err := common.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
-
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	errch := make(chan error, numfiles*5)
 	filesput := make(chan string, numfiles)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -340,6 +340,12 @@ func Test_putdeleteRange(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 // PUT, then delete
@@ -348,7 +354,7 @@ func Test_putdelete(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	var sgl *iosgl.SGL
+	var sgl *memsys.SGL
 	if err := common.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
@@ -357,12 +363,10 @@ func Test_putdelete(t *testing.T) {
 	filesput := make(chan string, numfiles)
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -402,6 +406,11 @@ func Test_putdelete(t *testing.T) {
 
 	wg.Wait()
 	selectErr(errch, "delete", t, false)
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func listObjects(t *testing.T, proxyURL string, msg *api.GetMsg, bucket string, objLimit int) (*api.BucketList, error) {
@@ -519,7 +528,7 @@ func Test_coldgetmd5(t *testing.T) {
 		wg        = &sync.WaitGroup{}
 		bucket    = clibucket
 		totalsize = numPuts * largefilesize
-		sgl       *iosgl.SGL
+		sgl       *memsys.SGL
 		proxyURL  = getPrimaryURL(t, proxyURLRO)
 	)
 
@@ -538,7 +547,7 @@ func Test_coldgetmd5(t *testing.T) {
 	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -602,15 +611,14 @@ func TestHeadLocalBucket(t *testing.T) {
 		capacityUpdTimeTestSetting         = "2m"
 		lruEnabledTestSetting              = true
 		nextTierURL                        = "http://foo.com"
-		bucket                             = TestLocalBucketName
 	)
 	var (
 		bucketProps dfc.BucketProps
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierURL
@@ -627,10 +635,10 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
 	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
 
-	err := client.SetBucketProps(proxyURL, bucket, bucketProps)
+	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
 	checkFatal(err, t)
 
-	p, err := client.HeadBucket(proxyURL, bucket)
+	p, err := client.HeadBucket(proxyURL, TestLocalBucketName)
 	checkFatal(err, t)
 
 	validateBucketProps(t, bucketProps, *p)
@@ -695,11 +703,11 @@ func TestHeadObject(t *testing.T) {
 
 	fileName := "headobject_test_file"
 	fileSize := 1024
-	r, frErr := readers.NewRandReader(int64(fileSize), false)
+	r, frErr := client.NewRandReader(int64(fileSize), false)
 	defer r.Close()
 
 	if frErr != nil {
-		t.Fatalf("readers.NewFileReader failed, err = %v", frErr)
+		t.Fatalf("client.NewFileReader failed, err = %v", frErr)
 	}
 
 	if err := client.Put(proxyURL, r, TestLocalBucketName, fileName, true); err != nil {
@@ -724,17 +732,14 @@ func TestHeadObject(t *testing.T) {
 
 func TestHeadObjectCheckCached(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
-
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fileName := "headobject_check_cached_test_file"
 	fileSize := 1024
-	r, err := readers.NewRandReader(int64(fileSize), false)
+	r, err := client.NewRandReader(int64(fileSize), false)
 	defer r.Close()
 
 	if err != nil {
-		t.Fatalf("readers.NewFileReader failed, err = %v", err)
+		t.Fatalf("client.NewFileReader failed, err = %v", err)
 	}
 
 	err = client.Put(proxyURL, r, clibucket, fileName, true)
@@ -753,6 +758,12 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	checkFatal(err, t)
 	if b {
 		t.Error("Expected object to NOT be cached after deleting object, got true from client.IsCached")
+	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
 	}
 }
 
@@ -936,7 +947,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		seed            = baseseed + 111
 		errorChannel    = make(chan error, numFiles*5)
 		fileNameChannel = make(chan string, numfiles)
-		sgl             *iosgl.SGL
+		sgl             *memsys.SGL
 		fqn             string
 		fileName        string
 		oldFileInfo     os.FileInfo
@@ -952,7 +963,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(fileSize)
+		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1081,20 +1092,24 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		numFiles        = 3
 		fileNameChannel = make(chan string, numFiles)
 		errorChannel    = make(chan error, 100)
-		sgl             *iosgl.SGL
+		sgl             *memsys.SGL
 		seed            = int64(111)
 		bucketName      = TestLocalBucketName
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 		fqn             string
 		errstr          string
-		err             error
 	)
 
-	createFreshLocalBucket(t, proxyURL, bucketName)
-	defer destroyLocalBucket(t, proxyURL, bucketName)
+	err := client.CreateLocalBucket(proxyURL, bucketName)
+	checkFatal(err, t)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyURL, bucketName)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(fileSize)
+		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1190,7 +1205,7 @@ func TestRangeRead(t *testing.T) {
 		numFiles        = 1
 		fileNameChannel = make(chan string, numFiles)
 		errorChannel    = make(chan error, numFiles)
-		sgl             *iosgl.SGL
+		sgl             *memsys.SGL
 		seed            = int64(131)
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 		bucketName      = clibucket
@@ -1198,14 +1213,11 @@ func TestRangeRead(t *testing.T) {
 	)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(fileSize)
+		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
-
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	putRandomFiles(proxyURL, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, false, sgl)
 	selectErr(errorChannel, "put", t, false)
 
@@ -1256,6 +1268,12 @@ cleanup:
 	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	close(errorChannel)
 	close(fileNameChannel)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func testValidCases(fileSize uint64, t *testing.T, proxyURL, bucketName string, fileName string, checkEntireObjCkSum bool, checkDir string) {
@@ -1366,15 +1384,12 @@ func Test_checksum(t *testing.T) {
 		start, curr time.Time
 		duration    time.Duration
 		numPuts     = 5
-		sgl         *iosgl.SGL
+		sgl         *memsys.SGL
 		totalio     = numPuts * largefilesize
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, bucket); created {
-		defer destroyLocalBucket(t, proxyURL, bucket)
-	}
-
+	created := createLocalBucketIfNotExists(t, proxyURL, bucket)
 	ldir := LocalSrcDir + "/" + ChksumValidStr
 	if err := common.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
@@ -1388,7 +1403,7 @@ func Test_checksum(t *testing.T) {
 	ochksum := cksumconfig["checksum"].(string)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1464,6 +1479,12 @@ cleanup:
 	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, bucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
+
 	return
 }
 
@@ -1515,7 +1536,8 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		return false
 	}
 
-	if err := client.CreateLocalBucket(proxyURL, bucket); err != nil {
+	err = client.CreateLocalBucket(proxyURL, bucket)
+	if err != nil {
 		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
 	}
 

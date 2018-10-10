@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -386,7 +385,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	gcpObj := client.Bucket(bucket).Object(objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
-	buf, slab := iosgl.AllocFromSlab(0)
+	buf, slab := gmem2.AllocFromSlab2(0)
 	written, err := io.CopyBuffer(wc, file, buf)
 	slab.Free(buf)
 	if err != nil {

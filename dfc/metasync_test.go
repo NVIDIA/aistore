@@ -199,7 +199,7 @@ func TestMetaSyncTransport(t *testing.T) {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup) {
 			defer wg.Done()
-			syncer.run()
+			syncer.Run()
 		}(&wg)
 
 		t.Run(tc.name, func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestMetaSyncTransport(t *testing.T) {
 			}
 		})
 
-		syncer.stop(nil)
+		syncer.Stop(nil)
 		wg.Wait()
 	}
 }
@@ -534,7 +534,7 @@ func TestMetaSyncData(t *testing.T) {
 	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
-		syncer.run()
+		syncer.Run()
 	}(&wg)
 
 	proxy := newServer(primary, &metaSyncServer{"proxy", true, nil, []int{3, 4, 5}}, ch)
@@ -666,7 +666,7 @@ func TestMetaSyncData(t *testing.T) {
 	syncer.sync(true, primary.smapowner.get(), msgSMap, bucketmd, msgBMD)
 	match(t, exp, ch, 1)
 
-	syncer.stop(nil)
+	syncer.Stop(nil)
 	wg.Wait()
 }
 
@@ -681,7 +681,7 @@ func TestMetaSyncMembership(t *testing.T) {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup) {
 			defer wg.Done()
-			syncer.run()
+			syncer.Run()
 		}(&wg)
 
 		var cnt int32
@@ -711,7 +711,7 @@ func TestMetaSyncMembership(t *testing.T) {
 			t.Fatal("Sync call didn't stop after traget is deleted")
 		}
 
-		syncer.stop(nil)
+		syncer.Stop(nil)
 		wg.Wait()
 	}
 
@@ -722,7 +722,7 @@ func TestMetaSyncMembership(t *testing.T) {
 	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
 		defer wg.Done()
-		syncer.run()
+		syncer.Run()
 	}(&wg)
 
 	ch := make(chan struct{}, 10)
@@ -771,7 +771,7 @@ func TestMetaSyncMembership(t *testing.T) {
 			t.Fatal("Too many sync calls received")
 		}
 
-		syncer.stop(nil)
+		syncer.Stop(nil)
 		wg.Wait()
 	}
 }
@@ -834,7 +834,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup) {
 			defer wg.Done()
-			syncer.run()
+			syncer.Run()
 		}(&wg)
 
 		chProxy := make(chan map[string]string, 10)
@@ -1106,7 +1106,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		emptyActionMsg(actMsg)
 		matchSMap(primary.smapowner.get(), newSMap)
 
-		syncer.stop(nil)
+		syncer.Stop(nil)
 		wg.Wait()
 	}
 
@@ -1123,7 +1123,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		wg.Add(1)
 		go func(wg *sync.WaitGroup) {
 			defer wg.Done()
-			syncer.run()
+			syncer.Run()
 		}(&wg)
 
 		chTarget := make(chan map[string]string, 10)
@@ -1194,7 +1194,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			t.Fatal("Not expecting action message")
 		}
 
-		syncer.stop(nil)
+		syncer.Stop(nil)
 		wg.Wait()
 	}
 }

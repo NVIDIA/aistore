@@ -27,7 +27,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/transport"
 )
 
@@ -69,9 +70,9 @@ func Example_Headers() {
 	ts := httptest.NewServer(http.HandlerFunc(f))
 	defer ts.Close()
 
-	client := &http.Client{Transport: &http.Transport{}}
+	httpclient := &http.Client{Transport: &http.Transport{}}
 
-	stream := transport.NewStream(client, ts.URL)
+	stream := transport.NewStream(httpclient, ts.URL)
 
 	sendText(stream, text1, text2)
 	stream.Fin()
@@ -81,11 +82,11 @@ func Example_Headers() {
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
-	sgl1 := iosgl.NewSGL(0)
+	sgl1 := client.Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	stream.SendAsync(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1)
 
-	sgl2 := iosgl.NewSGL(0)
+	sgl2 := client.Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	stream.SendAsync(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2)
 }
@@ -109,9 +110,9 @@ func Example_Mux() {
 	defer ts.Close()
 
 	path := transport.Register("n1", "dummy-rx", receive)
-	client := &http.Client{Transport: &http.Transport{}}
+	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(client, url)
+	stream := transport.NewStream(httpclient, url)
 
 	sendText(stream, text1, text2)
 
@@ -171,9 +172,9 @@ func Test_MultipleNetworks(t *testing.T) {
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
 		path := transport.Register(network, "endpoint", recvFunc)
-		client := &http.Client{Transport: &http.Transport{}}
+		httpclient := &http.Client{Transport: &http.Transport{}}
 		url := ts.URL + path
-		streams = append(streams, transport.NewStream(client, url))
+		streams = append(streams, transport.NewStream(httpclient, url))
 	}
 
 	totalSend := int64(0)
@@ -202,9 +203,9 @@ func Test_OnSendCallback(t *testing.T) {
 
 	totalRecv, recvFunc := makeRecvFunc(t)
 	path := transport.Register("n1", "callback", recvFunc)
-	client := &http.Client{Transport: &http.Transport{}}
+	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(client, url)
+	stream := transport.NewStream(httpclient, url)
 
 	totalSend := int64(0)
 	var fired []bool
@@ -246,13 +247,13 @@ func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Serv
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
 	path := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
-	client := &http.Client{Transport: &http.Transport{}}
+	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(client, url)
+	stream := transport.NewStream(httpclient, url)
 
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
-	slab := iosgl.SelectSlab(32 * common.KiB)
+	slab := client.Mem2.SelectSlab2(32 * common.KiB)
 	for size < common.GiB*10 {
 		hdr := genRandomHeader(random)
 		reader := newRandReader(random, hdr, slab)
@@ -275,7 +276,7 @@ func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Serv
 func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
-		slab := iosgl.SelectSlab(32 * common.KiB)
+		slab := client.Mem2.SelectSlab2(32 * common.KiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != nil && err != io.EOF {
@@ -318,11 +319,11 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 type randReader struct {
 	buf  []byte
 	hdr  transport.Header
-	slab *iosgl.Slab
+	slab *memsys.Slab2
 	off  int64
 }
 
-func newRandReader(random *rand.Rand, hdr transport.Header, slab *iosgl.Slab) *randReader {
+func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) *randReader {
 	buf := slab.Alloc()
 	_, err := random.Read(buf)
 	if err != nil {
@@ -332,7 +333,7 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *iosgl.Slab) *r
 }
 
 func makeRandReader() (transport.Header, *randReader) {
-	slab := iosgl.SelectSlab(32 * common.KiB)
+	slab := client.Mem2.SelectSlab2(32 * common.KiB)
 	random := newRand(time.Now().UnixNano())
 	hdr := genRandomHeader(random)
 	reader := newRandReader(random, hdr, slab)

@@ -74,8 +74,9 @@ func init() {
 //
 // API
 //
+var knownNetworks = []string{common.NetworkPublic, common.NetworkIntra, common.NetworkReplication}
+
 func SetMux(network string, x *http.ServeMux) {
-	knownNetworks := []string{common.NetworkPublic, common.NetworkIntra, common.NetworkReplication}
 	if !common.StringInSlice(network, knownNetworks) {
 		glog.Warningf("unknown network: %s, expected: %v", network, knownNetworks)
 	}
@@ -175,11 +176,11 @@ func (it iterator) next() (obj *objReader, err error) {
 		}
 		hdr, sessid := ExtHeader(it.headerBuf, hlen)
 		if hdr.IsLast() {
-			glog.Infof("%s[%d]: last", sessid, it.trname)
+			glog.Infof("%s[%d]: last", it.trname, sessid)
 			return nil, io.EOF
 		}
 		if glog.V(4) {
-			glog.Infof("%s[%d]: new object size=%d", sessid, it.trname, hdr.Dsize)
+			glog.Infof("%s[%d]: new object size=%d", it.trname, sessid, hdr.Dsize)
 		}
 		obj = &objReader{body: it.body, hdr: hdr}
 		return

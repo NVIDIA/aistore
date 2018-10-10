@@ -3,7 +3,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package readers
+package client
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -40,43 +40,6 @@ type Reader interface {
 	Open() (io.ReadCloser, error)
 	XXHash() string
 	Description() string
-}
-
-// populateData reads data from random source and writes to a writer,
-// calculates and returns xxhash (if needed)
-func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
-	var (
-		left = size
-		hash string
-		h    *xxhash.XXHash64
-	)
-	blk, s := iosgl.AllocFromSlab(int64(1048576))
-	blkSize := int64(len(blk))
-	defer iosgl.FreeToSlab(blk, s)
-
-	if withHash {
-		h = xxhash.New64()
-	}
-	for i := int64(0); i <= size/blkSize; i++ {
-		n := common.MinI64(blkSize, left)
-		rnd.Read(blk[:n])
-		m, err := w.Write(blk[:n])
-		if err != nil {
-			return "", err
-		}
-
-		if withHash {
-			h.Write(blk[:m])
-		}
-
-		left -= int64(m)
-	}
-	if withHash {
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
-		hash = hex.EncodeToString(b)
-	}
-	return hash, nil
 }
 
 // description returns a string constructed from a name and a xxhash
@@ -317,7 +280,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 }
 
 type sgReader struct {
-	iosgl.Reader
+	memsys.Reader
 	xxHash string
 }
 
@@ -334,14 +297,14 @@ func (r *sgReader) XXHash() string {
 }
 
 // NewSGReader returns a new sgReader
-func NewSGReader(sgl *iosgl.SGL, size int64, withHash bool) (Reader, error) {
+func NewSGReader(sgl *memsys.SGL, size int64, withHash bool) (Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	hash, err := populateData(sgl, size, withHash, rnd)
 	if err != nil {
 		return nil, err
 	}
 
-	r := iosgl.NewReader(sgl)
+	r := memsys.NewReader(sgl)
 	return &sgReader{*r, hash}, nil
 }
 
@@ -381,9 +344,9 @@ func NewBytesReader(buf []byte) Reader {
 
 // ParamReader is used to pass in parameters when creating a new reader
 type ParamReader struct {
-	Type       string     // file | sg | inmem | rand
-	SGL        *iosgl.SGL // When Type == sg
-	Path, Name string     // When Type == file; path and name of file to be created (if not already existing)
+	Type       string      // file | sg | inmem | rand
+	SGL        *memsys.SGL // When Type == sg
+	Path, Name string      // When Type == file; path and name of file to be created (if not already existing)
 	Size       int64
 }
 

@@ -51,7 +51,10 @@ func BenchmarkHRW(b *testing.B) {
 	}
 }
 
-func TestEqualDistribution(t *testing.T) {
+//
+// FIXME: spends too much time testing 3rd party stuff that has been already tested multiple times
+//
+func SKIP_TestEqualDistribution(t *testing.T) {
 	// Testing for the previous approach as well as the new approach
 	// since if both fail the test then the hash algorithm isn't the cause.
 	hashFs := []hashFuncs{

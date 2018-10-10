@@ -10,10 +10,8 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/iosgl"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -34,7 +32,7 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 	versionEnabled bool, isLocalBucket bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tlogf("Updating objects...\n")
-	r, err := readers.NewRandReader(int64(fileSize), true /* withHash */)
+	r, err := client.NewRandReader(int64(fileSize), true /* withHash */)
 	if err != nil {
 		t.Errorf("Failed to create reader: %v", err)
 		t.Fail()
@@ -328,12 +326,12 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		numPuts    = objCountToTest
 		bucket     = clibucket
 		versionDir = "versionid"
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -427,9 +425,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	if oldVersioning != versioning {
 		setConfig("versioning", versioning, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
@@ -438,6 +434,11 @@ func propsMainTest(t *testing.T, versioning string) {
 		}
 		if oldVersioning != versioning {
 			setConfig("versioning", oldVersioning, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		}
+		if created {
+			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+				t.Errorf("Failed to delete local bucket: %v", err)
+			}
 		}
 	}()
 

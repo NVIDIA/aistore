@@ -17,8 +17,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
-
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -38,13 +36,17 @@ func TestPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	tlogf("Looking for files with prefix [%s]\n", prefix)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
 	prefixLookup(t, proxyURL)
 	prefixCleanup(t, proxyURL)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func numberOfFilesWithPrefix(fileNames []string, namePrefix string, commonDir string) int {
@@ -72,7 +74,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		r, err := client.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +89,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	for _, fName := range extranames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		r, err := client.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}

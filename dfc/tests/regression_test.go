@@ -27,9 +27,8 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 	"github.com/json-iterator/go"
 )
 
@@ -81,7 +80,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	var (
 		filenameCh = make(chan string, num)
 		errch      = make(chan error, num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 		targets    = make(map[string]struct{})
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
@@ -93,12 +92,16 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
 	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyURL, bucket)
+		checkFatal(err, t)
+	}()
 
 	putRandomFiles(proxyURL, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, true)
@@ -159,7 +162,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	var (
 		fileNameCh = make(chan string, numberOfFiles)
 		errorCh    = make(chan error, numberOfFiles)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 		bucketName = clibucket
 		targets    = make(map[string]struct{})
 	)
@@ -176,7 +179,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(fileSize)
+		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -248,17 +251,21 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		num        = 2
 		filenameCh = make(chan string, num)
 		errch      = make(chan error, 100)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 		seed       = int64(111)
 		fqn        string
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 	bucket := TestLocalBucketName
 	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+
+	defer func() {
+		err := client.DestroyLocalBucket(proxyURL, bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -306,9 +313,13 @@ func TestRegressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
 
+	defer func() {
+		err := client.DestroyLocalBucket(proxyURL, bucket)
+		checkFatal(err, t)
+	}()
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: bucket})
+
 }
 
 func TestRenameLocalBuckets(t *testing.T) {
@@ -321,7 +332,10 @@ func TestRenameLocalBuckets(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, bucket)
 	destroyLocalBucket(t, proxyURL, renamedBucket)
 
-	defer destroyLocalBucket(t, proxyURL, renamedBucket)
+	defer func() {
+		err := client.DestroyLocalBucket(proxyURL, renamedBucket)
+		checkFatal(err, t)
+	}()
 
 	b, err := client.ListBuckets(proxyURL, true)
 	checkFatal(err, t)
@@ -342,16 +356,14 @@ func TestListObjects(t *testing.T) {
 		filesput = make(chan string, numfiles)
 		dir      = DeleteDir
 		proxyURL = getPrimaryURL(t, proxyURLRO)
-		sgl      *iosgl.SGL
+		sgl      *memsys.SGL
 	)
 	if usingSG {
-		sgl = iosgl.NewSGL(fileSize)
+		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 	tlogf("Create a list of %d objects", numFiles)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	fileList := make([]string, 0, numFiles)
 	for i := 0; i < numFiles; i++ {
 		fname := fmt.Sprintf("obj%d", i+1)
@@ -420,6 +432,12 @@ func TestListObjects(t *testing.T) {
 			os.Remove(dir + "/" + name)
 		}
 	}
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func TestRenameObjects(t *testing.T) {
@@ -434,12 +452,11 @@ func TestRenameObjects(t *testing.T) {
 		errch     = make(chan error, numPuts)
 		basenames = make([]string, 0, numPuts) // basenames
 		bnewnames = make([]string, 0, numPuts) // new basenames
-		sgl       *iosgl.SGL
+		sgl       *memsys.SGL
 		proxyURL  = getPrimaryURL(t, proxyURLRO)
 	)
 
 	createFreshLocalBucket(t, proxyURL, RenameLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, RenameLocalBucketName)
 
 	defer func() {
 		// cleanup
@@ -461,6 +478,8 @@ func TestRenameObjects(t *testing.T) {
 		wg.Wait()
 		selectErr(errch, "delete", t, false)
 		close(errch)
+		err = client.DestroyLocalBucket(proxyURL, RenameLocalBucketName)
+		checkFatal(err, t)
 	}()
 
 	time.Sleep(time.Second * 5)
@@ -470,7 +489,7 @@ func TestRenameObjects(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(1024 * 1024)
+		sgl = client.Mem2.NewSGL(1024 * 1024)
 		defer sgl.Free()
 	}
 
@@ -492,7 +511,7 @@ func TestRenameObjects(t *testing.T) {
 		}
 
 		url := proxyURL + api.URLPath(api.Version, api.Objects, RenameLocalBucketName, RenameStr, fname)
-		if err := client.HTTPRequest(http.MethodPost, url, readers.NewBytesReader(injson)); err != nil {
+		if err := client.HTTPRequest(http.MethodPost, url, client.NewBytesReader(injson)); err != nil {
 			t.Fatalf("Failed to send request, err = %v", err)
 		}
 
@@ -510,13 +529,18 @@ func TestRenameObjects(t *testing.T) {
 
 func TestObjectPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
+
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
 	prefixLookup(t, proxyURL)
 	prefixCleanup(t, proxyURL)
+
+	if created {
+		if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
+	}
 }
 
 func TestObjectsVersions(t *testing.T) {
@@ -545,7 +569,7 @@ func TestRebalance(t *testing.T) {
 		filesput        = make(chan string, numPuts)
 		errch           = make(chan error, 100)
 		wg              = &sync.WaitGroup{}
-		sgl             *iosgl.SGL
+		sgl             *memsys.SGL
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
 	)
 	filesSentOrig := make(map[string]int64)
@@ -559,12 +583,20 @@ func TestRebalance(t *testing.T) {
 			v.Core.Tracker["rx.size"].Value, v.Core.Tracker["rx.n"].Value
 	}
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	//
 	// step 1. config
+	//
+	defer func() {
+		if created {
+			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+				t.Errorf("Failed to delete local bucket: %v", err)
+			}
+		}
+	}()
+
+	//
 	// cluster-wide reduce startup_delay_time
 	//
 	waitProgressBar("Rebalance: ", time.Second*10)
@@ -589,7 +621,7 @@ func TestRebalance(t *testing.T) {
 	// step 3. put random files => (cluster - 1)
 	//
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandomFiles(proxyURL, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
@@ -945,13 +977,11 @@ func TestDeleteList(t *testing.T) {
 		files    = make([]string, 0, numfiles)
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
-		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		r, err := client.NewRandReader(fileSize, true /* withHash */)
 		checkFatal(err, t)
 
 		keyname := fmt.Sprintf("%s%d", prefix, i)
@@ -975,6 +1005,12 @@ func TestDeleteList(t *testing.T) {
 	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
+	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
 	}
 }
 
@@ -1083,13 +1119,11 @@ func TestDeleteRange(t *testing.T) {
 		proxyURL       = getPrimaryURL(t, proxyURLRO)
 	)
 
-	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
-	}
+	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	// 1. Put files to delete:
 	for i := 0; i < numfiles; i++ {
-		r, err := readers.NewRandReader(fileSize, true /* withHash */)
+		r, err := client.NewRandReader(fileSize, true /* withHash */)
 		checkFatal(err, t)
 
 		wg.Add(1)
@@ -1135,6 +1169,12 @@ func TestDeleteRange(t *testing.T) {
 	bktlst, err = client.ListBucket(proxyURL, clibucket, msg, 0)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
+	}
+
+	if created {
+		if err = client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
+			t.Errorf("Failed to delete local bucket: %v", err)
+		}
 	}
 }
 
@@ -1191,12 +1231,12 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		filesput = make(chan string, numPuts)
 		errch    = make(chan error, 100)
 		wg       = &sync.WaitGroup{}
-		sgl      *iosgl.SGL
+		sgl      *memsys.SGL
 		bucket   = rtd.bucket
 	)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 

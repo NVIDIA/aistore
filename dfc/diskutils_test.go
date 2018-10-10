@@ -36,7 +36,7 @@ func TestGetFSDiskUtil(t *testing.T) {
 	ctx.mountpaths.AddMountpath(tempRoot)
 
 	riostat := newIostatRunner()
-	go riostat.run()
+	go riostat.Run()
 
 	time.Sleep(50 * time.Millisecond)
 	percentage, ok := riostat.diskUtilFromFQN(tempRoot + "/test")
@@ -47,7 +47,7 @@ func TestGetFSDiskUtil(t *testing.T) {
 		t.Errorf("Invalid FS disk utilization percentage [%f].", percentage)
 	}
 	glog.Infof("Disk utilization fetched. Value [%f]", percentage)
-	riostat.stop(fmt.Errorf("test"))
+	riostat.Stop(fmt.Errorf("test"))
 }
 
 func TestGetDiskFromFileSystem(t *testing.T) {

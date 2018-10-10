@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ *
+ */
 // A statsd client that sends basic statd metrics(timer, counter and gauge) to a
 // listening UDP statsd server
 

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -26,10 +27,57 @@ const (
 	TiB = 1024 * GiB
 )
 
+var toBiBytes = map[string]int64{
+	"K":   KiB,
+	"KB":  KiB,
+	"KIB": KiB,
+	"M":   MiB,
+	"MB":  MiB,
+	"MIB": MiB,
+	"G":   GiB,
+	"GB":  GiB,
+	"GIB": GiB,
+	"T":   TiB,
+	"TB":  TiB,
+	"TIB": TiB,
+}
+
 type (
 	StringSet map[string]struct{}
 	SimpleKVs map[string]string
 )
+
+func S2B(s string) (int64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	s = strings.ToUpper(s)
+	for k, v := range toBiBytes {
+		if ns := strings.TrimSuffix(s, k); ns != s {
+			i, err := strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
+			return v * i, err
+		}
+	}
+	ns := strings.TrimSuffix(s, "B")
+	i, err := strconv.ParseInt(strings.TrimSpace(ns), 10, 64)
+	return i, err
+}
+
+func B2S(b int64, digits int) string {
+	if b >= TiB {
+		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(TiB), "TiB")
+	}
+	if b >= GiB {
+		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(GiB), "GiB")
+	}
+	if b >= MiB {
+		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(MiB), "MiB")
+	}
+	if b >= KiB {
+		return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(KiB), "KiB")
+	}
+	return fmt.Sprintf("%dB", b)
+}
 
 func (ss StringSet) String() string {
 	keys := make([]string, len(ss))

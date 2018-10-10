@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 type proxyServer struct {
@@ -88,7 +87,7 @@ func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, e
 // putObject creates a new file reader and uses it to make a proxy put call to save a new
 // object with xxHash enabled into a bucket.
 func (p *proxyServer) putObject(localPath string, bucket string, prefix string) error {
-	r, err := readers.NewFileReaderFromFile(localPath, true /* xxhash */)
+	r, err := client.NewFileReaderFromFile(localPath, true /* xxhash */)
 	if err != nil {
 		return err
 	}

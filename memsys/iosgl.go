@@ -2,9 +2,10 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-
-// Package iosgl provides Reader and (streaming) Writer on top of a Scatter Gather List (SGL) of reusable buffers.
-package iosgl
+// Package memsys provides memory management and Slab allocation
+// with io.Reader and io.Writer interfaces on top of a scatter-gather lists
+// (of reusable buffers)
+package memsys
 
 import (
 	"errors"
@@ -17,7 +18,7 @@ type (
 	// implements io.ReadWriteCloser  + Reset
 	SGL struct {
 		sgl  [][]byte
-		slab *Slab
+		slab *Slab2
 		woff int64 // stream
 		roff int64
 	}
@@ -41,24 +42,16 @@ type (
 // of allocated slabs or to react on memory pressure by dynamically shrinking slabs
 // at runtime. The responsibility to call sgl.Reclaim (see below) lies with the user.
 
-func NewSGL(immediateSize int64 /* the size to allocate at contrustion time */) *SGL {
-	slab := SelectSlab(immediateSize)
-	n := common.DivCeil(immediateSize, slab.Size())
-	sgl := make([][]byte, n)
-	for i := 0; i < int(n); i++ {
-		sgl[i] = slab.Alloc()
-	}
-	return &SGL{sgl: sgl, slab: slab}
-}
-
-func (z *SGL) Cap() int64  { return int64(len(z.sgl)) * z.slab.Size() }
-func (z *SGL) Size() int64 { return z.woff }
-func (z *SGL) Slab() *Slab { return z.slab }
+func (z *SGL) Cap() int64   { return int64(len(z.sgl)) * z.slab.Size() }
+func (z *SGL) Size() int64  { return z.woff }
+func (z *SGL) Slab() *Slab2 { return z.slab }
 
 func (z *SGL) grow(toSize int64) {
+	z.slab.muget.Lock()
 	for z.Cap() < toSize {
-		z.sgl = append(z.sgl, z.slab.Alloc()) // FIXME: OOM
+		z.sgl = append(z.sgl, z.slab._alloc())
 	}
+	z.slab.muget.Unlock()
 }
 
 func (z *SGL) Write(p []byte) (n int, err error) {
@@ -117,25 +110,12 @@ func (z *SGL) Reset() { z.woff, z.roff = 0, 0 }
 func (z *SGL) Close() error { return nil }
 
 func (z *SGL) Free() {
+	z.slab.muput.Lock()
 	for i := 0; i < len(z.sgl); i++ {
-		z.slab.Free(z.sgl[i])
+		z.slab._free(z.sgl[i])
 	}
-	z.sgl = z.sgl[:0]
-	z.sgl, z.slab = nil, nil
-	z.woff = 0xDEADBEEF
-}
+	z.slab.muput.Unlock()
 
-// Reclaim slab-allocated memory on demand
-// Quoting https://golang.org/pkg/sync/#Pool:
-// "Any item stored in the Pool may be removed automatically at any time without notification."
-// Meaning, GC. However, when GC starts "shrinking" the Pool, it is may be already too late
-// in a certain sense.
-//
-// Use this method to explicitly dereference buffers that belong to this SGL.
-func (z *SGL) Reclaim() {
-	for i := 0; i < len(z.sgl); i++ {
-		z.sgl[i] = nil
-	}
 	z.sgl = z.sgl[:0]
 	z.sgl, z.slab = nil, nil
 	z.woff = 0xDEADBEEF

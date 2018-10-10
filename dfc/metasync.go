@@ -25,7 +25,7 @@ const (
 	actiontag   = "-action"     // to make a pair (revs, action)
 )
 
-// =================== A Brief Theory of Operation =================================
+// ===================== Theory Of Operations (TOO) =============================
 //
 // The metasync API exposed to the rest of the code includes two methods:
 // * sync - to synchronize cluster-level metadata (the main method)
@@ -84,7 +84,7 @@ const (
 // version-compared, and the corresponding Rx handler gets invoked
 // with additional information that includes the per-replica action message.
 //
-// =================== end of A Brief Theory of Operation ==========================
+// ================================ end of TOO ==================================
 
 type revs interface {
 	tag() string                    // known tags enumerated above
@@ -109,7 +109,7 @@ type (
 )
 
 type metasyncer struct {
-	namedrunner
+	common.Named
 	p            *proxyrunner          // parent
 	revsmap      map[string]revsdaemon // sync-ed versions (cluster-wide, by DaemonID)
 	last         map[string]revs       // last/current sync-ed
@@ -132,14 +132,14 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 	y.stopCh = make(chan struct{}, 1)
 	y.workCh = make(chan revsReq, 8)
 
-	y.retryTimer = time.NewTimer(time.Duration(time.Hour))
+	y.retryTimer = time.NewTimer(time.Hour)
 	y.retryTimer.Stop()
 	y.timerStopped = true
 	return
 }
 
-func (y *metasyncer) run() error {
-	glog.Infof("Starting %s", y.name)
+func (y *metasyncer) Run() error {
+	glog.Infof("Starting %s", y.Getname())
 
 	for {
 		select {
@@ -177,8 +177,8 @@ func (y *metasyncer) run() error {
 	}
 }
 
-func (y *metasyncer) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", y.name, err)
+func (y *metasyncer) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", y.Getname(), err)
 
 	y.stopCh <- struct{}{}
 	close(y.stopCh)

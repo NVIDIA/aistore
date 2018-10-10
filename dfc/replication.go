@@ -20,7 +20,7 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 )
 
 // ================================================= Summary ===============================================
@@ -87,7 +87,7 @@ type mpathReplicator struct {
 }
 
 type replicationRunner struct {
-	namedrunner
+	common.Named
 	t                *targetrunner
 	replReqCh        chan *replRequest
 	mpathReqCh       chan mpathReq
@@ -146,7 +146,7 @@ func newReplicationRunner(t *targetrunner, mountpaths *fs.MountedFS) *replicatio
 	}
 }
 
-func (r *mpathReplicator) run() {
+func (r *mpathReplicator) Run() {
 	glog.Infof("Started replicator for mountpath: %s", r.mpath)
 	for {
 		select {
@@ -158,7 +158,7 @@ func (r *mpathReplicator) run() {
 	}
 }
 
-func (r *mpathReplicator) stop() {
+func (r *mpathReplicator) Stop() {
 	glog.Infof("Stopping replicator for mountpath: %s", r.mpath)
 	r.controlCh <- struct{}{}
 	close(r.controlCh)
@@ -226,7 +226,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	xxHashBinary, errstr := Getxattr(req.fqn, XattrXXHashVal)
 	xxHashVal := ""
 	if errstr != "" {
-		buf, slab := iosgl.AllocFromSlab(0)
+		buf, slab := gmem2.AllocFromSlab2(0)
 		xxHashVal, errstr = ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if errstr != "" {
@@ -292,7 +292,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
 		nhobj         cksumvalue
 		nhtype, nhval string
-		sgl           *iosgl.SGL
+		sgl           *memsys.SGL
 		errstr        string
 	)
 	httpr := req.httpReq
@@ -322,7 +322,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 	}
 	// Calculate the checksum when the Xattr does not exit
 	if file, err := os.Open(req.fqn); err == nil {
-		buf, slab := iosgl.AllocFromSlab(0)
+		buf, slab := gmem2.AllocFromSlab2(0)
 		xxHashVal, errstr := ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if err = file.Close(); err != nil {
@@ -376,8 +376,8 @@ func (rr *replicationRunner) init() {
 	}
 }
 
-func (rr *replicationRunner) run() error {
-	glog.Infof("Starting %s", rr.name)
+func (rr *replicationRunner) Run() error {
+	glog.Infof("Starting %s", rr.Getname())
 	rr.init()
 
 	for {
@@ -397,7 +397,7 @@ func (rr *replicationRunner) run() error {
 	}
 }
 
-func (rr *replicationRunner) stop(err error) {
+func (rr *replicationRunner) Stop(err error) {
 	rr.controlCh <- struct{}{}
 	glog.Warningf("Replication runner stopped with error: %v", err)
 	close(rr.controlCh)
@@ -417,7 +417,7 @@ func (rr *replicationRunner) dispatchRequest(req *replRequest) {
 	r, ok := rr.mpathReplicators[mpath]
 	common.Assert(ok, "Invalid mountpath given in replication request")
 
-	go r.once.Do(r.run) // only run replicator if there is at least one replication request
+	go r.once.Do(r.Run) // only run replicator if there is at least one replication request
 	r.replReqCh <- req
 }
 
@@ -482,6 +482,6 @@ func (rr *replicationRunner) addMpath(mpath string) {
 func (rr *replicationRunner) removeMpath(mpath string) {
 	replicator, ok := rr.mpathReplicators[mpath]
 	common.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
-	replicator.stop()
+	replicator.Stop()
 	delete(rr.mpathReplicators, mpath)
 }

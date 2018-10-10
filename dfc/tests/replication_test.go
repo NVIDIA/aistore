@@ -15,9 +15,8 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 const (
@@ -30,7 +29,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 		object   = "TestReplicationReceiveOneObject"
 		fileSize = int64(1024)
 	)
-	reader, err := readers.NewRandReader(fileSize, false)
+	reader, err := client.NewRandReader(fileSize, false)
 	checkFatal(err, t)
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
@@ -38,7 +37,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	xxhash := getXXHashChecksum(t, reader)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s\n", TestLocalBucketName, object, proxyURLRepl)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, xxhash, reader)
@@ -56,14 +55,14 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 		object   = "TestReplicationReceiveOneObjectNoChecksum"
 		fileSize = int64(1024)
 	)
-	reader, err := readers.NewRandReader(fileSize, false)
+	reader, err := client.NewRandReader(fileSize, false)
 	checkFatal(err, t)
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	url := proxyURLRepl + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
 	headers := map[string]string{
@@ -90,14 +89,14 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 		object   = "TestReplicationReceiveOneObjectBadChecksum"
 		fileSize = int64(1024)
 	)
-	reader, err := readers.NewRandReader(fileSize, false)
+	reader, err := client.NewRandReader(fileSize, false)
 	checkFatal(err, t)
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, badChecksum, reader)
@@ -122,8 +121,8 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		proxyURLRepl = getPrimaryReplicationURL(t, proxyURLRO)
 		bucket       = clibucket
 		size         = int64(fileSize)
-		r            readers.Reader
-		sgl          *iosgl.SGL
+		r            client.Reader
+		sgl          *memsys.SGL
 		errCnt       int
 		err          error
 	)
@@ -147,7 +146,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(size)
+		sgl = client.Mem2.NewSGL(size)
 		defer sgl.Free()
 	}
 
@@ -155,9 +154,9 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		object := SmokeStr + "/" + fname
 		if sgl != nil {
 			sgl.Reset()
-			r, err = readers.NewSGReader(sgl, int64(size), true)
+			r, err = client.NewSGReader(sgl, int64(size), true)
 		} else {
-			r, err = readers.NewReader(readers.ParamReader{Type: readerType, SGL: nil, Path: SmokeDir, Name: fname, Size: int64(size)})
+			r, err = client.NewReader(client.ParamReader{Type: readerType, SGL: nil, Path: SmokeDir, Name: fname, Size: int64(size)})
 		}
 
 		if err != nil {
@@ -184,7 +183,7 @@ func getPrimaryReplicationURL(t *testing.T, proxyURL string) string {
 }
 
 func getXXHashChecksum(t *testing.T, reader io.Reader) string {
-	buf, slab := iosgl.AllocFromSlab(0)
+	buf, slab := memsys.AllocFromSlab(0)
 	xxHashVal, errstr := dfc.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 	if errstr != "" {
@@ -193,7 +192,7 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 	return xxHashVal
 }
 
-func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader readers.Reader) error {
+func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader client.Reader) error {
 	url := dstProxyURL + api.URLPath(api.Version, api.Objects, bucket, object)
 	headers := map[string]string{
 		api.HeaderDFCReplicationSrc: srcURL,

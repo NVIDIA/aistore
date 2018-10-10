@@ -15,7 +15,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -104,7 +104,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 }
 
 func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
-	chstop chan struct{}, sgl *iosgl.SGL, bucket string) {
+	chstop chan struct{}, sgl *memsys.SGL, bucket string) {
 	const filesize = 64 * 1024
 	var (
 		seed     = baseseed + 300
@@ -166,20 +166,29 @@ func TestFSCheckerDetection(t *testing.T) {
 	const filesize = 64 * 1024
 	var (
 		err      error
-		sgl      *iosgl.SGL
+		sgl      *memsys.SGL
 		seed     = baseseed + 300
 		numObjs  = 100
 		proxyURL = getPrimaryURL(t, proxyURLRO)
-		bucket   = TestLocalBucketName
 	)
 
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
-	// create local bucket to write to
-	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+	bucket := clibucket
+	if isCloudBucket(t, proxyURL, bucket) {
+		bucket = TestLocalBucketName
+	}
+	// create local bucket to write to, or use an existing one
+	if createLocalBucketIfNotExists(t, proxyURL, bucket) {
+		tlogf("created local bucket %s\n", bucket)
+	}
+
+	defer func() {
+		err = client.DestroyLocalBucket(proxyURL, bucket)
+		checkFatal(err, t)
+	}()
 
 	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)
@@ -216,7 +225,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	tlogf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -323,6 +332,10 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
+	bucket := clibucket
+	if isCloudBucket(t, proxyURL, bucket) {
+		bucket = TestLocalBucketName
+	}
 
 	smap, err := client.GetClusterMap(proxyURL)
 	checkFatal(err, t)

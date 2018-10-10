@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/iosgl"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -453,37 +452,6 @@ func parsePort(p string) (int, error) {
 	return port, nil
 }
 
-func strToBytes(s string) (int64, error) {
-	if s == "" {
-		return 0, nil
-	}
-
-	s = strings.ToUpper(s)
-	suffixs := []string{"T", "G", "M", "K", "B"}
-	factors := []int64{common.TiB, common.GiB, common.MiB, common.KiB, 1}
-	for idx, v := range factors {
-		if pos := strings.Index(s, suffixs[idx]); pos != -1 {
-			i, err := strconv.ParseInt(strings.TrimSpace(s[:pos]), 10, 64)
-			return v * i, err
-		}
-	}
-	i, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
-	return i, err
-}
-
-func bytesToStr(b int64, digits int) string {
-	suffixs := []string{"TiB", "GiB", "MiB", "KiB", "B"}
-	factors := []int64{common.TiB, common.GiB, common.MiB, common.KiB, 1}
-
-	for idx, f := range factors {
-		if b >= f {
-			return fmt.Sprintf("%.*f%s", digits, float32(b)/float32(f), suffixs[idx])
-		}
-	}
-
-	return fmt.Sprintf("%dB", b)
-}
-
 func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 	fileIn, err := os.Open(fromFQN)
 	if err != nil {
@@ -499,8 +467,8 @@ func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 	}
 	defer fileOut.Close()
 
-	buf, slab := iosgl.AllocFromSlab(common.MiB)
-	defer iosgl.FreeToSlab(buf, slab)
+	buf, slab := gmem2.AllocFromSlab2(common.MiB)
+	defer slab.Free(buf)
 
 	if _, err = io.CopyBuffer(fileOut, fileIn, buf); err != nil {
 		glog.Errorf("Failed to copy %s -> %s: %v", fromFQN, toFQN, err)

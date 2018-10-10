@@ -8,6 +8,8 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,8 +27,10 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
+	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -82,7 +86,51 @@ var (
 		Timeout:   600 * time.Second,
 		Transport: transport,
 	}
+	Mem2 *memsys.Mem2
 )
+
+func init() {
+	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "ClientMem2"}
+	Mem2.Init()
+	go Mem2.Run()
+}
+
+// populateData reads data from random source and writes to a writer,
+// calculates and returns xxhash (if needed)
+func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
+	var (
+		left = size
+		hash string
+		h    *xxhash.XXHash64
+	)
+	blk, s := Mem2.AllocFromSlab2(common.MiB)
+	blkSize := int64(len(blk))
+	defer s.Free(blk)
+
+	if withHash {
+		h = xxhash.New64()
+	}
+	for i := int64(0); i <= size/blkSize; i++ {
+		n := common.MinI64(blkSize, left)
+		rnd.Read(blk[:n])
+		m, err := w.Write(blk[:n])
+		if err != nil {
+			return "", err
+		}
+
+		if withHash {
+			h.Write(blk[:m])
+		}
+
+		left -= int64(m)
+	}
+	if withHash {
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
+		hash = hex.EncodeToString(b)
+	}
+	return hash, nil
+}
 
 // RoundTrip records the proxy redirect time and keeps track of requests.
 func (t *traceableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -230,7 +278,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 
 		bufreader := bufio.NewReader(r.Body)
 		if validate {
-			length, hash, err = readers.ReadWriteWithHash(bufreader, w)
+			length, hash, err = ReadWriteWithHash(bufreader, w)
 			if err != nil {
 				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
@@ -489,7 +537,7 @@ func Evict(proxyURL, bucket string, fname string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, fname)
-	return HTTPRequest(http.MethodDelete, url, readers.NewBytesReader(injson))
+	return HTTPRequest(http.MethodDelete, url, NewBytesReader(injson))
 }
 
 func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}, wait bool) error {
@@ -507,7 +555,7 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 		"Content-Type": "application/json",
 	}
 
-	return HTTPRequest(method, url, readers.NewBytesReader(injson), headers)
+	return HTTPRequest(method, url, NewBytesReader(injson), headers)
 }
 
 func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
@@ -647,7 +695,7 @@ func SetBucketProps(proxyURL, bucket string, props dfc.BucketProps) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPut, url, readers.NewBytesReader(b))
+	return HTTPRequest(http.MethodPut, url, NewBytesReader(b))
 }
 
 func ResetBucketProps(proxyURL, bucket string) error {
@@ -657,7 +705,7 @@ func ResetBucketProps(proxyURL, bucket string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPut, url, readers.NewBytesReader(b))
+	return HTTPRequest(http.MethodPut, url, NewBytesReader(b))
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
@@ -686,7 +734,7 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 }
 
 // Put sends a PUT request to the given URL
-func Put(proxyURL string, reader readers.Reader, bucket string, key string, silent bool) error {
+func Put(proxyURL string, reader Reader, bucket string, key string, silent bool) error {
 	url := proxyURL + api.URLPath(api.Version, api.Objects, bucket, key)
 	if !silent {
 		fmt.Printf("PUT: %s/%s\n", bucket, key)
@@ -730,7 +778,7 @@ func Put(proxyURL string, reader readers.Reader, bucket string, key string, sile
 }
 
 // PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL string, reader readers.Reader, bucket string, key string,
+func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string, key string,
 	errch chan error, silent bool) {
 	defer wg.Done()
 	err := Put(proxyURL, reader, bucket, key, silent)
@@ -751,7 +799,7 @@ func CreateLocalBucket(proxyURL, bucket string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
+	err = HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
 	if err != nil {
 		return err
 	}
@@ -829,7 +877,7 @@ func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
+	err = HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
 	if err != nil {
 		return err
 	}
@@ -850,7 +898,7 @@ func DestroyLocalBucket(proxyURL, bucket string) error {
 	}
 
 	url := proxyURL + api.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodDelete, url, readers.NewBytesReader(msg))
+	err = HTTPRequest(http.MethodDelete, url, NewBytesReader(msg))
 	if err != nil {
 		return err
 	}
@@ -1036,14 +1084,14 @@ func GetPrimaryProxy(url string) (string, error) {
 }
 
 // HTTPRequest sends one HTTP request and checks result
-func HTTPRequest(method string, url string, msg readers.Reader, headers ...map[string]string) error {
+func HTTPRequest(method string, url string, msg Reader, headers ...map[string]string) error {
 	_, err := HTTPRequestWithResp(method, url, msg, headers...)
 	return err
 }
 
 // HTTPRequestWithResp sends one HTTP request, checks result and returns body of
 // response.
-func HTTPRequestWithResp(method string, url string, msg readers.Reader, headers ...map[string]string) ([]byte, error) {
+func HTTPRequestWithResp(method string, url string, msg Reader, headers ...map[string]string) ([]byte, error) {
 	var (
 		req *http.Request
 		err error
@@ -1178,7 +1226,7 @@ func EnableTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
+	return HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
 }
 
 func DisableTargetMountpath(daemonUrl, mpath string) error {
@@ -1187,7 +1235,7 @@ func DisableTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPost, url, readers.NewBytesReader(msg))
+	return HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
 }
 
 func AddTargetMountpath(daemonUrl, mpath string) error {
@@ -1196,7 +1244,7 @@ func AddTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodPut, url, readers.NewBytesReader(msg))
+	return HTTPRequest(http.MethodPut, url, NewBytesReader(msg))
 }
 
 func RemoveTargetMountpath(daemonUrl, mpath string) error {
@@ -1205,7 +1253,7 @@ func RemoveTargetMountpath(daemonUrl, mpath string) error {
 	if err != nil {
 		return err
 	}
-	return HTTPRequest(http.MethodDelete, url, readers.NewBytesReader(msg))
+	return HTTPRequest(http.MethodDelete, url, NewBytesReader(msg))
 }
 
 func UnregisterTarget(proxyURL, sid string) error {

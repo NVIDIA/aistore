@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/iosgl"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -88,7 +88,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		// during which GET errors can occur - see the timeline comment below
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -111,10 +111,14 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	// Step 2.
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -183,7 +187,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -210,10 +214,14 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// Step 2.
 	m.bucket = TestLocalBucketName
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -335,7 +343,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
@@ -349,11 +357,16 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	targets := extractTargetsInfo(m.smap)
 
 	// Create local bucket
+	m.bucket = TestLocalBucketName
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -432,7 +445,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Initialize metadata
@@ -444,10 +457,14 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -532,7 +549,7 @@ func TestPutDuringRebalance(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Init. metadata
@@ -544,10 +561,13 @@ func TestPutDuringRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -622,7 +642,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		err        error
 		filenameCh = make(chan string, md.num)
 		errch      = make(chan error, md.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Init. metadata
@@ -633,10 +653,13 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -754,7 +777,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		err        error
 		filenameCh = make(chan string, md.num)
 		errch      = make(chan error, md.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Init. metadata
@@ -765,10 +788,13 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -864,7 +890,7 @@ func TestGetDuringRebalance(t *testing.T) {
 		err        error
 		filenameCh = make(chan string, md.num)
 		errch      = make(chan error, md.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Init. metadata
@@ -878,10 +904,13 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
+		checkFatal(err, t)
+	}()
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -973,9 +1002,14 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	m.wg.Add(newLocalBucketCount)
 	for i := 0; i < newLocalBucketCount; i++ {
 		go func(number int) {
-			createFreshLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
-			defer destroyLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
+			err = client.CreateLocalBucket(m.proxyURL, TestLocalBucketName+strconv.Itoa(number))
+			checkFatal(err, t)
 			m.wg.Done()
+		}(i)
+
+		defer func(number int) {
+			err := client.DestroyLocalBucket(m.proxyURL, TestLocalBucketName+strconv.Itoa(number))
+			checkFatal(err, t)
 		}(i)
 	}
 
@@ -1011,7 +1045,8 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 	checkFatal(err, t)
 
 	// Destroy renamed local bucket
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	err = client.DestroyLocalBucket(m.proxyURL, newTestLocalBucketName)
+	checkFatal(err, t)
 }
 
 func TestRenameNonEmptyLocalBucket(t *testing.T) {
@@ -1037,7 +1072,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Initialize metadata
@@ -1051,7 +1086,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1080,7 +1115,8 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	resultsBeforeAfter(&m, num, maxErrPct)
 
 	// Destroy renamed local bucket
-	destroyLocalBucket(t, m.proxyURL, m.bucket)
+	err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+	checkFatal(err, t)
 }
 
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
@@ -1137,7 +1173,8 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	}
 
 	// Destroy renamed local bucket
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	err = client.DestroyLocalBucket(m.proxyURL, newTestLocalBucketName)
+	checkFatal(err, t)
 	if _, err := os.Stat(newBucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("new local bucket folder was not deleted")
 	}
@@ -1165,7 +1202,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	if testing.Short() {
@@ -1173,7 +1210,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1203,7 +1240,11 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1261,11 +1302,11 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1281,7 +1322,8 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	defer func() {
 		os.RemoveAll(newMountpath)
-		destroyLocalBucket(t, m.proxyURL, m.bucket)
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
 	}()
 
 	// Put random files
@@ -1338,11 +1380,11 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1358,7 +1400,8 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	defer func() {
 		os.RemoveAll(newMountpath)
-		destroyLocalBucket(t, m.proxyURL, m.bucket)
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
 	}()
 
 	// Put random files
@@ -1418,7 +1461,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	if testing.Short() {
@@ -1426,7 +1469,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1461,7 +1504,10 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	// Create local bucket
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
 
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	defer func() {
+		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
+		checkFatal(err, t)
+	}()
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1681,6 +1727,7 @@ func TestForwardCP(t *testing.T) {
 		seed     = int64(555)
 	)
 	var (
+		err    error
 		random = rand.New(rand.NewSource(seed))
 		m      = metadata{
 			t:               t,
@@ -1693,7 +1740,7 @@ func TestForwardCP(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	// Step 1.
@@ -1704,14 +1751,16 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 2.
 	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
-	nextProxyID, nextProxyURL, _ := chooseNextProxy(&m.smap)
+	nextProxyID, nextProxyURL, err := chooseNextProxy(&m.smap)
 
-	createFreshLocalBucket(t, nextProxyURL, m.bucket)
-	defer destroyLocalBucket(t, origURL, m.bucket)
+	destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
+	checkFatal(err, t)
 	tlogf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -1740,7 +1789,9 @@ func TestForwardCP(t *testing.T) {
 		t.Fatalf("Unexpected: GET errors before %d and after %d", m.numGetErrsBefore, m.numGetErrsAfter)
 	}
 
-	// Step 5. destroy local bucket via original primary which is not primary at this point through defer
+	// Step 5. destroy local bucket via original primary which is not primary at this point
+	err = client.DestroyLocalBucket(origURL, m.bucket)
+	checkFatal(err, t)
 	tlogf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
 }
 
@@ -1769,11 +1820,11 @@ func TestAtimeRebalance(t *testing.T) {
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
-		sgl        *iosgl.SGL
+		sgl        *memsys.SGL
 	)
 
 	if usingSG {
-		sgl = iosgl.NewSGL(filesize)
+		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 

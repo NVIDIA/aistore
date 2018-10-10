@@ -134,8 +134,8 @@ func TestLRUThrottling(t *testing.T) {
 
 	}
 	ctx.rg = &rungroup{
-		runarr: make([]runner, 0, 4),
-		runmap: make(map[string]runner),
+		runarr: make([]common.Runner, 0, 4),
+		runmap: make(map[string]common.Runner),
 	}
 	ctx.rg.add(riostat, xiostat)
 

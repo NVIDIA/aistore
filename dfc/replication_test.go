@@ -23,9 +23,9 @@ func TestReplicationRunnerStop(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS()
 	tr := newFakeTargetrunner()
 	rr := newReplicationRunner(tr, ctx.mountpaths)
-	go rr.run()
+	go rr.Run()
 
-	rr.stop(fmt.Errorf("Testing replicationRunner.stop"))
+	rr.Stop(fmt.Errorf("Testing replicationRunner.stop"))
 
 	waitCh := make(chan struct{})
 	go func() {
@@ -47,14 +47,14 @@ func TestReplicationSendNonExistingObject(t *testing.T) {
 
 	tr := newFakeTargetrunner()
 	rr := newReplicationRunner(tr, ctx.mountpaths)
-	go rr.run()
+	go rr.Run()
 
 	err := rr.reqSendReplica("fakeDirectURL", "fakeFqn", false, replicationPolicySync)
 	if err == nil {
 		t.Error("Send operation should fail on non-existing file")
 	}
 
-	rr.stop(fmt.Errorf("Testing replicationRunner.sendReplica sync"))
+	rr.Stop(fmt.Errorf("Testing replicationRunner.sendReplica sync"))
 }
 
 // newFakeTargetrunner returns a fake targetrunner initialized for replication tests

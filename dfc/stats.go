@@ -144,7 +144,7 @@ type targetCoreStats struct {
 
 type statsrunner struct {
 	sync.RWMutex
-	namedrunner
+	common.Named
 	stopCh    chan struct{}
 	workCh    chan namedVal64
 	starttime time.Time
@@ -180,7 +180,7 @@ type ClusterStatsRaw struct {
 
 type iostatrunner struct {
 	sync.RWMutex
-	namedrunner
+	common.Named
 	stopCh      chan struct{}
 	CPUidle     string
 	metricnames []string
@@ -336,7 +336,7 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	r.workCh = make(chan namedVal64, 256)
 	r.starttime = time.Now()
 
-	glog.Infof("Starting %s", r.name)
+	glog.Infof("Starting %s", r.Getname())
 	ticker := time.NewTicker(ctx.config.Periodic.StatsTime)
 	for {
 		select {
@@ -354,8 +354,8 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	}
 }
 
-func (r *statsrunner) stop(err error) {
-	glog.Infof("Stopping %s, err: %v", r.name, err)
+func (r *statsrunner) Stop(err error) {
+	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
 }
@@ -397,7 +397,7 @@ func (r *statsrunner) addErrorHTTP(method string, val int64) {
 // proxystatsrunner
 //
 //=================
-func (r *proxystatsrunner) run() error {
+func (r *proxystatsrunner) Run() error {
 	r.Core = &proxyCoreStats{}
 	r.Core.initStatsTracker()
 	return r.runcommon(r)
@@ -472,7 +472,7 @@ func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
 	}
 }
 
-func (r *storstatsrunner) run() error {
+func (r *storstatsrunner) Run() error {
 	r.init()
 	return r.runcommon(r)
 }

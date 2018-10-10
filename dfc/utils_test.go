@@ -143,7 +143,7 @@ func TestBytesToStr(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		s := bytesToStr(tst.val, tst.num)
+		s := common.B2S(tst.val, tst.num)
 		if s != tst.str {
 			t.Errorf("Expected %s got %s", tst.str, s)
 		}
@@ -169,7 +169,7 @@ func TestStrToBytes(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		n, e := strToBytes(tst.str)
+		n, e := common.S2B(tst.str)
 		if e != nil {
 			t.Errorf("Failed to convert %s: %v", tst.str, e)
 		}

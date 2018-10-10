@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
-	"github.com/NVIDIA/dfcpub/pkg/client/readers"
 )
 
 func TestGetObjectInNextTier(t *testing.T) {
@@ -22,7 +21,6 @@ func TestGetObjectInNextTier(t *testing.T) {
 		object    = "TestGetObjectInNextTier"
 		localData = []byte("Toto, I've got a feeling we're not in Kansas anymore.")
 		cloudData = []byte("Here's looking at you, kid.")
-		bucket    = TestLocalBucketName
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
@@ -55,15 +53,16 @@ func TestGetObjectInNextTier(t *testing.T) {
 	defer nextTierMockForLocalBucket.Close()
 	defer nextTierMockForCloudBucket.Close()
 
-	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+	err := client.CreateLocalBucket(proxyURL, TestLocalBucketName)
+	checkFatal(err, t)
+	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err := client.SetBucketProps(proxyURL, bucket, *bucketProps)
+	err = client.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
 	checkFatal(err, t)
-	defer resetBucketProps(proxyURL, bucket, t)
+	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
 	bucketProps = dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
@@ -72,7 +71,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 	checkFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := client.Get(proxyURL, bucket, object, nil, nil, false, false)
+	n, _, err := client.Get(proxyURL, TestLocalBucketName, object, nil, nil, false, false)
 	checkFatal(err, t)
 	if int(n) != len(localData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(localData), int(n))
@@ -110,7 +109,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	defer nextTierMock.Close()
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	err := client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(data))
+	err := client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
 
 	checkFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
@@ -159,7 +158,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	reader, err := readers.NewRandReader(int64(filesize), false)
+	reader, err := client.NewRandReader(int64(filesize), false)
 	checkFatal(err, t)
 
 	err = client.Put(proxyURL, reader, clibucket, object, true)
@@ -232,13 +231,14 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	defer nextTierMockForLocalBucket.Close()
 	defer nextTierMockForCloudBucket.Close()
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	err := client.CreateLocalBucket(proxyURL, TestLocalBucketName)
+	checkFatal(err, t)
+	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err := client.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
+	err = client.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
 	checkFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
@@ -251,7 +251,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
-	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(localData))
+	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(localData))
 	checkFatal(err, t)
 
 	if nextTierMockForLocalBucketReached != 1 {
@@ -260,7 +260,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	}
 
 	u = proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(cloudData))
+	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(cloudData))
 	checkFatal(err, t)
 
 	if nextTierMockForCloudBucketReached != 1 {
@@ -295,7 +295,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(data))
+	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
 	checkFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
@@ -335,7 +335,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
-	err = client.HTTPRequest(http.MethodPut, u, readers.NewBytesReader(data))
+	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
 	checkFatal(err, t)
 
 	deleteCloudObject(proxyURL, clibucket, object, t)
@@ -350,5 +350,11 @@ func resetBucketProps(proxyURL, bucket string, t *testing.T) {
 func deleteCloudObject(proxyURL, bucket, object string, t *testing.T) {
 	if err := client.Del(proxyURL, bucket, object, nil, nil, true); err != nil {
 		t.Errorf("bucket/object: %s/%s not deleted, err: %v", bucket, object, err)
+	}
+}
+
+func deleteLocalBucket(proxyURL, bucket string, t *testing.T) {
+	if err := client.DestroyLocalBucket(proxyURL, bucket); err != nil {
+		t.Errorf("local bucket: %s not deleted, err: %v", bucket, err)
 	}
 }
