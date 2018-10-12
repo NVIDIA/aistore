@@ -188,9 +188,6 @@ func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
 	} else {
 		written, err = io.CopyBuffer(writer, rrbody, buf)
 	}
-	if err != nil {
-		return written, err
-	}
 	return
 }
 

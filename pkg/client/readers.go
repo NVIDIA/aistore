@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -146,25 +147,46 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 	var (
 		hash string
 		err  error
+		seed = time.Now().UnixNano()
 	)
-
-	// FIXME, TODO: must be redone, along with populateData() - use SGL and io.MultiWriter
-	seed := int64(1)
+	slab, err := Mem2.GetSlab2(common.KiB * 32)
+	if err != nil {
+		return nil, err
+	}
+	buf := slab.Alloc()
+	defer slab.Free(buf)
 	rand1 := rand.New(rand.NewSource(seed))
-	rand1dup := rand.New(rand.NewSource(seed))
+	rr := &rrLimited{rand1, size, 0}
 	if withHash {
-		hash, err = populateData(ioutil.Discard, size, true, rand1)
+		xx := xxhash.New64()
+		_, err := dfc.ReceiveAndChecksum(ioutil.Discard, rr, buf, xx)
 		if err != nil {
 			return nil, err
 		}
 	}
-
+	rand1dup := rand.New(rand.NewSource(seed))
 	return &randReader{
 		seed:   seed,
 		rnd:    rand1dup,
 		size:   size,
 		xxHash: hash,
 	}, nil
+}
+
+type rrLimited struct {
+	random *rand.Rand
+	size   int64
+	off    int64
+}
+
+func (rr *rrLimited) Read(p []byte) (n int, err error) {
+	rem := int(common.MinI64(rr.size-rr.off, int64(len(p))))
+	n, _ = rr.random.Read(p[:rem]) // never fails
+	rr.off += int64(n)
+	if rem < len(p) {
+		err = io.EOF
+	}
+	return
 }
 
 type inMemReader struct {
