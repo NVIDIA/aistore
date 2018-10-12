@@ -25,8 +25,8 @@ import (
 
 // ===================== Theory Of Operations (TOO) =============================
 //
-// Mem2 is, simultaneously, a 1) Slab and SGL allocator and 2) memory manager
-// responsible to optimize memory usage between different (more and less) used
+// Mem2 is, simultaneously, a) Slab and SGL allocator, and b) memory manager
+// responsible to optimize memory usage between different (more vs less) utilized
 // Slabs.
 //
 // Multiple Mem2 instances may coexist in the system, each having its own
