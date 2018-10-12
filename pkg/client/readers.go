@@ -163,6 +163,10 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 		if err != nil {
 			return nil, err
 		}
+		hashIn64 := xx.Sum64()
+		hashInBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(hashInBytes, hashIn64)
+		hash = hex.EncodeToString(hashInBytes)
 	}
 	rand1dup := rand.New(rand.NewSource(seed))
 	return &randReader{
