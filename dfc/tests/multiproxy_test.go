@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -514,7 +515,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 			break
 		}
 
-		url := v.PublicNet.DirectURL + api.URLPath(api.Version, api.Daemon, api.SyncSmap)
+		url := v.PublicNet.DirectURL + common.URLPath(api.Version, api.Daemon, api.SyncSmap)
 		err := client.HTTPRequest(http.MethodPut, url, client.NewBytesReader(jsonMap))
 		checkFatal(err, t)
 
@@ -803,7 +804,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap dfc.Smap, directURL, toID,
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
-	url := directURL + api.URLPath(api.Version, api.Cluster, api.Proxy, toID)
+	url := directURL + common.URLPath(api.Version, api.Cluster, api.Proxy, toID)
 	// http://host:8081/v1/cluster/proxy/15205:8080
 	tlogf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
 	err := client.HTTPRequest(http.MethodPut, url, nil)
@@ -1009,7 +1010,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 	var loopCnt int = 0
 	for {
 		smap, err := client.GetClusterMap(proxyURL)
-		if err != nil && !dfc.IsErrConnectionRefused(err) {
+		if err != nil && !common.IsErrConnectionRefused(err) {
 			return dfc.Smap{}, err
 		}
 
@@ -1036,7 +1037,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 					break
 				}
 
-				if !dfc.IsErrConnectionRefused(err) {
+				if !common.IsErrConnectionRefused(err) {
 					return smap, err
 				}
 
@@ -1082,11 +1083,11 @@ type targetMocker interface {
 func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(api.URLPath(api.Version, api.Buckets), mocktgt.filehdlr)
-	mux.HandleFunc(api.URLPath(api.Version, api.Objects), mocktgt.filehdlr)
-	mux.HandleFunc(api.URLPath(api.Version, api.Daemon), mocktgt.daemonhdlr)
-	mux.HandleFunc(api.URLPath(api.Version, api.Vote), mocktgt.votehdlr)
-	mux.HandleFunc(api.URLPath(api.Version, api.Health), func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc(common.URLPath(api.Version, api.Buckets), mocktgt.filehdlr)
+	mux.HandleFunc(common.URLPath(api.Version, api.Objects), mocktgt.filehdlr)
+	mux.HandleFunc(common.URLPath(api.Version, api.Daemon), mocktgt.daemonhdlr)
+	mux.HandleFunc(common.URLPath(api.Version, api.Vote), mocktgt.votehdlr)
+	mux.HandleFunc(common.URLPath(api.Version, api.Health), func(w http.ResponseWriter, r *http.Request) {})
 
 	ip := ""
 	for _, v := range smap.Tmap {
@@ -1130,12 +1131,12 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *dfc.Smap) e
 		break
 	}
 
-	url := proxyURL + api.URLPath(api.Version, api.Cluster)
+	url := proxyURL + common.URLPath(api.Version, api.Cluster)
 	return client.HTTPRequest(http.MethodPost, url, client.NewBytesReader(jsonDaemonInfo))
 }
 
 func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
-	url := proxyURL + api.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
+	url := proxyURL + common.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
 	return client.HTTPRequest(http.MethodDelete, url, nil)
 }
 
@@ -1196,7 +1197,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	tlogf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
 	origURL := proxyconf["original_url"].(string)
 
@@ -1402,7 +1403,7 @@ func networkFailurePrimary(t *testing.T) {
 	}
 
 	// Forcefully set new primary for the original one
-	purl := oldPrimaryURL + api.URLPath(api.Version, api.Daemon, api.Proxy, newPrimaryID) +
+	purl := oldPrimaryURL + common.URLPath(api.Version, api.Daemon, api.Proxy, newPrimaryID) +
 		fmt.Sprintf("?%s=true&%s=%s", api.URLParamForce, api.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
 
 	err = client.HTTPRequest(http.MethodPut, purl, nil)

@@ -140,23 +140,23 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://foo.com",
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, BucketProps{
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket3", false, BucketProps{
 		CloudProvider: api.ProviderDFC,
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket4", false, BucketProps{
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 
@@ -402,7 +402,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	)
 
 	// handler for /v1/metasync
-	http.HandleFunc(api.URLPath(api.Version, api.Metasync), func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(common.URLPath(api.Version, api.Metasync), func(w http.ResponseWriter, r *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 
@@ -562,14 +562,14 @@ func TestMetaSyncData(t *testing.T) {
 	bucketmd.add("bucket1", true, BucketProps{
 		CloudProvider: api.ProviderDFC,
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, BucketProps{
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 	b, err = bucketmd.marshal()
@@ -607,7 +607,7 @@ func TestMetaSyncData(t *testing.T) {
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://foo.com",
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 	})
 	b, err = bucketmd.marshal()
@@ -990,13 +990,13 @@ func TestMetaSyncReceive(t *testing.T) {
 		bucketmd.add("lb1", true, BucketProps{
 			CloudProvider: api.ProviderDFC,
 			CksumConf: cksumconfig{
-				Checksum: ChecksumInherit,
+				Checksum: api.ChecksumInherit,
 			},
 		})
 		bucketmd.add("lb2", true, BucketProps{
 			CloudProvider: api.ProviderAmazon,
 			CksumConf: cksumconfig{
-				Checksum: ChecksumInherit,
+				Checksum: api.ChecksumInherit,
 			},
 		})
 		syncer.sync(true, bucketmd, "")
@@ -1055,7 +1055,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		bucketmd.add("lb3", true, BucketProps{
 			CloudProvider: api.ProviderGoogle,
 			CksumConf: cksumconfig{
-				Checksum: ChecksumInherit,
+				Checksum: api.ChecksumInherit,
 			},
 		})
 
@@ -1178,7 +1178,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		bucketmd.add("lb2", true, BucketProps{
 			CloudProvider: api.ProviderDFC,
 			CksumConf: cksumconfig{
-				Checksum: ChecksumInherit,
+				Checksum: api.ChecksumInherit,
 			},
 		})
 		syncer.sync(false, bucketmd, &api.ActionMsg{Action: "NB"})

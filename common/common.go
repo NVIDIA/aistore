@@ -8,15 +8,23 @@ package common
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 )
 
@@ -114,6 +122,22 @@ func StringInSlice(s string, arr []string) bool {
 	return false
 }
 
+func CopyStruct(dst interface{}, src interface{}) {
+	x := reflect.ValueOf(src)
+	if x.Kind() == reflect.Ptr {
+		starX := x.Elem()
+		y := reflect.New(starX.Type())
+		starY := y.Elem()
+		starY.Set(starX)
+		reflect.ValueOf(dst).Elem().Set(y.Elem())
+	} else {
+		dst = x.Interface()
+	}
+}
+
+//
+// files, IO, hash
+//
 func CreateDir(dirname string) error {
 	stat, err := os.Stat(dirname)
 	if err == nil && stat.IsDir() {
@@ -129,6 +153,59 @@ func CreateFile(fname string) (file *os.File, err error) {
 		return
 	}
 	file, err = os.Create(fname)
+	return
+}
+
+func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
+	buf []byte, hashes ...hash.Hash) (written int64, err error) {
+	var writer io.Writer
+	if len(hashes) == 0 {
+		writer = filewriter
+	} else {
+		hashwriters := make([]io.Writer, len(hashes)+1)
+		for i, h := range hashes {
+			hashwriters[i] = h.(io.Writer)
+		}
+		hashwriters[len(hashes)] = filewriter
+		writer = io.MultiWriter(hashwriters...)
+	}
+	if buf == nil {
+		written, err = io.Copy(writer, rrbody)
+	} else {
+		written, err = io.CopyBuffer(writer, rrbody, buf)
+	}
+	return
+}
+
+func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
+	var err error
+	var xx hash.Hash64 = xxhash.New64()
+	if buf == nil {
+		_, err = io.Copy(xx.(io.Writer), reader)
+	} else {
+		_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
+	}
+	if err != nil {
+		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
+	}
+	hashIn64 := xx.Sum64()
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
+	csum = hex.EncodeToString(hashInBytes)
+	return csum, ""
+}
+
+// as of 1.9 net/http does not appear to provide any better way..
+func IsErrConnectionRefused(err error) (yes bool) {
+	if uerr, ok := err.(*url.Error); ok {
+		if noerr, ok := uerr.Err.(*net.OpError); ok {
+			if scerr, ok := noerr.Err.(*os.SyscallError); ok {
+				if scerr.Err == syscall.ECONNREFUSED {
+					yes = true
+				}
+			}
+		}
+	}
 	return
 }
 

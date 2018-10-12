@@ -6,24 +6,20 @@
 package dfc
 
 import (
-	"encoding/binary"
-	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -34,19 +30,6 @@ const (
 type localIPv4Info struct {
 	ipv4 string
 	mtu  int
-}
-
-func copyStruct(dst interface{}, src interface{}) {
-	x := reflect.ValueOf(src)
-	if x.Kind() == reflect.Ptr {
-		starX := x.Elem()
-		y := reflect.New(starX.Type())
-		starY := y.Elem()
-		starY.Set(starX)
-		reflect.ValueOf(dst).Elem().Set(y.Elem())
-	} else {
-		dst = x.Interface()
-	}
 }
 
 // getLocalIPv4List returns a list of local unicast IPv4 with MTU
@@ -170,45 +153,6 @@ func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, 
 	return ip, nil
 }
 
-func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
-	buf []byte, hashes ...hash.Hash) (written int64, err error) {
-	var writer io.Writer
-	if len(hashes) == 0 {
-		writer = filewriter
-	} else {
-		hashwriters := make([]io.Writer, len(hashes)+1)
-		for i, h := range hashes {
-			hashwriters[i] = h.(io.Writer)
-		}
-		hashwriters[len(hashes)] = filewriter
-		writer = io.MultiWriter(hashwriters...)
-	}
-	if buf == nil {
-		written, err = io.Copy(writer, rrbody)
-	} else {
-		written, err = io.CopyBuffer(writer, rrbody, buf)
-	}
-	return
-}
-
-func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
-	var err error
-	var xx hash.Hash64 = xxhash.New64()
-	if buf == nil {
-		_, err = io.Copy(xx.(io.Writer), reader)
-	} else {
-		_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
-	}
-	if err != nil {
-		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
-	}
-	hashIn64 := xx.Sum64()
-	hashInBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
-	csum = hex.EncodeToString(hashInBytes)
-	return csum, ""
-}
-
 //===========================================================================
 //
 // typed checksum value
@@ -236,30 +180,16 @@ func newcksumvalue(kind string, val string) cksumvalue {
 		glog.Infof("Warning: checksum %s: empty value", kind)
 		return nil
 	}
-	if kind == ChecksumXXHash {
+	if kind == api.ChecksumXXHash {
 		return &cksumvalxxhash{kind, val}
 	}
-	common.Assert(kind == ChecksumMD5)
+	common.Assert(kind == api.ChecksumMD5)
 	return &cksumvalmd5{kind, val}
 }
 
 func (v *cksumvalxxhash) get() (string, string) { return v.tag, v.val }
 
 func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
-
-// as of 1.9 net/http does not appear to provide any better way..
-func IsErrConnectionRefused(err error) (yes bool) {
-	if uerr, ok := err.(*url.Error); ok {
-		if noerr, ok := uerr.Err.(*net.OpError); ok {
-			if scerr, ok := noerr.Err.(*os.SyscallError); ok {
-				if scerr.Err == syscall.ECONNREFUSED {
-					yes = true
-				}
-			}
-		}
-	}
-	return
-}
 
 // FIXME: usage
 // mentioned in the https://github.com/golang/go/issues/11745#issuecomment-123555313 thread
@@ -428,4 +358,12 @@ func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 	}
 
 	return "", nil
+}
+
+// query-able xactions
+func validateXactionQueryable(kind string) (errstr string) {
+	if kind == api.XactionRebalance || kind == api.XactionPrefetch {
+		return
+	}
+	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, api.XactionRebalance, api.XactionPrefetch)
 }

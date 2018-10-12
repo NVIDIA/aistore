@@ -53,19 +53,19 @@ These names must be self-explanatory.
 
 Once constructed and initialized, memory-manager-and-slab-allocator
 (Mem2, for shortness) can be exercised via its public API that includes
-GetSlab2(), SelectSlab2() and AllocFromSlab2(). Notice the difference between
-the first and the second: GetSlab2(128KB) will return the Slab that contains
-size=128KB reusable buffers, while SelectSlab2(128KB) - the Slab that is
+`GetSlab2`, `SelectSlab2` and `AllocFromSlab2`. Notice the difference between
+the first and the second: `GetSlab2(128KB)` will return the Slab that contains
+size=128KB reusable buffers, while `SelectSlab2(128KB)` - the Slab that is
 considered optimal for the (estimated) total size 128KB.
 
 Once selected, each Slab2 instance can be used via its own public API that
-includes Alloc() and Free() methods. In addition, each allocated SGL internally
+includes `Alloc` and `Free` methods. In addition, each allocated SGL internally
 utilizes one of the existing enumerated slabs to "grow" (that is, allocate more
 buffers from the slab) on demand. For details, look for "grow" in the iosgl.go.
 
-When being run (as in: go mem2.Run()), the memory manager periodically evaluates
+When being run (as in: `go mem2.Run()`), the memory manager periodically evaluates
 the remaining free memory resource and adjusts its slabs accordingly.
-The entire logic is consolidated in one work() method that can, for instance,
-"cleanup" (see cleanup()) an existing "idle" slab,
-or forcefully "reduce" (see reduce()) one if and when the amount of free
+The entire logic is consolidated in one `work()` method that can, for instance,
+"cleanup" (see `cleanup()`) an existing "idle" slab,
+or forcefully "reduce" (see `reduce()`) one if and when the amount of free
 memory falls below watermark.

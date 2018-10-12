@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -29,7 +30,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 	}
 
 	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == api.URLPath(api.Version, api.Objects, TestLocalBucketName, object) {
+		if r.URL.Path == common.URLPath(api.Version, api.Objects, TestLocalBucketName, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
@@ -40,7 +41,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 		}
 	}))
 	nextTierMockForCloudBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) {
+		if r.URL.Path == common.URLPath(api.Version, api.Objects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
@@ -96,7 +97,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) {
+		if r.URL.Path == common.URLPath(api.Version, api.Objects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
 			} else if r.Method == http.MethodGet {
@@ -108,7 +109,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
+	u := proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
 	err := client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
 
 	checkFatal(err, t)
@@ -145,7 +146,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	}
 
 	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) {
+		if r.URL.Path == common.URLPath(api.Version, api.Objects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(api.URLParamCheckCached) == "true" {
 				http.Error(w, "not found in nextTierMock", http.StatusNotFound)
 			} else if r.Method == http.MethodGet {
@@ -200,7 +201,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	}
 
 	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == api.URLPath(api.Version, api.Objects, TestLocalBucketName, object) &&
+		if r.URL.Path == common.URLPath(api.Version, api.Objects, TestLocalBucketName, object) &&
 			r.Method == http.MethodPut {
 			b, err := ioutil.ReadAll(r.Body)
 			checkFatal(err, t)
@@ -215,7 +216,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 		}
 	}))
 	nextTierMockForCloudBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == api.URLPath(api.Version, api.Objects, clibucket, object) && r.Method == http.MethodPut {
+		if r.URL.Path == common.URLPath(api.Version, api.Objects, clibucket, object) && r.Method == http.MethodPut {
 			b, err := ioutil.ReadAll(r.Body)
 			checkFatal(err, t)
 			expected := string(cloudData)
@@ -250,7 +251,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	checkFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	u := proxyURL + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
+	u := proxyURL + common.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
 	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(localData))
 	checkFatal(err, t)
 
@@ -259,7 +260,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			nextTierMockForLocalBucketReached)
 	}
 
-	u = proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
+	u = proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
 	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(cloudData))
 	checkFatal(err, t)
 
@@ -294,7 +295,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	checkFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
+	u := proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
 	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
 	checkFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
@@ -334,7 +335,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	checkFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	u := proxyURL + api.URLPath(api.Version, api.Objects, clibucket, object)
+	u := proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
 	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
 	checkFatal(err, t)
 

@@ -281,9 +281,9 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
 	} else {
 		if result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled {
-			bucketprops[api.HeaderVersioning] = VersionCloud
+			bucketprops[api.HeaderVersioning] = api.VersionCloud
 		} else {
-			bucketprops[api.HeaderVersioning] = VersionNone
+			bucketprops[api.HeaderVersioning] = api.VersionNone
 		}
 	}
 	return

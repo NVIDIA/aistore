@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -415,25 +415,25 @@ func propsMainTest(t *testing.T, versioning string) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	chkVersion := true
 
-	config := getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
 	versionCfg := config["version_config"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("versioning", versioning, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 		}
 		if oldVersioning != versioning {
-			setConfig("versioning", oldVersioning, proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+			setConfig("versioning", oldVersioning, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 		}
 		if created {
 			if err := client.DestroyLocalBucket(proxyURL, clibucket); err != nil {
@@ -446,7 +446,7 @@ func propsMainTest(t *testing.T, versioning string) {
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
-	versionEnabled := props.Versioning != dfc.VersionNone
+	versionEnabled := props.Versioning != api.VersionNone
 	isLocalBucket := props.CloudProvider == api.ProviderDFC
 	propsTestCore(t, versionEnabled, isLocalBucket)
 }
@@ -456,7 +456,7 @@ func TestObjPropsVersionEnabled(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	propsMainTest(t, dfc.VersionAll)
+	propsMainTest(t, api.VersionAll)
 }
 
 func TestObjPropsVersionDisabled(t *testing.T) {
@@ -464,5 +464,5 @@ func TestObjPropsVersionDisabled(t *testing.T) {
 		t.Skip("Long run only")
 	}
 
-	propsMainTest(t, dfc.VersionNone)
+	propsMainTest(t, api.VersionNone)
 }

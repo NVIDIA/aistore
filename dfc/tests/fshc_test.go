@@ -232,7 +232,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	// generate some filenames to PUT to them in a loop
 	generateRandomData(t, seed, numObjs)
 
-	// start PUTting in a loop for some time
+	// start PUT in a loop for some time
 	chstop := make(chan struct{})
 	chfail := make(chan struct{})
 	wg := &sync.WaitGroup{}
@@ -269,7 +269,7 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// reading non-existing objects should not disable mountpath
 	{
-		tlogf("Reading non-existing objects: read must fails, but mpath must be available\n")
+		tlogf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 		for n := 1; n < 10; n++ {
 			_, _, err = client.Get(proxyURL, bucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
 		}
@@ -281,8 +281,8 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// try PUT and GET with disabled FSChecker
 	tlogf("*** Testing with disabled FSHC***\n")
-	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
-	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+api.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	fileList := []string{}
 	for n := 0; n < 5; n++ {
@@ -301,7 +301,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		errch := make(chan error, len(fileList))
 		fillWithRandomData(proxyURL, seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
-			t.Error("PUTting objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
+			t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}
 
 		repairMountpath(t, failedTarget, failedMpath, len(failedMap.Available), len(failedMap.Disabled))

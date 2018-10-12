@@ -341,7 +341,7 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 
 	for res := range resch {
 		if res.err != nil {
-			if IsErrConnectionRefused(res.err) {
+			if common.IsErrConnectionRefused(res.err) {
 				if res.daemonID == vr.Primary {
 					glog.Infof("Expected response from %s (current/failed primary): connection refused", res.daemonID)
 				} else {
@@ -381,7 +381,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 	q := url.Values{}
 	q.Set(api.URLParamPrimaryCandidate, p.si.DaemonID)
 	res := p.broadcastCluster(
-		api.URLPath(api.Version, api.Vote, api.Proxy),
+		common.URLPath(api.Version, api.Vote, api.Proxy),
 		q,
 		http.MethodGet,
 		jsbytes,
@@ -424,7 +424,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 
 	smap := p.smapowner.get()
 	res := p.broadcastCluster(
-		api.URLPath(api.Version, api.Vote, api.Voteres),
+		common.URLPath(api.Version, api.Vote, api.Voteres),
 		nil, // query
 		http.MethodPut,
 		jsbytes,
@@ -523,14 +523,14 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *d
 		req: reqArgs{
 			method: http.MethodPut,
 			base:   nextPrimaryProxy.InternalNet.DirectURL,
-			path:   api.URLPath(api.Version, api.Vote, api.VoteInit),
+			path:   common.URLPath(api.Version, api.Vote, api.VoteInit),
 			body:   body,
 		},
 		timeout: defaultTimeout,
 	}
 	res := h.call(args)
 	if res.err != nil {
-		if IsErrConnectionRefused(res.err) {
+		if common.IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(ctx.config.Timeout.CplaneOperation)
 				res = h.call(args)
@@ -576,7 +576,7 @@ func (p *proxyrunner) pingWithTimeout(si *daemonInfo, timeout time.Duration) (bo
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   api.URLPath(api.Version, api.Health),
+			path:   common.URLPath(api.Version, api.Health),
 		},
 		timeout: timeout,
 	}
@@ -585,7 +585,7 @@ func (p *proxyrunner) pingWithTimeout(si *daemonInfo, timeout time.Duration) (bo
 		return true, nil
 	}
 
-	if res.err == context.DeadlineExceeded || IsErrConnectionRefused(res.err) {
+	if res.err == context.DeadlineExceeded || common.IsErrConnectionRefused(res.err) {
 		return false, nil
 	}
 

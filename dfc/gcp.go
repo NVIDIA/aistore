@@ -183,7 +183,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *api.G
 	if glog.V(4) {
 		glog.Infof("listbucket %s", bucket)
 	}
-	client, gctx, _, errstr := createClient(ct)
+	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -197,7 +197,7 @@ func (gcpimpl *gcpimpl) listbucket(ct context.Context, bucket string, msg *api.G
 		pageToken = msg.GetPageMarker
 	}
 
-	it := client.Bucket(bucket).Objects(gctx, query)
+	it := gcpclient.Bucket(bucket).Objects(gctx, query)
 	pageSize := gcpPageSize
 	if msg.GetPageSize != 0 {
 		pageSize = msg.GetPageSize
@@ -261,11 +261,11 @@ func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketpro
 	}
 	bucketprops = make(common.SimpleKVs)
 
-	client, gctx, _, errstr := createClient(ct)
+	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	_, err := client.Bucket(bucket).Attrs(gctx)
+	_, err := gcpclient.Bucket(bucket).Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
 		errstr = fmt.Sprintf("Failed to get attributes (bucket %s), err: %v", bucket, err)
@@ -274,17 +274,17 @@ func (gcpimpl *gcpimpl) headbucket(ct context.Context, bucket string) (bucketpro
 	bucketprops[api.HeaderCloudProvider] = api.ProviderGoogle
 	// GCP always generates a versionid for an object even if versioning is disabled.
 	// So, return that we can detect versionid change on getobj etc
-	bucketprops[api.HeaderVersioning] = VersionCloud
+	bucketprops[api.HeaderVersioning] = api.VersionCloud
 	return
 }
 
 func (gcpimpl *gcpimpl) getbucketnames(ct context.Context) (buckets []string, errstr string, errcode int) {
-	client, gctx, projectID, errstr := createClient(ct)
+	gcpclient, gctx, projectID, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
 	buckets = make([]string, 0, 16)
-	it := client.Buckets(gctx, projectID)
+	it := gcpclient.Buckets(gctx, projectID)
 	for {
 		battrs, err := it.Next()
 		if err == iterator.Done {
@@ -314,11 +314,11 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 	}
 	objmeta = make(common.SimpleKVs)
 
-	client, gctx, _, errstr := createClient(ct)
+	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	attrs, err := client.Bucket(bucket).Object(objname).Attrs(gctx)
+	attrs, err := gcpclient.Bucket(bucket).Object(objname).Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
@@ -336,11 +336,11 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 //=======================
 func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
 	var v cksumvalue
-	client, gctx, _, errstr := createClient(ct)
+	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	o := client.Bucket(bucket).Object(objname)
+	o := gcpclient.Bucket(bucket).Object(objname)
 	attrs, err := o.Attrs(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)
@@ -372,7 +372,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 		htype, hval string
 		md          common.SimpleKVs
 	)
-	client, gctx, _, errstr := createClient(ct)
+	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
@@ -382,7 +382,7 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 		md[gcpDfcHashType] = htype
 		md[gcpDfcHashVal] = hval
 	}
-	gcpObj := client.Bucket(bucket).Object(objname)
+	gcpObj := gcpclient.Bucket(bucket).Object(objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
 	buf, slab := gmem2.AllocFromSlab2(0)
@@ -409,11 +409,11 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 }
 
 func (gcpimpl *gcpimpl) deleteobj(ct context.Context, bucket, objname string) (errstr string, errcode int) {
-	client, gctx, _, errstr := createClient(ct)
+	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	o := client.Bucket(bucket).Object(objname)
+	o := gcpclient.Bucket(bucket).Object(objname)
 	err := o.Delete(gctx)
 	if err != nil {
 		errcode = gcpErrorToHTTP(err)

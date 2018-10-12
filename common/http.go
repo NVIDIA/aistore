@@ -10,12 +10,18 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
+
+// URLPath returns a HTTP URL path by joining all segments with "/"
+func URLPath(segments ...string) string {
+	return path.Join("/", path.Join(segments...))
+}
 
 // RESTItems splits whole path into the items.
 func RESTItems(unescapedPath string) []string {

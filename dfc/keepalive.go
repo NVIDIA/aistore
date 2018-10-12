@@ -273,7 +273,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta t
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   to.InternalNet.DirectURL,
-			path:   api.URLPath(api.Version, api.Health),
+			path:   common.URLPath(api.Version, api.Health),
 			query:  query,
 		},
 		timeout: timeout,
@@ -318,7 +318,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, args callArgs) (ok, stopp
 					", removing daemon %s from smap", si.DaemonID)
 				return false, false
 			}
-			if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
+			if common.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 				continue
 			}
 			glog.Warningf("keepalive: Unexpected status %d, err: %v", res.status, res.err)
@@ -397,7 +397,7 @@ func (k *keepalive) register(r registerer, statsif statsif, primaryProxyID strin
 					"daemon failed to register after retrying three times, removing from smap")
 				return true
 			}
-			if IsErrConnectionRefused(err) || s == http.StatusRequestTimeout {
+			if common.IsErrConnectionRefused(err) || s == http.StatusRequestTimeout {
 				continue
 			}
 			glog.Warningf(
@@ -446,7 +446,7 @@ func (k *keepalive) timeoutStatsForDaemon(sid string) *timeoutStats {
 }
 
 func (k *keepalive) onerr(err error, status int) {
-	if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+	if common.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 		k.controlCh <- controlSignal{msg: someError, err: err}
 	}
 }

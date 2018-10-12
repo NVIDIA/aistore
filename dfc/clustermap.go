@@ -279,7 +279,7 @@ func (m *Smap) clone() *Smap {
 }
 
 func (m *Smap) deepcopy(dst *Smap) {
-	copyStruct(dst, m)
+	common.CopyStruct(dst, m)
 	dst.init(len(m.Tmap), len(m.Pmap), len(m.NonElects))
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v

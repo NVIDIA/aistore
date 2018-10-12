@@ -131,8 +131,8 @@ func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter
 }
 
 func (a *authServ) registerPublicHandlers() {
-	a.registerHandler(api.URLPath(api.Version, pathUsers), a.userHandler)
-	a.registerHandler(api.URLPath(api.Version, pathTokens), a.tokenHandler)
+	a.registerHandler(common.URLPath(api.Version, pathUsers), a.userHandler)
+	a.registerHandler(common.URLPath(api.Version, pathTokens), a.tokenHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {

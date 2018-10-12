@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 )
 
@@ -58,7 +59,7 @@ func (r *bmdowner) get() (bucketmd *bucketMD) {
 func NewBucketProps() *BucketProps {
 	return &BucketProps{
 		CksumConf: cksumconfig{
-			Checksum: ChecksumInherit,
+			Checksum: api.ChecksumInherit,
 		},
 		LRUProps: ctx.config.LRU,
 	}
@@ -127,7 +128,7 @@ func (m *bucketMD) islocal(bucket string) bool {
 func (m *bucketMD) propsAndChecksum(bucket string) (p BucketProps, checksum string, defined bool) {
 	var ok bool
 	ok, p = m.get(bucket, m.islocal(bucket))
-	if !ok || p.CksumConf.Checksum == ChecksumInherit {
+	if !ok || p.CksumConf.Checksum == api.ChecksumInherit {
 		return p, "", false
 	}
 	return p, p.CksumConf.Checksum, true
@@ -149,7 +150,7 @@ func (m *bucketMD) clone() *bucketMD {
 }
 
 func (m *bucketMD) deepcopy(dst *bucketMD) {
-	copyStruct(dst, m)
+	common.CopyStruct(dst, m)
 	dst.LBmap = make(map[string]BucketProps, len(m.LBmap))
 	dst.CBmap = make(map[string]BucketProps, len(m.CBmap))
 	inmaps := [2]map[string]BucketProps{m.LBmap, m.CBmap}

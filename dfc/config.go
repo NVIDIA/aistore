@@ -13,25 +13,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
-)
-
-// string enum: http header, checksum, versioning - FIXME: move to ../api
-const (
-	// http header
-	XattrXXHashVal  = "user.obj.dfchash"
-	XattrObjVersion = "user.obj.version"
-	// checksum hash function
-	ChecksumNone   = "none"
-	ChecksumXXHash = "xxhash"
-	ChecksumMD5    = "md5"
-	// buckets to inherit global checksum config
-	ChecksumInherit = "inherit"
-	// versioning
-	VersionAll   = "all"
-	VersionCloud = "cloud"
-	VersionLocal = "local"
-	VersionNone  = "none"
 )
 
 // $CONFDIR/*
@@ -306,7 +289,7 @@ func getConfig(fpath string) {
 }
 
 func validateVersion(version string) error {
-	versions := []string{VersionAll, VersionCloud, VersionLocal, VersionNone}
+	versions := []string{api.VersionAll, api.VersionCloud, api.VersionLocal, api.VersionNone}
 	versionValid := false
 	for _, v := range versions {
 		if v == version {
@@ -357,8 +340,8 @@ func validateconf() (err error) {
 		return fmt.Errorf("Invalid Xaction configuration %+v", ctx.config.Xaction)
 	}
 
-	if ctx.config.Cksum.Checksum != ChecksumXXHash && ctx.config.Cksum.Checksum != ChecksumNone {
-		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
+	if ctx.config.Cksum.Checksum != api.ChecksumXXHash && ctx.config.Cksum.Checksum != api.ChecksumNone {
+		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.Cksum.Checksum, api.ChecksumXXHash, api.ChecksumNone)
 	}
 	if err := validateVersion(ctx.config.Ver.Versioning); err != nil {
 		return err

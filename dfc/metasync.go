@@ -303,7 +303,7 @@ OUTER:
 	common.Assert(err == nil, err)
 
 	// step 3: b-cast
-	urlPath := api.URLPath(api.Version, api.Metasync)
+	urlPath := common.URLPath(api.Version, api.Metasync)
 	res := y.p.broadcastCluster(
 		urlPath,
 		nil, // query
@@ -321,7 +321,7 @@ OUTER:
 			continue
 		}
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
-		if IsErrConnectionRefused(r.err) {
+		if common.IsErrConnectionRefused(r.err) {
 			if refused == nil {
 				refused = make(map[string]*daemonInfo)
 			}
@@ -461,7 +461,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,
-			path:   api.URLPath(api.Version, api.Metasync),
+			path:   common.URLPath(api.Version, api.Metasync),
 			body:   body,
 		},
 		internal: true,

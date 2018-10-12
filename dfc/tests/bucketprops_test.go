@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -30,7 +31,7 @@ func TestResetBucketProps(t *testing.T) {
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		bucketProps  dfc.BucketProps
 		globalProps  dfc.BucketProps
-		globalConfig = getConfig(proxyURL+api.URLPath(api.Version, api.Daemon), httpclient, t)
+		globalConfig = getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
 		cksumConfig  = globalConfig["cksum_config"].(map[string]interface{})
 		lruConfig    = globalConfig["lru_config"].(map[string]interface{})
 	)
@@ -42,7 +43,7 @@ func TestResetBucketProps(t *testing.T) {
 	bucketProps.NextTierURL = nextTierURL
 	bucketProps.ReadPolicy = dfc.RWPolicyNextTier
 	bucketProps.WritePolicy = dfc.RWPolicyNextTier
-	bucketProps.CksumConf.Checksum = dfc.ChecksumNone
+	bucketProps.CksumConf.Checksum = api.ChecksumNone
 	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
 	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
 	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting

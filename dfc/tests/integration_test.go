@@ -123,7 +123,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 3.
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -241,7 +241,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
 	time.Sleep(5 * time.Second)
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -477,7 +477,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	}
 
 	// Put some files
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -592,7 +592,7 @@ func TestPutDuringRebalance(t *testing.T) {
 		tlogf("Target %s is registered again.\n", targets[0].directURL)
 	}()
 
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -600,7 +600,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
-	tlogf("Putting finished.\n")
+	tlogf("PUT done.\n")
 
 	// Wait for everything to finish
 	m.wg.Wait()
@@ -705,14 +705,14 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	)
 	checkFatal(err, md.t)
 
-	tlogf("Putting %d files into bucket %s...\n", num, md.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
 	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 	}
-	tlogf("Putting finished.\n")
+	tlogf("PUT done.\n")
 
 	// Start getting files
 	md.wg.Add(num * md.numGetsEachFile)
@@ -823,14 +823,14 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		checkFatal(err, t)
 	}
 
-	tlogf("Putting %d files into bucket %s...\n", num, md.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
 	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 	}
-	tlogf("Putting finished.\n")
+	tlogf("PUT done.\n")
 
 	// Start getting files and enable mountpaths in parallel
 	md.wg.Add(num * md.numGetsEachFile)
@@ -923,7 +923,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	}
 
 	// Start putting files into bucket
-	tlogf("Putting %d files into bucket %s...\n", num, md.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
 	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -931,7 +931,7 @@ func TestGetDuringRebalance(t *testing.T) {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 		mdAfterRebalance.repFilenameCh <- repFile{repetitions: mdAfterRebalance.numGetsEachFile, filename: f}
 	}
-	tlogf("Putting finished.\n")
+	tlogf("PUT done.\n")
 
 	// Start getting files and register target in parallel
 	md.wg.Add(num * md.numGetsEachFile)
@@ -1091,7 +1091,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	}
 
 	// Put some files
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -1100,7 +1100,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
 
-	tlogln("putting finished")
+	tlogln("PUT done.")
 
 	// Rename it
 	oldLocalBucketName := m.bucket
@@ -1765,7 +1765,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 3.
-	tlogf("Putting %d files into bucket %s...\n", num, m.bucket)
+	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)

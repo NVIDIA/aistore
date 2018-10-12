@@ -132,7 +132,7 @@ func (t *targetrunner) Run() error {
 	for i := 0; i < maxRetrySeconds; i++ {
 		var status int
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
-			if IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
+			if common.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 				time.Sleep(time.Second)
 				continue
@@ -184,18 +184,18 @@ func (t *targetrunner) Run() error {
 	//
 
 	// Public network
-	t.registerPublicNetHandler(api.URLPath(api.Version, api.Buckets)+"/", t.bucketHandler)
-	t.registerPublicNetHandler(api.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
-	t.registerPublicNetHandler(api.URLPath(api.Version, api.Daemon), t.daemonHandler)
-	t.registerPublicNetHandler(api.URLPath(api.Version, api.Push)+"/", t.pushHandler)
-	t.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), t.tokenHandler)
+	t.registerPublicNetHandler(common.URLPath(api.Version, api.Buckets)+"/", t.bucketHandler)
+	t.registerPublicNetHandler(common.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
+	t.registerPublicNetHandler(common.URLPath(api.Version, api.Daemon), t.daemonHandler)
+	t.registerPublicNetHandler(common.URLPath(api.Version, api.Push)+"/", t.pushHandler)
+	t.registerPublicNetHandler(common.URLPath(api.Version, api.Tokens), t.tokenHandler)
 	transport.SetMux(common.NetworkPublic, t.publicServer.mux) // to register transport handlers at runtime
 	t.registerPublicNetHandler("/", common.InvalidHandler)
 
 	// Internal network
-	t.registerInternalNetHandler(api.URLPath(api.Version, api.Metasync), t.metasyncHandler)
-	t.registerInternalNetHandler(api.URLPath(api.Version, api.Health), t.healthHandler)
-	t.registerInternalNetHandler(api.URLPath(api.Version, api.Vote), t.voteHandler)
+	t.registerInternalNetHandler(common.URLPath(api.Version, api.Metasync), t.metasyncHandler)
+	t.registerInternalNetHandler(common.URLPath(api.Version, api.Health), t.healthHandler)
+	t.registerInternalNetHandler(common.URLPath(api.Version, api.Vote), t.voteHandler)
 	if ctx.config.Net.UseIntra {
 		transport.SetMux(common.NetworkIntra, t.internalServer.mux) // to register transport handlers at runtime
 		t.registerInternalNetHandler("/", common.InvalidHandler)
@@ -203,7 +203,7 @@ func (t *targetrunner) Run() error {
 
 	// Replication network
 	if ctx.config.Net.UseRepl {
-		t.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
+		t.registerReplNetHandler(common.URLPath(api.Version, api.Objects)+"/", t.objectHandler)
 		transport.SetMux(common.NetworkReplication, t.replServer.mux) // to register transport handlers at runtime
 		t.registerReplNetHandler("/", common.InvalidHandler)
 	}
@@ -288,7 +288,7 @@ func (t *targetrunner) unregister() (int, error) {
 		si: smap.ProxySI,
 		req: reqArgs{
 			method: http.MethodDelete,
-			path:   api.URLPath(api.Version, api.Cluster, api.Daemon, t.si.DaemonID),
+			path:   common.URLPath(api.Version, api.Cluster, api.Daemon, t.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -498,7 +498,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			coldget = vchanged
 		}
 	}
-	if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != ChecksumNone {
+	if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != api.ChecksumNone {
 		validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
@@ -558,9 +558,9 @@ existslocally:
 		}
 	}()
 
-	cksumRange := cksumcfg.Checksum != ChecksumNone && rangeLen > 0 && cksumcfg.EnableReadRangeChecksum
-	if !coldget && !cksumRange && cksumcfg.Checksum != ChecksumNone {
-		xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
+	cksumRange := cksumcfg.Checksum != api.ChecksumNone && rangeLen > 0 && cksumcfg.EnableReadRangeChecksum
+	if !coldget && !cksumRange && cksumcfg.Checksum != api.ChecksumNone {
+		xxHashBinary, errstr := Getxattr(fqn, api.XattrXXHashVal)
 		if errstr == "" && xxHashBinary != nil {
 			nhobj = newcksumvalue(cksumcfg.Checksum, string(xxHashBinary))
 		}
@@ -694,7 +694,7 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int6
 	xx := xxhash.New64()
 	if length <= maxBytesInMem {
 		sgl = gmem2.NewSGL(length)
-		_, err := ReceiveAndChecksum(sgl, rangeReader, buf, xx)
+		_, err := common.ReceiveAndChecksum(sgl, rangeReader, buf, xx)
 		if err != nil {
 			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
 			t.fshc(err, fqn)
@@ -1033,11 +1033,11 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	} else {
 		bucketprops = make(common.SimpleKVs)
 		bucketprops[api.HeaderCloudProvider] = api.ProviderDFC
-		bucketprops[api.HeaderVersioning] = VersionLocal
+		bucketprops[api.HeaderVersioning] = api.VersionLocal
 	}
 	// double check if we support versioning internally for the bucket
 	if !t.versioningConfigured(bucket) {
-		bucketprops[api.HeaderVersioning] = VersionNone
+		bucketprops[api.HeaderVersioning] = api.VersionNone
 	}
 
 	for k, v := range bucketprops {
@@ -1249,7 +1249,7 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, objname := range objnames {
-			err := pusher.Push(api.URLPath(api.Version, api.Objects, bucket, objname), nil)
+			err := pusher.Push(common.URLPath(api.Version, api.Objects, bucket, objname), nil)
 			if err != nil {
 				t.invalmsghdlr(w, r, "Error Pushing "+bucket+"/"+objname+": "+err.Error())
 				return
@@ -1484,7 +1484,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 			}
 		}
 
-		if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != ChecksumNone {
+		if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != api.ChecksumNone {
 			validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
 			if errstr == "" {
 				coldget = !validChecksum
@@ -1495,7 +1495,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	if !coldget && eexists == "" {
 		props = &objectProps{version: version, size: size}
-		xxHashBinary, _ := Getxattr(fqn, XattrXXHashVal)
+		xxHashBinary, _ := Getxattr(fqn, api.XattrXXHashVal)
 		if xxHashBinary != nil {
 			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxHashBinary))
 		}
@@ -1578,7 +1578,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 		return
 	}
 	size = finfo.Size()
-	if bytes, errs := Getxattr(fqn, XattrObjVersion); errs == "" {
+	if bytes, errs := Getxattr(fqn, api.XattrObjVersion); errs == "" {
 		version = string(bytes)
 	}
 	return
@@ -1586,7 +1586,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 
 func (t *targetrunner) lookupRemotely(bucket, objname string) *daemonInfo {
 	res := t.broadcastNeighbors(
-		api.URLPath(api.Version, api.Objects, bucket, objname),
+		common.URLPath(api.Version, api.Objects, bucket, objname),
 		nil, // query
 		http.MethodHead,
 		nil,
@@ -1929,13 +1929,13 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		}
 	}
 	if ci.needChkSum {
-		xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
+		xxHashBinary, errstr := Getxattr(fqn, api.XattrXXHashVal)
 		if errstr == "" {
 			fileInfo.Checksum = hex.EncodeToString(xxHashBinary)
 		}
 	}
 	if ci.needVersion {
-		version, errstr := Getxattr(fqn, XattrObjVersion)
+		version, errstr := Getxattr(fqn, api.XattrObjVersion)
 		if errstr == "" {
 			fileInfo.Version = string(version)
 		}
@@ -2014,13 +2014,13 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		htype, hval = hdhobj.get()
 	}
 	// optimize out if the checksums do match
-	if hdhobj != nil && cksumcfg.Checksum != ChecksumNone && !dryRun.disk && !dryRun.network {
+	if hdhobj != nil && cksumcfg.Checksum != api.ChecksumNone && !dryRun.disk && !dryRun.network {
 		file, err = os.Open(fqn)
 		// exists - compute checksum and compare with the caller's
 		if err == nil {
 			buf, slab := gmem2.AllocFromSlab2(0)
-			if htype == ChecksumXXHash {
-				xxHashVal, errstr = ComputeXXHash(file, buf)
+			if htype == api.ChecksumXXHash {
+				xxHashVal, errstr = common.ComputeXXHash(file, buf)
 			} else {
 				errstr = fmt.Sprintf("Unsupported checksum type %s", htype)
 			}
@@ -2490,7 +2490,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		newbucket = bucket
 	}
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	url := destsi.PublicNet.DirectURL + api.URLPath(api.Version, api.Objects, newbucket, newobjname)
+	url := destsi.PublicNet.DirectURL + common.URLPath(api.Version, api.Objects, newbucket, newobjname)
 	url += fmt.Sprintf("?%s=%s&%s=%s", api.URLParamFromID, fromid, api.URLParamToID, toid)
 	islocal := t.bmdowner.get().islocal(bucket)
 	cksumcfg := &ctx.config.Cksum
@@ -2526,14 +2526,14 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	}
 	defer file.Close()
 
-	if version, errstr = Getxattr(fqn, XattrObjVersion); errstr != "" {
-		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, XattrObjVersion, errstr)
+	if version, errstr = Getxattr(fqn, api.XattrObjVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, api.XattrObjVersion, errstr)
 	}
 
-	if cksumcfg.Checksum != ChecksumNone {
-		common.Assert(cksumcfg.Checksum == ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
+	if cksumcfg.Checksum != api.ChecksumNone {
+		common.Assert(cksumcfg.Checksum == api.ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
 		buf, slab := gmem2.AllocFromSlab2(size)
-		if xxHashVal, errstr = ComputeXXHash(file, buf); errstr != "" {
+		if xxHashVal, errstr = common.ComputeXXHash(file, buf); errstr != "" {
 			slab.Free(buf)
 			return errstr
 		}
@@ -2550,7 +2550,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)
 	}
 	if xxHashVal != "" {
-		request.Header.Set(api.HeaderDFCChecksumType, ChecksumXXHash)
+		request.Header.Set(api.HeaderDFCChecksumType, api.ChecksumXXHash)
 		request.Header.Set(api.HeaderDFCChecksumVal, xxHashVal)
 	}
 	if len(version) != 0 {
@@ -2652,7 +2652,7 @@ func (t *targetrunner) bmdVersionFixup() {
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   psi.InternalNet.DirectURL,
-			path:   api.URLPath(api.Version, api.Daemon),
+			path:   common.URLPath(api.Version, api.Daemon),
 			query:  q,
 		},
 		timeout: ctx.config.Timeout.CplaneOperation,
@@ -2818,7 +2818,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case api.GetWhatXaction:
 		kind := r.URL.Query().Get(api.URLParamProps)
-		if errstr := api.ValidateXactionQueryable(kind); errstr != "" {
+		if errstr := validateXactionQueryable(kind); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -3010,7 +3010,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	}()
 
 	if dryRun.disk || dryRun.network {
-		if written, err = ReceiveAndChecksum(filewriter, reader, buf); err != nil {
+		if written, err = common.ReceiveAndChecksum(filewriter, reader, buf); err != nil {
 			errstr = err.Error()
 		}
 		if !dryRun.disk {
@@ -3022,10 +3022,10 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	}
 
 	// receive and checksum
-	if cksumcfg.Checksum != ChecksumNone {
-		common.Assert(cksumcfg.Checksum == ChecksumXXHash)
+	if cksumcfg.Checksum != api.ChecksumNone {
+		common.Assert(cksumcfg.Checksum == api.ChecksumXXHash)
 		xx := xxhash.New64()
-		if written, err = ReceiveAndChecksum(filewriter, reader, buf, xx); err != nil {
+		if written, err = common.ReceiveAndChecksum(filewriter, reader, buf, xx); err != nil {
 			errstr = err.Error()
 			t.fshc(err, fqn)
 			return
@@ -3034,10 +3034,10 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		hashInBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(hashInBytes, hashIn64)
 		nhval = hex.EncodeToString(hashInBytes)
-		nhobj = newcksumvalue(ChecksumXXHash, nhval)
+		nhobj = newcksumvalue(api.ChecksumXXHash, nhval)
 		if ohobj != nil {
 			ohtype, ohval = ohobj.get()
-			common.Assert(ohtype == ChecksumXXHash)
+			common.Assert(ohtype == api.ChecksumXXHash)
 			if ohval != nhval {
 				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
@@ -3048,7 +3048,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		}
 	} else if omd5 != "" && cksumcfg.ValidateColdGet {
 		md5 := md5.New()
-		if written, err = ReceiveAndChecksum(filewriter, reader, buf, md5); err != nil {
+		if written, err = common.ReceiveAndChecksum(filewriter, reader, buf, md5); err != nil {
 			errstr = err.Error()
 			t.fshc(err, fqn)
 			return
@@ -3063,7 +3063,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			return
 		}
 	} else {
-		if written, err = ReceiveAndChecksum(filewriter, reader, buf); err != nil {
+		if written, err = common.ReceiveAndChecksum(filewriter, reader, buf); err != nil {
 			errstr = err.Error()
 			t.fshc(err, fqn)
 			return
@@ -3283,22 +3283,22 @@ func (t *targetrunner) versioningConfigured(bucket string) bool {
 	islocal := t.bmdowner.get().islocal(bucket)
 	versioning := ctx.config.Ver.Versioning
 	if islocal {
-		return versioning == VersionAll || versioning == VersionLocal
+		return versioning == api.VersionAll || versioning == api.VersionLocal
 	}
-	return versioning == VersionAll || versioning == VersionCloud
+	return versioning == api.VersionAll || versioning == api.VersionCloud
 }
 
 // xattrs
 func (t *targetrunner) finalizeobj(fqn string, objprops *objectProps) (errstr string) {
 	if objprops.nhobj != nil {
 		htype, hval := objprops.nhobj.get()
-		common.Assert(htype == ChecksumXXHash)
-		if errstr = Setxattr(fqn, XattrXXHashVal, []byte(hval)); errstr != "" {
+		common.Assert(htype == api.ChecksumXXHash)
+		if errstr = Setxattr(fqn, api.XattrXXHashVal, []byte(hval)); errstr != "" {
 			return errstr
 		}
 	}
 	if objprops.version != "" {
-		errstr = Setxattr(fqn, XattrObjVersion, []byte(objprops.version))
+		errstr = Setxattr(fqn, api.XattrObjVersion, []byte(objprops.version))
 	}
 
 	if !objprops.atime.IsZero() {
@@ -3329,7 +3329,7 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 		return
 	}
 
-	if vbytes, errstr = Getxattr(fqn, XattrObjVersion); errstr != "" {
+	if vbytes, errstr = Getxattr(fqn, api.XattrObjVersion); errstr != "" {
 		return
 	}
 	if currValue, err := strconv.Atoi(string(vbytes)); err != nil {
@@ -3624,7 +3624,7 @@ func (t *targetrunner) pollClusterStarted() {
 			req: reqArgs{
 				method: http.MethodGet,
 				base:   psi.InternalNet.DirectURL,
-				path:   api.URLPath(api.Version, api.Health),
+				path:   common.URLPath(api.Version, api.Health),
 			},
 			timeout: defaultTimeout,
 		}
@@ -3686,12 +3686,12 @@ func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, slabSize int64) (validChecksum bool, errstr string) {
-	if checksumAlgo != ChecksumXXHash {
+	if checksumAlgo != api.ChecksumXXHash {
 		errstr := fmt.Sprintf("Unsupported checksum algorithm: [%s]", checksumAlgo)
 		return false, errstr
 	}
 
-	xxHashBinary, errstr := Getxattr(fqn, XattrXXHashVal)
+	xxHashBinary, errstr := Getxattr(fqn, api.XattrXXHashVal)
 	if errstr != "" {
 		errstr = fmt.Sprintf("Unable to read checksum of object [%s], err: %s", fqn, errstr)
 		return false, errstr
@@ -3709,7 +3709,7 @@ func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, s
 	}
 
 	buf, slab := gmem2.AllocFromSlab2(slabSize)
-	xxHashVal, errstr := ComputeXXHash(file, buf)
+	xxHashVal, errstr := common.ComputeXXHash(file, buf)
 	file.Close()
 	slab.Free(buf)
 
@@ -3738,7 +3738,7 @@ func (t *targetrunner) disable() error {
 	glog.Info("Disabling the target")
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, eunreg = t.unregister(); eunreg != nil {
-			if IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
+			if common.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
 				glog.Errorf("Target %s: retrying unregistration...", t.si.DaemonID)
 				time.Sleep(time.Second)
 				continue
@@ -3777,7 +3777,7 @@ func (t *targetrunner) enable() error {
 	glog.Info("Enabling the target")
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
-			if IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
+			if common.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
 				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
 				time.Sleep(time.Second)
 				continue

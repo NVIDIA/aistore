@@ -89,7 +89,7 @@ func SetMux(network string, x *http.ServeMux) {
 
 // examples resulting URL.Path: /v1/transport/replication, /v1/transport/rebalance, etc.
 func Register(network, trname string, callback Receive) (path string) {
-	path = api.URLPath(api.Version, api.Transport, trname)
+	path = common.URLPath(api.Version, api.Transport, trname)
 	h := &handler{trname, callback}
 	mu.Lock()
 	mux, ok := muxers[network]

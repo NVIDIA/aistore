@@ -290,7 +290,7 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
-		url := m.proxy.URL + api.URLPath(api.Version, path)
+		url := m.proxy.URL + common.URLPath(api.Version, path)
 		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
 			// Fatal - interrupt the loop

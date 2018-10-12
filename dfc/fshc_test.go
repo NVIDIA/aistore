@@ -123,7 +123,7 @@ func TestFSCheckerMain(t *testing.T) {
 	}
 	testList := []tstInfo{
 		{"Inaccessible mountpath", 0, 0, false, false},
-		{"Healthy mounpath", 0, 0, true, true},
+		{"Healthy mountpath", 0, 0, true, true},
 		{"Unstable but OK mountpath", 1, 1, true, true},
 		{"Reads failed", 3, 0, true, false},
 		{"Writes failed", 1, 3, true, false},

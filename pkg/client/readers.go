@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -159,7 +158,7 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 	rr := &rrLimited{rand1, size, 0}
 	if withHash {
 		xx := xxhash.New64()
-		_, err := dfc.ReceiveAndChecksum(ioutil.Discard, rr, buf, xx)
+		_, err := common.ReceiveAndChecksum(ioutil.Discard, rr, buf, xx)
 		if err != nil {
 			return nil, err
 		}

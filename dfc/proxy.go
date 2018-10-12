@@ -121,16 +121,16 @@ func (p *proxyrunner) Run() error {
 
 	// Public network
 	if ctx.config.Auth.Enabled {
-		p.registerPublicNetHandler(api.URLPath(api.Version, api.Buckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
-		p.registerPublicNetHandler(api.URLPath(api.Version, api.Objects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
+		p.registerPublicNetHandler(common.URLPath(api.Version, api.Buckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
+		p.registerPublicNetHandler(common.URLPath(api.Version, api.Objects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
 	} else {
-		p.registerPublicNetHandler(api.URLPath(api.Version, api.Buckets)+"/", p.bucketHandler)
-		p.registerPublicNetHandler(api.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
+		p.registerPublicNetHandler(common.URLPath(api.Version, api.Buckets)+"/", p.bucketHandler)
+		p.registerPublicNetHandler(common.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
 	}
 
-	p.registerPublicNetHandler(api.URLPath(api.Version, api.Daemon), p.daemonHandler)
-	p.registerPublicNetHandler(api.URLPath(api.Version, api.Cluster), p.clusterHandler)
-	p.registerPublicNetHandler(api.URLPath(api.Version, api.Tokens), p.tokenHandler)
+	p.registerPublicNetHandler(common.URLPath(api.Version, api.Daemon), p.daemonHandler)
+	p.registerPublicNetHandler(common.URLPath(api.Version, api.Cluster), p.clusterHandler)
+	p.registerPublicNetHandler(common.URLPath(api.Version, api.Tokens), p.tokenHandler)
 
 	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
@@ -139,9 +139,9 @@ func (p *proxyrunner) Run() error {
 	}
 
 	// Internal network
-	p.registerInternalNetHandler(api.URLPath(api.Version, api.Metasync), p.metasyncHandler)
-	p.registerInternalNetHandler(api.URLPath(api.Version, api.Health), p.healthHandler)
-	p.registerInternalNetHandler(api.URLPath(api.Version, api.Vote), p.voteHandler)
+	p.registerInternalNetHandler(common.URLPath(api.Version, api.Metasync), p.metasyncHandler)
+	p.registerInternalNetHandler(common.URLPath(api.Version, api.Health), p.healthHandler)
+	p.registerInternalNetHandler(common.URLPath(api.Version, api.Vote), p.voteHandler)
 	if ctx.config.Net.UseIntra {
 		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
 			p.registerInternalNetHandler("/", p.reverseProxyHandler)
@@ -152,7 +152,7 @@ func (p *proxyrunner) Run() error {
 
 	// Replication network
 	if ctx.config.Net.UseRepl {
-		p.registerReplNetHandler(api.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
+		p.registerReplNetHandler(common.URLPath(api.Version, api.Objects)+"/", p.objectHandler)
 		p.registerReplNetHandler("/", common.InvalidHandler)
 	}
 
@@ -201,7 +201,7 @@ func (p *proxyrunner) unregister() (int, error) {
 		si: smap.ProxySI,
 		req: reqArgs{
 			method: http.MethodDelete,
-			path:   api.URLPath(api.Version, api.Cluster, api.Daemon, api.Proxy, p.si.DaemonID),
+			path:   common.URLPath(api.Version, api.Cluster, api.Daemon, api.Proxy, p.si.DaemonID),
 		},
 		timeout: defaultTimeout,
 	}
@@ -839,7 +839,7 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *buck
 	common.Assert(err == nil, err)
 
 	res := p.broadcastTargets(
-		api.URLPath(api.Version, api.Buckets, bucketFrom),
+		common.URLPath(api.Version, api.Buckets, bucketFrom),
 		nil, // query
 		method,
 		jsbytes,
@@ -894,7 +894,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		req: reqArgs{
 			method: r.Method,
 			header: r.Header,
-			path:   api.URLPath(api.Version, api.Buckets, bucketspec),
+			path:   common.URLPath(api.Version, api.Buckets, bucketspec),
 		},
 		timeout: defaultTimeout,
 	}
@@ -953,7 +953,7 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 		req: reqArgs{
 			method: http.MethodPost,
 			header: header,
-			path:   api.URLPath(api.Version, api.Buckets, bucket),
+			path:   common.URLPath(api.Version, api.Buckets, bucket),
 			query:  query,
 			body:   actionMsgBytes,
 		},
@@ -1005,7 +1005,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh
 // The target returns its list in batches `pageSize` length
 func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, dataCh chan *localFilePage, origmsg *api.GetMsg) {
 	var msg api.GetMsg
-	copyStruct(&msg, origmsg)
+	common.CopyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
 	for {
 		resp, err := p.targetListBucket(nil, bucket, daemon, &msg, false /* islocal */, true /* cachedObjects */)
@@ -1407,7 +1407,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 
 	smap := p.smapowner.get()
 	results = p.broadcastTargets(
-		api.URLPath(api.Version, api.Buckets, bucket),
+		common.URLPath(api.Version, api.Buckets, bucket),
 		q,
 		method,
 		jsonbytes,
@@ -1644,7 +1644,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *Smap, errstr string) {
 	req := reqArgs{
 		method: http.MethodGet,
 		base:   baseURL,
-		path:   api.URLPath(api.Version, api.Daemon),
+		path:   common.URLPath(api.Version, api.Daemon),
 		query:  query,
 	}
 	args := callArgs{req: req, timeout: defaultTimeout}
@@ -1847,7 +1847,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	// (I) prepare phase
-	urlPath := api.URLPath(api.Version, api.Daemon, api.Proxy, proxyid)
+	urlPath := common.URLPath(api.Version, api.Daemon, api.Proxy, proxyid)
 	q := url.Values{}
 	q.Set(api.URLParamPrepare, "true")
 	method := http.MethodPut
@@ -1943,11 +1943,11 @@ func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request
 	if baseURL == gcsURL && r.Method == http.MethodGet {
 		s := common.RESTItems(r.URL.Path)
 		if len(s) == 2 {
-			r.URL.Path = api.URLPath(api.Version, api.Objects) + r.URL.Path
+			r.URL.Path = common.URLPath(api.Version, api.Objects) + r.URL.Path
 			p.httpobjget(w, r)
 			return
 		} else if len(s) == 1 {
-			r.URL.Path = api.URLPath(api.Version, api.Buckets) + r.URL.Path
+			r.URL.Path = common.URLPath(api.Version, api.Buckets) + r.URL.Path
 			p.httpbckget(w, r)
 			return
 		}
@@ -1981,7 +1981,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Request) bool {
 	kind := r.URL.Query().Get(api.URLParamProps)
-	if errstr := api.ValidateXactionQueryable(kind); errstr != "" {
+	if errstr := validateXactionQueryable(kind); errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return false
 	}
@@ -2012,7 +2012,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 
 func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
 	results := p.broadcastTargets(
-		api.URLPath(api.Version, api.Daemon),
+		common.URLPath(api.Version, api.Daemon),
 		r.URL.Query(),
 		r.Method,
 		nil, // message
@@ -2149,7 +2149,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 				si: &nsi,
 				req: reqArgs{
 					method: http.MethodPost,
-					path:   api.URLPath(api.Version, api.Daemon, api.Register),
+					path:   common.URLPath(api.Version, api.Daemon, api.Register),
 				},
 				timeout: ctx.config.Timeout.ProxyPing,
 			}
@@ -2313,7 +2313,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 			si: osi,
 			req: reqArgs{
 				method: http.MethodDelete,
-				path:   api.URLPath(api.Version, api.Daemon, api.Unregister),
+				path:   common.URLPath(api.Version, api.Daemon, api.Unregister),
 			},
 			timeout: ctx.config.Timeout.ProxyPing,
 		}
@@ -2377,7 +2377,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			common.Assert(err == nil, err)
 
 			results := p.broadcastCluster(
-				api.URLPath(api.Version, api.Daemon),
+				common.URLPath(api.Version, api.Daemon),
 				nil, // query
 				http.MethodPut,
 				msgbytes,
@@ -2403,7 +2403,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		common.Assert(err == nil, err)
 
 		p.broadcastCluster(
-			api.URLPath(api.Version, api.Daemon),
+			common.URLPath(api.Version, api.Daemon),
 			nil, // query
 			http.MethodPut,
 			msgbytes,
@@ -2493,7 +2493,7 @@ func validateBucketProps(props *BucketProps, isLocal bool) error {
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
 		}
 	}
-	if err := ValidateCloudProvider(props.CloudProvider, isLocal); err != nil {
+	if err := validateCloudProvider(props.CloudProvider, isLocal); err != nil {
 		return err
 	}
 	if props.ReadPolicy != "" && props.ReadPolicy != RWPolicyCloud && props.ReadPolicy != RWPolicyNextTier {
@@ -2522,9 +2522,10 @@ func validateBucketProps(props *BucketProps, isLocal bool) error {
 			props.WritePolicy = RWPolicyNextTier
 		}
 	}
-	if props.CksumConf.Checksum != ChecksumInherit &&
-		props.CksumConf.Checksum != ChecksumNone && props.CksumConf.Checksum != ChecksumXXHash {
-		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s", props.CksumConf.Checksum, ChecksumXXHash, ChecksumNone, ChecksumInherit)
+	if props.CksumConf.Checksum != api.ChecksumInherit &&
+		props.CksumConf.Checksum != api.ChecksumNone && props.CksumConf.Checksum != api.ChecksumXXHash {
+		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s",
+			props.CksumConf.Checksum, api.ChecksumXXHash, api.ChecksumNone, api.ChecksumInherit)
 	}
 
 	lwm, hwm := props.LRUProps.LowWM, props.LRUProps.HighWM
@@ -2554,14 +2555,14 @@ func validateBucketProps(props *BucketProps, isLocal bool) error {
 
 func rechecksumRequired(globalChecksum string, bucketChecksumOld string, bucketChecksumNew string) bool {
 	checksumOld := globalChecksum
-	if bucketChecksumOld != ChecksumInherit {
+	if bucketChecksumOld != api.ChecksumInherit {
 		checksumOld = bucketChecksumOld
 	}
 	checksumNew := globalChecksum
-	if bucketChecksumNew != ChecksumInherit {
+	if bucketChecksumNew != api.ChecksumInherit {
 		checksumNew = bucketChecksumNew
 	}
-	return checksumNew != ChecksumNone && checksumNew != checksumOld
+	return checksumNew != api.ChecksumNone && checksumNew != checksumOld
 }
 
 func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
@@ -2569,7 +2570,7 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 	common.Assert(err == nil, err)
 
 	res := p.broadcastTargets(
-		api.URLPath(api.Version, api.Buckets, bucket),
+		common.URLPath(api.Version, api.Buckets, bucket),
 		nil,
 		http.MethodPost,
 		jsbytes,
@@ -2593,7 +2594,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 		si: osi,
 		req: reqArgs{
 			method: http.MethodGet,
-			path:   api.URLPath(api.Version, api.Daemon),
+			path:   common.URLPath(api.Version, api.Daemon),
 			query:  query,
 		},
 		timeout: ctx.config.Timeout.CplaneOperation,
@@ -2610,7 +2611,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 	return !nsi.Equals(si)
 }
 
-func ValidateCloudProvider(provider string, isLocal bool) error {
+func validateCloudProvider(provider string, isLocal bool) error {
 	if provider != "" && provider != api.ProviderAmazon && provider != api.ProviderGoogle && provider != api.ProviderDFC {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
 			api.ProviderAmazon, api.ProviderGoogle, api.ProviderDFC)
@@ -2634,7 +2635,7 @@ func (p *proxyrunner) copyBucketProps(oldProps *BucketProps, newProps *BucketPro
 	}
 	if newProps.CksumConf.Checksum != "" {
 		oldProps.CksumConf.Checksum = newProps.CksumConf.Checksum
-		if newProps.CksumConf.Checksum != ChecksumInherit {
+		if newProps.CksumConf.Checksum != api.ChecksumInherit {
 			oldProps.CksumConf.ValidateColdGet = newProps.CksumConf.ValidateColdGet
 			oldProps.CksumConf.ValidateWarmGet = newProps.CksumConf.ValidateWarmGet
 			oldProps.CksumConf.EnableReadRangeChecksum = newProps.CksumConf.EnableReadRangeChecksum

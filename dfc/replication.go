@@ -205,7 +205,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return errors.New(errstr)
 	}
 
-	url := req.remoteDirectURL + api.URLPath(api.Version, api.Objects, bucket, object)
+	url := req.remoteDirectURL + common.URLPath(api.Version, api.Objects, bucket, object)
 
 	uname := uniquename(bucket, object)
 	r.t.rtnamemap.lockname(uname, req.deleteObject, &pendinginfo{Time: time.Now(), fqn: req.fqn}, time.Second)
@@ -223,11 +223,11 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	}
 	defer file.Close()
 
-	xxHashBinary, errstr := Getxattr(req.fqn, XattrXXHashVal)
+	xxHashBinary, errstr := Getxattr(req.fqn, api.XattrXXHashVal)
 	xxHashVal := ""
 	if errstr != "" {
 		buf, slab := gmem2.AllocFromSlab2(0)
-		xxHashVal, errstr = ComputeXXHash(file, buf)
+		xxHashVal, errstr = common.ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if errstr != "" {
 			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", req.fqn, errstr)
@@ -252,7 +252,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	// specify source direct URL in request header
 	httpReq.Header.Add(api.HeaderDFCReplicationSrc, r.directURL)
 
-	httpReq.Header.Add(api.HeaderDFCChecksumType, ChecksumXXHash)
+	httpReq.Header.Add(api.HeaderDFCChecksumType, api.ChecksumXXHash)
 	httpReq.Header.Add(api.HeaderDFCChecksumVal, xxHashVal)
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
@@ -309,21 +309,21 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 	hdhtype, hdhval := hdhobj.get()
-	if hdhtype != ChecksumXXHash {
+	if hdhtype != api.ChecksumXXHash {
 		errstr = fmt.Sprintf("Unsupported checksum type: %q", hdhtype)
 		return errors.New(errstr)
 	}
 
 	// Avoid replication by checking if cheksums from header and existing file match
 	// Attempt to access the checksum Xattr if it already exists
-	if xxHashBinary, errstr := Getxattr(req.fqn, XattrXXHashVal); errstr != "" && xxHashBinary != nil && string(xxHashBinary) == hdhval {
+	if xxHashBinary, errstr := Getxattr(req.fqn, api.XattrXXHashVal); errstr != "" && xxHashBinary != nil && string(xxHashBinary) == hdhval {
 		glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
 		return nil
 	}
 	// Calculate the checksum when the Xattr does not exit
 	if file, err := os.Open(req.fqn); err == nil {
 		buf, slab := gmem2.AllocFromSlab2(0)
-		xxHashVal, errstr := ComputeXXHash(file, buf)
+		xxHashVal, errstr := common.ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if err = file.Close(); err != nil {
 			glog.Warningf("Unexpected failure to close %s once xxhash has been computed, error: %v", req.fqn, err)

@@ -225,7 +225,7 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   api.URLPath(api.Version, api.Health),
+			path:   common.URLPath(api.Version, api.Health),
 			query:  query,
 		},
 		timeout: timeout,
@@ -266,7 +266,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
-			path:   api.URLPath(api.Version, api.Daemon),
+			path:   common.URLPath(api.Version, api.Daemon),
 			query:  query,
 		},
 		timeout: defaultTimeout,
@@ -308,7 +308,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   api.URLPath(api.Version, api.Health),
+			path:   common.URLPath(api.Version, api.Health),
 		},
 		timeout: defaultTimeout,
 	}

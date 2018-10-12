@@ -861,10 +861,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 			ctx.config.Ver.ValidateWarmGet = v
 		}
 	case "checksum":
-		if value == ChecksumXXHash || value == ChecksumNone {
+		if value == api.ChecksumXXHash || value == api.ChecksumNone {
 			ctx.config.Cksum.Checksum = value
 		} else {
-			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, ChecksumXXHash, ChecksumNone)
+			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, api.ChecksumXXHash, api.ChecksumNone)
 		}
 	case "versioning":
 		if err := validateVersion(value); err == nil {
@@ -1080,12 +1080,12 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 	info, err := jsoniter.Marshal(h.si)
 	common.Assert(err == nil, err)
 
-	path := api.URLPath(api.Version, api.Cluster)
+	path := common.URLPath(api.Version, api.Cluster)
 	if isproxy {
-		path += api.URLPath(api.Proxy)
+		path += common.URLPath(api.Proxy)
 	}
 	if keepalive {
-		path += api.URLPath(api.Keepalive)
+		path += common.URLPath(api.Keepalive)
 	}
 
 	callArgs := callArgs{
@@ -1104,7 +1104,7 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 		if res.err == nil {
 			return
 		}
-		if IsErrConnectionRefused(res.err) {
+		if common.IsErrConnectionRefused(res.err) {
 			glog.Errorf("%s: (register => %s: connection refused)", h.si.DaemonID, path)
 		} else {
 			glog.Errorf("%s: (register => %s: %v)", h.si.DaemonID, path, res.err)

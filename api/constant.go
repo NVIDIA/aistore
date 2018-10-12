@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+// string enum: http header, checksum, versioning
+const (
+	// http header
+	XattrXXHashVal  = "user.obj.dfchash"
+	XattrObjVersion = "user.obj.version"
+	// checksum hash function
+	ChecksumNone   = "none"
+	ChecksumXXHash = "xxhash"
+	ChecksumMD5    = "md5"
+	// buckets to inherit global checksum config
+	ChecksumInherit = "inherit"
+	// versioning
+	VersionAll   = "all"
+	VersionCloud = "cloud"
+	VersionLocal = "local"
+	VersionNone  = "none"
+)
+
 // ActionMsg is a JSON-formatted control structures
 type ActionMsg struct {
 	Action string      `json:"action"` // shutdown, restart, setconfig - the enum below

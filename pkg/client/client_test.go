@@ -242,7 +242,7 @@ func TestMain(m *testing.M) {
 
 		// Verify hash
 		t := r.Header.Get(api.HeaderDFCChecksumType)
-		if t != dfc.ChecksumXXHash {
+		if t != api.ChecksumXXHash {
 			errf(http.StatusBadRequest, fmt.Sprintf("Do not know how to handle hash type %s", t))
 			return
 		}

@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
@@ -64,7 +64,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer deleteLocalBucket(proxyURL, TestLocalBucketName, t)
 
-	url := proxyURLRepl + api.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
+	url := proxyURLRepl + common.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
 	headers := map[string]string{
 		api.HeaderDFCReplicationSrc: dummySrcURL,
 	}
@@ -75,7 +75,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 		t.Errorf("Replication PUT to local bucket without checksum didn't fail")
 	}
 
-	url = proxyURLRepl + api.URLPath(api.Version, api.Objects, clibucket, object)
+	url = proxyURLRepl + common.URLPath(api.Version, api.Objects, clibucket, object)
 	tlogf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
 	err = client.HTTPRequest(http.MethodPut, url, reader, headers)
 
@@ -184,7 +184,7 @@ func getPrimaryReplicationURL(t *testing.T, proxyURL string) string {
 
 func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 	buf, slab := memsys.AllocFromSlab(0)
-	xxHashVal, errstr := dfc.ComputeXXHash(reader, buf)
+	xxHashVal, errstr := common.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 	if errstr != "" {
 		t.Fatal("Failed to compute xxhash checksum")
@@ -193,10 +193,10 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 }
 
 func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader client.Reader) error {
-	url := dstProxyURL + api.URLPath(api.Version, api.Objects, bucket, object)
+	url := dstProxyURL + common.URLPath(api.Version, api.Objects, bucket, object)
 	headers := map[string]string{
 		api.HeaderDFCReplicationSrc: srcURL,
-		api.HeaderDFCChecksumType:   dfc.ChecksumXXHash,
+		api.HeaderDFCChecksumType:   api.ChecksumXXHash,
 		api.HeaderDFCChecksumVal:    xxhash,
 	}
 	return client.HTTPRequest(http.MethodPut, url, reader, headers)

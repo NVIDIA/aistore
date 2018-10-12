@@ -45,7 +45,7 @@ func (p *proxyrunner) bootstrap() {
 		if smap.countTargets() > 0 || smap.countProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
 			q.Add(api.URLParamWhat, api.GetWhatSmapVote)
-			res := p.broadcastCluster(api.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, smap, tout, false)
+			res := p.broadcastCluster(common.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, smap, tout, false)
 			for re := range res {
 				if re.err != nil {
 					continue
@@ -123,7 +123,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 	req := reqArgs{
 		method: http.MethodGet,
 		base:   getSmapURL,
-		path:   api.URLPath(api.Version, api.Daemon),
+		path:   common.URLPath(api.Version, api.Daemon),
 		query:  query,
 	}
 
@@ -138,7 +138,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		for i := 0; i < maxRetrySeconds; i++ {
 			res = p.call(args)
 			if res.err != nil {
-				if IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
+				if common.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, getSmapURL)
 					time.Sleep(ctx.config.Timeout.CplaneOperation)
 					continue
@@ -332,7 +332,7 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 	)
 	q.Add(api.URLParamWhat, api.GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
-		res := p.broadcastCluster(api.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, bcastSmap, tout, false)
+		res := p.broadcastCluster(common.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, bcastSmap, tout, false)
 		keeptrying = false
 		for re := range res {
 			if re.err != nil {
@@ -382,7 +382,7 @@ func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
 
 func (p *proxyrunner) registerWithRetry() error {
 	if status, err := p.register(false, defaultTimeout); err != nil {
-		if IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+		if common.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Errorf("%s: retrying...", p.si.DaemonID)
 			time.Sleep(ctx.config.Timeout.CplaneOperation)
 			if _, err = p.register(false, defaultTimeout); err != nil {
