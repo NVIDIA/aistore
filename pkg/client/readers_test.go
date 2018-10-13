@@ -415,7 +415,7 @@ func BenchmarkWriteFiles(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			r, err := client.NewFileReader(flag.Arg(0), client.FastRandomFilename(rnd, 32), 1024*1024*8, false)
+			r, err := client.NewFileReader(flag.Arg(0), common.FastRandomFilename(rnd, 32), 1024*1024*8, false)
 			if err != nil {
 				b.Fatalf("Failed to create file reader, err = %v\n", err)
 			}

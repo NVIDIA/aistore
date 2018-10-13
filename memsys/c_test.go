@@ -16,10 +16,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"runtime/debug"
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
 
@@ -52,16 +52,17 @@ func TestSGLStressN(t *testing.T) {
 			// save buffer to SGL
 			br := bytes.NewReader(bufR)
 			_, err := io.Copy(sglR, br)
-			checkFatal(err, t)
+			common.CheckFatal(err, t)
+
 			// copy SGL to SGL
 			rr := memsys.NewReader(sglR)
 			_, err = io.Copy(sglW, rr)
-			checkFatal(err, t)
+			common.CheckFatal(err, t)
 
 			// read SGL from destination and compare with the original
 			var bufW []byte
 			bufW, err = ioutil.ReadAll(memsys.NewReader(sglW))
-			checkFatal(err, t)
+			common.CheckFatal(err, t)
 			for j := 0; j < objsize; j++ {
 				if bufW[j] != bufR[j] {
 					fmt.Printf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
@@ -80,12 +81,4 @@ func TestSGLStressN(t *testing.T) {
 		go fn(n)
 	}
 	wg.Wait()
-}
-
-func checkFatal(err error, t *testing.T) {
-	if err != nil {
-		fmt.Printf("FATAL: %v\n", err)
-		debug.PrintStack()
-		t.Fatalf("FATAL: %v", err)
-	}
 }

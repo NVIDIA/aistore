@@ -25,7 +25,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	)
 
 	smap, err := client.GetClusterMap(proxyURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	for sid = range smap.Tmap {
 		break

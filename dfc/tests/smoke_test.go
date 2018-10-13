@@ -236,7 +236,7 @@ func putRandomFiles(proxyURL string, seed int64, fileSize uint64, numPuts int, b
 	random := rand.New(src)
 	fileList := make([]string, 0, numPuts)
 	for i := 0; i < numPuts; i++ {
-		fname := client.FastRandomFilename(random, fnlen)
+		fname := common.FastRandomFilename(random, fnlen)
 		fileList = append(fileList, fname)
 	}
 

@@ -17,8 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"runtime/debug"
-
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
@@ -101,20 +99,20 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	targets := extractTargetsInfo(m.smap)
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
-	tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
+	common.Tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
 
 	// Step 2.
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
 
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -123,7 +121,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 3.
-	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -204,12 +202,12 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	targets := extractTargetsInfo(m.smap)
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
-	tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
+	common.Tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
 
 	// Step 2.
 	m.bucket = TestLocalBucketName
@@ -217,7 +215,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -231,7 +229,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// it changes the primary proxy. Without the change putRandomFiles is
 	// failing while the current primary is restarting and rejoining
 	m.proxyURL = newPrimaryURL
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	m.wg.Add(1)
 	go func() {
@@ -241,7 +239,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
 	time.Sleep(5 * time.Second)
-	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -293,26 +291,26 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	if m.originalTargetCount < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
-	tlogf("Num targets %d, num proxies %d\n", m.originalTargetCount, m.originalProxyCount)
+	common.Tlogf("Num targets %d, num proxies %d\n", m.originalTargetCount, m.originalProxyCount)
 
 	targets := extractTargetsInfo(m.smap)
 	// Unregister target
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
-	tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
+	common.Tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
 
 	// Unregister same target again
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n = len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
-	tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
+	common.Tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[0].directURL, n)
 
 	// Register target (bring cluster to normal state)
 	doReregisterTarget(targets[0].sid, targets[0].directURL, &m)
@@ -362,7 +360,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -372,7 +370,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	// Unregister target 0
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -382,33 +380,33 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	m.wg.Add(1)
 	go func() {
 		// Put some files
-		tlogf("PUT %d files into bucket %s...\n", num, m.bucket)
+		common.Tlogf("PUT %d files into bucket %s...\n", num, m.bucket)
 		putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 		selectErr(errch, "put", t, false)
 		close(filenameCh)
 
 		m.wg.Done()
-		tlogln("PUT done")
+		common.Tlogln("PUT done")
 	}()
 
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
-		tlogf("Registering target: %s\n", targets[0].directURL)
+		common.Tlogf("Registering target: %s\n", targets[0].directURL)
 		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 		m.wg.Done()
-		tlogf("Registered target %s again\n", targets[0].directURL)
+		common.Tlogf("Registered target %s again\n", targets[0].directURL)
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
-		tlogf("Unregistering target: %s\n", targets[1].directURL)
+		common.Tlogf("Unregistering target: %s\n", targets[1].directURL)
 		err = client.UnregisterTarget(m.proxyURL, targets[1].sid)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 		m.wg.Done()
-		tlogf("Unregistered target %s\n", targets[1].directURL)
+		common.Tlogf("Unregistered target %s\n", targets[1].directURL)
 	}()
 
 	// Wait for everything to end
@@ -460,7 +458,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -470,14 +468,14 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Unregister target 0
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
 	}
 
 	// Put some files
-	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -489,21 +487,21 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	// Register target 0 in parallel
 	m.wg.Add(1)
 	go func() {
-		tlogf("trying to register target: %s\n", targets[0].directURL)
+		common.Tlogf("trying to register target: %s\n", targets[0].directURL)
 		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 		m.wg.Done()
-		tlogf("registered target %s again\n", targets[0].directURL)
+		common.Tlogf("registered target %s again\n", targets[0].directURL)
 	}()
 
 	// Unregister target 1 in parallel
 	m.wg.Add(1)
 	go func() {
-		tlogf("trying to unregister target: %s\n", targets[1].directURL)
+		common.Tlogf("trying to unregister target: %s\n", targets[1].directURL)
 		err = client.UnregisterTarget(m.proxyURL, targets[1].sid)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 		m.wg.Done()
-		tlogf("unregistered target %s\n", targets[1].directURL)
+		common.Tlogf("unregistered target %s\n", targets[1].directURL)
 	}()
 
 	// Wait for everything to end
@@ -511,7 +509,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Register target 1 to bring cluster to original state
 	doReregisterTarget(targets[1].sid, targets[1].directURL, &m)
-	tlogln("reregistering complete")
+	common.Tlogln("reregistering complete")
 
 	waitForRebalanceToComplete(t, m.proxyURL)
 
@@ -563,7 +561,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -572,9 +570,9 @@ func TestPutDuringRebalance(t *testing.T) {
 	}
 
 	// Unregister a target
-	tlogf("Trying to unregister target: %s\n", targets[0].directURL)
+	common.Tlogf("Trying to unregister target: %s\n", targets[0].directURL)
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n := len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -585,14 +583,14 @@ func TestPutDuringRebalance(t *testing.T) {
 	go func() {
 		// sleep some time to wait for PUT operations to begin
 		time.Sleep(3 * time.Second)
-		tlogf("Trying to register target: %s\n", targets[0].directURL)
+		common.Tlogf("Trying to register target: %s\n", targets[0].directURL)
 		err = client.RegisterTarget(targets[0].sid, targets[0].directURL, m.smap)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 		m.wg.Done()
-		tlogf("Target %s is registered again.\n", targets[0].directURL)
+		common.Tlogf("Target %s is registered again.\n", targets[0].directURL)
 	}()
 
-	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -600,7 +598,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
-	tlogf("PUT done.\n")
+	common.Tlogf("PUT done.\n")
 
 	// Wait for everything to finish
 	m.wg.Wait()
@@ -655,7 +653,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
 	defer func() {
 		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -682,7 +680,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	}
 
 	mpList, err := client.TargetMountpaths(targetURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	if len(mpList.Available) < 2 {
 		t.Fatalf("Must have at least 2 mountpaths")
@@ -693,9 +691,9 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	err = client.DisableTargetMountpath(targetURL, mpath)
 
 	// Unregister a target
-	tlogf("Trying to unregister target: %s\n", killTargetURL)
+	common.Tlogf("Trying to unregister target: %s\n", killTargetURL)
 	err = client.UnregisterTarget(md.proxyURL, killTargetSI)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	smap, err := waitForPrimaryProxy(
 		md.proxyURL,
 		"target is gone",
@@ -703,16 +701,16 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		md.originalProxyCount,
 		md.originalTargetCount-1,
 	)
-	checkFatal(err, md.t)
+	common.CheckFatal(err, md.t)
 
-	tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
 	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 	}
-	tlogf("PUT done.\n")
+	common.Tlogf("PUT done.\n")
 
 	// Start getting files
 	md.wg.Add(num * md.numGetsEachFile)
@@ -722,11 +720,11 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// register a new target
 	err = client.RegisterTarget(killTargetSI, killTargetURL, md.smap)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// enable mountpath
 	err = client.EnableTargetMountpath(targetURL, mpath)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// wait until GETs are done while 2 rebalance are running
 	md.wg.Wait()
@@ -739,12 +737,12 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		md.originalProxyCount,
 		md.originalTargetCount,
 	)
-	checkFatal(err, md.t)
+	common.CheckFatal(err, md.t)
 
 	resultsBeforeAfter(&md, num, maxErrPct)
 
 	mpListAfter, err := client.TargetMountpaths(targetURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
 			len(mpList.Available), len(mpListAfter.Available))
@@ -790,7 +788,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
 	defer func() {
 		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -805,7 +803,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	}
 
 	mpList, err := client.TargetMountpaths(targetURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	if len(mpList.Available) < 2 {
 		t.Fatalf("Must have at least 2 mountpaths")
@@ -820,17 +818,17 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	// Disable mountpaths temporarily
 	for _, mp := range mpaths {
 		err = client.DisableTargetMountpath(targetURL, mp)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
-	tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
 	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 	}
-	tlogf("PUT done.\n")
+	common.Tlogf("PUT done.\n")
 
 	// Start getting files and enable mountpaths in parallel
 	md.wg.Add(num * md.numGetsEachFile)
@@ -840,14 +838,14 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		// sleep for a while before enabling another mountpath
 		time.Sleep(50 * time.Millisecond)
 		err = client.EnableTargetMountpath(targetURL, mp)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	md.wg.Wait()
 	resultsBeforeAfter(&md, num, maxErrPct)
 
 	mpListAfter, err := client.TargetMountpaths(targetURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
 			len(mpList.Available), len(mpListAfter.Available))
@@ -906,7 +904,7 @@ func TestGetDuringRebalance(t *testing.T) {
 	createFreshLocalBucket(t, md.proxyURL, md.bucket)
 	defer func() {
 		err = client.DestroyLocalBucket(md.proxyURL, md.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	if usingSG {
@@ -916,14 +914,14 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Unregister a target
 	err = client.UnregisterTarget(md.proxyURL, targets[0].sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	n := len(getClusterMap(t, md.proxyURL).Tmap)
 	if n != md.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", md.originalTargetCount-1, n)
 	}
 
 	// Start putting files into bucket
-	tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, md.bucket)
 	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -931,15 +929,15 @@ func TestGetDuringRebalance(t *testing.T) {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 		mdAfterRebalance.repFilenameCh <- repFile{repetitions: mdAfterRebalance.numGetsEachFile, filename: f}
 	}
-	tlogf("PUT done.\n")
+	common.Tlogf("PUT done.\n")
 
 	// Start getting files and register target in parallel
 	md.wg.Add(num * md.numGetsEachFile)
 	doGetsInParallel(&md)
 
-	tlogf("Trying to register target: %s\n", targets[0].directURL)
+	common.Tlogf("Trying to register target: %s\n", targets[0].directURL)
 	err = client.RegisterTarget(targets[0].sid, targets[0].directURL, md.smap)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// wait for everything to finish
 	waitForRebalanceToComplete(t, md.proxyURL)
@@ -976,25 +974,25 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	if m.originalTargetCount < 3 {
 		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
 	}
-	tlogf("Num targets %d\n", m.originalTargetCount)
+	common.Tlogf("Num targets %d\n", m.originalTargetCount)
 	targets := extractTargetsInfo(m.smap)
 
 	// Unregister targets
 	for i := 0; i < unregisterTargetCount; i++ {
 		err = client.UnregisterTarget(m.proxyURL, targets[i].sid)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 		n := len(getClusterMap(t, m.proxyURL).Tmap)
 		if n != m.originalTargetCount-(i+1) {
 			t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-(i+1), n)
 		}
-		tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[i].directURL, n)
+		common.Tlogf("Unregistered target %s: the cluster now has %d targets\n", targets[i].directURL, n)
 	}
 
 	m.wg.Add(unregisterTargetCount)
 	for i := 0; i < unregisterTargetCount; i++ {
 		go func(number int) {
 			err = client.RegisterTarget(targets[number].sid, targets[number].directURL, m.smap)
-			checkFatal(err, t)
+			common.CheckFatal(err, t)
 			m.wg.Done()
 		}(i)
 	}
@@ -1003,13 +1001,13 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	for i := 0; i < newLocalBucketCount; i++ {
 		go func(number int) {
 			err = client.CreateLocalBucket(m.proxyURL, TestLocalBucketName+strconv.Itoa(number))
-			checkFatal(err, t)
+			common.CheckFatal(err, t)
 			m.wg.Done()
 		}(i)
 
 		defer func(number int) {
 			err := client.DestroyLocalBucket(m.proxyURL, TestLocalBucketName+strconv.Itoa(number))
-			checkFatal(err, t)
+			common.CheckFatal(err, t)
 		}(i)
 	}
 
@@ -1042,11 +1040,11 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 
 	// Rename it
 	err = client.RenameLocalBucket(m.proxyURL, m.bucket, newTestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// Destroy renamed local bucket
 	err = client.DestroyLocalBucket(m.proxyURL, newTestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 }
 
 func TestRenameNonEmptyLocalBucket(t *testing.T) {
@@ -1091,7 +1089,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	}
 
 	// Put some files
-	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -1100,13 +1098,13 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
 
-	tlogln("PUT done.")
+	common.Tlogln("PUT done.")
 
 	// Rename it
 	oldLocalBucketName := m.bucket
 	m.bucket = newTestLocalBucketName
 	err = client.RenameLocalBucket(m.proxyURL, oldLocalBucketName, m.bucket)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// Gets on renamed local bucket
 	m.wg.Add(num * m.numGetsEachFile)
@@ -1116,7 +1114,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 
 	// Destroy renamed local bucket
 	err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 }
 
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
@@ -1163,7 +1161,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 
 	// Rename local bucket
 	err = client.RenameLocalBucket(m.proxyURL, m.bucket, newTestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not deleted")
 	}
@@ -1174,7 +1172,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 
 	// Destroy renamed local bucket
 	err = client.DestroyLocalBucket(m.proxyURL, newTestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	if _, err := os.Stat(newBucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("new local bucket folder was not deleted")
 	}
@@ -1223,16 +1221,16 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Remove all mountpaths for one target
 	oldMountpaths, err := client.TargetMountpaths(targets[0].directURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	for _, mpath := range oldMountpaths.Available {
 		err = client.RemoveTargetMountpath(targets[0].directURL, mpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually removed
 	mountpaths, err := client.TargetMountpaths(targets[0].directURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != 0 {
 		t.Fatalf("Target should not have any paths available")
@@ -1243,18 +1241,18 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
 		err = client.AddTargetMountpath(targets[0].directURL, mpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually added
 	mountpaths, err = client.TargetMountpaths(targets[0].directURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {
 		t.Fatalf("Target should have old mountpath available restored")
@@ -1323,7 +1321,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	defer func() {
 		os.RemoveAll(newMountpath)
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	// Put random files
@@ -1337,7 +1335,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Add new mountpath to target
 	err = client.AddTargetMountpath(targets[0].directURL, newMountpath)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	waitForRebalanceToComplete(t, m.proxyURL)
 
@@ -1348,7 +1346,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 
 	// Remove new mountpath from target
 	err = client.RemoveTargetMountpath(targets[0].directURL, newMountpath)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	resultsBeforeAfter(&m, num, maxErrPct)
 }
@@ -1401,7 +1399,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	defer func() {
 		os.RemoveAll(newMountpath)
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	// Put random files
@@ -1418,7 +1416,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 		common.CreateDir(mountpath)
 		err = client.AddTargetMountpath(target.directURL, mountpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	waitForRebalanceToComplete(t, m.proxyURL)
@@ -1433,7 +1431,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 		os.RemoveAll(mountpath)
 		err = client.RemoveTargetMountpath(target.directURL, mountpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	resultsBeforeAfter(&m, num, maxErrPct)
@@ -1482,16 +1480,16 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	// Remove all mountpaths for one target
 	oldMountpaths, err := client.TargetMountpaths(targets[0].directURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	for _, mpath := range oldMountpaths.Available {
 		err = client.DisableTargetMountpath(targets[0].directURL, mpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually disabled
 	mountpaths, err := client.TargetMountpaths(targets[0].directURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != 0 {
 		t.Fatalf("Target should not have any paths available")
@@ -1506,18 +1504,18 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	defer func() {
 		err = client.DestroyLocalBucket(m.proxyURL, m.bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
 		err = client.EnableTargetMountpath(targets[0].directURL, mpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually enabled
 	mountpaths, err = client.TargetMountpaths(targets[0].directURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {
 		t.Fatalf("Target should have old mountpath available restored")
@@ -1544,7 +1542,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 // see above - the T1/2/3 timeline and details
 func resultsBeforeAfter(m *metadata, num, maxErrPct int) {
-	tlogf("Errors before and after time=T3 (re-registered target gets the updated local bucket map): %d and %d, respectively\n",
+	common.Tlogf("Errors before and after time=T3 (re-registered target gets the updated local bucket map): %d and %d, respectively\n",
 		m.numGetErrsBefore, m.numGetErrsAfter)
 	pctBefore := int(m.numGetErrsBefore) * 100 / (num * m.numGetsEachFile)
 	pctAfter := int(m.numGetErrsAfter) * 100 / (num * m.numGetsEachFile)
@@ -1557,7 +1555,7 @@ func doGetsInParallel(m *metadata) {
 	for i := 0; i < 10; i++ {
 		m.semaphore <- struct{}{}
 	}
-	tlogf("Getting each of the %d files %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bucket)
+	common.Tlogf("Getting each of the %d files %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bucket)
 
 	// GET is timed so a large portion of requests will happen both before and after the target is re-registered
 	time.Sleep(m.delay)
@@ -1585,7 +1583,7 @@ func doGetsInParallel(m *metadata) {
 			}
 			g := atomic.AddUint64(&(m.getsCompleted), 1)
 			if g%5000 == 0 {
-				tlogf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
+				common.Tlogf(" %d/%d GET requests completed...\n", g, m.num*m.numGetsEachFile)
 			}
 
 			// Tell other tasks they can begin to do work in parallel
@@ -1614,10 +1612,10 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 	)
 
 	// T1
-	tlogf("Re-registering target %s...\n", target)
+	common.Tlogf("Re-registering target %s...\n", target)
 	smap := getClusterMap(m.t, m.proxyURL)
 	err := client.RegisterTarget(target, targetDirectURL, smap)
-	checkFatal(err, m.t)
+	common.CheckFatal(err, m.t)
 
 	for i := 0; i < iterations; i++ {
 		time.Sleep(interval)
@@ -1625,29 +1623,21 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 			// T2
 			smap = getClusterMap(m.t, m.proxyURL)
 			if _, ok := smap.Tmap[target]; ok {
-				tlogf("T2: re-registered target %s\n", target)
+				common.Tlogf("T2: re-registered target %s\n", target)
 			}
 		} else {
 			lbNames, err := client.GetLocalBucketNames(targetDirectURL)
-			checkFatal(err, m.t)
+			common.CheckFatal(err, m.t)
 			// T3
 			if common.StringInSlice(m.bucket, lbNames.Local) {
 				s := atomic.CompareAndSwapUint64(&m.reregistered, 0, 1)
 				if !s {
 					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
 				}
-				tlogf("T3: re-registered target %s got updated with the new bucket-metadata\n", target)
+				common.Tlogf("T3: re-registered target %s got updated with the new bucket-metadata\n", target)
 				break
 			}
 		}
-	}
-}
-
-func checkFatal(err error, t *testing.T) {
-	if err != nil {
-		tlogf("FATAL: %v\n", err)
-		debug.PrintStack()
-		t.Fatalf("FATAL: %v", err)
 	}
 }
 
@@ -1655,10 +1645,10 @@ func saveClusterState(m *metadata) {
 	var err error
 	m.proxyURL = getPrimaryURL(m.t, proxyURLRO)
 	m.smap, err = client.GetClusterMap(m.proxyURL)
-	checkFatal(err, m.t)
+	common.CheckFatal(err, m.t)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)
-	tlogf("Number of targets %d, number of proxies %d\n", m.originalTargetCount, m.originalProxyCount)
+	common.Tlogf("Number of targets %d, number of proxies %d\n", m.originalTargetCount, m.originalProxyCount)
 }
 
 func assertClusterState(m *metadata) {
@@ -1669,7 +1659,7 @@ func assertClusterState(m *metadata) {
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
-	checkFatal(err, m.t)
+	common.CheckFatal(err, m.t)
 
 	proxyCount := len(smap.Pmap)
 	targetCount := len(smap.Tmap)
@@ -1686,15 +1676,15 @@ func assertClusterState(m *metadata) {
 func createFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
 	destroyLocalBucket(t, proxyURL, bucketFQN)
 	err := client.CreateLocalBucket(proxyURL, bucketFQN)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 }
 
 func destroyLocalBucket(t *testing.T, proxyURL, bucket string) {
 	exists, err := client.DoesLocalBucketExist(proxyURL, bucket)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	if exists {
 		err = client.DestroyLocalBucket(proxyURL, bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 }
 
@@ -1703,9 +1693,9 @@ func checkObjectDistribution(t *testing.T, m *metadata) {
 		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
 		targetObjectCount = make(map[string]int64)
 	)
-	tlogf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
+	common.Tlogf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
 	bucketList, err := client.ListBucket(m.proxyURL, m.bucket, &api.GetMsg{GetProps: api.GetTargetURL}, 0)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL] += 1
 	}
@@ -1736,7 +1726,7 @@ func TestForwardCP(t *testing.T) {
 			repFilenameCh:   make(chan repFile, num),
 			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
 			wg:              &sync.WaitGroup{},
-			bucket:          client.FastRandomFilename(random, 13),
+			bucket:          common.FastRandomFilename(random, 13),
 		}
 		filenameCh = make(chan string, m.num)
 		errch      = make(chan error, m.num)
@@ -1756,8 +1746,8 @@ func TestForwardCP(t *testing.T) {
 	destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	err = client.CreateLocalBucket(nextProxyURL, m.bucket)
-	checkFatal(err, t)
-	tlogf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
+	common.CheckFatal(err, t)
+	common.Tlogf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -1765,7 +1755,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 3.
-	tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	common.Tlogf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
@@ -1791,8 +1781,8 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 5. destroy local bucket via original primary which is not primary at this point
 	err = client.DestroyLocalBucket(origURL, m.bucket)
-	checkFatal(err, t)
-	tlogf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
+	common.CheckFatal(err, t)
+	common.Tlogf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
 }
 
 func TestAtimeRebalance(t *testing.T) {
@@ -1841,9 +1831,9 @@ func TestAtimeRebalance(t *testing.T) {
 	target := extractTargetsInfo(m.smap)[0]
 
 	// Unregister a target
-	tlogf("Trying to unregister target: %s\n", target.directURL)
+	common.Tlogf("Trying to unregister target: %s\n", target.directURL)
 	err = client.UnregisterTarget(m.proxyURL, target.sid)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	smap, err := waitForPrimaryProxy(
 		m.proxyURL,
 		"target is gone",
@@ -1851,7 +1841,7 @@ func TestAtimeRebalance(t *testing.T) {
 		m.originalProxyCount,
 		m.originalTargetCount-1,
 	)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// Put random files
 	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
@@ -1861,7 +1851,7 @@ func TestAtimeRebalance(t *testing.T) {
 	objNames := make(map[string]string, 0)
 	msg := &api.GetMsg{GetProps: api.GetPropsAtime + ", " + api.GetPropsStatus}
 	bucketList, err := client.ListBucket(m.proxyURL, m.bucket, msg, 0)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	for _, entry := range bucketList.Entries {
 		objNames[entry.Name] = entry.Atime
@@ -1869,7 +1859,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	// register a new target
 	err = client.RegisterTarget(target.sid, target.directURL, m.smap)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// make sure that the cluster has all targets enabled
 	_, err = waitForPrimaryProxy(
@@ -1879,12 +1869,12 @@ func TestAtimeRebalance(t *testing.T) {
 		m.originalProxyCount,
 		m.originalTargetCount,
 	)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	waitForRebalanceToComplete(t, m.proxyURL)
 
 	bucketListReb, err := client.ListBucket(m.proxyURL, m.bucket, msg, 0)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	itemCount := 0
 	for _, entry := range bucketListReb.Entries {

@@ -67,19 +67,19 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.LRUProps.LRUEnabled = lruConfig["lru_enabled"].(bool)
 
 	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	p, err := client.HeadBucket(proxyURL, TestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
 
 	err = client.ResetBucketProps(proxyURL, TestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	p, err = client.HeadBucket(proxyURL, TestLocalBucketName)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	// check that bucket props are reset
 	validateBucketProps(t, globalProps, *p)

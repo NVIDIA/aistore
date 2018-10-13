@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -35,7 +36,7 @@ var (
 func TestPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
-	tlogf("Looking for files with prefix [%s]\n", prefix)
+	common.Tlogf("Looking for files with prefix [%s]\n", prefix)
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
@@ -70,7 +71,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	wg := &sync.WaitGroup{}
 
 	for i := 0; i < prefixFileNumber; i++ {
-		fileName := client.FastRandomFilename(random, fnlen)
+		fileName := common.FastRandomFilename(random, fnlen)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
@@ -110,7 +111,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 }
 
 func prefixLookupOne(t *testing.T, proxyURL string) {
-	tlogf("Looking up for files than names start with %s\n", prefix)
+	common.Tlogf("Looking up for files than names start with %s\n", prefix)
 	var msg = &api.GetMsg{GetPrefix: prefix}
 	numFiles := 0
 	objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
@@ -120,20 +121,20 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 	}
 
 	for _, entry := range objList.Entries {
-		tlogf("Found object: %s\n", entry.Name)
+		common.Tlogf("Found object: %s\n", entry.Name)
 		numFiles++
 	}
 
 	realNumFiles := numberOfFilesWithPrefix(fileNames, prefix, prefixDir)
 	if realNumFiles == numFiles {
-		tlogf("Total files with prefix found: %v\n", numFiles)
+		common.Tlogf("Total files with prefix found: %v\n", numFiles)
 	} else {
 		t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", prefix, realNumFiles, numFiles)
 	}
 }
 
 func prefixLookupDefault(t *testing.T, proxyURL string) {
-	tlogf("Looking up for files in alphabetic order\n")
+	common.Tlogf("Looking up for files in alphabetic order\n")
 
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	for i := 0; i < len(letters); i++ {
@@ -151,20 +152,20 @@ func prefixLookupDefault(t *testing.T, proxyURL string) {
 
 		if numFiles == realNumFiles {
 			if numFiles != 0 {
-				tlogf("Found %v files starting with '%s'\n", numFiles, key)
+				common.Tlogf("Found %v files starting with '%s'\n", numFiles, key)
 			}
 		} else {
 			t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", key, realNumFiles, numFiles)
-			tlogf("Objects returned:\n")
+			common.Tlogf("Objects returned:\n")
 			for id, oo := range objList.Entries {
-				tlogf("    %d[%d]. %s\n", i, id, oo.Name)
+				common.Tlogf("    %d[%d]. %s\n", i, id, oo.Name)
 			}
 		}
 	}
 }
 
 func prefixLookupCornerCases(t *testing.T, proxyURL string) {
-	tlogf("Testing corner cases\n")
+	common.Tlogf("Testing corner cases\n")
 
 	type testProps struct {
 		title    string
@@ -180,7 +181,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
-		tlogf("%d. Prefix: %s [%s]\n", idx, test.title, p)
+		common.Tlogf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &api.GetMsg{GetPrefix: p}
 		objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
 		if err != nil {
@@ -191,9 +192,9 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 		if len(objList.Entries) != test.objCount {
 			t.Errorf("Expected number of objects with prefix '%s' is %d but found %d",
 				test.prefix, test.objCount, len(objList.Entries))
-			tlogf("Objects returned:\n")
+			common.Tlogf("Objects returned:\n")
 			for id, oo := range objList.Entries {
-				tlogf("    %d[%d]. %s\n", idx, id, oo.Name)
+				common.Tlogf("    %d[%d]. %s\n", idx, id, oo.Name)
 			}
 		}
 	}
@@ -221,7 +222,7 @@ func prefixCleanup(t *testing.T, proxyURL string) {
 
 	select {
 	case e := <-errch:
-		tlogf("Failed to DEL: %s\n", e)
+		common.Tlogf("Failed to DEL: %s\n", e)
 		t.Fail()
 	default:
 	}

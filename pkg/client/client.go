@@ -594,31 +594,6 @@ func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline
 	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg)
 }
 
-// fastRandomFilename is taken from https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
-const (
-	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
-
-func FastRandomFilename(src *rand.Rand, fnlen int) string {
-	b := make([]byte, fnlen)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := fnlen-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-	return string(b)
-}
-
 func HeadBucket(proxyURL, bucket string) (*BucketProps, error) {
 	r, err := client.Head(proxyURL + common.URLPath(api.Version, api.Buckets, bucket))
 	if err != nil {

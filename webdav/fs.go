@@ -20,7 +20,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 type (
@@ -1077,7 +1077,7 @@ func group(objs []*api.BucketEntry, prefix string) []os.FileInfo {
 // localFileName returns a full path of a temporary file used while a DFC object is opened for read or write
 func (fs *FileSystem) localFileName() string {
 	return filepath.Join(fs.localDir,
-		client.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32 /* length */))
+		common.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32 /* length */))
 }
 
 type fiSortByName []os.FileInfo

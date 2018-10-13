@@ -43,11 +43,11 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 		time.Sleep(time.Millisecond * 100)
 	}
 	detectTime := time.Since(detectStart)
-	tlogf("passed %v\n", detectTime)
+	common.Tlogf("passed %v\n", detectTime)
 
 	if len(newMpaths.Disabled) == disabledLen &&
 		len(newMpaths.Available) == availLen {
-		tlogf("Check is successful in %v\n", detectTime)
+		common.Tlogf("Check is successful in %v\n", detectTime)
 		return true
 	}
 
@@ -75,7 +75,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
 	client.EnableTargetMountpath(target, mpath)
-	tlogf("Recheck mountpaths\n")
+	common.Tlogf("Recheck mountpaths\n")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var mpaths *api.MountpathList
@@ -111,7 +111,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 		ldir     = LocalSrcDir + "/" + fshcDir
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-	tlogf("Testing mpath fail detection on %s\n", op)
+	common.Tlogf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
 
 	for stopTime.After(time.Now()) {
@@ -182,25 +182,25 @@ func TestFSCheckerDetection(t *testing.T) {
 	}
 	// create local bucket to write to, or use an existing one
 	if createLocalBucketIfNotExists(t, proxyURL, bucket) {
-		tlogf("created local bucket %s\n", bucket)
+		common.Tlogf("created local bucket %s\n", bucket)
 	}
 
 	defer func() {
 		err = client.DestroyLocalBucket(proxyURL, bucket)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}()
 
 	smap, err := client.GetClusterMap(proxyURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	mpList := make(map[string]string, 0)
 	allMps := make(map[string]*api.MountpathList, 0)
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
-		tlogf("Target: %s\n", target)
+		common.Tlogf("Target: %s\n", target)
 		lst, err := client.TargetMountpaths(tinfo.PublicNet.DirectURL)
-		checkFatal(err, t)
-		tlogf("    Mountpaths: %v\n", lst)
+		common.CheckFatal(err, t)
+		common.Tlogf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
 			mpList[fqn] = tinfo.PublicNet.DirectURL
@@ -222,7 +222,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		failedMap = allMps[failedTarget]
 		break
 	}
-	tlogf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
+	common.Tlogf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
@@ -269,7 +269,7 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// reading non-existing objects should not disable mountpath
 	{
-		tlogf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
+		common.Tlogf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 		for n := 1; n < 10; n++ {
 			_, _, err = client.Get(proxyURL, bucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
 		}
@@ -280,7 +280,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	}
 
 	// try PUT and GET with disabled FSChecker
-	tlogf("*** Testing with disabled FSHC***\n")
+	common.Tlogf("*** Testing with disabled FSHC***\n")
 	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
@@ -338,17 +338,17 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	smap, err := client.GetClusterMap(proxyURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	mpList := make(map[string]string, 0)
 	allMps := make(map[string]*api.MountpathList, 0)
 	origAvail := 0
 	origOff := 0
 	for target, tinfo := range smap.Tmap {
-		tlogf("Target: %s\n", target)
+		common.Tlogf("Target: %s\n", target)
 		lst, err := client.TargetMountpaths(tinfo.PublicNet.DirectURL)
-		checkFatal(err, t)
-		tlogf("    Mountpaths: %v\n", lst)
+		common.CheckFatal(err, t)
+		common.Tlogf("    Mountpaths: %v\n", lst)
 
 		for _, fqn := range lst.Available {
 			mpList[fqn] = tinfo.PublicNet.DirectURL
@@ -371,7 +371,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	// create a local bucket to write to
-	tlogf("Mpath %s of %s is going offline\n", failedMpath, failedTarget)
+	common.Tlogf("Mpath %s of %s is going offline\n", failedMpath, failedTarget)
 
 	err = client.EnableTargetMountpath(failedTarget, failedMpath)
 	if err != nil {
@@ -387,7 +387,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 func TestFSCheckerTargetDisable(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	smap, err := client.GetClusterMap(proxyURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
 	proxyCnt := len(smap.Pmap)
 	targetCnt := len(smap.Tmap)
@@ -402,26 +402,26 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 	}
 
 	oldMpaths, err := client.TargetMountpaths(tgtURL)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 	if len(oldMpaths.Available) == 0 {
 		t.Fatalf("Target %s does not have availalble mountpaths", tgtURL)
 	}
 
-	tlogf("Removing all mountpaths from target: %s\n", tgtURL)
+	common.Tlogf("Removing all mountpaths from target: %s\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
 		err = client.DisableTargetMountpath(tgtURL, mpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	smap, err = waitForPrimaryProxy(proxyURL, "all mpath disabled", smap.Version, false, proxyCnt, targetCnt-1)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 
-	tlogf("Restoring target %s mountpaths\n", tgtURL)
+	common.Tlogf("Restoring target %s mountpaths\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
 		err = client.EnableTargetMountpath(tgtURL, mpath)
-		checkFatal(err, t)
+		common.CheckFatal(err, t)
 	}
 
 	smap, err = waitForPrimaryProxy(proxyURL, "all mpath enabled", smap.Version, false, proxyCnt, targetCnt)
-	checkFatal(err, t)
+	common.CheckFatal(err, t)
 }

@@ -121,7 +121,7 @@ func generateRandomData(t *testing.T, seed int64, fileCount int) {
 	fileNames = make([]string, fileCount)
 
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = client.FastRandomFilename(random, fnlen)
+		fileNames[i] = common.FastRandomFilename(random, fnlen)
 	}
 }
 

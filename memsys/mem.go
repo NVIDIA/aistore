@@ -568,9 +568,11 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 		missed = s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
-	common.Assert(len(s.put) == s.pos)
+	if s.debug {
+		common.Assert(len(s.put) == s.pos)
+		common.Assert(len(s.get) >= int(curmindepth))
+	}
 	s.put = s.put[:0]
-	common.Assert(len(s.get) >= int(curmindepth))
 	s.muput.Unlock()
 
 	s.pos = 0

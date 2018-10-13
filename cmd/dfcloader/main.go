@@ -492,7 +492,7 @@ func newPutWorkOrder() *workOrder {
 		bucket:   runParams.bucket,
 		isLocal:  runParams.isLocal,
 		op:       opPut,
-		objName:  myName + "/" + client.FastRandomFilename(nonDeterministicRand, 32),
+		objName:  myName + "/" + common.FastRandomFilename(nonDeterministicRand, 32),
 		size:     int64(size * 1024),
 	}
 }

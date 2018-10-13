@@ -21,7 +21,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/OneOfOne/xxhash"
@@ -50,7 +49,7 @@ func TestPutSG(t *testing.T) {
 }
 
 func putFile(size int64, withHash bool) error {
-	fn := "dfc-client-test-" + client.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32)
+	fn := "dfc-client-test-" + common.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32)
 	dir := "/tmp"
 	r, err := client.NewFileReader(dir, fn, size, withHash)
 	if err != nil {
