@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 func TestResetBucketProps(t *testing.T) {
@@ -67,19 +68,19 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.LRUProps.LRUEnabled = lruConfig["lru_enabled"].(bool)
 
 	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 
 	p, err := client.HeadBucket(proxyURL, TestLocalBucketName)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
 
 	err = client.ResetBucketProps(proxyURL, TestLocalBucketName)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 
 	p, err = client.HeadBucket(proxyURL, TestLocalBucketName)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 
 	// check that bucket props are reset
 	validateBucketProps(t, globalProps, *p)

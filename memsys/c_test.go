@@ -13,14 +13,13 @@ package memsys_test
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -52,29 +51,27 @@ func TestSGLStressN(t *testing.T) {
 			// save buffer to SGL
 			br := bytes.NewReader(bufR)
 			_, err := io.Copy(sglR, br)
-			common.CheckFatal(err, t)
+			tutils.CheckFatal(err, t)
 
 			// copy SGL to SGL
 			rr := memsys.NewReader(sglR)
 			_, err = io.Copy(sglW, rr)
-			common.CheckFatal(err, t)
+			tutils.CheckFatal(err, t)
 
 			// read SGL from destination and compare with the original
 			var bufW []byte
 			bufW, err = ioutil.ReadAll(memsys.NewReader(sglW))
-			common.CheckFatal(err, t)
+			tutils.CheckFatal(err, t)
 			for j := 0; j < objsize; j++ {
 				if bufW[j] != bufR[j] {
-					fmt.Printf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
+					tutils.Logf("IN : %s\nOUT: %s\n", string(bufR), string(bufW))
 					t.Fatalf("Step %d failed", i)
 				}
 			}
 			sglR.Free() // removing these two lines fixes the test
 			sglW.Free()
 		}
-		if id > 0 && id%100 == 0 {
-			fmt.Printf("%d done\n", id)
-		}
+		tutils.Progress(id, 100)
 	}
 	for n := 0; n < workers; n++ {
 		wg.Add(1)

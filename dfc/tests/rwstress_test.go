@@ -20,6 +20,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -121,7 +122,7 @@ func generateRandomData(t *testing.T, seed int64, fileCount int) {
 	fileNames = make([]string, fileCount)
 
 	for i := 0; i < fileCount; i++ {
-		fileNames[i] = common.FastRandomFilename(random, fnlen)
+		fileNames[i] = tutils.FastRandomFilename(random, fnlen)
 	}
 }
 
@@ -153,7 +154,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 			// Note: This test depends on the files it creates, so ignore reader type, always use file reader
 			r, err := client.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
 			if err != nil {
-				fmt.Fprintf(os.Stdout, "PUT write FAIL: %v\n", err)
+				tutils.Logf("PUT write FAIL: %v\n", err)
 				t.Error(err)
 				if errch != nil {
 					errch <- err
@@ -187,7 +188,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 			}
 			select {
 			case e := <-errch:
-				fmt.Printf("PUT failed: %v\n", e.Error())
+				tutils.Logf("PUT failed: %v\n", e.Error())
 				t.Fail()
 			default:
 			}
@@ -247,7 +248,7 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		case <-doneCh:
 			done = true
 		case e := <-errch:
-			fmt.Printf("DEL failed: %v\n", e.Error())
+			tutils.Logf("DEL failed: %v\n", e.Error())
 			t.Fail()
 		default:
 		}
@@ -295,7 +296,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		case <-doneCh:
 			done = true
 		case e := <-errch:
-			fmt.Printf("GET failed: %v\n", e.Error())
+			tutils.Logf("GET failed: %v\n", e.Error())
 			t.Fail()
 		default:
 		}
@@ -343,7 +344,7 @@ func rwstressCleanup(t *testing.T) {
 	for _, fileName := range fileNames {
 		e := os.Remove(fmt.Sprintf("%s/%s", fileDir, fileName))
 		if e != nil {
-			fmt.Printf("Failed to remove file %s: %v\n", fileName, e)
+			tutils.Logf("Failed to remove file %s: %v\n", fileName, e)
 			t.Error(e)
 		}
 	}
@@ -366,7 +367,7 @@ func TestRWStress(t *testing.T) {
 //    test finishes it executes extra loop to delete all files
 func Test_rwstress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Long run only")
+		t.Skip(skipping)
 	}
 
 	numLoops = cycles

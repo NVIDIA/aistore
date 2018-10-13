@@ -15,16 +15,17 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 var (
-	filesizes = [3]int64{128 * 1024, 1024 * 1024, 4 * 1024 * 1024} // 128 KiB, 1MiB, 4 MiB
-	ratios    = [6]float32{0, 0.1, 0.25, 0.5, 0.75, 0.9}           // #gets / #puts
+	filesizes = [3]int64{128 * common.KiB, 192 * common.KiB, 256 * common.KiB}
+	ratios    = [5]float32{0, 0.25, 0.50, 0.75, 1} // #gets / #puts
 )
 
 func Test_smoke(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Long run only")
+		t.Skip(skipping)
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
@@ -41,7 +42,8 @@ func Test_smoke(t *testing.T) {
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
 		for _, r := range ratios {
-			t.Run(fmt.Sprintf("Filesize:%dB,Ratio:%.3f%%", fs, r*100), func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, bs, fp) })
+			s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", common.B2S(fs, 0), r*100)
+			t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, bs, fp) })
 			bs += int64(numworkers + 1)
 		}
 	}
@@ -59,7 +61,7 @@ func Test_smoke(t *testing.T) {
 			}
 		}
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, "smoke/"+file, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, clibucket, "smoke/"+file, wg, errch, true)
 	}
 	wg.Wait()
 	select {
@@ -108,7 +110,7 @@ func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bsee
 				}
 
 				putRandomFiles(proxyURL, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
-					SmokeDir, SmokeStr, !testing.Verbose(), sgl)
+					SmokeDir, SmokeStr, true, sgl)
 				wg.Done()
 			}(i)
 			nPut--
@@ -203,8 +205,8 @@ func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []
 		}
 
 		if err != nil {
+			tutils.Logf("Failed to generate random file %s, err: %v\n", dir+"/"+fname, err)
 			t.Error(err)
-			fmt.Fprintf(os.Stderr, "Failed to generate random file %s, err: %v\n", dir+"/"+fname, err)
 			if errch != nil {
 				errch <- err
 			}
@@ -236,7 +238,7 @@ func putRandomFiles(proxyURL string, seed int64, fileSize uint64, numPuts int, b
 	random := rand.New(src)
 	fileList := make([]string, 0, numPuts)
 	for i := 0; i < numPuts; i++ {
-		fname := common.FastRandomFilename(random, fnlen)
+		fname := tutils.FastRandomFilename(random, fnlen)
 		fileList = append(fileList, fname)
 	}
 

@@ -31,6 +31,7 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -492,7 +493,7 @@ func newPutWorkOrder() *workOrder {
 		bucket:   runParams.bucket,
 		isLocal:  runParams.isLocal,
 		op:       opPut,
-		objName:  myName + "/" + common.FastRandomFilename(nonDeterministicRand, 32),
+		objName:  myName + "/" + tutils.FastRandomFilename(nonDeterministicRand, 32),
 		size:     int64(size * 1024),
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 func TestPutObjectNoDaemonID(t *testing.T) {
@@ -25,7 +26,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	)
 
 	smap, err := client.GetClusterMap(proxyURL)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 
 	for sid = range smap.Tmap {
 		break

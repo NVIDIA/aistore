@@ -20,7 +20,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -30,6 +29,7 @@ import (
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/transport"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -59,7 +59,7 @@ func Example_Headers() {
 			off += 16 // hlen and hlen-checksum
 			hdr, _ = transport.ExtHeader(body[off:], hlen)
 			if !hdr.IsLast() {
-				fmt.Fprintf(os.Stdout, "%+v (%d)\n", hdr, hlen)
+				tutils.Logf("%+v (%d)\n", hdr, hlen)
 				off += hlen + int(hdr.Dsize)
 			} else {
 				break
@@ -100,7 +100,7 @@ func Example_Mux() {
 		if int64(len(object)) != hdr.Dsize {
 			panic(fmt.Sprintf("size %d != %d", len(object), hdr.Dsize))
 		}
-		fmt.Fprintf(os.Stdout, "%s...\n", string(object[:16]))
+		tutils.Logf("%s...\n", string(object[:16]))
 	}
 	mux := http.NewServeMux()
 
@@ -131,7 +131,7 @@ func Example_Mux() {
 // test random streaming
 func Test_OneStream(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping not short")
+		t.Skip("skipping test in short mode.")
 	}
 	mux := http.NewServeMux()
 
@@ -145,7 +145,7 @@ func Test_OneStream(t *testing.T) {
 
 func Test_MultiStream(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping not short")
+		t.Skip("skipping test in short mode.")
 	}
 	mux := http.NewServeMux()
 	transport.SetMux("n1", mux)
@@ -260,13 +260,13 @@ func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Serv
 		stream.SendAsync(hdr, reader)
 		size += hdr.Dsize
 		if size-prevsize >= common.GiB {
-			fmt.Fprintf(os.Stdout, "[%2d]: %d GiB\n", ii, size/common.GiB)
+			tutils.Logf("[%2d]: %d GiB\n", ii, size/common.GiB)
 			prevsize = size
 		}
 		num++
 	}
 	stream.Fin()
-	fmt.Fprintf(os.Stdout, "[%2d]: objects: %d, total size: %d(%d MiB)\n", ii, num, size, size/common.MiB)
+	tutils.Logf("[%2d]: objects: %d, total size: %d(%d MiB)\n", ii, num, size, size/common.MiB)
 
 	if *totalRecv != size {
 		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, size)

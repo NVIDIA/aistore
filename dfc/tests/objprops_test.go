@@ -13,6 +13,7 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged int64) {
@@ -31,7 +32,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *api.GetMsg,
 	versionEnabled bool, isLocalBucket bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
-	common.Tlogf("Updating objects...\n")
+	tutils.Logf("Updating objects...\n")
 	r, err := client.NewRandReader(int64(fileSize), true /* withHash */)
 	if err != nil {
 		t.Errorf("Failed to create reader: %v", err)
@@ -58,7 +59,7 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 		if ver, ok = oldVersions[m.Name]; !ok {
 			continue
 		}
-		common.Tlogf("Object %s new version %s\n", m.Name, m.Version)
+		tutils.Logf("Object %s new version %s\n", m.Name, m.Version)
 		newVersions[m.Name] = m.Version
 
 		if !m.IsCached && !isLocalBucket {
@@ -82,7 +83,7 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 
 func propsReadObjects(t *testing.T, proxyURL, bucket string, filelist map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
-	common.Tlogf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
+	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
 	for fname := range filelist {
 		_, _, err := client.Get(proxyURL, bucket, fname, nil, nil, false, false)
@@ -93,7 +94,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, filelist map[string
 	}
 
 	versChangedFinal, bytesChangedFinal := propsStats(t, proxyURL)
-	common.Tlogf("Version mismatch stats after test. Objects: %d, bytes fetched: %d\n", versChangedFinal, bytesChangedFinal)
+	tutils.Logf("Version mismatch stats after test. Objects: %d, bytes fetched: %d\n", versChangedFinal, bytesChangedFinal)
 	if versChanged != versChangedFinal || bytesChanged != bytesChangedFinal {
 		t.Errorf("All objects must be retreived from the cache but cold get happened: %d times (%d bytes)",
 			versChangedFinal-versChanged, bytesChangedFinal-bytesChanged)
@@ -109,12 +110,12 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 	}
 	toEvictList := make([]string, 0, toEvict)
 	evictMap := make(map[string]bool, toEvict)
-	common.Tlogf("Evicting %v objects:\n", toEvict)
+	tutils.Logf("Evicting %v objects:\n", toEvict)
 
 	for fname := range objMap {
 		evictMap[fname] = true
 		toEvictList = append(toEvictList, fname)
-		common.Tlogf("    %s/%s\n", bucket, fname)
+		tutils.Logf("    %s/%s\n", bucket, fname)
 		if len(toEvictList) >= toEvict {
 			break
 		}
@@ -126,7 +127,7 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 		t.Fail()
 	}
 
-	common.Tlogf("Reading object list...\n")
+	tutils.Logf("Reading object list...\n")
 
 	// read a new object list and check that evicted objects do not have atime and iscached==false
 	// version must be the same
@@ -140,7 +141,7 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 		if !ok {
 			continue
 		}
-		common.Tlogf("%s/%s [%s] - iscached: [%v], atime [%v]\n", bucket, m.Name, m.Status, m.IsCached, m.Atime)
+		tutils.Logf("%s/%s [%s] - iscached: [%v], atime [%v]\n", bucket, m.Name, m.Status, m.IsCached, m.Atime)
 
 		// invalid object: rebalance leftover or uploaded directly to target
 		if m.Status != "" {
@@ -173,9 +174,9 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 }
 
 func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]string, msg *api.GetMsg, versionEnabled bool) {
-	common.Tlogf("Refetching objects...\n")
+	tutils.Logf("Refetching objects...\n")
 	propsReadObjects(t, proxyURL, bucket, objs)
-	common.Tlogf("Checking objects properties after refetching...\n")
+	tutils.Logf("Checking objects properties after refetching...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
@@ -230,9 +231,9 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		break
 	}
 
-	common.Tlogf("Removing a target: %s\n", removedSid)
+	tutils.Logf("Removing a target: %s\n", removedSid)
 	err := client.UnregisterTarget(proxyURL, removedSid)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
 		"target is gone",
@@ -240,16 +241,16 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Pmap),
 		len(smap.Tmap)-1,
 	)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 
-	common.Tlogf("Target %s [%s] is removed\n", removedSid, removedTargetDirectURL)
+	tutils.Logf("Target %s [%s] is removed\n", removedSid, removedTargetDirectURL)
 
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, isLocalBucket)
 
-	common.Tlogf("Reregistering target...\n")
+	tutils.Logf("Reregistering target...\n")
 	err = client.RegisterTarget(removedSid, removedTargetDirectURL, smap)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
 		"to join target back",
@@ -257,10 +258,10 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		len(smap.Pmap),
 		len(smap.Tmap)+1,
 	)
-	common.CheckFatal(err, t)
+	tutils.CheckFatal(err, t)
 	waitForRebalanceToComplete(t, proxyURL)
 
-	common.Tlogf("Reading file versions...\n")
+	tutils.Logf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
 		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
@@ -293,7 +294,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 			continue
 		}
 
-		common.Tlogf("Object %s/%s, version before rebalance [%s], after [%s]\n", bucket, m.Name, version, m.Version)
+		tutils.Logf("Object %s/%s, version before rebalance [%s], after [%s]\n", bucket, m.Name, version, m.Version)
 		if version != m.Version {
 			t.Errorf("Object %s/%s version mismatch: existing [%s], expected [%s]", bucket, m.Name, m.Version, version)
 		}
@@ -336,7 +337,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	}
 
 	// Create a few objects
-	common.Tlogf("Creating %d objects...\n", numPuts)
+	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
 	putRandomFiles(proxyURL, baseseed+110, filesize, int(numPuts), bucket, t, nil, errch, filesput,
 		ldir, versionDir, true, sgl)
@@ -365,7 +366,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		if _, ok := fileslist[m.Name]; !ok {
 			continue
 		}
-		common.Tlogf("Initial version %s - %v\n", m.Name, m.Version)
+		tutils.Logf("Initial version %s - %v\n", m.Name, m.Version)
 
 		if !m.IsCached && !isLocalBucket {
 			t.Errorf("Object %s/%s is not marked as cached one", bucket, m.Name)
@@ -453,7 +454,7 @@ func propsMainTest(t *testing.T, versioning string) {
 
 func TestObjPropsVersionEnabled(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Long run only")
+		t.Skip(skipping)
 	}
 
 	propsMainTest(t, api.VersionAll)
@@ -461,7 +462,7 @@ func TestObjPropsVersionEnabled(t *testing.T) {
 
 func TestObjPropsVersionDisabled(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Long run only")
+		t.Skip(skipping)
 	}
 
 	propsMainTest(t, api.VersionNone)

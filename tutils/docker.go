@@ -2,7 +2,8 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package util
+// Package tutils provides common low-level utilities for all dfcpub unit and integration tests
+package tutils
 
 import (
 	"os/exec"

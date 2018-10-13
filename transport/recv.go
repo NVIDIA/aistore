@@ -80,7 +80,6 @@ func SetMux(network string, x *http.ServeMux) {
 	if !common.StringInSlice(network, knownNetworks) {
 		glog.Warningf("unknown network: %s, expected: %v", network, knownNetworks)
 	}
-
 	mu.Lock()
 	muxers[network] = x
 	handlers[network] = make(map[string]*handler)
@@ -95,6 +94,7 @@ func Register(network, trname string, callback Receive) (path string) {
 	mux, ok := muxers[network]
 	if !ok {
 		glog.Errorf("no mux was set for this network: %s; registering was not successful for: %s", network, trname)
+		mu.Unlock()
 		return
 	}
 	mux.HandleFunc(path, h.receive)

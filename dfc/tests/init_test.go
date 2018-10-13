@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/dfc/tests/util"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -103,7 +103,7 @@ func init() {
 	usingFile = readerType == client.ReaderTypeFile
 	checkMemory()
 
-	if util.DockerRunning() && proxyURLRO == ProxyURL {
+	if tutils.DockerRunning() && proxyURLRO == ProxyURL {
 		proxyURLRO = "http://172.50.0.2:8080"
 	}
 }
@@ -128,7 +128,7 @@ func TestMain(m *testing.M) {
 	// find out who is the current primary proxy
 	url, err := client.GetPrimaryProxy(proxyURLRO)
 	if err != nil {
-		fmt.Printf("Failed to get primary proxy, err = %v", err)
+		tutils.Logf("Failed to get primary proxy, err = %v", err)
 		os.Exit(1)
 	}
 

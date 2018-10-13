@@ -17,8 +17,8 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -36,7 +36,7 @@ var (
 func TestPrefix(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
-	common.Tlogf("Looking for files with prefix [%s]\n", prefix)
+	tutils.Logf("Looking for files with prefix [%s]\n", prefix)
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)
@@ -71,7 +71,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	wg := &sync.WaitGroup{}
 
 	for i := 0; i < prefixFileNumber; i++ {
-		fileName := common.FastRandomFilename(random, fnlen)
+		fileName := tutils.FastRandomFilename(random, fnlen)
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
@@ -104,14 +104,14 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 
 	select {
 	case e := <-errch:
-		fmt.Printf("Failed to PUT: %s\n", e)
+		tutils.Logf("Failed to PUT: %s\n", e)
 		t.Fail()
 	default:
 	}
 }
 
 func prefixLookupOne(t *testing.T, proxyURL string) {
-	common.Tlogf("Looking up for files than names start with %s\n", prefix)
+	tutils.Logf("Looking up for files than names start with %s\n", prefix)
 	var msg = &api.GetMsg{GetPrefix: prefix}
 	numFiles := 0
 	objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
@@ -121,20 +121,20 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 	}
 
 	for _, entry := range objList.Entries {
-		common.Tlogf("Found object: %s\n", entry.Name)
+		tutils.Logf("Found object: %s\n", entry.Name)
 		numFiles++
 	}
 
 	realNumFiles := numberOfFilesWithPrefix(fileNames, prefix, prefixDir)
 	if realNumFiles == numFiles {
-		common.Tlogf("Total files with prefix found: %v\n", numFiles)
+		tutils.Logf("Total files with prefix found: %v\n", numFiles)
 	} else {
 		t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", prefix, realNumFiles, numFiles)
 	}
 }
 
 func prefixLookupDefault(t *testing.T, proxyURL string) {
-	common.Tlogf("Looking up for files in alphabetic order\n")
+	tutils.Logf("Looking up for files in alphabetic order\n")
 
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	for i := 0; i < len(letters); i++ {
@@ -152,20 +152,20 @@ func prefixLookupDefault(t *testing.T, proxyURL string) {
 
 		if numFiles == realNumFiles {
 			if numFiles != 0 {
-				common.Tlogf("Found %v files starting with '%s'\n", numFiles, key)
+				tutils.Logf("Found %v files starting with '%s'\n", numFiles, key)
 			}
 		} else {
 			t.Errorf("Expected number of files with prefix '%s' is %v but found %v files", key, realNumFiles, numFiles)
-			common.Tlogf("Objects returned:\n")
+			tutils.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {
-				common.Tlogf("    %d[%d]. %s\n", i, id, oo.Name)
+				tutils.Logf("    %d[%d]. %s\n", i, id, oo.Name)
 			}
 		}
 	}
 }
 
 func prefixLookupCornerCases(t *testing.T, proxyURL string) {
-	common.Tlogf("Testing corner cases\n")
+	tutils.Logf("Testing corner cases\n")
 
 	type testProps struct {
 		title    string
@@ -181,7 +181,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
-		common.Tlogf("%d. Prefix: %s [%s]\n", idx, test.title, p)
+		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &api.GetMsg{GetPrefix: p}
 		objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
 		if err != nil {
@@ -192,9 +192,9 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 		if len(objList.Entries) != test.objCount {
 			t.Errorf("Expected number of objects with prefix '%s' is %d but found %d",
 				test.prefix, test.objCount, len(objList.Entries))
-			common.Tlogf("Objects returned:\n")
+			tutils.Logf("Objects returned:\n")
 			for id, oo := range objList.Entries {
-				common.Tlogf("    %d[%d]. %s\n", idx, id, oo.Name)
+				tutils.Logf("    %d[%d]. %s\n", idx, id, oo.Name)
 			}
 		}
 	}
@@ -222,7 +222,7 @@ func prefixCleanup(t *testing.T, proxyURL string) {
 
 	select {
 	case e := <-errch:
-		common.Tlogf("Failed to DEL: %s\n", e)
+		tutils.Logf("Failed to DEL: %s\n", e)
 		t.Fail()
 	default:
 	}

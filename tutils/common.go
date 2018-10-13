@@ -3,8 +3,8 @@
  *
  */
 
-// Package common provides common low-level types and utilities for all dfcpub projects
-package common
+// Package tutils provides common low-level utilities for all dfcpub unit and integration tests
+package tutils
 
 import (
 	"fmt"
@@ -23,20 +23,26 @@ const (
 
 func CheckFatal(err error, t *testing.T) {
 	if err != nil {
-		Tlogf("FATAL: %v\n", err)
+		Logf("FATAL: %v\n", err)
 		debug.PrintStack()
 		t.Fatalf("FATAL: %v", err)
 	}
 }
 
-func Tlogf(msg string, args ...interface{}) {
+func Logf(msg string, args ...interface{}) {
 	if testing.Verbose() {
 		fmt.Fprintf(os.Stdout, msg, args...)
 	}
 }
 
-func Tlogln(msg string) {
-	Tlogf(msg + "\n")
+func Logln(msg string) {
+	Logf(msg + "\n")
+}
+
+func Progress(id int, period int) {
+	if id > 0 && id%period == 0 {
+		Logf("%3d: done.\n", id)
+	}
 }
 
 func FastRandomFilename(src *rand.Rand, fnlen int) string {

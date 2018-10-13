@@ -33,6 +33,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 var (
@@ -66,10 +67,10 @@ func Test_Sleep(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 100; i++ {
 		ttl := time.Duration(random.Int63n(int64(time.Second*10))) + time.Second
-		siz := random.Int63n(common.MiB*10) + common.KiB
-		tot := random.Int63n(common.DivCeil(common.GiB, siz))*siz + common.MiB
+		siz := random.Int63n(common.KiB*10) + common.KiB
+		tot := random.Int63n(common.DivCeil(common.MiB, siz))*siz + common.MiB
 		wg.Add(1)
 		go memstress(mem, i, ttl, siz, tot, wg)
 	}
@@ -88,9 +89,9 @@ func Test_NoSleep(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < 10000; i++ {
-		siz := random.Int63n(common.MiB*10) + common.KiB
-		tot := random.Int63n(common.DivCeil(common.GiB, siz))*siz + common.MiB
+	for i := 0; i < 100; i++ {
+		siz := random.Int63n(common.KiB*10) + common.KiB
+		tot := random.Int63n(common.DivCeil(common.MiB, siz))*siz + common.MiB
 		wg.Add(1)
 		go memstress(mem, i, time.Millisecond, siz, tot, wg)
 	}
@@ -104,9 +105,9 @@ func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *
 	x := common.B2S(siz, 1) + "/" + common.B2S(tot, 1)
 	if id%100 == 0 && verbose {
 		if ttl > time.Millisecond {
-			fmt.Printf("%4d: %-19s ttl %v\n", id, x, ttl)
+			tutils.Logf("%4d: %-19s ttl %v\n", id, x, ttl)
 		} else {
-			fmt.Printf("%4d: %-19s\n", id, x)
+			tutils.Logf("%4d: %-19s\n", id, x)
 		}
 	}
 	started := time.Now()
@@ -127,7 +128,7 @@ func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *
 		}
 	}
 	if id%100 == 0 && verbose {
-		fmt.Printf("%4d: done\n", id)
+		tutils.Logf("%4d: done\n", id)
 	}
 }
 
