@@ -82,6 +82,7 @@ import (
 // ========================== end of TOO ========================================
 
 const Numslabs = 128 / 4 // [4K - 128K] at 4K increments
+const DEADBEEF = "DEADBEEF"
 
 // mem subsystem defaults (potentially, tunables)
 const (
@@ -567,6 +568,9 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 		missed = s.grow(cnt)
 	}
 	s.get, s.put = s.put, s.get
+	common.Assert(len(s.put) == s.pos)
+	s.put = s.put[:0]
+	common.Assert(len(s.get) >= int(curmindepth))
 	s.muput.Unlock()
 
 	s.pos = 0
@@ -606,6 +610,12 @@ func (s *Slab2) grow(cnt int) bool {
 
 func (s *Slab2) _free(buf []byte) {
 	if len(s.put) < maxdepth {
+		if s.debug {
+			common.Assert(len(buf) == int(s.bufsize))
+			for i := 0; i < len(buf); i += len(DEADBEEF) {
+				copy(buf[i:], []byte(DEADBEEF))
+			}
+		}
 		s.put = append(s.put, buf)
 	} else if s.usespool {
 		s.l2cache.Put(buf)

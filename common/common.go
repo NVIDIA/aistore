@@ -110,7 +110,7 @@ func Assert(cond bool, args ...interface{}) {
 		}
 	}
 	glog.Flush()
-	glog.Fatalln(message)
+	panic(message)
 }
 
 func StringInSlice(s string, arr []string) bool {
