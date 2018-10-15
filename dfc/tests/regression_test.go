@@ -100,8 +100,10 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
-	putRandomFiles(proxyURL, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(proxyURL, seed, filesize, num, bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, true)
+	close(filenameCh)
+	close(errch)
 
 	msg := &api.GetMsg{GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
 	bl, err := client.ListBucket(proxyURL, bucket, msg, num)
@@ -179,9 +181,10 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(proxyURL, seed, fileSize, numberOfFiles, bucketName, t, nil, errorCh, fileNameCh, SmokeDir, prefix, true, sgl)
+	putRandObjs(proxyURL, seed, fileSize, numberOfFiles, bucketName, errorCh, fileNameCh, SmokeDir, prefix, true, sgl)
 	selectErr(errorCh, "put", t, true)
+	close(fileNameCh)
+	close(errorCh)
 	defer func() {
 		files := make([]string, numberOfFiles)
 		for i := 0; i < numberOfFiles; i++ {
@@ -262,8 +265,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(proxyURL, seed, filesize, num, bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(proxyURL, seed, filesize, num, bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
+	close(filenameCh)
+	close(errch)
 
 	// Test corrupting the file contents
 	// Note: The following tests can only work when running on a local setup(targets are co-located with
@@ -333,15 +338,15 @@ func TestRenameLocalBuckets(t *testing.T) {
 func TestListObjects(t *testing.T) {
 	const fileSize = 1024
 	var (
-		numFiles = 20
-		prefix   = "regressionList"
-		bucket   = clibucket
-		seed     = baseseed + 101
-		errch    = make(chan error, numFiles*5)
-		filesput = make(chan string, numfiles)
-		dir      = DeleteDir
-		proxyURL = getPrimaryURL(t, proxyURLRO)
-		sgl      *memsys.SGL
+		numFiles   = 20
+		prefix     = "regressionList"
+		bucket     = clibucket
+		seed       = baseseed + 101
+		errch      = make(chan error, numFiles*5)
+		filesPutCh = make(chan string, numfiles)
+		dir        = DeleteDir
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		sgl        *memsys.SGL
 	)
 	if usingSG {
 		sgl = client.Mem2.NewSGL(fileSize)
@@ -356,10 +361,10 @@ func TestListObjects(t *testing.T) {
 		fname := fmt.Sprintf("obj%d", i+1)
 		fileList = append(fileList, fname)
 	}
-	fillWithRandomData(proxyURL, seed, fileSize, fileList, bucket, t, errch, filesput, dir, prefix, !testing.Verbose(), sgl)
-	close(filesput)
+	putRandObjsFromList(proxyURL, seed, fileSize, fileList, bucket, errch, filesPutCh, dir, prefix, !testing.Verbose(), sgl)
+	close(filesPutCh)
 	selectErr(errch, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
-
+	close(errch)
 	type testParams struct {
 		title    string
 		prefix   string
@@ -415,7 +420,7 @@ func TestListObjects(t *testing.T) {
 	}
 
 	if usingFile {
-		for name := range filesput {
+		for name := range filesPutCh {
 			os.Remove(dir + "/" + name)
 		}
 	}
@@ -426,15 +431,15 @@ func TestRenameObjects(t *testing.T) {
 		t.Skip(skipping)
 	}
 	var (
-		injson    []byte
-		err       error
-		numPuts   = 10
-		filesput  = make(chan string, numPuts)
-		errch     = make(chan error, numPuts)
-		basenames = make([]string, 0, numPuts) // basenames
-		bnewnames = make([]string, 0, numPuts) // new basenames
-		sgl       *memsys.SGL
-		proxyURL  = getPrimaryURL(t, proxyURLRO)
+		injson     []byte
+		err        error
+		numPuts    = 10
+		filesPutCh = make(chan string, numPuts)
+		errch      = make(chan error, numPuts)
+		basenames  = make([]string, 0, numPuts) // basenames
+		bnewnames  = make([]string, 0, numPuts) // new basenames
+		sgl        *memsys.SGL
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
 	createFreshLocalBucket(t, proxyURL, RenameLocalBucketName)
@@ -473,11 +478,11 @@ func TestRenameObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, t, nil, nil, filesput, RenameDir,
+	putRandObjs(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, errch, filesPutCh, RenameDir,
 		RenameStr, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
-	close(filesput)
-	for fname := range filesput {
+	close(filesPutCh)
+	for fname := range filesPutCh {
 		basenames = append(basenames, fname)
 	}
 
@@ -542,7 +547,7 @@ func TestRebalance(t *testing.T) {
 		sid             string
 		targetDirectURL string
 		numPuts         = 40
-		filesput        = make(chan string, numPuts)
+		filesPutCh      = make(chan string, numPuts)
 		errch           = make(chan error, 100)
 		wg              = &sync.WaitGroup{}
 		sgl             *memsys.SGL
@@ -594,7 +599,7 @@ func TestRebalance(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandomFiles(proxyURL, baseseed, filesize, numPuts, clibucket, t, nil, errch, filesput, SmokeDir,
+	putRandObjs(proxyURL, baseseed, filesize, numPuts, clibucket, errch, filesPutCh, SmokeDir,
 		SmokeStr, !testing.Verbose(), sgl)
 	selectErr(errch, "put", t, false)
 
@@ -634,8 +639,8 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 7. cleanup
 	//
-	close(filesput) // to exit for-range
-	for fname := range filesput {
+	close(filesPutCh) // to exit for-range
+	for fname := range filesPutCh {
 		if usingFile {
 			err := os.Remove(SmokeDir + "/" + fname)
 			if err != nil {
@@ -1178,9 +1183,9 @@ func TestStressDeleteRange(t *testing.T) {
 		reader, err := client.NewRandReader(size, true /* withHash */)
 		tutils.CheckFatal(err, t)
 		readersList[i] = reader
+		wg.Add(1)
 
 		go func(i int, reader client.Reader) {
-			wg.Add(1)
 			for j := 0; j < numFiles/numReaders; j++ {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
 				err := client.Put(proxyURL, reader, TestLocalBucketName, objname, true)
@@ -1244,7 +1249,7 @@ func TestStressDeleteRange(t *testing.T) {
 	destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 }
 
-func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesput chan string) {
+func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
 	err := client.RenameLocalBucket(proxyURL, rtd.bucket, rtd.renamedBucket)
 	tutils.CheckFatal(err, t)
 
@@ -1273,7 +1278,7 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	tutils.CheckFatal(err, t)
 
 	if len(objs) != numPuts {
-		for name := range filesput {
+		for name := range filesPutCh {
 			found := false
 			for _, n := range objs {
 				if strings.Contains(n, name) || strings.Contains(name, n) {
@@ -1293,33 +1298,31 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData) {
 	const filesize = 1024
 	var (
-		numPuts  = 64
-		filesput = make(chan string, numPuts)
-		errch    = make(chan error, 100)
-		wg       = &sync.WaitGroup{}
-		sgl      *memsys.SGL
-		bucket   = rtd.bucket
+		numPuts    = 64
+		filesPutCh = make(chan string, numPuts)
+		errch      = make(chan error, 100)
+		wg         = &sync.WaitGroup{}
+		sgl        *memsys.SGL
+		bucket     = rtd.bucket
 	)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(proxyURL, baseseed+2, filesize, numPuts, bucket, t, nil, errch, filesput, SmokeDir,
+	putRandObjs(proxyURL, baseseed+2, filesize, numPuts, bucket, errch, filesPutCh, SmokeDir,
 		SmokeStr, !testing.Verbose(), sgl)
-	close(filesput)
+	close(filesPutCh)
 	selectErr(errch, "put", t, true)
-
 	if rtd.rename {
-		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesput)
+		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesPutCh)
 		tutils.Logf("\nRenamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
 		bucket = rtd.renamedBucket
 	}
 
 	getRandomFiles(proxyURL, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
 	selectErr(errch, "get", t, false)
-	for fname := range filesput {
+	for fname := range filesPutCh {
 		if usingFile {
 			err := os.Remove(SmokeDir + "/" + fname)
 			if err != nil {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -75,7 +76,7 @@ func Test_smoke(t *testing.T) {
 	}
 }
 
-func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bseed int64, filesput chan string) {
+func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bseed int64, filesPutCh chan string) {
 	// Start the worker pools
 	errch := make(chan error, 100)
 	var wg = &sync.WaitGroup{}
@@ -107,7 +108,7 @@ func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bsee
 					sgl = sgls[i]
 				}
 
-				putRandomFiles(proxyURL, bseed+int64(i), uint64(filesize), numops, clibucket, t, nil, errch, filesput,
+				putRandObjs(proxyURL, bseed+int64(i), uint64(filesize), numops, clibucket, errch, filesPutCh,
 					SmokeDir, SmokeStr, true, sgl)
 				wg.Done()
 			}(i)
@@ -174,26 +175,26 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 	getsGroup.Wait()
 }
 
-func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []string, bucket string,
-	t *testing.T, errch chan error, filesput chan string,
-	dir, keystr string, silent bool, sgl *memsys.SGL) {
-	src := rand.NewSource(seed)
-	random := rand.New(src)
-	for _, fname := range objList {
+func putObjsWithRandData(proxyURL, bucket, dir, keystr string, random *rand.Rand, fileSize uint64, silent bool,
+	sgl *memsys.SGL, errCh chan error, objCh, filesPutCh chan string) {
+	for {
+		fname := <-objCh
+		if fname == "" {
+			return
+		}
 		size := fileSize
 		if size == 0 {
 			size = uint64(random.Intn(1024)+1) * 1024
 		}
-
 		var (
-			r   client.Reader
-			err error
+			reader client.Reader
+			err    error
 		)
 		if sgl != nil {
 			sgl.Reset()
-			r, err = client.NewSGReader(sgl, int64(size), true /* with Hash */)
+			reader, err = client.NewSGReader(sgl, int64(size), true /* with Hash */)
 		} else {
-			r, err = client.NewReader(client.ParamReader{
+			reader, err = client.NewReader(client.ParamReader{
 				Type: readerType,
 				SGL:  nil,
 				Path: dir,
@@ -204,33 +205,74 @@ func fillWithRandomData(proxyURL string, seed int64, fileSize uint64, objList []
 
 		if err != nil {
 			tutils.Logf("Failed to generate random file %s, err: %v\n", dir+"/"+fname, err)
-			t.Error(err)
-			if errch != nil {
-				errch <- err
+			if errCh != nil {
+				errCh <- err
 			}
 			return
 		}
 
+		objname := filepath.Join(keystr, fname)
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		err = client.Put(proxyURL, r, bucket, keystr+"/"+fname, silent)
+		err = client.Put(proxyURL, reader, bucket, objname, silent)
 		if err != nil {
-			if errch == nil {
-				fmt.Println("Error channel is nil, do not know how to report error")
+			if errCh == nil {
+				tutils.Logf("Error performing PUT of object with random data, provided error channel is nil")
+			} else {
+				errCh <- err
 			}
-			errch <- err
 		}
-		filesput <- fname
+		filesPutCh <- fname
 	}
 }
 
-func putRandomFiles(proxyURL string, seed int64, fileSize uint64, numPuts int, bucket string,
-	t *testing.T, wg *sync.WaitGroup, errch chan error, filesput chan string,
-	dir, keystr string, silent bool, sgl *memsys.SGL) {
-	if wg != nil {
-		defer wg.Done()
+func putRandObjsFromList(proxyURL string, seed int64, fileSize uint64, objList []string, bucket string,
+	errCh chan error, filesPutCh chan string, dir, keystr string, silent bool, sgl *memsys.SGL) {
+	var (
+		random = rand.New(rand.NewSource(seed))
+		wg     = &sync.WaitGroup{}
+		objCh  = make(chan string, len(objList))
+	)
+	// if len(objList) < numworkers, only need as many workers as there are objects to be PUT
+	numworkers := common.Min(numworkers, len(objList))
+	sgls := make([]*memsys.SGL, numworkers, numworkers)
+
+	// need an SGL for each worker with its size being that of the original SGL
+	if usingSG {
+		slabSize := sgl.Slab().Size()
+		for i := 0; i < numworkers; i++ {
+			sgls[i] = client.Mem2.NewSGL(slabSize)
+		}
+		defer func() {
+			for _, sgl := range sgls {
+				sgl.Free()
+			}
+		}()
 	}
+
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		if usingSG {
+			sgl = sgls[i]
+		}
+		go func(sgl *memsys.SGL) {
+			putObjsWithRandData(proxyURL, bucket, dir, keystr, random, fileSize, silent, sgl, errCh, objCh, filesPutCh)
+			wg.Done()
+		}(sgl)
+	}
+
+	for _, objName := range objList {
+		objCh <- objName
+	}
+	close(objCh)
+
+	wg.Wait()
+}
+
+func putRandObjs(proxyURL string, seed int64, fileSize uint64, numPuts int, bucket string,
+	errCh chan error, filesPutCh chan string,
+	dir, keystr string, silent bool, sgl *memsys.SGL) {
 
 	src := rand.NewSource(seed)
 	random := rand.New(src)
@@ -240,5 +282,5 @@ func putRandomFiles(proxyURL string, seed int64, fileSize uint64, numPuts int, b
 		fileList = append(fileList, fname)
 	}
 
-	fillWithRandomData(proxyURL, seed, fileSize, fileList, bucket, t, errch, filesput, dir, keystr, silent, sgl)
+	putRandObjsFromList(proxyURL, seed, fileSize, fileList, bucket, errCh, filesPutCh, dir, keystr, silent, sgl)
 }

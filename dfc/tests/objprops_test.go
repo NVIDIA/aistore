@@ -179,7 +179,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 	tutils.Logf("Checking objects properties after refetching...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
+		t.Errorf("Unexpected error: no object in the bucket %s", bucket)
 		t.Fail()
 	}
 	var (
@@ -264,7 +264,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	tutils.Logf("Reading file versions...\n")
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
+		t.Errorf("Unexpected error: no object in the bucket %s", bucket)
 		t.Fail()
 	}
 	var (
@@ -318,10 +318,12 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 }
 
 func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
-	const objCountToTest = 15
-	const filesize = 1024 * 1024
+	const (
+		objCountToTest = 15
+		filesize       = 1024 * 1024
+	)
 	var (
-		filesput   = make(chan string, objCountToTest)
+		filesPutCh = make(chan string, objCountToTest)
 		fileslist  = make(map[string]string, objCountToTest)
 		errch      = make(chan error, objCountToTest)
 		numPuts    = objCountToTest
@@ -339,11 +341,12 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
-	putRandomFiles(proxyURL, baseseed+110, filesize, int(numPuts), bucket, t, nil, errch, filesput,
+	putRandObjs(proxyURL, baseseed+110, filesize, int(numPuts), bucket, errch, filesPutCh,
 		ldir, versionDir, true, sgl)
 	selectErr(errch, "put", t, false)
-	close(filesput)
-	for fname := range filesput {
+	close(filesPutCh)
+	close(errch)
+	for fname := range filesPutCh {
 		if fname != "" {
 			fileslist[versionDir+"/"+fname] = ""
 		}
@@ -356,7 +359,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	}
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
-		t.Errorf("Unexpected erorr: no object in the bucket %s", bucket)
+		t.Errorf("Unexpected error: no object in the bucket %s", bucket)
 		t.Fail()
 		return
 	}

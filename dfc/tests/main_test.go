@@ -218,13 +218,12 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	errch := make(chan error, numfiles*5)
-	filesput := make(chan string, numfiles)
+	filesPutCh := make(chan string, numfiles)
 
 	if usingSG {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-
 	filenameList := make([]string, 0, numfiles)
 	for i := 0; i < numfiles/2; i++ {
 		fname := fmt.Sprintf("a-%04d", i)
@@ -232,11 +231,10 @@ func Test_putdeleteRange(t *testing.T) {
 		fname = fmt.Sprintf("b-%04d", i)
 		filenameList = append(filenameList, fname)
 	}
-	fillWithRandomData(proxyURL, baseseed, filesize, filenameList, clibucket, t, errch, filesput, DeleteDir,
+	putRandObjsFromList(proxyURL, baseseed, filesize, filenameList, clibucket, errch, filesPutCh, DeleteDir,
 		commonPrefix, true, sgl)
 	selectErr(errch, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
-	close(filesput)
-
+	close(filesPutCh)
 	type testParams struct {
 		// title to print out while testing
 		name string
@@ -322,7 +320,7 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	if usingFile {
-		for name := range filesput {
+		for name := range filesPutCh {
 			os.Remove(DeleteDir + "/" + name)
 		}
 	}
@@ -353,7 +351,7 @@ func Test_putdelete(t *testing.T) {
 	}
 
 	errch := make(chan error, numfiles)
-	filesput := make(chan string, numfiles)
+	filesPutCh := make(chan string, numfiles)
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
@@ -364,10 +362,10 @@ func Test_putdelete(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(proxyURL, baseseed, filesize, numfiles, clibucket, t, nil, errch, filesput,
+	putRandObjs(proxyURL, baseseed, filesize, numfiles, clibucket, errch, filesPutCh,
 		DeleteDir, DeleteStr, true, sgl)
-	close(filesput)
+	close(filesPutCh)
+	selectErr(errch, "put", t, true)
 
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
@@ -385,7 +383,7 @@ func Test_putdelete(t *testing.T) {
 	}
 
 	num := 0
-	for name := range filesput {
+	for name := range filesPutCh {
 		if usingFile {
 			os.Remove(DeleteDir + "/" + name)
 		}
@@ -511,15 +509,15 @@ func printbucketnames(t *testing.T, r *http.Response) {
 func Test_coldgetmd5(t *testing.T) {
 	const filesize = largefilesize * 1024 * 1024
 	var (
-		numPuts   = 5
-		filesput  = make(chan string, numPuts)
-		fileslist = make([]string, 0, 100)
-		errch     = make(chan error, 100)
-		wg        = &sync.WaitGroup{}
-		bucket    = clibucket
-		totalsize = numPuts * largefilesize
-		sgl       *memsys.SGL
-		proxyURL  = getPrimaryURL(t, proxyURLRO)
+		numPuts    = 5
+		filesPutCh = make(chan string, numPuts)
+		fileslist  = make([]string, 0, 100)
+		errch      = make(chan error, 100)
+		wg         = &sync.WaitGroup{}
+		bucket     = clibucket
+		totalsize  = numPuts * largefilesize
+		sgl        *memsys.SGL
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
@@ -540,12 +538,11 @@ func Test_coldgetmd5(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(proxyURL, baseseed, filesize, numPuts, bucket, t, nil, errch, filesput, ldir,
+	putRandObjs(proxyURL, baseseed, filesize, numPuts, bucket, errch, filesPutCh, ldir,
 		ColdValidStr, true, sgl)
 	selectErr(errch, "put", t, false)
-	close(filesput) // to exit for-range
-	for fname := range filesput {
+	close(filesPutCh) // to exit for-range
+	for fname := range filesPutCh {
 		fileslist = append(fileslist, ColdValidStr+"/"+fname)
 	}
 	evictobjects(t, proxyURL, fileslist)
@@ -954,7 +951,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	tutils.Logf("Creating %d objects\n", numFiles)
-	putRandomFiles(proxyURL, seed, fileSize, numFiles, clibucket, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	putRandObjs(proxyURL, seed, fileSize, numFiles, clibucket, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	selectErr(errorChannel, "put", t, false)
 
 	fileName = <-fileNameChannel
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
@@ -1094,7 +1092,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandomFiles(proxyURL, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
 	selectErr(errorChannel, "put", t, false)
 
 	// Get Current Config
@@ -1200,7 +1198,7 @@ func TestRangeRead(t *testing.T) {
 	}
 
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
-	putRandomFiles(proxyURL, seed, fileSize, numFiles, bucketName, t, nil, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, false, sgl)
+	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, false, sgl)
 	selectErr(errorChannel, "put", t, false)
 
 	// Get Current Config
@@ -1357,7 +1355,7 @@ func Test_checksum(t *testing.T) {
 
 	const filesize = largefilesize * 1024 * 1024
 	var (
-		filesput    = make(chan string, 100)
+		filesPutCh  = make(chan string, 100)
 		fileslist   = make([]string, 0, 100)
 		errch       = make(chan error, 100)
 		bucket      = clibucket
@@ -1386,12 +1384,11 @@ func Test_checksum(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-
-	putRandomFiles(proxyURL, 0, filesize, int(numPuts), bucket, t, nil, errch, filesput, ldir,
+	putRandObjs(proxyURL, 0, filesize, int(numPuts), bucket, errch, filesPutCh, ldir,
 		ChksumValidStr, true, sgl)
 	selectErr(errch, "put", t, false)
-	close(filesput) // to exit for-range
-	for fname := range filesput {
+	close(filesPutCh) // to exit for-range
+	for fname := range filesPutCh {
 		if fname != "" {
 			fileslist = append(fileslist, ChksumValidStr+"/"+fname)
 		}

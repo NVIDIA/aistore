@@ -121,10 +121,12 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 
 	// Step 3.
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	start := time.Now()
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
+	tutils.Logf("PUT time: %v\n", time.Since(start))
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -220,7 +222,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// Step 3.
 	_, newPrimaryURL, err := chooseNextProxy(&m.smap)
 	// use a new proxuURL because primaryCrashElectRestart has a side-effect:
-	// it changes the primary proxy. Without the change putRandomFiles is
+	// it changes the primary proxy. Without the change putRandObjs is
 	// failing while the current primary is restarting and rejoining
 	m.proxyURL = newPrimaryURL
 	tutils.CheckFatal(err, t)
@@ -234,9 +236,10 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
 	time.Sleep(5 * time.Second)
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
+	close(errch)
 
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
@@ -371,9 +374,10 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		// Put some files
 		tutils.Logf("PUT %d files into bucket %s...\n", num, m.bucket)
-		putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+		putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 		selectErr(errch, "put", t, false)
 		close(filenameCh)
+		close(errch)
 
 		m.wg.Done()
 		tutils.Logln("PUT done.")
@@ -462,9 +466,10 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Put some files
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
+	close(errch)
 
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
@@ -574,9 +579,10 @@ func TestPutDuringRebalance(t *testing.T) {
 	}()
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
+	close(errch)
 
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
@@ -684,9 +690,10 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tutils.CheckFatal(err, md.t)
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, md.bucket)
-	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(md.proxyURL, seed, filesize, num, md.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
+	close(errch)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 	}
@@ -799,9 +806,10 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	}
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, md.bucket)
-	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(md.proxyURL, seed, filesize, num, md.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
+	close(errch)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 	}
@@ -896,9 +904,10 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Start putting files into bucket
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, md.bucket)
-	putRandomFiles(md.proxyURL, seed, filesize, num, md.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(md.proxyURL, seed, filesize, num, md.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
+	close(errch)
 	for f := range filenameCh {
 		md.repFilenameCh <- repFile{repetitions: md.numGetsEachFile, filename: f}
 		mdAfterRebalance.repFilenameCh <- repFile{repetitions: mdAfterRebalance.numGetsEachFile, filename: f}
@@ -1058,10 +1067,10 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 
 	// Put some files
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -1221,10 +1230,10 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	// Put and read random files
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -1286,10 +1295,10 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}()
 
 	// Put random files
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -1363,10 +1372,10 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}()
 
 	// Put random files
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -1482,10 +1491,10 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	// Put and read random files
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -1714,10 +1723,10 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 3.
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	for f := range filenameCh {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
@@ -1801,10 +1810,10 @@ func TestAtimeRebalance(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Put random files
-	putRandomFiles(m.proxyURL, seed, filesize, num, m.bucket, t, nil, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
 	selectErr(errch, "put", t, false)
 	close(filenameCh)
-
+	close(errch)
 	objNames := make(map[string]string, 0)
 	msg := &api.GetMsg{GetProps: api.GetPropsAtime + ", " + api.GetPropsStatus}
 	bucketList, err := client.ListBucket(m.proxyURL, m.bucket, msg, 0)

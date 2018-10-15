@@ -29,7 +29,10 @@ func TestRandomReaderPutStress(t *testing.T) {
 		reader, err := client.NewRandReader(fileSize, true)
 		tutils.CheckFatal(err, t)
 		wg.Add(1)
-		go putRR(t, i, proxyURL, bs, reader, wg, bucket, numobjects)
+		go func(workerId int) {
+			putRR(t, workerId, proxyURL, bs, reader, bucket, numobjects)
+			wg.Done()
+		}(i)
 		bs++
 	}
 	wg.Wait()
@@ -37,7 +40,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 
 }
 
-func putRR(t *testing.T, id int, proxyURL string, seed int64, reader client.Reader, wg *sync.WaitGroup, bucket string, numobjects int) {
+func putRR(t *testing.T, id int, proxyURL string, seed int64, reader client.Reader, bucket string, numobjects int) {
 	var subdir = "dir"
 	random := rand.New(rand.NewSource(seed))
 	for i := 0; i < numobjects; i++ {
@@ -50,5 +53,4 @@ func putRR(t *testing.T, id int, proxyURL string, seed int64, reader client.Read
 			tutils.Logf("%2d: %d\n", id, i)
 		}
 	}
-	wg.Done()
 }

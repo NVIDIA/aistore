@@ -117,7 +117,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 
 	for stopTime.After(time.Now()) {
 		errch := make(chan error, len(filelist))
-		filesput := make(chan string, len(filelist))
+		filesPutCh := make(chan string, len(filelist))
 
 		for _, fname := range filelist {
 			select {
@@ -142,7 +142,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				fillWithRandomData(proxyURL, seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
+				putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errch, filesPutCh, ldir, fshcDir, true, sgl)
 				select {
 				case <-errch:
 					// do nothing
@@ -157,7 +157,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 		}
 
 		close(errch)
-		close(filesput)
+		close(filesPutCh)
 	}
 
 	wg.Done()
@@ -171,13 +171,13 @@ func TestFSCheckerDetection(t *testing.T) {
 		seed     = baseseed + 300
 		numObjs  = 100
 		proxyURL = getPrimaryURL(t, proxyURLRO)
+		bucket   = TestLocalBucketName
 	)
 
 	if testing.Short() {
 		t.Skip(skipping)
 	}
 
-	bucket := TestLocalBucketName
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
@@ -288,9 +288,12 @@ func TestFSCheckerDetection(t *testing.T) {
 			t.Errorf("Failed to create file: %v", err)
 		}
 		f.Close()
-		filesput := make(chan string, len(fileList))
+		filesPutCh := make(chan string, len(fileList))
 		errch := make(chan error, len(fileList))
-		fillWithRandomData(proxyURL, seed, filesize, fileList, bucket, t, errch, filesput, ldir, fshcDir, true, sgl)
+		putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errch, filesPutCh, ldir, fshcDir, true, sgl)
+		selectErr(errch, "put", t, false)
+		close(filesPutCh)
+		close(errch)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}
