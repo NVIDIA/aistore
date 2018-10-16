@@ -370,7 +370,8 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
+	mpathInfo, _ := path2mpathInfo(mpath)
+	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
@@ -421,7 +422,8 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
+	mpathInfo, _ := path2mpathInfo(mpath)
+	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
@@ -474,7 +476,8 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
+	mpathInfo, _ := path2mpathInfo(mpath)
+	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
@@ -528,7 +531,8 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpath))
+	mpathInfo, _ := path2mpathInfo(mpath)
+	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.34"

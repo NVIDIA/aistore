@@ -172,7 +172,8 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)
-	disks := fs2disks(ctx.mountpaths.MountpathToFS(mpaths[0]))
+	mpathInfo, _ := path2mpathInfo(mpaths[0])
+	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = diskUtil

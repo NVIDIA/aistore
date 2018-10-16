@@ -3124,13 +3124,17 @@ func (t *targetrunner) fqn(bucket, objname string, islocal bool) (string, string
 
 // the opposite
 func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error) {
-	var isLocal bool
+	var (
+		isLocal   bool
+		parsedFQN fqnParsed
+	)
 
-	_, bucket, objName, isLocal, err = fqn2info(fqn)
+	parsedFQN, err = fqn2info(fqn)
 	if err != nil {
 		return
 	}
 
+	bucket, objName, isLocal = parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
 	bucketmd := t.bmdowner.get()
 	realFQN, errstr := t.fqn(bucket, objName, isLocal)
 	if errstr != "" {
@@ -3148,10 +3152,11 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error
 // situation can happen when new mountpath is added or mountpath is moved from
 // disabled to enabled.
 func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
-	_, bucket, objName, isLocal, err := fqn2info(fqn)
+	parsedFQN, err := fqn2info(fqn)
 	if err != nil {
 		return false, "", err
 	}
+	bucket, objName, isLocal := parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
 	newFQN, errstr := t.fqn(bucket, objName, isLocal)
 	if errstr != "" {
 		return false, "", errors.New(errstr)
@@ -3358,7 +3363,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	if !isIOError(err) {
 		return
 	}
-	mpathInfo, _, _, _, err := fqn2info(filepath)
+	mpathInfo, _ := path2mpathInfo(filepath)
 	if mpathInfo != nil {
 		keyName := mpathInfo.Path
 		// keyName is the mountpath is the fspath - counting IO errors on a per basis..

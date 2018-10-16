@@ -100,21 +100,15 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 // AddMountpath adds new mountpath to the target's mountpaths.
 func (mfs *MountedFS) AddMountpath(mpath string) error {
 	seperator := string(filepath.Separator)
-	invalidMpath := seperator + mfs.localBucketName
-	if strings.HasSuffix(mpath, invalidMpath) {
-		return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
-	}
-	invalidMpath += seperator
-	if strings.Contains(mpath, invalidMpath) {
-		return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
-	}
-	invalidMpath = seperator + mfs.cloudBucketName
-	if strings.HasSuffix(mpath, invalidMpath) {
-		return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
-	}
-	invalidMpath += seperator
-	if strings.Contains(mpath, invalidMpath) {
-		return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
+	for _, bucket := range []string{mfs.localBucketName, mfs.cloudBucketName} {
+		invalidMpath := seperator + bucket
+		if strings.HasSuffix(mpath, invalidMpath) {
+			return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
+		}
+		invalidMpath += seperator
+		if strings.Contains(mpath, invalidMpath) {
+			return fmt.Errorf("Fspath %q cannot contain %q anywhere in its path", mpath, invalidMpath)
+		}
 	}
 
 	if _, err := os.Stat(mpath); err != nil {
@@ -245,15 +239,6 @@ func (mfs *MountedFS) Mountpaths() (map[string]*MountpathInfo, map[string]*Mount
 	}
 
 	return *available, *disabled
-}
-
-// MountpathToFS returns the mpath's associated filesystem
-func (mfs *MountedFS) MountpathToFS(mpath string) string {
-	available, _ := mfs.Mountpaths()
-	if m, ok := available[mpath]; ok {
-		return m.FileSystem
-	}
-	return ""
 }
 
 // DisableFsIDCheck disables fsid checking when adding new mountpath

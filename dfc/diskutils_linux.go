@@ -151,7 +151,7 @@ func (r *iostatrunner) updateFSDisks() {
 }
 
 func (r *iostatrunner) diskUtilFromFQN(fqn string) (util float32, ok bool) {
-	mpathInfo, _, _, _, _ := fqn2info(fqn)
+	mpathInfo, _ := path2mpathInfo(fqn)
 	if mpathInfo == nil {
 		return
 	}

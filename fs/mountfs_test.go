@@ -5,11 +5,14 @@
 package fs
 
 import (
+	"os"
 	"testing"
+
+	"github.com/NVIDIA/dfcpub/common"
 )
 
 func TestAddNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/nonexistingpath")
 	if err == nil {
@@ -20,33 +23,57 @@ func TestAddNonExistingMountpath(t *testing.T) {
 }
 
 func TestAddInvalidMountpaths(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
-
-	err := mfs.AddMountpath("/local")
-	if err == nil {
-		t.Error("adding invalid mountpath succeeded")
+	mpaths := []string{
+		"/local",
+		"/cloud",
+		"/tmp/local/abcd",
+		"/tmp/cloud/abcd",
+		"/tmp/abcd/local",
+		"/tmp/abcd/cloud",
 	}
-
-	err = mfs.AddMountpath("/cloud")
-	if err == nil {
-		t.Error("adding invalid mountpath succeeded")
+	// Note: There is no need to create the directories for these mountpaths because the
+	// check for os.Stat(mpath) happens after we check if the have '/local' or
+	// '/cloud' in their path
+	for _, mpath := range mpaths {
+		err := mfs.AddMountpath(mpath)
+		if err == nil {
+			t.Errorf("adding invalid mountpath: %q succeeded", mpath)
+		}
 	}
+	assertMountpathCount(t, mfs, 0, 0)
+}
 
-	err = mfs.AddMountpath("/tmp/local/abcd")
-	if err == nil {
-		t.Error("adding invalid mountpath succeeded")
+func TestAddValidMountpaths(t *testing.T) {
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
+	mfs := NewMountedFS("cloud", "local")
+	mfs.DisableFsIDCheck()
+	mpaths := []string{"/tmp/clouder", "/tmp/locals", "/tmp/locals/err"}
+
+	for _, mpath := range mpaths {
+		if _, err := os.Stat(mpath); os.IsNotExist(err) {
+			common.CreateDir(mpath)
+			defer os.RemoveAll(mpath)
+		}
+
+		if err := mfs.AddMountpath(mpath); err != nil {
+			t.Errorf("adding valid mountpath %q failed", mpath)
+		}
+
 	}
+	assertMountpathCount(t, mfs, 3, 0)
 
-	err = mfs.AddMountpath("/tmp/cloud/abcd")
-	if err == nil {
-		t.Error("adding invalid mountpath succeeded")
+	for _, mpath := range mpaths {
+		if err := mfs.RemoveMountpath(mpath); err != nil {
+			t.Errorf("removing valid mountpath %q failed", mpath)
+		}
 	}
 	assertMountpathCount(t, mfs, 0, 0)
 }
 
 func TestAddExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -57,7 +84,7 @@ func TestAddExistingMountpath(t *testing.T) {
 }
 
 func TestAddAlreadyAddedMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -75,7 +102,7 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 }
 
 func TestRemoveNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.RemoveMountpath("/nonexistingpath")
 	if err == nil {
@@ -86,7 +113,7 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -102,7 +129,7 @@ func TestRemoveExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -121,7 +148,7 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 }
 
 func TestDisableNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	disabled, exists := mfs.DisableMountpath("/tmp")
 	if disabled || exists {
@@ -132,7 +159,7 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 }
 
 func TestDisableExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -148,7 +175,7 @@ func TestDisableExistingMountpath(t *testing.T) {
 }
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -169,7 +196,7 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	enabled, exists := mfs.EnableMountpath("/tmp")
 	if enabled || exists {
@@ -180,7 +207,7 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 }
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -196,7 +223,7 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -217,7 +244,7 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -245,7 +272,7 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 }
 
 func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {
@@ -261,7 +288,7 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 }
 
 func TestAddAndDisableMultipleMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFs()
+	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
 	mfs := NewMountedFS("cloud", "local")
 	err := mfs.AddMountpath("/tmp")
 	if err != nil {

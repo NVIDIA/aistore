@@ -442,7 +442,7 @@ func (rr *replicationRunner) Stop(err error) {
 }
 
 func (rr *replicationRunner) dispatchRequest(req *replRequest) {
-	mpathInfo, _, _, _, _ := fqn2info(req.fqn)
+	mpathInfo, _ := path2mpathInfo(req.fqn)
 	if mpathInfo == nil {
 		errmsg := fmt.Sprintf("Failed to get mountpath for file %q", req.fqn)
 		glog.Error(errmsg)

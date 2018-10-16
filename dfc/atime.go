@@ -167,8 +167,8 @@ func (r *atimerunner) Run() error {
 	for {
 		select {
 		case <-ticker.C:
-			for mpath := range r.mpathRunners {
-				r.mpathRunners[mpath].flush()
+			for _, runner := range r.mpathRunners {
+				runner.flush()
 			}
 		case mpathRequest := <-r.mpathReqCh:
 			switch mpathRequest.action {
@@ -191,6 +191,9 @@ func (r *atimerunner) Run() error {
 			}
 		case <-r.stopCh:
 			ticker.Stop() // NOTE: not flushing cached atimes
+			for _, runner := range r.mpathRunners {
+				runner.stop()
+			}
 			return nil
 		}
 	}
@@ -209,7 +212,7 @@ func (r *atimerunner) Stop(err error) {
 // Note this method should only be called on objects belonging to buckets that have
 // LRU Enabled.
 func (r *atimerunner) touch(fqn string, setTime ...time.Time) {
-	mpathInfo, _, _, _, _ := fqn2info(fqn)
+	mpathInfo, _ := path2mpathInfo(fqn)
 	if mpathInfo == nil {
 		return
 	}
@@ -227,7 +230,6 @@ func (r *atimerunner) touch(fqn string, setTime ...time.Time) {
 		requestType: atimeTouch,
 	}
 	r.requestCh <- request
-
 }
 
 // atime requests the most recent access time of a given file.
@@ -241,7 +243,7 @@ func (r *atimerunner) touch(fqn string, setTime ...time.Time) {
 //     accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
 func (r *atimerunner) atime(fqn string) chan *atimeResponse {
 	var mpath string
-	if mpathInfo, _, _, _, _ := fqn2info(fqn); mpathInfo != nil {
+	if mpathInfo, _ := path2mpathInfo(fqn); mpathInfo != nil {
 		mpath = mpathInfo.Path
 		request := &atimeRequest{
 			responseCh:  make(chan *atimeResponse, 1),
@@ -264,13 +266,12 @@ func (r *atimerunner) addMpathAtimeRunner(mpath string) {
 		glog.Warningf("Attempted to add already existing mpath: %q", mpath)
 		return
 	}
-
-	fs := r.mountpaths.MountpathToFS(mpath)
-	if fs == "" {
+	mpathInfo, _ := path2mpathInfo(mpath)
+	if mpathInfo == nil {
 		common.Assert(false, fmt.Sprintf("Attempted to add a mpath %q with no corresponding filesystem", mpath))
 	}
 
-	r.mpathRunners[mpath] = r.newMpathAtimeRunner(mpath, fs)
+	r.mpathRunners[mpath] = r.newMpathAtimeRunner(mpath, mpathInfo.FileSystem)
 	go r.mpathRunners[mpath].run()
 }
 

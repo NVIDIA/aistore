@@ -184,7 +184,7 @@ func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 func TestSearchValidMountPath(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	oldMPs := setAvailableMountPaths("/")
-	mpathInfo, _, _, _, _ := fqn2info("/abc")
+	mpathInfo, _ := path2mpathInfo("/abc")
 	longestPrefix := mpathInfo.Path
 	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	setAvailableMountPaths(oldMPs...)
@@ -193,7 +193,7 @@ func TestSearchValidMountPath(t *testing.T) {
 func TestSearchInvalidMountPath(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	oldMPs := setAvailableMountPaths("/")
-	mpathInfo, _, _, _, _ := fqn2info("xabc")
+	mpathInfo, _ := path2mpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
@@ -201,7 +201,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 func TestSearchWithNoMountPath(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	oldMPs := setAvailableMountPaths("")
-	mpathInfo, _, _, _, _ := fqn2info("xabc")
+	mpathInfo, _ := path2mpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 	setAvailableMountPaths(oldMPs...)
 }
@@ -214,14 +214,14 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 
 	oldMPs := setAvailableMountPaths("/tmp", "/tmp/x")
 
-	mpathInfo, _, _, _, _ := fqn2info("xabc")
+	mpathInfo, _ := path2mpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
 
-	mpathInfo, _, _, _, _ = fqn2info("/tmp/xabc")
+	mpathInfo, _ = path2mpathInfo("/tmp/xabc")
 	longestPrefix := mpathInfo.Path
 	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
-	mpathInfo, _, _, _, _ = fqn2info("/tmp/x/abc")
+	mpathInfo, _ = path2mpathInfo("/tmp/x/abc")
 	longestPrefix = mpathInfo.Path
 	testAssert(t, longestPrefix == "/tmp/x", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/x")
 	setAvailableMountPaths(oldMPs...)
@@ -235,15 +235,15 @@ func TestSimilarCases(t *testing.T) {
 
 	oldMPs := setAvailableMountPaths("/tmp/abc")
 
-	mpathInfo, _, _, _, _ := fqn2info("/tmp/abc")
+	mpathInfo, _ := path2mpathInfo("/tmp/abc")
 	longestPrefix := mpathInfo.Path
 	testAssert(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
-	mpathInfo, _, _, _, _ = fqn2info("/tmp/abc/")
+	mpathInfo, _ = path2mpathInfo("/tmp/abc/")
 	longestPrefix = mpathInfo.Path
 	testAssert(t, longestPrefix == "/tmp/abc", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp/abc")
 
-	mpathInfo, _, _, _, _ = fqn2info("/abx")
+	mpathInfo, _ = path2mpathInfo("/abx")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "/abx")
 	setAvailableMountPaths(oldMPs...)
 }
@@ -252,15 +252,15 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
-	mpathInfo, _, _, _, _ := fqn2info("/tmp")
+	mpathInfo, _ := path2mpathInfo("/tmp")
 	longestPrefix := mpathInfo.Path
 	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
-	mpathInfo, _, _, _, _ = fqn2info("/tmp/")
+	mpathInfo, _ = path2mpathInfo("/tmp/")
 	longestPrefix = mpathInfo.Path
 	testAssert(t, longestPrefix == "/tmp", "Actual: [%s]. Expected: [%s]", longestPrefix, "/tmp")
 
-	mpathInfo, _, _, _, _ = fqn2info("/abx")
+	mpathInfo, _ = path2mpathInfo("/abx")
 	longestPrefix = mpathInfo.Path
 	testAssert(t, longestPrefix == "/", "Actual: [%s]. Expected: [%s]", longestPrefix, "/")
 	setAvailableMountPaths(oldMPs...)
