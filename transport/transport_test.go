@@ -4,22 +4,31 @@
  */
 package transport_test
 
-// How to run (examples):
+// How to run:
 //
 // 1) run all tests while redirecting errors to standard error:
 // go test -v -logtostderr=true
 //
 // 2) run a given test (name matching "Multi") with debug enabled:
 // DFC_STREAM_DEBUG=1 go test -v -run=Multi
+//
+// 3) same, with no debug and for 2 minutes instead of (the default) 30s
+// go test -v -run=Multi -duration 2m
+//
+// 4) same as above non-verbose
+// go test -run=Multi -duration 2m
+//
 
 import (
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -27,7 +36,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -43,6 +51,28 @@ eligendi optio, cumque nihil impedit, quo minus id, quod maxime placeat, facere 
 ut et voluptates repudiandae sint et molestiae non-recusandae.`
 	text = text1 + text2 + text3 + text4
 )
+
+var (
+	Mem2     *memsys.Mem2
+	duration time.Duration // test duration
+)
+
+func init() {
+	var (
+		d   string
+		err error
+	)
+	flag.StringVar(&d, "duration", "30s", "test duration")
+	flag.Parse()
+	if duration, err = time.ParseDuration(d); err != nil {
+		fmt.Printf("Invalid duration '%s'\n", d)
+		os.Exit(1)
+	}
+
+	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "TransportMem2"}
+	Mem2.Init()
+	go Mem2.Run()
+}
 
 func Example_Headers() {
 	f := func(w http.ResponseWriter, r *http.Request) {
@@ -82,11 +112,11 @@ func Example_Headers() {
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
-	sgl1 := client.Mem2.NewSGL(0)
+	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
 	stream.SendAsync(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1)
 
-	sgl2 := client.Mem2.NewSGL(0)
+	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
 	stream.SendAsync(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2)
 }
@@ -109,7 +139,11 @@ func Example_Mux() {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	path := transport.Register("n1", "dummy-rx", receive)
+	path, err := transport.Register("n1", "dummy-rx", receive)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url)
@@ -140,13 +174,15 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	streamWrite10GB(t, 99, nil, ts)
+	streamWrite10GB(t, 99, nil, ts, nil, nil)
+	printNetworkStats(t, "n1")
 }
 
 func Test_MultiStream(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+	tutils.Logf("Duration %v\n", duration)
 	mux := http.NewServeMux()
 	transport.SetMux("n1", mux)
 
@@ -154,11 +190,45 @@ func Test_MultiStream(t *testing.T) {
 	defer ts.Close()
 
 	wg := &sync.WaitGroup{}
+	netstats := make(map[string]transport.EndpointStats)
+	lock := &sync.Mutex{}
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
-		go streamWrite10GB(t, i, wg, ts)
+		go streamWrite10GB(t, i, wg, ts, netstats, lock)
 	}
 	wg.Wait()
+	compareNetworkStats(t, "n1", netstats)
+}
+
+func printNetworkStats(t *testing.T, network string) {
+	netstats, err := transport.GetNetworkStats(network)
+	tutils.CheckFatal(err, t)
+	for trname, eps := range netstats {
+		for sessid, stats := range eps { // EndpointStats by session ID
+			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats.Offset, stats.Num)
+		}
+	}
+}
+
+func compareNetworkStats(t *testing.T, network string, netstats1 map[string]transport.EndpointStats) {
+	netstats2, err := transport.GetNetworkStats(network)
+	tutils.CheckFatal(err, t)
+	for trname, eps2 := range netstats2 {
+		eps1, ok := netstats1[trname]
+		for sessid, stats2 := range eps2 { // EndpointStats by session ID
+			fmt.Printf("recv$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats2.Offset, stats2.Num)
+			if ok {
+				stats1, ok := eps1[sessid]
+				if ok {
+					fmt.Printf("send$ %s[%d]: offset=%d, num=%d\n", trname, sessid, stats1.Offset, stats1.Num)
+				} else {
+					fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessid)
+				}
+			} else {
+				fmt.Printf("send$ %s[%d]: -- not present --\n", trname, sessid)
+			}
+		}
+	}
 }
 
 func Test_MultipleNetworks(t *testing.T) {
@@ -171,7 +241,9 @@ func Test_MultipleNetworks(t *testing.T) {
 		transport.SetMux(network, mux)
 		ts := httptest.NewServer(mux)
 		defer ts.Close()
-		path := transport.Register(network, "endpoint", recvFunc)
+		path, err := transport.Register(network, "endpoint", recvFunc)
+		tutils.CheckFatal(err, t)
+
 		httpclient := &http.Client{Transport: &http.Transport{}}
 		url := ts.URL + path
 		streams = append(streams, transport.NewStream(httpclient, url))
@@ -202,7 +274,10 @@ func Test_OnSendCallback(t *testing.T) {
 	defer ts.Close()
 
 	totalRecv, recvFunc := makeRecvFunc(t)
-	path := transport.Register("n1", "callback", recvFunc)
+	path, err := transport.Register("n1", "callback", recvFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url)
@@ -241,20 +316,27 @@ func Test_OnSendCallback(t *testing.T) {
 // test helpers
 //
 
-func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server) {
+func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, netstats map[string]transport.EndpointStats, lock *sync.Mutex) {
 	if wg != nil {
 		defer wg.Done()
 	}
 	totalRecv, recvFunc := makeRecvFunc(t)
-	path := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
+	path, err := transport.Register("n1", fmt.Sprintf("rand-rx-%d", ii), recvFunc)
+	tutils.CheckFatal(err, t)
+
+	// NOTE: prior to running traffic, give it some time for all other goroutines
+	//       to perform registration (see README for details)
+	time.Sleep(time.Second)
+
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url)
+	now := time.Now()
 
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
-	slab := client.Mem2.SelectSlab2(32 * common.KiB)
-	for size < common.GiB*10 {
+	slab := Mem2.SelectSlab2(32 * common.KiB)
+	for time.Since(now) < duration {
 		hdr := genRandomHeader(random)
 		reader := newRandReader(random, hdr, slab)
 		stream.SendAsync(hdr, reader)
@@ -266,7 +348,17 @@ func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Serv
 		num++
 	}
 	stream.Fin()
-	tutils.Logf("[%2d]: objects: %d, total size: %d(%d MiB)\n", ii, num, size, size/common.MiB)
+	stats := stream.GetStats()
+	trname, sessid := stream.ID()
+	if netstats == nil {
+		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d)\n", trname, sessid, stats.Offset, stats.Num, num)
+	} else {
+		lock.Lock()
+		eps := make(transport.EndpointStats)
+		eps[sessid] = &stats
+		netstats[trname] = eps
+		lock.Unlock()
+	}
 
 	if *totalRecv != size {
 		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, size)
@@ -276,11 +368,11 @@ func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Serv
 func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
-		slab := client.Mem2.SelectSlab2(32 * common.KiB)
+		slab := Mem2.SelectSlab2(32 * common.KiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
-		if err != nil && err != io.EOF {
-			t.Fatal(err)
+		if err != io.EOF {
+			tutils.CheckFatal(err, t)
 		}
 		if written != hdr.Dsize {
 			t.Fatalf("size %d != %d", written, hdr.Dsize)
@@ -333,7 +425,7 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) 
 }
 
 func makeRandReader() (transport.Header, *randReader) {
-	slab := client.Mem2.SelectSlab2(32 * common.KiB)
+	slab := Mem2.SelectSlab2(32 * common.KiB)
 	random := newRand(time.Now().UnixNano())
 	hdr := genRandomHeader(random)
 	reader := newRandReader(random, hdr, slab)

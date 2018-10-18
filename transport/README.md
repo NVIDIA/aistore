@@ -13,7 +13,6 @@ First, basic definitions:
 | Receive callback | A function that has the following signature: `Receive func(http.ResponseWriter, transport.Header, io.Reader)`. Receive callback must be *registered* prior to the very first object being transferred over the stream - see next. | Notice the last parameter in the receive callback: `io.Reader`. Behind this (reading) interface, there's a special type reader supporting, in part, object boundaries. In other words, each callback invocation corresponds to one ransferred and received object. Note as well the object header that is also delivered to the receiving endpoint via the same callback. |
 | Registering receive callback | An API to establish the one-to-one correspondence between the stream sender and the stream receiver | For instance, to register the same receive callback `foo` with two different HTTP endpoints named "ep1" and "ep2", we could call `transport.Register("n1", "ep1", foo)` and `transport.Register("n1", "ep2", foo)`, where `n1` is an http request multiplexer ("muxer") that corresponds to one of the documented networking options - see [README, section Networking](README.md). The transport will then be calling `foo()` to separately deliver the "ep1" stream to the "ep1" endpoint and "ep2" - to, respectively, "ep2". Needless to say that a per-endpoint callback is also supported and permitted. To allow registering endpoints to different http request multiplexers, one can change network parameter `transport.Register("different-network", "ep1", foo)` |
 
-
 ## Example with comments
 
 ```go
@@ -31,6 +30,42 @@ for  {
 stream.Fin() // gracefully close the stream
 
 ```
+## Registering HTTP endpoint
+
+On the receiving side, each network contains multiple HTTP endpoints, whereby each HTTP endpoint, in turn, may have zero or more stream sessions.
+In effect, there are two nested many-to-many relationships whereby you may have multiple logical networks, each containing multiple named transports, etc.
+
+The following:
+
+```go
+path, err := transport.Register("public", "myapp", mycallback)
+```
+
+adds a transport endpoint named "myapp" to the "public" network (that must already exist), and then registers a user callback with the latter.
+
+The last argument, user-defined callback, must have the following typedef:
+
+```go
+Receive func(w http.ResponseWriter, hdr Header, object io.Reader)
+```
+
+The callback is being invoked on a per received object basis (note that a single stream may transfer multiple, potentially unlimited, number of objects).
+
+Back to the registration. On the HTTP receiving side, the call to `Register` translates as:
+
+```go
+mux.HandleFunc(path, mycallback)
+```
+where mux is `http.ServeMux` that corresponds to the named network ("public", in this example), and path is a URL path ending with "/myapp".
+
+**BEWARE**
+
+>> HTTP request multiplexer matches the URL of each incoming request against a list of registered paths and calls the handler for the path that most closely matches the URL.
+
+>> That is why registering a new endpoint with a given network (and its per-network multiplexer) should not be done concurrently with traffic that utilizes this same network.
+
+>> The limitation is rooted in the fact that, when registering, we insert an entry into the `http.ServeMux` private map of all its URL paths. This map is protected by a private mutex and is read-accessed to route HTTP requests...
+
 
 ## On the wire
 
