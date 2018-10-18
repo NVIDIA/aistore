@@ -248,19 +248,31 @@ func (r *Mem2) Init() (err error) {
 
 // as a common.Runner
 func (r *Mem2) Run() error {
-	if !flag.Parsed() {
-		flag.Parse()
-	}
 	r.time.t = time.NewTimer(r.time.d)
 	m, l := common.B2S(int64(r.MinFree), 2), common.B2S(int64(r.lowwm), 2)
-	glog.Infof("Starting %s, minfree %s, low %s", r.Getname(), m, l)
+	str := fmt.Sprintf("Starting %s, minfree %s, low %s", r.Getname(), m, l)
+	if flag.Parsed() {
+		glog.Infoln(str)
+	} else {
+		fmt.Println(str)
+	}
 	mem := sigar.Mem{}
 	mem.Get()
 	f := common.B2S(int64(mem.Free), 2)
 	if mem.Free > mem.Total-mem.Total/5 { // more than 80%
-		glog.Infof("%s: free memory %s > 80%% total", r.Getname(), f)
+		str = fmt.Sprintf("%s: free memory %s > 80%% total", r.Getname(), f)
+		if flag.Parsed() {
+			glog.Infoln(str)
+		} else {
+			fmt.Println(str)
+		}
 	} else if mem.Free < r.lowwm {
-		glog.Warningf("Warning: free memory %s below low watermark %s at %s startup", f, l, r.Getname())
+		str = fmt.Sprintf("Warning: free memory %s below low watermark %s at %s startup", f, l, r.Getname())
+		if flag.Parsed() {
+			glog.Infoln(str)
+		} else {
+			fmt.Println(str)
+		}
 	}
 	for {
 		select {
