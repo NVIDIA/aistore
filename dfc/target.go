@@ -1672,7 +1672,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *api.GetMsg) (*
 	// combine results into one long list
 	// real size of page is set in newFileWalk, so read it from any of results inside loop
 	pageSize := api.DefaultPageSize
-	allfinfos := make([]*api.BucketEntry, 0)
+	bckEntries := make([]*api.BucketEntry, 0)
 	fileCount := 0
 	for r := range ch {
 		if r.err != nil {
@@ -1681,7 +1681,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *api.GetMsg) (*
 		}
 
 		pageSize = r.infos.limit
-		allfinfos = append(allfinfos, r.infos.files...)
+		bckEntries = append(bckEntries, r.infos.files...)
 		fileCount += r.infos.fileCount
 	}
 
@@ -1689,20 +1689,20 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *api.GetMsg) (*
 	marker := ""
 	if fileCount > pageSize {
 		ifLess := func(i, j int) bool {
-			return allfinfos[i].Name < allfinfos[j].Name
+			return bckEntries[i].Name < bckEntries[j].Name
 		}
-		sort.Slice(allfinfos, ifLess)
+		sort.Slice(bckEntries, ifLess)
 		// set extra infos to nil to avoid memory leaks
 		// see NOTE on https://github.com/golang/go/wiki/SliceTricks
 		for i := pageSize; i < fileCount; i++ {
-			allfinfos[i] = nil
+			bckEntries[i] = nil
 		}
-		allfinfos = allfinfos[:pageSize]
-		marker = allfinfos[pageSize-1].Name
+		bckEntries = bckEntries[:pageSize]
+		marker = bckEntries[pageSize-1].Name
 	}
 
 	bucketList := &api.BucketList{
-		Entries:    allfinfos,
+		Entries:    bckEntries,
 		PageMarker: marker,
 	}
 
