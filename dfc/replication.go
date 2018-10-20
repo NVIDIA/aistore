@@ -83,7 +83,7 @@ type mpathReplicator struct {
 	mpath     string
 	replReqCh chan *replRequest
 	once      *sync.Once
-	controlCh chan struct{}
+	stopCh    chan struct{}
 }
 
 type replicationRunner struct {
@@ -93,7 +93,7 @@ type replicationRunner struct {
 	mpathReqCh       chan mpathReq
 	mountpaths       *fs.MountedFS
 	mpathReplicators map[string]*mpathReplicator // mpath -> replicator
-	controlCh        chan struct{}
+	stopCh           chan struct{}
 }
 
 func (rr *replicationRunner) newMpathReplicator(mpath string) *mpathReplicator {
@@ -103,7 +103,7 @@ func (rr *replicationRunner) newMpathReplicator(mpath string) *mpathReplicator {
 		mpath:     mpath,
 		replReqCh: make(chan *replRequest, mpathReplicationRequestBufferSize),
 		once:      &sync.Once{},
-		controlCh: make(chan struct{}, 1),
+		stopCh:    make(chan struct{}, 1),
 	}
 }
 
@@ -142,7 +142,7 @@ func newReplicationRunner(t *targetrunner, mountpaths *fs.MountedFS) *replicatio
 		mpathReqCh:       make(chan mpathReq),
 		mountpaths:       mountpaths,
 		mpathReplicators: make(map[string]*mpathReplicator),
-		controlCh:        make(chan struct{}),
+		stopCh:           make(chan struct{}),
 	}
 }
 
@@ -152,7 +152,7 @@ func (r *mpathReplicator) Run() {
 		select {
 		case req := <-r.replReqCh:
 			r.replicate(req)
-		case <-r.controlCh:
+		case <-r.stopCh:
 			return
 		}
 	}
@@ -160,8 +160,8 @@ func (r *mpathReplicator) Run() {
 
 func (r *mpathReplicator) Stop() {
 	glog.Infof("Stopping replicator for mountpath: %s", r.mpath)
-	r.controlCh <- struct{}{}
-	close(r.controlCh)
+	r.stopCh <- struct{}{}
+	close(r.stopCh)
 }
 
 func (r *mpathReplicator) replicate(req *replRequest) {
@@ -391,16 +391,16 @@ func (rr *replicationRunner) Run() error {
 			case replicationRemoveMountpath:
 				rr.removeMpath(mpathRequest.mpath)
 			}
-		case <-rr.controlCh:
+		case <-rr.stopCh:
 			return nil
 		}
 	}
 }
 
 func (rr *replicationRunner) Stop(err error) {
-	rr.controlCh <- struct{}{}
+	rr.stopCh <- struct{}{}
 	glog.Warningf("Replication runner stopped with error: %v", err)
-	close(rr.controlCh)
+	close(rr.stopCh)
 }
 
 func (rr *replicationRunner) dispatchRequest(req *replRequest) {

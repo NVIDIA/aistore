@@ -97,13 +97,13 @@ func (p *proxyServer) putObject(localPath string, bucket string, prefix string) 
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).
 func (p *proxyServer) getObject(bucket string, prefix string, w io.Writer) error {
-	_, _, err := client.GetFile(p.url, bucket, prefix, nil /* wg */, nil, /* errch */
+	_, _, err := client.GetFile(p.url, bucket, prefix, nil /* wg */, nil, /* errCh */
 		true /* silent */, true /* validate */, w)
 	return err
 }
 
 func (p *proxyServer) deleteObject(bucket string, prefix string) error {
-	return client.Del(p.url, bucket, prefix, nil /* wg */, nil /* errch */, true /* silent */)
+	return client.Del(p.url, bucket, prefix, nil /* wg */, nil /* errCh */, true /* silent */)
 }
 
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket

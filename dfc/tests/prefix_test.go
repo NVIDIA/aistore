@@ -63,7 +63,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	src := rand.NewSource(baseseed + 1000)
 	random := rand.New(src)
 	fileNames = make([]string, 0, prefixFileNumber)
-	errch := make(chan error, numfiles)
+	errCh := make(chan error, numfiles)
 	wg := &sync.WaitGroup{}
 
 	for i := 0; i < prefixFileNumber; i++ {
@@ -77,7 +77,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		}
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, keyName, errch, !testing.Verbose())
+		go client.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
 		fileNames = append(fileNames, fileName)
 	}
 
@@ -92,14 +92,14 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		}
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, keyName, errch, !testing.Verbose())
+		go client.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
 		fileNames = append(fileNames, fName)
 	}
 
 	wg.Wait()
 
 	select {
-	case e := <-errch:
+	case e := <-errCh:
 		tutils.Logf("Failed to PUT: %s\n", e)
 		t.Fail()
 	default:
@@ -206,18 +206,18 @@ func prefixLookup(t *testing.T, proxyURL string) {
 }
 
 func prefixCleanup(t *testing.T, proxyURL string) {
-	errch := make(chan error, numfiles)
+	errCh := make(chan error, numfiles)
 	var wg = &sync.WaitGroup{}
 
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, keyName, wg, errch, true)
+		go client.Del(proxyURL, clibucket, keyName, wg, errCh, true)
 	}
 	wg.Wait()
 
 	select {
-	case e := <-errch:
+	case e := <-errCh:
 		tutils.Logf("Failed to DEL: %s\n", e)
 		t.Fail()
 	default:

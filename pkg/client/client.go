@@ -299,20 +299,20 @@ func discardResponse(r *http.Response, err error, src string) (int64, error) {
 	return len, err
 }
 
-func emitError(r *http.Response, err error, errch chan error) {
-	if err == nil || errch == nil {
+func emitError(r *http.Response, err error, errCh chan error) {
+	if err == nil || errCh == nil {
 		return
 	}
 
 	if r != nil {
 		errObj := newReqError(err.Error(), r.StatusCode)
-		errch <- errObj
+		errCh <- errObj
 	} else {
-		errch <- err
+		errCh <- err
 	}
 }
 
-func get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
 	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
@@ -362,8 +362,8 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan erro
 	if v {
 		if hdhash != hash {
 			err = newInvalidCksumError(hdhash, hash)
-			if errch != nil {
-				errch <- err
+			if errCh != nil {
+				errCh <- err
 			}
 		} else {
 			if !silent {
@@ -372,7 +372,7 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan erro
 		}
 	}
 
-	emitError(resp, err, errch)
+	emitError(resp, err, errCh)
 	l := HTTPLatencies{
 		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
 		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
@@ -390,30 +390,30 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan erro
 }
 
 // Get sends a GET request to url and discards returned data
-func Get(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+func Get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
 	silent bool, validate bool) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, nil)
+	return get(url, bucket, keyname, wg, errCh, silent, validate, ioutil.Discard, nil)
 }
 
 // Get sends a GET request to url and discards the return
-func GetWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+func GetWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
 	silent bool, validate bool, q url.Values) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errch, silent, validate, ioutil.Discard, q)
+	return get(url, bucket, keyname, wg, errCh, silent, validate, ioutil.Discard, q)
 }
 
 // GetFile sends a GET request to url and writes the data to io.Writer
-func GetFile(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+func GetFile(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
 	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errch, silent, validate, w, nil)
+	return get(url, bucket, keyname, wg, errCh, silent, validate, w, nil)
 }
 
 // GetFile sends a GET request to url and writes the data to io.Writer
-func GetFileWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errch chan error,
+func GetFileWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
 	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errch, silent, validate, w, query)
+	return get(url, bucket, keyname, wg, errCh, silent, validate, w, query)
 }
 
-func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errch chan error, silent bool) (err error) {
+func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error, silent bool) (err error) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -424,14 +424,14 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	req, httperr := http.NewRequest(http.MethodDelete, url, nil)
 	if httperr != nil {
 		err = fmt.Errorf("Failed to create new HTTP request, err: %v", httperr)
-		emitError(nil, err, errch)
+		emitError(nil, err, errCh)
 		return err
 	}
 
 	r, httperr := client.Do(req)
 	if httperr != nil {
 		err = fmt.Errorf("Failed to delete file, err: %v", httperr)
-		emitError(nil, err, errch)
+		emitError(nil, err, errCh)
 		return err
 	}
 
@@ -440,7 +440,7 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errch chan
 	}()
 
 	_, err = discardResponse(r, err, "DELETE")
-	emitError(r, err, errch)
+	emitError(r, err, errCh)
 	return err
 }
 
@@ -754,14 +754,14 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 
 // PutAsync sends a PUT request to the given URL
 func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string, key string,
-	errch chan error, silent bool) {
+	errCh chan error, silent bool) {
 	defer wg.Done()
 	err := Put(proxyURL, reader, bucket, key, silent)
 	if err != nil {
-		if errch == nil {
+		if errCh == nil {
 			fmt.Println("Error channel is not given, do not know how to report error", err)
 		} else {
-			errch <- err
+			errCh <- err
 		}
 	}
 }

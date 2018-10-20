@@ -58,8 +58,8 @@ type (
 	rungroup struct {
 		runarr []common.Runner
 		runmap map[string]common.Runner // redundant, named
-		errch  chan error
-		stpch  chan error
+		errCh  chan error
+		stopCh chan error
 	}
 )
 
@@ -103,26 +103,26 @@ func (g *rungroup) run() error {
 	if len(g.runarr) == 0 {
 		return nil
 	}
-	g.errch = make(chan error, len(g.runarr))
-	g.stpch = make(chan error, 1)
+	g.errCh = make(chan error, len(g.runarr))
+	g.stopCh = make(chan error, 1)
 	for i, r := range g.runarr {
 		go func(i int, r common.Runner) {
 			err := r.Run()
 			glog.Warningf("Runner [%s] threw error [%v].", r.Getname(), err)
-			g.errch <- err
+			g.errCh <- err
 		}(i, r)
 	}
 
 	// wait here for (any/first) runner termination
-	err := <-g.errch
+	err := <-g.errCh
 	for _, r := range g.runarr {
 		r.Stop(err)
 	}
-	for i := 0; i < cap(g.errch)-1; i++ {
-		<-g.errch
+	for i := 0; i < cap(g.errCh)-1; i++ {
+		<-g.errCh
 	}
 	glog.Flush()
-	g.stpch <- nil
+	g.stopCh <- nil
 	return err
 }
 

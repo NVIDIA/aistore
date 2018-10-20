@@ -372,33 +372,33 @@ func (h *httprunner) run() error {
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 
 	if ctx.config.Net.UseIntra || ctx.config.Net.UseRepl {
-		var controlCh chan error
+		var errCh chan error
 		if ctx.config.Net.UseIntra && ctx.config.Net.UseRepl {
-			controlCh = make(chan error, 3)
+			errCh = make(chan error, 3)
 		} else {
-			controlCh = make(chan error, 2)
+			errCh = make(chan error, 2)
 		}
 
 		if ctx.config.Net.UseIntra {
 			go func() {
 				addr := h.si.InternalNet.NodeIPAddr + ":" + h.si.InternalNet.DaemonPort
-				controlCh <- h.internalServer.listenAndServe(addr, h.glogger)
+				errCh <- h.internalServer.listenAndServe(addr, h.glogger)
 			}()
 		}
 
 		if ctx.config.Net.UseRepl {
 			go func() {
 				addr := h.si.ReplNet.NodeIPAddr + ":" + h.si.ReplNet.DaemonPort
-				controlCh <- h.replServer.listenAndServe(addr, h.glogger)
+				errCh <- h.replServer.listenAndServe(addr, h.glogger)
 			}()
 		}
 
 		go func() {
 			addr := h.si.PublicNet.NodeIPAddr + ":" + h.si.PublicNet.DaemonPort
-			controlCh <- h.publicServer.listenAndServe(addr, h.glogger)
+			errCh <- h.publicServer.listenAndServe(addr, h.glogger)
 		}()
 
-		return <-controlCh
+		return <-errCh
 	}
 
 	// When only public net is configured listen on *:port

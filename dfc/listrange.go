@@ -470,8 +470,8 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 		done := make(chan struct{}, 1)
 		defer close(done)
 
-		errch := make(chan error)
-		defer close(errch)
+		errCh := make(chan error)
+		defer close(errCh)
 
 		// Asynchronously perform function
 		go func() {
@@ -480,12 +480,12 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 				glog.Errorf("Error performing list function: %v", err)
 				t.statsif.add(statErrListCount, 1)
 			}
-			errch <- err
+			errCh <- err
 		}()
 
 		if listMsg.Wait {
 			<-done
-			err = <-errch
+			err = <-errCh
 		}
 	}
 	return err

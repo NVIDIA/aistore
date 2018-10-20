@@ -30,14 +30,14 @@ func TestAtimerunnerStop(t *testing.T) {
 
 	atimer.Stop(fmt.Errorf("test"))
 
-	waitChan := make(chan struct{})
+	waitCh := make(chan struct{})
 	go func() {
 		atimer.touch("/tmp/fqn1")
-		waitChan <- struct{}{}
+		waitCh <- struct{}{}
 	}()
 
 	select {
-	case <-waitChan:
+	case <-waitCh:
 		t.Error("Touch was successful so atimerunner did not stop")
 	case <-time.After(50 * time.Millisecond):
 		break

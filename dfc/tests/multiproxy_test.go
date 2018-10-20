@@ -422,10 +422,10 @@ func joinWhileVoteInProgress(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	stopch := make(chan struct{})
-	errch := make(chan error, 10)
+	errCh := make(chan error, 10)
 	mocktgt := &voteRetryMockTarget{
 		voteInProgress: true,
-		errch:          errch,
+		errCh:          errCh,
 	}
 
 	go runMockTarget(t, proxyURL, mocktgt, stopch, &smap)
@@ -472,7 +472,7 @@ func joinWhileVoteInProgress(t *testing.T) {
 	stopch <- v
 	close(stopch)
 	select {
-	case err := <-errch:
+	case err := <-errCh:
 		t.Errorf("Mock Target Error: %v", err)
 
 	default:
@@ -554,7 +554,7 @@ func concurrentPutGetDel(t *testing.T) {
 	createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	var (
-		errch = make(chan error, len(smap.Pmap))
+		errCh = make(chan error, len(smap.Pmap))
 		wg    sync.WaitGroup
 	)
 
@@ -568,14 +568,14 @@ func concurrentPutGetDel(t *testing.T) {
 		wg.Add(1)
 		go func(url string, cid int64) {
 			defer wg.Done()
-			errch <- proxyPutGetDelete(int64(baseseed)+cid, 100, url)
+			errCh <- proxyPutGetDelete(int64(baseseed)+cid, 100, url)
 		}(v.PublicNet.DirectURL, cid)
 	}
 
 	wg.Wait()
-	close(errch)
+	close(errCh)
 
-	for err := range errch {
+	for err := range errCh {
 		tutils.CheckFatal(err, t)
 	}
 	destroyLocalBucket(t, proxyURL, clibucket)
@@ -598,12 +598,12 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 			return fmt.Errorf("Error executing put: %v", err)
 		}
 
-		client.Get(proxyURL, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */, false /* validate */)
+		client.Get(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */, false /* validate */)
 		if err != nil {
 			return fmt.Errorf("Error executing get: %v", err)
 		}
 
-		err = client.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errch */, true /* silent */)
+		err = client.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */)
 		if err != nil {
 			return fmt.Errorf("Error executing del: %v", err)
 		}
@@ -616,7 +616,7 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 // channel and route the deletes to the new primary proxy
 // stops when told to do so via the stop channel
 func putGetDelWorker(proxyURL string, seed int64, stopch <-chan struct{}, proxyurlch <-chan string,
-	errch chan error, wg *sync.WaitGroup) {
+	errCh chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	random := rand.New(rand.NewSource(seed))
@@ -625,7 +625,7 @@ loop:
 	for {
 		select {
 		case <-stopch:
-			close(errch)
+			close(errCh)
 			break loop
 
 		case url := <-proxyurlch:
@@ -634,7 +634,7 @@ loop:
 			for {
 				select {
 				case keyname := <-missedDeleteCh:
-					err := client.Del(url, localBucketName, keyname, nil, errch, true)
+					err := client.Del(url, localBucketName, keyname, nil, errCh, true)
 					if err != nil {
 						missedDeleteCh <- keyname
 					}
@@ -649,7 +649,7 @@ loop:
 
 		reader, err := client.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
-			errch <- err
+			errCh <- err
 			continue
 		}
 
@@ -658,16 +658,16 @@ loop:
 
 		err = client.Put(proxyURL, reader, localBucketName, keyname, true /* silent */)
 		if err != nil {
-			errch <- err
+			errCh <- err
 			continue
 		}
 
-		_, _, err = client.Get(proxyURL, localBucketName, keyname, nil, errch, true, false)
+		_, _, err = client.Get(proxyURL, localBucketName, keyname, nil, errCh, true, false)
 		if err != nil {
-			errch <- err
+			errCh <- err
 		}
 
-		err = client.Del(proxyURL, localBucketName, keyname, nil, errch, true)
+		err = client.Del(proxyURL, localBucketName, keyname, nil, errCh, true)
 		if err != nil {
 			missedDeleteCh <- keyname
 		}
@@ -682,14 +682,14 @@ loop:
 
 // primaryKiller kills primary proxy, notifies all workers, and restore it.
 func primaryKiller(t *testing.T, proxyURL string, seed int64, stopch <-chan struct{}, proxyurlchs []chan string,
-	errch chan error, wg *sync.WaitGroup) {
+	errCh chan error, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 loop:
 	for {
 		select {
 		case <-stopch:
-			close(errch)
+			close(errCh)
 			for _, ch := range proxyurlchs {
 				close(ch)
 			}
@@ -731,7 +731,7 @@ loop:
 func proxyStress(t *testing.T) {
 	var (
 		bs          = int64(baseseed)
-		errchs      = make([]chan error, numworkers+1)
+		errChs      = make([]chan error, numworkers+1)
 		stopchs     = make([]chan struct{}, numworkers+1)
 		proxyurlchs = make([]chan string, numworkers)
 		wg          sync.WaitGroup
@@ -742,12 +742,12 @@ func proxyStress(t *testing.T) {
 
 	// start all workers
 	for i := 0; i < numworkers; i++ {
-		errchs[i] = make(chan error, defaultChanSize)
+		errChs[i] = make(chan error, defaultChanSize)
 		stopchs[i] = make(chan struct{}, defaultChanSize)
 		proxyurlchs[i] = make(chan string, defaultChanSize)
 
 		wg.Add(1)
-		go putGetDelWorker(proxyURL, bs, stopchs[i], proxyurlchs[i], errchs[i], &wg)
+		go putGetDelWorker(proxyURL, bs, stopchs[i], proxyurlchs[i], errChs[i], &wg)
 
 		// stagger the workers so they don't always do the same operation at the same time
 		n := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(999)
@@ -755,15 +755,15 @@ func proxyStress(t *testing.T) {
 		bs++
 	}
 
-	errchs[numworkers] = make(chan error, defaultChanSize)
+	errChs[numworkers] = make(chan error, defaultChanSize)
 	stopchs[numworkers] = make(chan struct{}, defaultChanSize)
 	wg.Add(1)
-	go primaryKiller(t, proxyURL, bs, stopchs[numworkers], proxyurlchs, errchs[numworkers], &wg)
+	go primaryKiller(t, proxyURL, bs, stopchs[numworkers], proxyurlchs, errChs[numworkers], &wg)
 
 	timer := time.After(multiProxyTestDuration)
 loop:
 	for {
-		for _, ch := range errchs {
+		for _, ch := range errChs {
 			select {
 			case <-timer:
 				break loop
@@ -1132,7 +1132,7 @@ func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
 
 type voteRetryMockTarget struct {
 	voteInProgress bool
-	errch          chan error
+	errCh          chan error
 }
 
 func (*voteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
@@ -1156,7 +1156,7 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 		}
 
 		if err != nil {
-			p.errch <- fmt.Errorf("Error writing message: %v\n", err)
+			p.errCh <- fmt.Errorf("Error writing message: %v\n", err)
 		}
 
 	default:

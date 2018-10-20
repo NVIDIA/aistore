@@ -973,11 +973,11 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *da
 
 // Receives info about locally cached files from targets in batches
 // and merges with existing list of cloud files
-func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh chan *localFilePage, errch chan error) {
+func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh chan *localFilePage, errCh chan error) {
 	for rb := range dataCh {
 		if rb.err != nil {
-			if errch != nil {
-				errch <- rb.err
+			if errCh != nil {
+				errCh <- rb.err
 			}
 			glog.Errorf("Failed to get information about file in DFC cache: %v", rb.err)
 			return
@@ -1070,11 +1070,11 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *api.BucketL
 
 	smap := p.smapowner.get()
 	dataCh := make(chan *localFilePage, smap.countTargets())
-	errch := make(chan error, 1)
+	errCh := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
 	go func() {
-		p.consumeCachedList(bucketMap, dataCh, errch)
+		p.consumeCachedList(bucketMap, dataCh, errCh)
 		wgConsumer.Done()
 	}()
 
@@ -1096,7 +1096,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *api.BucketL
 	wgConsumer.Wait()
 
 	select {
-	case err = <-errch:
+	case err = <-errCh:
 		return
 	default:
 	}

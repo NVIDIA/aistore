@@ -138,7 +138,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		totalOps int
 		prc      int
 	)
-	errch := make(chan error, 10)
+	errCh := make(chan error, 10)
 	fileCount := len(fileNames)
 	if taskGrp != nil {
 		defer taskGrp.Done()
@@ -156,8 +156,8 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 			if err != nil {
 				tutils.Logf("PUT write FAIL: %v\n", err)
 				t.Error(err)
-				if errch != nil {
-					errch <- err
+				if errCh != nil {
+					errCh <- err
 				}
 				return
 			}
@@ -168,14 +168,14 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.PutAsync(&wg, proxyURL, r, clibucket, keyname, errch, true /* silent */)
+						client.PutAsync(&wg, proxyURL, r, clibucket, keyname, errCh, true /* silent */)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
 					err = client.Put(proxyURL, r, clibucket, keyname, true /* silent */)
 					if err != nil {
-						errch <- err
+						errCh <- err
 					}
 					unlockFile(idx, rwFileCreated)
 				}
@@ -187,7 +187,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				prc = newPrc
 			}
 			select {
-			case e := <-errch:
+			case e := <-errCh:
 				tutils.Logf("PUT failed: %v\n", e.Error())
 				t.Fail()
 			default:
@@ -207,7 +207,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int, doCleanUp bool) {
 	done := false
 	var totalOps, currIdx int
-	errch := make(chan error, 10)
+	errCh := make(chan error, 10)
 	var wg = &sync.WaitGroup{}
 
 	if taskGrp != nil {
@@ -223,12 +223,12 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Del(proxyURL, clibucket, keyname, wg, errch, true)
+					client.Del(proxyURL, clibucket, keyname, wg, errCh, true)
 					unlockFile(localIdx, rwFileDeleted)
 					atomic.AddInt64(&delCounter, -1)
 				}()
 			} else {
-				client.Del(proxyURL, clibucket, keyname, nil, errch, true)
+				client.Del(proxyURL, clibucket, keyname, nil, errCh, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 
@@ -247,7 +247,7 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		select {
 		case <-doneCh:
 			done = true
-		case e := <-errch:
+		case e := <-errCh:
 			tutils.Logf("DEL failed: %v\n", e.Error())
 			t.Fail()
 		default:
@@ -259,7 +259,7 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	done := false
 	var currIdx, totalOps int
-	errch := make(chan error, 10)
+	errCh := make(chan error, 10)
 	var wg = &sync.WaitGroup{}
 
 	if taskGrp != nil {
@@ -275,12 +275,12 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Get(proxyURL, clibucket, keyname, wg, errch, true, false)
+					client.Get(proxyURL, clibucket, keyname, wg, errCh, true, false)
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
 				}()
 			} else {
-				client.Get(proxyURL, clibucket, keyname, nil, errch, true, false)
+				client.Get(proxyURL, clibucket, keyname, nil, errCh, true, false)
 				unlockFile(idx, rwFileExists)
 			}
 			currIdx = idx + 1
@@ -295,7 +295,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 		select {
 		case <-doneCh:
 			done = true
-		case e := <-errch:
+		case e := <-errCh:
 			tutils.Logf("GET failed: %v\n", e.Error())
 			t.Fail()
 		default:

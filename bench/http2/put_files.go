@@ -59,7 +59,7 @@ func main() {
 
 func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan func()) error {
 	var (
-		errch = make(chan error, files)
+		errCh = make(chan error, files)
 		wg    = &sync.WaitGroup{}
 	)
 
@@ -74,13 +74,13 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			client.PutAsync(wg, url, r, bucket, "__bench/"+fname, errch, !testing.Verbose())
+			client.PutAsync(wg, url, r, bucket, "__bench/"+fname, errCh, !testing.Verbose())
 		}
 	}
 	close(pool)
 	wg.Wait()
 	select {
-	case err := <-errch:
+	case err := <-errCh:
 		return err
 	default:
 		return nil

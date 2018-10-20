@@ -306,15 +306,15 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 }
 
 func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[string]string) {
-	errch := make(chan error, 100)
+	errCh := make(chan error, 100)
 	wg := &sync.WaitGroup{}
 	for objname := range newVersions {
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, objname, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, bucket, objname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	selectErr(errch, "delete", t, abortonerr)
-	close(errch)
+	selectErr(errCh, "delete", t, abortonerr)
+	close(errCh)
 }
 
 func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
@@ -325,7 +325,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	var (
 		filesPutCh = make(chan string, objCountToTest)
 		fileslist  = make(map[string]string, objCountToTest)
-		errch      = make(chan error, objCountToTest)
+		errCh      = make(chan error, objCountToTest)
 		numPuts    = objCountToTest
 		bucket     = clibucket
 		versionDir = "versionid"
@@ -341,11 +341,11 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
-	putRandObjs(proxyURL, baseseed+110, filesize, int(numPuts), bucket, errch, filesPutCh,
+	putRandObjs(proxyURL, baseseed+110, filesize, int(numPuts), bucket, errCh, filesPutCh,
 		ldir, versionDir, true, sgl)
-	selectErr(errch, "put", t, false)
+	selectErr(errCh, "put", t, false)
 	close(filesPutCh)
-	close(errch)
+	close(errCh)
 	for fname := range filesPutCh {
 		if fname != "" {
 			fileslist[versionDir+"/"+fname] = ""

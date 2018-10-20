@@ -116,7 +116,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 	stopTime := time.Now().Add(fshcRunTimeMax)
 
 	for stopTime.After(time.Now()) {
-		errch := make(chan error, len(filelist))
+		errCh := make(chan error, len(filelist))
 		filesPutCh := make(chan string, len(filelist))
 
 		for _, fname := range filelist {
@@ -142,9 +142,9 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errch, filesPutCh, ldir, fshcDir, true, sgl)
+				putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errCh, filesPutCh, ldir, fshcDir, true, sgl)
 				select {
-				case <-errch:
+				case <-errCh:
 					// do nothing
 				default:
 				}
@@ -156,7 +156,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			}
 		}
 
-		close(errch)
+		close(errCh)
 		close(filesPutCh)
 	}
 
@@ -289,11 +289,11 @@ func TestFSCheckerDetection(t *testing.T) {
 		}
 		f.Close()
 		filesPutCh := make(chan string, len(fileList))
-		errch := make(chan error, len(fileList))
-		putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errch, filesPutCh, ldir, fshcDir, true, sgl)
-		selectErr(errch, "put", t, false)
+		errCh := make(chan error, len(fileList))
+		putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errCh, filesPutCh, ldir, fshcDir, true, sgl)
+		selectErr(errCh, "put", t, false)
 		close(filesPutCh)
-		close(errch)
+		close(errCh)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}

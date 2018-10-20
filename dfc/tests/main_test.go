@@ -84,14 +84,14 @@ func Test_download(t *testing.T) {
 	}
 
 	// Start the worker pools
-	errch := make(chan error, 100)
+	errCh := make(chan error, 100)
 
 	var wg = &sync.WaitGroup{}
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
 		// Read the response and write it to a file
-		go getAndCopyTmp(proxyURL, i, keynameChans[i], t, wg, errch, resultChans[i], clibucket)
+		go getAndCopyTmp(proxyURL, i, keynameChans[i], t, wg, errCh, resultChans[i], clibucket)
 	}
 
 	num := getMatchingKeys(proxyURL, match, clibucket, keynameChans, filesCreated, t)
@@ -124,12 +124,12 @@ func Test_download(t *testing.T) {
 	if sumtotfiles != num {
 		s := fmt.Sprintf("Not all files downloaded. Expected: %d, Downloaded:%d", num, sumtotfiles)
 		t.Error(s)
-		if errch != nil {
-			errch <- errors.New(s)
+		if errCh != nil {
+			errCh <- errors.New(s)
 		}
 	}
 	select {
-	case <-errch:
+	case <-errCh:
 		t.Fail()
 	default:
 	}
@@ -149,12 +149,12 @@ func Test_matchdelete(t *testing.T) {
 		keyname_chans[i] = make(chan string, 100)
 	}
 	// Start the worker pools
-	errch := make(chan error, 100)
+	errCh := make(chan error, 100)
 	var wg = &sync.WaitGroup{}
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keyname_chans[i], t, wg, errch, clibucket)
+		go deleteFiles(proxyURL, keyname_chans[i], t, wg, errCh, clibucket)
 	}
 
 	// list the bucket
@@ -188,7 +188,7 @@ func Test_matchdelete(t *testing.T) {
 	}
 	wg.Wait()
 	select {
-	case <-errch:
+	case <-errCh:
 		t.Fail()
 	default:
 	}
@@ -217,7 +217,7 @@ func Test_putdeleteRange(t *testing.T) {
 		defer destroyLocalBucket(t, proxyURL, clibucket)
 	}
 
-	errch := make(chan error, numfiles*5)
+	errCh := make(chan error, numfiles*5)
 	filesPutCh := make(chan string, numfiles)
 
 	if usingSG {
@@ -231,9 +231,9 @@ func Test_putdeleteRange(t *testing.T) {
 		fname = fmt.Sprintf("b-%04d", i)
 		filenameList = append(filenameList, fname)
 	}
-	putRandObjsFromList(proxyURL, baseseed, filesize, filenameList, clibucket, errch, filesPutCh, DeleteDir,
+	putRandObjsFromList(proxyURL, baseseed, filesize, filenameList, clibucket, errCh, filesPutCh, DeleteDir,
 		commonPrefix, true, sgl)
-	selectErr(errch, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
+	selectErr(errCh, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
 	close(filesPutCh)
 	type testParams struct {
 		// title to print out while testing
@@ -316,7 +316,7 @@ func Test_putdeleteRange(t *testing.T) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keynameChans[i], t, wg, errch, clibucket)
+		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
 	}
 
 	if usingFile {
@@ -336,7 +336,7 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	wg.Wait()
-	selectErr(errch, "delete", t, false)
+	selectErr(errCh, "delete", t, false)
 }
 
 // PUT, then delete
@@ -350,7 +350,7 @@ func Test_putdelete(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
 
-	errch := make(chan error, numfiles)
+	errCh := make(chan error, numfiles)
 	filesPutCh := make(chan string, numfiles)
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
@@ -362,10 +362,10 @@ func Test_putdelete(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, baseseed, filesize, numfiles, clibucket, errch, filesPutCh,
+	putRandObjs(proxyURL, baseseed, filesize, numfiles, clibucket, errCh, filesPutCh,
 		DeleteDir, DeleteStr, true, sgl)
 	close(filesPutCh)
-	selectErr(errch, "put", t, true)
+	selectErr(errCh, "put", t, true)
 
 	// Declare one channel per worker to pass the keyname
 	keynameChans := make([]chan string, numworkers)
@@ -379,7 +379,7 @@ func Test_putdelete(t *testing.T) {
 	// Get the workers started
 	for i := 0; i < numworkers; i++ {
 		wg.Add(1)
-		go deleteFiles(proxyURL, keynameChans[i], t, wg, errch, clibucket)
+		go deleteFiles(proxyURL, keynameChans[i], t, wg, errCh, clibucket)
 	}
 
 	num := 0
@@ -398,7 +398,7 @@ func Test_putdelete(t *testing.T) {
 	}
 
 	wg.Wait()
-	selectErr(errch, "delete", t, false)
+	selectErr(errCh, "delete", t, false)
 }
 
 func listObjects(t *testing.T, proxyURL string, msg *api.GetMsg, bucket string, objLimit int) (*api.BucketList, error) {
@@ -512,7 +512,7 @@ func Test_coldgetmd5(t *testing.T) {
 		numPuts    = 5
 		filesPutCh = make(chan string, numPuts)
 		fileslist  = make([]string, 0, 100)
-		errch      = make(chan error, 100)
+		errCh      = make(chan error, 100)
 		wg         = &sync.WaitGroup{}
 		bucket     = clibucket
 		totalsize  = numPuts * largefilesize
@@ -520,8 +520,7 @@ func Test_coldgetmd5(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("Test_coldgetmd5 requires a cloud bucket")
 	}
 
@@ -538,9 +537,9 @@ func Test_coldgetmd5(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, baseseed, filesize, numPuts, bucket, errch, filesPutCh, ldir,
+	putRandObjs(proxyURL, baseseed, filesize, numPuts, bucket, errCh, filesPutCh, ldir,
 		ColdValidStr, true, sgl)
-	selectErr(errch, "put", t, false)
+	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
 		fileslist = append(fileslist, ColdValidStr+"/"+fname)
@@ -551,14 +550,14 @@ func Test_coldgetmd5(t *testing.T) {
 		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	}
 	start := time.Now()
-	getfromfilelist(t, proxyURL, bucket, errch, fileslist, false)
+	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
 	curr := time.Now()
 	duration := curr.Sub(start)
 	if t.Failed() {
 		goto cleanup
 	}
 	tutils.Logf("GET %d MB without MD5 validation: %v\n", totalsize, duration)
-	selectErr(errch, "get", t, false)
+	selectErr(errCh, "get", t, false)
 	evictobjects(t, proxyURL, fileslist)
 	// Enable Cold Get Validation
 	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
@@ -566,11 +565,11 @@ func Test_coldgetmd5(t *testing.T) {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, proxyURL, bucket, errch, fileslist, true)
+	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	tutils.Logf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
-	selectErr(errch, "get", t, false)
+	selectErr(errCh, "get", t, false)
 cleanup:
 	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	for _, fn := range fileslist {
@@ -579,11 +578,11 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, fn, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, bucket, fn, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	selectErr(errch, "delete", t, false)
-	close(errch)
+	selectErr(errCh, "delete", t, false)
+	close(errCh)
 }
 
 func TestHeadLocalBucket(t *testing.T) {
@@ -751,7 +750,7 @@ func TestHeadObjectCheckCached(t *testing.T) {
 }
 
 func getAndCopyTmp(proxyURL string, id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
-	errch chan error, resch chan workres, bucket string) {
+	errCh chan error, resch chan workres, bucket string) {
 	geturl := proxyURL + common.URLPath(api.Version, api.Objects)
 	res := workres{0, 0}
 	defer func() {
@@ -761,7 +760,7 @@ func getAndCopyTmp(proxyURL string, id int, keynames <-chan string, t *testing.T
 
 	for keyname := range keynames {
 		url := geturl + common.URLPath(bucket, keyname)
-		written, failed := getAndCopyOne(id, t, errch, bucket, keyname, url)
+		written, failed := getAndCopyOne(id, t, errCh, bucket, keyname, url)
 		if failed {
 			t.Fail()
 			return
@@ -772,7 +771,7 @@ func getAndCopyTmp(proxyURL string, id int, keynames <-chan string, t *testing.T
 	resch <- res
 }
 
-func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url string) (written int64, failed bool) {
+func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url string) (written int64, failed bool) {
 	var errstr string
 	t.Logf("Worker %2d: GET %q", id, url)
 	resp, err := http.Get(url)
@@ -781,7 +780,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 	}
 
 	if err != nil {
-		errch <- err
+		errCh <- err
 		t.Error(err)
 		failed = true
 		return
@@ -792,7 +791,7 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 	if resp.StatusCode >= http.StatusBadRequest {
 		err = fmt.Errorf("Worker %2d: get key %s from bucket %s http error %d",
 			id, keyname, bucket, resp.StatusCode)
-		errch <- err
+		errCh <- err
 		t.Error(err)
 		failed = true
 		return
@@ -864,12 +863,12 @@ func getAndCopyOne(id int, t *testing.T, errch chan error, bucket, keyname, url 
 	return
 }
 
-func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errch chan error, bucket string) {
+func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync.WaitGroup, errCh chan error, bucket string) {
 	defer wg.Done()
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go client.Del(proxyURL, bucket, keyname, dwg, errch, true)
+		go client.Del(proxyURL, bucket, keyname, dwg, errCh, true)
 	}
 	dwg.Wait()
 }
@@ -926,22 +925,21 @@ func testListBucket(t *testing.T, proxyURL, bucket string, msg *api.GetMsg, limi
 func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	const fileSize = 1024
 	var (
-		numFiles        = 3
-		seed            = baseseed + 111
-		errorChannel    = make(chan error, numFiles*5)
-		fileNameChannel = make(chan string, numfiles)
-		sgl             *memsys.SGL
-		fqn             string
-		fileName        string
-		oldFileInfo     os.FileInfo
-		newFileInfo     os.FileInfo
-		errstr          string
-		filesList       = make([]string, 0, numFiles)
-		proxyURL        = getPrimaryURL(t, proxyURLRO)
+		numFiles    = 3
+		seed        = baseseed + 111
+		errCh       = make(chan error, numFiles*5)
+		fileNameCh  = make(chan string, numfiles)
+		sgl         *memsys.SGL
+		fqn         string
+		fileName    string
+		oldFileInfo os.FileInfo
+		newFileInfo os.FileInfo
+		errstr      string
+		filesList   = make([]string, 0, numFiles)
+		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestRegressionCloudBuckets test requires a cloud bucket")
 	}
 
@@ -951,10 +949,10 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	tutils.Logf("Creating %d objects\n", numFiles)
-	putRandObjs(proxyURL, seed, fileSize, numFiles, clibucket, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
-	selectErr(errorChannel, "put", t, false)
+	putRandObjs(proxyURL, seed, fileSize, numFiles, clibucket, errCh, fileNameCh, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	selectErr(errCh, "put", t, false)
 
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	// Fetch the file from cloud bucket.
 	_, _, err := client.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
@@ -995,7 +993,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, newFileInfo, fqn, oldFileInfo)
 
 	// Test when the xxHash of the file is changed
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	filepath.Walk(rootDir, fsWalkFunc)
 	oldFileInfo, err = os.Stat(fqn)
@@ -1010,7 +1008,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, newFileInfo, fqn, oldFileInfo)
 
 	// Test for no checksum algo
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	filepath.Walk(rootDir, fsWalkFunc)
 	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
@@ -1038,12 +1036,12 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, fn, wg, errorChannel, !testing.Verbose())
+		go client.Del(proxyURL, clibucket, fn, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	selectErr(errorChannel, "delete", t, false)
-	close(errorChannel)
-	close(fileNameChannel)
+	selectErr(errCh, "delete", t, false)
+	close(errCh)
+	close(fileNameCh)
 }
 
 func validateGETUponFileChangeForChecksumValidation(
@@ -1073,16 +1071,16 @@ func validateGETUponFileChangeForChecksumValidation(
 func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	const fileSize = 1024
 	var (
-		numFiles        = 3
-		fileNameChannel = make(chan string, numFiles)
-		errorChannel    = make(chan error, 100)
-		sgl             *memsys.SGL
-		seed            = int64(111)
-		bucketName      = TestLocalBucketName
-		proxyURL        = getPrimaryURL(t, proxyURLRO)
-		fqn             string
-		errstr          string
-		err             error
+		numFiles   = 3
+		fileNameCh = make(chan string, numFiles)
+		errCh      = make(chan error, 100)
+		sgl        *memsys.SGL
+		seed       = int64(111)
+		bucketName = TestLocalBucketName
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		fqn        string
+		errstr     string
+		err        error
 	)
 
 	createFreshLocalBucket(t, proxyURL, bucketName)
@@ -1092,8 +1090,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errorChannel, fileNameChannel, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
-	selectErr(errorChannel, "put", t, false)
+	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errCh, fileNameCh, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
 	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
@@ -1120,7 +1118,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}
 
 	// Test changing the file content
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing contents of the file [%s]: %s\n", fileName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
@@ -1128,7 +1126,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	executeTwoGETsForChecksumValidation(proxyURL, bucketName, fileName, t)
 
 	// Test changing the file xattr
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
 	errstr = dfc.Setxattr(fqn, api.XattrXXHashVal, []byte("01234abcde"))
@@ -1138,7 +1136,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	executeTwoGETsForChecksumValidation(proxyURL, bucketName, fileName, t)
 
 	// Test for none checksum algo
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	if t.Failed() {
@@ -1159,8 +1157,8 @@ cleanup:
 	destroyLocalBucket(t, proxyURL, bucketName)
 	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-	close(errorChannel)
-	close(fileNameChannel)
+	close(errCh)
+	close(fileNameCh)
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, t *testing.T) {
@@ -1182,14 +1180,14 @@ func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, 
 func TestRangeRead(t *testing.T) {
 	const fileSize = 1024
 	var (
-		numFiles        = 1
-		fileNameChannel = make(chan string, numFiles)
-		errorChannel    = make(chan error, numFiles)
-		sgl             *memsys.SGL
-		seed            = int64(131)
-		proxyURL        = getPrimaryURL(t, proxyURLRO)
-		bucketName      = clibucket
-		fileName        string
+		numFiles   = 1
+		fileNameCh = make(chan string, numFiles)
+		errCh      = make(chan error, numFiles)
+		sgl        *memsys.SGL
+		seed       = int64(131)
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		bucketName = clibucket
+		fileName   string
 	)
 
 	if usingSG {
@@ -1198,15 +1196,15 @@ func TestRangeRead(t *testing.T) {
 	}
 
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
-	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errorChannel, fileNameChannel, RangeGetDir, RangeGetStr, false, sgl)
-	selectErr(errorChannel, "put", t, false)
+	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errCh, fileNameCh, RangeGetDir, RangeGetStr, false, sgl)
+	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
 	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldEnableReadRangeChecksum := checksumConfig["enable_read_range_checksum"].(bool)
 
-	fileName = <-fileNameChannel
+	fileName = <-fileNameCh
 	tutils.Logln("Testing valid cases.")
 	// Validate entire object checksum is being returned
 	if oldEnableReadRangeChecksum {
@@ -1242,12 +1240,12 @@ cleanup:
 	}
 
 	wg.Add(1)
-	go client.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errorChannel, !testing.Verbose())
+	go client.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
 	wg.Wait()
-	selectErr(errorChannel, "delete", t, false)
+	selectErr(errCh, "delete", t, false)
 	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-	close(errorChannel)
-	close(fileNameChannel)
+	close(errCh)
+	close(fileNameCh)
 
 	if created {
 		destroyLocalBucket(t, proxyURL, clibucket)
@@ -1357,7 +1355,7 @@ func Test_checksum(t *testing.T) {
 	var (
 		filesPutCh  = make(chan string, 100)
 		fileslist   = make([]string, 0, 100)
-		errch       = make(chan error, 100)
+		errCh       = make(chan error, 100)
 		bucket      = clibucket
 		start, curr time.Time
 		duration    time.Duration
@@ -1384,9 +1382,9 @@ func Test_checksum(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, 0, filesize, int(numPuts), bucket, errch, filesPutCh, ldir,
+	putRandObjs(proxyURL, 0, filesize, int(numPuts), bucket, errCh, filesPutCh, ldir,
 		ChksumValidStr, true, sgl)
-	selectErr(errch, "put", t, false)
+	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
 		if fname != "" {
@@ -1410,14 +1408,14 @@ func Test_checksum(t *testing.T) {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, proxyURL, bucket, errch, fileslist, false)
+	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	if t.Failed() {
 		goto cleanup
 	}
 	tutils.Logf("GET %d MB without any checksum validation: %v\n", totalio, duration)
-	selectErr(errch, "get", t, false)
+	selectErr(errCh, "get", t, false)
 	evictobjects(t, proxyURL, fileslist)
 	switch clichecksum {
 	case "all":
@@ -1445,13 +1443,13 @@ func Test_checksum(t *testing.T) {
 		goto cleanup
 	}
 	start = time.Now()
-	getfromfilelist(t, proxyURL, bucket, errch, fileslist, true)
+	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, true)
 	curr = time.Now()
 	duration = curr.Sub(start)
 	tutils.Logf("GET %d MB and validate checksum (%s): %v\n", totalio, clichecksum, duration)
-	selectErr(errch, "get", t, false)
+	selectErr(errCh, "get", t, false)
 cleanup:
-	deletefromfilelist(t, proxyURL, bucket, errch, fileslist)
+	deletefromfilelist(t, proxyURL, bucket, errCh, fileslist)
 	// restore old config
 	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
 	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
@@ -1463,7 +1461,7 @@ cleanup:
 	return
 }
 
-func deletefromfilelist(t *testing.T, proxyURL, bucket string, errch chan error, fileslist []string) {
+func deletefromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fileslist []string) {
 	wg := &sync.WaitGroup{}
 	// Delete local file and objects from bucket
 	for _, fn := range fileslist {
@@ -1475,20 +1473,20 @@ func deletefromfilelist(t *testing.T, proxyURL, bucket string, errch chan error,
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, fn, wg, errch, true)
+		go client.Del(proxyURL, bucket, fn, wg, errCh, true)
 	}
 
 	wg.Wait()
-	selectErr(errch, "delete", t, false)
-	close(errch)
+	selectErr(errCh, "delete", t, false)
+	close(errCh)
 }
 
-func getfromfilelist(t *testing.T, proxyURL, bucket string, errch chan error, fileslist []string, validate bool) {
+func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fileslist []string, validate bool) {
 	getsGroup := &sync.WaitGroup{}
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go client.Get(proxyURL, bucket, fileslist[i], getsGroup, errch, !testing.Verbose(), validate)
+			go client.Get(proxyURL, bucket, fileslist[i], getsGroup, errCh, !testing.Verbose(), validate)
 		}
 	}
 	getsGroup.Wait()

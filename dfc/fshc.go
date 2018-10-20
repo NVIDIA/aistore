@@ -39,7 +39,7 @@ const (
 type (
 	fshc struct {
 		common.Named
-		controlCh     chan struct{}
+		stopCh        chan struct{}
 		fileListCh    chan string
 		reqCh         chan fshcReq
 		mpathCheckers map[string]*mountpathChecker
@@ -54,9 +54,9 @@ type (
 	}
 
 	mountpathChecker struct {
-		controlCh chan struct{}
-		fileCh    chan string
-		mpath     string
+		stopCh chan struct{}
+		fileCh chan string
+		mpath  string
 	}
 
 	fshcReq struct {
@@ -93,7 +93,7 @@ func (f *fshc) Run() error {
 			case fshcReqRemoveMountpath:
 				f.delmp(request.body)
 			}
-		case <-f.controlCh:
+		case <-f.stopCh:
 			return nil
 		}
 	}
@@ -102,11 +102,11 @@ func (f *fshc) Run() error {
 func (f *fshc) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", f.Getname(), err)
 	for _, r := range f.mpathCheckers {
-		r.controlCh <- struct{}{}
+		r.stopCh <- struct{}{}
 	}
 
-	f.controlCh <- struct{}{}
-	close(f.controlCh)
+	f.stopCh <- struct{}{}
+	close(f.stopCh)
 }
 
 // gets a base directory and looks for a random file inside it.
@@ -150,9 +150,9 @@ func getRandomFileName(basePath string) (string, error) {
 
 func newMountpathChecker(mpath string) *mountpathChecker {
 	return &mountpathChecker{
-		controlCh: make(chan struct{}, 1),
-		fileCh:    make(chan string),
-		mpath:     mpath,
+		stopCh: make(chan struct{}, 1),
+		fileCh: make(chan string),
+		mpath:  mpath,
 	}
 }
 
@@ -161,7 +161,7 @@ func newFSHC(mounts *fs.MountedFS, conf *fshcconf, f func(string) string) *fshc 
 		mountpaths:     mounts,
 		fnMakeTempName: f,
 		config:         conf,
-		controlCh:      make(chan struct{}, 4),
+		stopCh:         make(chan struct{}, 4),
 		fileListCh:     make(chan string, 32),
 		reqCh:          make(chan fshcReq),
 		mpathCheckers:  make(map[string]*mountpathChecker),
@@ -177,7 +177,7 @@ func (f *fshc) runMountpathChecker(r *mountpathChecker) {
 		select {
 		case filename := <-r.fileCh:
 			f.runMpathTest(r.mpath, filename)
-		case <-r.controlCh:
+		case <-r.stopCh:
 			return
 		}
 	}
@@ -210,7 +210,7 @@ func (f *fshc) delmp(mpath string) {
 	}
 
 	delete(f.mpathCheckers, mpath)
-	mpathChecker.controlCh <- struct{}{} // stop mpathChecker
+	mpathChecker.stopCh <- struct{}{} // stop mpathChecker
 }
 
 func (f *fshc) addmp(mpath string) {

@@ -80,7 +80,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	)
 	var (
 		filenameCh = make(chan string, num)
-		errch      = make(chan error, num)
+		errCh      = make(chan error, num)
 		sgl        *memsys.SGL
 		targets    = make(map[string]struct{})
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
@@ -100,10 +100,10 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
-	putRandObjs(proxyURL, seed, filesize, num, bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
-	selectErr(errch, "put", t, true)
+	putRandObjs(proxyURL, seed, filesize, num, bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errCh, "put", t, true)
 	close(filenameCh)
-	close(errch)
+	close(errCh)
 
 	msg := &api.GetMsg{GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
 	bl, err := client.ListBucket(proxyURL, bucket, msg, num)
@@ -160,14 +160,13 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	var (
 		fileNameCh = make(chan string, numberOfFiles)
-		errorCh    = make(chan error, numberOfFiles)
+		errCh      = make(chan error, numberOfFiles)
 		sgl        *memsys.SGL
 		bucketName = clibucket
 		targets    = make(map[string]struct{})
 	)
 
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestCloudListBucketGetTargetURL requires a cloud bucket")
 	}
 
@@ -181,10 +180,10 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		sgl = client.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, seed, fileSize, numberOfFiles, bucketName, errorCh, fileNameCh, SmokeDir, prefix, true, sgl)
-	selectErr(errorCh, "put", t, true)
+	putRandObjs(proxyURL, seed, fileSize, numberOfFiles, bucketName, errCh, fileNameCh, SmokeDir, prefix, true, sgl)
+	selectErr(errCh, "put", t, true)
 	close(fileNameCh)
-	close(errorCh)
+	close(errCh)
 	defer func() {
 		files := make([]string, numberOfFiles)
 		for i := 0; i < numberOfFiles; i++ {
@@ -250,7 +249,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	var (
 		num        = 2
 		filenameCh = make(chan string, num)
-		errch      = make(chan error, 100)
+		errCh      = make(chan error, 100)
 		sgl        *memsys.SGL
 		seed       = int64(111)
 		fqn        string
@@ -265,10 +264,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandObjs(proxyURL, seed, filesize, num, bucket, errch, filenameCh, SmokeDir, SmokeStr, true, sgl)
-	selectErr(errch, "put", t, false)
+	putRandObjs(proxyURL, seed, filesize, num, bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	selectErr(errCh, "put", t, false)
 	close(filenameCh)
-	close(errch)
+	close(errCh)
 
 	// Test corrupting the file contents
 	// Note: The following tests can only work when running on a local setup(targets are co-located with
@@ -342,7 +341,7 @@ func TestListObjects(t *testing.T) {
 		prefix     = "regressionList"
 		bucket     = clibucket
 		seed       = baseseed + 101
-		errch      = make(chan error, numFiles*5)
+		errCh      = make(chan error, numFiles*5)
 		filesPutCh = make(chan string, numfiles)
 		dir        = DeleteDir
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
@@ -361,10 +360,10 @@ func TestListObjects(t *testing.T) {
 		fname := fmt.Sprintf("obj%d", i+1)
 		fileList = append(fileList, fname)
 	}
-	putRandObjsFromList(proxyURL, seed, fileSize, fileList, bucket, errch, filesPutCh, dir, prefix, !testing.Verbose(), sgl)
+	putRandObjsFromList(proxyURL, seed, fileSize, fileList, bucket, errCh, filesPutCh, dir, prefix, !testing.Verbose(), sgl)
 	close(filesPutCh)
-	selectErr(errch, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
-	close(errch)
+	selectErr(errCh, "list - put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
+	close(errCh)
 	type testParams struct {
 		title    string
 		prefix   string
@@ -435,7 +434,7 @@ func TestRenameObjects(t *testing.T) {
 		err        error
 		numPuts    = 10
 		filesPutCh = make(chan string, numPuts)
-		errch      = make(chan error, numPuts)
+		errCh      = make(chan error, numPuts)
 		basenames  = make([]string, 0, numPuts) // basenames
 		bnewnames  = make([]string, 0, numPuts) // new basenames
 		sgl        *memsys.SGL
@@ -449,7 +448,7 @@ func TestRenameObjects(t *testing.T) {
 		wg := &sync.WaitGroup{}
 		for _, fname := range bnewnames {
 			wg.Add(1)
-			go client.Del(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, wg, errch, !testing.Verbose())
+			go client.Del(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, wg, errCh, !testing.Verbose())
 		}
 
 		if usingFile {
@@ -462,8 +461,8 @@ func TestRenameObjects(t *testing.T) {
 		}
 
 		wg.Wait()
-		selectErr(errch, "delete", t, false)
-		close(errch)
+		selectErr(errCh, "delete", t, false)
+		close(errCh)
 		destroyLocalBucket(t, proxyURL, RenameLocalBucketName)
 	}()
 
@@ -478,9 +477,9 @@ func TestRenameObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandObjs(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, errch, filesPutCh, RenameDir,
+	putRandObjs(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, errCh, filesPutCh, RenameDir,
 		RenameStr, !testing.Verbose(), sgl)
-	selectErr(errch, "put", t, false)
+	selectErr(errCh, "put", t, false)
 	close(filesPutCh)
 	for fname := range filesPutCh {
 		basenames = append(basenames, fname)
@@ -507,9 +506,9 @@ func TestRenameObjects(t *testing.T) {
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
 		client.Get(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, nil,
-			errch, !testing.Verbose(), false /* validate */)
+			errCh, !testing.Verbose(), false /* validate */)
 	}
-	selectErr(errch, "get", t, false)
+	selectErr(errCh, "get", t, false)
 }
 
 func TestObjectPrefix(t *testing.T) {
@@ -530,8 +529,7 @@ func TestObjectsVersions(t *testing.T) {
 
 func TestRegressionCloudBuckets(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestRegressionCloudBuckets requires a cloud bucket")
 	}
 
@@ -548,7 +546,7 @@ func TestRebalance(t *testing.T) {
 		targetDirectURL string
 		numPuts         = 40
 		filesPutCh      = make(chan string, numPuts)
-		errch           = make(chan error, 100)
+		errCh           = make(chan error, 100)
 		wg              = &sync.WaitGroup{}
 		sgl             *memsys.SGL
 		proxyURL        = getPrimaryURL(t, proxyURLRO)
@@ -599,9 +597,9 @@ func TestRebalance(t *testing.T) {
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, baseseed, filesize, numPuts, clibucket, errch, filesPutCh, SmokeDir,
+	putRandObjs(proxyURL, baseseed, filesize, numPuts, clibucket, errCh, filesPutCh, SmokeDir,
 		SmokeStr, !testing.Verbose(), sgl)
-	selectErr(errch, "put", t, false)
+	selectErr(errCh, "put", t, false)
 
 	//
 	// step 4. register back
@@ -649,11 +647,11 @@ func TestRebalance(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, "smoke/"+fname, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, clibucket, "smoke/"+fname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	selectErr(errch, "delete", t, abortonerr)
-	close(errch)
+	selectErr(errCh, "delete", t, abortonerr)
+	close(errCh)
 	if !t.Failed() && testing.Verbose() {
 		tutils.Logf("Rebalance: sent     %.2f MB in %d files\n", float64(bsent)/1000/1000, fsent)
 		tutils.Logf("           received %.2f MB in %d files\n", float64(brecv)/1000/1000, frecv)
@@ -761,19 +759,18 @@ func TestConfig(t *testing.T) {
 
 func TestLRU(t *testing.T) {
 	var (
-		errch    = make(chan error, 100)
+		errCh    = make(chan error, 100)
 		usedpct  = 100
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestLRU test requires a cloud bucket")
 	}
 
-	getRandomFiles(proxyURL, 0, 20, clibucket, "", t, nil, errch)
+	getRandomFiles(proxyURL, 0, 20, clibucket, "", t, nil, errCh)
 	// The error could be no object in the bucket. In that case, consider it as not an error;
 	// this test will be skipped
-	if len(errch) != 0 {
+	if len(errCh) != 0 {
 		t.Logf("LRU: need a cloud bucket with at least 20 objects")
 		t.Skip("skipping - cannot test LRU.")
 	}
@@ -793,8 +790,8 @@ func TestLRU(t *testing.T) {
 		hwms[k] = lrucfg["highwm"]
 	}
 	// add a few more
-	getRandomFiles(proxyURL, 0, 3, clibucket, "", t, nil, errch)
-	selectErr(errch, "get", t, true)
+	getRandomFiles(proxyURL, 0, 3, clibucket, "", t, nil, errCh)
+	selectErr(errCh, "get", t, true)
 	//
 	// find out min usage %% across all targets
 	//
@@ -857,7 +854,7 @@ func TestLRU(t *testing.T) {
 		return
 	}
 	waitProgressBar("LRU: ", sleeptime/2)
-	getRandomFiles(proxyURL, 0, 1, clibucket, "", t, nil, errch)
+	getRandomFiles(proxyURL, 0, 1, clibucket, "", t, nil, errCh)
 	waitProgressBar("LRU: ", sleeptime/2)
 	//
 	// results
@@ -892,8 +889,7 @@ func TestPrefetchList(t *testing.T) {
 		proxyURL      = getPrimaryURL(t, proxyURLRO)
 	)
 
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
 	}
 
@@ -948,7 +944,7 @@ func TestDeleteList(t *testing.T) {
 		err      error
 		prefix   = ListRangeStr + "/tstf-"
 		wg       = &sync.WaitGroup{}
-		errch    = make(chan error, numfiles)
+		errCh    = make(chan error, numfiles)
 		files    = make([]string, 0, numfiles)
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
@@ -964,12 +960,12 @@ func TestDeleteList(t *testing.T) {
 		keyname := fmt.Sprintf("%s%d", prefix, i)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, keyname, errch, true)
+		go client.PutAsync(wg, proxyURL, r, clibucket, keyname, errCh, true)
 		files = append(files, keyname)
 
 	}
 	wg.Wait()
-	selectErr(errch, "put", t, true)
+	selectErr(errCh, "put", t, true)
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the objects
@@ -1001,8 +997,7 @@ func TestPrefetchRange(t *testing.T) {
 		prefetchRegex  = "\\d*"
 	)
 
-	isCloud := isCloudBucket(t, proxyURL, clibucket)
-	if !isCloud {
+	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skipf("Cannot prefetch from local bucket %s", clibucket)
 	}
 
@@ -1090,7 +1085,7 @@ func TestDeleteRange(t *testing.T) {
 		bigrange       = fmt.Sprintf("0:%d", numfiles)
 		regex          = "\\d?\\d"
 		wg             = &sync.WaitGroup{}
-		errch          = make(chan error, numfiles)
+		errCh          = make(chan error, numfiles)
 		proxyURL       = getPrimaryURL(t, proxyURLRO)
 	)
 
@@ -1104,10 +1099,10 @@ func TestDeleteRange(t *testing.T) {
 		tutils.CheckFatal(err, t)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errch, true)
+		go client.PutAsync(wg, proxyURL, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errCh, true)
 	}
 	wg.Wait()
-	selectErr(errch, "put", t, true)
+	selectErr(errCh, "put", t, true)
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the small range of objects
@@ -1164,7 +1159,7 @@ func TestStressDeleteRange(t *testing.T) {
 		err          error
 		prefix       = ListRangeStr + "/tstf-"
 		wg           = &sync.WaitGroup{}
-		errch        = make(chan error, numFiles)
+		errCh        = make(chan error, numFiles)
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		regex        = "\\d*"
 		tenth        = numFiles / 10
@@ -1190,7 +1185,7 @@ func TestStressDeleteRange(t *testing.T) {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
 				err := client.Put(proxyURL, reader, TestLocalBucketName, objname, true)
 				if err != nil {
-					errch <- err
+					errCh <- err
 				}
 				reader.Seek(0, io.SeekStart)
 			}
@@ -1199,7 +1194,7 @@ func TestStressDeleteRange(t *testing.T) {
 		}(i, reader)
 	}
 	wg.Wait()
-	selectErr(errch, "put", t, true)
+	selectErr(errCh, "put", t, true)
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partial_rnge)
@@ -1300,7 +1295,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	var (
 		numPuts    = 64
 		filesPutCh = make(chan string, numPuts)
-		errch      = make(chan error, 100)
+		errCh      = make(chan error, 100)
 		wg         = &sync.WaitGroup{}
 		sgl        *memsys.SGL
 		bucket     = rtd.bucket
@@ -1310,18 +1305,18 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		sgl = client.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, baseseed+2, filesize, numPuts, bucket, errch, filesPutCh, SmokeDir,
+	putRandObjs(proxyURL, baseseed+2, filesize, numPuts, bucket, errCh, filesPutCh, SmokeDir,
 		SmokeStr, !testing.Verbose(), sgl)
 	close(filesPutCh)
-	selectErr(errch, "put", t, true)
+	selectErr(errCh, "put", t, true)
 	if rtd.rename {
 		doRenameRegressionTest(t, proxyURL, rtd, numPuts, filesPutCh)
 		tutils.Logf("\nRenamed %s(numobjs=%d) => %s\n", bucket, numPuts, rtd.renamedBucket)
 		bucket = rtd.renamedBucket
 	}
 
-	getRandomFiles(proxyURL, 0, numPuts, bucket, SmokeStr+"/", t, nil, errch)
-	selectErr(errch, "get", t, false)
+	getRandomFiles(proxyURL, 0, numPuts, bucket, SmokeStr+"/", t, nil, errCh)
+	selectErr(errCh, "get", t, false)
 	for fname := range filesPutCh {
 		if usingFile {
 			err := os.Remove(SmokeDir + "/" + fname)
@@ -1331,11 +1326,11 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, "smoke/"+fname, wg, errch, !testing.Verbose())
+		go client.Del(proxyURL, bucket, "smoke/"+fname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
-	selectErr(errch, "delete", t, abortonerr)
-	close(errch)
+	selectErr(errCh, "delete", t, abortonerr)
+	close(errCh)
 }
 
 //========
@@ -1508,9 +1503,9 @@ func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 	defer r.Body.Close()
 }
 
-func selectErr(errch chan error, verb string, t *testing.T, errisfatal bool) {
+func selectErr(errCh chan error, verb string, t *testing.T, errisfatal bool) {
 	select {
-	case err := <-errch:
+	case err := <-errCh:
 		if errisfatal {
 			t.Fatalf("Failed to %s files: %v", verb, err)
 		} else {
