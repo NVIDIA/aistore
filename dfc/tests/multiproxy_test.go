@@ -114,7 +114,7 @@ func clusterHealthCheck(t *testing.T, smapBefore cluster.Smap) {
 	}
 
 	if tutils.DockerRunning() {
-		pCnt, tCnt := tutils.NumberOfRunningContainers()
+		pCnt, tCnt := tutils.ContainerCount()
 		if pCnt != len(smapAfter.Pmap) {
 			t.Fatalf("Some proxy conatiners crashed: expected %d, found %d containers", len(smapAfter.Pmap), pCnt)
 		}

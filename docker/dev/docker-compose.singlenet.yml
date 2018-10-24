@@ -1,6 +1,6 @@
 version: '3'
 services:
-  dfcproxy:
+  proxy:
     build:
       context: .
       dockerfile: Dockerfile
@@ -13,10 +13,11 @@ services:
       - ROLE=proxy
       - DFCPRIMARYPROXY=${DFCPRIMARYPROXY}
     env_file:
-      - aws.env
+      - /tmp/docker_dfc/aws.env
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
-  dfctarget:
+      - ${HOST_CONTAINER_PATH}:/tmp/dfc
+  target:
     build:
       context: .
       dockerfile: Dockerfile
@@ -28,9 +29,10 @@ services:
     environment:
       - ROLE=target
     env_file:
-      - aws.env
+      - /tmp/docker_dfc/aws.env
     volumes:
       - ${GOPATH}/src:${GOPATH}/src
+      - ${HOST_CONTAINER_PATH}:/tmp/dfc
 networks:
   public:
     driver: bridge

@@ -177,6 +177,10 @@ func TestFSCheckerDetection(t *testing.T) {
 		t.Skip(skipping)
 	}
 
+	if tutils.DockerRunning() {
+		t.Skip("TestFSCheckerDetection requires direct filesystem access, doesn't work with docker")
+	}
+
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)
 

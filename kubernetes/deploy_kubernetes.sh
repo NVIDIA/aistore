@@ -3,27 +3,21 @@
 GRAPHITE_PORT=2003
 GRAPHITE_SERVER="52.41.234.112"
 usage() {
-    echo "Usage: $0 [-e dev|prod|k8s] -a <aws.env> [-s]"
+    echo "Usage: $0 -a <aws.env> [-s]"
     echo "   -a : aws.env - AWS credentials"
-    echo "   -e : dev|prod - deployment environment (default is dev[elopment])"
     echo "   -g : name or ip address of graphite server (default is $GRAPHITE_SERVER)"
     echo "   -p : port of graphite server (default is $GRAPHITE_PORT)"
-    echo "   -s : scale the targets: add new targets to an already running cluster, or stop a given number of already running"
     echo
     exit 1;
 }
-environment="dev";
+environment="k8s";
 aws_env="";
 os="ubuntu"
-while getopts "a:e:g:p:s:" OPTION
+while getopts "a:g:p:" OPTION
 do
     case $OPTION in
     a)
         aws_env=${OPTARG}
-        ;;
-
-    e)
-        environment=${OPTARG}
         ;;
 
     g)
@@ -34,9 +28,6 @@ do
         GRAPHITE_PORT=${OPTARG}
         ;;
 
-    s)
-        scale=${OPTARG}
-        ;;
     *)
         usage
         ;;
@@ -46,18 +37,6 @@ done
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 if [ "${PWD##*/}" != "docker" ]; then
     cd $DIR
-fi
-
-
-if [ ! -z "$scale" ]; then
-   echo "Scaling cluster "
-   cp /tmp/dfc_backup/* .
-   sudo docker-compose -f $environment"_docker-compose.yml" up --no-recreate --scale dfctarget=$scale -d dfctarget
-   rm aws.env
-   rm dfc.json
-   sudo docker ps
-   echo Done
-   exit 0
 fi
 
 if [ -z "$aws_env" ]; then
@@ -133,11 +112,9 @@ echo  1: Amazon Cloud
 echo  2: Google Cloud
 echo Enter your choice:
 read cldprovider
-if [ $cldprovider -eq 1 ]
-then
-  CLDPROVIDER="aws"
-  cp $aws_env .
-  if [ "$environment" == "k8s" ]; then
+if [ $cldprovider -eq 1 ]; then
+    CLDPROVIDER="aws"
+    cp $aws_env .
     # creating aws credential files
     rm -rf credentials
     cat $aws_env >> credentials
@@ -147,7 +124,6 @@ then
     sed -i 's/AWS_DEFAULT_REGION/region/g' credentials
     kubectl delete secret generic aws-credentials
     kubectl create secret generic aws-credentials --from-file=./credentials
-  fi
 elif [ $cldprovider -eq 2 ]
 then
   CLDPROVIDER="gcp"
@@ -164,60 +140,40 @@ source $DIR/../dfc/setup/config.sh
 #1) create/update/delete kubctl configmap
 #)  run the cluster
 
-if [ "$environment" == "k8s" ]; then
-    # Deploying kubernetes cluster
-    echo Starting kubernetes deployment ..
-    #Create DFC configmap to attach during runtime
-    echo Creating DFC configMap
-    kubectl delete configmap dfc-config
-    kubectl delete configmap collectd-config
-    kubectl delete configmap statsd-config
-    kubectl create configmap dfc-config --from-file=dfc.json
-    kubectl create configmap statsd-config --from-file=statsd.conf
-    kubectl create configmap collectd-config --from-file=collectd.conf
+# Deploying kubernetes cluster
+echo Starting kubernetes deployment ..
+#Create DFC configmap to attach during runtime
+echo Creating DFC configMap
+kubectl delete configmap dfc-config
+kubectl delete configmap collectd-config
+kubectl delete configmap statsd-config
+kubectl create configmap dfc-config --from-file=dfc.json
+kubectl create configmap statsd-config --from-file=statsd.conf
+kubectl create configmap collectd-config --from-file=collectd.conf
 
-    echo Stopping DFC cluster
-    kubectl delete -f dfctarget_deployment.yml
-    kubectl delete -f dfcproxy_deployment.yml
-    kubectl delete -f dfcprimaryproxy_deployment.yml
+echo Stopping DFC cluster
+kubectl delete -f dfctarget_deployment.yml
+kubectl delete -f dfcproxy_deployment.yml
+kubectl delete -f dfcprimaryproxy_deployment.yml
 
-    echo Starting Primary Proxy Deployment
-    kubectl create -f dfcprimaryproxy_deployment.yml
+echo Starting Primary Proxy Deployment
+kubectl create -f dfcprimaryproxy_deployment.yml
 
-    echo Wating for proxy to start ....
-    sleep 100
+echo Wating for proxy to start ....
+sleep 100
 
-    echo Starting Proxy Deployment
-    kubectl create -f dfcproxy_deployment.yml
+echo Starting Proxy Deployment
+kubectl create -f dfcproxy_deployment.yml
 
-    echo Scaling proxies
-    kubectl scale --replicas=$proxycount -f dfcproxy_deployment.yml
+echo Scaling proxies
+kubectl scale --replicas=$proxycount -f dfcproxy_deployment.yml
 
-    echo Starting Target Deployment
-    kubectl create -f dfctarget_deployment.yml
+echo Starting Target Deployment
+kubectl create -f dfctarget_deployment.yml
 
-    echo Scaling targets
-    kubectl scale --replicas=$servcount -f dfctarget_deployment.yml
+echo Scaling targets
+kubectl scale --replicas=$servcount -f dfctarget_deployment.yml
 
-    echo List of running pods
-    kubectl get pods -o wide
-
-else
-    echo Stoping running  cluster..
-    sudo docker-compose -f $environment"_docker-compose.yml" down
-    echo Building Image..
-    sudo docker-compose -f $environment"_docker-compose.yml" build
-    echo Starting Primary Proxy
-    sudo DFCPRIMARYPROXY=TRUE docker-compose -f $environment"_docker-compose.yml" up -d dfcproxy
-    echo Starting cluster ..
-    sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale dfctarget=$servcount --scale dfcproxy=$proxycount --no-recreate
-    sleep 3
-    sudo docker ps
-    echo "Cleaning up files.."
-    mkdir -p /tmp/dfc_backup
-    mv aws.env /tmp/dfc_backup/
-    mv $CONFFILE /tmp/dfc_backup/
-    mv $CONFFILE_STATSD /tmp/dfc_backup/
-    mv $CONFFILE_COLLECTD /tmp/dfc_backup/
-fi
+echo List of running pods
+kubectl get pods -o wide
 echo done

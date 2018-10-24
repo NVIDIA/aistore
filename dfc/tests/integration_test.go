@@ -1369,7 +1369,9 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	createFreshLocalBucket(t, m.proxyURL, m.bucket)
 
 	defer func() {
-		os.RemoveAll(newMountpath)
+		if !tutils.DockerRunning() {
+			os.RemoveAll(newMountpath)
+		}
 		destroyLocalBucket(t, m.proxyURL, m.bucket)
 	}()
 
@@ -1382,12 +1384,21 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
 	}
 
-	// Add new mountpath to all targets
-	for idx, target := range targets {
-		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
-		cmn.CreateDir(mountpath)
-		err = tutils.AddTargetMountpath(target.directURL, mountpath)
+	if tutils.DockerRunning() {
+		err = tutils.DockerCreateMpathDir(0, newMountpath)
 		tutils.CheckFatal(err, t)
+		for _, target := range targets {
+			err = tutils.AddTargetMountpath(target.directURL, newMountpath)
+			tutils.CheckFatal(err, t)
+		}
+	} else {
+		// Add new mountpath to all targets
+		for idx, target := range targets {
+			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
+			cmn.CreateDir(mountpath)
+			err = tutils.AddTargetMountpath(target.directURL, mountpath)
+			tutils.CheckFatal(err, t)
+		}
 	}
 
 	waitForRebalanceToComplete(t, m.proxyURL)
@@ -1398,11 +1409,22 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.wg.Wait()
 
 	// Remove new mountpath from all targets
-	for idx, target := range targets {
-		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
-		os.RemoveAll(mountpath)
-		err = tutils.RemoveTargetMountpath(target.directURL, mountpath)
+	if tutils.DockerRunning() {
+		err = tutils.DockerRemoveMpathDir(0, newMountpath)
 		tutils.CheckFatal(err, t)
+		for _, target := range targets {
+			if err = tutils.RemoveTargetMountpath(target.directURL, newMountpath); err != nil {
+				t.Error(err.Error())
+			}
+		}
+	} else {
+		for idx, target := range targets {
+			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
+			os.RemoveAll(mountpath)
+			if err = tutils.RemoveTargetMountpath(target.directURL, mountpath); err != nil {
+				t.Error(err.Error())
+			}
+		}
 	}
 
 	resultsBeforeAfter(&m, num, maxErrPct)

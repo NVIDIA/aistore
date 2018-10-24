@@ -252,6 +252,10 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		fqn        string
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
+	if tutils.DockerRunning() {
+		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
+	}
+
 	bucket := TestLocalBucketName
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)

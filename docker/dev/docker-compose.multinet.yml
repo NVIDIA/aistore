@@ -1,27 +1,29 @@
 version: '3'
 services:
-  dfcproxy:
+  proxy:
     networks:
         public:
-        internal:
-  dfctarget:
+        internal_control:
+        internal_data:
+  target:
     networks:
         public:
-        internal:
+        internal_control:
+        internal_data:
 networks:
-  public:
+  internal_control:
     driver: bridge
     ipam:
       driver: default
       config:
         -
-          subnet: ${PUB_SUBNET}
-  internal:
+          subnet: ${INT_CONTROL_SUBNET}
+  internal_data:
     driver: bridge
     ipam:
       driver: default
       config:
         -
-          subnet: ${INT_SUBNET}
+          subnet: ${INT_DATA_SUBNET}
 
 

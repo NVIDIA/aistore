@@ -371,6 +371,9 @@ func readDir(t *testing.T, fs webdav.FileSystem, pth string) ([]os.FileInfo, err
 // This requirement can be removed after proxy/target can be started in unit test
 // Also assumes the localhost:8080 is one of the proxy
 func TestFS(t *testing.T) {
+	if tutils.DockerRunning() {
+		t.Skip("TestFS requires direct access to local filesystem, not compatible with docker")
+	}
 	leader, err := tutils.GetPrimaryProxy("http://127.0.0.1:8080")
 	if err != nil {
 		t.Fatal(err)

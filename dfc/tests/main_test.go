@@ -869,7 +869,11 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestRegressionCloudBuckets test requires a cloud bucket")
+		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
+	}
+
+	if tutils.DockerRunning() {
+		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
 	if usingSG {
@@ -1011,6 +1015,10 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		errstr     string
 		err        error
 	)
+
+	if tutils.DockerRunning() {
+		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
+	}
 
 	createFreshLocalBucket(t, proxyURL, bucketName)
 

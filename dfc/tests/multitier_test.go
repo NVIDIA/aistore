@@ -6,7 +6,9 @@
 package dfc_test
 
 import (
+	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,17 +20,33 @@ import (
 
 func TestGetObjectInNextTier(t *testing.T) {
 	var (
-		object    = "TestGetObjectInNextTier"
-		localData = []byte("Toto, I've got a feeling we're not in Kansas anymore.")
-		cloudData = []byte("Here's looking at you, kid.")
+		object              = t.Name()
+		localData           = []byte("Toto, I've got a feeling we're not in Kansas anymore.")
+		cloudData           = []byte("Here's looking at you, kid.")
+		localBucketListener net.Listener
+		cloudBucketListener net.Listener
+		err                 error
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestGetObjectInNextTier requires a cloud bucket")
+		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
-	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if tutils.DockerRunning() {
+		// use the default docker0 bridge ip address
+		localBucketListener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode for local bucket")
+		}
+
+		cloudBucketListener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode for cloud bucket")
+		}
+	}
+
+	nextTierMockForLocalBucket := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(cmn.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
@@ -39,7 +57,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 			http.Error(w, "bad request to nextTierMockForLocalBucket", http.StatusBadRequest)
 		}
 	}))
-	nextTierMockForCloudBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextTierMockForCloudBucket := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(cmn.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
@@ -50,6 +68,14 @@ func TestGetObjectInNextTier(t *testing.T) {
 			http.Error(w, "bad request to nextTierMockForCloudBucket", http.StatusBadRequest)
 		}
 	}))
+	if tutils.DockerRunning() {
+		nextTierMockForLocalBucket.Listener.Close()
+		nextTierMockForLocalBucket.Listener = localBucketListener
+		nextTierMockForCloudBucket.Listener.Close()
+		nextTierMockForCloudBucket.Listener = cloudBucketListener
+	}
+	nextTierMockForLocalBucket.Start()
+	nextTierMockForCloudBucket.Start()
 	defer nextTierMockForLocalBucket.Close()
 	defer nextTierMockForCloudBucket.Close()
 
@@ -59,7 +85,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
+	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
@@ -85,16 +111,25 @@ func TestGetObjectInNextTier(t *testing.T) {
 
 func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	var (
-		object = "TestGetObjectInNextTierErrorOnGet"
-		data   = []byte("this is the object you want!")
+		object   = t.Name()
+		data     = []byte("this is the object you want!")
+		listener net.Listener
+		err      error
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestGetObjectInNextTierErrorOnGet requires a cloud bucket")
+		t.Skip(fmt.Sprintf("%q requires a cloud bucket", t.Name()))
+	}
+	if tutils.DockerRunning() {
+		// use the default docker0 bridge ip address
+		listener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode")
+		}
 	}
 
-	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextTierMock := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(cmn.URLParamCheckCached) == "true" {
 				w.WriteHeader(http.StatusOK)
@@ -105,10 +140,16 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 			}
 		}
 	}))
+
+	if tutils.DockerRunning() {
+		nextTierMock.Listener.Close()
+		nextTierMock.Listener = listener
+	}
+	nextTierMock.Start()
 	defer nextTierMock.Close()
 
 	u := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
-	err := tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
+	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
 
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
@@ -133,17 +174,27 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 
 func TestGetObjectNotInNextTier(t *testing.T) {
 	var (
-		object   = "TestGetObjectNotInNextTier"
+		object   = t.Name()
 		data     = []byte("this is some other object - not the one you want!")
 		filesize = 1024
+		listener net.Listener
+		err      error
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestGetObjectNotInNextTier requires a cloud bucket")
+		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
-	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if tutils.DockerRunning() {
+		// use the default docker0 bridge ip address
+		listener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode")
+		}
+	}
+
+	nextTierMock := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object) {
 			if r.Method == http.MethodHead && r.URL.Query().Get(cmn.URLParamCheckCached) == "true" {
 				http.Error(w, "not found in nextTierMock", http.StatusNotFound)
@@ -155,6 +206,11 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 			}
 		}
 	}))
+	if tutils.DockerRunning() {
+		nextTierMock.Listener.Close()
+		nextTierMock.Listener = listener
+	}
+	nextTierMock.Start()
 	defer nextTierMock.Close()
 
 	reader, err := tutils.NewRandReader(int64(filesize), false)
@@ -183,22 +239,37 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 }
 
 func TestPutObjectNextTierPolicy(t *testing.T) {
-	const (
-		object = "TestPutObjectNextTierPolicy"
-	)
 	var (
+		object                            = t.Name()
 		localData                         = []byte("May the Force be with you.")
 		cloudData                         = []byte("I'm going to make him an offer he can't refuse.")
 		nextTierMockForLocalBucketReached int
 		nextTierMockForCloudBucketReached int
+		localBucketListener               net.Listener
+		cloudBucketListener               net.Listener
+		err                               error
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
+	tutils.Logf("proxyurl: %q \n", proxyURL)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestPutObjectNextTierPolicy requires a cloud bucket")
+		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
-	nextTierMockForLocalBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if tutils.DockerRunning() {
+		// use the default docker0 bridge ip address
+		localBucketListener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode for local bucket")
+		}
+
+		cloudBucketListener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode for cloud bucket")
+		}
+	}
+
+	nextTierMockForLocalBucket := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object) &&
 			r.Method == http.MethodPut {
 			b, err := ioutil.ReadAll(r.Body)
@@ -213,7 +284,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			http.Error(w, "bad request to nextTierMockForLocal", http.StatusBadRequest)
 		}
 	}))
-	nextTierMockForCloudBucket := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextTierMockForCloudBucket := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object) && r.Method == http.MethodPut {
 			b, err := ioutil.ReadAll(r.Body)
 			tutils.CheckFatal(err, t)
@@ -227,6 +298,14 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			http.Error(w, "bad request to nextTierMockForCloud", http.StatusBadRequest)
 		}
 	}))
+	if tutils.DockerRunning() {
+		nextTierMockForLocalBucket.Listener.Close()
+		nextTierMockForLocalBucket.Listener = localBucketListener
+		nextTierMockForCloudBucket.Listener.Close()
+		nextTierMockForCloudBucket.Listener = cloudBucketListener
+	}
+	nextTierMockForLocalBucket.Start()
+	nextTierMockForCloudBucket.Start()
 	defer nextTierMockForLocalBucket.Close()
 	defer nextTierMockForCloudBucket.Close()
 
@@ -236,7 +315,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
+	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
@@ -269,18 +348,33 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 
 func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	var (
-		object = "TestPutObjectNextTierPolicyErrorOnPut"
-		data   = []byte("this object will go to the cloud!")
+		object   = t.Name()
+		data     = []byte("this object will go to the cloud!")
+		listener net.Listener
+		err      error
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestPutObjectNextTierPolicyErrorOnPut requires a cloud bucket")
+		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
-	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if tutils.DockerRunning() {
+		// use the default docker0 bridge ip address
+		listener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode")
+		}
+	}
+
+	nextTierMock := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "some arbitrary internal server error", http.StatusInternalServerError)
 	}))
+	if tutils.DockerRunning() {
+		nextTierMock.Listener.Close()
+		nextTierMock.Listener = listener
+	}
+	nextTierMock.Start()
 	defer nextTierMock.Close()
 
 	bucketProps := testBucketProps(t)
@@ -288,7 +382,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.ReadPolicy = cmn.RWPolicyCloud
 	bucketProps.WritePolicy = cmn.RWPolicyNextTier
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
@@ -310,25 +404,40 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 
 func TestPutObjectCloudPolicy(t *testing.T) {
 	var (
-		object = "TestPutObjectCloudPolicy"
-		data   = []byte("this object will go to the cloud!")
+		object   = t.Name()
+		data     = []byte("this object will go to the cloud!")
+		listener net.Listener
+		err      error
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestPutObjectCloudPolicy requires a cloud bucket")
+		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
 
-	nextTierMock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if tutils.DockerRunning() {
+		// use the default docker0 bridge ip address
+		listener, err = net.Listen("tcp", "172.17.0.1:0")
+		if err != nil {
+			t.Errorf("Failed to initialize test server listener when using docker mode")
+		}
+	}
+
+	nextTierMock := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}))
+	if tutils.DockerRunning() {
+		nextTierMock.Listener.Close()
+		nextTierMock.Listener = listener
+	}
+	nextTierMock.Start()
 	defer nextTierMock.Close()
 
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.WritePolicy = cmn.RWPolicyCloud
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
