@@ -69,3 +69,22 @@ The entire logic is consolidated in one `work()` method that can, for instance,
 "cleanup" (see `cleanup()`) an existing "idle" slab,
 or forcefully "reduce" (see `reduce()`) one if and when the amount of free
 memory falls below watermark.
+
+## Testing
+
+* To run all tests while redirecting errors to standard error:
+```
+go test -v -logtostderr=true
+```
+
+* To run one of the named tests for 100 seconds:
+
+```
+go test -v -logtostderr=true -run=Test_Sleep -duration=100s
+```
+
+* All tests for 2 minutes with verbose tracing and debug (i.e., assertions) enabled:
+
+```
+DFC_MEM_DEBUG=1 go test -v -logtostderr=true -duration=2m
+```

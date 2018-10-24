@@ -71,7 +71,7 @@ func init() {
 	}
 
 	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "TransportMem2"}
-	Mem2.Init()
+	Mem2.Init(false)
 	go Mem2.Run()
 }
 
@@ -115,11 +115,11 @@ func Example_Headers() {
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
-	stream.SendAsync(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1, nil)
+	stream.Send(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1, nil)
 
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
-	stream.SendAsync(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2, nil)
+	stream.Send(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2, nil)
 }
 
 func Example_Mux() {
@@ -216,7 +216,7 @@ func Test_CancelStream(t *testing.T) {
 		hdr := genStaticHeader()
 		slab := Mem2.SelectSlab2(hdr.Dsize)
 		reader := newRandReader(random, hdr, slab)
-		stream.SendAsync(hdr, reader, nil)
+		stream.Send(hdr, reader, nil)
 		num++
 		size += hdr.Dsize
 		if size-prevsize >= common.GiB {
@@ -306,7 +306,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	totalSend := int64(0)
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
-		stream.SendAsync(hdr, reader, nil)
+		stream.Send(hdr, reader, nil)
 		totalSend += hdr.Dsize
 	}
 
@@ -350,7 +350,7 @@ func Test_OnSendCallback(t *testing.T) {
 				reader.slab.Free(reader.buf)
 			}
 		}(idx)
-		stream.SendAsync(hdr, reader, callback)
+		stream.Send(hdr, reader, callback)
 		totalSend += hdr.Dsize
 	}
 	stream.Fin()
@@ -394,7 +394,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		// hdr := genStaticHeader()
 		slab := Mem2.SelectSlab2(hdr.Dsize)
 		reader := newRandReader(random, hdr, slab)
-		stream.SendAsync(hdr, reader, nil)
+		stream.Send(hdr, reader, nil)
 		num++
 		size += hdr.Dsize
 		if size-prevsize >= common.GiB {

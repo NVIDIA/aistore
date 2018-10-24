@@ -224,10 +224,7 @@ func dfcinit() {
 
 		// system-wide gen-purpose memory manager and slab/SGL allocator
 		mem := &memsys.Mem2{Name: "gmem2", MinPctFree: 50 /* % of current free mem */}
-		err := mem.Init()
-		if err != nil {
-			glog.Exit(err)
-		}
+		_ = mem.Init(false /* ignore init-time errors */)
 		ctx.rg.add(mem, xmem)
 		gmem2 = getmem2() // making it global; getmem2() can still be used
 

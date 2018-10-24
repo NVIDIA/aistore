@@ -50,8 +50,8 @@ type (
 	handler struct {
 		trname      string
 		callback    Receive
-		sessions    map[int64]*Stats
-		oldSessions map[int64]time.Time
+		sessions    sync.Map // map[int64]*Stats
+		oldSessions sync.Map // map[int64]time.Time
 	}
 )
 
@@ -69,6 +69,7 @@ var (
 	mu       *sync.Mutex
 	debug    bool
 )
+var knownNetworks = []string{common.NetworkPublic, common.NetworkIntra, common.NetworkReplication}
 
 func init() {
 	mu = &sync.Mutex{}
@@ -80,7 +81,6 @@ func init() {
 //
 // API
 //
-var knownNetworks = []string{common.NetworkPublic, common.NetworkIntra, common.NetworkReplication}
 
 func SetMux(network string, x *http.ServeMux) {
 	if !common.StringInSlice(network, knownNetworks) {
@@ -114,7 +114,7 @@ func Register(network, trname string, callback Receive) (path string, err error)
 		return
 	}
 
-	h := &handler{trname, callback, make(map[int64]*Stats), make(map[int64]time.Time)}
+	h := &handler{trname: trname, callback: callback}
 	path = common.URLPath(api.Version, api.Transport, trname)
 	mux.HandleFunc(path, h.receive)
 	if _, ok = handlers[network][trname]; ok {
@@ -135,14 +135,18 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 	}
 	netstats = make(map[string]EndpointStats)
 	for trname, h := range handlers {
-		eps := make(EndpointStats, len(h.sessions))
-		for sessid, in := range h.sessions {
+		eps := make(EndpointStats)
+		f := func(key, value interface{}) bool {
 			out := &Stats{}
+			sessid := key.(int64)
+			in := value.(*Stats)
 			out.Num = atomic.LoadInt64(&in.Num)
 			out.Offset = atomic.LoadInt64(&in.Offset)
 			out.Size = atomic.LoadInt64(&in.Size)
 			eps[sessid] = out
+			return true
 		}
+		h.sessions.Range(f)
 		netstats[trname] = eps
 	}
 	mu.Unlock()
@@ -168,13 +172,11 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		var stats *Stats
 		objReader, sessid, hl64, err := it.next()
 		if sessid != 0 {
-			if _, ok := h.sessions[sessid]; !ok {
-				h.sessions[sessid] = &Stats{}
-				if bool(glog.V(4)) || debug {
-					glog.Infof("%s[%d]: start-of-stream", trname, sessid)
-				}
+			statsif, loaded := h.sessions.LoadOrStore(sessid, &Stats{})
+			if !loaded && (bool(glog.V(4)) || debug) {
+				glog.Infof("%s[%d]: start-of-stream", trname, sessid)
 			}
-			stats, _ = h.sessions[sessid]
+			stats = statsif.(*Stats)
 		}
 		if stats != nil && hl64 != 0 {
 			off := atomic.AddInt64(&stats.Offset, hl64)
@@ -195,13 +197,17 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if sessid != 0 {
 				// delayed cleanup old sessions
-				for id, timeClosed := range h.oldSessions {
+				f := func(key, value interface{}) bool {
+					id := key.(int64)
+					timeClosed := value.(time.Time)
 					if time.Since(timeClosed) > cleanupTimeout {
-						delete(h.oldSessions, id)
-						delete(h.sessions, id)
+						h.oldSessions.Delete(id)
+						h.sessions.Delete(id)
 					}
+					return true
 				}
-				h.oldSessions[sessid] = time.Now()
+				h.oldSessions.Range(f)
+				h.oldSessions.Store(sessid, time.Now())
 			}
 			if err != io.EOF {
 				common.InvalidHandlerDetailed(w, r, err.Error())

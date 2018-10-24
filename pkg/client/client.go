@@ -91,7 +91,7 @@ var (
 
 func init() {
 	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "ClientMem2"}
-	Mem2.Init()
+	_ = Mem2.Init(false /* ignore init-time errors */)
 	go Mem2.Run()
 }
 

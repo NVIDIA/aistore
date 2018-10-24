@@ -20,7 +20,7 @@ const (
 
 func testMemInit(name string) {
 	gmem2 = &memsys.Mem2{Name: name}
-	gmem2.Init()
+	_ = gmem2.Init(false /* ignore init-time errors */)
 }
 
 func testTmpFileName(fname string) string {

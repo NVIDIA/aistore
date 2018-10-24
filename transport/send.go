@@ -90,7 +90,7 @@ type (
 		Opaque          []byte // custom control (optional)
 		Dsize           int64  // size of the object (size=0 (unknown) not supported yet)
 	}
-	// send-done callback (user-defined, optional)
+	// object-sent callback (user-defined, optional)
 	SendCallback func(error)
 )
 
@@ -170,7 +170,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	return
 }
 
-func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser, callback SendCallback) {
+func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback) {
 	if bool(glog.V(4)) || debug {
 		glog.Infof("%s send %s/%s(%d)", s.lid, hdr.Bucket, hdr.Objname, hdr.Dsize)
 	}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"sync"
@@ -89,8 +90,7 @@ const (
 	mindepth      = 128             // ring cap min; default ring growth increment
 	maxdepth      = 1024 * 24       // ring cap max
 	sizetoGC      = common.GiB * 2  // see heuristics ("Heu")
-	loadavg1      = 1               // load average type 1
-	loadavg2      = 3               // load average type 2
+	loadavg       = 2               // "idle load average" to deallocate Slabs when the load is below this constant
 	maxMemPct     = 50              // % of total RAM that can be used by the subsystem unless specified via DFC_MINMEM_*
 	minMemFree    = common.GiB      // default minimum memory size that must remain available - see DFC_MINMEM_*
 	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
@@ -146,6 +146,12 @@ type (
 		MinPctFree  int           // ditto, as % of free at init time
 		Debug       bool
 	}
+	FreeSpec struct {
+		IdleDuration time.Duration // reduce only the slabs that are idling for at least as much time
+		MinSize      int64         // minimum freed size that'd warrant calling GC (default = sizetoGC)
+		Totally      bool          // true: free all slabs regardless of their idle-ness and size
+		ToOS         bool          // GC and then return the memory to the operating system
+	}
 )
 
 // private types
@@ -170,10 +176,17 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to allocate at construction ti
 	return &SGL{sgl: sgl, slab: slab}
 }
 
-func (r *Mem2) Init() (err error) {
+//
+// on error behavior is defined by the ignorerr argument
+// true:  print error message and proceed regardless
+// false: print error message and panic
+//
+func (r *Mem2) Init(ignorerr bool) (err error) {
 	// 1. environment overrides defaults and Mem2{...} hard-codings
 	if err = r.env(); err != nil {
-		return
+		if !ignorerr {
+			panic(err)
+		}
 	}
 	// 2. compute minfree - mem size that must remain free at all times
 	mem := sigar.Mem{}
@@ -207,7 +220,10 @@ func (r *Mem2) Init() (err error) {
 	// 3. validate and compute free memory "low watermark"
 	m, f := common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.Free), 2)
 	if mem.Free < r.MinFree {
-		return fmt.Errorf("Insufficient free memory %s, minimum required %s", f, m)
+		err = fmt.Errorf("Insufficient free memory %s, minimum required %s", f, m)
+		if !ignorerr {
+			panic(err)
+		}
 	}
 	r.lowwm = common.MinU64(r.MinFree*3, (r.MinFree+mem.Total)/2) // Heu #1: hysteresis
 
@@ -246,6 +262,48 @@ func (r *Mem2) Init() (err error) {
 	return
 }
 
+// on-demand memory freeing to the user-provided specification
+func (r *Mem2) Free(spec FreeSpec) {
+	var freed int64
+	if spec.Totally {
+		for _, s := range r.rings {
+			freed += s.cleanup()
+		}
+	} else {
+		if spec.IdleDuration == 0 {
+			spec.IdleDuration = freeIdleMin // using default
+		}
+		currStats := Stats2{}
+		req := ReqStats2{Wg: &sync.WaitGroup{}, Stats: &currStats}
+		req.Wg.Add(1)
+		r.GetStats(req)
+		req.Wg.Wait()
+
+		for i, idle := range currStats.Idle {
+			if idle.IsZero() {
+				continue
+			}
+			elapsed := time.Since(idle)
+			if elapsed > spec.IdleDuration {
+				s := r.rings[i]
+				x := s.cleanup()
+				freed += x
+				if x > 0 {
+					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
+				}
+			}
+		}
+	}
+	if spec.MinSize == 0 {
+		spec.MinSize = sizetoGC // using default
+	}
+	mem := sigar.Mem{}
+	mem.Get()
+	if r.doGC(mem.Free, freed, spec.MinSize, spec.ToOS, spec.ToOS) { // ToOS==true forces it
+		glog.Infof("Freed %s memory", common.B2S(freed, 2))
+	}
+}
+
 // as a common.Runner
 func (r *Mem2) Run() error {
 	r.time.t = time.NewTimer(r.time.d)
@@ -279,6 +337,7 @@ func (r *Mem2) Run() error {
 		case <-r.time.t.C:
 			r.work()
 		case req := <-r.statCh:
+			r.doStats()
 			for i := 0; i < Numslabs; i++ {
 				req.Stats.Hits[i] = r.stats.Hits[i]
 				req.Stats.Miss[i] = r.stats.Miss[i]
@@ -405,12 +464,15 @@ func (r *Mem2) work() {
 	swapping := swap.Used > r.swap
 	r.swap = swap.Used
 
-	r.doStats() // TODO more frequently(?)
+	r.doStats()
 
 	// 1. enough => free idle
 	if mem.Free > r.lowwm && !swapping {
 		atomic.StoreInt64(&r.mindepth, int64(mindepth))
-		r.freeIdleGC(mem.Free, false, false)
+		r.toGC += r.freeIdle(freeIdleMin)
+		if r.doGC(mem.Free, r.toGC, sizetoGC, false, false) {
+			r.toGC = 0
+		}
 		goto timex
 	}
 	if mem.Free <= r.MinFree { // 2. mem too low indicates "high watermark"
@@ -439,13 +501,17 @@ func (r *Mem2) work() {
 		s := pair.s
 		r.toGC += s.reduce(depth, pair.v == 0 /* idle */, true /* force */)
 		if r.toGC > sizetoGC {
-			r.freeIdleGC(mem.Free, true, swapping)
+			if r.doGC(mem.Free, r.toGC, sizetoGC, true, swapping) {
+				r.toGC = 0
+			}
 			goto timex
 		}
 	}
 	// 4. when too low call it anyway if weren't called
 	if mem.Free <= r.MinFree {
-		r.freeIdleGC(mem.Free, true, swapping)
+		if r.doGC(mem.Free, r.toGC, sizetoGC, true, swapping) {
+			r.toGC = 0
+		}
 	}
 timex:
 	if r.setTimer(mem.Free, mem.Total, swapping, true /* reset */) {
@@ -470,56 +536,60 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) (flipped bool)
 	return
 }
 
-//
-// The freeIdleGC() method is utilized for two different albeit interrelated
-// purposes: 1) free idle slabs and 2) forcefully reduce /less/ active slabs
-// when memory is running low.
-// In the first case (force = false) the method traverses and cleanups
-// idle slabs while at the same time incrementing the toGC counter.
-// Note that in the second case, slab "reduction" is done by the caller
-// code prior to calling freeIdleGC().
-// In both cases, freeIdleGC() may decide to garbage-collect - but only
-// when the toGC counter accumulates a certain amount (greater than sizetoGC)
-//
-
-func (r *Mem2) freeIdleGC(free uint64, force, swapping bool) {
-	if !force {
-		for i, idle := range r.stats.Idle {
-			if idle.IsZero() {
-				continue
-			}
-			elapsed := time.Since(idle)
-			if elapsed > freeIdleMin {
-				s := r.rings[i]
-				if elapsed > freeIdleZero {
-					glog.Infof("%s: idle for %v - cleaning up", s.tag, elapsed)
-					r.toGC += s.cleanup()
-				} else {
-					glog.Infof("%s: idle for %v - minimizing", s.tag, elapsed)
-					r.toGC += s.reduce(mindepth, true /* idle */, false /* force */)
+// freeIdle traverses and deallocates idle slabs- those that were not used for at
+// least the specified duration; returns freed size
+func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
+	for i, idle := range r.stats.Idle {
+		if idle.IsZero() {
+			continue
+		}
+		elapsed := time.Since(idle)
+		if elapsed > duration {
+			s := r.rings[i]
+			if elapsed > freeIdleZero {
+				x := s.cleanup()
+				freed += x
+				if x > 0 {
+					glog.Infof("%s: idle for %v - cleanup", s.tag, elapsed)
+				}
+			} else {
+				x := s.reduce(mindepth, true /* idle */, false /* force */)
+				freed += x
+				if x > 0 && (bool(glog.V(4)) || r.Debug) {
+					glog.Infof("%s: idle for %v - reduced %s", s.tag, elapsed, common.B2S(x, 1))
 				}
 			}
 		}
 	}
-	if r.toGC < sizetoGC { // Heu #3
-		return
-	}
+	return
+}
+
+// The method is called in a few different cases:
+// 1) upon periodic freeing of idle slabs
+// 2) after forceful reduction of the /less/ active slabs (done when memory is running low)
+// 3) on demand via Mem2.Free()
+func (r *Mem2) doGC(free uint64, toGC, minsize int64, force, swapping bool) (gced bool) {
 	c := sigar.ConcreteSigar{}
 	avg, err := c.GetLoadAverage()
 	if err != nil {
 		glog.Errorf("Failed to load averages, err: %v", err)
-		if force {
-			runtime.GC()
-			r.toGC = 0
-		}
+		avg.One = 999 // fall thru on purpose
+	}
+	if avg.One > loadavg && !force && !swapping { // Heu #3
 		return
 	}
-	if avg.One < loadavg1 || (avg.One < loadavg2 && force) || swapping { // Heu #4
-		glog.Infof("GC(f=%t, swap=%t) load %.2f free %s GC %s", force, swapping, avg.One,
-			common.B2S(int64(free), 1), common.B2S(int64(r.toGC), 2))
+
+	str := fmt.Sprintf("GC(%t, %t) load %.2f free %s GC %s", force, swapping, avg.One, common.B2S(int64(free), 1), common.B2S(toGC, 2))
+	if force || swapping { // Heu #4
+		glog.Errorf("%s - freeing memory to the OS...", str)
+		debug.FreeOSMemory() // forces GC followed by an attempt to return memory to the OS
+		gced = true
+	} else if toGC > minsize { // Heu #5: only when accumulated beyond threshold
+		glog.Infof(str)
 		runtime.GC()
-		r.toGC = 0
+		gced = true
 	}
+	return
 }
 
 func (r *Mem2) fsort(i, j int) bool {
@@ -642,9 +712,9 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 	cnt := lput - todepth
 	if isidle {
 		if force {
-			cnt = common.Max(cnt, lput/2) // Heu #5
+			cnt = common.Max(cnt, lput/2) // Heu #6
 		} else {
-			cnt = common.Min(cnt, lput/2) // Heu #6
+			cnt = common.Min(cnt, lput/2) // Heu #7
 		}
 	}
 	if cnt > 0 {
@@ -653,7 +723,7 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 		}
 		for ; cnt > 0; cnt-- {
 			lput--
-			if s.usespool && todepth > 0 && freed < sizetoGC/4 { // Heu #7
+			if s.usespool && todepth > 0 && freed < sizetoGC/4 { // Heu #8
 				buf := s.put[lput]
 				s.l2cache.Put(buf)
 			}
@@ -669,9 +739,9 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 	cnt = lget - todepth
 	if isidle {
 		if force {
-			cnt = common.Max(cnt, lget/2) // Heu #5
+			cnt = common.Max(cnt, lget/2) // Heu #9
 		} else {
-			cnt = common.Min(cnt, lget/2) // Heu #6
+			cnt = common.Min(cnt, lget/2) // Heu #10
 		}
 	}
 	if cnt > 0 {
