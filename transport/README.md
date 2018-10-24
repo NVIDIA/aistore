@@ -94,3 +94,13 @@ go test -v -logtostderr=true
 ```
 DFC_STREAM_DEBUG=1 go test -v -run=Multi
 ```
+
+For more examples, please see [tests](transport/transport_test.go) in this directory.
+
+
+## Environment
+
+| Environment Variable | Description |
+|--- | --- |
+| DFC_STREAM_DEBUG | Enable inline assertions and verbose tracing |
+| DFC_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |

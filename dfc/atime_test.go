@@ -34,7 +34,7 @@ func TestAtimerunnerStop(t *testing.T) {
 	waitCh := make(chan struct{})
 	go func() {
 		atimer.touch(fileName)
-		waitChan <- struct{}{}
+		waitCh <- struct{}{}
 	}()
 
 	select {

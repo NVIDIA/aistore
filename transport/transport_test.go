@@ -20,6 +20,7 @@ package transport_test
 //
 
 import (
+	"context"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -102,7 +103,7 @@ func Example_Headers() {
 
 	httpclient := &http.Client{Transport: &http.Transport{}}
 
-	stream := transport.NewStream(httpclient, ts.URL)
+	stream := transport.NewStream(httpclient, ts.URL, nil)
 
 	sendText(stream, text1, text2)
 	stream.Fin()
@@ -114,11 +115,11 @@ func Example_Headers() {
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
-	stream.SendAsync(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1)
+	stream.SendAsync(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1, nil)
 
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
-	stream.SendAsync(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2)
+	stream.SendAsync(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2, nil)
 }
 
 func Example_Mux() {
@@ -146,7 +147,9 @@ func Example_Mux() {
 	}
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url)
+	stream := transport.NewStream(httpclient, url, nil)
+
+	time.Sleep(time.Second * 2)
 
 	sendText(stream, text1, text2)
 
@@ -174,8 +177,59 @@ func Test_OneStream(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	streamWrite10GB(t, 99, nil, ts, nil, nil)
+	streamWriteUntil(t, 99, nil, ts, nil, nil)
 	printNetworkStats(t, "n1")
+}
+
+func Test_CancelStream(t *testing.T) {
+	mux := http.NewServeMux()
+
+	transport.SetMux("nc", mux)
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+		slab := Mem2.SelectSlab2(common.GiB)
+		buf := slab.Alloc()
+		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
+		if err != nil && err != io.EOF {
+			tutils.Logf("err %v", err)
+		} else if err == io.EOF && written != hdr.Dsize {
+			t.Fatalf("size %d != %d", written, hdr.Dsize)
+		}
+		slab.Free(buf)
+	}
+
+	path, err := transport.Register("nc", "cancel-rx-88", recvFunc)
+	tutils.CheckFatal(err, t)
+
+	httpclient := &http.Client{Transport: &http.Transport{}}
+	url := ts.URL + path
+	ctx, cancel := context.WithCancel(context.Background())
+	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 1, Ctx: ctx})
+	now := time.Now()
+
+	random := newRand(time.Now().UnixNano())
+	size, num, prevsize := int64(0), 0, int64(0)
+	for time.Since(now) < duration {
+		hdr := genStaticHeader()
+		slab := Mem2.SelectSlab2(hdr.Dsize)
+		reader := newRandReader(random, hdr, slab)
+		stream.SendAsync(hdr, reader, nil)
+		num++
+		size += hdr.Dsize
+		if size-prevsize >= common.GiB {
+			tutils.Logf("[%2d]: %d GiB\n", 88, size/common.GiB)
+			prevsize = size
+			if num > 10 && random.Int63()%3 == 0 {
+				cancel()
+				tutils.Logln("Canceling...")
+				break
+			}
+		}
+	}
+	stream.Fin() // no-op: can be skipped as well
 }
 
 func Test_MultiStream(t *testing.T) {
@@ -194,7 +248,7 @@ func Test_MultiStream(t *testing.T) {
 	lock := &sync.Mutex{}
 	for i := 0; i < 16; i++ {
 		wg.Add(1)
-		go streamWrite10GB(t, i, wg, ts, netstats, lock)
+		go streamWriteUntil(t, i, wg, ts, netstats, lock)
 	}
 	wg.Wait()
 	compareNetworkStats(t, "n1", netstats)
@@ -246,13 +300,13 @@ func Test_MultipleNetworks(t *testing.T) {
 
 		httpclient := &http.Client{Transport: &http.Transport{}}
 		url := ts.URL + path
-		streams = append(streams, transport.NewStream(httpclient, url))
+		streams = append(streams, transport.NewStream(httpclient, url, nil))
 	}
 
 	totalSend := int64(0)
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
-		stream.SendAsync(hdr, reader)
+		stream.SendAsync(hdr, reader, nil)
 		totalSend += hdr.Dsize
 	}
 
@@ -280,7 +334,7 @@ func Test_OnSendCallback(t *testing.T) {
 	}
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url)
+	stream := transport.NewStream(httpclient, url, nil)
 
 	totalSend := int64(0)
 	var fired []bool
@@ -316,7 +370,7 @@ func Test_OnSendCallback(t *testing.T) {
 // test helpers
 //
 
-func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, netstats map[string]transport.EndpointStats, lock *sync.Mutex) {
+func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Server, netstats map[string]transport.EndpointStats, lock *sync.Mutex) {
 	if wg != nil {
 		defer wg.Done()
 	}
@@ -330,22 +384,26 @@ func streamWrite10GB(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Serv
 
 	httpclient := &http.Client{Transport: &http.Transport{}}
 	url := ts.URL + path
-	stream := transport.NewStream(httpclient, url)
+	stream := transport.NewStream(httpclient, url, nil)
 	now := time.Now()
 
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
-	slab := Mem2.SelectSlab2(32 * common.KiB)
 	for time.Since(now) < duration {
 		hdr := genRandomHeader(random)
+		// hdr := genStaticHeader()
+		slab := Mem2.SelectSlab2(hdr.Dsize)
 		reader := newRandReader(random, hdr, slab)
-		stream.SendAsync(hdr, reader)
+		stream.SendAsync(hdr, reader, nil)
+		num++
 		size += hdr.Dsize
 		if size-prevsize >= common.GiB {
 			tutils.Logf("[%2d]: %d GiB\n", ii, size/common.GiB)
 			prevsize = size
+			if random.Int63()%7 == 0 {
+				time.Sleep(time.Second * 2) // simulate occasional timeout
+			}
 		}
-		num++
 	}
 	stream.Fin()
 	stats := stream.GetStats()
@@ -386,6 +444,14 @@ func newRand(seed int64) *rand.Rand {
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	return random
+}
+
+func genStaticHeader() (hdr transport.Header) {
+	hdr.Bucket = "a"
+	hdr.Objname = "b"
+	hdr.Opaque = []byte("c")
+	hdr.Dsize = common.GiB
+	return
 }
 
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {

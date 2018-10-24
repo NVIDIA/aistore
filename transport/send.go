@@ -11,13 +11,16 @@
 package transport
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,12 +31,20 @@ import (
 	"github.com/NVIDIA/dfcpub/xoshiro256"
 )
 
+// transport defaults
 const (
 	MaxHeaderSize  = 1024
 	lastMarker     = common.MaxInt64
 	defaultIdleOut = time.Second
-	wakeupOut      = time.Millisecond * 100
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
+	burstNum       = 64 // default max num objects that can be posted for sending without any back-pressure
+)
+
+// stream TCP/HTTP lifecycle: expired => posted => activated ( => expired) transitions
+const (
+	expired = iota + 1
+	posted
+	activated
 )
 
 // API: types
@@ -55,25 +66,32 @@ type (
 		time      struct {
 			idleOut time.Duration // inter-object timeout: when triggers, causes recycling of the underlying http request
 			idle    *time.Timer
-			wakeup  *time.Timer
-			expired int64
 		}
-		wg      sync.WaitGroup
-		sendoff sendoff
+		lifecycle int64 // see state enum above
+		wg        sync.WaitGroup
+		sendoff   sendoff
 	}
+	// advanced usage: additional stream control
+	Extra struct {
+		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
+		Ctx         context.Context // typically, result of context.WithCancel(context.Background()) by the caller
+		Burst       int             // max num objects that can be posted for sending without any back-pressure
+	}
+	// stream stats
 	Stats struct {
 		Num    int64 // number of transferred objects
 		Size   int64 // transferred size in bytes
 		Offset int64 // stream offset
 	}
 	EndpointStats map[int64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
-	Header        struct {
+	// object header
+	Header struct {
 		Bucket, Objname string // uname at the destination
 		Opaque          []byte // custom control (optional)
 		Dsize           int64  // size of the object (size=0 (unknown) not supported yet)
 	}
-
-	SendCallback func(error) // callback function type used in async send
+	// send-done callback (user-defined, optional)
+	SendCallback func(error)
 )
 
 // internal
@@ -94,7 +112,7 @@ type (
 //
 // API: methods
 //
-func NewStream(client *http.Client, toURL string, idleTimeout ...time.Duration) (s *Stream) {
+func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	if client == nil {
 		glog.Errorln("nil client")
 		return
@@ -107,48 +125,74 @@ func NewStream(client *http.Client, toURL string, idleTimeout ...time.Duration) 
 	s = &Stream{client: client, toURL: toURL}
 
 	s.time.idleOut = defaultIdleOut
-	if len(idleTimeout) > 0 {
-		s.time.idleOut = idleTimeout[0]
+	if extra != nil && extra.IdleTimeout > 0 {
+		s.time.idleOut = extra.IdleTimeout
 	}
-	if tm := time.Now().UnixNano(); tm&0xfff != 0 {
-		s.sessid = tm & 0xfff
+	if tm := time.Now().UnixNano(); tm&0xffff != 0 {
+		s.sessid = tm & 0xffff
 	} else { // enforce non-zero
 		s.sessid = tm
 	}
 	s.trname = path.Base(u.Path)
 	s.lid = fmt.Sprintf("%s[%d]:", s.trname, s.sessid)
 
-	s.workCh = make(chan obj, 128)
+	// burst size: the number of objects the caller is permitted to post for sending
+	// without experiencing any sort of back-pressure
+	burst := burstNum
+	if extra != nil && extra.Burst > 0 {
+		burst = extra.Burst
+	}
+	if a := os.Getenv("DFC_STREAM_BURST_NUM"); a != "" {
+		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
+			glog.Errorf("%s error parsing burst env '%s': %v", s.lid, a, err)
+			burst = burstNum
+		} else {
+			burst = int(burst64)
+		}
+	}
+	s.workCh = make(chan obj, burst)
+
 	s.lastCh = make(chan struct{}, 1)
 	s.stopCh = make(chan struct{}, 1)
 	s.maxheader = make([]byte, MaxHeaderSize)
 	s.time.idle = time.NewTimer(s.time.idleOut)
 	s.time.idle.Stop()
-	s.time.wakeup = time.NewTimer(wakeupOut)
-	s.time.wakeup.Stop()
+	atomic.StoreInt64(&s.lifecycle, expired) // initiate HTTP/TCP session upon arrival of the very first object and *not* earlier
 
+	var ctx context.Context
+	if extra != nil && extra.Ctx != nil {
+		ctx = extra.Ctx
+	} else {
+		ctx, _ = context.WithCancel(context.Background())
+	}
 	s.wg.Add(1)
-	go s.doTx()
+	go s.doTx(ctx)
 	return
 }
 
-func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser, callbacks ...SendCallback) {
+func (s *Stream) SendAsync(hdr Header, reader io.ReadCloser, callback SendCallback) {
 	if bool(glog.V(4)) || debug {
 		glog.Infof("%s send %s/%s(%d)", s.lid, hdr.Bucket, hdr.Objname, hdr.Dsize)
 	}
 	s.time.idle.Stop()
-	if atomic.CompareAndSwapInt64(&s.time.expired, lastMarker, 0) {
-		glog.Infof("%s wake-up", s.lid)
-	}
-	var callback SendCallback
-	if len(callbacks) > 0 {
-		callback = callbacks[0]
+	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
+		if bool(glog.V(4)) || debug {
+			glog.Infof("%s expired => posted", s.lid)
+		}
 	}
 	s.workCh <- obj{hdr, reader, callback}
 }
 
 func (s *Stream) Fin() {
+	defer func() {
+		if r := recover(); r != nil { // case in point: stream cancel() mistakenly followed by Fin()
+			glog.Errorln("recovered", r)
+		}
+	}()
 	s.workCh <- obj{hdr: Header{Dsize: lastMarker}}
+	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
+		glog.Infof("%s (expired => posted) to handle Fin", s.lid)
+	}
 	s.wg.Wait() // synchronous termination
 }
 
@@ -168,71 +212,75 @@ func (hdr *Header) IsLast() bool { return hdr.Dsize == lastMarker }
 //
 // internal methods
 //
-func (s *Stream) doTx() {
-	defer s.wg.Done()
-outer:
+// main loop
+func (s *Stream) doTx(ctx context.Context) {
+forever:
 	for {
-		var (
-			request  *http.Request
-			response *http.Response
-			err      error
-		)
-		defer func() {
-			if err != nil {
-				glog.Errorf("%s exiting with err %v", s.lid, err)
-			}
-		}()
-
-		if request, err = http.NewRequest(http.MethodPut, s.toURL, s); err != nil {
-			break
-		}
-		s.Numcur, s.Sizecur = 0, 0
-		if bool(glog.V(4)) || debug {
-			glog.Infof("%s Do", s.lid)
-		}
-		response, err = s.client.Do(request)
-		if err == nil {
+		if atomic.CompareAndSwapInt64(&s.lifecycle, posted, activated) {
 			if bool(glog.V(4)) || debug {
-				glog.Infof("%s Done", s.lid)
+				glog.Infof("%s posted => activated", s.lid)
 			}
-		} else {
-			glog.Errorf("%s Done, err %v", s.lid, err)
+			if err := s.doRequest(ctx); err != nil {
+				break
+			}
 		}
-		if err != nil {
-			break
-		}
-		ioutil.ReadAll(response.Body)
-		response.Body.Close()
-		//
-		// upon timeout, initiate HTTP/TCP session *upon arrival* of the first object, and not earlier
-		//
-		s.time.wakeup.Reset(wakeupOut)
-	inner:
+	newreq:
 		for {
 			select {
+			case <-ctx.Done():
+				glog.Infof("%s %v", s.lid, ctx.Err())
+				break forever
 			case <-s.lastCh:
 				if bool(glog.V(4)) || debug {
 					glog.Infof("%s end-of-stream", s.lid)
 				}
-				s.time.wakeup.Stop()
-				break outer
+				break forever
 			case <-s.stopCh:
 				glog.Infof("%s stopped", s.lid)
-				s.time.wakeup.Stop()
-				break outer
-			case <-s.time.wakeup.C:
-				if atomic.LoadInt64(&s.time.expired) == lastMarker {
-					s.time.wakeup.Reset(wakeupOut)
-				} else {
-					break inner
+				break forever
+			default:
+				if v := atomic.LoadInt64(&s.lifecycle); v != expired {
+					if debug {
+						common.Assert(v == posted)
+					}
+					break newreq // new post after timeout: initiate new HTTP/TCP session
 				}
+				time.Sleep(time.Millisecond * 10)
 			}
 		}
 	}
-	// this stream is done - terminated: closing the work channel on purpose
+	s.time.idle.Stop()
 	close(s.workCh)
 	close(s.lastCh)
 	close(s.stopCh)
+	s.wg.Done()
+}
+
+func (s *Stream) doRequest(ctx context.Context) (err error) {
+	var (
+		request  *http.Request
+		response *http.Response
+	)
+	if request, err = http.NewRequest(http.MethodPut, s.toURL, s); err != nil {
+		return
+	}
+	request = request.WithContext(ctx)
+	s.Numcur, s.Sizecur = 0, 0
+	if bool(glog.V(4)) || debug {
+		glog.Infof("%s Do", s.lid)
+	}
+	response, err = s.client.Do(request)
+	if err == nil {
+		if bool(glog.V(4)) || debug {
+			glog.Infof("%s Done", s.lid)
+		}
+	} else {
+		glog.Errorf("%s Done, err %v", s.lid, err)
+		return
+	}
+	ioutil.ReadAll(response.Body)
+	response.Body.Close()
+	return
 }
 
 // as io.Reader
@@ -251,12 +299,14 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		l := s.insHeader(s.sendoff.obj.hdr)
 		s.header = s.maxheader[:l]
 		return s.sendHdr(b)
-	// control stream lifesycle on object boundaries
+	// control stream lifesycle at object boundaries
 	case <-s.time.idle.C:
 		err = io.EOF
 		num := atomic.LoadInt64(&s.stats.Num)
 		glog.Warningf("%s timed out (%d/%d)", s.lid, s.Numcur, num)
-		atomic.CompareAndSwapInt64(&s.time.expired, 0, lastMarker)
+		if atomic.CompareAndSwapInt64(&s.lifecycle, activated, expired) {
+			glog.Infof("%s activated => expired", s.lid)
+		}
 		return
 	case <-s.stopCh:
 		num := atomic.LoadInt64(&s.stats.Num)
@@ -300,11 +350,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 
 func (s *Stream) sendData(b []byte) (n int, err error) {
 	n, err = s.sendoff.obj.reader.Read(b)
-	s.sendoff.off += int64(n)
-	if bool(glog.V(4)) || debug {
-		num := atomic.LoadInt64(&s.stats.Num)
-		glog.Infof("%s offset=%d (%d/%d)", s.lid, s.sendoff.off, s.Numcur, num)
-	}
+	s.sendoff.off += int64(n) // (avg send transfer size tbd)
 	if err != nil {
 		if err == io.EOF {
 			err = nil

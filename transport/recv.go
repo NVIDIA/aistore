@@ -19,6 +19,7 @@ import (
 	"path"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
@@ -47,11 +48,15 @@ type (
 		hlen int
 	}
 	handler struct {
-		trname   string
-		callback Receive
-		sessions map[int64]*Stats
+		trname      string
+		callback    Receive
+		sessions    map[int64]*Stats
+		oldSessions map[int64]time.Time
 	}
 )
+
+// session stats cleanup timeout
+const cleanupTimeout = time.Minute
 
 //====================
 //
@@ -109,7 +114,7 @@ func Register(network, trname string, callback Receive) (path string, err error)
 		return
 	}
 
-	h := &handler{trname, callback, make(map[int64]*Stats)}
+	h := &handler{trname, callback, make(map[int64]*Stats), make(map[int64]time.Time)}
 	path = common.URLPath(api.Version, api.Transport, trname)
 	mux.HandleFunc(path, h.receive)
 	if _, ok = handlers[network][trname]; ok {
@@ -172,7 +177,10 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			stats, _ = h.sessions[sessid]
 		}
 		if stats != nil && hl64 != 0 {
-			atomic.AddInt64(&stats.Offset, hl64)
+			off := atomic.AddInt64(&stats.Offset, hl64)
+			if bool(glog.V(4)) || debug {
+				glog.Infof("%s[%d]: offset=%d, hlen=%d", trname, sessid, off, hl64)
+			}
 		}
 		if objReader != nil {
 			h.callback(w, objReader.hdr, objReader)
@@ -185,7 +193,16 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err != nil {
-			// FIXME: mark and later delete h.sessions[sessid]
+			if sessid != 0 {
+				// delayed cleanup old sessions
+				for id, timeClosed := range h.oldSessions {
+					if time.Since(timeClosed) > cleanupTimeout {
+						delete(h.oldSessions, id)
+						delete(h.sessions, id)
+					}
+				}
+				h.oldSessions[sessid] = time.Now()
+			}
 			if err != io.EOF {
 				common.InvalidHandlerDetailed(w, r, err.Error())
 			}
@@ -203,7 +220,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 	if n < sizeofI64*2 {
 		common.Assert(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
 		if err != io.EOF {
-			glog.Errorf("%s: next %v", it.trname, err)
+			glog.Errorf("%s: %v", it.trname, err)
 		}
 		return
 	}
@@ -223,6 +240,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 	if debug {
 		common.Assert(hlen < len(it.headerBuf))
 	}
+	hl64 += int64(sizeofI64) * 2 // to account for hlen and its checksum
 	n, err = it.body.Read(it.headerBuf[:hlen])
 	if n == 0 {
 		return
@@ -265,7 +283,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 			glog.Errorf("size %d != %d Dsize", obj.off, obj.hdr.Dsize)
 		}
 	default:
-		glog.Errorf("err %v", err)
+		glog.Errorf("err %v", err) // canceled?
 	}
 	return
 }
