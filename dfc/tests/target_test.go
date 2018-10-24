@@ -37,3 +37,15 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }
+
+func TestDeleteInvalidDaemonID(t *testing.T) {
+	var (
+		sid      = "abcde:abcde"
+		proxyURL = getPrimaryURL(t, proxyURLRO)
+	)
+
+	url := proxyURL + common.URLPath(api.Version, api.Cluster, api.Daemon, sid)
+	if err := client.HTTPRequest(http.MethodDelete, url, nil); err == nil {
+		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
+	}
+}

@@ -36,6 +36,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	xxhash := getXXHashChecksum(t, reader)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -44,11 +45,13 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, xxhash, reader)
 	tutils.CheckFatal(err, t)
 
-	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLRepl)
-	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, xxhash, reader)
-	tutils.CheckFatal(err, t)
+	if isCloud {
+		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLRepl)
+		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, xxhash, reader)
+		tutils.CheckFatal(err, t)
+		client.Del(proxyURL, clibucket, object, nil, nil, true)
+	}
 
-	client.Del(proxyURL, clibucket, object, nil, nil, true)
 }
 
 func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
@@ -61,6 +64,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -76,12 +80,14 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 		t.Error("Replication PUT to local bucket without checksum didn't fail")
 	}
 
-	url = proxyURLRepl + common.URLPath(api.Version, api.Objects, clibucket, object)
-	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-	err = client.HTTPRequest(http.MethodPut, url, reader, headers)
+	if isCloud {
+		url = proxyURLRepl + common.URLPath(api.Version, api.Objects, clibucket, object)
+		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
+		err = client.HTTPRequest(http.MethodPut, url, reader, headers)
 
-	if err == nil {
-		t.Error("Replication PUT to local bucket without checksum didn't fail")
+		if err == nil {
+			t.Error("Replication PUT to local bucket without checksum didn't fail")
+		}
 	}
 }
 
@@ -95,6 +101,7 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
+	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -105,10 +112,12 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 		t.Error("Replication PUT to local bucket with bad checksum didn't fail")
 	}
 
-	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, badChecksum, reader)
-	if err == nil {
-		t.Error("Replication PUT to local bucket with bad checksum didn't fail")
+	if isCloud {
+		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
+		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, clibucket, reader)
+		if err == nil {
+			t.Error("Replication PUT to local bucket with bad checksum didn't fail")
+		}
 	}
 }
 
@@ -120,6 +129,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	)
 	var (
 		proxyURLRepl = getPrimaryReplicationURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		bucket       = clibucket
 		size         = int64(fileSize)
 		r            client.Reader
@@ -130,6 +140,9 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 
 	if testing.Short() {
 		t.Skip(skipping)
+	}
+	if !isCloudBucket(t, proxyURL, clibucket) {
+		t.Skip("test requires a Cloud bucket")
 	}
 
 	tutils.Logf("Sending %d files (cloud bucket: %s) for replication...\n", numFiles, bucket)

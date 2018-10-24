@@ -2290,8 +2290,9 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	if isproxy {
 		psi = clone.getProxy(sid)
 		if psi == nil {
-			glog.Errorf("Unknown proxy %s", sid)
 			p.smapowner.Unlock()
+			errstr := fmt.Sprintf("Unknown proxy %s", sid)
+			p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
 			return
 		}
 		clone.delProxy(sid)
@@ -2301,8 +2302,9 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	} else {
 		osi = clone.getTarget(sid)
 		if osi == nil {
-			glog.Errorf("Unknown target %s", sid)
 			p.smapowner.Unlock()
+			errstr := fmt.Sprintf("Unknown target %s", sid)
+			p.invalmsghdlr(w, r, errstr, http.StatusNotFound)
 			return
 		}
 		clone.delTarget(sid)

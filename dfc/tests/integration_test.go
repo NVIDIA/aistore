@@ -302,7 +302,9 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 	// Unregister same target again
 	err = client.UnregisterTarget(m.proxyURL, targets[0].sid)
-	tutils.CheckFatal(err, t)
+	if err == nil || !strings.Contains(err.Error(), "Not Found") {
+		t.Fatal("Unregistering the same target twice must return error 404")
+	}
 	n = len(getClusterMap(t, m.proxyURL).Tmap)
 	if n != m.originalTargetCount-1 {
 		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
@@ -1117,13 +1119,14 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 		if localBucketDir != "" {
 			return filepath.SkipDir
 		}
-		if strings.Contains(path, "local") {
+		if strings.HasSuffix(path, "/local") {
 			localBucketDir = path
 			return filepath.SkipDir
 		}
 		return nil
 	}
 	filepath.Walk(rootDir, fsWalkFunc)
+	tutils.Logf("Found local bucket's directory: %s\n", localBucketDir)
 	bucketFQN := filepath.Join(localBucketDir, m.bucket)
 	newBucketFQN := filepath.Join(localBucketDir, newTestLocalBucketName)
 
