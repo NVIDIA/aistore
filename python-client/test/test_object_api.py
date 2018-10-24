@@ -54,12 +54,11 @@ class TestObjectApi(unittest.TestCase):
 
     def test_object_headers(self):
         object_name, _ = self.__put_random_object()
-        headers = self.object.get_with_http_info(
-            self.BUCKET_NAME, object_name)[2]
-        self.assertTrue(self.models.Headers.HEADERDFCCHECKSUMTYPE in headers,
+        headers = self.object.get_with_http_info(self.BUCKET_NAME, object_name)[2]
+        self.assertTrue(self.models.Headers.DFCCHECKSUMTYPE in headers,
                         "ChecksumType not in header for [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
-        self.assertTrue(headers[self.models.Headers.HEADERDFCCHECKSUMVAL] ,
+        self.assertTrue(headers[self.models.Headers.DFCCHECKSUMVAL] ,
                         "ChecksumVal is None or empty [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
 

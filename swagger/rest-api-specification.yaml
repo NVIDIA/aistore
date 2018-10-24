@@ -66,10 +66,10 @@ paths:
         '200':
           description: Object at the location bucket-name/object-name
           headers:
-            HeaderDfcChecksumType:
+            DfcChecksumType:
               schema:
                 type: string
-            HeaderDfcChecksumVal:
+            DfcChecksumVal:
               schema:
                 type: string
           content:
@@ -606,7 +606,7 @@ paths:
             text/plain:
               schema:
                 type: string
-  /daemon/mountpaths/:
+  /daemon/mountpaths:
     post:
       summary: Perform operations on mountpath such as disable and enable
       operationId: modifyMountpath
@@ -810,7 +810,7 @@ components:
       enum: [dfc, aws, gcp]
     Headers:
       type: string
-      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, Version, Size, HeaderDfcChecksumType, HeaderDfcChecksumVal]
+      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, Version, Size, DfcChecksumType, DfcChecksumVal]
     RWPolicy:
       type: string
       enum: [cloud, next_tier]

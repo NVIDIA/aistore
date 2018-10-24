@@ -34,8 +34,8 @@ class Headers(object):
     WRITEPOLICY = "WritePolicy"
     VERSION = "Version"
     SIZE = "Size"
-    HEADERDFCCHECKSUMTYPE = "HeaderDfcChecksumType"
-    HEADERDFCCHECKSUMVAL = "HeaderDfcChecksumVal"
+    DFCCHECKSUMTYPE = "DfcChecksumType"
+    DFCCHECKSUMVAL = "DfcChecksumVal"
 
     """
     Attributes:

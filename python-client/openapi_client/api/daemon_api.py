@@ -116,7 +116,7 @@ class DaemonApi(object):
         auth_settings = []  # noqa: E501
 
         return self.api_client.call_api(
-            '/daemon/mountpaths/', 'PUT',
+            '/daemon/mountpaths', 'PUT',
             path_params,
             query_params,
             header_params,
@@ -308,7 +308,7 @@ class DaemonApi(object):
         auth_settings = []  # noqa: E501
 
         return self.api_client.call_api(
-            '/daemon/mountpaths/', 'POST',
+            '/daemon/mountpaths', 'POST',
             path_params,
             query_params,
             header_params,
@@ -504,7 +504,7 @@ class DaemonApi(object):
         auth_settings = []  # noqa: E501
 
         return self.api_client.call_api(
-            '/daemon/mountpaths/', 'DELETE',
+            '/daemon/mountpaths', 'DELETE',
             path_params,
             query_params,
             header_params,

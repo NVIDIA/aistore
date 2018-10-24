@@ -4,11 +4,11 @@ All URIs are relative to *http://localhost:8080/v1*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**create_mountpath**](DaemonApi.md#create_mountpath) | **PUT** /daemon/mountpaths/ | Create mountpath on target
+[**create_mountpath**](DaemonApi.md#create_mountpath) | **PUT** /daemon/mountpaths | Create mountpath on target
 [**get**](DaemonApi.md#get) | **GET** /daemon/ | Get daemon related details
-[**modify_mountpath**](DaemonApi.md#modify_mountpath) | **POST** /daemon/mountpaths/ | Perform operations on mountpath such as disable and enable
+[**modify_mountpath**](DaemonApi.md#modify_mountpath) | **POST** /daemon/mountpaths | Perform operations on mountpath such as disable and enable
 [**perform_operation**](DaemonApi.md#perform_operation) | **PUT** /daemon/ | Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
-[**remove_mountpath**](DaemonApi.md#remove_mountpath) | **DELETE** /daemon/mountpaths/ | Remove mountpath from target
+[**remove_mountpath**](DaemonApi.md#remove_mountpath) | **DELETE** /daemon/mountpaths | Remove mountpath from target
 
 
 # **create_mountpath**
