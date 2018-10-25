@@ -1918,7 +1918,11 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		Status:   objStatus,
 	}
 	if ci.needAtime {
-		atime, _, _ := getAmTimes(osfi)
+		atimeResponse := <-getatimerunner().atime(fqn)
+		atime, ok := atimeResponse.accessTime, atimeResponse.ok
+		if !ok {
+			atime, _, _ = getAmTimes(osfi)
+		}
 		if ci.msg.GetTimeFormat == "" {
 			fileInfo.Atime = atime.Format(api.RFC822)
 		} else {
