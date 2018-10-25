@@ -57,7 +57,7 @@ func init() {
 }
 
 func Test_Sleep(t *testing.T) {
-	mem := &memsys.Mem2{Period: time.Second * 20, MinPctFree: 50, Name: "amem", Debug: verbose}
+	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: common.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
 		t.Fatal(err)
@@ -67,27 +67,27 @@ func Test_Sleep(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < 100; i++ {
-		ttl := time.Duration(random.Int63n(int64(time.Second))) + time.Second
+		ttl := time.Duration(random.Int63n(int64(time.Millisecond*100))) + time.Millisecond
 		var siz, tot int64
 		if i%2 == 0 {
 			siz = random.Int63n(common.MiB*10) + common.KiB
 		} else {
-			siz = random.Int63n(common.MiB) + common.KiB
+			siz = random.Int63n(common.KiB*100) + common.KiB
 		}
-		tot = random.Int63n(common.DivCeil(common.MiB*100, siz))*siz + common.KiB
+		tot = random.Int63n(common.DivCeil(common.MiB*50, siz))*siz + common.KiB
 		wg.Add(1)
 		go memstress(mem, i, ttl, siz, tot, wg)
 	}
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.Free(memsys.FreeSpec{IdleDuration: 1, MinSize: common.KiB})
+		mem.Free(memsys.FreeSpec{IdleDuration: 1, MinSize: common.MiB})
 	}
 	wg.Wait()
 	mem.Stop(nil)
 }
 
 func Test_NoSleep(t *testing.T) {
-	mem := &memsys.Mem2{Period: time.Second * 20, MinPctFree: 50, Name: "bmem", Debug: verbose}
+	mem := &memsys.Mem2{Period: time.Second * 20, MinPctTotal: 5, Name: "bmem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func Test_NoSleep(t *testing.T) {
 	}
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.Free(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: common.MiB})
+		mem.Free(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: common.MiB * 10})
 	}
 	wg.Wait()
 	mem.Stop(nil)

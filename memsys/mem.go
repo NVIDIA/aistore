@@ -90,8 +90,7 @@ const (
 	mindepth      = 128             // ring cap min; default ring growth increment
 	maxdepth      = 1024 * 24       // ring cap max
 	sizetoGC      = common.GiB * 2  // see heuristics ("Heu")
-	loadavg       = 2               // "idle load average" to deallocate Slabs when the load is below this constant
-	maxMemPct     = 50              // % of total RAM that can be used by the subsystem unless specified via DFC_MINMEM_*
+	loadavg       = 10              // "idle" load average to deallocate Slabs when below
 	minMemFree    = common.GiB      // default minimum memory size that must remain available - see DFC_MINMEM_*
 	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
 	freeIdleMin   = memCheckAbove   // time to reduce an idle slab to a minimum depth (see mindepth)
@@ -133,11 +132,12 @@ type (
 			d time.Duration
 			t *time.Timer
 		}
-		lowwm          uint64
-		rings          [Numslabs]*Slab2
-		stats          Stats2
-		sorted         []sortpair
-		toGC, mindepth int64
+		lowwm    uint64
+		rings    [Numslabs]*Slab2
+		stats    Stats2
+		sorted   []sortpair
+		toGC     int64 // accumulates over time and triggers GC upon reaching the spec-ed limit
+		mindepth int64 // minimum ring depth aka length
 		// for user to specify at construction time
 		Name        string
 		MinFree     uint64        // memory that must be available at all times
@@ -182,6 +182,9 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to allocate at construction ti
 // false: print error message and panic
 //
 func (r *Mem2) Init(ignorerr bool) (err error) {
+	if r.Name != "" {
+		r.Setname(r.Name)
+	}
 	// 1. environment overrides defaults and Mem2{...} hard-codings
 	if err = r.env(); err != nil {
 		if !ignorerr {
@@ -211,11 +214,9 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		r.MinFree = minMemFree
 	}
 	if r.MinFree < common.GiB {
-		fmt.Printf("Warning: minimum free memory %s cannot be lower than 1GB\n", common.B2S(int64(r.MinFree), 2))
-		r.MinFree = common.GiB // at least
-	}
-	if r.Name != "" {
-		r.Setname(r.Name)
+		fmt.Println("Warning: ********")
+		fmt.Printf("Warning: minimum free memory %s < 1GiB\n", common.B2S(int64(r.MinFree), 2))
+		fmt.Println("Warning: ********")
 	}
 	// 3. validate and compute free memory "low watermark"
 	m, f := common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.Free), 2)
@@ -225,13 +226,15 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 			panic(err)
 		}
 	}
-	r.lowwm = common.MinU64(r.MinFree*3, (r.MinFree+mem.Total)/2) // Heu #1: hysteresis
+	x := common.MaxU64(r.MinFree*2, (r.MinFree+mem.Free)/2)
+	r.lowwm = common.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
 	if r.Period == 0 {
 		r.Period = memCheckAbove
 	}
-	_ = r.setTimer(mem.Free, mem.Total, false /*swapping */, false /* reset */)
+	r.time.d = r.Period
+	r.setTimer(mem.Free, mem.Total, false /*swapping */, false /* reset */)
 
 	// 5. final construction steps
 	r.sorted = make([]sortpair, Numslabs)
@@ -239,6 +242,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	swap.Get()
 	r.swap = swap.Used
 	atomic.StoreInt64(&r.mindepth, int64(mindepth))
+	atomic.StoreInt64(&r.toGC, 0)
 
 	r.stopCh = make(chan struct{}, 1)
 	r.statCh = make(chan ReqStats2, 1)
@@ -294,13 +298,14 @@ func (r *Mem2) Free(spec FreeSpec) {
 			}
 		}
 	}
-	if spec.MinSize == 0 {
-		spec.MinSize = sizetoGC // using default
-	}
-	mem := sigar.Mem{}
-	mem.Get()
-	if r.doGC(mem.Free, freed, spec.MinSize, spec.ToOS, spec.ToOS) { // ToOS==true forces it
-		glog.Infof("Freed %s", common.B2S(freed, 2))
+	if freed > 0 {
+		atomic.AddInt64(&r.toGC, freed)
+		if spec.MinSize == 0 {
+			spec.MinSize = sizetoGC // using default
+		}
+		mem := sigar.Mem{}
+		mem.Get()
+		r.doGC(mem.Free, spec.MinSize, spec.ToOS /* force */, false)
 	}
 }
 
@@ -308,7 +313,7 @@ func (r *Mem2) Free(spec FreeSpec) {
 func (r *Mem2) Run() error {
 	r.time.t = time.NewTimer(r.time.d)
 	m, l := common.B2S(int64(r.MinFree), 2), common.B2S(int64(r.lowwm), 2)
-	str := fmt.Sprintf("Starting %s, minfree %s, low %s", r.Getname(), m, l)
+	str := fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d)
 	if flag.Parsed() {
 		glog.Infoln(str)
 	} else {
@@ -455,8 +460,10 @@ func (r *Mem2) env() (err error) {
 
 // NOTE: notice enumerated heuristics below denoted as "Heu"
 func (r *Mem2) work() {
-	var depth int
-
+	var (
+		depth int               // => current ring depth tbd
+		limit = int64(sizetoGC) // minimum accumulated size that triggers GC
+	)
 	mem := sigar.Mem{}
 	mem.Get()
 	swap := sigar.Swap{}
@@ -469,13 +476,13 @@ func (r *Mem2) work() {
 	// 1. enough => free idle
 	if mem.Free > r.lowwm && !swapping {
 		atomic.StoreInt64(&r.mindepth, int64(mindepth))
-		r.toGC += r.freeIdle(freeIdleMin)
-		if r.doGC(mem.Free, r.toGC, sizetoGC, false, false) {
-			r.toGC = 0
+		if delta := r.freeIdle(freeIdleMin); delta > 0 {
+			atomic.AddInt64(&r.toGC, delta)
+			r.doGC(mem.Free, sizetoGC, false, false)
 		}
 		goto timex
 	}
-	if mem.Free <= r.MinFree { // 2. mem too low indicates "high watermark"
+	if mem.Free <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
 		depth = mindepth / 4
 		if mem.ActualFree < r.MinFree {
 			depth = mindepth / 8
@@ -484,6 +491,7 @@ func (r *Mem2) work() {
 			depth = 1
 		}
 		atomic.StoreInt64(&r.mindepth, int64(depth))
+		limit = sizetoGC / 2
 	} else { // 3. in-between hysteresis
 		x := uint64(maxdepth-mindepth) * (mem.Free - r.MinFree)
 		depth = mindepth + int(x/(r.lowwm-r.MinFree)) // Heu #2
@@ -492,48 +500,57 @@ func (r *Mem2) work() {
 		}
 		atomic.StoreInt64(&r.mindepth, int64(mindepth/4))
 	}
-	// idle - first
+	// idle first
 	for i, s := range r.rings {
 		r.sorted[i] = sortpair{s, r.stats.Adeltas[i]}
 	}
 	sort.Slice(r.sorted, r.fsort)
 	for _, pair := range r.sorted {
 		s := pair.s
-		r.toGC += s.reduce(depth, pair.v == 0 /* idle */, true /* force */)
-		if r.toGC > sizetoGC {
-			if r.doGC(mem.Free, r.toGC, sizetoGC, true, swapping) {
-				r.toGC = 0
+		if delta := s.reduce(depth, pair.v == 0 /* idle */, true /* force */); delta > 0 {
+			if r.doGC(mem.Free, limit, true, swapping) {
+				goto timex
 			}
-			goto timex
 		}
 	}
-	// 4. when too low call it anyway if weren't called
-	if mem.Free <= r.MinFree {
-		if r.doGC(mem.Free, r.toGC, sizetoGC, true, swapping) {
-			r.toGC = 0
-		}
+	// 4. red
+	if mem.Free <= r.MinFree || swapping {
+		r.doGC(mem.Free, limit, true, swapping)
 	}
 timex:
-	if r.setTimer(mem.Free, mem.Total, swapping, true /* reset */) {
-		glog.Infof("timer %v", r.time.d)
-	}
+	r.setTimer(mem.Free, mem.Total, swapping, true /* reset */)
 }
 
-func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) (flipped bool) {
-	if r.time.d != r.Period/4 && (free <= r.lowwm || swapping) {
-		r.time.d = r.Period / 4
-		flipped = true
-	} else if r.time.d != r.Period*2 && free > r.lowwm && free > total-total/5 {
-		r.time.d = r.Period * 2
-		flipped = true
-	} else if r.time.d != r.Period && free > r.lowwm {
-		r.time.d = r.Period
-		flipped = true
+func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
+	var changed bool
+	switch {
+	case free > r.lowwm && free > total-total/5:
+		if r.time.d != r.Period*2 {
+			r.time.d = r.Period * 2
+			changed = true
+		}
+	case free <= r.MinFree || swapping:
+		if r.time.d != r.Period/4 {
+			r.time.d = r.Period / 4
+			changed = true
+		}
+	case free <= r.lowwm:
+		if r.time.d != r.Period/2 {
+			r.time.d = r.Period / 2
+			changed = true
+		}
+	default:
+		if r.time.d != r.Period {
+			r.time.d = r.Period
+			changed = true
+		}
 	}
 	if reset {
+		if changed {
+			glog.Infof("timer %v, free %s", r.time.d, common.B2S(int64(free), 1))
+		}
 		r.time.t.Reset(r.time.d)
 	}
-	return
 }
 
 // freeIdle traverses and deallocates idle slabs- those that were not used for at
@@ -568,7 +585,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 // 1) upon periodic freeing of idle slabs
 // 2) after forceful reduction of the /less/ active slabs (done when memory is running low)
 // 3) on demand via Mem2.Free()
-func (r *Mem2) doGC(free uint64, toGC, minsize int64, force, swapping bool) (gced bool) {
+func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool) {
 	c := sigar.ConcreteSigar{}
 	avg, err := c.GetLoadAverage()
 	if err != nil {
@@ -578,6 +595,7 @@ func (r *Mem2) doGC(free uint64, toGC, minsize int64, force, swapping bool) (gce
 	if avg.One > loadavg && !force && !swapping { // Heu #3
 		return
 	}
+	toGC := atomic.LoadInt64(&r.toGC)
 	if toGC > minsize {
 		str := fmt.Sprintf("GC(%t, %t) load %.2f free %s GC %s", force, swapping, avg.One,
 			common.B2S(int64(free), 1), common.B2S(toGC, 2))
@@ -589,6 +607,7 @@ func (r *Mem2) doGC(free uint64, toGC, minsize int64, force, swapping bool) (gce
 			runtime.GC()
 		}
 		gced = true
+		atomic.StoreInt64(&r.toGC, 0)
 	}
 	return
 }

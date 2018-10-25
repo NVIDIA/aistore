@@ -24,7 +24,7 @@ import (
 const (
 	xproxy           = "proxy"
 	xtarget          = "target"
-	xmem             = "mem"
+	xmem             = "gmem2"
 	xsignal          = "signal"
 	xproxystats      = "proxystats"
 	xstorstats       = "storstats"
@@ -223,10 +223,10 @@ func dfcinit() {
 		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
 
 		// system-wide gen-purpose memory manager and slab/SGL allocator
-		mem := &memsys.Mem2{Name: "gmem2", MinPctFree: 50 /* % of current free mem */}
-		_ = mem.Init(false /* ignore init-time errors */)
-		ctx.rg.add(mem, xmem)
-		gmem2 = getmem2() // making it global; getmem2() can still be used
+		mem := &memsys.Mem2{MinPctTotal: 4} // try to maintain free at least 4% of total memory
+		_ = mem.Init(false)                 // don't ignore init-time errors
+		ctx.rg.add(mem, xmem)               // to periodically house-keep
+		gmem2 = getmem2()                   // making it global; getmem2() can still be used
 
 		iostat := newIostatRunner()
 		ctx.rg.add(iostat, xiostat)
