@@ -66,6 +66,7 @@ type (
 		needChkSum   bool
 		needVersion  bool
 		needStatus   bool
+		atimeRespCh  chan *atimeResponse
 	}
 
 	uxprocess struct {
@@ -1861,6 +1862,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *api.GetMsg) *allfinfos {
 		needChkSum:   strings.Contains(msg.GetProps, api.GetPropsChecksum),
 		needVersion:  strings.Contains(msg.GetProps, api.GetPropsVersion),
 		needStatus:   strings.Contains(msg.GetProps, api.GetPropsStatus),
+		atimeRespCh:  make(chan *atimeResponse, 1),
 	}
 
 	if msg.GetPageSize != 0 {
@@ -1918,7 +1920,7 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		Status:   objStatus,
 	}
 	if ci.needAtime {
-		atimeResponse := <-getatimerunner().atime(fqn)
+		atimeResponse := <-getatimerunner().atime(fqn, ci.atimeRespCh)
 		atime, ok := atimeResponse.accessTime, atimeResponse.ok
 		if !ok {
 			atime, _, _ = getAmTimes(osfi)

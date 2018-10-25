@@ -238,15 +238,22 @@ func (r *atimerunner) touch(fqn string, setTime ...time.Time) {
 // indicates that the request has been fully processed. Note: caller of this
 // method does not necessarily need to check if the bucket the object belongs
 // to has LRU Enabled (a zero-valued atimeResponse will be returned)
+// Note, the caller can optionally provide a customRespCh where the response will
+// be written to. This reduces channel creation if atime is called repeatedly.
 // Example usage:
 //     atimeResponse := <-atimer.atime("/tmp/fqn123")
 //     accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
-func (r *atimerunner) atime(fqn string) chan *atimeResponse {
+func (r *atimerunner) atime(fqn string, customRespCh ...chan *atimeResponse) (responseCh chan *atimeResponse) {
+	if len(customRespCh) == 1 {
+		responseCh = customRespCh[0]
+	} else {
+		responseCh = make(chan *atimeResponse, 1)
+	}
 	var mpath string
 	if mpathInfo, _ := path2mpathInfo(fqn); mpathInfo != nil {
 		mpath = mpathInfo.Path
 		request := &atimeRequest{
-			responseCh:  make(chan *atimeResponse, 1),
+			responseCh:  responseCh,
 			fqn:         fqn,
 			mpath:       mpath,
 			requestType: atimeGet,
@@ -256,7 +263,6 @@ func (r *atimerunner) atime(fqn string) chan *atimeResponse {
 	}
 
 	// No mpath exists for the file
-	responseCh := make(chan *atimeResponse, 1)
 	responseCh <- &atimeResponse{accessTime: time.Time{}, ok: false}
 	return responseCh
 }

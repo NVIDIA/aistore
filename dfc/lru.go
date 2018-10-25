@@ -53,15 +53,16 @@ type fileInfo struct {
 type fileInfoMinHeap []*fileInfo
 
 type lructx struct {
-	cursize int64
-	totsize int64
-	newest  time.Time
-	xlru    *xactLRU
-	heap    *fileInfoMinHeap
-	oldwork []*fileInfo
-	t       *targetrunner
-	fs      string
-	thrctx  throttleContext
+	cursize     int64
+	totsize     int64
+	newest      time.Time
+	xlru        *xactLRU
+	heap        *fileInfoMinHeap
+	oldwork     []*fileInfo
+	t           *targetrunner
+	fs          string
+	thrctx      throttleContext
+	atimeRespCh chan *atimeResponse
 }
 
 func (t *targetrunner) runLRU() {
@@ -123,14 +124,14 @@ func (t *targetrunner) oneLRU(mpathInfo *fs.MountpathInfo, bucketdir string, fsc
 	var oldwork []*fileInfo
 
 	lctx := &lructx{
-		totsize: toevict,
-		xlru:    xlru,
-		heap:    h,
-		oldwork: oldwork,
-		t:       t,
-		fs:      mpathInfo.FileSystem,
+		totsize:     toevict,
+		xlru:        xlru,
+		heap:        h,
+		oldwork:     oldwork,
+		t:           t,
+		fs:          mpathInfo.FileSystem,
+		atimeRespCh: make(chan *atimeResponse, 1),
 	}
-
 	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -199,7 +200,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	// object eviction: access time
 	usetime := atime
 
-	atimeResponse := <-getatimerunner().atime(fqn)
+	atimeResponse := <-getatimerunner().atime(fqn, lctx.atimeRespCh)
 	accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
 	if ok {
 		usetime = accessTime
