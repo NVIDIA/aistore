@@ -7,7 +7,7 @@ First, basic definitions:
 
 | Term | Description | Example |
 |--- | --- | ---|
-| Stream | A point-to-point flow over one or multiple HTTP PUT requests (and as many TCP connections) | `transport.NewStream(client, "http://example.com")` - creates a stream between the local client and the `example.com` host |
+| Stream | A point-to-point flow over one or multiple HTTP PUT requests (and as many TCP connections) | `transport.NewStream(client, "http://example.com", nil)` - creates a stream between the local client and the `example.com` host |
 | Object | Any sequence of bytes (or, more precisely, any [io.ReadCloser](https://golang.org/pkg/io/#ReadCloser)) that is accompanied by a transport header | `transport.Header{"abc", "X", nil, 1024*1024}` - specifies a 1MB object that will be named `abc/X` at the destination |
 | Object Header | A `transport.Header` structure that, in addition to bucket name, object name, and object size, carries an arbitrary (*opaque*) sequence of bytes that, for instance, may be a JSON message or anything else. | `transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, 13}` - describes a 13-byte object that, in the example, has some application-specific and non-nil *opaque* field in the header |
 | Receive callback | A function that has the following signature: `Receive func(http.ResponseWriter, transport.Header, io.Reader)`. Receive callback must be *registered* prior to the very first object being transferred over the stream - see next. | Notice the last parameter in the receive callback: `io.Reader`. Behind this (reading) interface, there's a special type reader supporting, in part, object boundaries. In other words, each callback invocation corresponds to one ransferred and received object. Note as well the object header that is also delivered to the receiving endpoint via the same callback. |
@@ -19,15 +19,20 @@ First, basic definitions:
 path := transport.Register("n1", "ep1", testReceive) // register receive callback with HTTP endpoint "ep1" to "n1" network
 client := &http.Client{Transport: &http.Transport{}} // create default HTTP client
 url := "http://example.com/" +  path // combine the hostname with the result of the Register() above
-stream := transport.NewStream(client, url) // open a stream to the http endpoint identified by the url
+
+// open a stream (to the http endpoint identified by the url) with burst equal 10 and the capability to cancel at any time
+// ("burst" is the number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure)
+ctx, cancel := context.WithCancel(context.Background())
+stream := transport.NewStream(client, url, &transport.Extra{Burst: 10, Ctx: ctx})
 
 for  {
 	hdr := transport.Header{...} 	// next object header
 	object := ... 			// next object reader, e.g. os.Open("some file")
-	stream.SendAsync(hdr, object)	// send the object asynchronously
+	// send the object asynchronously (the 3rd arg specifies an optional "object-has-been-sent" callback)
+	stream.Send(hdr, object, nil)
 	...
 }
-stream.Fin() // gracefully close the stream
+stream.Fin() // gracefully close the stream (call it in all cases except after canceling (aborting) the stream)
 
 ```
 ## Registering HTTP endpoint

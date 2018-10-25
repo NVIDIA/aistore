@@ -300,7 +300,7 @@ func (r *Mem2) Free(spec FreeSpec) {
 	mem := sigar.Mem{}
 	mem.Get()
 	if r.doGC(mem.Free, freed, spec.MinSize, spec.ToOS, spec.ToOS) { // ToOS==true forces it
-		glog.Infof("Freed %s memory", common.B2S(freed, 2))
+		glog.Infof("Freed %s", common.B2S(freed, 2))
 	}
 }
 
@@ -578,15 +578,16 @@ func (r *Mem2) doGC(free uint64, toGC, minsize int64, force, swapping bool) (gce
 	if avg.One > loadavg && !force && !swapping { // Heu #3
 		return
 	}
-
-	str := fmt.Sprintf("GC(%t, %t) load %.2f free %s GC %s", force, swapping, avg.One, common.B2S(int64(free), 1), common.B2S(toGC, 2))
-	if force || swapping { // Heu #4
-		glog.Errorf("%s - freeing memory to the OS...", str)
-		debug.FreeOSMemory() // forces GC followed by an attempt to return memory to the OS
-		gced = true
-	} else if toGC > minsize { // Heu #5: only when accumulated beyond threshold
-		glog.Infof(str)
-		runtime.GC()
+	if toGC > minsize {
+		str := fmt.Sprintf("GC(%t, %t) load %.2f free %s GC %s", force, swapping, avg.One,
+			common.B2S(int64(free), 1), common.B2S(toGC, 2))
+		if force || swapping { // Heu #4
+			glog.Errorf("%s - freeing memory to the OS...", str)
+			debug.FreeOSMemory() // forces GC followed by an attempt to return memory to the OS
+		} else { // Heu #5
+			glog.Infof(str)
+			runtime.GC()
+		}
 		gced = true
 	}
 	return
