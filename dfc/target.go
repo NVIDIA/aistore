@@ -1426,7 +1426,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		nhtype, nhval := nhobj.get()
 		common.Assert(hdhobj == nil || htype == nhtype)
 		if hval != "" && nhval != "" && hval != nhval {
-			glog.Errorf("Bad checksum: %s/%s %s %s... != %s...", bucket, objname, htype, hval[:8], nhval[:8])
+			glog.Errorf("Bad checksum: %s/%s %s %.8s... != %.8s...", bucket, objname, htype, hval, nhval)
 			return
 		}
 	}
@@ -2060,7 +2060,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	}
 	// validate checksum when and if provided
 	if hval != "" && nhval != "" && hval != nhval && !dryRun.disk && !dryRun.network {
-		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %s... != %s...", bucket, objname, htype, hval[:8], nhval[:8])
+		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %.8s... != %.8s...", bucket, objname, htype, hval, nhval)
 		return
 	}
 	// commit
@@ -2311,8 +2311,8 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			htype, hval := hdhobj.get()
 			common.Assert(htype == nhtype)
 			if hval != nhval {
-				errstr = fmt.Sprintf("Bad checksum at the destination %s: %s/%s %s %s... != %s...",
-					t.si.DaemonID, bucket, objname, htype, hval[:8], nhval[:8])
+				errstr = fmt.Sprintf("Bad checksum at the destination %s: %s/%s %s %.8s... != %.8s...",
+					t.si.DaemonID, bucket, objname, htype, hval, nhval)
 				return
 			}
 		}
@@ -3055,8 +3055,8 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			ohtype, ohval = ohobj.get()
 			common.Assert(ohtype == api.ChecksumXXHash)
 			if ohval != nhval {
-				errstr = fmt.Sprintf("Bad checksum: %s %s %s... != %s... computed for the %q",
-					objname, cksumcfg.Checksum, ohval[:8], nhval[:8], fqn)
+				errstr = fmt.Sprintf("Bad checksum: %s %s %.8s... != %.8s... computed for the %q",
+					objname, cksumcfg.Checksum, ohval, nhval, fqn)
 
 				t.statsif.addMany(namedVal64{statErrCksumCount, 1}, namedVal64{statErrCksumSize, written})
 				return
@@ -3072,8 +3072,8 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		hashInBytes := md5.Sum(nil)[:16]
 		md5hash := hex.EncodeToString(hashInBytes)
 		if omd5 != md5hash {
-			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %s... != %s... computed for the %q",
-				objname, ohval[:8], nhval[:8], fqn)
+			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %.8s... != %.8s... computed for the %q",
+				objname, ohval, nhval, fqn)
 
 			t.statsif.addMany(namedVal64{statErrCksumCount, 1}, namedVal64{statErrCksumSize, written})
 			return

@@ -114,7 +114,7 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 
 	if isCloud {
 		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, clibucket, reader)
+		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, clibucket, reader)
 		if err == nil {
 			t.Error("Replication PUT to local bucket with bad checksum didn't fail")
 		}
