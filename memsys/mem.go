@@ -203,7 +203,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		}
 	}
 	if r.MinPctFree > 0 {
-		x := mem.Free * uint64(r.MinPctFree) / 100
+		x := mem.ActualFree * uint64(r.MinPctFree) / 100
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
@@ -214,19 +214,18 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		r.MinFree = minMemFree
 	}
 	if r.MinFree < common.GiB {
-		fmt.Println("Warning: ********")
-		fmt.Printf("Warning: minimum free memory %s < 1GiB\n", common.B2S(int64(r.MinFree), 2))
-		fmt.Println("Warning: ********")
+		fmt.Printf("Warning: configured minimum free memory %s < 1GiB (actual free %s)\n",
+			common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 1))
 	}
 	// 3. validate and compute free memory "low watermark"
-	m, f := common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.Free), 2)
-	if mem.Free < r.MinFree {
+	m, f := common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 2)
+	if mem.ActualFree < r.MinFree {
 		err = fmt.Errorf("Insufficient free memory %s, minimum required %s", f, m)
 		if !ignorerr {
 			panic(err)
 		}
 	}
-	x := common.MaxU64(r.MinFree*2, (r.MinFree+mem.Free)/2)
+	x := common.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
 	r.lowwm = common.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
@@ -234,7 +233,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		r.Period = memCheckAbove
 	}
 	r.time.d = r.Period
-	r.setTimer(mem.Free, mem.Total, false /*swapping */, false /* reset */)
+	r.setTimer(mem.ActualFree, mem.Total, false /*swapping */, false /* reset */)
 
 	// 5. final construction steps
 	r.sorted = make([]sortpair, Numslabs)
@@ -305,13 +304,15 @@ func (r *Mem2) Free(spec FreeSpec) {
 		}
 		mem := sigar.Mem{}
 		mem.Get()
-		r.doGC(mem.Free, spec.MinSize, spec.ToOS /* force */, false)
+		r.doGC(mem.ActualFree, spec.MinSize, spec.ToOS /* force */, false)
 	}
 }
 
 // as a common.Runner
 func (r *Mem2) Run() error {
 	r.time.t = time.NewTimer(r.time.d)
+	mem := sigar.Mem{}
+	mem.Get()
 	m, l := common.B2S(int64(r.MinFree), 2), common.B2S(int64(r.lowwm), 2)
 	str := fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d)
 	if flag.Parsed() {
@@ -319,17 +320,15 @@ func (r *Mem2) Run() error {
 	} else {
 		fmt.Println(str)
 	}
-	mem := sigar.Mem{}
-	mem.Get()
-	f := common.B2S(int64(mem.Free), 2)
-	if mem.Free > mem.Total-mem.Total/5 { // more than 80%
+	f := common.B2S(int64(mem.ActualFree), 2)
+	if mem.ActualFree > mem.Total-mem.Total/5 { // more than 80%
 		str = fmt.Sprintf("%s: free memory %s > 80%% total", r.Getname(), f)
 		if flag.Parsed() {
 			glog.Infoln(str)
 		} else {
 			fmt.Println(str)
 		}
-	} else if mem.Free < r.lowwm {
+	} else if mem.ActualFree < r.lowwm {
 		str = fmt.Sprintf("Warning: free memory %s below low watermark %s at %s startup", f, l, r.Getname())
 		if flag.Parsed() {
 			glog.Infoln(str)
@@ -474,15 +473,15 @@ func (r *Mem2) work() {
 	r.doStats()
 
 	// 1. enough => free idle
-	if mem.Free > r.lowwm && !swapping {
+	if mem.ActualFree > r.lowwm && !swapping {
 		atomic.StoreInt64(&r.mindepth, int64(mindepth))
 		if delta := r.freeIdle(freeIdleMin); delta > 0 {
 			atomic.AddInt64(&r.toGC, delta)
-			r.doGC(mem.Free, sizetoGC, false, false)
+			r.doGC(mem.ActualFree, sizetoGC, false, false)
 		}
 		goto timex
 	}
-	if mem.Free <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
+	if mem.ActualFree <= r.MinFree || swapping { // 2. mem too low indicates "high watermark"
 		depth = mindepth / 4
 		if mem.ActualFree < r.MinFree {
 			depth = mindepth / 8
@@ -493,7 +492,7 @@ func (r *Mem2) work() {
 		atomic.StoreInt64(&r.mindepth, int64(depth))
 		limit = sizetoGC / 2
 	} else { // 3. in-between hysteresis
-		x := uint64(maxdepth-mindepth) * (mem.Free - r.MinFree)
+		x := uint64(maxdepth-mindepth) * (mem.ActualFree - r.MinFree)
 		depth = mindepth + int(x/(r.lowwm-r.MinFree)) // Heu #2
 		if r.Debug {
 			common.Assert(depth >= mindepth && depth <= maxdepth)
@@ -508,17 +507,17 @@ func (r *Mem2) work() {
 	for _, pair := range r.sorted {
 		s := pair.s
 		if delta := s.reduce(depth, pair.v == 0 /* idle */, true /* force */); delta > 0 {
-			if r.doGC(mem.Free, limit, true, swapping) {
+			if r.doGC(mem.ActualFree, limit, true, swapping) {
 				goto timex
 			}
 		}
 	}
 	// 4. red
-	if mem.Free <= r.MinFree || swapping {
-		r.doGC(mem.Free, limit, true, swapping)
+	if mem.ActualFree <= r.MinFree || swapping {
+		r.doGC(mem.ActualFree, limit, true, swapping)
 	}
 timex:
-	r.setTimer(mem.Free, mem.Total, swapping, true /* reset */)
+	r.setTimer(mem.ActualFree, mem.Total, swapping, true /* reset */)
 }
 
 func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
