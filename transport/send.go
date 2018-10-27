@@ -37,7 +37,7 @@ const (
 	lastMarker     = common.MaxInt64
 	defaultIdleOut = time.Second
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
-	burstNum       = 64 // default max num objects that can be posted for sending without any back-pressure
+	burstNum       = 96 // default max num objects that can be posted for sending without any back-pressure
 )
 
 // stream TCP/HTTP lifecycle: expired => posted => activated ( => expired) transitions
@@ -245,7 +245,7 @@ forever:
 					}
 					break newreq // new post after timeout: initiate new HTTP/TCP session
 				}
-				time.Sleep(time.Millisecond * 10)
+				time.Sleep(time.Millisecond)
 			}
 		}
 	}
