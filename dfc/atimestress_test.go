@@ -75,7 +75,7 @@ func touchFakeFiles(r *atimerunner, mpath, fqn1, fqn2 string, numFiles int) {
 		r.touch(fqn1 + numStr)
 		r.touch(fqn2 + numStr)
 	}
-	tutils.Logf("Took %s to touch %d files in %s\n", time.Since(start), numFiles, mpath)
+	tutils.Logf("%v to touch %d files in %s\n", time.Since(start), numFiles, mpath)
 }
 
 func touchRandomFiles(r *atimerunner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
@@ -168,7 +168,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 
 	wg.Wait()
 
-	tutils.Logf("Took %s to touch %d files.\n", time.Since(start), numFilesTotal)
+	tutils.Logf("%v to touch %d files.\n", time.Since(start), numFilesTotal)
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]common.SimpleKVs)

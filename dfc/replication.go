@@ -251,7 +251,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	var accessTime time.Time
 	okAccessTime := r.t.bucketLRUEnabled(bucket)
 	if okAccessTime {
-		// obtain the access time of the obkect from the atimemap
+		// obtain the object's access time
 		atimeResponse := <-getatimerunner().atime(req.fqn)
 		accessTime, okAccessTime = atimeResponse.accessTime, atimeResponse.ok
 	}

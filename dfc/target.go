@@ -297,12 +297,9 @@ func (t *targetrunner) unregister() (int, error) {
 	return res.status, res.err
 }
 
-// bucketLRUEnabled returns whether or not LRU is enabled
-// for the bucket that fqn belongs to. If no bucket
-// LRU configuration exists, it returns the global setting
 func (t *targetrunner) bucketLRUEnabled(bucket string) bool {
 	bucketmd := t.bmdowner.get()
-	return bucketmd.GetLRUConf(bucket).LRUEnabled
+	return bucketmd.lruEnabled(bucket)
 }
 
 //===========================================================================================
@@ -682,7 +679,7 @@ send:
 		goto send
 	}
 
-	if !coldget && t.bucketLRUEnabled(bucket) {
+	if !coldget && bucketmd.lruEnabled(bucket) {
 		getatimerunner().touch(fqn)
 	}
 	if glog.V(4) {
@@ -2506,9 +2503,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
 	url := destsi.PublicNet.DirectURL + common.URLPath(api.Version, api.Objects, newbucket, newobjname)
 	url += fmt.Sprintf("?%s=%s&%s=%s", api.URLParamFromID, fromid, api.URLParamToID, toid)
-	islocal := t.bmdowner.get().islocal(bucket)
+	bucketmd := t.bmdowner.get()
+	islocal := bucketmd.islocal(bucket)
 	cksumcfg := &ctx.config.Cksum
-	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
+	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
 	fqn, errstr := t.fqn(bucket, objname, islocal)
@@ -2518,7 +2516,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonIn
 
 	var accessTime time.Time
 	var ok bool
-	if t.bucketLRUEnabled(bucket) {
+	if bucketmd.lruEnabled(bucket) {
 		atimeResponse := <-getatimerunner().atime(fqn)
 		accessTime, ok = atimeResponse.accessTime, atimeResponse.ok
 	}

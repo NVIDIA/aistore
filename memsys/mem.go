@@ -214,8 +214,10 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		r.MinFree = minMemFree
 	}
 	if r.MinFree < common.GiB {
-		fmt.Printf("Warning: configured minimum free memory %s < 1GiB (actual free %s)\n",
-			common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 1))
+		if flag.Parsed() {
+			glog.Warningf("Warning: configured minimum free memory %s < 1GiB (actual free %s)\n",
+				common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 1))
+		}
 	}
 	// 3. validate and compute free memory "low watermark"
 	m, f := common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 2)

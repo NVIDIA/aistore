@@ -398,9 +398,11 @@ func (r *statsrunner) addErrorHTTP(method string, val int64) {
 //
 //=================
 func (r *proxystatsrunner) Run() error {
+	return r.runcommon(r)
+}
+func (r *proxystatsrunner) init() {
 	r.Core = &proxyCoreStats{}
 	r.Core.initStatsTracker()
-	return r.runcommon(r)
 }
 
 // statslogger interface impl
@@ -473,7 +475,6 @@ func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
 }
 
 func (r *storstatsrunner) Run() error {
-	r.init()
 	return r.runcommon(r)
 }
 

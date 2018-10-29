@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 )
@@ -134,13 +133,14 @@ func (m *bucketMD) propsAndChecksum(bucket string) (p BucketProps, checksum stri
 	return p, p.CksumConf.Checksum, true
 }
 
-func (m *bucketMD) GetLRUConf(bucket string) *lruconfig {
+// lruEnabled returns whether or not LRU is enabled
+// for the bucket. Returns the global setting if bucket not found
+func (m *bucketMD) lruEnabled(bucket string) bool {
 	ok, p := m.get(bucket, m.islocal(bucket))
 	if !ok {
-		glog.Errorf("Invalid Bucket: %s", bucket)
-		return &ctx.config.LRU
+		return ctx.config.LRU.LRUEnabled
 	}
-	return &p.LRUProps
+	return p.LRUProps.LRUEnabled
 }
 
 func (m *bucketMD) clone() *bucketMD {

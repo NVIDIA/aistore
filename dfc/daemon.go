@@ -205,14 +205,18 @@ func dfcinit() {
 		p := &proxyrunner{}
 		p.initSI()
 		ctx.rg.add(p, xproxy)
-		ctx.rg.add(&proxystatsrunner{}, xproxystats)
+		ps := &proxystatsrunner{}
+		ps.init()
+		ctx.rg.add(ps, xproxystats)
 		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
 		ctx.rg.add(newmetasyncer(p), xmetasyncer)
 	} else {
 		t := &targetrunner{}
 		t.initSI()
 		ctx.rg.add(t, xtarget)
-		ctx.rg.add(&storstatsrunner{}, xstorstats)
+		ts := &storstatsrunner{}
+		ts.init()
+		ctx.rg.add(ts, xstorstats)
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 
 		// iostat is required: ensure that it is installed and its version is right
