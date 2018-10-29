@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
@@ -79,7 +80,7 @@ func TestMultiProxy(t *testing.T) {
 
 // clusterHealthCheck verifies the cluster has the same servers after tests
 // note: add verify primary if primary is reset
-func clusterHealthCheck(t *testing.T, smapBefore dfc.Smap) {
+func clusterHealthCheck(t *testing.T, smapBefore cluster.Smap) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	smapAfter := getClusterMap(t, proxyURL)
 	if len(smapAfter.Tmap) != len(smapBefore.Tmap) {
@@ -790,7 +791,7 @@ loop:
 // directURL	- DirectURL of the proxy that we send the request to
 //           	  (not necessarily the current primary)
 // toID, toURL 	- DaemonID and DirectURL of the proxy that must become the new primary
-func setPrimaryTo(t *testing.T, proxyURL string, smap dfc.Smap, directURL, toID, toURL string) {
+func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, toID, toURL string) {
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
@@ -809,7 +810,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap dfc.Smap, directURL, toID,
 	}
 }
 
-func chooseNextProxy(smap *dfc.Smap) (proxyid, proxyURL string, err error) {
+func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
 	pid, errstr := hrwProxyTest(smap, smap.ProxySI.DaemonID)
 	pi := smap.Pmap[pid]
 	if errstr != "" {
@@ -971,7 +972,7 @@ func checkPmapVersions(proxyURL string) error {
 // It is useful if the test kills more than one proxy/target. In this case the
 // primary proxy may run two metasync calls and we cannot tell if the current SMap
 // is what we are waiting for only by looking at its version.
-func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (dfc.Smap, error) {
+func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose bool, nodeCnt ...int) (cluster.Smap, error) {
 	var (
 		lastVersion          int64
 		timeUntil, timeStart time.Time
@@ -1001,7 +1002,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 	for {
 		smap, err := client.GetClusterMap(proxyURL)
 		if err != nil && !common.IsErrConnectionRefused(err) {
-			return dfc.Smap{}, err
+			return cluster.Smap{}, err
 		}
 
 		doCheckSMap := (totalTargets == 0 || len(smap.Tmap) == totalTargets) &&
@@ -1057,7 +1058,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		time.Sleep(time.Second * time.Duration(loopCnt)) // sleep longer every loop
 	}
 
-	return dfc.Smap{}, fmt.Errorf("Timed out waiting for the cluster to stabilize")
+	return cluster.Smap{}, fmt.Errorf("Timed out waiting for the cluster to stabilize")
 }
 
 const (
@@ -1070,7 +1071,7 @@ type targetMocker interface {
 	votehdlr(w http.ResponseWriter, r *http.Request)
 }
 
-func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *dfc.Smap) {
+func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *cluster.Smap) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(common.URLPath(api.Version, api.Buckets), mocktgt.filehdlr)
@@ -1098,7 +1099,7 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	s.Shutdown(context.Background())
 }
 
-func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *dfc.Smap) error {
+func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Smap) error {
 	var (
 		jsonDaemonInfo []byte
 		err            error
@@ -1107,7 +1108,7 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *dfc.Smap) e
 	// borrow a random target's ip but using a different port to register the mock target
 	for _, v := range smap.Tmap {
 		v.DaemonID = mockDaemonID
-		v.PublicNet = dfc.NetInfo{
+		v.PublicNet = cluster.NetInfo{
 			NodeIPAddr: v.PublicNet.NodeIPAddr,
 			DaemonPort: mockTargetPort,
 			DirectURL:  "http://" + v.PublicNet.NodeIPAddr + ":" + mockTargetPort,
@@ -1147,7 +1148,7 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 		msg := dfc.SmapVoteMsg{
 			VoteInProgress: p.voteInProgress,
 			// The VoteMessage must have a Smap with non-zero version
-			Smap: &dfc.Smap{Version: 1},
+			Smap: &dfc.SmapX{cluster.Smap{Version: 1}},
 		}
 
 		jsbytes, err := jsoniter.Marshal(msg)
@@ -1229,7 +1230,7 @@ func primarySetToOriginal(t *testing.T) {
 // exported. As a result of this, dfc.HrwProxy will not return the correct
 // proxy since the `idDigest` will be initialized to 0. To avoid this, we
 // compute the checksum directly in this method.
-func hrwProxyTest(smap *dfc.Smap, idToSkip string) (pi string, errstr string) {
+func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, errstr string) {
 	if len(smap.Pmap) == 0 {
 		errstr = "DFC cluster map is empty: no proxies"
 		return

@@ -8,8 +8,8 @@ import (
 	"fmt"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/pkg/client"
 )
 
@@ -17,8 +17,8 @@ type (
 	// Manages the current primary proxy URL and runs autodetection in case
 	// of primary proxy does not response
 	proxy struct {
-		URL        string    `json:"url"`
-		Smap       *dfc.Smap `json:"smap"`
+		URL        string        `json:"url"`
+		Smap       *cluster.Smap `json:"smap"`
 		configPath string
 	}
 )

@@ -31,6 +31,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
@@ -431,7 +432,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		ct         = t.contextWithAuth(r)
 	)
 	// lockname(ro)
-	uname = uniquename(bucket, objname)
+	uname = cluster.Uname(bucket, objname)
 	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
 	// bucket-level checksumming should override global
@@ -779,7 +780,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, "PUT requests are expected to be redirected")
 			return
 		}
-		if t.smapowner.get().getProxy(pid) == nil {
+		if t.smapowner.get().GetProxy(pid) == nil {
 			t.invalmsghdlr(w, r, fmt.Sprintf("PUT from an unknown proxy/gateway ID '%s' - Smap out of sync?", pid))
 			return
 		}
@@ -1449,7 +1450,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	var (
 		bucketmd    = t.bmdowner.get()
 		islocal     = bucketmd.islocal(bucket)
-		uname       = uniquename(bucket, objname)
+		uname       = cluster.Uname(bucket, objname)
 		versioncfg  = &ctx.config.Ver
 		cksumcfg    = &ctx.config.Cksum
 		errv        string
@@ -1590,7 +1591,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 	return
 }
 
-func (t *targetrunner) lookupRemotely(bucket, objname string) *daemonInfo {
+func (t *targetrunner) lookupRemotely(bucket, objname string) *cluster.Snode {
 	res := t.broadcastNeighbors(
 		common.URLPath(api.Version, api.Objects, bucket, objname),
 		nil, // query
@@ -1982,7 +1983,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 			glog.Warning(err)
 			objStatus = api.ObjStatusMoved
 		}
-		si, errstr := HrwTarget(bucket, objname, ci.t.smapowner.get())
+		si, errstr := hrwTarget(bucket, objname, ci.t.smapowner.get())
 		if errstr != "" || ci.t.si.DaemonID != si.DaemonID {
 			glog.Warningf("Rebalanced object: %s/%s: %s", bucket, objname, errstr)
 			objStatus = api.ObjStatusMoved
@@ -2221,7 +2222,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 	}
 
 	// when all set and done:
-	uname := uniquename(bucket, objname)
+	uname := cluster.Uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
 	if err = os.Rename(putfqn, fqn); err != nil {
@@ -2256,7 +2257,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		//
 		// the source
 		//
-		uname := uniquename(bucket, objname)
+		uname := cluster.Uname(bucket, objname)
 		t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 		defer t.rtnamemap.unlockname(uname, false)
 
@@ -2268,7 +2269,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, doesnotexist, t.si.DaemonID)
 			return
 		}
-		si := t.smapowner.get().getTarget(to)
+		si := t.smapowner.get().GetTarget(to)
 		if si == nil {
 			errstr = fmt.Sprintf("File copy: unknown destination %s (Smap not in-sync?)", to)
 			return
@@ -2333,7 +2334,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	if errstr != "" {
 		return errors.New(errstr)
 	}
-	uname := uniquename(bucket, objname)
+	uname := cluster.Uname(bucket, objname)
 
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
@@ -2389,7 +2390,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ap
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
-	uname := uniquename(bucket, objname)
+	uname := cluster.Uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 
 	if errstr = t.renameobject(bucket, objname, bucket, newobjname); errstr != "" {
@@ -2438,10 +2439,10 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg api
 
 func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
 	var (
-		si     *daemonInfo
+		si     *cluster.Snode
 		newfqn string
 	)
-	if si, errstr = HrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
+	if si, errstr = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
 		return
 	}
 	bucketmd := t.bmdowner.get()
@@ -2485,7 +2486,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 // Rebalancing supports versioning. If an object in DFC cache has version in
 // xattrs then the sender adds to HTTP header object version. A receiver side
 // reads version from headers and set xattrs if the version is not empty
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *daemonInfo, size int64, newbucket, newobjname string) string {
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.Snode, size int64, newbucket, newobjname string) string {
 	var (
 		xxHashVal string
 		errstr    string
@@ -2724,7 +2725,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			t.httpdaesetprimaryproxy(w, r, apitems)
 			return
 		case api.SyncSmap:
-			var newsmap = &Smap{}
+			var newsmap = &SmapX{}
 			if t.readJSON(w, r, newsmap) != nil {
 				return
 			}
@@ -2793,7 +2794,7 @@ func (t *targetrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Req
 	}
 
 	smap := t.smapowner.get()
-	psi := smap.getProxy(proxyid)
+	psi := smap.GetProxy(proxyid)
 	if psi == nil {
 		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyid, smap.pp())
 		t.invalmsghdlr(w, r, s)
@@ -3563,7 +3564,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg
 	return
 }
 
-func (t *targetrunner) receiveSmap(newsmap *Smap, msg *api.ActionMsg) (errstr string) {
+func (t *targetrunner) receiveSmap(newsmap *SmapX, msg *api.ActionMsg) (errstr string) {
 	var (
 		newtargetid, s                 string
 		existentialQ, aborted, running bool
@@ -3576,7 +3577,7 @@ func (t *targetrunner) receiveSmap(newsmap *Smap, msg *api.ActionMsg) (errstr st
 	if msg.Action != "" {
 		s = ", action " + msg.Action
 	}
-	glog.Infof("receive Smap: v%d, ntargets %d, primary %s%s", newsmap.version(), newsmap.countTargets(), pid, s)
+	glog.Infof("receive Smap: v%d, ntargets %d, primary %s%s", newsmap.version(), newsmap.CountTargets(), pid, s)
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
@@ -3667,7 +3668,7 @@ func (t *targetrunner) pollClusterStarted() {
 
 // broadcastNeighbors sends a message ([]byte) to all neighboring targets belongs to a smap
 func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout time.Duration) chan callResult {
+	smap *SmapX, timeout time.Duration) chan callResult {
 
 	if len(smap.Tmap) < 2 {
 		// no neighbor, returns empty channel, so caller doesnt have to check channel is nil
@@ -3684,7 +3685,7 @@ func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method 
 			body:   body,
 		},
 		timeout: timeout,
-		servers: []map[string]*daemonInfo{smap.Tmap},
+		servers: []map[string]*cluster.Snode{smap.Tmap},
 	}
 	return t.broadcast(bcastArgs)
 }

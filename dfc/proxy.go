@@ -26,6 +26,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
@@ -287,7 +288,7 @@ func (p *proxyrunner) objectHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
-	if p.smapowner.get().countTargets() < 1 {
+	if p.smapowner.get().CountTargets() < 1 {
 		p.invalmsghdlr(w, r, "No registered targets yet")
 		return
 	}
@@ -319,9 +320,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-
 	smap := p.smapowner.get()
-	si, errstr := HrwTarget(bucket, objname, smap)
+	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -374,7 +374,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	//
 	bucket, objname := apitems[0], apitems[1]
 	smap := p.smapowner.get()
-	si, errstr := HrwTarget(bucket, objname, smap)
+	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -449,7 +449,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	}
 	bucket, objname := apitems[0], apitems[1]
 	smap := p.smapowner.get()
-	si, errstr := HrwTarget(bucket, objname, smap)
+	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -678,7 +678,7 @@ func (p *proxyrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	var si *daemonInfo
+	var si *cluster.Snode
 	// Use random map iteration order to choose a random target to redirect to
 	smap := p.smapowner.get()
 	for _, si = range smap.Tmap {
@@ -757,7 +757,7 @@ func (p *proxyrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	smap := p.smapowner.get()
-	si, errstr := HrwTarget(bucket, objname, smap)
+	si, errstr := hrwTarget(bucket, objname, smap)
 	if errstr != "" {
 		return
 	}
@@ -812,11 +812,11 @@ func (p *proxyrunner) forwardCP(w http.ResponseWriter, r *http.Request, msg *api
 }
 
 // reverse-proxy GET object request
-func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *daemonInfo) {
+func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *cluster.Snode) {
 	p.rproxy.Lock()
 	if p.rproxy.tmap == nil {
 		smap := p.smapowner.get()
-		p.rproxy.tmap = make(map[string]*httputil.ReverseProxy, smap.countTargets())
+		p.rproxy.tmap = make(map[string]*httputil.ReverseProxy, smap.CountTargets())
 	}
 	rproxy, ok := p.rproxy.tmap[tsi.DaemonID]
 	if !ok || rproxy == nil {
@@ -883,7 +883,7 @@ func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, buc
 		return
 	}
 
-	var si *daemonInfo
+	var si *cluster.Snode
 	smap := p.smapowner.get()
 	for _, si = range smap.Tmap {
 		break
@@ -927,7 +927,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 }
 
 // For cached = false goes to the Cloud, otherwise returns locally cached files
-func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *daemonInfo,
+func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cluster.Snode,
 	getMsg *api.GetMsg, islocal bool, cached bool) (*bucketResp, error) {
 	actionMsgBytes, err := jsoniter.Marshal(api.ActionMsg{Action: api.ActListObjects, Value: getMsg})
 	if err != nil {
@@ -1003,7 +1003,7 @@ func (p *proxyrunner) consumeCachedList(bmap map[string]*api.BucketEntry, dataCh
 
 // Request list of all cached files from a target.
 // The target returns its list in batches `pageSize` length
-func (p *proxyrunner) generateCachedList(bucket string, daemon *daemonInfo, dataCh chan *localFilePage, origmsg *api.GetMsg) {
+func (p *proxyrunner) generateCachedList(bucket string, daemon *cluster.Snode, dataCh chan *localFilePage, origmsg *api.GetMsg) {
 	var msg api.GetMsg
 	common.CopyStruct(&msg, origmsg)
 	msg.GetPageSize = internalPageSize
@@ -1069,7 +1069,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *api.BucketL
 	}
 
 	smap := p.smapowner.get()
-	dataCh := make(chan *localFilePage, smap.countTargets())
+	dataCh := make(chan *localFilePage, smap.CountTargets())
 	errCh := make(chan error, 1)
 	wgConsumer := &sync.WaitGroup{}
 	wgConsumer.Add(1)
@@ -1086,7 +1086,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *api.BucketL
 	for _, daemon := range smap.Tmap {
 		wg.Add(1)
 		// without this copy all goroutines get the same pointer
-		go func(d *daemonInfo) {
+		go func(d *cluster.Snode) {
 			p.generateCachedList(bucket, d, dataCh, reqParams)
 			wg.Done()
 		}(daemon)
@@ -1141,7 +1141,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	chresult := make(chan *targetReply, len(smap.Tmap))
 	wg := &sync.WaitGroup{}
 
-	targetCallFn := func(si *daemonInfo) {
+	targetCallFn := func(si *cluster.Snode) {
 		resp, err := p.targetListBucket(nil, bucket, si, msg, islocal, cachedObjs)
 		chresult <- &targetReply{resp, err}
 		wg.Done()
@@ -1149,7 +1149,7 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	smap = p.smapowner.get()
 	for _, si := range smap.Tmap {
 		wg.Add(1)
-		go func(d *daemonInfo) {
+		go func(d *cluster.Snode) {
 			targetCallFn(d)
 		}(si)
 	}
@@ -1236,8 +1236,9 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 		return
 	}
 	if strings.Contains(msg.GetProps, api.GetTargetURL) {
+		smap := p.smapowner.get()
 		for _, e := range allentries.Entries {
-			si, errStr := HrwTarget(bucket, e.Name, p.smapowner.get())
+			si, errStr := hrwTarget(bucket, e.Name, smap)
 			if errStr != "" {
 				err = errors.New(errStr)
 				return
@@ -1311,7 +1312,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *api
 	}
 
 	smap := p.smapowner.get()
-	si, errstr := HrwTarget(lbucket, objname, smap)
+	si, errstr := hrwTarget(lbucket, objname, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -1337,7 +1338,7 @@ func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *api
 	}
 	bucket, object := apitems[0], apitems[1]
 	smap := p.smapowner.get()
-	si, errstr := HrwTarget(bucket, object, smap)
+	si, errstr := hrwTarget(bucket, object, smap)
 	if errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
 		return
@@ -1573,7 +1574,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			p.httpdaesetprimaryproxy(w, r)
 			return
 		case api.SyncSmap:
-			var newsmap = &Smap{}
+			var newsmap = &SmapX{}
 			if p.readJSON(w, r, newsmap) != nil {
 				return
 			}
@@ -1638,7 +1639,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) smapFromURL(baseURL string) (smap *Smap, errstr string) {
+func (p *proxyrunner) smapFromURL(baseURL string) (smap *SmapX, errstr string) {
 	query := url.Values{}
 	query.Add(api.URLParamWhat, api.GetWhatSmap)
 	req := reqArgs{
@@ -1652,7 +1653,7 @@ func (p *proxyrunner) smapFromURL(baseURL string) (smap *Smap, errstr string) {
 	if res.err != nil {
 		return nil, fmt.Sprintf("Failed to get smap from %s: %v", baseURL, res.err)
 	}
-	smap = &Smap{}
+	smap = &SmapX{}
 	if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
 		return nil, fmt.Sprintf("Failed to unmarshal smap: %v", err)
 	}
@@ -1678,7 +1679,7 @@ func (p *proxyrunner) forcefulJoin(w http.ResponseWriter, r *http.Request, proxy
 	}
 
 	smap := p.smapowner.get()
-	psi := smap.getProxy(proxyID)
+	psi := smap.GetProxy(proxyID)
 
 	if psi == nil && newPrimaryURL == "" {
 		s := fmt.Sprintf("Failed to find new primary %s in local smap: %s",
@@ -1765,7 +1766,7 @@ func (p *proxyrunner) httpdaesetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	}
 
 	smap := p.smapowner.get()
-	psi := smap.getProxy(proxyID)
+	psi := smap.GetProxy(proxyID)
 
 	if psi == nil {
 		s := fmt.Sprintf("New primary proxy %s not present in the local %s", proxyID, smap.pp())
@@ -2020,7 +2021,7 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.R
 		ctx.config.Timeout.Default,
 	)
 
-	targetResults := make(map[string]jsoniter.RawMessage, p.smapowner.get().countTargets())
+	targetResults := make(map[string]jsoniter.RawMessage, p.smapowner.get().CountTargets())
 	for result := range results {
 		if result.err != nil {
 			glog.Errorf(
@@ -2081,7 +2082,7 @@ func (p *proxyrunner) invokeHttpGetClusterMountpaths(w http.ResponseWriter, r *h
 // register|keepalive target|proxy
 func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
-		nsi                   daemonInfo
+		nsi                   cluster.Snode
 		keepalive, register   bool
 		isproxy, nonelectable bool
 		msg                   *api.ActionMsg
@@ -2130,20 +2131,20 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
 	if isproxy {
-		osi := smap.getProxy(nsi.DaemonID)
+		osi := smap.GetProxy(nsi.DaemonID)
 		if !p.addOrUpdateNode(&nsi, osi, keepalive, "proxy") {
 			p.smapowner.Unlock()
 			return
 		}
 	} else {
-		osi := smap.getTarget(nsi.DaemonID)
+		osi := smap.GetTarget(nsi.DaemonID)
 		if !p.addOrUpdateNode(&nsi, osi, keepalive, "target") {
 			p.smapowner.Unlock()
 			return
 		}
 		if register {
 			if glog.V(3) {
-				glog.Infof("register target %s (num targets before %d)", nsi.DaemonID, smap.countTargets())
+				glog.Infof("register target %s (num targets before %d)", nsi.DaemonID, smap.CountTargets())
 			}
 			args := callArgs{
 				si: &nsi,
@@ -2197,11 +2198,11 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	}(isproxy, nonelectable)
 }
 
-func (p *proxyrunner) registerToSmap(isproxy bool, nsi *daemonInfo, nonelectable bool) {
+func (p *proxyrunner) registerToSmap(isproxy bool, nsi *cluster.Snode, nonelectable bool) {
 	clone := p.smapowner.get().clone()
 	id := nsi.DaemonID
 	if isproxy {
-		if clone.getProxy(id) != nil { // update if need be - see addOrUpdateNode()
+		if clone.GetProxy(id) != nil { // update if need be - see addOrUpdateNode()
 			clone.delProxy(id)
 		}
 		clone.addProxy(nsi)
@@ -2213,21 +2214,21 @@ func (p *proxyrunner) registerToSmap(isproxy bool, nsi *daemonInfo, nonelectable
 			glog.Infof("Note: proxy %s won't be electable", id)
 		}
 		if glog.V(3) {
-			glog.Infof("joined proxy %s (num proxies %d)", id, clone.countProxies())
+			glog.Infof("joined proxy %s (num proxies %d)", id, clone.CountProxies())
 		}
 	} else {
-		if clone.getTarget(id) != nil { // ditto
+		if clone.GetTarget(id) != nil { // ditto
 			clone.delTarget(id)
 		}
 		clone.addTarget(nsi)
 		if glog.V(3) {
-			glog.Infof("joined target %s (num targets %d)", id, clone.countTargets())
+			glog.Infof("joined target %s (num targets %d)", id, clone.CountTargets())
 		}
 	}
 	p.smapowner.put(clone)
 }
 
-func (p *proxyrunner) addOrUpdateNode(nsi *daemonInfo, osi *daemonInfo, keepalive bool, kind string) bool {
+func (p *proxyrunner) addOrUpdateNode(nsi *cluster.Snode, osi *cluster.Snode, keepalive bool, kind string) bool {
 	if keepalive {
 		if osi == nil {
 			glog.Warningf("register/keepalive %s %s: adding back to the cluster map", kind, nsi.DaemonID)
@@ -2268,8 +2269,8 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	var (
 		isproxy bool
 		msg     *api.ActionMsg
-		osi     *daemonInfo
-		psi     *daemonInfo
+		osi     *cluster.Snode
+		psi     *cluster.Snode
 		sid     = apitems[0]
 	)
 	msg = &api.ActionMsg{Action: api.ActUnregTarget}
@@ -2288,7 +2289,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 	clone := smap.clone()
 
 	if isproxy {
-		psi = clone.getProxy(sid)
+		psi = clone.GetProxy(sid)
 		if psi == nil {
 			p.smapowner.Unlock()
 			errstr := fmt.Sprintf("Unknown proxy %s", sid)
@@ -2297,10 +2298,10 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		clone.delProxy(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered proxy {%s} (num proxies %d)", sid, clone.countProxies())
+			glog.Infof("unregistered proxy {%s} (num proxies %d)", sid, clone.CountProxies())
 		}
 	} else {
-		osi = clone.getTarget(sid)
+		osi = clone.GetTarget(sid)
 		if osi == nil {
 			p.smapowner.Unlock()
 			errstr := fmt.Sprintf("Unknown target %s", sid)
@@ -2309,7 +2310,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 		}
 		clone.delTarget(sid)
 		if glog.V(3) {
-			glog.Infof("unregistered target {%s} (num targets %d)", sid, clone.countTargets())
+			glog.Infof("unregistered target {%s} (num targets %d)", sid, clone.CountTargets())
 		}
 		args := callArgs{
 			si: osi,
@@ -2456,7 +2457,7 @@ func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg)
 
 // broadcastCluster sends a message ([]byte) to all proxies and targets belongs to a smap
 func (p *proxyrunner) broadcastCluster(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout time.Duration, internal bool) chan callResult {
+	smap *SmapX, timeout time.Duration, internal bool) chan callResult {
 
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
@@ -2467,14 +2468,14 @@ func (p *proxyrunner) broadcastCluster(path string, query url.Values, method str
 		},
 		internal: internal,
 		timeout:  timeout,
-		servers:  []map[string]*daemonInfo{smap.Pmap, smap.Tmap},
+		servers:  []map[string]*cluster.Snode{smap.Pmap, smap.Tmap},
 	}
 	return p.broadcast(bcastArgs)
 }
 
 // broadcastTargets sends a message ([]byte) to all targets belongs to a smap
 func (p *proxyrunner) broadcastTargets(path string, query url.Values, method string, body []byte,
-	smap *Smap, timeout time.Duration) chan callResult {
+	smap *SmapX, timeout time.Duration) chan callResult {
 
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
@@ -2484,7 +2485,7 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 			body:   body,
 		},
 		timeout: timeout,
-		servers: []map[string]*daemonInfo{smap.Tmap},
+		servers: []map[string]*cluster.Snode{smap.Tmap},
 	}
 	return p.broadcast(bcastArgs)
 }
@@ -2610,7 +2611,7 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 
 // detectDaemonDuplicate queries osi for its daemon info in order to determine if info has changed
 // and is equal to nsi
-func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bool {
+func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Snode) bool {
 	query := url.Values{}
 	query.Add(api.URLParamWhat, api.GetWhatDaemonInfo)
 	args := callArgs{
@@ -2627,7 +2628,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *daemonInfo, nsi *daemonInfo) bo
 		// error getting response from osi
 		return false
 	}
-	si := &daemonInfo{}
+	si := &cluster.Snode{}
 	if err := jsoniter.Unmarshal(res.outjson, si); err != nil {
 		common.Assert(false, err)
 	}

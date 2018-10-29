@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/json-iterator/go"
 )
 
@@ -31,7 +32,7 @@ type (
 // newDiscoverServerPrimary returns a proxy runner after initializing the fields that are needed by this test
 func newDiscoverServerPrimary() *proxyrunner {
 	p := proxyrunner{}
-	p.si = newDaemonInfo("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	p.si = newSnode("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
 	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
@@ -47,7 +48,7 @@ func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
-				Smap:           &Smap{Version: smapVersion},
+				Smap:           &SmapX{cluster.Smap{Version: smapVersion}},
 				BucketMD:       &bucketMD{Version: bmdVersion},
 			}
 			b, _ := jsoniter.Marshal(msg)
@@ -66,7 +67,7 @@ func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 		cnt++
 		msg := SmapVoteMsg{
 			VoteInProgress: cnt == 1,
-			Smap:           &Smap{Version: smapVersion},
+			Smap:           &SmapX{cluster.Smap{Version: smapVersion}},
 			BucketMD:       &bucketMD{Version: bmdVersion},
 		}
 		b, _ := jsoniter.Marshal(msg)
@@ -87,7 +88,7 @@ func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 		if cnt > 2 {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
-				Smap:           &Smap{Version: smapVersion},
+				Smap:           &SmapX{cluster.Smap{Version: smapVersion}},
 				BucketMD:       &bucketMD{Version: bmdVersion},
 			}
 			b, _ := jsoniter.Marshal(msg)
@@ -115,7 +116,7 @@ func discoverServerVoteInProgressHandler(sv int64, lv int64) *httptest.Server {
 		func(w http.ResponseWriter, r *http.Request) {
 			msg := SmapVoteMsg{
 				VoteInProgress: true,
-				Smap:           &Smap{Version: 12345},
+				Smap:           &SmapX{cluster.Smap{Version: 12345}},
 				BucketMD:       &bucketMD{Version: 67890},
 			}
 			b, _ := jsoniter.Marshal(msg)
@@ -249,7 +250,7 @@ func TestDiscoverServers(t *testing.T) {
 		for _, s := range tc.servers {
 			ts := s.httpHandler(s.smapVersion, s.bmdVersion)
 			addrInfo := serverTCPAddr(ts.URL)
-			daemon := newDaemonInfo(s.id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
+			daemon := newSnode(s.id, httpProto, addrInfo, &net.TCPAddr{}, &net.TCPAddr{})
 			if s.isProxy {
 				discoverSmap.addProxy(daemon)
 			} else {

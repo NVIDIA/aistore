@@ -16,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 )
 
@@ -164,12 +165,12 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	var (
 		smap       = pkr.p.smapowner.get()
 		wg         = &sync.WaitGroup{}
-		daemonCnt  = smap.countProxies() + smap.countTargets()
+		daemonCnt  = smap.CountProxies() + smap.CountTargets()
 		stoppedCh  = make(chan struct{}, daemonCnt)
 		toRemoveCh = make(chan string, daemonCnt)
 		latencyCh  = make(chan time.Duration, daemonCnt)
 	)
-	for _, daemons := range []map[string]*daemonInfo{smap.Tmap, smap.Pmap} {
+	for _, daemons := range []map[string]*cluster.Snode{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
 			if sid == pkr.p.si.DaemonID {
 				continue
@@ -179,7 +180,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 				continue
 			}
 			wg.Add(1)
-			go func(si *daemonInfo) {
+			go func(si *cluster.Snode) {
 				if len(stoppedCh) > 0 {
 					wg.Done()
 					return
@@ -224,7 +225,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 	clone := newSmap.clone()
 	metaction := "keepalive: removing ["
 	for sid := range toRemoveCh {
-		if clone.getProxy(sid) != nil {
+		if clone.GetProxy(sid) != nil {
 			clone.delProxy(sid)
 			metaction += " proxy " + sid
 		} else {
@@ -263,7 +264,7 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 	}
 }
 
-func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta time.Duration) {
+func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
 	query := url.Values{}
 	query.Add(api.URLParamFromID, pkr.p.si.DaemonID)
 
@@ -292,7 +293,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *daemonInfo) (ok, stopped bool, delta t
 	return ok, stopped, defaultTimeout
 }
 
-func (pkr *proxyKeepaliveRunner) retry(si *daemonInfo, args callArgs) (ok, stopped bool) {
+func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, stopped bool) {
 	var (
 		i       int
 		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.DaemonID).timeout)

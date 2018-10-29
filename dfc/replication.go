@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -207,7 +208,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 	url := req.remoteDirectURL + common.URLPath(api.Version, api.Objects, bucket, object)
 
-	uname := uniquename(bucket, object)
+	uname := cluster.Uname(bucket, object)
 	r.t.rtnamemap.lockname(uname, req.deleteObject, &pendinginfo{Time: time.Now(), fqn: req.fqn}, time.Second)
 	defer r.t.rtnamemap.unlockname(uname, req.deleteObject)
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/fs"
 )
@@ -306,7 +307,7 @@ func (t *targetrunner) lruEvict(fqn string) error {
 		glog.Infof("LRU: removed %q", fqn)
 		return nil
 	}
-	uname := uniquename(bucket, objname)
+	uname := cluster.Uname(bucket, objname)
 	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
 	defer t.rtnamemap.unlockname(uname, true)
 
