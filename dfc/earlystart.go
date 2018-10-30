@@ -32,7 +32,7 @@ const maxRetrySeconds = 5
 //	  in this type scenarios
 func (p *proxyrunner) bootstrap() {
 	var (
-		found, smap    *Smap
+		found, smap    *smapX
 		guessAmPrimary bool
 		getSmapURL     = ctx.config.Proxy.PrimaryURL
 		tout           = ctx.config.Timeout.CplaneOperation
@@ -42,7 +42,7 @@ func (p *proxyrunner) bootstrap() {
 	//         try to use it for discovery of the current one
 	smap = newSmap()
 	if err := common.LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
-		if smap.countTargets() > 0 || smap.countProxies() > 1 {
+		if smap.CountTargets() > 0 || smap.CountProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
 			q.Add(api.URLParamWhat, api.GetWhatSmapVote)
 			res := p.broadcastCluster(common.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, smap, tout, false)
@@ -150,7 +150,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			s := fmt.Sprintf("Error getting Smap from primary %s: %v", getSmapURL, res.err)
 			glog.Fatalf("FATAL: %s", s)
 		}
-		smap := &Smap{}
+		smap := &smapX{}
 		if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
 			common.Assert(false, err)
 		}
@@ -189,7 +189,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 // 	- (iii)  merge the Smap containing newly joined nodes with the guessSmap
 // 		 that was previously discovered/merged
 // 	- (iiii) discover cluster-wide metadata, and resolve remaining conflicts
-func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
+func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	const (
 		metaction1 = "early-start-have-registrations"
 		metaction2 = "primary-started-up"
@@ -216,7 +216,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	haveRegistratons := false
 	p.smapowner.Lock()
 	if smap.version() > 0 {
-		common.Assert(smap.countTargets() > 0 || smap.countProxies() > 1)
+		common.Assert(smap.CountTargets() > 0 || smap.CountProxies() > 1)
 		haveRegistratons = true
 		guessSmap.merge(smap)
 		p.smapowner.put(smap)
@@ -227,7 +227,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 
 	smap = p.smapowner.get()
 	if haveRegistratons {
-		glog.Infof("%s: merged local Smap (%d/%d)", p.si.DaemonID, smap.countTargets(), smap.countProxies())
+		glog.Infof("%s: merged local Smap (%d/%d)", p.si.DaemonID, smap.CountTargets(), smap.CountProxies())
 		p.metasyncer.sync(true, smap, metaction1, p.bmdowner.get(), metaction1)
 	} else {
 		glog.Infof("%s: no registrations yet", p.si.DaemonID)
@@ -248,7 +248,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *Smap, ntargets int) {
 	}
 	p.metasyncer.sync(false, smap, metaction2, p.bmdowner.get(), metaction2)
 	glog.Infof("%s: primary/cluster startup complete, Smap v%d, ntargets %d",
-		p.si.DaemonID, smap.version(), smap.countTargets())
+		p.si.DaemonID, smap.version(), smap.CountTargets())
 	p.startedup(1) // started up as primary
 }
 
@@ -259,14 +259,14 @@ func (p *proxyrunner) startup(ntargets int) {
 		if !smap.isPrimary(p.si) {
 			break
 		}
-		nt := smap.countTargets()
+		nt := smap.CountTargets()
 		if nt >= ntargets && ntargets > 0 {
 			glog.Infof("Reached the expected %d/%d target registrations", ntargets, nt)
 			return
 		}
 		time.Sleep(time.Second)
 	}
-	nt := p.smapowner.get().countTargets()
+	nt := p.smapowner.get().CountTargets()
 	if nt > 0 {
 		glog.Warningf("Timed out waiting for %d/%d target registrations", ntargets, nt)
 	}
@@ -307,7 +307,7 @@ func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 	// merge the discovered (max-version) Smap and the local/current one
 	// that was constructed from scratch via node-joins
 	glog.Infof("%s: merging discovered Smap v%d (%d, %d)", p.si.DaemonID,
-		maxVerSmap.version(), maxVerSmap.countTargets(), maxVerSmap.countProxies())
+		maxVerSmap.version(), maxVerSmap.CountTargets(), maxVerSmap.CountProxies())
 
 	p.smapowner.Lock()
 	clone := p.smapowner.get().clone()
@@ -321,10 +321,10 @@ func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 	glog.Infof("Merged %s", clone.pp())
 }
 
-func (p *proxyrunner) meta(deadline time.Time) (*Smap, *bucketMD) {
+func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 	var (
 		maxVerBucketMD *bucketMD
-		maxVersionSmap *Smap
+		maxVersionSmap *smapX
 		bcastSmap      = p.smapowner.get().clone()
 		q              = url.Values{}
 		tout           = ctx.config.Timeout.CplaneOperation

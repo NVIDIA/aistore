@@ -457,7 +457,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 	bucket := apitems[0]
 	objs := make([]string, 0, len(listMsg.Objnames))
 	for _, obj := range listMsg.Objnames {
-		si, errstr := HrwTarget(bucket, obj, t.smapowner.get())
+		si, errstr := hrwTarget(bucket, obj, t.smapowner.get())
 		if errstr != "" {
 			return fmt.Errorf(errstr)
 		}

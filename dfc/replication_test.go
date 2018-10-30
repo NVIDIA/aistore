@@ -60,6 +60,6 @@ func TestReplicationSendNonExistingObject(t *testing.T) {
 // newFakeTargetRunner returns a fake targetrunner initialized for replication tests
 func newFakeTargetRunner() *targetrunner {
 	t := &targetrunner{}
-	t.si = newDaemonInfo(fakeDaemonID, httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
+	t.si = newSnode(fakeDaemonID, httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	return t
 }

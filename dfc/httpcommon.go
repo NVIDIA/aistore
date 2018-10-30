@@ -28,6 +28,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
@@ -55,7 +56,7 @@ type (
 
 	// callResult contains data returned by a server to server call
 	callResult struct {
-		si      *daemonInfo
+		si      *cluster.Snode
 		outjson []byte
 		err     error
 		errstr  string
@@ -76,7 +77,7 @@ type (
 	callArgs struct {
 		req     reqArgs
 		timeout time.Duration
-		si      *daemonInfo
+		si      *cluster.Snode
 	}
 
 	// bcastCallArgs contains arguments for a broadcast server call
@@ -84,14 +85,14 @@ type (
 		req             reqArgs
 		internal        bool // specifies if the call is the internal communication
 		timeout         time.Duration
-		servers         []map[string]*daemonInfo
+		servers         []map[string]*cluster.Snode
 		serversToIgnore map[string]struct{}
 	}
 
 	// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
 	SmapVoteMsg struct {
 		VoteInProgress bool      `json:"vote_in_progress"`
-		Smap           *Smap     `json:"smap"`
+		Smap           *smapX    `json:"smap"`
 		BucketMD       *bucketMD `json:"bucketmd"`
 	}
 )
@@ -175,7 +176,7 @@ type httprunner struct {
 	internalServer        *netServer
 	replServer            *netServer
 	glogger               *log.Logger
-	si                    *daemonInfo
+	si                    *cluster.Snode
 	httpclient            *http.Client // http client for intra-cluster comm
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	keepalive             keepaliver
@@ -332,14 +333,14 @@ func (h *httprunner) initSI() {
 
 	daemonID := os.Getenv("DFCDAEMONID")
 	if daemonID == "" {
-		cs := xxhash.ChecksumString32S(publicAddr.String(), MLCG32)
+		cs := xxhash.ChecksumString32S(publicAddr.String(), cluster.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
 		if testingFSPpaths() {
 			daemonID += ":" + ctx.config.Net.L4.PortStr
 		}
 	}
 
-	h.si = newDaemonInfo(daemonID, ctx.config.Net.HTTP.proto, publicAddr, internalAddr, replAddr)
+	h.si = newSnode(daemonID, ctx.config.Net.HTTP.proto, publicAddr, internalAddr, replAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
@@ -566,7 +567,7 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 				continue
 			}
 			wg.Add(1)
-			go func(di *daemonInfo) {
+			go func(di *cluster.Snode) {
 				args := callArgs{
 					si:      di,
 					req:     bcastArgs.req,
@@ -907,11 +908,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 // metasync Rx handlers
 //
 //=====================
-func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *Smap, msg *api.ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *smapX, msg *api.ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
-	newsmap, msg = &Smap{}, &api.ActionMsg{}
+	newsmap, msg = &smapX{}, &api.ActionMsg{}
 	smapvalue := payload[smaptag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(smapvalue), newsmap); err != nil {
@@ -937,12 +938,12 @@ func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *Smap, msg *
 		return
 	}
 	if newsmap.version() < myver {
-		if h.si != nil && localsmap.getTarget(h.si.DaemonID) == nil {
+		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) == nil {
 			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap v%d to v%d", h.si.DaemonID, myver, newsmap.version())
 			newsmap = nil
 			return
 		}
-		if h.si != nil && localsmap.getTarget(h.si.DaemonID) != nil {
+		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) != nil {
 			glog.Errorf("target %s: receive Smap v%d < v%d local - proceeding anyway",
 				h.si.DaemonID, newsmap.version(), localsmap.version())
 		} else {
@@ -954,7 +955,7 @@ func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *Smap, msg *
 	if msg.Action != "" {
 		s = ", action " + msg.Action
 	}
-	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newsmap.version(), localsmap.version(), newsmap.countTargets(), s)
+	glog.Infof("receive Smap v%d (local v%d), ntargets %d%s", newsmap.version(), localsmap.version(), newsmap.CountTargets(), s)
 	return
 }
 
@@ -1075,7 +1076,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	return
 }
 
-func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Duration, isproxy bool, query url.Values,
+func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, isproxy bool, query url.Values,
 	keepalive bool) (res callResult) {
 	info, err := jsoniter.Marshal(h.si)
 	common.Assert(err == nil, err)
@@ -1118,7 +1119,7 @@ func (h *httprunner) registerToURL(url string, psi *daemonInfo, timeout time.Dur
 // if Smap is not yet synced, use the primary proxy from the config
 // smap lock is acquired to avoid race between this function and other smap access (for example,
 // receiving smap during metasync)
-func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *daemonInfo) {
+func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
 	smap := h.smapowner.get()
 	if smap == nil || smap.ProxySI == nil {
 		url, proxysi = ctx.config.Proxy.PrimaryURL, nil

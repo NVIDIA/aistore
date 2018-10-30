@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -41,7 +42,7 @@ type targetInfo struct {
 
 type metadata struct {
 	t                   *testing.T
-	smap                dfc.Smap
+	smap                cluster.Smap
 	delay               time.Duration
 	semaphore           chan struct{}
 	controlCh           chan struct{}
@@ -1568,7 +1569,7 @@ func doGetsInParallel(m *metadata) {
 	}
 }
 
-func extractTargetsInfo(smap dfc.Smap) []targetInfo {
+func extractTargetsInfo(smap cluster.Smap) []targetInfo {
 	var targets []targetInfo
 	for sid, daemon := range smap.Tmap {
 		targets = append(targets, targetInfo{sid: sid, directURL: daemon.PublicNet.DirectURL})

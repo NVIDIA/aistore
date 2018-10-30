@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -1444,7 +1445,7 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, url string) (stats ma
 	return
 }
 
-func getClusterMap(t *testing.T, URL string) dfc.Smap {
+func getClusterMap(t *testing.T, URL string) cluster.Smap {
 	smap, err := client.GetClusterMap(URL)
 	tutils.CheckFatal(err, t)
 	return smap

@@ -27,6 +27,7 @@ import (
 	"net/url"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -967,7 +968,7 @@ func ListBuckets(proxyURL string, local bool) (*api.BucketNames, error) {
 
 // GetClusterMap retrives a DFC's server map
 // Note: this may not be a good idea to expose the map to clients, but this how it is for now.
-func GetClusterMap(url string) (dfc.Smap, error) {
+func GetClusterMap(url string) (cluster.Smap, error) {
 	q := getWhatRawQuery(api.GetWhatSmap, "")
 	requestURL := fmt.Sprintf("%s?%s", url+common.URLPath(api.Version, api.Daemon), q)
 	r, err := client.Get(requestURL)
@@ -980,25 +981,25 @@ func GetClusterMap(url string) (dfc.Smap, error) {
 	if err != nil {
 		// Note: might return connection refused if the servet is not ready
 		//       caller can retry in that case
-		return dfc.Smap{}, err
+		return cluster.Smap{}, err
 	}
 
 	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return dfc.Smap{}, fmt.Errorf("get Smap, HTTP status %d", r.StatusCode)
+		return cluster.Smap{}, fmt.Errorf("get Smap, HTTP status %d", r.StatusCode)
 	}
 
 	var (
 		b    []byte
-		smap dfc.Smap
+		smap cluster.Smap
 	)
 	b, err = ioutil.ReadAll(r.Body)
 	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to read response, err: %v", err)
+		return cluster.Smap{}, fmt.Errorf("Failed to read response, err: %v", err)
 	}
 
 	err = json.Unmarshal(b, &smap)
 	if err != nil {
-		return dfc.Smap{}, fmt.Errorf("Failed to unmarshal Smap, err: %v", err)
+		return cluster.Smap{}, fmt.Errorf("Failed to unmarshal Smap, err: %v", err)
 	}
 
 	return smap, nil
@@ -1257,7 +1258,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	return nil
 }
 
-func RegisterTarget(sid, targetDirectURL string, smap dfc.Smap) error {
+func RegisterTarget(sid, targetDirectURL string, smap cluster.Smap) error {
 	_, ok := smap.Tmap[sid]
 	url := targetDirectURL + common.URLPath(api.Version, api.Daemon, api.Register)
 	if err := HTTPRequest(http.MethodPost, url, nil); err != nil {
@@ -1273,7 +1274,7 @@ func RegisterTarget(sid, targetDirectURL string, smap dfc.Smap) error {
 	return nil
 }
 
-func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, idsToIgnore []string) error {
+func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64, idsToIgnore []string) error {
 	inList := func(s string, values []string) bool {
 		for _, v := range values {
 			if s == v {
@@ -1284,7 +1285,7 @@ func WaitMapVersionSync(timeout time.Time, smap dfc.Smap, prevVersion int64, ids
 		return false
 	}
 
-	checkAwaitingDaemon := func(smap dfc.Smap, idsToIgnore []string) (string, string, bool) {
+	checkAwaitingDaemon := func(smap cluster.Smap, idsToIgnore []string) (string, string, bool) {
 		for _, d := range smap.Pmap {
 			if !inList(d.DaemonID, idsToIgnore) {
 				return d.DaemonID, d.PublicNet.DirectURL, true

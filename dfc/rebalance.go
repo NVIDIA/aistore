@@ -18,6 +18,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/json-iterator/go"
 )
@@ -34,7 +35,7 @@ type xrebpathrunner struct {
 	mpathplus string
 	xreb      *xactRebalance
 	wg        *sync.WaitGroup
-	newsmap   *Smap
+	newsmap   *smapX
 	aborted   bool
 	fileMoved int64
 	byteMoved int64
@@ -106,7 +107,7 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 			return nil
 		}
 	}
-	si, errstr := HrwTarget(bucket, objname, rcl.newsmap)
+	si, errstr := hrwTarget(bucket, objname, rcl.newsmap)
 	if errstr != "" {
 		return fmt.Errorf(errstr)
 	}
@@ -215,7 +216,7 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 // pingTarget pings target to check if it is running. After DestRetryTime it
 // assumes that target is dead. Returns true if target is healthy and running,
 // false otherwise.
-func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadline time.Duration) bool {
+func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, deadline time.Duration) bool {
 	query := url.Values{}
 	query.Add(api.URLParamFromID, t.si.DaemonID)
 
@@ -258,7 +259,7 @@ func (t *targetrunner) pingTarget(si *daemonInfo, timeout time.Duration, deadlin
 
 // waitForRebalanceFinish waits for the other target to complete the current
 // rebalancing operation.
-func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion int64) {
+func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersion int64) {
 	// Phase 1: Call and check if smap is at least our version.
 	query := url.Values{}
 	query.Add(api.URLParamWhat, api.GetWhatSmap)
@@ -285,7 +286,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 			return
 		}
 
-		tsmap := &Smap{}
+		tsmap := &smapX{}
 		err := jsoniter.Unmarshal(res.outjson, tsmap)
 		if err != nil {
 			glog.Errorf("Unexpected: failed to unmarshal response, err: %v [%v]", err, string(res.outjson))
@@ -336,7 +337,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *daemonInfo, rebalanceVersion i
 	}
 }
 
-func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
+func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	neighborCnt := len(newsmap.Tmap) - 1
 
 	//
@@ -353,7 +354,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 			continue
 		}
 
-		go func(si *daemonInfo) {
+		go func(si *cluster.Snode) {
 			ok := t.pingTarget(
 				si,
 				ctx.config.Timeout.CplaneOperation*keepaliveTimeoutFactor,
@@ -438,7 +439,7 @@ func (t *targetrunner) runRebalance(newsmap *Smap, newtargetid string) {
 	t.xactinp.del(xreb.id)
 }
 
-func (t *targetrunner) pollRebalancingDone(newSmap *Smap) {
+func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(newSmap.Tmap) - 1)
 
@@ -447,7 +448,7 @@ func (t *targetrunner) pollRebalancingDone(newSmap *Smap) {
 			continue
 		}
 
-		go func(si *daemonInfo) {
+		go func(si *cluster.Snode) {
 			t.waitForRebalanceFinish(si, newSmap.version())
 			wg.Done()
 		}(si)
