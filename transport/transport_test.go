@@ -90,7 +90,7 @@ func Example_Headers() {
 			off += 16 // hlen and hlen-checksum
 			hdr, _ = transport.ExtHeader(body[off:], hlen)
 			if !hdr.IsLast() {
-				tutils.Logf("%+v (%d)\n", hdr, hlen)
+				fmt.Printf("%+v (%d)\n", hdr, hlen)
 				off += hlen + int(hdr.Dsize)
 			} else {
 				break
@@ -131,7 +131,7 @@ func Example_Mux() {
 		if int64(len(object)) != hdr.Dsize {
 			panic(fmt.Sprintf("size %d != %d", len(object), hdr.Dsize))
 		}
-		tutils.Logf("%s...\n", string(object[:16]))
+		// fmt.Printf("%s...\n", string(object[:16])) // FIXME
 	}
 	mux := http.NewServeMux()
 
@@ -158,11 +158,12 @@ func Example_Mux() {
 	sendText(stream, text3, text4)
 	stream.Fin()
 
-	// Output:
 	// Lorem ipsum dolo...
 	// Duis aute irure ...
 	// Et harum quidem ...
 	// Temporibus autem...
+
+	// Output:
 }
 
 // test random streaming
@@ -336,31 +337,28 @@ func Test_OnSendCallback(t *testing.T) {
 	url := ts.URL + path
 	stream := transport.NewStream(httpclient, url, nil)
 
-	totalSend := int64(0)
-	var fired []bool
-	for idx := 0; idx < 100; idx++ {
-		fired = append(fired, false)
-		hdr, reader := makeRandReader()
-		callback := func(idx int) transport.SendCallback {
-			return func(err error) {
-				if err != nil {
-					t.Errorf("callback %d returned an error: %v", idx, err)
-				}
-				fired[idx] = true
-				reader.slab.Free(reader.buf)
-			}
-		}(idx)
-		stream.Send(hdr, reader, callback)
+	var (
+		totalSend int64
+		mu        sync.Mutex
+		posted    []*randReader = make([]*randReader, 10000) // 10K objects
+	)
+	for idx := 0; idx < len(posted); idx++ {
+		hdr, rr := makeRandReader()
+		mu.Lock()
+		posted[idx] = rr
+		mu.Unlock()
+		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
+		stream.Send(hdr, rr, rrc.sentCallback)
 		totalSend += hdr.Dsize
 	}
 	stream.Fin()
 
-	for idx, f := range fired {
-		if !f {
-			t.Errorf("callback %d not fired", idx)
+	// mu.Lock()  - no need to crit-sect as the Fin is done
+	for idx := range posted {
+		if posted[idx] != nil {
+			t.Errorf("sent-callback %d never fired", idx)
 		}
 	}
-
 	if *totalRecv != totalSend {
 		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)
 	}
@@ -474,6 +472,12 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	return
 }
 
+//===========================================================================
+//
+// randReader
+//
+//===========================================================================
+
 type randReader struct {
 	buf  []byte
 	hdr  transport.Header
@@ -517,4 +521,27 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 func (r *randReader) Close() error {
 	r.slab.Free(r.buf)
 	return nil
+}
+
+type randReaderCtx struct {
+	t      *testing.T
+	rr     *randReader
+	posted []*randReader // => stream
+	mu     *sync.Mutex
+	idx    int
+}
+
+func (rrc *randReaderCtx) sentCallback(reader io.ReadCloser, err error) {
+	if err != nil {
+		rrc.t.Errorf("sent-callback %d returned an error: %v", rrc.idx, err)
+	}
+	rr := rrc.rr
+	rr.slab.Free(rr.buf)
+	rrc.mu.Lock()
+	rrc.posted[rrc.idx] = nil
+	if rrc.idx > 0 && rrc.posted[rrc.idx-1] != nil {
+		rrc.t.Errorf("sent-callback %d fired out of order", rrc.idx)
+	}
+	rrc.posted[rrc.idx] = nil
+	rrc.mu.Unlock()
 }

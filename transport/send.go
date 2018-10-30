@@ -57,24 +57,26 @@ type (
 		stats           Stats        // stream stats
 		Numcur, Sizecur int64        // gets reset to zero upon each timeout
 		// internals
-		lid       string        // log prefix
-		workCh    chan obj      // next object to stream
-		lastCh    chan struct{} // end of stream
-		stopCh    chan struct{} // stop/abort stream
-		maxheader []byte        // max header buffer
-		header    []byte        // object header - slice of the maxheader with bucket/objname, etc. fields
-		time      struct {
+		lid      string        // log prefix
+		workCh   chan obj      // next object to stream
+		lastCh   chan struct{} // end of stream
+		stopCh   chan struct{} // stop/abort stream
+		callback SendCallback  // to free SGLs, close files, etc.
+		time     struct {
 			idleOut time.Duration // inter-object timeout: when triggers, causes recycling of the underlying http request
 			idle    *time.Timer
 		}
 		lifecycle int64 // see state enum above
 		wg        sync.WaitGroup
 		sendoff   sendoff
+		maxheader []byte // max header buffer
+		header    []byte // object header - slice of the maxheader with bucket/objname, etc. fields
 	}
 	// advanced usage: additional stream control
 	Extra struct {
 		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
-		Ctx         context.Context // typically, result of context.WithCancel(context.Background()) by the caller
+		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
+		callback    SendCallback    // typical usage: to free SGLs, close files, etc.
 		Burst       int             // max num objects that can be posted for sending without any back-pressure
 	}
 	// stream stats
@@ -90,8 +92,16 @@ type (
 		Opaque          []byte // custom control (optional)
 		Dsize           int64  // size of the object (size=0 (unknown) not supported yet)
 	}
-	// object-sent callback (user-defined, optional)
-	SendCallback func(error)
+	// object-sent callback that has the following signature can optionally be defined on a:
+	// a) per-stream basis (via NewStream constructor - see Extra struct above)
+	// b) for a given object that is being sent (for instance, to support a call-per-batch semantics)
+	// Naturally, object callback "overrides" the per-stream one: when object callback is defined
+	// (i.e., non-nil), the stream callback is ignored/skipped.
+	// NOTE:
+	// This callback's latency adds to the latency of the entire stream operation on the send side.
+	// It is critically important, therefore, that user implementations do not take extra locks,
+	// do not execute system calls and, generally, return as soon as possible.
+	SendCallback func(io.ReadCloser, error)
 )
 
 // internal
@@ -245,7 +255,7 @@ forever:
 					}
 					break newreq // new post after timeout: initiate new HTTP/TCP session
 				}
-				time.Sleep(time.Millisecond * 10)
+				time.Sleep(time.Millisecond)
 			}
 		}
 	}
@@ -363,25 +373,26 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 }
 
 func (s *Stream) eoObj(err error) {
+	var obj = s.sendoff.obj
 	s.Numcur++
 	s.Sizecur += s.sendoff.off
 	atomic.AddInt64(&s.stats.Num, 1)
 	atomic.AddInt64(&s.stats.Offset, s.sendoff.off)
 	atomic.AddInt64(&s.stats.Size, s.sendoff.off)
-	if s.sendoff.off != s.sendoff.obj.hdr.Dsize {
+	if s.sendoff.off != obj.hdr.Dsize {
 		if debug {
-			errstr := fmt.Sprintf("%s: hdr: %v; offset %d != %d size", s.lid, string(s.header), s.sendoff.off, s.sendoff.obj.hdr.Dsize)
+			errstr := fmt.Sprintf("%s: hdr: %v; offset %d != %d size", s.lid, string(s.header), s.sendoff.off, obj.hdr.Dsize)
 			common.Assert(false, errstr)
 		} else {
-			glog.Errorf("%s offset %d != %d size", s.lid, s.sendoff.off, s.sendoff.obj.hdr.Dsize)
+			glog.Errorf("%s offset %d != %d size", s.lid, s.sendoff.off, obj.hdr.Dsize)
 		}
 	} else {
 		if bool(glog.V(4)) || debug {
-			glog.Infof("%s sent size=%d (%d/%d)", s.lid, s.sendoff.obj.hdr.Dsize, s.Numcur, s.stats.Num)
+			glog.Infof("%s sent size=%d (%d/%d)", s.lid, obj.hdr.Dsize, s.Numcur, s.stats.Num)
 		}
 	}
 
-	if closeErr := s.sendoff.obj.reader.Close(); closeErr != nil {
+	if closeErr := obj.reader.Close(); closeErr != nil {
 		if debug {
 			common.Assert(false, fmt.Sprintf("%s: hdr: %v; failed to close reader %v", s.lid, string(s.header), closeErr))
 		} else {
@@ -393,8 +404,10 @@ func (s *Stream) eoObj(err error) {
 		}
 	}
 	s.time.idle.Reset(s.time.idleOut)
-	if s.sendoff.obj.callback != nil {
-		s.sendoff.obj.callback(err)
+	if obj.callback != nil {
+		obj.callback(obj.reader, err)
+	} else if s.callback != nil {
+		s.callback(obj.reader, err)
 	}
 	s.sendoff = sendoff{}
 }
