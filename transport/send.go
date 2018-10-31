@@ -63,6 +63,7 @@ type (
 		stopCh   chan struct{} // stop/abort stream
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
+			start   int64         // to support idle stats
 			idleOut time.Duration // inter-object timeout: when triggers, causes recycling of the underlying http request
 			idle    *time.Timer
 		}
@@ -81,9 +82,12 @@ type (
 	}
 	// stream stats
 	Stats struct {
-		Num    int64 // number of transferred objects
-		Size   int64 // transferred size in bytes
-		Offset int64 // stream offset
+		Num     int64   // number of transferred objects
+		Size    int64   // transferred size, in bytes
+		Offset  int64   // stream offset, in bytes
+		IdleDur int64   // idle time elapsed since the previous GetStats call
+		TotlDur int64   // total time since the previous GetStats
+		IdlePct float64 // idle time (percentage)
 	}
 	EndpointStats map[int64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
 	// object header
@@ -178,6 +182,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	} else {
 		ctx, _ = context.WithCancel(context.Background())
 	}
+	atomic.StoreInt64(&s.time.start, time.Now().UnixNano())
+	atomic.StoreInt64(&s.stats.IdleDur, 0)
 	s.wg.Add(1)
 	go s.doTx(ctx)
 	return
@@ -214,9 +220,20 @@ func (s *Stream) ID() (string, int64) { return s.trname, s.sessid }
 func (s *Stream) URL() string         { return s.toURL }
 
 func (s *Stream) GetStats() (stats Stats) {
+	// byte-num transfer stats
 	stats.Num = atomic.LoadInt64(&s.stats.Num)
 	stats.Offset = atomic.LoadInt64(&s.stats.Offset)
 	stats.Size = atomic.LoadInt64(&s.stats.Size)
+	// busy-idle stats
+	now := time.Now().UnixNano()
+	stats.TotlDur = now - atomic.LoadInt64(&s.time.start)
+	stats.IdlePct = float64(atomic.LoadInt64(&s.stats.IdleDur)) * 100 / float64(stats.TotlDur)
+	if stats.IdlePct > 100 { // GetStats is async vis-à-vis IdleDur += deltas
+		stats.TotlDur = atomic.LoadInt64(&s.stats.IdleDur)
+		stats.IdlePct = 100
+	}
+	atomic.StoreInt64(&s.time.start, now)
+	atomic.StoreInt64(&s.stats.IdleDur, 0) // NOTE zeroing out, to start afresh and accumulate until the next GetStats call
 	return
 }
 
@@ -227,6 +244,7 @@ func (hdr *Header) IsLast() bool { return hdr.Dsize == lastMarker }
 //
 // main loop
 func (s *Stream) doTx(ctx context.Context) {
+	var begin time.Time
 forever:
 	for {
 		if atomic.CompareAndSwapInt64(&s.lifecycle, posted, activated) {
@@ -237,6 +255,7 @@ forever:
 				break
 			}
 		}
+		begin = time.Now()
 	newreq:
 		for {
 			select {
@@ -258,10 +277,16 @@ forever:
 					}
 					break newreq // new post after timeout: initiate new HTTP/TCP session
 				}
-				time.Sleep(time.Millisecond)
+				// polling tradeoff: CPU usage vs the first object's send latency
+				// FIXME: use sync.Cond?
+				time.Sleep(time.Millisecond * 200)
 			}
 		}
+		delta := int64(time.Since(begin))
+		atomic.AddInt64(&s.stats.IdleDur, delta)
 	}
+	delta := int64(time.Since(begin))
+	atomic.AddInt64(&s.stats.IdleDur, delta)
 	s.time.idle.Stop()
 	close(s.workCh)
 	close(s.lastCh)
@@ -305,6 +330,11 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 		return s.sendHdr(b)
 	}
+	begin := time.Now()
+	defer func(b time.Time) {
+		delta := int64(time.Since(b))
+		atomic.AddInt64(&s.stats.IdleDur, delta)
+	}(begin)
 	select {
 	// next object
 	case s.sendoff.obj = <-s.workCh:

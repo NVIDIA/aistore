@@ -90,6 +90,38 @@ Stream termination is denoted by a special marker in the data-size field of the 
 
 >> header = [object size=7fffffffffffffff]
 
+## Transport statistics
+
+The API that queries runtime statistics includes:
+
+```go
+func (s *Stream) GetStats() (stats Stats)
+```
+- on the send side, and
+
+```go
+func GetNetworkStats(network string) (netstats map[string]EndpointStats, err error)
+```
+- on receive.
+
+Statistics themselves include the following metrics:
+
+```go
+Stats struct {
+	Num     int64   // number of transferred objects
+	Size    int64   // transferred size, in bytes
+	Offset  int64   // current stream offset, in bytes
+	IdleDur int64   // idle time since the previous GetStats call
+	TotlDur int64   // total time elapsed since the previous GetStats
+	IdlePct float64 // idle time (percentage)
+}
+
+```
+
+On the receive side, the `EndpointStats` map contains all the `transport.Stats` structures indexed by (unique) stream IDs for currently active streams.
+
+For usage examples and details, please see [tests](transport/transport_test.go) in the local directory.
+
 ## Testing
 
 * To run all tests while redirecting errors to standard error:
