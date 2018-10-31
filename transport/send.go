@@ -76,7 +76,7 @@ type (
 	Extra struct {
 		IdleTimeout time.Duration   // stream idle timeout: causes PUT to terminate (and renew on the next obj send)
 		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
-		callback    SendCallback    // typical usage: to free SGLs, close files, etc.
+		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
 		Burst       int             // max num objects that can be posted for sending without any back-pressure
 	}
 	// stream stats
@@ -135,8 +135,11 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	s = &Stream{client: client, toURL: toURL}
 
 	s.time.idleOut = defaultIdleOut
-	if extra != nil && extra.IdleTimeout > 0 {
-		s.time.idleOut = extra.IdleTimeout
+	if extra != nil {
+		s.callback = extra.Callback
+		if extra.IdleTimeout > 0 {
+			s.time.idleOut = extra.IdleTimeout
+		}
 	}
 	if tm := time.Now().UnixNano(); tm&0xffff != 0 {
 		s.sessid = tm & 0xffff
