@@ -9,6 +9,7 @@ package dfc
 import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 type (
@@ -38,7 +39,7 @@ func (g *fsprungroup) add(r fsprunner) {
 // enableMountpath enables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
-	enabled, exists = ctx.mountpaths.EnableMountpath(mpath)
+	enabled, exists = fs.Mountpaths.EnableMountpath(mpath)
 	if !enabled || !exists {
 		return
 	}
@@ -49,7 +50,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
 	glog.Infof("Re-enabled mountpath %s", mpath)
 	go g.t.runLocalRebalance()
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	if len(availablePaths) == 1 {
 		if err := g.t.enable(); err != nil {
 			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si.DaemonID, err)
@@ -61,7 +62,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
 // disableMountpath disables mountpath and notifies necessary runners about the
 // change if mountpath actually was disabled.
 func (g *fsprungroup) disableMountpath(mpath string) (disabled, exists bool) {
-	disabled, exists = ctx.mountpaths.DisableMountpath(mpath)
+	disabled, exists = fs.Mountpaths.DisableMountpath(mpath)
 	if !disabled || !exists {
 		return
 	}
@@ -71,7 +72,7 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled, exists bool) {
 	}
 	glog.Infof("Disabled mountpath %s", mpath)
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	if len(availablePaths) > 0 {
 		return
 	}
@@ -86,15 +87,15 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled, exists bool) {
 // addMountpath adds mountpath and notifies necessary runners about the change
 // if the mountpath was actually added.
 func (g *fsprungroup) addMountpath(mpath string) (err error) {
-	if err = ctx.mountpaths.AddMountpath(mpath); err != nil {
+	if err = fs.Mountpaths.AddMountpath(mpath); err != nil {
 		return
 	}
 
-	err = g.t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
+	err = g.t.createBucketDirs("local", ctx.config.LocalBuckets, fs.Mountpaths.MakePathLocal)
 	if err != nil {
 		return
 	}
-	err = g.t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
+	err = g.t.createBucketDirs("cloud", ctx.config.CloudBuckets, fs.Mountpaths.MakePathCloud)
 	if err != nil {
 		return
 	}
@@ -104,7 +105,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	}
 	go g.t.runLocalRebalance()
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	if len(availablePaths) > 1 {
 		glog.Infof("Added mountpath %s", mpath)
 	} else {
@@ -119,7 +120,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 // removeMountpath removes mountpath and notifies necessary runners about the
 // change if the mountpath was actually removed.
 func (g *fsprungroup) removeMountpath(mpath string) (err error) {
-	if err = ctx.mountpaths.RemoveMountpath(mpath); err != nil {
+	if err = fs.Mountpaths.RemoveMountpath(mpath); err != nil {
 		return
 	}
 
@@ -127,7 +128,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 		r.reqRemoveMountpath(mpath)
 	}
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	if len(availablePaths) > 0 {
 		glog.Infof("Removed mountpath %s", mpath)
 	} else {

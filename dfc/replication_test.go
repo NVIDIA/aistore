@@ -20,9 +20,9 @@ const (
 )
 
 func TestReplicationRunnerStop(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	tr := newFakeTargetRunner()
-	rr := newReplicationRunner(tr, ctx.mountpaths)
+	rr := newReplicationRunner(tr, fs.Mountpaths)
 	go rr.Run()
 
 	rr.Stop(fmt.Errorf("Testing replicationRunner.stop"))
@@ -42,11 +42,11 @@ func TestReplicationRunnerStop(t *testing.T) {
 }
 
 func TestReplicationSendNonExistingObject(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
 
 	tr := newFakeTargetRunner()
-	rr := newReplicationRunner(tr, ctx.mountpaths)
+	rr := newReplicationRunner(tr, fs.Mountpaths)
 	go rr.Run()
 
 	err := rr.reqSendReplica("fakeDirectURL", "fakeFqn", false, replicationPolicySync)

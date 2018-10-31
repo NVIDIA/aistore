@@ -136,15 +136,15 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	ctx.mountpaths.DisableFsIDCheck()
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths.DisableFsIDCheck()
 	cleanMountpaths()
 	for _, mpath := range mpaths {
 		common.CreateDir(mpath)
-		ctx.mountpaths.AddMountpath(mpath)
+		fs.Mountpaths.AddMountpath(mpath)
 	}
 
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go atimer.Run()

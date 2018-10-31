@@ -38,7 +38,7 @@ func TestGetFSDiskUtil(t *testing.T) {
 	}
 
 	tempRoot := "/tmp"
-	ctx.mountpaths.AddMountpath(tempRoot)
+	fs.Mountpaths.AddMountpath(tempRoot)
 
 	riostat := newIostatRunner()
 	go riostat.Run()
@@ -182,7 +182,7 @@ func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 }
 
 func TestSearchValidMountPath(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := path2mpathInfo("/abc")
 	longestPrefix := mpathInfo.Path
@@ -191,7 +191,7 @@ func TestSearchValidMountPath(t *testing.T) {
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := path2mpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -199,7 +199,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 }
 
 func TestSearchWithNoMountPath(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := path2mpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -207,7 +207,7 @@ func TestSearchWithNoMountPath(t *testing.T) {
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -228,7 +228,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 }
 
 func TestSimilarCases(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -249,7 +249,7 @@ func TestSimilarCases(t *testing.T) {
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
 	mpathInfo, _ := path2mpathInfo("/tmp")
@@ -267,16 +267,16 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 }
 
 func setAvailableMountPaths(paths ...string) []string {
-	ctx.mountpaths.DisableFsIDCheck()
+	fs.Mountpaths.DisableFsIDCheck()
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	oldPaths := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		oldPaths = append(oldPaths, mpathInfo.Path)
 	}
 
 	for _, mpathInfo := range availablePaths {
-		ctx.mountpaths.RemoveMountpath(mpathInfo.Path)
+		fs.Mountpaths.RemoveMountpath(mpathInfo.Path)
 	}
 
 	for _, path := range paths {
@@ -284,7 +284,7 @@ func setAvailableMountPaths(paths ...string) []string {
 			continue
 		}
 
-		ctx.mountpaths.AddMountpath(path)
+		fs.Mountpaths.AddMountpath(path)
 	}
 
 	return oldPaths

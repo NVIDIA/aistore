@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
 
@@ -136,7 +137,7 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 }
 
 func (r *iostatrunner) updateFSDisks() {
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	r.Lock()
 	r.fsdisks = make(map[string]common.StringSet, len(availablePaths))
 	for _, mpathInfo := range availablePaths {

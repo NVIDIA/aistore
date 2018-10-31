@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
 
@@ -129,7 +130,7 @@ func newRahJogger(mpath string) (rj *rahjogger) {
 // as a runner
 func (r *readahead) Run() error {
 	glog.Infof("Starting %s", r.Getname())
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	for mpath := range availablePaths {
 		r.addmp(mpath, "added")
 	}

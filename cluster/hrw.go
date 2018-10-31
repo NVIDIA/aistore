@@ -11,7 +11,9 @@ package cluster
 
 import (
 	"fmt"
+	"path/filepath"
 
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
@@ -70,4 +72,36 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
 		errstr = fmt.Sprintf("Cannot HRW-select proxy: current count=%d, skipped=%d", smap.CountProxies(), skipped)
 	}
 	return
+}
+
+func hrwMpath(bucket, objname string) (mpath string, errstr string) {
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	if len(availablePaths) == 0 {
+		errstr = fmt.Sprintf("Cannot select mountpath for %s/%s", bucket, objname)
+		return
+	}
+
+	var max uint64
+	name := Uname(bucket, objname)
+	digest := xxhash.ChecksumString64S(name, MLCG32)
+	for _, mpathInfo := range availablePaths {
+		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
+		if cs > max {
+			max = cs
+			mpath = mpathInfo.Path
+		}
+	}
+	return
+}
+
+// (bucket, object) => (local hashed path, fully qualified name aka fqn & error)
+func FQN(bucket, objname string, islocal bool) (string, string) {
+	mpath, errstr := hrwMpath(bucket, objname)
+	if errstr != "" {
+		return "", errstr
+	}
+	if islocal {
+		return filepath.Join(fs.Mountpaths.MakePathLocal(mpath), bucket, objname), ""
+	}
+	return filepath.Join(fs.Mountpaths.MakePathCloud(mpath), bucket, objname), ""
 }

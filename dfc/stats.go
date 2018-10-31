@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
 
@@ -640,7 +641,7 @@ func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []o
 }
 
 func (r *storstatsrunner) updateCapacity() (runlru bool) {
-	availableMountpaths, _ := ctx.mountpaths.Mountpaths()
+	availableMountpaths, _ := fs.Mountpaths.Mountpaths()
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
 
 	for mpath := range availableMountpaths {

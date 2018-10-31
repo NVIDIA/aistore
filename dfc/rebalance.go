@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
 
@@ -377,7 +378,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 
 	// find and abort in-progress x-action if exists and if its smap version is lower
 	// start new x-action unless the one for the current version is already in progress
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	runnerCnt := len(availablePaths) * 2
 
 	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnerCnt)
@@ -398,12 +399,12 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 
 	allr := make([]*xrebpathrunner, 0, runnerCnt)
 	for _, mpathInfo := range availablePaths {
-		rc := &xrebpathrunner{t: t, mpathplus: makePathCloud(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
+		rc := &xrebpathrunner{t: t, mpathplus: fs.Mountpaths.MakePathCloud(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
 		go rc.oneRebalance()
 		allr = append(allr, rc)
 
-		rl := &xrebpathrunner{t: t, mpathplus: makePathLocal(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
+		rl := &xrebpathrunner{t: t, mpathplus: fs.Mountpaths.MakePathLocal(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
 		wg.Add(1)
 		go rl.oneRebalance()
 		allr = append(allr, rl)
@@ -458,7 +459,7 @@ func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
 }
 
 func (t *targetrunner) runLocalRebalance() {
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	runnerCnt := len(availablePaths) * 2
 	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 
@@ -475,7 +476,7 @@ func (t *targetrunner) runLocalRebalance() {
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
 	for _, mpathInfo := range availablePaths {
-		runner := &localRebPathRunner{t: t, mpath: makePathCloud(mpathInfo.Path), xreb: xreb}
+		runner := &localRebPathRunner{t: t, mpath: fs.Mountpaths.MakePathCloud(mpathInfo.Path), xreb: xreb}
 		wg.Add(1)
 		go func(runner *localRebPathRunner) {
 			runner.run()
@@ -483,7 +484,7 @@ func (t *targetrunner) runLocalRebalance() {
 		}(runner)
 		allr = append(allr, runner)
 
-		runner = &localRebPathRunner{t: t, mpath: makePathLocal(mpathInfo.Path), xreb: xreb}
+		runner = &localRebPathRunner{t: t, mpath: fs.Mountpaths.MakePathLocal(mpathInfo.Path), xreb: xreb}
 		wg.Add(1)
 		go func(runner *localRebPathRunner) {
 			runner.run()

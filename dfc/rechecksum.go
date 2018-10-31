@@ -41,12 +41,12 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 
 	// re-checksum every object in a given bucket
 	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum.tostring(), bucket)
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
 		go func(mpathInfo *fs.MountpathInfo) {
-			t.oneRechecksumBucket(mpathInfo, makePathLocal(mpathInfo.Path), xrcksum)
+			t.oneRechecksumBucket(mpathInfo, fs.Mountpaths.MakePathLocal(mpathInfo.Path), xrcksum)
 			wg.Done()
 		}(mpathInfo)
 	}
@@ -54,7 +54,7 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
 		go func(mpathInfo *fs.MountpathInfo) {
-			t.oneRechecksumBucket(mpathInfo, makePathCloud(mpathInfo.Path), xrcksum)
+			t.oneRechecksumBucket(mpathInfo, fs.Mountpaths.MakePathCloud(mpathInfo.Path), xrcksum)
 			wg.Done()
 		}(mpathInfo)
 	}

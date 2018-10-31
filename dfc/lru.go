@@ -77,15 +77,15 @@ func (t *targetrunner) runLRU() {
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
 
 	// copy available mountpaths
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	for _, mpathInfo := range availablePaths {
 		fschkwg.Add(1)
-		go t.oneLRU(mpathInfo, makePathLocal(mpathInfo.Path), fschkwg, xlru)
+		go t.oneLRU(mpathInfo, fs.Mountpaths.MakePathLocal(mpathInfo.Path), fschkwg, xlru)
 	}
 	fschkwg.Wait()
 	for _, mpathInfo := range availablePaths {
 		fschkwg.Add(1)
-		go t.oneLRU(mpathInfo, makePathCloud(mpathInfo.Path), fschkwg, xlru)
+		go t.oneLRU(mpathInfo, fs.Mountpaths.MakePathCloud(mpathInfo.Path), fschkwg, xlru)
 	}
 	fschkwg.Wait()
 

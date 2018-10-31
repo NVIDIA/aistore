@@ -50,9 +50,8 @@ type (
 
 	// daemon instance: proxy or storage target
 	daemon struct {
-		config     dfconfig
-		mountpaths *fs.MountedFS // for mountpath definition, see fs/mountfs.go
-		rg         *rungroup
+		config dfconfig
+		rg     *rungroup
 	}
 
 	rungroup struct {
@@ -194,7 +193,7 @@ func dfcinit() {
 	}
 
 	// init daemon
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	// NOTE: proxy and, respectively, target terminations are executed in the same
 	//       exact order as the initializations below
 	ctx.rg = &rungroup{
@@ -239,7 +238,7 @@ func dfcinit() {
 		// for mountpath definition, see fs/mountfs.go
 		if testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
-			ctx.mountpaths.DisableFsIDCheck()
+			fs.Mountpaths.DisableFsIDCheck()
 			t.testCachepathMounts()
 		} else {
 			fsPaths := make([]string, 0, len(ctx.config.FSpaths))
@@ -247,12 +246,12 @@ func dfcinit() {
 				fsPaths = append(fsPaths, path)
 			}
 
-			if err := ctx.mountpaths.Init(fsPaths); err != nil {
+			if err := fs.Mountpaths.Init(fsPaths); err != nil {
 				glog.Fatal(err)
 			}
 		}
 
-		fshc := newFSHC(ctx.mountpaths, &ctx.config.FSHC, t.fqn2workfile)
+		fshc := newFSHC(fs.Mountpaths, &ctx.config.FSHC, t.fqn2workfile)
 		ctx.rg.add(fshc, xfshc)
 		t.fsprg.add(fshc)
 
@@ -265,11 +264,11 @@ func dfcinit() {
 			t.readahead = &dummyreadahead{}
 		}
 
-		replRunner := newReplicationRunner(t, ctx.mountpaths)
+		replRunner := newReplicationRunner(t, fs.Mountpaths)
 		ctx.rg.add(replRunner, xreplication)
 		t.fsprg.add(replRunner)
 
-		atime := newAtimeRunner(t, ctx.mountpaths)
+		atime := newAtimeRunner(t, fs.Mountpaths)
 		ctx.rg.add(atime, xatime)
 		t.fsprg.add(atime)
 	}

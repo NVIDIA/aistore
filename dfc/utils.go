@@ -252,7 +252,7 @@ func pathPrefixMatch(mpath, targ string) (rel string, match bool) {
 func path2mpathInfo(path string) (info *fs.MountpathInfo, relativePath string) {
 	var max int
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	cleanedPath := filepath.Clean(path)
 
 	for mpath, mpathInfo := range availablePaths {

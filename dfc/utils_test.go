@@ -126,7 +126,7 @@ func TestFqn2Info(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			mfs := fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+			mfs := fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 			mfs.DisableFsIDCheck()
 			for _, mpath := range tt.mpaths {
 				if _, err := os.Stat(mpath); os.IsNotExist(err) {
@@ -139,7 +139,7 @@ func TestFqn2Info(t *testing.T) {
 					return
 				}
 			}
-			ctx.mountpaths = mfs
+			fs.Mountpaths = mfs
 
 			parsedFQN, err := fqn2info(tt.fqn)
 			if (err != nil) != tt.wantErr {

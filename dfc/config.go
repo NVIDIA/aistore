@@ -20,7 +20,7 @@ import (
 // $CONFDIR/*
 const (
 	bucketmdbase  = "bucket-metadata" // base name of the config file; not to confuse with config.Localbuckets mpath
-	mpname        = "mpaths"          // base name to persist ctx.mountpaths
+	mpname        = "mpaths"          // base name to persist fs.Mountpaths
 	smapname      = "smap.json"
 	rebinpname    = ".rebalancing"
 	reblocinpname = ".localrebalancing"

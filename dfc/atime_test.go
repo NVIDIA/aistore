@@ -19,12 +19,12 @@ func TestAtimerunnerStop(t *testing.T) {
 	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	ctx.mountpaths.DisableFsIDCheck()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths.DisableFsIDCheck()
+	fs.Mountpaths.AddMountpath(mpath)
 
 	target := newFakeTargetRunner()
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 
 	go atimer.Run()
 	atimer.reqAddMountpath(mpath)
@@ -49,10 +49,10 @@ func TestAtimerunnerTouch(t *testing.T) {
 	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths.AddMountpath(mpath)
 	target := newFakeTargetRunner()
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 
 	go atimer.Run()
 	atimer.reqAddMountpath(mpath)
@@ -84,9 +84,9 @@ func TestAtimerunnerTouch(t *testing.T) {
 func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	fileName := "/tmp/local/bck1/fqn1"
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 
 	go atimer.Run()
 	time.Sleep(50 * time.Millisecond)
@@ -101,9 +101,9 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 }
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
-	ctx.mountpaths.AddMountpath("/tmp")
-	atimer := newAtimeRunner(newFakeTargetRunner(), ctx.mountpaths)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths.AddMountpath("/tmp")
+	atimer := newAtimeRunner(newFakeTargetRunner(), fs.Mountpaths)
 	go atimer.Run()
 	atimer.reqAddMountpath("/tmp")
 
@@ -129,11 +129,11 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	go atimer.Run()
 	atimer.reqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -175,11 +175,11 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 	fileName1 := "/tmp/cloud/bck1/fqn1"
 	fileName2 := "/tmp/local/bck2/fqn2"
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	go atimer.Run()
 	atimer.reqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -214,11 +214,11 @@ func TestAtimerunnerFlush(t *testing.T) {
 	fileName2 := "/tmp/local/bck2/fqn2"
 	fileName3 := "/tmp/local/bck2/fqn3"
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	go atimer.Run()
 	atimer.reqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -256,12 +256,12 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 		runmap: make(map[string]common.Runner),
 	}
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 	target := newFakeTargetRunner()
 
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 	ctx.rg.add(newIostatRunner(), xiostat)
 	go ctx.rg.run()
@@ -290,9 +290,9 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		runmap: make(map[string]common.Runner),
 	}
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	iostatr.Disk = map[string]common.SimpleKVs{
@@ -304,7 +304,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 
 	target := newFakeTargetRunner()
 	target.fsprg.addMountpath(mpath)
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go ctx.rg.run()
@@ -341,16 +341,16 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 		runmap: make(map[string]common.Runner),
 	}
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
 	target.fsprg.addMountpath(mpath)
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go ctx.rg.run()
@@ -393,16 +393,16 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 		runarr: make([]common.Runner, 0, 1),
 		runmap: make(map[string]common.Runner),
 	}
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
 	target.fsprg.addMountpath(mpath)
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go ctx.rg.run()
@@ -447,16 +447,16 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 		runmap: make(map[string]common.Runner),
 	}
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
 	target.fsprg.addMountpath(mpath)
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go ctx.rg.run()
@@ -501,9 +501,9 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 		runmap: make(map[string]common.Runner),
 	}
 
-	ctx.mountpaths = fs.NewMountedFS(ctx.config.CloudBuckets, ctx.config.LocalBuckets)
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	ctx.mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
 
@@ -511,7 +511,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 
 	target := newFakeTargetRunner()
 	target.fsprg.addMountpath(mpath)
-	atimer := newAtimeRunner(target, ctx.mountpaths)
+	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go ctx.rg.run()
@@ -546,11 +546,11 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 }
 
 func cleanMountpaths() {
-	availableMountpaths, disabledMountpaths := ctx.mountpaths.Mountpaths()
+	availableMountpaths, disabledMountpaths := fs.Mountpaths.Mountpaths()
 	for _, mpathInfo := range availableMountpaths {
-		ctx.mountpaths.RemoveMountpath(mpathInfo.Path)
+		fs.Mountpaths.RemoveMountpath(mpathInfo.Path)
 	}
 	for _, mpathInfo := range disabledMountpaths {
-		ctx.mountpaths.RemoveMountpath(mpathInfo.Path)
+		fs.Mountpaths.RemoveMountpath(mpathInfo.Path)
 	}
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
@@ -150,12 +151,12 @@ func (t *targetrunner) Run() error {
 
 	go t.pollClusterStarted()
 
-	err := t.createBucketDirs("local", ctx.config.LocalBuckets, makePathLocal)
+	err := t.createBucketDirs("local", ctx.config.LocalBuckets, fs.Mountpaths.MakePathLocal)
 	if err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
-	err = t.createBucketDirs("cloud", ctx.config.CloudBuckets, makePathCloud)
+	err = t.createBucketDirs("cloud", ctx.config.CloudBuckets, fs.Mountpaths.MakePathCloud)
 	if err != nil {
 		glog.Error(err)
 		os.Exit(1)
@@ -400,7 +401,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.islocal(bucket)
-	fqn, errstr = t.fqn(bucket, objname, islocal)
+	fqn, errstr = cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -1104,7 +1105,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if islocal || checkCached {
-		fqn, errstr := t.fqn(bucket, objname, islocal)
+		fqn, errstr := cluster.FQN(bucket, objname, islocal)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
@@ -1286,18 +1287,18 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 
 	wg := &sync.WaitGroup{}
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	ch := make(chan string, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		// Create directory for new local bucket
-		toDir := filepath.Join(makePathLocal(mpathInfo.Path), bucketTo)
+		toDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucketTo)
 		if err := common.CreateDir(toDir); err != nil {
 			ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
 			continue
 		}
 
 		wg.Add(1)
-		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
+		fromdir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucketFrom)
 		go func(fromdir string, wg *sync.WaitGroup) {
 			time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
 			ch <- t.renameOne(fromdir, bucketFrom, bucketTo)
@@ -1312,7 +1313,7 @@ func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketPr
 		}
 	}
 	for _, mpathInfo := range availablePaths {
-		fromdir := filepath.Join(makePathLocal(mpathInfo.Path), bucketFrom)
+		fromdir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucketFrom)
 		if err := os.RemoveAll(fromdir); err != nil {
 			glog.Errorf("Failed to remove dir %s", fromdir)
 		}
@@ -1408,7 +1409,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		hdhobj  = newcksumvalue(htype, hval)
 		version = response.Header.Get(api.HeaderDFCObjVersion)
 	)
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		response.Body.Close()
 		glog.Error(errstr)
@@ -1460,7 +1461,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		bucketProps BucketProps
 		err         error
 	)
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return nil, errstr, http.StatusBadRequest
 	}
@@ -1631,7 +1632,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *api.GetMsg) (*
 		err        error
 	}
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	ch := make(chan *mresp, len(availablePaths))
 	wg := &sync.WaitGroup{}
 
@@ -1666,9 +1667,9 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *api.GetMsg) (*
 		wg.Add(1)
 		var localDir string
 		if islocal {
-			localDir = filepath.Join(makePathLocal(mpathInfo.Path), bucket)
+			localDir = filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucket)
 		} else {
-			localDir = filepath.Join(makePathCloud(mpathInfo.Path), bucket)
+			localDir = filepath.Join(fs.Mountpaths.MakePathCloud(mpathInfo.Path), bucket)
 		}
 
 		go walkMpath(localDir)
@@ -2011,7 +2012,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	)
 	started = time.Now()
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return errstr, http.StatusBadRequest
 	}
@@ -2091,7 +2092,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 		islocal = t.bmdowner.get().islocal(bucket)
 	)
 
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return errstr
 	}
@@ -2248,7 +2249,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 	}
 	var size int64
 	bucketmd := t.bmdowner.get()
-	fqn, errstr := t.fqn(bucket, objname, bucketmd.islocal(bucket))
+	fqn, errstr := cluster.FQN(bucket, objname, bucketmd.islocal(bucket))
 	if errstr != "" {
 		return
 	}
@@ -2330,7 +2331,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		errcode int
 	)
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
@@ -2385,7 +2386,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ap
 	}
 	newobjname := msg.Name
 	islocal := t.bmdowner.get().islocal(bucket)
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -2410,7 +2411,7 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg api
 	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.islocal(bucket)
-	fqn, errstr := t.fqn(bucket, object, islocal)
+	fqn, errstr := cluster.FQN(bucket, object, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -2447,7 +2448,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	}
 	bucketmd := t.bmdowner.get()
 	islocalFrom := bucketmd.islocal(bucketFrom)
-	fqn, errstr := t.fqn(bucketFrom, objnameFrom, islocalFrom)
+	fqn, errstr := cluster.FQN(bucketFrom, objnameFrom, islocalFrom)
 	if errstr != "" {
 		return
 	}
@@ -2459,7 +2460,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		islocalTo := bucketmd.islocal(bucketTo)
-		newfqn, errstr = t.fqn(bucketTo, objnameTo, islocalTo)
+		newfqn, errstr = cluster.FQN(bucketTo, objnameTo, islocalTo)
 		if errstr != "" {
 			return
 		}
@@ -2510,7 +2511,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
-	fqn, errstr := t.fqn(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return errstr
 	}
@@ -2845,7 +2846,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case api.GetWhatMountpaths:
 		mpList := api.MountpathList{}
-		availablePaths, disabledPaths := ctx.mountpaths.Mountpaths()
+		availablePaths, disabledPaths := fs.Mountpaths.Mountpaths()
 		mpList.Available = make([]string, len(availablePaths))
 		mpList.Disabled = make([]string, len(disabledPaths))
 
@@ -3115,18 +3116,6 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	return
 }
 
-// (bucket, object) => (local hashed path, fully qualified name aka fqn & error)
-func (t *targetrunner) fqn(bucket, objname string, islocal bool) (string, string) {
-	mpath, errstr := hrwMpath(bucket, objname)
-	if errstr != "" {
-		return "", errstr
-	}
-	if islocal {
-		return filepath.Join(makePathLocal(mpath), bucket, objname), ""
-	}
-	return filepath.Join(makePathCloud(mpath), bucket, objname), ""
-}
-
 // the opposite
 func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error) {
 	var (
@@ -3141,7 +3130,7 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error
 
 	bucket, objName, isLocal = parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
 	bucketmd := t.bmdowner.get()
-	realFQN, errstr := t.fqn(bucket, objName, isLocal)
+	realFQN, errstr := cluster.FQN(bucket, objName, isLocal)
 	if errstr != "" {
 		return "", "", errors.New(errstr)
 	}
@@ -3162,7 +3151,7 @@ func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
 		return false, "", err
 	}
 	bucket, objName, isLocal := parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
-	newFQN, errstr := t.fqn(bucket, objName, isLocal)
+	newFQN, errstr := cluster.FQN(bucket, objName, isLocal)
 	if errstr != "" {
 		return false, "", errors.New(errstr)
 	}
@@ -3219,7 +3208,7 @@ func (t *targetrunner) testCachepathMounts() {
 			os.Exit(1)
 		}
 
-		err := ctx.mountpaths.AddMountpath(mpath)
+		err := fs.Mountpaths.AddMountpath(mpath)
 		common.Assert(err == nil, err)
 	}
 }
@@ -3228,7 +3217,7 @@ func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath stri
 	if basename == "" {
 		return fmt.Errorf("empty basename for the %s buckets directory - update your config", s)
 	}
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	for _, mpathInfo := range availablePaths {
 		dir := f(mpathInfo.Path)
 		if _, exists := availablePaths[dir]; exists {
@@ -3259,7 +3248,7 @@ func (t *targetrunner) detectMpathChanges() {
 		}
 	)
 
-	availablePaths, disabledPath := ctx.mountpaths.Mountpaths()
+	availablePaths, disabledPath := fs.Mountpaths.Mountpaths()
 	for mpath := range availablePaths {
 		newfs.Available[mpath] = struct{}{}
 	}
@@ -3432,16 +3421,6 @@ func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
 	return ct
 }
 
-// builds fqn of directory for local buckets from mountpath
-func makePathLocal(basePath string) string {
-	return filepath.Join(basePath, ctx.config.LocalBuckets)
-}
-
-// builds fqn of directory for cloud buckets from mountpath
-func makePathCloud(basePath string) string {
-	return filepath.Join(basePath, ctx.config.CloudBuckets)
-}
-
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
 	msg := api.ActionMsg{}
 	if t.readJSON(w, r, &msg) != nil {
@@ -3536,13 +3515,13 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	// Remove buckets which don't exist in newbucketmd
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
 			for _, mpathInfo := range availablePaths {
-				localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
+				localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucket)
 				if err := os.RemoveAll(localbucketfqn); err != nil {
 					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
 				}
@@ -3554,7 +3533,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *api.ActionMsg
 	for bucket := range newbucketmd.LBmap {
 		if _, ok := bucketmd.LBmap[bucket]; !ok {
 			for _, mpathInfo := range availablePaths {
-				localbucketfqn := filepath.Join(makePathLocal(mpathInfo.Path), bucket)
+				localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucket)
 				if err := common.CreateDir(localbucketfqn); err != nil {
 					glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
 				}
@@ -3827,10 +3806,10 @@ func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled,
 }
 
 func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (fqn string, size int64) {
-	availablePaths, _ := ctx.mountpaths.Mountpaths()
-	fn := makePathCloud
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	fn := fs.Mountpaths.MakePathCloud
 	if islocal {
-		fn = makePathLocal
+		fn = fs.Mountpaths.MakePathLocal
 	}
 	for _, mpathInfo := range availablePaths {
 		dir := fn(mpathInfo.Path)

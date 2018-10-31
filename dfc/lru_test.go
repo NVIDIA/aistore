@@ -120,8 +120,8 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.config.Xaction.DiskUtilHighWM = 40
 	ctx.config.Periodic.StatsTime = -1 * time.Second
 
-	ctx.mountpaths.AddMountpath("/")
-	available, _ := ctx.mountpaths.Mountpaths()
+	fs.Mountpaths.AddMountpath("/")
+	available, _ := fs.Mountpaths.Mountpaths()
 	fileSystem := available["/"].FileSystem
 
 	disks := fs2disks(fileSystem)

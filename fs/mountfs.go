@@ -21,6 +21,10 @@ import (
 
 const MLCG32 = 1103515245
 
+var (
+	Mountpaths *MountedFS
+)
+
 // Terminology:
 // - a mountpath is equivalent to (configurable) fspath - both terms are used interchangeably;
 // - each mountpath is, simply, a local directory that is serviced by a local filesystem;
@@ -28,7 +32,6 @@ const MLCG32 = 1103515245
 //   (different mountpaths map onto different filesystems, and vise versa);
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
-// MountedFS holds all mountpaths for the target.
 type (
 	MountpathInfo struct {
 		Path       string // Cleaned OrigPath
@@ -38,6 +41,7 @@ type (
 		PathDigest uint64
 	}
 
+	// MountedFS holds all mountpaths for the target.
 	MountedFS struct {
 		mu sync.Mutex
 		// fsIDs is set in which we store fsids of mountpaths. This allows for
@@ -54,8 +58,8 @@ type (
 		disabled unsafe.Pointer
 		// The following correspond to the values in config.sh for "cloud_buckets"
 		// and "local_buckets", used for mpath validation
-		cloudBucketName string
-		localBucketName string
+		localBuckets string
+		cloudBuckets string
 	}
 )
 
@@ -71,12 +75,12 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 }
 
 // NewMountedFS returns initialized instance of MountedFS struct.
-func NewMountedFS(cloudBucketName, localBucketName string) *MountedFS {
+func NewMountedFS(localBuckets, cloudBuckets string) *MountedFS {
 	return &MountedFS{
-		fsIDs:           make(map[syscall.Fsid]string),
-		checkFsID:       true,
-		cloudBucketName: cloudBucketName,
-		localBucketName: localBucketName,
+		fsIDs:        make(map[syscall.Fsid]string),
+		checkFsID:    true,
+		localBuckets: localBuckets,
+		cloudBuckets: cloudBuckets,
 	}
 }
 
@@ -100,7 +104,7 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 // AddMountpath adds new mountpath to the target's mountpaths.
 func (mfs *MountedFS) AddMountpath(mpath string) error {
 	seperator := string(filepath.Separator)
-	for _, bucket := range []string{mfs.localBucketName, mfs.cloudBucketName} {
+	for _, bucket := range []string{mfs.localBuckets, mfs.cloudBuckets} {
 		invalidMpath := seperator + bucket
 		if strings.HasSuffix(mpath, invalidMpath) {
 			return fmt.Errorf("Cannot add fspath %q with suffix %q", mpath, invalidMpath)
@@ -266,4 +270,14 @@ func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*M
 	}
 
 	return availableCopy, disabledCopy
+}
+
+// builds fqn of directory for local buckets from mountpath
+func (mfs *MountedFS) MakePathLocal(basePath string) string {
+	return filepath.Join(basePath, mfs.localBuckets)
+}
+
+// builds fqn of directory for cloud buckets from mountpath
+func (mfs *MountedFS) MakePathCloud(basePath string) string {
+	return filepath.Join(basePath, mfs.cloudBuckets)
 }
