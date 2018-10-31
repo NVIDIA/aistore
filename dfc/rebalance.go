@@ -77,8 +77,8 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 		break
 	}
 
-	// Skip working files
-	if iswork, _ := rcl.t.isworkfile(fqn); iswork {
+	// Skip files which are not movable (for example workfiles)
+	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToMove() {
 		return nil
 	}
 	if err != nil {
@@ -157,8 +157,8 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 		break
 	}
 
-	// Skip working files
-	if iswork, _ := rb.t.isworkfile(fqn); iswork {
+	// Skip files which are not movable (for example workfiles)
+	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToMove() {
 		return nil
 	}
 	if err != nil {

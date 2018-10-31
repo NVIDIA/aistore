@@ -43,7 +43,6 @@ import (
 const (
 	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
 	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
-	workfileprefix   = ".~~~."
 	doesnotexist     = "does not exist"
 	maxBytesInMem    = 256 * cmn.KiB
 )
@@ -1336,7 +1335,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if iswork, _ := renctx.t.isworkfile(fqn); iswork { // FIXME: work files indicate work in progress..
+	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToProcess() { // FIXME: workfiles indicate work in progress..
 		return nil
 	}
 	bucket, objname, err := renctx.t.fqn2bckobj(fqn)
@@ -1412,7 +1411,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		glog.Error(errstr)
 		return
 	}
-	getfqn := t.fqn2workfile(fqn)
+	getfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
 	if _, nhobj, size, errstr = t.receive(getfqn, objname, "", hdhobj, response.Body); errstr != "" {
 		response.Body.Close()
 		glog.Errorf(errstr)
@@ -1462,7 +1461,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	if errstr != "" {
 		return nil, errstr, http.StatusBadRequest
 	}
-	getfqn := t.fqn2workfile(fqn)
+	getfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
 	// one cold GET at a time
 	if prefetch {
 		if !t.rtnamemap.TryLock(uname, true) {
@@ -1970,7 +1969,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.IsDir() {
 		return ci.processDir(fqn)
 	}
-	if iswork, _ := ci.t.isworkfile(fqn); iswork {
+	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToProcess() {
 		return nil
 	}
 
@@ -2013,7 +2012,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	if errstr != "" {
 		return errstr, http.StatusBadRequest
 	}
-	putfqn := t.fqn2workfile(fqn)
+	putfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConfig
@@ -2286,7 +2285,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if glog.V(4) {
 			glog.Infof("Rebalance %s/%s from %s to %s (self, %s, ver %d)", bucket, objname, from, to, fqn, ver)
 		}
-		putfqn := t.fqn2workfile(fqn)
+		putfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
 		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
@@ -3147,40 +3146,6 @@ func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
 		return false, "", errors.New(errstr)
 	}
 	return fqn != newFQN, newFQN, nil
-}
-
-func (t *targetrunner) fqn2workfile(fqn string) (workfqn string) {
-	dir, base := filepath.Split(fqn)
-	cmn.Assert(strings.HasSuffix(dir, "/"), dir+" : "+base)
-	cmn.Assert(base != "", dir+" : "+base)
-
-	tiebreaker := strconv.FormatInt(time.Now().UnixNano(), 16)
-	workfqn = dir + workfileprefix + base + "." + tiebreaker[5:] + "." + t.uxprocess.spid
-	return
-}
-
-func (t *targetrunner) isworkfile(workfqn string) (iswork, isold bool) {
-	dir, base := filepath.Split(workfqn)
-	if !strings.HasSuffix(dir, "/") {
-		return
-	}
-	if base == "" {
-		return
-	}
-	if !strings.HasPrefix(base, workfileprefix) {
-		return
-	}
-	i := strings.LastIndex(base, ".")
-	if i < 0 {
-		return
-	}
-	pid, err := strconv.ParseInt(base[i+1:], 16, 64)
-	if err != nil {
-		return
-	}
-	iswork = true
-	isold = pid != t.uxprocess.pid
-	return
 }
 
 // create local directories to test multiple fspaths

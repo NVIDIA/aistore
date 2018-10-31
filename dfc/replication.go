@@ -323,7 +323,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		accessTime    time.Time
 	)
 	httpr := req.httpReq
-	putfqn := r.t.fqn2workfile(req.fqn)
+	putfqn := cluster.GenContentFQN(req.fqn, cluster.DefaultWorkfileType)
 	bucket, object, err := r.t.fqn2bckobj(req.fqn)
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
@@ -86,7 +87,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 	if osfi.IsDir() {
 		return nil
 	}
-	if isWork, isOld := rcksctx.t.isworkfile(fqn); isWork && !isOld {
+	if spec, info := cluster.FileSpec(fqn); info != nil && (!spec.PermToProcess() || info.Old) {
 		return nil
 	}
 

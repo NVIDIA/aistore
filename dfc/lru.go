@@ -108,8 +108,9 @@ func (lctx *lructx) onelru(wg *sync.WaitGroup) {
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	var (
-		iswork, isold bool
-		xlru, h       = lctx.xlru, lctx.heap
+		spec    cluster.ContentResolver
+		info    *cluster.ContentInfo
+		xlru, h = lctx.xlru, lctx.heap
 	)
 	if err != nil {
 		glog.Errorf("invoked with err: %v", err)
@@ -118,10 +119,8 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if iswork, isold = lctx.t.isworkfile(fqn); iswork {
-		if !isold {
-			return nil
-		}
+	if spec, info = cluster.FileSpec(fqn); spec != nil && !spec.PermToEvict() && !info.Old {
+		return nil
 	}
 	lctx.thrparams.fqn = fqn
 	lctx.thrctx.throttle(&lctx.thrparams)
@@ -147,7 +146,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	atime, mtime, stat := getAmTimes(osfi)
-	if isold {
+	if info.Old {
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
 		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		return nil
@@ -208,10 +207,9 @@ func (lctx *lructx) evict() error {
 	)
 	for _, fi := range lctx.oldwork {
 		if t.isRebalancing() {
-			iswork, _ := t.isworkfile(fi.fqn)
 			_, _, err := t.fqn2bckobj(fi.fqn)
 			// keep a copy of a rebalanced file while rebalance is running
-			if !iswork && err != nil {
+			if spec, _ := cluster.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
 				continue
 			}
 		}

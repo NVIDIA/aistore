@@ -250,7 +250,7 @@ func dfcinit() {
 			}
 		}
 
-		fshc := newFSHC(fs.Mountpaths, &ctx.config.FSHC, t.fqn2workfile)
+		fshc := newFSHC(fs.Mountpaths, &ctx.config.FSHC)
 		ctx.rg.add(fshc, xfshc)
 		t.fsprg.add(fshc)
 

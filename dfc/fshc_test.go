@@ -22,10 +22,6 @@ func testMemInit(name string) {
 	_ = gmem2.Init(false /* ignore init-time errors */)
 }
 
-func testTmpFileName(fname string) string {
-	return fname + "-tmp"
-}
-
 func testCheckerMountPaths() *fs.MountedFS {
 	cmn.CreateDir(fsCheckerTmpDir)
 	cmn.CreateDir(fsCheckerTmpDir + "/1")
@@ -74,7 +70,7 @@ func testCheckerCleanup() {
 
 func TestFSCheckerMain(t *testing.T) {
 	testMemInit("fshctest")
-	fshc := newFSHC(testCheckerMountPaths(), testCheckerConfig(), testTmpFileName)
+	fshc := newFSHC(testCheckerMountPaths(), testCheckerConfig())
 
 	if fshc == nil {
 		t.Error("Failed to create fshc")

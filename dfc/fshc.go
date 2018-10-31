@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -45,9 +46,8 @@ type (
 		mpathCheckers map[string]*mountpathChecker
 
 		// pointers to common data
-		config         *fshcconf
-		mountpaths     *fs.MountedFS
-		fnMakeTempName func(string) string
+		config     *fshcconf
+		mountpaths *fs.MountedFS
 
 		// listener is notified in case of a mountpath is disabled
 		dispatcher fspathDispatcher
@@ -156,15 +156,14 @@ func newMountpathChecker(mpath string) *mountpathChecker {
 	}
 }
 
-func newFSHC(mounts *fs.MountedFS, conf *fshcconf, f func(string) string) *fshc {
+func newFSHC(mounts *fs.MountedFS, conf *fshcconf) *fshc {
 	return &fshc{
-		mountpaths:     mounts,
-		fnMakeTempName: f,
-		config:         conf,
-		stopCh:         make(chan struct{}, 4),
-		fileListCh:     make(chan string, 32),
-		reqCh:          make(chan fshcReq),
-		mpathCheckers:  make(map[string]*mountpathChecker),
+		mountpaths:    mounts,
+		config:        conf,
+		stopCh:        make(chan struct{}, 4),
+		fileListCh:    make(chan string, 32),
+		reqCh:         make(chan fshcReq),
+		mpathCheckers: make(map[string]*mountpathChecker),
 	}
 }
 
@@ -311,7 +310,7 @@ func (f *fshc) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 			glog.Errorf("Failed to clean up temporary directory: %v", err)
 		}
 	}()
-	tmpfilename := f.fnMakeTempName(filepath.Join(tmpdir, fshcNameTemplate))
+	tmpfilename := cluster.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), cluster.DefaultWorkfileType)
 	tmpfile, err := os.OpenFile(tmpfilename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		glog.Errorf("Failed to create temporary file: %v", err)
