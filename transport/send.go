@@ -61,6 +61,7 @@ type (
 		workCh   chan obj      // next object to stream
 		lastCh   chan struct{} // end of stream
 		stopCh   chan struct{} // stop/abort stream
+		postCh   chan struct{} // expired => posted transition: new HTTP/TCP session
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
 			start   int64         // to support idle stats
@@ -171,6 +172,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 
 	s.lastCh = make(chan struct{}, 1)
 	s.stopCh = make(chan struct{}, 1)
+	s.postCh = make(chan struct{}, 1)
 	s.maxheader = make([]byte, MaxHeaderSize)
 	s.time.idle = time.NewTimer(s.time.idleOut)
 	s.time.idle.Stop()
@@ -198,6 +200,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback) {
 		if bool(glog.V(4)) || debug {
 			glog.Infof("%s expired => posted", s.lid)
 		}
+		s.postCh <- struct{}{}
 	}
 	s.workCh <- obj{hdr, reader, callback}
 }
@@ -211,6 +214,7 @@ func (s *Stream) Fin() {
 	s.workCh <- obj{hdr: Header{Dsize: lastMarker}}
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
 		glog.Infof("%s (expired => posted) to handle Fin", s.lid)
+		s.postCh <- struct{}{}
 	}
 	s.wg.Wait() // synchronous termination
 }
@@ -270,16 +274,10 @@ forever:
 			case <-s.stopCh:
 				glog.Infof("%s stopped", s.lid)
 				break forever
-			default:
-				if v := atomic.LoadInt64(&s.lifecycle); v != expired {
-					if debug {
-						common.Assert(v == posted)
-					}
-					break newreq // new post after timeout: initiate new HTTP/TCP session
+			case <-s.postCh:
+				if atomic.LoadInt64(&s.lifecycle) == posted {
+					break newreq // new post after timeout: initiate a new HTTP/TCP session
 				}
-				// polling tradeoff: CPU usage vs the first object's send latency
-				// FIXME: use sync.Cond?
-				time.Sleep(time.Millisecond * 200)
 			}
 		}
 		delta := int64(time.Since(begin))

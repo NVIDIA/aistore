@@ -118,9 +118,9 @@ Stats struct {
 
 ```
 
-On the receive side, the `EndpointStats` map contains all the `transport.Stats` structures indexed by (unique) stream IDs for currently active streams.
+On the receive side, the `EndpointStats` map contains all the `transport.Stats` structures indexed by (unique) stream IDs for the currently active streams.
 
-For usage examples and details, please see [tests](transport/transport_test.go) in the local directory.
+For usage examples and details, please see [tests](transport_test.go) in the local directory.
 
 ## Testing
 
@@ -134,7 +134,7 @@ go test -v -logtostderr=true
 DFC_STREAM_DEBUG=1 go test -v -run=Multi
 ```
 
-For more examples, please see [tests](transport/transport_test.go) in this directory.
+For more examples, please see [tests](transport_test.go) in this directory.
 
 
 ## Environment
