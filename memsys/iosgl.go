@@ -9,6 +9,7 @@ package memsys
 
 import (
 	"errors"
+	"hash"
 	"io"
 
 	"github.com/NVIDIA/dfcpub/common"
@@ -21,6 +22,7 @@ type (
 		slab *Slab2
 		woff int64 // stream
 		roff int64
+		hash hash.Hash64
 	}
 	// uses the underlying SGL to implement io.ReadWriteCloser + io.Seeker
 	Reader struct {
@@ -64,7 +66,14 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 	for wlen > 0 {
 		size := common.MinI64(z.slab.Size()-off, int64(wlen))
 		buf := z.sgl[idx]
-		copy(buf[off:], p[poff:poff+int(size)])
+		src := p[poff : poff+int(size)]
+		copy(buf[off:], src) // assert(n == size)
+		if z.hash != nil {
+			_, err = z.hash.Write(src) // assert(n == size)
+			if err != nil {
+				return poff, err
+			}
+		}
 		z.woff += size
 		idx++
 		off = 0
@@ -72,6 +81,13 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 		poff += int(size)
 	}
 	return len(p), nil
+}
+
+func (z *SGL) ComputeHash() uint64 {
+	if z.hash == nil {
+		return 0
+	}
+	return z.hash.Sum64()
 }
 
 func (z *SGL) Read(b []byte) (n int, err error) {
@@ -100,6 +116,19 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64
 	}
 	if n < len(b) {
 		err = io.EOF
+	}
+	return
+}
+
+// ReadAll is a convenience method and an optimized alternative to the generic
+// ioutil.ReadAll. Similarly to the latter, a successful call returns err == nil,
+// not err == EOF. The difference, though, is that the method always succeeds.
+// NOTE: intended usage includes testing code and debug.
+func (z *SGL) ReadAll() (b []byte, err error) {
+	b = make([]byte, z.Size())
+	for off, i := 0, 0; i < len(z.sgl); i++ {
+		n := copy(b[off:], z.sgl[i])
+		off += n
 	}
 	return
 }

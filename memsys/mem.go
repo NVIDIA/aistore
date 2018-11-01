@@ -10,6 +10,7 @@ package memsys
 import (
 	"flag"
 	"fmt"
+	"hash"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -174,6 +175,12 @@ func (r *Mem2) NewSGL(immediateSize int64 /* size to allocate at construction ti
 	}
 	slab.muget.Unlock()
 	return &SGL{sgl: sgl, slab: slab}
+}
+
+func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64) *SGL {
+	sgl := r.NewSGL(immediateSize)
+	sgl.hash = hash
+	return sgl
 }
 
 //
