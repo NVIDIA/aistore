@@ -437,7 +437,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// bucket-level checksumming should override global
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
-		cksumcfg = &bucketProps.CksumConf
+		cksumcfg = &bucketProps.CksumConfig
 	}
 
 	// existence, access & versioning
@@ -1004,7 +1004,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		errstr      string
 		errcode     int
 		bucketprops common.SimpleKVs
-		cksumcfg    *api.Cksumconfig
+		cksumcfg    *api.CksumConfig
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
 	if err != nil {
@@ -1055,7 +1055,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	// include checksumming settings in the response
 	cksumcfg = &ctx.config.Cksum
 	if defined {
-		cksumcfg = &props.CksumConf
+		cksumcfg = &props.CksumConfig
 	}
 
 	// include lru settings in the response
@@ -1066,12 +1066,12 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add(api.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
 	w.Header().Add(api.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
 	w.Header().Add(api.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
-	w.Header().Add(api.HeaderBucketLRULowWM, strconv.FormatUint(uint64(props.LRUProps.LowWM), 10))
-	w.Header().Add(api.HeaderBucketLRUHighWM, strconv.FormatUint(uint64(props.LRUProps.HighWM), 10))
-	w.Header().Add(api.HeaderBucketAtimeCacheMax, strconv.FormatUint(props.LRUProps.AtimeCacheMax, 10))
-	w.Header().Add(api.HeaderBucketDontEvictTime, props.LRUProps.DontEvictTimeStr)
-	w.Header().Add(api.HeaderBucketCapUpdTime, props.LRUProps.CapacityUpdTimeStr)
-	w.Header().Add(api.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUProps.LRUEnabled))
+	w.Header().Add(api.HeaderBucketLRULowWM, strconv.FormatUint(uint64(props.LowWM), 10))
+	w.Header().Add(api.HeaderBucketLRUHighWM, strconv.FormatUint(uint64(props.HighWM), 10))
+	w.Header().Add(api.HeaderBucketAtimeCacheMax, strconv.FormatUint(props.AtimeCacheMax, 10))
+	w.Header().Add(api.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
+	w.Header().Add(api.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
+	w.Header().Add(api.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1478,7 +1478,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	// check if bucket-level checksumming configuration should override cluster-level configuration
 	bucketProps, _, defined := bucketmd.propsAndChecksum(bucket)
 	if defined {
-		cksumcfg = &bucketProps.CksumConf
+		cksumcfg = &bucketProps.CksumConfig
 	}
 
 	// existence, access & versioning
@@ -2018,7 +2018,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	putfqn := t.fqn2workfile(fqn)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
-		cksumcfg = &bucketProps.CksumConf
+		cksumcfg = &bucketProps.CksumConfig
 	}
 	hdhobj = newcksumvalue(r.Header.Get(api.HeaderDFCChecksumType), r.Header.Get(api.HeaderDFCChecksumVal))
 
@@ -2508,7 +2508,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	islocal := bucketmd.islocal(bucket)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
-		cksumcfg = &bucketProps.CksumConf
+		cksumcfg = &bucketProps.CksumConfig
 	}
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
@@ -2992,7 +2992,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	// try to override cksum config with bucket-level config
 	if bucket, _, err := t.fqn2bckobj(fqn); err == nil {
 		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
-			cksumcfg = &bucketProps.CksumConf
+			cksumcfg = &bucketProps.CksumConfig
 		}
 	}
 

@@ -136,24 +136,6 @@ type InvalidCksumError struct {
 	ActualHash   string
 }
 
-type BucketProps struct {
-	CloudProvider   string
-	Versioning      string
-	NextTierURL     string
-	ReadPolicy      string
-	WritePolicy     string
-	ChecksumType    string
-	ValidateColdGet string
-	ValidateWarmGet string
-	ValidateRange   string
-	LowWM           string
-	HighWM          string
-	AtimeCacheMax   string
-	DontEvictTime   string
-	CapUpdTime      string
-	LRUEnabled      string
-}
-
 type ObjectProps struct {
 	Size    int
 	Version string
@@ -263,21 +245,9 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan erro
 	}
 	req.URL.RawQuery = query.Encode() // golang handles query == nil
 
-	tr := &traceableTransport{
-		transport: transport,
-		tsBegin:   time.Now(),
-	}
-	trace := &httptrace.ClientTrace{
-		GotConn:              tr.GotConn,
-		WroteHeaders:         tr.WroteHeaders,
-		WroteRequest:         tr.WroteRequest,
-		GotFirstResponseByte: tr.GotFirstResponseByte,
-	}
-
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
-	client := &http.Client{Transport: tr}
-	resp, err := client.Do(req)
+	resp, err := tracedClient.Do(req)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -362,7 +332,7 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errCh chan
 		return err
 	}
 
-	r, httperr := client.Do(req)
+	r, httperr := HTTPClient.Do(req)
 	if httperr != nil {
 		err = fmt.Errorf("Failed to delete file, err: %v", httperr)
 		emitError(nil, err, errCh)
@@ -405,13 +375,13 @@ func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) 
 			return nil, err
 		}
 		if len(injson) == 0 {
-			resp, err = client.Get(url)
+			resp, err = HTTPClient.Get(url)
 		} else {
 			injson, err = json.Marshal(api.ActionMsg{Action: api.ActListObjects, Value: msg})
 			if err != nil {
 				return nil, err
 			}
-			resp, err = client.Post(url, "application/json", bytes.NewBuffer(injson))
+			resp, err = HTTPClient.Post(url, "application/json", bytes.NewBuffer(injson))
 		}
 
 		if err != nil {
@@ -528,45 +498,9 @@ func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline
 	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg)
 }
 
-func HeadBucket(proxyURL, bucket string) (*BucketProps, error) {
-	r, err := client.Head(proxyURL + common.URLPath(api.Version, api.Buckets, bucket))
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		r.Body.Close()
-	}()
-	if r.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"ioutil.ReadAll falled on response body, err: %v, HTTP status code: %d", err, r.StatusCode)
-		}
-		return nil, fmt.Errorf("head bucket: %s failed, HTTP status code: %d, HTTP response body: %s",
-			bucket, r.StatusCode, string(b))
-	}
-	return &BucketProps{
-		CloudProvider:   r.Header.Get(api.HeaderCloudProvider),
-		Versioning:      r.Header.Get(api.HeaderVersioning),
-		NextTierURL:     r.Header.Get(api.HeaderNextTierURL),
-		ReadPolicy:      r.Header.Get(api.HeaderReadPolicy),
-		WritePolicy:     r.Header.Get(api.HeaderWritePolicy),
-		ChecksumType:    r.Header.Get(api.HeaderBucketChecksumType),
-		ValidateColdGet: r.Header.Get(api.HeaderBucketValidateColdGet),
-		ValidateWarmGet: r.Header.Get(api.HeaderBucketValidateWarmGet),
-		ValidateRange:   r.Header.Get(api.HeaderBucketValidateRange),
-		LowWM:           r.Header.Get(api.HeaderBucketLRULowWM),
-		HighWM:          r.Header.Get(api.HeaderBucketLRUHighWM),
-		AtimeCacheMax:   r.Header.Get(api.HeaderBucketAtimeCacheMax),
-		DontEvictTime:   r.Header.Get(api.HeaderBucketDontEvictTime),
-		CapUpdTime:      r.Header.Get(api.HeaderBucketCapUpdTime),
-		LRUEnabled:      r.Header.Get(api.HeaderBucketLRUEnabled),
-	}, nil
-}
-
 func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err error) {
 	objProps = &ObjectProps{}
-	r, err := client.Head(proxyURL + common.URLPath(api.Version, api.Objects, bucket, objname))
+	r, err := HTTPClient.Head(proxyURL + common.URLPath(api.Version, api.Objects, bucket, objname))
 	if err != nil {
 		return
 	}
@@ -593,20 +527,6 @@ func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err er
 	return
 }
 
-func SetBucketProps(proxyURL, bucket string, props api.BucketProps) error {
-	var url = proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
-
-	if props.CksumConf.Checksum == "" {
-		props.CksumConf.Checksum = api.ChecksumInherit
-	}
-
-	b, err := json.Marshal(api.ActionMsg{Action: api.ActSetProps, Value: props})
-	if err != nil {
-		return err
-	}
-	return HTTPRequest(http.MethodPut, url, NewBytesReader(b))
-}
-
 func ResetBucketProps(proxyURL, bucket string) error {
 	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
 
@@ -619,7 +539,7 @@ func ResetBucketProps(proxyURL, bucket string) error {
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
 	url := proxyURL + common.URLPath(api.Version, api.Objects, bucket, objname) + "?" + api.URLParamCheckCached + "=true"
-	r, err := client.Head(url)
+	r, err := HTTPClient.Head(url)
 	if err != nil {
 		return false, err
 	}
@@ -671,7 +591,7 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 		req.Header.Set(api.HeaderDFCChecksumVal, reader.XXHash())
 	}
 
-	resp, err := client.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("Failed to PUT, err: %v", err)
 	}
@@ -840,19 +760,9 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	url := server + common.URLPath(api.Version, api.Daemon)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.URL.RawQuery = GetWhatRawQuery(api.GetWhatConfig, "")
-	tr := &traceableTransport{
-		transport: transport,
-		tsBegin:   time.Now(),
-	}
-	trace := &httptrace.ClientTrace{
-		GotConn: tr.GotConn,
-	}
-
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-	client := &http.Client{
-		Transport: tr,
-	}
-	resp, err := client.Do(req)
+
+	resp, err := tracedClient.Do(req)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -904,7 +814,7 @@ func ListBuckets(proxyURL string, local bool) (*api.BucketNames, error) {
 func GetClusterMap(url string) (cluster.Smap, error) {
 	q := GetWhatRawQuery(api.GetWhatSmap, "")
 	requestURL := fmt.Sprintf("%s?%s", url+common.URLPath(api.Version, api.Daemon), q)
-	r, err := client.Get(requestURL)
+	r, err := HTTPClient.Get(requestURL)
 	defer func() {
 		if r != nil {
 			r.Body.Close()
@@ -988,7 +898,7 @@ func HTTPRequestWithResp(method string, url string, msg Reader, headers ...map[s
 			req.Header.Set(key, value)
 		}
 	}
-	resp, err := client.Do(req)
+	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to %s, err: %v", method, err)
 	}
@@ -1061,7 +971,7 @@ func TargetMountpaths(targetUrl string) (*api.MountpathList, error) {
 	q := GetWhatRawQuery(api.GetWhatMountpaths, "")
 	url := fmt.Sprintf("%s?%s", targetUrl+common.URLPath(api.Version, api.Daemon), q)
 
-	resp, err := client.Get(url)
+	resp, err := HTTPClient.Get(url)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -1219,7 +1129,7 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
 	q := GetWhatRawQuery(api.GetWhatXaction, kind)
 	url := fmt.Sprintf("%s?%s", proxyURL+common.URLPath(api.Version, api.Cluster), q)
-	r, err := client.Get(url)
+	r, err := HTTPClient.Get(url)
 	defer func() {
 		if r != nil {
 			r.Body.Close()

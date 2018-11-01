@@ -67,7 +67,6 @@ var (
 		"highwm":            fmt.Sprintf("%d", HighWaterMark),
 		"lru_enabled":       "true",
 	}
-	httpclient = &http.Client{}
 )
 
 func TestLocalListBucketGetTargetURL(t *testing.T) {
@@ -554,7 +553,7 @@ func TestRebalance(t *testing.T) {
 	bytesSentOrig := make(map[string]int64)
 	filesRecvOrig := make(map[string]int64)
 	bytesRecvOrig := make(map[string]int64)
-	stats := getClusterStats(httpclient, t, proxyURL)
+	stats := getClusterStats(t, proxyURL)
 	for k, v := range stats.Target {
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
 			v.Core.Tracker["tx.size"].Value, v.Core.Tracker["tx.n"].Value,
@@ -624,7 +623,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 6. statistics
 	//
-	stats = getClusterStats(httpclient, t, proxyURL)
+	stats = getClusterStats(t, proxyURL)
 	var bsent, fsent, brecv, frecv int64
 	for k, v := range stats.Target {
 		bsent += v.Core.Tracker["tx.size"].Value - bytesSentOrig[k]
@@ -660,10 +659,10 @@ func TestRebalance(t *testing.T) {
 func TestGetClusterStats(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	smap := getClusterMap(t, proxyURL)
-	stats := getClusterStats(httpclient, t, proxyURL)
+	stats := getClusterStats(t, proxyURL)
 
 	for k, v := range stats.Target {
-		tdstats := getDaemonStats(httpclient, t, smap.Tmap[k].PublicNet.DirectURL)
+		tdstats := getDaemonStats(t, smap.Tmap[k].PublicNet.DirectURL)
 		tdcapstats := tdstats["capacity"].(map[string]interface{})
 		dcapstats := v.Capacity
 		for fspath, fstats := range dcapstats {
@@ -694,15 +693,15 @@ func TestGetClusterStats(t *testing.T) {
 
 func TestConfig(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	oconfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	oconfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
-		setConfig(k, v, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig(k, v, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 
-	nconfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	nconfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nperiodic := nconfig["periodic"].(map[string]interface{})
 
@@ -711,21 +710,21 @@ func TestConfig(t *testing.T) {
 			nperiodic["stats_time"], configRegression["stats_time"])
 	} else {
 		o := operiodic["stats_time"].(string)
-		setConfig("stats_time", o, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("stats_time", o, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
 	} else {
 		o := olruconfig["dont_evict_time"].(string)
-		setConfig("dont_evict_time", o, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("dont_evict_time", o, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
 			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
 	} else {
 		o := olruconfig["capacity_upd_time"].(string)
-		setConfig("capacity_upd_time", o, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("capacity_upd_time", o, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -734,7 +733,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["highwm"], hw)
 	} else {
 		o := olruconfig["highwm"].(float64)
-		setConfig("highwm", strconv.Itoa(int(o)), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("highwm", strconv.Itoa(int(o)), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -743,7 +742,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["lowwm"], lw)
 	} else {
 		o := olruconfig["lowwm"].(float64)
-		setConfig("lowwm", strconv.Itoa(int(o)), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("lowwm", strconv.Itoa(int(o)), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)
@@ -752,7 +751,7 @@ func TestConfig(t *testing.T) {
 			nlruconfig["lru_enabled"], pt)
 	} else {
 		o := olruconfig["lru_enabled"].(bool)
-		setConfig("lru_enabled", strconv.FormatBool(o), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("lru_enabled", strconv.FormatBool(o), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 }
 
@@ -783,7 +782,7 @@ func TestLRU(t *testing.T) {
 	bytesEvictedOrig := make(map[string]int64)
 	filesEvictedOrig := make(map[string]int64)
 	for k, di := range smap.Tmap {
-		cfg := getConfig(di.PublicNet.DirectURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+		cfg := getConfig(di.PublicNet.DirectURL+common.URLPath(api.Version, api.Daemon), t)
 		lrucfg := cfg["lru_config"].(map[string]interface{})
 		lwms[k] = lrucfg["lowwm"]
 		hwms[k] = lrucfg["highwm"]
@@ -794,7 +793,7 @@ func TestLRU(t *testing.T) {
 	//
 	// find out min usage %% across all targets
 	//
-	stats := getClusterStats(httpclient, t, proxyURL)
+	stats := getClusterStats(t, proxyURL)
 	for k, v := range stats.Target {
 		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Tracker["lru.evict.size"].Value, v.Core.Tracker["lru.evict.n"].Value
 		for _, c := range v.Capacity {
@@ -811,7 +810,7 @@ func TestLRU(t *testing.T) {
 		t.Skip("skipping - cannot test LRU.")
 		return
 	}
-	oconfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	oconfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	if t.Failed() {
 		return
 	}
@@ -821,13 +820,13 @@ func TestLRU(t *testing.T) {
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 	defer func() {
-		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		for k, di := range smap.Tmap {
-			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
-			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+common.URLPath(api.Version, api.Daemon), t)
+			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+common.URLPath(api.Version, api.Daemon), t)
 		}
 	}()
 	//
@@ -839,16 +838,16 @@ func TestLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
-	setConfig("dont_evict_time", dontevicttimestr, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-	setConfig("capacity_upd_time", capacityupdtimestr, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("dont_evict_time", dontevicttimestr, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("capacity_upd_time", capacityupdtimestr, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	if t.Failed() {
 		return
 	}
-	setConfig("lowwm", fmt.Sprint(lowwm), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("lowwm", fmt.Sprint(lowwm), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	if t.Failed() {
 		return
 	}
-	setConfig("highwm", fmt.Sprint(highwm), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("highwm", fmt.Sprint(highwm), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	if t.Failed() {
 		return
 	}
@@ -858,7 +857,7 @@ func TestLRU(t *testing.T) {
 	//
 	// results
 	//
-	stats = getClusterStats(httpclient, t, proxyURL)
+	stats = getClusterStats(t, proxyURL)
 	testFsPaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := v.Core.Tracker["lru.evict.size"].Value - bytesEvictedOrig[k]
@@ -895,7 +894,7 @@ func TestPrefetchList(t *testing.T) {
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
+		stats := getDaemonStats(t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
@@ -925,7 +924,7 @@ func TestPrefetchList(t *testing.T) {
 
 	// 5. Ensure that all the prefetches occurred.
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
+		stats := getDaemonStats(t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
@@ -1003,7 +1002,7 @@ func TestPrefetchRange(t *testing.T) {
 	// 1. Get initial number of prefetches
 	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
+		stats := getDaemonStats(t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
@@ -1059,7 +1058,7 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 5. Ensure that all the prefetches occurred
 	for _, v := range smap.Tmap {
-		stats := getDaemonStats(httpclient, t, v.PublicNet.DirectURL)
+		stats := getDaemonStats(t, v.PublicNet.DirectURL)
 		corestats := stats["core"].(map[string]interface{})
 		npf, err := corestats["pre.n"].(json.Number).Int64()
 		if err != nil {
@@ -1404,10 +1403,10 @@ waitloop:
 	ticker.Stop()
 }
 
-func getClusterStats(httpclient *http.Client, t *testing.T, proxyURL string) (stats dfc.ClusterStats) {
+func getClusterStats(t *testing.T, proxyURL string) (stats dfc.ClusterStats) {
 	q := tutils.GetWhatRawQuery(api.GetWhatStats, "")
 	url := fmt.Sprintf("%s?%s", proxyURL+common.URLPath(api.Version, api.Cluster), q)
-	resp, err := httpclient.Get(url)
+	resp, err := tutils.BaseHTTPClient.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to perform get, err = %v", err)
 	}
@@ -1430,10 +1429,10 @@ func getClusterStats(httpclient *http.Client, t *testing.T, proxyURL string) (st
 	return
 }
 
-func getDaemonStats(httpclient *http.Client, t *testing.T, url string) (stats map[string]interface{}) {
+func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 	q := tutils.GetWhatRawQuery(api.GetWhatStats, "")
 	url = fmt.Sprintf("%s?%s", url+common.URLPath(api.Version, api.Daemon), q)
-	resp, err := httpclient.Get(url)
+	resp, err := tutils.BaseHTTPClient.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to perform get, err = %v", err)
 	}
@@ -1465,10 +1464,10 @@ func getClusterMap(t *testing.T, URL string) cluster.Smap {
 	return smap
 }
 
-func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[string]interface{}) {
+func getConfig(URL string, t *testing.T) (dfcfg map[string]interface{}) {
 	q := tutils.GetWhatRawQuery(api.GetWhatConfig, "")
 	url := fmt.Sprintf("%s?%s", URL, q)
-	resp, err := httpclient.Get(url)
+	resp, err := tutils.BaseHTTPClient.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to perform get, err = %v", err)
 	}
@@ -1495,7 +1494,7 @@ func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[str
 	return
 }
 
-func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
+func setConfig(name, value, URL string, t *testing.T) {
 	SetConfigMsg := api.ActionMsg{Action: api.ActSetConfig,
 		Name:  name,
 		Value: value,
@@ -1511,7 +1510,7 @@ func setConfig(name, value, URL string, httpclient *http.Client, t *testing.T) {
 		t.Errorf("Failed to create request: %v", err)
 		return
 	}
-	r, err := httpclient.Do(req)
+	r, err := tutils.BaseHTTPClient.Do(req)
 	if err != nil {
 		t.Fatalf("Failed to perform request, err = %v", err)
 	}

@@ -46,11 +46,11 @@ type dfconfig struct {
 	Periodic         periodic          `json:"periodic"`
 	Timeout          timeoutconfig     `json:"timeout"`
 	Proxy            proxyconfig       `json:"proxyconfig"`
-	LRU              api.Lruconfig     `json:"lru_config"`
+	LRU              api.LRUConfig     `json:"lru_config"`
 	Xaction          xactionConfig     `json:"xaction_config"`
 	Rebalance        rebalanceconf     `json:"rebalance_conf"`
 	Replication      replicationconfig `json:"replication"`
-	Cksum            api.Cksumconfig   `json:"cksum_config"`
+	Cksum            api.CksumConfig   `json:"cksum_config"`
 	Ver              versionconfig     `json:"version_config"`
 	FSpaths          common.SimpleKVs  `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`

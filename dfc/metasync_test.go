@@ -138,23 +138,23 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd.add("bucket1", true, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://foo.com",
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, api.BucketProps{
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket3", false, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket4", false, api.BucketProps{
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
@@ -560,14 +560,14 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail target and retry
 	bucketmd.add("bucket1", true, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})

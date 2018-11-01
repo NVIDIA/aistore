@@ -16,7 +16,7 @@ import (
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged int64) {
-	stats := getClusterStats(httpclient, t, proxyURL)
+	stats := getClusterStats(t, proxyURL)
 	objChanged = 0
 	bytesChanged = 0
 
@@ -418,32 +418,32 @@ func propsMainTest(t *testing.T, versioning string) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	chkVersion := true
 
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	versionCfg := config["version_config"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("versioning", versioning, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		}
 		if oldVersioning != versioning {
-			setConfig("versioning", oldVersioning, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+			setConfig("versioning", oldVersioning, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		}
 		if created {
 			destroyLocalBucket(t, proxyURL, clibucket)
 		}
 	}()
 
-	props, err := tutils.HeadBucket(proxyURL, clibucket)
+	props, err := api.HeadBucket(tutils.HTTPClient, proxyURL, clibucket)
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}

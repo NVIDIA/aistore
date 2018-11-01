@@ -1077,7 +1077,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	tutils.Logf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
 	origURL := proxyconf["original_url"].(string)
 

@@ -30,7 +30,7 @@ func (p *proxyServer) deleteBucket(bucket string) error {
 
 func (p *proxyServer) doesBucketExist(bucket string) bool {
 	// note: webdav works with local bucket only (at least for now)
-	// _, err := tutils.HeadBucket(p.url, bucket)
+	// _, err := api.HeadBucket(p.url, bucket)
 	// return err == nil
 
 	bns, err := tutils.ListBuckets(p.url, true /* local */)

@@ -13,24 +13,10 @@ import (
 )
 
 func TestResetBucketProps(t *testing.T) {
-	const (
-		nextTierURL                        = "http://foo.com"
-		validateColdGetTestSetting         = false
-		validateWarmGetTestSetting         = true
-		enableReadRangeChecksumTestSetting = true
-
-		lowWMTestSetting           = (uint32)(10)
-		highWMTestSetting          = (uint32)(50)
-		atimeCacheMaxTestSetting   = (uint64)(9999)
-		dontEvictTimeTestSetting   = "1m"
-		capacityUpdTimeTestSetting = "2m"
-		lruEnabledTestSetting      = false
-	)
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
-		bucketProps  api.BucketProps
 		globalProps  api.BucketProps
-		globalConfig = getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+		globalConfig = getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 		cksumConfig  = globalConfig["cksum_config"].(map[string]interface{})
 		lruConfig    = globalConfig["lru_config"].(map[string]interface{})
 	)
@@ -38,36 +24,26 @@ func TestResetBucketProps(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CloudProvider = api.ProviderDFC
-	bucketProps.NextTierURL = nextTierURL
-	bucketProps.ReadPolicy = api.RWPolicyNextTier
-	bucketProps.WritePolicy = api.RWPolicyNextTier
-	bucketProps.CksumConf.Checksum = api.ChecksumNone
-	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
-	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
-	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
-	bucketProps.LRUProps.LowWM = lowWMTestSetting
-	bucketProps.LRUProps.HighWM = highWMTestSetting
-	bucketProps.LRUProps.AtimeCacheMax = atimeCacheMaxTestSetting
-	bucketProps.LRUProps.DontEvictTimeStr = dontEvictTimeTestSetting
-	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
-	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
+	bucketProps := defaultBucketProps()
+	bucketProps.Checksum = api.ChecksumNone
+	bucketProps.ValidateWarmGet = true
+	bucketProps.EnableReadRangeChecksum = true
 
 	globalProps.CloudProvider = api.ProviderDFC
-	globalProps.CksumConf.Checksum = cksumConfig["checksum"].(string)
-	globalProps.CksumConf.ValidateColdGet = cksumConfig["validate_checksum_cold_get"].(bool)
-	globalProps.CksumConf.ValidateWarmGet = cksumConfig["validate_checksum_warm_get"].(bool)
-	globalProps.CksumConf.EnableReadRangeChecksum = cksumConfig["enable_read_range_checksum"].(bool)
-	globalProps.LRUProps.LowWM = uint32(lruConfig["lowwm"].(float64))
-	globalProps.LRUProps.HighWM = uint32(lruConfig["highwm"].(float64))
-	globalProps.LRUProps.AtimeCacheMax = uint64(lruConfig["atime_cache_max"].(float64))
-	globalProps.LRUProps.DontEvictTimeStr = lruConfig["dont_evict_time"].(string)
-	globalProps.LRUProps.CapacityUpdTimeStr = lruConfig["capacity_upd_time"].(string)
-	globalProps.LRUProps.LRUEnabled = lruConfig["lru_enabled"].(bool)
-	err := tutils.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
+	globalProps.Checksum = cksumConfig["checksum"].(string)
+	globalProps.ValidateColdGet = cksumConfig["validate_checksum_cold_get"].(bool)
+	globalProps.ValidateWarmGet = cksumConfig["validate_checksum_warm_get"].(bool)
+	globalProps.EnableReadRangeChecksum = cksumConfig["enable_read_range_checksum"].(bool)
+	globalProps.LowWM = uint32(lruConfig["lowwm"].(float64))
+	globalProps.HighWM = uint32(lruConfig["highwm"].(float64))
+	globalProps.AtimeCacheMax = uint64(lruConfig["atime_cache_max"].(float64))
+	globalProps.DontEvictTimeStr = lruConfig["dont_evict_time"].(string)
+	globalProps.CapacityUpdTimeStr = lruConfig["capacity_upd_time"].(string)
+	globalProps.LRUEnabled = lruConfig["lru_enabled"].(bool)
+	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
-	p, err := tutils.HeadBucket(proxyURL, TestLocalBucketName)
+	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	// check that bucket props do get set
@@ -75,7 +51,7 @@ func TestResetBucketProps(t *testing.T) {
 	err = tutils.ResetBucketProps(proxyURL, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
-	p, err = tutils.HeadBucket(proxyURL, TestLocalBucketName)
+	p, err = api.HeadBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	// check that bucket props are reset
@@ -123,7 +99,7 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 
 	for _, url := range invalidDaemonURLs {
 		bucketProps.NextTierURL = url
-		if err = tutils.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps); err == nil {
+		if err = api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps); err == nil {
 			t.Fatalf("Setting the bucket's nextTierURL to daemon %q should fail, it is in the current cluster.", url)
 		}
 	}

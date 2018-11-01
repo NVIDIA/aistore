@@ -528,7 +528,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
@@ -546,7 +546,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	start := time.Now()
 	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
@@ -559,7 +559,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errCh, "get", t, false)
 	evictobjects(t, proxyURL, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -570,7 +570,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
 cleanup:
-	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	for _, fn := range fileslist {
 		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
@@ -585,91 +585,45 @@ cleanup:
 }
 
 func TestHeadLocalBucket(t *testing.T) {
-	const (
-		validateColdGetTestSetting         = false
-		validateWarmGetTestSetting         = true
-		enableReadRangeChecksumTestSetting = false
-		lowWMTestSetting                   = (uint32)(10)
-		highWMTestSetting                  = (uint32)(50)
-		atimeCacheMaxTestSetting           = (uint64)(9999)
-		dontEvictTimeTestSetting           = "1m"
-		capacityUpdTimeTestSetting         = "2m"
-		lruEnabledTestSetting              = true
-		nextTierURL                        = "http://foo.com"
-	)
 	var (
-		bucketProps api.BucketProps
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps.CloudProvider = api.ProviderDFC
-	bucketProps.NextTierURL = nextTierURL
-	bucketProps.ReadPolicy = api.RWPolicyNextTier
-	bucketProps.WritePolicy = api.RWPolicyNextTier
-	bucketProps.CksumConf.Checksum = api.ChecksumXXHash
-	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
-	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
-	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
-	bucketProps.LRUProps.LowWM = lowWMTestSetting
-	bucketProps.LRUProps.HighWM = highWMTestSetting
-	bucketProps.LRUProps.AtimeCacheMax = atimeCacheMaxTestSetting
-	bucketProps.LRUProps.DontEvictTimeStr = dontEvictTimeTestSetting
-	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
-	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
+	bucketProps := defaultBucketProps()
+	bucketProps.ValidateWarmGet = true
+	bucketProps.LRUEnabled = true
 
-	err := tutils.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
+	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
-	p, err := tutils.HeadBucket(proxyURL, TestLocalBucketName)
+	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	validateBucketProps(t, bucketProps, *p)
 }
 
 func TestHeadCloudBucket(t *testing.T) {
-	const (
-		nextTierURL                        = "http://foo.com"
-		validateColdGetTestSetting         = true
-		validateWarmGetTestSetting         = true
-		enableReadRangeChecksumTestSetting = false
-		lowWMTestSetting                   = (uint32)(10)
-		highWMTestSetting                  = (uint32)(50)
-		atimeCacheMaxTestSetting           = (uint64)(9999)
-		dontEvictTimeTestSetting           = "1m"
-		capacityUpdTimeTestSetting         = "2m"
-		lruEnabledTestSetting              = true
-	)
 	var (
-		bucketProps api.BucketProps
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestHeadCloudBucket requires a cloud bucket")
 	}
+	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = api.ProviderAmazon
-	bucketProps.NextTierURL = nextTierURL
-	bucketProps.ReadPolicy = api.RWPolicyCloud
-	bucketProps.WritePolicy = api.RWPolicyNextTier
-	bucketProps.CksumConf.Checksum = api.ChecksumXXHash
-	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
-	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
-	bucketProps.CksumConf.EnableReadRangeChecksum = enableReadRangeChecksumTestSetting
-	bucketProps.LRUProps.LowWM = lowWMTestSetting
-	bucketProps.LRUProps.HighWM = highWMTestSetting
-	bucketProps.LRUProps.AtimeCacheMax = atimeCacheMaxTestSetting
-	bucketProps.LRUProps.DontEvictTimeStr = dontEvictTimeTestSetting
-	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
-	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
+	bucketProps.ValidateWarmGet = true
+	bucketProps.ValidateColdGet = true
+	bucketProps.LRUEnabled = true
 
-	err := tutils.SetBucketProps(proxyURL, clibucket, bucketProps)
+	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	p, err := tutils.HeadBucket(proxyURL, clibucket)
+	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, clibucket)
 	tutils.CheckFatal(err, t)
 
 	versionModes := []string{api.VersionAll, api.VersionCloud, api.VersionLocal, api.VersionNone}
@@ -967,13 +921,13 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	url := proxyURL + common.URLPath(api.Version, api.Daemon)
-	config := getConfig(url, httpclient, t)
+	config := getConfig(url, t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
 	oldChecksum := checksumConfig["checksum"].(string)
 	if !oldWarmGet {
 		url := proxyURL + common.URLPath(api.Version, api.Cluster)
-		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), url, httpclient, t)
+		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), url, t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1010,7 +964,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	filepath.Walk(rootDir, fsWalkFunc)
-	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -1026,8 +980,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
-	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
 		if usingFile {
@@ -1093,7 +1047,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
 	oldChecksum := checksumConfig["checksum"].(string)
@@ -1110,7 +1064,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}
 
 	if !oldWarmGet {
-		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1137,7 +1091,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	// Test for none checksum algo
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
-	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -1154,8 +1108,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 cleanup:
 	// Restore old config
 	destroyLocalBucket(t, proxyURL, bucketName)
-	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	close(errCh)
 	close(fileNameCh)
 }
@@ -1199,7 +1153,7 @@ func TestRangeRead(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), httpclient, t)
+	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldEnableReadRangeChecksum := checksumConfig["enable_read_range_checksum"].(bool)
 
@@ -1207,7 +1161,7 @@ func TestRangeRead(t *testing.T) {
 	tutils.Logln("Testing valid cases.")
 	// Validate entire object checksum is being returned
 	if oldEnableReadRangeChecksum {
-		setConfig("enable_read_range_checksum", fmt.Sprint(false), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("enable_read_range_checksum", fmt.Sprint(false), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1216,7 +1170,7 @@ func TestRangeRead(t *testing.T) {
 
 	// Validate only range checksum is being returned
 	if !oldEnableReadRangeChecksum {
-		setConfig("enable_read_range_checksum", fmt.Sprint(true), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("enable_read_range_checksum", fmt.Sprint(true), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1242,7 +1196,7 @@ cleanup:
 	go tutils.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
-	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	close(errCh)
 	close(fileNameCh)
 
@@ -1372,7 +1326,7 @@ func Test_checksum(t *testing.T) {
 
 	// Get Current Config
 	url := proxyURL + common.URLPath(api.Version, api.Daemon)
-	config := getConfig(url, httpclient, t)
+	config := getConfig(url, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
@@ -1394,14 +1348,14 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	// Disable checkum
 	if ochksum != api.ChecksumNone {
-		setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_checksum_cold_get", fmt.Sprint("false"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("false"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -1418,18 +1372,18 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	switch clichecksum {
 	case "all":
-		setConfig("checksum", api.ChecksumXXHash, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("checksum", api.ChecksumXXHash, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case api.ChecksumXXHash:
-		setConfig("checksum", api.ChecksumXXHash, proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("checksum", api.ChecksumXXHash, proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1450,8 +1404,8 @@ func Test_checksum(t *testing.T) {
 cleanup:
 	deletefromfilelist(t, proxyURL, bucket, errCh, fileslist)
 	// restore old config
-	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
-	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
+	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+common.URLPath(api.Version, api.Cluster), t)
 
 	if created {
 		destroyLocalBucket(t, proxyURL, bucket)
@@ -1534,47 +1488,82 @@ func getPrimaryURL(t *testing.T, proxyURL string) string {
 	return url
 }
 
-func validateBucketProps(t *testing.T, expected api.BucketProps, actual tutils.BucketProps) {
+func validateBucketProps(t *testing.T, expected, actual api.BucketProps) {
 	if actual.CloudProvider != expected.CloudProvider {
-		t.Errorf("Expected cloud provider: %s, received cloud provider: %s", expected.CloudProvider, actual.CloudProvider)
+		t.Errorf("Expected cloud provider: %s, received cloud provider: %s",
+			expected.CloudProvider, actual.CloudProvider)
 	}
 	if actual.ReadPolicy != expected.ReadPolicy {
-		t.Errorf("Expected read policy: %s, received read policy: %s", expected.ReadPolicy, actual.ReadPolicy)
+		t.Errorf("Expected read policy: %s, received read policy: %s",
+			expected.ReadPolicy, actual.ReadPolicy)
 	}
 	if actual.WritePolicy != expected.WritePolicy {
-		t.Errorf("Expected write policy: %s, received write policy: %s", expected.WritePolicy, actual.WritePolicy)
+		t.Errorf("Expected write policy: %s, received write policy: %s",
+			expected.WritePolicy, actual.WritePolicy)
 	}
 	if actual.NextTierURL != expected.NextTierURL {
-		t.Errorf("Expected next tier URL: %s, received next tier URL: %s", expected.NextTierURL, actual.NextTierURL)
+		t.Errorf("Expected next tier URL: %s, received next tier URL: %s",
+			expected.NextTierURL, actual.NextTierURL)
 	}
-	if actual.ChecksumType != expected.CksumConf.Checksum {
-		t.Errorf("Expected checksum type: %s, received checksum type: %s", expected.CksumConf.Checksum, actual.ChecksumType)
+	if actual.Checksum != expected.Checksum {
+		t.Errorf("Expected checksum type: %s, received checksum type: %s",
+			expected.Checksum, actual.Checksum)
 	}
-	if b, _ := strconv.ParseBool(actual.ValidateColdGet); b != expected.CksumConf.ValidateColdGet {
-		t.Errorf("Expected cold GET validation setting: %t, received: %t", expected.CksumConf.ValidateColdGet, b)
+	if actual.ValidateColdGet != expected.ValidateColdGet {
+		t.Errorf("Expected cold GET validation setting: %t, received: %t",
+			expected.ValidateColdGet, actual.ValidateColdGet)
 	}
-	if b, _ := strconv.ParseBool(actual.ValidateWarmGet); b != expected.CksumConf.ValidateWarmGet {
-		t.Errorf("Expected warm GET validation setting: %t, received: %t", expected.CksumConf.ValidateWarmGet, b)
+	if actual.ValidateWarmGet != expected.ValidateWarmGet {
+		t.Errorf("Expected warm GET validation setting: %t, received: %t",
+			expected.ValidateWarmGet, actual.ValidateWarmGet)
 	}
-	if b, _ := strconv.ParseBool(actual.ValidateRange); b != expected.CksumConf.EnableReadRangeChecksum {
-		t.Errorf("Expected byte range validation setting: %t, received: %t", expected.CksumConf.EnableReadRangeChecksum, b)
+	if actual.EnableReadRangeChecksum != expected.EnableReadRangeChecksum {
+		t.Errorf("Expected byte range validation setting: %t, received: %t",
+			expected.EnableReadRangeChecksum, actual.EnableReadRangeChecksum)
 	}
-	if u, _ := strconv.ParseUint(actual.LowWM, 10, 32); uint32(u) != expected.LRUProps.LowWM {
-		t.Errorf("Expected LowWM setting: %d, received %d", expected.LRUProps.LowWM, u)
+	if actual.LowWM != expected.LowWM {
+		t.Errorf("Expected LowWM setting: %d, received %d", expected.LowWM, actual.LowWM)
 	}
-	if u, _ := strconv.ParseUint(actual.HighWM, 10, 32); uint32(u) != expected.LRUProps.HighWM {
-		t.Errorf("Expected HighWM setting: %d, received %d", expected.LRUProps.HighWM, u)
+	if actual.HighWM != expected.HighWM {
+		t.Errorf("Expected HighWM setting: %d, received %d", expected.HighWM, actual.HighWM)
 	}
-	if u, _ := strconv.ParseUint(actual.AtimeCacheMax, 10, 32); u != expected.LRUProps.AtimeCacheMax {
-		t.Errorf("Expected AtimeCacheMax setting: %d, received %d", expected.LRUProps.AtimeCacheMax, u)
+	if actual.AtimeCacheMax != expected.AtimeCacheMax {
+		t.Errorf("Expected AtimeCacheMax setting: %d, received %d",
+			expected.AtimeCacheMax, actual.AtimeCacheMax)
 	}
-	if actual.DontEvictTime != expected.LRUProps.DontEvictTimeStr {
-		t.Errorf("Expected DontEvictTimeStr setting: %s, received %s", expected.LRUProps.DontEvictTimeStr, actual.DontEvictTime)
+	if actual.DontEvictTimeStr != expected.DontEvictTimeStr {
+		t.Errorf("Expected DontEvictTimeStr setting: %s, received %s",
+			expected.DontEvictTimeStr, actual.DontEvictTimeStr)
 	}
-	if actual.CapUpdTime != expected.LRUProps.CapacityUpdTimeStr {
-		t.Errorf("Expected CapacityUpdTimeStr setting: %s, received %s", expected.LRUProps.CapacityUpdTimeStr, actual.CapUpdTime)
+	if actual.CapacityUpdTimeStr != expected.CapacityUpdTimeStr {
+		t.Errorf("Expected CapacityUpdTimeStr setting: %s, received %s",
+			expected.CapacityUpdTimeStr, actual.CapacityUpdTimeStr)
 	}
-	if b, _ := strconv.ParseBool(actual.LRUEnabled); b != expected.LRUProps.LRUEnabled {
-		t.Errorf("Expected LRU enabled setting: %t, received: %t", expected.LRUProps.LRUEnabled, b)
+	if actual.LRUEnabled != expected.LRUEnabled {
+		t.Errorf("Expected LRU enabled setting: %t, received: %t",
+			expected.LRUEnabled, actual.LRUEnabled)
+	}
+}
+
+func defaultBucketProps() api.BucketProps {
+	return api.BucketProps{
+		CloudProvider: api.ProviderDFC,
+		NextTierURL:   "http://foo.com",
+		ReadPolicy:    api.RWPolicyNextTier,
+		WritePolicy:   api.RWPolicyNextTier,
+		CksumConfig: api.CksumConfig{
+			Checksum:                api.ChecksumXXHash,
+			ValidateColdGet:         false,
+			ValidateWarmGet:         false,
+			EnableReadRangeChecksum: false,
+		},
+		LRUConfig: api.LRUConfig{
+			LowWM:              (uint32)(10),
+			HighWM:             (uint32)(50),
+			AtimeCacheMax:      (uint64)(9999),
+			DontEvictTimeStr:   "1m",
+			CapacityUpdTimeStr: "2m",
+			LRUEnabled:         false,
+		},
 	}
 }

@@ -2545,33 +2545,33 @@ func (p *proxyrunner) validateBucketProps(props *api.BucketProps, isLocal bool) 
 			props.WritePolicy = api.RWPolicyNextTier
 		}
 	}
-	if props.CksumConf.Checksum != api.ChecksumInherit &&
-		props.CksumConf.Checksum != api.ChecksumNone && props.CksumConf.Checksum != api.ChecksumXXHash {
+	if props.Checksum != api.ChecksumInherit &&
+		props.Checksum != api.ChecksumNone && props.Checksum != api.ChecksumXXHash {
 		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s",
-			props.CksumConf.Checksum, api.ChecksumXXHash, api.ChecksumNone, api.ChecksumInherit)
+			props.Checksum, api.ChecksumXXHash, api.ChecksumNone, api.ChecksumInherit)
 	}
 
-	lwm, hwm := props.LRUProps.LowWM, props.LRUProps.HighWM
+	lwm, hwm := props.LowWM, props.HighWM
 	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
 		return fmt.Errorf("Invalid WM configuration. LowWM: %d, HighWM: %d, LowWM and HighWM must be in the range [0, 100] with LowWM <= HighWM", lwm, hwm)
 	}
-	if props.LRUProps.AtimeCacheMax < 0 {
-		return fmt.Errorf("Invalid value: %d, AtimeCacheMax cannot be negative", props.LRUProps.AtimeCacheMax)
+	if props.AtimeCacheMax < 0 {
+		return fmt.Errorf("Invalid value: %d, AtimeCacheMax cannot be negative", props.AtimeCacheMax)
 	}
-	if props.LRUProps.DontEvictTimeStr != "" {
-		dontEvictTime, err := time.ParseDuration(props.LRUProps.DontEvictTimeStr)
+	if props.DontEvictTimeStr != "" {
+		dontEvictTime, err := time.ParseDuration(props.DontEvictTimeStr)
 		if err != nil {
 			return fmt.Errorf("Bad dont_evict_time format %s, err: %v", dontEvictTime, err)
 		}
-		props.LRUProps.DontEvictTime = dontEvictTime
+		props.DontEvictTime = dontEvictTime
 
 	}
-	if props.LRUProps.CapacityUpdTimeStr != "" {
-		capacityUpdTime, err := time.ParseDuration(props.LRUProps.CapacityUpdTimeStr)
+	if props.CapacityUpdTimeStr != "" {
+		capacityUpdTime, err := time.ParseDuration(props.CapacityUpdTimeStr)
 		if err != nil {
 			return fmt.Errorf("Bad capacity_upd_time format %s, err: %v", capacityUpdTime, err)
 		}
-		props.LRUProps.CapacityUpdTime = capacityUpdTime
+		props.CapacityUpdTime = capacityUpdTime
 	}
 	return nil
 }
@@ -2644,7 +2644,7 @@ func validateCloudProvider(provider string, isLocal bool) error {
 	return nil
 }
 
-func (p *proxyrunner) copyBucketProps(oldProps *api.BucketProps, newProps *api.BucketProps, bucket string) {
+func (p *proxyrunner) copyBucketProps(oldProps, newProps *api.BucketProps, bucket string) {
 	oldProps.NextTierURL = newProps.NextTierURL
 	oldProps.CloudProvider = newProps.CloudProvider
 	if newProps.ReadPolicy != "" {
@@ -2653,27 +2653,27 @@ func (p *proxyrunner) copyBucketProps(oldProps *api.BucketProps, newProps *api.B
 	if newProps.WritePolicy != "" {
 		oldProps.WritePolicy = newProps.WritePolicy
 	}
-	if rechecksumRequired(ctx.config.Cksum.Checksum, oldProps.CksumConf.Checksum, newProps.CksumConf.Checksum) {
+	if rechecksumRequired(ctx.config.Cksum.Checksum, oldProps.Checksum, newProps.Checksum) {
 		go p.notifyTargetsRechecksum(bucket)
 	}
-	if newProps.CksumConf.Checksum != "" {
-		oldProps.CksumConf.Checksum = newProps.CksumConf.Checksum
-		if newProps.CksumConf.Checksum != api.ChecksumInherit {
-			oldProps.CksumConf.ValidateColdGet = newProps.CksumConf.ValidateColdGet
-			oldProps.CksumConf.ValidateWarmGet = newProps.CksumConf.ValidateWarmGet
-			oldProps.CksumConf.EnableReadRangeChecksum = newProps.CksumConf.EnableReadRangeChecksum
+	if newProps.Checksum != "" {
+		oldProps.Checksum = newProps.Checksum
+		if newProps.Checksum != api.ChecksumInherit {
+			oldProps.ValidateColdGet = newProps.ValidateColdGet
+			oldProps.ValidateWarmGet = newProps.ValidateWarmGet
+			oldProps.EnableReadRangeChecksum = newProps.EnableReadRangeChecksum
 		}
 	}
-	oldProps.LRUProps.LowWM = newProps.LRUProps.LowWM // can't conditionally assign if value != 0 since 0 is valid
-	oldProps.LRUProps.HighWM = newProps.LRUProps.HighWM
-	oldProps.LRUProps.AtimeCacheMax = newProps.LRUProps.AtimeCacheMax
-	if newProps.LRUProps.DontEvictTimeStr != "" {
-		oldProps.LRUProps.DontEvictTimeStr = newProps.LRUProps.DontEvictTimeStr
-		oldProps.LRUProps.DontEvictTime = newProps.LRUProps.DontEvictTime // parsing done in validateBucketProps()
+	oldProps.LowWM = newProps.LowWM // can't conditionally assign if value != 0 since 0 is valid
+	oldProps.HighWM = newProps.HighWM
+	oldProps.AtimeCacheMax = newProps.AtimeCacheMax
+	if newProps.DontEvictTimeStr != "" {
+		oldProps.DontEvictTimeStr = newProps.DontEvictTimeStr
+		oldProps.DontEvictTime = newProps.DontEvictTime // parsing done in validateBucketProps()
 	}
-	if newProps.LRUProps.CapacityUpdTimeStr != "" {
-		oldProps.LRUProps.CapacityUpdTimeStr = newProps.LRUProps.CapacityUpdTimeStr
-		oldProps.LRUProps.CapacityUpdTime = newProps.LRUProps.CapacityUpdTime // parsing done in validateBucketProps()
+	if newProps.CapacityUpdTimeStr != "" {
+		oldProps.CapacityUpdTimeStr = newProps.CapacityUpdTimeStr
+		oldProps.CapacityUpdTime = newProps.CapacityUpdTime // parsing done in validateBucketProps()
 	}
-	oldProps.LRUProps.LRUEnabled = newProps.LRUProps.LRUEnabled
+	oldProps.LRUEnabled = newProps.LRUEnabled
 }

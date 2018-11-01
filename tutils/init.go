@@ -8,6 +8,7 @@ package tutils
 import (
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -26,11 +27,23 @@ var (
 		TLSHandshakeTimeout: 600 * time.Second,
 		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}
-	client = &http.Client{
+	BaseHTTPClient = &http.Client{}
+	HTTPClient     = &http.Client{
 		Timeout:   600 * time.Second,
 		Transport: transport,
 	}
-	Mem2 *memsys.Mem2
+	tr = &traceableTransport{
+		transport: transport,
+		tsBegin:   time.Now(),
+	}
+	trace = &httptrace.ClientTrace{
+		GotConn:              tr.GotConn,
+		WroteHeaders:         tr.WroteHeaders,
+		WroteRequest:         tr.WroteRequest,
+		GotFirstResponseByte: tr.GotFirstResponseByte,
+	}
+	tracedClient = &http.Client{Transport: tr}
+	Mem2         *memsys.Mem2
 )
 
 func init() {

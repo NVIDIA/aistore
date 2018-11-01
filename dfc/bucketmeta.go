@@ -43,10 +43,10 @@ func (r *bmdowner) get() (bucketmd *bucketMD) {
 
 func NewBucketProps() *api.BucketProps {
 	return &api.BucketProps{
-		CksumConf: api.Cksumconfig{
+		CksumConfig: api.CksumConfig{
 			Checksum: api.ChecksumInherit,
 		},
-		LRUProps: ctx.config.LRU,
+		LRUConfig: ctx.config.LRU,
 	}
 }
 
@@ -113,10 +113,10 @@ func (m *bucketMD) islocal(bucket string) bool {
 func (m *bucketMD) propsAndChecksum(bucket string) (p api.BucketProps, checksum string, defined bool) {
 	var ok bool
 	ok, p = m.get(bucket, m.islocal(bucket))
-	if !ok || p.CksumConf.Checksum == api.ChecksumInherit {
+	if !ok || p.Checksum == api.ChecksumInherit {
 		return p, "", false
 	}
-	return p, p.CksumConf.Checksum, true
+	return p, p.Checksum, true
 }
 
 // lruEnabled returns whether or not LRU is enabled
@@ -126,7 +126,7 @@ func (m *bucketMD) lruEnabled(bucket string) bool {
 	if !ok {
 		return ctx.config.LRU.LRUEnabled
 	}
-	return p.LRUProps.LRUEnabled
+	return p.LRUEnabled
 }
 
 func (m *bucketMD) clone() *bucketMD {

@@ -1798,8 +1798,8 @@ func TestAtimeRebalance(t *testing.T) {
 	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Enable bucket level LRU properties
-	bucketProps.LRUProps.LRUEnabled = true
-	err = tutils.SetBucketProps(m.proxyURL, m.bucket, bucketProps)
+	bucketProps.LRUEnabled = true
+	err = api.SetBucketProps(tutils.HTTPClient, m.proxyURL, m.bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 
 	target := extractTargetsInfo(m.smap)[0]
