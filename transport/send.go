@@ -275,8 +275,11 @@ forever:
 				glog.Infof("%s stopped", s.lid)
 				break forever
 			case <-s.postCh:
-				if atomic.LoadInt64(&s.lifecycle) == posted {
-					break newreq // new post after timeout: initiate a new HTTP/TCP session
+				if v := atomic.LoadInt64(&s.lifecycle); v != expired {
+					if debug {
+						common.Assert(v == posted)
+					}
+					break newreq // new post after timeout: initiate new HTTP/TCP session
 				}
 			}
 		}
