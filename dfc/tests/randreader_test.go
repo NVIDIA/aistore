@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -26,7 +25,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 	)
 	createFreshLocalBucket(t, proxyURL, bucket)
 	for i := 0; i < numworkers; i++ {
-		reader, err := client.NewRandReader(fileSize, true)
+		reader, err := tutils.NewRandReader(fileSize, true)
 		tutils.CheckFatal(err, t)
 		wg.Add(1)
 		go func(workerId int) {
@@ -40,13 +39,13 @@ func TestRandomReaderPutStress(t *testing.T) {
 
 }
 
-func putRR(t *testing.T, id int, proxyURL string, seed int64, reader client.Reader, bucket string, numobjects int) {
+func putRR(t *testing.T, id int, proxyURL string, seed int64, reader tutils.Reader, bucket string, numobjects int) {
 	var subdir = "dir"
 	random := rand.New(rand.NewSource(seed))
 	for i := 0; i < numobjects; i++ {
 		fname := tutils.FastRandomFilename(random, fnlen)
 		objname := filepath.Join(subdir, fname)
-		err := client.Put(proxyURL, reader, bucket, objname, true)
+		err := tutils.Put(proxyURL, reader, bucket, objname, true)
 		tutils.CheckFatal(err, t)
 
 		if i%100 == 0 && id%100 == 0 {

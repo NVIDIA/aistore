@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -47,7 +46,7 @@ var (
 	objlimit               int64
 	prefix                 string
 	abortonerr             = false
-	readerType             = client.ReaderTypeSG
+	readerType             = tutils.ReaderTypeSG
 	prefetchPrefix         = "__bench/test-"
 	prefetchRegex          = "^\\d22\\d?"
 	prefetchRange          = "0:2000"
@@ -79,9 +78,9 @@ func init() {
 	flag.StringVar(&prefetchPrefix, "prefetchprefix", prefetchPrefix, "Prefix for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRegex, "prefetchregex", prefetchRegex, "Regex for Prefix-Regex Prefetch")
 	flag.StringVar(&prefetchRange, "prefetchrange", prefetchRange, "Range for Prefix-Regex Prefetch")
-	flag.StringVar(&readerType, "readertype", client.ReaderTypeSG,
-		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", client.ReaderTypeSG,
-			client.ReaderTypeFile, client.ReaderTypeInMem, client.ReaderTypeRand))
+	flag.StringVar(&readerType, "readertype", tutils.ReaderTypeSG,
+		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", tutils.ReaderTypeSG,
+			tutils.ReaderTypeFile, tutils.ReaderTypeInMem, tutils.ReaderTypeRand))
 	flag.BoolVar(&skipdel, "nodel", false, "Run only PUT and GET in a loop and do cleanup once at the end")
 	flag.IntVar(&numops, "numops", 4, "Number of PUT/GET per worker")
 	flag.IntVar(&fnlen, "fnlen", 20, "Length of randomly generated filenames")
@@ -99,8 +98,8 @@ func init() {
 
 	flag.Parse()
 
-	usingSG = readerType == client.ReaderTypeSG
-	usingFile = readerType == client.ReaderTypeFile
+	usingSG = readerType == tutils.ReaderTypeSG
+	usingFile = readerType == tutils.ReaderTypeFile
 	checkMemory()
 
 	if tutils.DockerRunning() && proxyURLRO == ProxyURL {
@@ -109,7 +108,7 @@ func init() {
 }
 
 func checkMemory() {
-	if readerType == client.ReaderTypeSG || readerType == client.ReaderTypeInMem {
+	if readerType == tutils.ReaderTypeSG || readerType == tutils.ReaderTypeInMem {
 		megabytes, _ := dfc.TotalMemory()
 		if megabytes < PhysMemSizeWarn {
 			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider use other reader type\n", megabytes)
@@ -126,7 +125,7 @@ func TestMain(m *testing.M) {
 
 	// primary proxy can change if proxy tests are run and no new cluster is re-deployed before each test
 	// find out who is the current primary proxy
-	url, err := client.GetPrimaryProxy(proxyURLRO)
+	url, err := tutils.GetPrimaryProxy(proxyURLRO)
 	if err != nil {
 		tutils.Logf("Failed to get primary proxy, err = %v", err)
 		os.Exit(1)

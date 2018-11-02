@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package client_test
+package tutils_test
 
 import (
 	"io"
@@ -11,17 +11,17 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 func TestFileReader(t *testing.T) {
-	_, err := client.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
+	_, err := tutils.NewFileReader("/tmp", "seek", 10240, false /* withHash */)
 	if err != nil {
 		t.Fatal("Failed to create file reader", err)
 	}
 }
 
-func testReaderBasic(t *testing.T, r client.Reader, size int64) {
+func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
 	_, err := r.Seek(0, io.SeekStart)
 	if err != nil {
 		t.Fatal("Failed to seek", err)
@@ -95,7 +95,7 @@ func testReaderBasic(t *testing.T, r client.Reader, size int64) {
 }
 
 // Note: These are testcases that fail when running on SGReader.
-func testReaderAdv(t *testing.T, r client.Reader, size int64) {
+func testReaderAdv(t *testing.T, r tutils.Reader, size int64) {
 	buf := make([]byte, size)
 	_, err := r.Seek(0, io.SeekStart)
 	if err != nil {
@@ -225,7 +225,7 @@ func testReaderAdv(t *testing.T, r client.Reader, size int64) {
 
 func TestRandReader(t *testing.T) {
 	size := int64(1024)
-	r, err := client.NewRandReader(size, true /* withHash */)
+	r, err := tutils.NewRandReader(size, true /* withHash */)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,10 +238,10 @@ func TestSGReader(t *testing.T) {
 	{
 		// Basic read
 		size := int64(1024)
-		sgl := client.Mem2.NewSGL(size)
+		sgl := tutils.Mem2.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := client.NewSGReader(sgl, size, true /* withHash */)
+		r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,10 +270,10 @@ func TestSGReader(t *testing.T) {
 
 	{
 		size := int64(1024)
-		sgl := client.Mem2.NewSGL(size)
+		sgl := tutils.Mem2.NewSGL(size)
 		defer sgl.Free()
 
-		r, err := client.NewSGReader(sgl, size, true /* withHash */)
+		r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -288,7 +288,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := client.NewFileReader(path, fn, common.MiB, true /* withHash */)
+		r, err := tutils.NewFileReader(path, fn, common.MiB, true /* withHash */)
 		r.Close()
 		os.Remove(path + "/" + fn)
 		if err != nil {
@@ -299,7 +299,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkInMemReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := client.NewInMemReader(common.MiB, true /* withHash */)
+		r, err := tutils.NewInMemReader(common.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -309,7 +309,7 @@ func BenchmarkInMemReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := client.NewRandReader(common.MiB, true /* withHash */)
+		r, err := tutils.NewRandReader(common.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -318,12 +318,12 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	sgl := client.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(common.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := client.NewSGReader(sgl, common.MiB, true /* withHash */)
+		r, err := tutils.NewSGReader(sgl, common.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -336,7 +336,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := client.NewFileReader(path, fn, common.MiB, false /* withHash */)
+		r, err := tutils.NewFileReader(path, fn, common.MiB, false /* withHash */)
 		r.Close()
 		os.Remove(path + "/" + fn)
 		if err != nil {
@@ -347,7 +347,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkInMemReaderCreateNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := client.NewInMemReader(common.MiB, false /* withHash */)
+		r, err := tutils.NewInMemReader(common.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -357,7 +357,7 @@ func BenchmarkInMemReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := client.NewRandReader(common.MiB, false /* withHash */)
+		r, err := tutils.NewRandReader(common.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -366,170 +366,15 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	sgl := client.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(common.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := client.NewSGReader(sgl, common.MiB, false /* withHash */)
+		r, err := tutils.NewSGReader(sgl, common.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 }
-
-/*
-// File read throughput tests
-// Usages:
-// 1. Run discard benchmark (to show which discard method is the fastest):
-// 	  go test -v -run=XXX -bench=Discard
-// 2. Create temporary files to prepare for read testing:
-// 	  go test -v -run=XXX -bench=WriteFiles -args /tmp/dfc (directory where files are saved)
-// 3. Random file read benchmark (simulate dfcloader file get):
-// 	  go test -v -run=XXX -bench=RandomRead -args /tmp/dfc
-// 4. Cleanup all generated files:
-// 	  go test -v -run=DeleteFiles -args /tmp/dfc
-
-var files []string
-
-func visit(path string, f os.FileInfo, err error) error {
-	if !f.IsDir() {
-		files = append(files, path)
-	}
-	return nil
-}
-
-func listFiles() {
-	flag.Parse()
-	if len(flag.Args()) != 1 {
-		fmt.Printf("Usags: %s root_directory\n", os.Args[0])
-		os.Exit(2)
-	}
-
-	filepath.Walk(flag.Arg(0), visit)
-}
-
-func BenchmarkWriteFiles(b *testing.B) {
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			r, err := client.NewFileReader(flag.Arg(0), common.FastRandomFilename(rnd, 32), 1024*1024*8, false)
-			if err != nil {
-				b.Fatalf("Failed to create file reader, err = %v\n", err)
-			}
-
-			r.Close()
-		}
-	})
-}
-
-func BenchmarkRandomReadFiles(b *testing.B) {
-	listFiles()
-	if len(files) == 0 {
-		fmt.Println("No files found, can't do read tests")
-		os.Exit(0)
-	}
-
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			i := rnd.Intn(len(files))
-			f, err := os.Open(files[i])
-			if err != nil {
-				b.Fatalf("Failed to open file %s, err = %v\n", files[i], err)
-			}
-			defer f.Close()
-
-			_, err = io.Copy(ioutil.Discard, f)
-			if err != nil {
-				b.Fatalf("Failed to read file %s, err = %v\n", files[i], err)
-			}
-		}
-	})
-}
-
-func TestDeleteFiles(t *testing.T) {
-	listFiles()
-	for _, f := range files {
-		os.Remove(f)
-	}
-}
-
-func BenchmarkDevDiscard(b *testing.B) {
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			size := int64(1024 * 1024 * 8)
-			r, err := client.NewRandReader(size, false)
-			if err != nil {
-				b.Fatal("Failed to create reader", err)
-			}
-			defer r.Close()
-
-			n, err := io.Copy(ioutil.Discard, r)
-			if err != nil {
-				b.Fatal("Failed to read from reader", err)
-			}
-
-			if n != size {
-				b.Fatalf("read returned wrong number of bytes, exp = %d, act = %d", size, n)
-			}
-		}
-	})
-}
-
-func BenchmarkBufDiscard(b *testing.B) {
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			size := int64(1024 * 1024 * 8)
-			r, err := client.NewRandReader(size, false)
-			if err != nil {
-				b.Fatal("Failed to create reader", err)
-			}
-			defer r.Close()
-
-			buf := make([]byte, size, size)
-			var totalLen int64
-			for {
-				n, err := r.Read(buf)
-				if err != nil && err != io.EOF {
-					b.Fatal("Failed to read from reader", err)
-				}
-				totalLen += int64(n)
-				if n < len(buf) || err == io.EOF {
-					break
-				}
-			}
-
-			if totalLen != size {
-				b.Fatalf("read returned wrong number of bytes, exp = %d, act = %d", size, totalLen)
-			}
-		}
-	})
-}
-
-func BenchmarkByteBufDiscard(b *testing.B) {
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			size := int64(1024 * 1024 * 8)
-			r, err := client.NewRandReader(size, false)
-			if err != nil {
-				b.Fatal("Failed to create reader", err)
-			}
-			defer r.Close()
-
-			var buf bytes.Buffer
-			n, err := buf.ReadFrom(r)
-			if err != nil {
-				b.Fatal("Failed to read", err)
-			}
-
-			if n != size {
-				b.Fatalf("read returned wrong number of bytes, exp = %d, act = %d", size, n)
-			}
-		}
-	})
-}
-*/

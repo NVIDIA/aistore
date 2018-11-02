@@ -2,16 +2,21 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-
 // Package tutils provides common low-level utilities for all dfcpub unit and integration tests
 package tutils
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"runtime/debug"
 	"testing"
+
+	"github.com/NVIDIA/dfcpub/common"
+	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -60,4 +65,42 @@ func FastRandomFilename(src *rand.Rand, fnlen int) string {
 		remain--
 	}
 	return string(b)
+}
+
+// copyRandWithHash reads data from random source and writes it to a writer while
+// optionally computing xxhash
+// See related: memsys_test.copyRand
+func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
+	var (
+		rem   = size
+		shash string
+		h     *xxhash.XXHash64
+	)
+	buf, s := Mem2.AllocFromSlab2(common.MiB)
+	blkSize := int64(len(buf))
+	defer s.Free(buf)
+
+	if withHash {
+		h = xxhash.New64()
+	}
+	for i := int64(0); i <= size/blkSize; i++ {
+		n := int(common.MinI64(blkSize, rem))
+		rnd.Read(buf[:n])
+		m, err := w.Write(buf[:n])
+		if err != nil {
+			return "", err
+		}
+
+		if withHash {
+			h.Write(buf[:m])
+		}
+		common.Assert(m == n)
+		rem -= int64(m)
+	}
+	if withHash {
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
+		shash = hex.EncodeToString(b)
+	}
+	return shash, nil
 }

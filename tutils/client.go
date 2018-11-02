@@ -1,42 +1,33 @@
-// Package client provides common operations for files in cloud storage
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package client
+// Package tutils provides common low-level utilities for all dfcpub unit and integration tests
+//
+//  FIXME -- FIXME: split and transform it into the: a) client API and b) test utilities
+//  FIXME -- FIXME: the client API must then move into the api package
+//
+package tutils
 
 import (
 	"bufio"
 	"bytes"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"strconv"
-
-	"net/url"
-
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/OneOfOne/xxhash"
-)
-
-const (
-	registerTimeout    = time.Minute * 2
-	maxBodyErrorLength = 256
 )
 
 type (
@@ -74,64 +65,6 @@ type (
 		TargetFirstResponse time.Duration // from TargetWroteRequest to first byte of response
 	}
 )
-
-var (
-	transport = &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout: 60 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout: 600 * time.Second,
-		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
-	}
-	client = &http.Client{
-		Timeout:   600 * time.Second,
-		Transport: transport,
-	}
-	Mem2 *memsys.Mem2
-)
-
-func init() {
-	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "ClientMem2"}
-	_ = Mem2.Init(false /* ignore init-time errors */)
-	go Mem2.Run()
-}
-
-// populateData reads data from random source and writes to a writer,
-// calculates and returns xxhash (if needed)
-func populateData(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (string, error) {
-	var (
-		left = size
-		hash string
-		h    *xxhash.XXHash64
-	)
-	blk, s := Mem2.AllocFromSlab2(common.MiB)
-	blkSize := int64(len(blk))
-	defer s.Free(blk)
-
-	if withHash {
-		h = xxhash.New64()
-	}
-	for i := int64(0); i <= size/blkSize; i++ {
-		n := common.MinI64(blkSize, left)
-		rnd.Read(blk[:n])
-		m, err := w.Write(blk[:n])
-		if err != nil {
-			return "", err
-		}
-
-		if withHash {
-			h.Write(blk[:m])
-		}
-
-		left -= int64(m)
-	}
-	if withHash {
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
-		hash = hex.EncodeToString(b)
-	}
-	return hash, nil
-}
 
 // RoundTrip records the proxy redirect time and keeps track of requests.
 func (t *traceableTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -660,7 +593,7 @@ func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err er
 	return
 }
 
-func SetBucketProps(proxyURL, bucket string, props dfc.BucketProps) error {
+func SetBucketProps(proxyURL, bucket string, props api.BucketProps) error {
 	var url = proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
 
 	if props.CksumConf.Checksum == "" {
@@ -906,7 +839,7 @@ func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]strin
 func GetConfig(server string) (HTTPLatencies, error) {
 	url := server + common.URLPath(api.Version, api.Daemon)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.URL.RawQuery = getWhatRawQuery(api.GetWhatConfig, "")
+	req.URL.RawQuery = GetWhatRawQuery(api.GetWhatConfig, "")
 	tr := &traceableTransport{
 		transport: transport,
 		tsBegin:   time.Now(),
@@ -969,7 +902,7 @@ func ListBuckets(proxyURL string, local bool) (*api.BucketNames, error) {
 // GetClusterMap retrives a DFC's server map
 // Note: this may not be a good idea to expose the map to clients, but this how it is for now.
 func GetClusterMap(url string) (cluster.Smap, error) {
-	q := getWhatRawQuery(api.GetWhatSmap, "")
+	q := GetWhatRawQuery(api.GetWhatSmap, "")
 	requestURL := fmt.Sprintf("%s?%s", url+common.URLPath(api.Version, api.Daemon), q)
 	r, err := client.Get(requestURL)
 	defer func() {
@@ -1003,50 +936,6 @@ func GetClusterMap(url string) (cluster.Smap, error) {
 	}
 
 	return smap, nil
-}
-
-func GetXactionRebalance(proxyURL string) (dfc.RebalanceStats, error) {
-	var rebalanceStats dfc.RebalanceStats
-	responseBytes, err := getXactionResponse(proxyURL, api.XactionRebalance)
-	if err != nil {
-		return rebalanceStats, err
-	}
-
-	err = json.Unmarshal(responseBytes, &rebalanceStats)
-	if err != nil {
-		return rebalanceStats,
-			fmt.Errorf("Failed to unmarshal rebalance stats: %v", err)
-	}
-
-	return rebalanceStats, nil
-}
-
-func getXactionResponse(proxyURL string, kind string) ([]byte, error) {
-	q := getWhatRawQuery(api.GetWhatXaction, kind)
-	url := fmt.Sprintf("%s?%s", proxyURL+common.URLPath(api.Version, api.Cluster), q)
-	r, err := client.Get(url)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-
-	if err != nil {
-		return []byte{}, err
-	}
-
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return []byte{},
-			fmt.Errorf("Get xaction, HTTP Status %d", r.StatusCode)
-	}
-
-	var response []byte
-	response, err = ioutil.ReadAll(r.Body)
-	if err != nil {
-		return []byte{}, fmt.Errorf("Failed to read response, err: %v", err)
-	}
-
-	return response, nil
 }
 
 // GetPrimaryProxy returns the primary proxy's url of a cluster
@@ -1159,7 +1048,7 @@ func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 	return false, nil
 }
 
-func getWhatRawQuery(getWhat string, getProps string) string {
+func GetWhatRawQuery(getWhat string, getProps string) string {
 	q := url.Values{}
 	q.Add(api.URLParamWhat, getWhat)
 	if getProps != "" {
@@ -1169,7 +1058,7 @@ func getWhatRawQuery(getWhat string, getProps string) string {
 }
 
 func TargetMountpaths(targetUrl string) (*api.MountpathList, error) {
-	q := getWhatRawQuery(api.GetWhatMountpaths, "")
+	q := GetWhatRawQuery(api.GetWhatMountpaths, "")
 	url := fmt.Sprintf("%s?%s", targetUrl+common.URLPath(api.Version, api.Daemon), q)
 
 	resp, err := client.Get(url)
@@ -1325,4 +1214,32 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 		time.Sleep(time.Second)
 	}
 	return nil
+}
+
+func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
+	q := GetWhatRawQuery(api.GetWhatXaction, kind)
+	url := fmt.Sprintf("%s?%s", proxyURL+common.URLPath(api.Version, api.Cluster), q)
+	r, err := client.Get(url)
+	defer func() {
+		if r != nil {
+			r.Body.Close()
+		}
+	}()
+
+	if err != nil {
+		return []byte{}, err
+	}
+
+	if r != nil && r.StatusCode >= http.StatusBadRequest {
+		return []byte{},
+			fmt.Errorf("Get xaction, HTTP Status %d", r.StatusCode)
+	}
+
+	var response []byte
+	response, err = ioutil.ReadAll(r.Body)
+	if err != nil {
+		return []byte{}, fmt.Errorf("Failed to read response, err: %v", err)
+	}
+
+	return response, nil
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 type (
@@ -35,7 +35,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 	err := common.LocalLoad(configPath, p)
 	if err != nil {
 		// first run: read the current Smap and save to local file
-		smap, err := client.GetClusterMap(defaultURL)
+		smap, err := tutils.GetClusterMap(defaultURL)
 		if err != nil {
 			glog.Errorf("Failed to get cluster map: %v", err)
 			return &proxy{configPath: configPath, URL: defaultURL}
@@ -67,7 +67,7 @@ func (p *proxy) saveSmap() {
 //   config and saves new valid Smap
 // Returns error if the node failed to respond
 func (p *proxy) comparePrimaryURL(url string) error {
-	smap, err := client.GetClusterMap(url)
+	smap, err := tutils.GetClusterMap(url)
 	if err != nil {
 		return err
 	}

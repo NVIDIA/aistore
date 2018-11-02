@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 const (
@@ -66,7 +66,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 	common.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
-		r, err := client.NewRandReader(int64(fileSize), true /* withHash */)
+		r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)
 		if err != nil {
 			return err
 		}
@@ -74,7 +74,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			client.PutAsync(wg, url, r, bucket, "__bench/"+fname, errCh, !testing.Verbose())
+			tutils.PutAsync(wg, url, r, bucket, "__bench/"+fname, errCh, !testing.Verbose())
 		}
 	}
 	close(pool)

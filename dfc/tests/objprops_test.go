@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -33,13 +32,13 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 	versionEnabled bool, isLocalBucket bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
-	r, err := client.NewRandReader(int64(fileSize), true /* withHash */)
+	r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)
 	if err != nil {
 		t.Errorf("Failed to create reader: %v", err)
 		t.Fail()
 	}
 	for fname := range oldVersions {
-		err = client.Put(proxyURL, r, bucket, fname, !testing.Verbose())
+		err = tutils.Put(proxyURL, r, bucket, fname, !testing.Verbose())
 		if err != nil {
 			t.Errorf("Failed to put new data to object %s/%s, err: %v", bucket, fname, err)
 			t.Fail()
@@ -86,7 +85,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, filelist map[string
 	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
 	for fname := range filelist {
-		_, _, err := client.Get(proxyURL, bucket, fname, nil, nil, false, false)
+		_, _, err := tutils.Get(proxyURL, bucket, fname, nil, nil, false, false)
 		if err != nil {
 			t.Errorf("Failed to read %s/%s, err: %v", bucket, fname, err)
 			continue
@@ -121,7 +120,7 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 		}
 	}
 
-	err := client.EvictList(proxyURL, bucket, toEvictList, true, 0)
+	err := tutils.EvictList(proxyURL, bucket, toEvictList, true, 0)
 	if err != nil {
 		t.Errorf("Failed to evict objects: %v\n", err)
 		t.Fail()
@@ -232,7 +231,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	}
 
 	tutils.Logf("Removing a target: %s\n", removedSid)
-	err := client.UnregisterTarget(proxyURL, removedSid)
+	err := tutils.UnregisterTarget(proxyURL, removedSid)
 	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
@@ -249,7 +248,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, isLocalBucket)
 
 	tutils.Logf("Reregistering target...\n")
-	err = client.RegisterTarget(removedSid, removedTargetDirectURL, smap)
+	err = tutils.RegisterTarget(removedSid, removedTargetDirectURL, smap)
 	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
@@ -310,7 +309,7 @@ func propsCleanupObjects(t *testing.T, proxyURL, bucket string, newVersions map[
 	wg := &sync.WaitGroup{}
 	for objname := range newVersions {
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, objname, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bucket, objname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, abortonerr)
@@ -334,7 +333,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -444,7 +443,7 @@ func propsMainTest(t *testing.T, versioning string) {
 		}
 	}()
 
-	props, err := client.HeadBucket(proxyURL, clibucket)
+	props, err := tutils.HeadBucket(proxyURL, clibucket)
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}

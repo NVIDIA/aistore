@@ -32,12 +32,12 @@ func Test_sglhash(t *testing.T) {
 	xxh1 := xxhash.New64()
 	sgl := mem.NewSGLWithHash(size, xxh1)
 	buf := sgl.Slab().Alloc()
-	copyRandom(sgl, rnd1, size, buf)
+	copyRand(sgl, rnd1, size, buf)
 	sum1 := sgl.ComputeHash()
 
 	rnd2 := rand.New(rand.NewSource(seed))
 	xxh2 := xxhash.New64()
-	copyRandom(xxh2, rnd2, size, buf)
+	copyRand(xxh2, rnd2, size, buf)
 	sum2 := xxh2.Sum64()
 
 	if sum1 != sum2 {
@@ -54,7 +54,7 @@ func Test_sglhash(t *testing.T) {
 	tutils.Logf("all hashes are equal (%x)\n", sum1)
 }
 
-func copyRandom(dst io.Writer, rnd *rand.Rand, size int64, buf []byte) error {
+func copyRand(dst io.Writer, rnd *rand.Rand, size int64, buf []byte) error {
 	l64 := int64(len(buf))
 	for rem, i := size, int64(0); i <= size/l64; i++ {
 		n := int(common.MinI64(l64, rem))

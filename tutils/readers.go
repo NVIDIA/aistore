@@ -1,9 +1,8 @@
-// Package readers holds various implementations of Reader
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package client
+package tutils
 
 import (
 	"bytes"
@@ -234,7 +233,7 @@ func NewInMemReader(size int64, withHash bool) (Reader, error) {
 	data := bytes.NewBuffer(make([]byte, size))
 	data.Reset()
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	hash, err := populateData(data, size, withHash, rnd)
+	hash, err := copyRandWithHash(data, size, withHash, rnd)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +276,7 @@ func NewFileReader(path, name string, size int64, withHash bool) (Reader, error)
 	}
 	defer f.Close()
 
-	hash, err := populateData(f, size, withHash, rnd)
+	hash, err := copyRandWithHash(f, size, withHash, rnd)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +326,7 @@ func (r *sgReader) XXHash() string {
 // NewSGReader returns a new sgReader
 func NewSGReader(sgl *memsys.SGL, size int64, withHash bool) (Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	hash, err := populateData(sgl, size, withHash, rnd)
+	hash, err := copyRandWithHash(sgl, size, withHash, rnd)
 	if err != nil {
 		return nil, err
 	}

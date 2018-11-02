@@ -17,7 +17,6 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -71,13 +70,13 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := client.NewRandReader(fileSize, true /* withHash */)
+		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
+		go tutils.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
 		fileNames = append(fileNames, fileName)
 	}
 
@@ -86,13 +85,13 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 	for _, fName := range extranames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fName)
 		// Note: Since this test is to test prefix fetch, the reader type is ignored, always use rand reader
-		r, err := client.NewRandReader(fileSize, true /* withHash */)
+		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
+		go tutils.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
 		fileNames = append(fileNames, fName)
 	}
 
@@ -110,7 +109,7 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 	tutils.Logf("Looking up for files than names start with %s\n", prefix)
 	var msg = &api.GetMsg{GetPrefix: prefix}
 	numFiles := 0
-	objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	objList, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("List files with prefix failed, err = %v", err)
 		return
@@ -137,7 +136,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string) {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &api.GetMsg{GetPrefix: lookFor}
-		objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+		objList, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -179,7 +178,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &api.GetMsg{GetPrefix: p}
-		objList, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+		objList, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -212,7 +211,7 @@ func prefixCleanup(t *testing.T, proxyURL string) {
 	for _, fileName := range fileNames {
 		keyName := fmt.Sprintf("%s/%s", prefixDir, fileName)
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, keyName, wg, errCh, true)
+		go tutils.Del(proxyURL, clibucket, keyName, wg, errCh, true)
 	}
 	wg.Wait()
 

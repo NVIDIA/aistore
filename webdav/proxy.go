@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 type proxyServer struct {
@@ -21,19 +21,19 @@ type proxyServer struct {
 
 // createBucket creates a new bucket
 func (p *proxyServer) createBucket(bucket string) error {
-	return client.CreateLocalBucket(p.url, bucket)
+	return tutils.CreateLocalBucket(p.url, bucket)
 }
 
 func (p *proxyServer) deleteBucket(bucket string) error {
-	return client.DestroyLocalBucket(p.url, bucket)
+	return tutils.DestroyLocalBucket(p.url, bucket)
 }
 
 func (p *proxyServer) doesBucketExist(bucket string) bool {
 	// note: webdav works with local bucket only (at least for now)
-	// _, err := client.HeadBucket(p.url, bucket)
+	// _, err := tutils.HeadBucket(p.url, bucket)
 	// return err == nil
 
-	bns, err := client.ListBuckets(p.url, true /* local */)
+	bns, err := tutils.ListBuckets(p.url, true /* local */)
 	if err != nil {
 		return false
 	}
@@ -53,7 +53,7 @@ func (p *proxyServer) listBuckets(local bool) ([]string, error) {
 		return nil, nil
 	}
 
-	bns, err := client.ListBuckets(p.url, local)
+	bns, err := tutils.ListBuckets(p.url, local)
 	if err != nil {
 		return nil, err
 	}
@@ -87,23 +87,23 @@ func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, e
 // putObject creates a new file reader and uses it to make a proxy put call to save a new
 // object with xxHash enabled into a bucket.
 func (p *proxyServer) putObject(localPath string, bucket string, prefix string) error {
-	r, err := client.NewFileReaderFromFile(localPath, true /* xxhash */)
+	r, err := tutils.NewFileReaderFromFile(localPath, true /* xxhash */)
 	if err != nil {
 		return err
 	}
 
-	return client.Put(p.url, r, bucket, prefix, true /* silent */)
+	return tutils.Put(p.url, r, bucket, prefix, true /* silent */)
 }
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).
 func (p *proxyServer) getObject(bucket string, prefix string, w io.Writer) error {
-	_, _, err := client.GetFile(p.url, bucket, prefix, nil /* wg */, nil, /* errCh */
+	_, _, err := tutils.GetFile(p.url, bucket, prefix, nil /* wg */, nil, /* errCh */
 		true /* silent */, true /* validate */, w)
 	return err
 }
 
 func (p *proxyServer) deleteObject(bucket string, prefix string) error {
-	return client.Del(p.url, bucket, prefix, nil /* wg */, nil /* errCh */, true /* silent */)
+	return tutils.Del(p.url, bucket, prefix, nil /* wg */, nil /* errCh */, true /* silent */)
 }
 
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket
@@ -113,7 +113,7 @@ func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int
 		GetProps:  "size, ctime",
 	}
 
-	bl, err := client.ListBucket(p.url, bucket, msg, limit)
+	bl, err := tutils.ListBucket(p.url, bucket, msg, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +123,10 @@ func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int
 
 // listObjectsNames returns names of all objects that matches the prefix in a bucket
 func (p *proxyServer) listObjectsNames(bucket string, prefix string) ([]string, error) {
-	return client.ListObjects(p.url, bucket, prefix, 0)
+	return tutils.ListObjects(p.url, bucket, prefix, 0)
 }
 
 // deleteObjects deletes all objects in the list of names from a bucket
 func (p *proxyServer) deleteObjects(bucket string, names []string) error {
-	return client.DeleteList(p.url, bucket, names, true /* wait */, 0 /* deadline*/)
+	return tutils.DeleteList(p.url, bucket, names, true /* wait */, 0 /* deadline*/)
 }

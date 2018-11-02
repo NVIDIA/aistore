@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -62,7 +61,7 @@ func Test_smoke(t *testing.T) {
 			}
 		}
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, "smoke/"+file, wg, errCh, true)
+		go tutils.Del(proxyURL, clibucket, "smoke/"+file, wg, errCh, true)
 	}
 	wg.Wait()
 	select {
@@ -90,7 +89,7 @@ func oneSmoke(t *testing.T, proxyURL string, filesize int64, ratio float32, bsee
 	// Get the workers started
 	if usingSG {
 		for i := 0; i < numworkers; i++ {
-			sgls[i] = client.Mem2.NewSGL(filesize)
+			sgls[i] = tutils.Mem2.NewSGL(filesize)
 		}
 		defer func() {
 			for _, sgl := range sgls {
@@ -140,7 +139,7 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 	getsGroup := &sync.WaitGroup{}
 	var msg = &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
-		items, err := client.ListBucket(proxyURL, bucket, msg, 0)
+		items, err := tutils.ListBucket(proxyURL, bucket, msg, 0)
 		if err != nil {
 			errCh <- err
 			t.Error(err)
@@ -169,7 +168,7 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 
 		keyname := files[random.Intn(len(files))]
 		getsGroup.Add(1)
-		go client.Get(proxyURL, bucket, keyname, getsGroup, errCh, !testing.Verbose(), false /* validate */)
+		go tutils.Get(proxyURL, bucket, keyname, getsGroup, errCh, !testing.Verbose(), false /* validate */)
 	}
 
 	getsGroup.Wait()
@@ -187,14 +186,14 @@ func putObjsWithRandData(proxyURL, bucket, dir, keystr string, random *rand.Rand
 			size = uint64(random.Intn(1024)+1) * 1024
 		}
 		var (
-			reader client.Reader
+			reader tutils.Reader
 			err    error
 		)
 		if sgl != nil {
 			sgl.Reset()
-			reader, err = client.NewSGReader(sgl, int64(size), true /* with Hash */)
+			reader, err = tutils.NewSGReader(sgl, int64(size), true /* with Hash */)
 		} else {
-			reader, err = client.NewReader(client.ParamReader{
+			reader, err = tutils.NewReader(tutils.ParamReader{
 				Type: readerType,
 				SGL:  nil,
 				Path: dir,
@@ -215,7 +214,7 @@ func putObjsWithRandData(proxyURL, bucket, dir, keystr string, random *rand.Rand
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		err = client.Put(proxyURL, reader, bucket, objname, silent)
+		err = tutils.Put(proxyURL, reader, bucket, objname, silent)
 		if err != nil {
 			if errCh == nil {
 				tutils.Logf("Error performing PUT of object with random data, provided error channel is nil")
@@ -242,7 +241,7 @@ func putRandObjsFromList(proxyURL string, seed int64, fileSize uint64, objList [
 	if usingSG {
 		slabSize := sgl.Slab().Size()
 		for i := 0; i < numworkers; i++ {
-			sgls[i] = client.Mem2.NewSGL(slabSize)
+			sgls[i] = tutils.Mem2.NewSGL(slabSize)
 		}
 		defer func() {
 			for _, sgl := range sgls {

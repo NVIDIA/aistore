@@ -32,7 +32,6 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -51,7 +50,7 @@ func Test_download(t *testing.T) {
 		t.Skip("test requires a Cloud bucket")
 	}
 
-	if err := client.Tcping(proxyURL); err != nil {
+	if err := tutils.Tcping(proxyURL); err != nil {
 		tutils.Logf("%s: %v\n", proxyURL, err)
 		os.Exit(1)
 	}
@@ -159,7 +158,7 @@ func Test_matchdelete(t *testing.T) {
 
 	// list the bucket
 	var msg = &api.GetMsg{GetPageSize: int(pagesize)}
-	reslist, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	reslist, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -221,7 +220,7 @@ func Test_putdeleteRange(t *testing.T) {
 	filesPutCh := make(chan string, numfiles)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	filenameList := make([]string, 0, numfiles)
@@ -280,13 +279,13 @@ func Test_putdeleteRange(t *testing.T) {
 		msg := &api.GetMsg{GetPrefix: commonPrefix + "/"}
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
-		err := client.DeleteRange(proxyURL, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
+		err := tutils.DeleteRange(proxyURL, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
 		if err != nil {
 			t.Error(err)
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+		bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -299,7 +298,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tutils.Logf("Cleaning up remained objects...\n")
 	msg := &api.GetMsg{GetPrefix: commonPrefix + "/"}
-	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -359,7 +358,7 @@ func Test_putdelete(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandObjs(proxyURL, baseseed, filesize, numfiles, clibucket, errCh, filesPutCh,
@@ -534,7 +533,7 @@ func Test_coldgetmd5(t *testing.T) {
 	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandObjs(proxyURL, baseseed, filesize, numPuts, bucket, errCh, filesPutCh, ldir,
@@ -578,7 +577,7 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, fn, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bucket, fn, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
@@ -599,7 +598,7 @@ func TestHeadLocalBucket(t *testing.T) {
 		nextTierURL                        = "http://foo.com"
 	)
 	var (
-		bucketProps dfc.BucketProps
+		bucketProps api.BucketProps
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
@@ -608,8 +607,8 @@ func TestHeadLocalBucket(t *testing.T) {
 
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierURL
-	bucketProps.ReadPolicy = dfc.RWPolicyNextTier
-	bucketProps.WritePolicy = dfc.RWPolicyNextTier
+	bucketProps.ReadPolicy = api.RWPolicyNextTier
+	bucketProps.WritePolicy = api.RWPolicyNextTier
 	bucketProps.CksumConf.Checksum = api.ChecksumXXHash
 	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
 	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
@@ -621,10 +620,10 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
 	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
 
-	err := client.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
+	err := tutils.SetBucketProps(proxyURL, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
-	p, err := client.HeadBucket(proxyURL, TestLocalBucketName)
+	p, err := tutils.HeadBucket(proxyURL, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	validateBucketProps(t, bucketProps, *p)
@@ -644,7 +643,7 @@ func TestHeadCloudBucket(t *testing.T) {
 		lruEnabledTestSetting              = true
 	)
 	var (
-		bucketProps dfc.BucketProps
+		bucketProps api.BucketProps
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
 	)
 
@@ -653,8 +652,8 @@ func TestHeadCloudBucket(t *testing.T) {
 	}
 	bucketProps.CloudProvider = api.ProviderAmazon
 	bucketProps.NextTierURL = nextTierURL
-	bucketProps.ReadPolicy = dfc.RWPolicyCloud
-	bucketProps.WritePolicy = dfc.RWPolicyNextTier
+	bucketProps.ReadPolicy = api.RWPolicyCloud
+	bucketProps.WritePolicy = api.RWPolicyNextTier
 	bucketProps.CksumConf.Checksum = api.ChecksumXXHash
 	bucketProps.CksumConf.ValidateColdGet = validateColdGetTestSetting
 	bucketProps.CksumConf.ValidateWarmGet = validateWarmGetTestSetting
@@ -666,11 +665,11 @@ func TestHeadCloudBucket(t *testing.T) {
 	bucketProps.LRUProps.CapacityUpdTimeStr = capacityUpdTimeTestSetting
 	bucketProps.LRUProps.LRUEnabled = lruEnabledTestSetting
 
-	err := client.SetBucketProps(proxyURL, clibucket, bucketProps)
+	err := tutils.SetBucketProps(proxyURL, clibucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	p, err := client.HeadBucket(proxyURL, clibucket)
+	p, err := tutils.HeadBucket(proxyURL, clibucket)
 	tutils.CheckFatal(err, t)
 
 	versionModes := []string{api.VersionAll, api.VersionCloud, api.VersionLocal, api.VersionNone}
@@ -689,30 +688,30 @@ func TestHeadObject(t *testing.T) {
 
 	fileName := "headobject_test_file"
 	fileSize := 1024
-	r, frErr := client.NewRandReader(int64(fileSize), false)
+	r, frErr := tutils.NewRandReader(int64(fileSize), false)
 	defer r.Close()
 
 	if frErr != nil {
-		t.Fatalf("client.NewFileReader failed, err = %v", frErr)
+		t.Fatalf("tutils.NewFileReader failed, err = %v", frErr)
 	}
 
-	if err := client.Put(proxyURL, r, TestLocalBucketName, fileName, true); err != nil {
-		t.Fatalf("client.Put failed, err = %v", err)
+	if err := tutils.Put(proxyURL, r, TestLocalBucketName, fileName, true); err != nil {
+		t.Fatalf("tutils.Put failed, err = %v", err)
 	}
 
-	propsExp := &client.ObjectProps{Size: fileSize, Version: "1"}
-	props, err := client.HeadObject(proxyURL, TestLocalBucketName, fileName)
+	propsExp := &tutils.ObjectProps{Size: fileSize, Version: "1"}
+	props, err := tutils.HeadObject(proxyURL, TestLocalBucketName, fileName)
 	if err != nil {
-		t.Errorf("client.HeadObject failed, err = %v", err)
+		t.Errorf("tutils.HeadObject failed, err = %v", err)
 	}
 
 	if !reflect.DeepEqual(props, propsExp) {
 		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
 	}
 
-	props, err = client.HeadObject(proxyURL, TestLocalBucketName, "this_file_should_not_exist")
+	props, err = tutils.HeadObject(proxyURL, TestLocalBucketName, "this_file_should_not_exist")
 	if err == nil {
-		t.Errorf("Expected non-nil error (404) from client.HeadObject, received nil error")
+		t.Errorf("Expected non-nil error (404) from tutils.HeadObject, received nil error")
 	}
 }
 
@@ -723,29 +722,29 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	}
 	fileName := "headobject_check_cached_test_file"
 	fileSize := 1024
-	r, err := client.NewRandReader(int64(fileSize), false)
+	r, err := tutils.NewRandReader(int64(fileSize), false)
 	defer r.Close()
 
 	if err != nil {
-		t.Fatalf("client.NewFileReader failed, err = %v", err)
+		t.Fatalf("tutils.NewFileReader failed, err = %v", err)
 	}
 
-	err = client.Put(proxyURL, r, clibucket, fileName, true)
+	err = tutils.Put(proxyURL, r, clibucket, fileName, true)
 	tutils.CheckFatal(err, t)
 
-	b, err := client.IsCached(proxyURL, clibucket, fileName)
+	b, err := tutils.IsCached(proxyURL, clibucket, fileName)
 	tutils.CheckFatal(err, t)
 	if !b {
-		t.Error("Expected object to be cached, got false from client.IsCached")
+		t.Error("Expected object to be cached, got false from tutils.IsCached")
 	}
 
-	err = client.Del(proxyURL, clibucket, fileName, nil, nil, true)
+	err = tutils.Del(proxyURL, clibucket, fileName, nil, nil, true)
 	tutils.CheckFatal(err, t)
 
-	b, err = client.IsCached(proxyURL, clibucket, fileName)
+	b, err = tutils.IsCached(proxyURL, clibucket, fileName)
 	tutils.CheckFatal(err, t)
 	if b {
-		t.Error("Expected object to NOT be cached after deleting object, got true from client.IsCached")
+		t.Error("Expected object to NOT be cached after deleting object, got true from tutils.IsCached")
 	}
 }
 
@@ -868,7 +867,7 @@ func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync
 	dwg := &sync.WaitGroup{}
 	for keyname := range keynames {
 		dwg.Add(1)
-		go client.Del(proxyURL, bucket, keyname, dwg, errCh, true)
+		go tutils.Del(proxyURL, bucket, keyname, dwg, errCh, true)
 	}
 	dwg.Wait()
 }
@@ -907,7 +906,7 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 
 func testListBucket(t *testing.T, proxyURL, bucket string, msg *api.GetMsg, limit int) *api.BucketList {
 	tutils.Logf("LIST bucket %s (%s)\n", bucket, proxyURL)
-	reslist, err := client.ListBucket(proxyURL, bucket, msg, limit)
+	reslist, err := tutils.ListBucket(proxyURL, bucket, msg, limit)
 	if err != nil {
 		t.Errorf("List bucket %s failed, err = %v", bucket, err)
 		return nil
@@ -944,7 +943,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(fileSize)
+		sgl = tutils.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -955,7 +954,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	// Fetch the file from cloud bucket.
-	_, _, err := client.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, _, err := tutils.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
 	}
@@ -1020,7 +1019,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = client.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, _, err = tutils.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
 	if err != nil {
 		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
 	}
@@ -1036,7 +1035,7 @@ cleanup:
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, fn, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, clibucket, fn, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
@@ -1048,7 +1047,7 @@ func validateGETUponFileChangeForChecksumValidation(
 	t *testing.T, proxyURL, fileName string, newFileInfo os.FileInfo, fqn string,
 	oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
-	_, _, err := client.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, _, err := tutils.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
@@ -1086,7 +1085,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, bucketName)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(fileSize)
+		sgl = tutils.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1147,7 +1146,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = client.Get(proxyURL, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, _, err = tutils.Get(proxyURL, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
@@ -1162,14 +1161,14 @@ cleanup:
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, t *testing.T) {
-	_, _, err := client.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
+	_, _, err := tutils.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
 	} else if !strings.Contains(err.Error(), "status 500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
-	_, _, err = client.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
+	_, _, err = tutils.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
 	} else if !strings.Contains(err.Error(), "status 404") {
@@ -1191,7 +1190,7 @@ func TestRangeRead(t *testing.T) {
 	)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(fileSize)
+		sgl = tutils.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 
@@ -1240,7 +1239,7 @@ cleanup:
 	}
 
 	wg.Add(1)
-	go client.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
+	go tutils.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
 	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), httpclient, t)
@@ -1282,12 +1281,12 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 	q.Add(api.URLParamLength, strconv.FormatInt(length, 10))
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
-	_, _, err := client.GetFileWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, true, true, w, q)
+	_, _, err := tutils.GetFileWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, true, true, w, q)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bucketName, fileName, err)
 		} else {
-			if ckErr, ok := err.(client.InvalidCksumError); ok {
+			if ckErr, ok := err.(tutils.InvalidCksumError); ok {
 				file, err := os.Open(fqn)
 				if err != nil {
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
@@ -1340,7 +1339,7 @@ func verifyInvalidParams(t *testing.T, proxyURL, bucketName string, fileName str
 	q := url.Values{}
 	q.Add(api.URLParamOffset, offset)
 	q.Add(api.URLParamLength, length)
-	_, _, err := client.GetWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, false, true, q)
+	_, _, err := tutils.GetWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, false, true, q)
 	if err == nil {
 		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
 	}
@@ -1379,7 +1378,7 @@ func Test_checksum(t *testing.T) {
 	ochksum := cksumconfig["checksum"].(string)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandObjs(proxyURL, 0, filesize, int(numPuts), bucket, errCh, filesPutCh, ldir,
@@ -1473,7 +1472,7 @@ func deletefromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error,
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, fn, wg, errCh, true)
+		go tutils.Del(proxyURL, bucket, fn, wg, errCh, true)
 	}
 
 	wg.Wait()
@@ -1486,21 +1485,21 @@ func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fi
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go client.Get(proxyURL, bucket, fileslist[i], getsGroup, errCh, !testing.Verbose(), validate)
+			go tutils.Get(proxyURL, bucket, fileslist[i], getsGroup, errCh, !testing.Verbose(), validate)
 		}
 	}
 	getsGroup.Wait()
 }
 
 func evictobjects(t *testing.T, proxyURL string, fileslist []string) {
-	err := client.EvictList(proxyURL, clibucket, fileslist, true, 0)
+	err := tutils.EvictList(proxyURL, clibucket, fileslist, true, 0)
 	if err != nil {
 		t.Errorf("Evict bucket %s failed, err = %v", clibucket, err)
 	}
 }
 
 func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (created bool) {
-	buckets, err := client.ListBuckets(proxyURL, false)
+	buckets, err := tutils.ListBuckets(proxyURL, false)
 	if err != nil {
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
@@ -1509,7 +1508,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		return false
 	}
 
-	err = client.CreateLocalBucket(proxyURL, bucket)
+	err = tutils.CreateLocalBucket(proxyURL, bucket)
 	if err != nil {
 		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
 	}
@@ -1518,7 +1517,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 }
 
 func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
-	buckets, err := client.ListBuckets(proxyURL, false)
+	buckets, err := tutils.ListBuckets(proxyURL, false)
 	if err != nil {
 		t.Fatalf("Failed to read bucket names: %v", err)
 	}
@@ -1527,7 +1526,7 @@ func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
 }
 
 func getPrimaryURL(t *testing.T, proxyURL string) string {
-	url, err := client.GetPrimaryProxy(proxyURL)
+	url, err := tutils.GetPrimaryProxy(proxyURL)
 	if err != nil {
 		t.Fatalf("Failed to get primary proxy URL: %v", err)
 	}
@@ -1535,7 +1534,7 @@ func getPrimaryURL(t *testing.T, proxyURL string) string {
 	return url
 }
 
-func validateBucketProps(t *testing.T, expected dfc.BucketProps, actual client.BucketProps) {
+func validateBucketProps(t *testing.T, expected api.BucketProps, actual tutils.BucketProps) {
 	if actual.CloudProvider != expected.CloudProvider {
 		t.Errorf("Expected cloud provider: %s, received cloud provider: %s", expected.CloudProvider, actual.CloudProvider)
 	}

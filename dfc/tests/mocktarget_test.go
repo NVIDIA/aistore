@@ -14,7 +14,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -80,12 +80,12 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Sma
 	}
 
 	url := proxyURL + common.URLPath(api.Version, api.Cluster)
-	return client.HTTPRequest(http.MethodPost, url, client.NewBytesReader(jsonDaemonInfo))
+	return tutils.HTTPRequest(http.MethodPost, url, tutils.NewBytesReader(jsonDaemonInfo))
 }
 
 func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
 	url := proxyURL + common.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
-	return client.HTTPRequest(http.MethodDelete, url, nil)
+	return tutils.HTTPRequest(http.MethodDelete, url, nil)
 }
 
 type voteRetryMockTarget struct {

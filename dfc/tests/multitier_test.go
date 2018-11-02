@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -61,24 +60,24 @@ func TestGetObjectInNextTier(t *testing.T) {
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err := client.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
+	err := tutils.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
 	bucketProps = dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
-	err = client.SetBucketProps(proxyURL, clibucket, *bucketProps)
+	err = tutils.SetBucketProps(proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := client.Get(proxyURL, TestLocalBucketName, object, nil, nil, false, false)
+	n, _, err := tutils.Get(proxyURL, TestLocalBucketName, object, nil, nil, false, false)
 	tutils.CheckFatal(err, t)
 	if int(n) != len(localData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(localData), int(n))
 	}
 
-	n, _, err = client.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, _, err = tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
 	tutils.CheckFatal(err, t)
 	if int(n) != len(cloudData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(cloudData), int(n))
@@ -110,22 +109,22 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	defer nextTierMock.Close()
 
 	u := proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
-	err := client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
+	err := tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
 
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = client.Evict(proxyURL, clibucket, object)
+	err = tutils.Evict(proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
-	err = client.SetBucketProps(proxyURL, clibucket, *bucketProps)
+	err = tutils.SetBucketProps(proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := client.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, _, err := tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != len(data) {
@@ -159,24 +158,24 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	reader, err := client.NewRandReader(int64(filesize), false)
+	reader, err := tutils.NewRandReader(int64(filesize), false)
 	tutils.CheckFatal(err, t)
 
-	err = client.Put(proxyURL, reader, clibucket, object, true)
+	err = tutils.Put(proxyURL, reader, clibucket, object, true)
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = client.Evict(proxyURL, clibucket, object)
+	err = tutils.Evict(proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
-	err = client.SetBucketProps(proxyURL, clibucket, *bucketProps)
+	err = tutils.SetBucketProps(proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := client.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, _, err := tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != filesize {
@@ -238,20 +237,20 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err := client.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
+	err := tutils.SetBucketProps(proxyURL, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
 	bucketProps = dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
-	bucketProps.WritePolicy = dfc.RWPolicyNextTier
-	err = client.SetBucketProps(proxyURL, clibucket, *bucketProps)
+	bucketProps.WritePolicy = api.RWPolicyNextTier
+	err = tutils.SetBucketProps(proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + common.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
-	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(localData))
+	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(localData))
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForLocalBucketReached != 1 {
@@ -260,7 +259,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	}
 
 	u = proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
-	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(cloudData))
+	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(cloudData))
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForCloudBucketReached != 1 {
@@ -288,21 +287,21 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
-	bucketProps.ReadPolicy = dfc.RWPolicyCloud
-	bucketProps.WritePolicy = dfc.RWPolicyNextTier
-	err := client.SetBucketProps(proxyURL, clibucket, *bucketProps)
+	bucketProps.ReadPolicy = api.RWPolicyCloud
+	bucketProps.WritePolicy = api.RWPolicyNextTier
+	err := tutils.SetBucketProps(proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
-	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
+	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = client.Evict(proxyURL, clibucket, object)
+	err = tutils.Evict(proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
-	n, _, err := client.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, _, err := tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != len(data) {
@@ -329,26 +328,26 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	bucketProps := dfc.NewBucketProps()
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
-	bucketProps.WritePolicy = dfc.RWPolicyCloud
-	err := client.SetBucketProps(proxyURL, clibucket, *bucketProps)
+	bucketProps.WritePolicy = api.RWPolicyCloud
+	err := tutils.SetBucketProps(proxyURL, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
 	u := proxyURL + common.URLPath(api.Version, api.Objects, clibucket, object)
-	err = client.HTTPRequest(http.MethodPut, u, client.NewBytesReader(data))
+	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 
 	deleteCloudObject(proxyURL, clibucket, object, t)
 }
 
 func resetBucketProps(proxyURL, bucket string, t *testing.T) {
-	if err := client.ResetBucketProps(proxyURL, bucket); err != nil {
+	if err := tutils.ResetBucketProps(proxyURL, bucket); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
 }
 
 func deleteCloudObject(proxyURL, bucket, object string, t *testing.T) {
-	if err := client.Del(proxyURL, bucket, object, nil, nil, true); err != nil {
+	if err := tutils.Del(proxyURL, bucket, object, nil, nil, true); err != nil {
 		t.Errorf("bucket/object: %s/%s not deleted, err: %v", bucket, object, err)
 	}
 }

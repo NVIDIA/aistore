@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package client_test
+package tutils_test
 
 import (
 	"bufio"
@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
 )
@@ -41,7 +40,7 @@ func TestPutFile(t *testing.T) {
 
 func TestPutSG(t *testing.T) {
 	size := int64(10)
-	sgl := client.Mem2.NewSGL(size)
+	sgl := tutils.Mem2.NewSGL(size)
 	defer sgl.Free()
 	err := putSG(sgl, size, false /* withHash */)
 	if err != nil {
@@ -52,12 +51,12 @@ func TestPutSG(t *testing.T) {
 func putFile(size int64, withHash bool) error {
 	fn := "dfc-client-test-" + tutils.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32)
 	dir := "/tmp"
-	r, err := client.NewFileReader(dir, fn, size, withHash)
+	r, err := tutils.NewFileReader(dir, fn, size, withHash)
 	if err != nil {
 		return err
 	}
 
-	err = client.Put(server.URL, r, "bucket", "key", true /* silent */)
+	err = tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
 
 	r.Close()
 	os.Remove(dir + "/" + fn)
@@ -65,34 +64,34 @@ func putFile(size int64, withHash bool) error {
 }
 
 func putInMem(size int64, withHash bool) error {
-	r, err := client.NewInMemReader(size, withHash)
+	r, err := tutils.NewInMemReader(size, withHash)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
-	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
+	return tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
 func putRand(size int64, withHash bool) error {
-	r, err := client.NewRandReader(size, withHash)
+	r, err := tutils.NewRandReader(size, withHash)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
-	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
+	return tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
 func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 	sgl.Reset()
-	r, err := client.NewSGReader(sgl, size, true /* withHash */)
+	r, err := tutils.NewSGReader(sgl, size, true /* withHash */)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
 
-	return client.Put(server.URL, r, "bucket", "key", true /* silent */)
+	return tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
@@ -123,7 +122,7 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := client.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(common.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -162,7 +161,7 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := client.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(common.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -208,7 +207,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := client.Mem2.NewSGL(common.MiB)
+		sgl := tutils.Mem2.NewSGL(common.MiB)
 		defer sgl.Free()
 
 		for pb.Next() {

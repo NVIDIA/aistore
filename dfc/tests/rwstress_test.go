@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -152,7 +151,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 			keyname := fmt.Sprintf("%s/%s", rwdir, fileNames[idx])
 
 			// Note: This test depends on the files it creates, so ignore reader type, always use file reader
-			r, err := client.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
+			r, err := tutils.NewFileReader(baseDir, keyname, fileSize, true /* withHash */)
 			if err != nil {
 				tutils.Logf("PUT write FAIL: %v\n", err)
 				t.Error(err)
@@ -168,12 +167,12 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						client.PutAsync(&wg, proxyURL, r, clibucket, keyname, errCh, true /* silent */)
+						tutils.PutAsync(&wg, proxyURL, r, clibucket, keyname, errCh, true /* silent */)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					err = client.Put(proxyURL, r, clibucket, keyname, true /* silent */)
+					err = tutils.Put(proxyURL, r, clibucket, keyname, true /* silent */)
 					if err != nil {
 						errCh <- err
 					}
@@ -223,12 +222,12 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Del(proxyURL, clibucket, keyname, wg, errCh, true)
+					tutils.Del(proxyURL, clibucket, keyname, wg, errCh, true)
 					unlockFile(localIdx, rwFileDeleted)
 					atomic.AddInt64(&delCounter, -1)
 				}()
 			} else {
-				client.Del(proxyURL, clibucket, keyname, nil, errCh, true)
+				tutils.Del(proxyURL, clibucket, keyname, nil, errCh, true)
 				unlockFile(idx, rwFileDeleted)
 			}
 
@@ -275,12 +274,12 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					client.Get(proxyURL, clibucket, keyname, wg, errCh, true, false)
+					tutils.Get(proxyURL, clibucket, keyname, wg, errCh, true, false)
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
 				}()
 			} else {
-				client.Get(proxyURL, clibucket, keyname, nil, errCh, true, false)
+				tutils.Get(proxyURL, clibucket, keyname, nil, errCh, true, false)
 				unlockFile(idx, rwFileExists)
 			}
 			currIdx = idx + 1

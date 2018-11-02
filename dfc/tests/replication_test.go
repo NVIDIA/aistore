@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -30,7 +29,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 		object   = "TestReplicationReceiveOneObject"
 		fileSize = int64(1024)
 	)
-	reader, err := client.NewRandReader(fileSize, false)
+	reader, err := tutils.NewRandReader(fileSize, false)
 	tutils.CheckFatal(err, t)
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
@@ -49,7 +48,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLRepl)
 		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, xxhash, reader)
 		tutils.CheckFatal(err, t)
-		client.Del(proxyURL, clibucket, object, nil, nil, true)
+		tutils.Del(proxyURL, clibucket, object, nil, nil, true)
 	}
 
 }
@@ -59,7 +58,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 		object   = "TestReplicationReceiveOneObjectNoChecksum"
 		fileSize = int64(1024)
 	)
-	reader, err := client.NewRandReader(fileSize, false)
+	reader, err := tutils.NewRandReader(fileSize, false)
 	tutils.CheckFatal(err, t)
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
@@ -74,7 +73,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 		api.HeaderDFCReplicationSrc: dummySrcURL,
 	}
 	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
-	err = client.HTTPRequest(http.MethodPut, url, reader, headers)
+	err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 
 	if err == nil {
 		t.Error("Replication PUT to local bucket without checksum didn't fail")
@@ -83,7 +82,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	if isCloud {
 		url = proxyURLRepl + common.URLPath(api.Version, api.Objects, clibucket, object)
 		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-		err = client.HTTPRequest(http.MethodPut, url, reader, headers)
+		err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 
 		if err == nil {
 			t.Error("Replication PUT to local bucket without checksum didn't fail")
@@ -96,7 +95,7 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 		object   = "TestReplicationReceiveOneObjectBadChecksum"
 		fileSize = int64(1024)
 	)
-	reader, err := client.NewRandReader(fileSize, false)
+	reader, err := tutils.NewRandReader(fileSize, false)
 	tutils.CheckFatal(err, t)
 
 	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
@@ -132,7 +131,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		bucket       = clibucket
 		size         = int64(fileSize)
-		r            client.Reader
+		r            tutils.Reader
 		sgl          *memsys.SGL
 		errCnt       int
 		err          error
@@ -160,7 +159,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(size)
+		sgl = tutils.Mem2.NewSGL(size)
 		defer sgl.Free()
 	}
 
@@ -168,9 +167,9 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		object := SmokeStr + "/" + fname
 		if sgl != nil {
 			sgl.Reset()
-			r, err = client.NewSGReader(sgl, int64(size), true)
+			r, err = tutils.NewSGReader(sgl, int64(size), true)
 		} else {
-			r, err = client.NewReader(client.ParamReader{Type: readerType, SGL: nil, Path: SmokeDir, Name: fname, Size: int64(size)})
+			r, err = tutils.NewReader(tutils.ParamReader{Type: readerType, SGL: nil, Path: SmokeDir, Name: fname, Size: int64(size)})
 		}
 
 		if err != nil {
@@ -189,7 +188,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 }
 
 func getPrimaryReplicationURL(t *testing.T, proxyURL string) string {
-	smap, err := client.GetClusterMap(proxyURL)
+	smap, err := tutils.GetClusterMap(proxyURL)
 	if err != nil {
 		t.Fatalf("Failed to get primary proxy replication URL, error: %v", err)
 	}
@@ -206,12 +205,12 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 	return xxHashVal
 }
 
-func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader client.Reader) error {
+func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader tutils.Reader) error {
 	url := dstProxyURL + common.URLPath(api.Version, api.Objects, bucket, object)
 	headers := map[string]string{
 		api.HeaderDFCReplicationSrc: srcURL,
 		api.HeaderDFCChecksumType:   api.ChecksumXXHash,
 		api.HeaderDFCChecksumVal:    xxhash,
 	}
-	return client.HTTPRequest(http.MethodPut, url, reader, headers)
+	return tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 }

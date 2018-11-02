@@ -2,7 +2,6 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-
 // Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
@@ -1005,7 +1004,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		errstr      string
 		errcode     int
 		bucketprops common.SimpleKVs
-		cksumcfg    *cksumconfig
+		cksumcfg    *api.Cksumconfig
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Buckets)
 	if err != nil {
@@ -1279,7 +1278,7 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p BucketProps, clone *bucketMD) (errstr string) {
+func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p api.BucketProps, clone *bucketMD) (errstr string) {
 	// ready to receive migrated obj-s _after_ that point
 	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
 	clone.LBmap[bucketTo] = p
@@ -1458,7 +1457,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		nextTierURL string
 		vchanged    bool
 		inNextTier  bool
-		bucketProps BucketProps
+		bucketProps api.BucketProps
 		err         error
 	)
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
@@ -1512,7 +1511,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	// cold
 	nextTierURL = bucketProps.NextTierURL
-	if nextTierURL != "" && bucketProps.ReadPolicy == RWPolicyNextTier {
+	if nextTierURL != "" && bucketProps.ReadPolicy == api.RWPolicyNextTier {
 		if inNextTier, errstr, errcode = t.objectInNextTier(nextTierURL, bucket, objname); errstr != "" {
 			t.rtnamemap.unlockname(uname, true)
 			return
@@ -2187,7 +2186,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 			return
 		}
 		_, p := bucketmd.get(bucket, islocal)
-		if p.NextTierURL != "" && p.WritePolicy == RWPolicyNextTier {
+		if p.NextTierURL != "" && p.WritePolicy == api.RWPolicyNextTier {
 			if errstr, errcode = t.putObjectNextTier(p.NextTierURL, bucket, objname, file, reopenFile); errstr != "" {
 				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
 					bucket, objname, errstr, errcode)

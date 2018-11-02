@@ -1,8 +1,8 @@
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -46,11 +46,11 @@ type dfconfig struct {
 	Periodic         periodic          `json:"periodic"`
 	Timeout          timeoutconfig     `json:"timeout"`
 	Proxy            proxyconfig       `json:"proxyconfig"`
-	LRU              lruconfig         `json:"lru_config"`
+	LRU              api.Lruconfig     `json:"lru_config"`
 	Xaction          xactionConfig     `json:"xaction_config"`
 	Rebalance        rebalanceconf     `json:"rebalance_conf"`
 	Replication      replicationconfig `json:"replication"`
-	Cksum            cksumconfig       `json:"cksum_config"`
+	Cksum            api.Cksumconfig   `json:"cksum_config"`
 	Ver              versionconfig     `json:"version_config"`
 	FSpaths          common.SimpleKVs  `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
@@ -113,17 +113,6 @@ type proxyconfig struct {
 	DiscoveryURL string `json:"discovery_url"`
 }
 
-type lruconfig struct {
-	LowWM              uint32        `json:"lowwm"`             // capacity usage low watermark
-	HighWM             uint32        `json:"highwm"`            // capacity usage high watermark
-	AtimeCacheMax      uint64        `json:"atime_cache_max"`   // atime cache - max num entries
-	DontEvictTimeStr   string        `json:"dont_evict_time"`   // eviction is not permitted during [atime, atime + dont]
-	CapacityUpdTimeStr string        `json:"capacity_upd_time"` // min time to update capacity
-	DontEvictTime      time.Duration `json:"-"`                 // omitempty
-	CapacityUpdTime    time.Duration `json:"-"`                 // ditto
-	LRUEnabled         bool          `json:"lru_enabled"`       // LRU will only run when LRUEnabled is true
-}
-
 type rebalanceconf struct {
 	DestRetryTimeStr string        `json:"dest_retry_time"`
 	DestRetryTime    time.Duration `json:"-"` //
@@ -169,13 +158,6 @@ type httpcnf struct {
 	Key           string `json:"server_key"`         // HTTPS: openssl key
 	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
 	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
-}
-
-type cksumconfig struct {
-	Checksum                string `json:"checksum"`                   // DFC checksum: xxhash:none
-	ValidateColdGet         bool   `json:"validate_checksum_cold_get"` // MD5 (ETag) validation upon cold GET
-	ValidateWarmGet         bool   `json:"validate_checksum_warm_get"` // MD5 (ETag) validation upon warm GET
-	EnableReadRangeChecksum bool   `json:"enable_read_range_checksum"` // Return read range checksum otherwise return entire object checksum
 }
 
 type versionconfig struct {

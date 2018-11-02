@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -515,7 +514,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		}
 
 		url := v.PublicNet.DirectURL + common.URLPath(api.Version, api.Daemon, api.SyncSmap)
-		err := client.HTTPRequest(http.MethodPut, url, client.NewBytesReader(jsonMap))
+		err := tutils.HTTPRequest(http.MethodPut, url, tutils.NewBytesReader(jsonMap))
 		tutils.CheckFatal(err, t)
 
 		n--
@@ -584,7 +583,7 @@ func concurrentPutGetDel(t *testing.T) {
 func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 	random := rand.New(rand.NewSource(seed))
 	for i := 0; i < count; i++ {
-		reader, err := client.NewRandReader(fileSize, true /* withHash */)
+		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			return fmt.Errorf("Error creating reader: %v", err)
 		}
@@ -592,17 +591,17 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 
-		err = client.Put(proxyURL, reader, clibucket, keyname, true /* silent */)
+		err = tutils.Put(proxyURL, reader, clibucket, keyname, true /* silent */)
 		if err != nil {
 			return fmt.Errorf("Error executing put: %v", err)
 		}
 
-		client.Get(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */, false /* validate */)
+		tutils.Get(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */, false /* validate */)
 		if err != nil {
 			return fmt.Errorf("Error executing get: %v", err)
 		}
 
-		err = client.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */)
+		err = tutils.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */)
 		if err != nil {
 			return fmt.Errorf("Error executing del: %v", err)
 		}
@@ -633,7 +632,7 @@ loop:
 			for {
 				select {
 				case keyname := <-missedDeleteCh:
-					err := client.Del(url, localBucketName, keyname, nil, errCh, true)
+					err := tutils.Del(url, localBucketName, keyname, nil, errCh, true)
 					if err != nil {
 						missedDeleteCh <- keyname
 					}
@@ -646,7 +645,7 @@ loop:
 		default:
 		}
 
-		reader, err := client.NewRandReader(fileSize, true /* withHash */)
+		reader, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		if err != nil {
 			errCh <- err
 			continue
@@ -655,18 +654,18 @@ loop:
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 
-		err = client.Put(proxyURL, reader, localBucketName, keyname, true /* silent */)
+		err = tutils.Put(proxyURL, reader, localBucketName, keyname, true /* silent */)
 		if err != nil {
 			errCh <- err
 			continue
 		}
 
-		_, _, err = client.Get(proxyURL, localBucketName, keyname, nil, errCh, true, false)
+		_, _, err = tutils.Get(proxyURL, localBucketName, keyname, nil, errCh, true, false)
 		if err != nil {
 			errCh <- err
 		}
 
-		err = client.Del(proxyURL, localBucketName, keyname, nil, errCh, true)
+		err = tutils.Del(proxyURL, localBucketName, keyname, nil, errCh, true)
 		if err != nil {
 			missedDeleteCh <- keyname
 		}
@@ -675,7 +674,7 @@ loop:
 	// process left over not deleted objects
 	close(missedDeleteCh)
 	for n := range missedDeleteCh {
-		client.Del(proxyURL, localBucketName, n, nil, nil, true)
+		tutils.Del(proxyURL, localBucketName, n, nil, nil, true)
 	}
 }
 
@@ -796,7 +795,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 	url := directURL + common.URLPath(api.Version, api.Cluster, api.Proxy, toID)
 	// http://host:8081/v1/cluster/proxy/15205:8080
 	tutils.Logf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
-	err := client.HTTPRequest(http.MethodPut, url, nil)
+	err := tutils.HTTPRequest(http.MethodPut, url, nil)
 
 	smap, err = waitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
@@ -936,7 +935,7 @@ func getProcess(port string) (string, string, []string, error) {
 // Read Pmap from all proxies and checks versions. If any proxy's smap version
 // differs from primary's one then an error returned
 func checkPmapVersions(proxyURL string) error {
-	smapPrimary, err := client.GetClusterMap(proxyURL)
+	smapPrimary, err := tutils.GetClusterMap(proxyURL)
 	if err != nil {
 		return err
 	}
@@ -945,7 +944,7 @@ func checkPmapVersions(proxyURL string) error {
 		if proxyURL == proxyInfo.PublicNet.DirectURL {
 			continue
 		}
-		smap, err := client.GetClusterMap(proxyInfo.PublicNet.DirectURL)
+		smap, err := tutils.GetClusterMap(proxyInfo.PublicNet.DirectURL)
 		if err != nil {
 			return err
 		}
@@ -998,7 +997,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 
 	var loopCnt int = 0
 	for {
-		smap, err := client.GetClusterMap(proxyURL)
+		smap, err := tutils.GetClusterMap(proxyURL)
 		if err != nil && !common.IsErrConnectionRefused(err) {
 			return cluster.Smap{}, err
 		}
@@ -1021,7 +1020,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if err == nil && smap.Version == lastVersion && smap.Version > origVersion && doCheckSMap {
 			for {
-				smap, err = client.GetClusterMap(proxyURL)
+				smap, err = tutils.GetClusterMap(proxyURL)
 				if err == nil {
 					break
 				}
@@ -1043,7 +1042,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 					proxyID = p.DaemonID
 				}
 			}
-			err = client.WaitMapVersionSync(timeUntil, smap, origVersion, []string{mockDaemonID, proxyID})
+			err = tutils.WaitMapVersionSync(timeUntil, smap, origVersion, []string{mockDaemonID, proxyID})
 			return smap, err
 		}
 
@@ -1274,7 +1273,7 @@ func networkFailurePrimary(t *testing.T) {
 	// connections and starts talking to neighbors
 	waitProgressBar("Wait for old primary is connected to network", 5*time.Second)
 
-	oldSmap, err := client.GetClusterMap(oldPrimaryURL)
+	oldSmap, err := tutils.GetClusterMap(oldPrimaryURL)
 	tutils.CheckFatal(err, t)
 
 	// the original primary still thinks that it is the primary, so its smap
@@ -1287,7 +1286,7 @@ func networkFailurePrimary(t *testing.T) {
 	purl := oldPrimaryURL + common.URLPath(api.Version, api.Daemon, api.Proxy, newPrimaryID) +
 		fmt.Sprintf("?%s=true&%s=%s", api.URLParamForce, api.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
 
-	err = client.HTTPRequest(http.MethodPut, purl, nil)
+	err = tutils.HTTPRequest(http.MethodPut, purl, nil)
 	tutils.CheckFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(

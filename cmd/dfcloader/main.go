@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/dfcpub/cmd/dfcloader/stats"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -53,7 +52,7 @@ type (
 		err       error
 		start     time.Time
 		end       time.Time
-		latencies client.HTTPLatencies
+		latencies tutils.HTTPLatencies
 	}
 
 	params struct {
@@ -120,17 +119,17 @@ func parseCmdLine() (params, error) {
 	flag.BoolVar(&p.verifyHash, "verifyhash", false, "True if verify xxhash during get")
 	flag.IntVar(&p.minSize, "minsize", 1024, "Minimal object size in KB")
 	flag.IntVar(&p.maxSize, "maxsize", 1048576, "Maximal object size in KB")
-	flag.StringVar(&p.readerType, "readertype", client.ReaderTypeSG,
-		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", client.ReaderTypeSG,
-			client.ReaderTypeFile, client.ReaderTypeInMem, client.ReaderTypeRand))
+	flag.StringVar(&p.readerType, "readertype", tutils.ReaderTypeSG,
+		fmt.Sprintf("Type of reader. {%s(default) | %s | %s | %s", tutils.ReaderTypeSG,
+			tutils.ReaderTypeFile, tutils.ReaderTypeInMem, tutils.ReaderTypeRand))
 	flag.IntVar(&p.loaderID, "loaderid", 1, "ID to identify a loader when multiple instances of loader running on the same host")
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for local statsd server")
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
 	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
 
 	flag.Parse()
-	p.usingSG = p.readerType == client.ReaderTypeSG
-	p.usingFile = p.readerType == client.ReaderTypeFile
+	p.usingSG = p.readerType == tutils.ReaderTypeSG
+	p.usingFile = p.readerType == tutils.ReaderTypeFile
 
 	// Sanity check
 	if p.maxSize < p.minSize {
@@ -201,14 +200,14 @@ func main() {
 	}
 
 	if runParams.isLocal {
-		exists, err := client.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
+		exists, err := tutils.DoesLocalBucketExist(runParams.proxyURL, runParams.bucket)
 		if err != nil {
 			fmt.Println("Failed to get local bucket lists", runParams.bucket, "err = ", err)
 			return
 		}
 
 		if !exists {
-			err := client.CreateLocalBucket(runParams.proxyURL, runParams.bucket)
+			err := tutils.CreateLocalBucket(runParams.proxyURL, runParams.bucket)
 			if err != nil {
 				fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
 				return
@@ -722,14 +721,14 @@ func cleanUp() {
 		b := common.Min(t, runParams.batchSize)
 		n := t / b
 		for i := 0; i < n; i++ {
-			err := client.DeleteList(runParams.proxyURL, runParams.bucket, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
+			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
 		}
 
 		if t%b != 0 {
-			err := client.DeleteList(runParams.proxyURL, runParams.bucket, objs[n*b:], true /* wait */, 0 /* wait forever */)
+			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, objs[n*b:], true /* wait */, 0 /* wait forever */)
 			if err != nil {
 				fmt.Println("delete err ", err)
 			}
@@ -760,7 +759,7 @@ func cleanUp() {
 	wg.Wait()
 
 	if runParams.isLocal {
-		client.DestroyLocalBucket(runParams.proxyURL, runParams.bucket)
+		tutils.DestroyLocalBucket(runParams.proxyURL, runParams.bucket)
 	}
 
 	fmt.Println(prettyTimeStamp() + " Clean up done")
@@ -769,6 +768,6 @@ func cleanUp() {
 // bootStrap boot straps existing objects in the bucket
 func bootStrap() error {
 	var err error
-	allObjects, err = client.ListObjects(runParams.proxyURL, runParams.bucket, myName, 0)
+	allObjects, err = tutils.ListObjects(runParams.proxyURL, runParams.bucket, myName, 0)
 	return err
 }

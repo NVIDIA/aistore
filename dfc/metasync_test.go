@@ -1,7 +1,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-
 package dfc
 
 import (
@@ -136,26 +135,26 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
-	bucketmd.add("bucket1", true, BucketProps{
+	bucketmd.add("bucket1", true, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://foo.com",
-		CksumConf: cksumconfig{
+		CksumConf: api.Cksumconfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, BucketProps{
-		CksumConf: cksumconfig{
+	bucketmd.add("bucket2", true, api.BucketProps{
+		CksumConf: api.Cksumconfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket3", false, BucketProps{
+	bucketmd.add("bucket3", false, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
-		CksumConf: cksumconfig{
+		CksumConf: api.Cksumconfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket4", false, BucketProps{
-		CksumConf: cksumconfig{
+	bucketmd.add("bucket4", false, api.BucketProps{
+		CksumConf: api.Cksumconfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
@@ -559,16 +558,16 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add("bucket1", true, BucketProps{
+	bucketmd.add("bucket1", true, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
-		CksumConf: cksumconfig{
+		CksumConf: api.Cksumconfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, BucketProps{
+	bucketmd.add("bucket2", true, api.BucketProps{
 		CloudProvider: api.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
-		CksumConf: cksumconfig{
+		CksumConf: api.Cksumconfig{
 			Checksum: api.ChecksumInherit,
 		},
 	})

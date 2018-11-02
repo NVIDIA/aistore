@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/pkg/client"
+	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 func TestName(t *testing.T) {
@@ -371,7 +371,7 @@ func readDir(t *testing.T, fs webdav.FileSystem, pth string) ([]os.FileInfo, err
 // This requirement can be removed after proxy/target can be started in unit test
 // Also assumes the localhost:8080 is one of the proxy
 func TestFS(t *testing.T) {
-	leader, err := client.GetPrimaryProxy("http://127.0.0.1:8080")
+	leader, err := tutils.GetPrimaryProxy("http://127.0.0.1:8080")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,7 +2,6 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-
 // Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
@@ -701,7 +700,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	props := &BucketProps{} // every field has to have zero value
+	props := &api.BucketProps{} // every field has to have zero value
 	msg := api.ActionMsg{Value: props}
 	if p.readJSON(w, r, &msg) != nil {
 		return
@@ -830,7 +829,7 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props BucketProps,
+func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props api.BucketProps,
 	msg *api.ActionMsg, method string) bool {
 	smap4bcast := p.smapowner.get()
 
@@ -2507,7 +2506,7 @@ func (p *proxyrunner) urlOutsideCluster(url string) bool {
 	return true
 }
 
-func (p *proxyrunner) validateBucketProps(props *BucketProps, isLocal bool) error {
+func (p *proxyrunner) validateBucketProps(props *api.BucketProps, isLocal bool) error {
 	if props.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(props.NextTierURL); err != nil {
 			return fmt.Errorf("invalid next tier URL: %s, err: %v", props.NextTierURL, err)
@@ -2520,17 +2519,17 @@ func (p *proxyrunner) validateBucketProps(props *BucketProps, isLocal bool) erro
 	if err := validateCloudProvider(props.CloudProvider, isLocal); err != nil {
 		return err
 	}
-	if props.ReadPolicy != "" && props.ReadPolicy != RWPolicyCloud && props.ReadPolicy != RWPolicyNextTier {
+	if props.ReadPolicy != "" && props.ReadPolicy != api.RWPolicyCloud && props.ReadPolicy != api.RWPolicyNextTier {
 		return fmt.Errorf("invalid read policy: %s", props.ReadPolicy)
 	}
-	if props.ReadPolicy == RWPolicyCloud && isLocal {
-		return fmt.Errorf("read policy for local bucket cannot be '%s'", RWPolicyCloud)
+	if props.ReadPolicy == api.RWPolicyCloud && isLocal {
+		return fmt.Errorf("read policy for local bucket cannot be '%s'", api.RWPolicyCloud)
 	}
-	if props.WritePolicy != "" && props.WritePolicy != RWPolicyCloud && props.WritePolicy != RWPolicyNextTier {
+	if props.WritePolicy != "" && props.WritePolicy != api.RWPolicyCloud && props.WritePolicy != api.RWPolicyNextTier {
 		return fmt.Errorf("invalid write policy: %s", props.WritePolicy)
 	}
-	if props.WritePolicy == RWPolicyCloud && isLocal {
-		return fmt.Errorf("write policy for local bucket cannot be '%s'", RWPolicyCloud)
+	if props.WritePolicy == api.RWPolicyCloud && isLocal {
+		return fmt.Errorf("write policy for local bucket cannot be '%s'", api.RWPolicyCloud)
 	}
 	if props.NextTierURL != "" {
 		if props.CloudProvider == "" {
@@ -2538,12 +2537,12 @@ func (p *proxyrunner) validateBucketProps(props *BucketProps, isLocal bool) erro
 				api.ProviderAmazon, api.ProviderGoogle, api.ProviderDFC)
 		}
 		if props.ReadPolicy == "" {
-			props.ReadPolicy = RWPolicyNextTier
+			props.ReadPolicy = api.RWPolicyNextTier
 		}
 		if props.WritePolicy == "" && !isLocal {
-			props.WritePolicy = RWPolicyCloud
+			props.WritePolicy = api.RWPolicyCloud
 		} else if props.WritePolicy == "" && isLocal {
-			props.WritePolicy = RWPolicyNextTier
+			props.WritePolicy = api.RWPolicyNextTier
 		}
 	}
 	if props.CksumConf.Checksum != api.ChecksumInherit &&
@@ -2645,7 +2644,7 @@ func validateCloudProvider(provider string, isLocal bool) error {
 	return nil
 }
 
-func (p *proxyrunner) copyBucketProps(oldProps *BucketProps, newProps *BucketProps, bucket string) {
+func (p *proxyrunner) copyBucketProps(oldProps *api.BucketProps, newProps *api.BucketProps, bucket string) {
 	oldProps.NextTierURL = newProps.NextTierURL
 	oldProps.CloudProvider = newProps.CloudProvider
 	if newProps.ReadPolicy != "" {

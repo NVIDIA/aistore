@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,7 +28,6 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/pkg/client"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/json-iterator/go"
 )
@@ -87,14 +85,14 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
-	smap, err := client.GetClusterMap(proxyURL)
+	smap, err := tutils.GetClusterMap(proxyURL)
 	tutils.CheckFatal(err, t)
 	if len(smap.Tmap) == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -107,7 +105,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	close(errCh)
 
 	msg := &api.GetMsg{GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
-	bl, err := client.ListBucket(proxyURL, bucket, msg, num)
+	bl, err := tutils.ListBucket(proxyURL, bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -121,7 +119,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		if _, ok := targets[e.TargetURL]; !ok {
 			targets[e.TargetURL] = struct{}{}
 		}
-		l, _, err := client.Get(e.TargetURL, bucket, e.Name, nil, nil, false, false)
+		l, _, err := tutils.Get(e.TargetURL, bucket, e.Name, nil, nil, false, false)
 		tutils.CheckFatal(err, t)
 		if uint64(l) != filesize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", filesize, l)
@@ -134,7 +132,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.GetProps = ""
-	bl, err = client.ListBucket(proxyURL, bucket, msg, num)
+	bl, err = tutils.ListBucket(proxyURL, bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -171,14 +169,14 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		t.Skip("TestCloudListBucketGetTargetURL requires a cloud bucket")
 	}
 
-	clusterMap, err := client.GetClusterMap(proxyURL)
+	clusterMap, err := tutils.GetClusterMap(proxyURL)
 	tutils.CheckFatal(err, t)
 	if len(clusterMap.Tmap) == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
 	}
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(fileSize)
+		sgl = tutils.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 	putRandObjs(proxyURL, seed, fileSize, numberOfFiles, bucketName, errCh, fileNameCh, SmokeDir, prefix, true, sgl)
@@ -190,14 +188,14 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		for i := 0; i < numberOfFiles; i++ {
 			files[i] = prefix + "/" + <-fileNameCh
 		}
-		err := client.DeleteList(proxyURL, bucketName, files, true, 0)
+		err := tutils.DeleteList(proxyURL, bucketName, files, true, 0)
 		if err != nil {
 			t.Error("Unable to delete files during cleanup from cloud bucket.")
 		}
 	}()
 
 	listBucketMsg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: api.GetTargetURL}
-	bucketList, err := client.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
+	bucketList, err := tutils.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -212,7 +210,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		if _, ok := targets[object.TargetURL]; !ok {
 			targets[object.TargetURL] = struct{}{}
 		}
-		objectSize, _, err := client.Get(object.TargetURL, bucketName, object.Name,
+		objectSize, _, err := tutils.Get(object.TargetURL, bucketName, object.Name,
 			nil, nil, false, false)
 		tutils.CheckFatal(err, t)
 		if uint64(objectSize) != fileSize {
@@ -228,7 +226,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	listBucketMsg.GetProps = ""
-	bucketList, err = client.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
+	bucketList, err = tutils.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -261,7 +259,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 
@@ -289,7 +287,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.Logf("Corrupting file data[%s]: %s\n", fName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	tutils.CheckFatal(err, t)
-	_, _, err = client.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
+	_, _, err = tutils.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
@@ -301,7 +299,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	if errstr := dfc.Setxattr(fqn, api.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = client.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
+	_, _, err = tutils.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
@@ -327,7 +325,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 	destroyLocalBucket(t, proxyURL, renamedBucket)
 	defer destroyLocalBucket(t, proxyURL, renamedBucket)
 
-	b, err := client.ListBuckets(proxyURL, true)
+	b, err := tutils.ListBuckets(proxyURL, true)
 	tutils.CheckFatal(err, t)
 
 	doBucketRegressionTest(t, proxyURL, regressionTestData{
@@ -349,7 +347,7 @@ func TestListObjects(t *testing.T) {
 		sgl        *memsys.SGL
 	)
 	if usingSG {
-		sgl = client.Mem2.NewSGL(fileSize)
+		sgl = tutils.Mem2.NewSGL(fileSize)
 		defer sgl.Free()
 	}
 	tutils.Logf("Create a list of %d objects", numFiles)
@@ -449,7 +447,7 @@ func TestRenameObjects(t *testing.T) {
 		wg := &sync.WaitGroup{}
 		for _, fname := range bnewnames {
 			wg.Add(1)
-			go client.Del(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, wg, errCh, !testing.Verbose())
+			go tutils.Del(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, wg, errCh, !testing.Verbose())
 		}
 
 		if usingFile {
@@ -474,7 +472,7 @@ func TestRenameObjects(t *testing.T) {
 	}
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(1024 * 1024)
+		sgl = tutils.Mem2.NewSGL(1024 * 1024)
 		defer sgl.Free()
 	}
 
@@ -496,7 +494,7 @@ func TestRenameObjects(t *testing.T) {
 		}
 
 		url := proxyURL + common.URLPath(api.Version, api.Objects, RenameLocalBucketName, RenameStr, fname)
-		if err := client.HTTPRequest(http.MethodPost, url, client.NewBytesReader(injson)); err != nil {
+		if err := tutils.HTTPRequest(http.MethodPost, url, tutils.NewBytesReader(injson)); err != nil {
 			t.Fatalf("Failed to send request, err = %v", err)
 		}
 
@@ -506,7 +504,7 @@ func TestRenameObjects(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
-		client.Get(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, nil,
+		tutils.Get(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, nil,
 			errCh, !testing.Verbose(), false /* validate */)
 	}
 	selectErr(errCh, "get", t, false)
@@ -588,14 +586,14 @@ func TestRebalance(t *testing.T) {
 	}
 	targetDirectURL = smap.Tmap[sid].PublicNet.DirectURL
 
-	err := client.UnregisterTarget(proxyURL, sid)
+	err := tutils.UnregisterTarget(proxyURL, sid)
 	tutils.CheckFatal(err, t)
 	tutils.Logf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
 	//
 	// step 3. put random files => (cluster - 1)
 	//
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandObjs(proxyURL, baseseed, filesize, numPuts, clibucket, errCh, filesPutCh, SmokeDir,
@@ -605,7 +603,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 4. register back
 	//
-	err = client.RegisterTarget(sid, targetDirectURL, smap)
+	err = tutils.RegisterTarget(sid, targetDirectURL, smap)
 	tutils.CheckFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
@@ -648,7 +646,7 @@ func TestRebalance(t *testing.T) {
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, clibucket, "smoke/"+fname, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, clibucket, "smoke/"+fname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, abortonerr)
@@ -916,11 +914,11 @@ func TestPrefetchList(t *testing.T) {
 
 	// 3. Evict those objects from the cache and prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err := client.EvictList(proxyURL, clibucket, files, true, 0)
+	err := tutils.EvictList(proxyURL, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = client.PrefetchList(proxyURL, clibucket, files, true, 0)
+	err = tutils.PrefetchList(proxyURL, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -955,13 +953,13 @@ func TestDeleteList(t *testing.T) {
 
 	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
-		r, err := client.NewRandReader(fileSize, true /* withHash */)
+		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		tutils.CheckFatal(err, t)
 
 		keyname := fmt.Sprintf("%s%d", prefix, i)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, keyname, errCh, true)
+		go tutils.PutAsync(wg, proxyURL, r, clibucket, keyname, errCh, true)
 		files = append(files, keyname)
 
 	}
@@ -970,14 +968,14 @@ func TestDeleteList(t *testing.T) {
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the objects
-	err = client.DeleteList(proxyURL, clibucket, files, true, 0)
+	err = tutils.DeleteList(proxyURL, clibucket, files, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 3. Check to see that all the files have been deleted
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1050,11 +1048,11 @@ func TestPrefetchRange(t *testing.T) {
 
 	// 4. Evict those objects from the cache, and then prefetch them
 	tutils.Logf("Evicting and Prefetching %d objects\n", len(files))
-	err = client.EvictRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = tutils.EvictRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
-	err = client.PrefetchRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
+	err = tutils.PrefetchRange(proxyURL, clibucket, prefetchPrefix, prefetchRegex, prefetchRange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1096,25 +1094,25 @@ func TestDeleteRange(t *testing.T) {
 
 	// 1. Put files to delete
 	for i := 0; i < numfiles; i++ {
-		r, err := client.NewRandReader(fileSize, true /* withHash */)
+		r, err := tutils.NewRandReader(fileSize, true /* withHash */)
 		tutils.CheckFatal(err, t)
 
 		wg.Add(1)
-		go client.PutAsync(wg, proxyURL, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errCh, true)
+		go tutils.PutAsync(wg, proxyURL, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errCh, true)
 	}
 	wg.Wait()
 	selectErr(errCh, "put", t, true)
 	tutils.Logf("PUT done.\n")
 
 	// 2. Delete the small range of objects
-	err = client.DeleteRange(proxyURL, clibucket, prefix, regex, smallrange, true, 0)
+	err = tutils.DeleteRange(proxyURL, clibucket, prefix, regex, smallrange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := client.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
@@ -1134,13 +1132,13 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 4. Delete the big range of objects
-	err = client.DeleteRange(proxyURL, clibucket, prefix, regex, bigrange, true, 0)
+	err = tutils.DeleteRange(proxyURL, clibucket, prefix, regex, bigrange, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = client.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err = tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1166,7 +1164,7 @@ func TestStressDeleteRange(t *testing.T) {
 		tenth        = numFiles / 10
 		partial_rnge = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		rnge         = fmt.Sprintf("0:%d", numFiles)
-		readersList  [numReaders]client.Reader
+		readersList  [numReaders]tutils.Reader
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -1176,15 +1174,15 @@ func TestStressDeleteRange(t *testing.T) {
 		random := rand.New(rand.NewSource(int64(i)))
 		size := random.Int63n(common.KiB*128) + common.KiB/3
 		tutils.CheckFatal(err, t)
-		reader, err := client.NewRandReader(size, true /* withHash */)
+		reader, err := tutils.NewRandReader(size, true /* withHash */)
 		tutils.CheckFatal(err, t)
 		readersList[i] = reader
 		wg.Add(1)
 
-		go func(i int, reader client.Reader) {
+		go func(i int, reader tutils.Reader) {
 			for j := 0; j < numFiles/numReaders; j++ {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
-				err := client.Put(proxyURL, reader, TestLocalBucketName, objname, true)
+				err := tutils.Put(proxyURL, reader, TestLocalBucketName, objname, true)
 				if err != nil {
 					errCh <- err
 				}
@@ -1199,7 +1197,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 2. Delete a range of objects
 	tutils.Logf("Deleting objects in range: %s\n", partial_rnge)
-	err = client.DeleteRange(proxyURL, TestLocalBucketName, prefix, regex, partial_rnge, true, 0)
+	err = tutils.DeleteRange(proxyURL, TestLocalBucketName, prefix, regex, partial_rnge, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1207,7 +1205,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := client.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
+	bktlst, err := tutils.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bktlst.Entries), expectedRemaining)
@@ -1229,14 +1227,14 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 4. Delete the entire range of objects
 	tutils.Logf("Deleting objects in range: %s\n", rnge)
-	err = client.DeleteRange(proxyURL, TestLocalBucketName, prefix, regex, rnge, true, 0)
+	err = tutils.DeleteRange(proxyURL, TestLocalBucketName, prefix, regex, rnge, true, 0)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// 5. Check to see that all files have been deleted
 	msg = &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err = client.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
+	bktlst, err = tutils.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1246,10 +1244,10 @@ func TestStressDeleteRange(t *testing.T) {
 }
 
 func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
-	err := client.RenameLocalBucket(proxyURL, rtd.bucket, rtd.renamedBucket)
+	err := tutils.RenameLocalBucket(proxyURL, rtd.bucket, rtd.renamedBucket)
 	tutils.CheckFatal(err, t)
 
-	buckets, err := client.ListBuckets(proxyURL, true)
+	buckets, err := tutils.ListBuckets(proxyURL, true)
 	tutils.CheckFatal(err, t)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
@@ -1270,7 +1268,7 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		t.Fatalf("renamed local bucket %s does not exist after rename", rtd.renamedBucket)
 	}
 
-	objs, err := client.ListObjects(proxyURL, rtd.renamedBucket, "", numPuts+1)
+	objs, err := tutils.ListObjects(proxyURL, rtd.renamedBucket, "", numPuts+1)
 	tutils.CheckFatal(err, t)
 
 	if len(objs) != numPuts {
@@ -1303,7 +1301,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	)
 
 	if usingSG {
-		sgl = client.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
 	putRandObjs(proxyURL, baseseed+2, filesize, numPuts, bucket, errCh, filesPutCh, SmokeDir,
@@ -1327,7 +1325,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 		}
 
 		wg.Add(1)
-		go client.Del(proxyURL, bucket, "smoke/"+fname, wg, errCh, !testing.Verbose())
+		go tutils.Del(proxyURL, bucket, "smoke/"+fname, wg, errCh, !testing.Verbose())
 	}
 	wg.Wait()
 	selectErr(errCh, "delete", t, abortonerr)
@@ -1348,7 +1346,7 @@ OUTER:
 		time.Sleep(time.Second * 3)
 		tutils.Logln("Waiting for rebalance to complete.")
 
-		rebalanceStats, err := client.GetXactionRebalance(proxyURL)
+		rebalanceStats, err := getXactionRebalance(proxyURL)
 		if err != nil {
 			t.Fatalf("Unable to get rebalance stats. Error: [%v]", err)
 		}
@@ -1371,6 +1369,22 @@ OUTER:
 	}
 }
 
+func getXactionRebalance(proxyURL string) (dfc.RebalanceStats, error) {
+	var rebalanceStats dfc.RebalanceStats
+	responseBytes, err := tutils.GetXactionResponse(proxyURL, api.XactionRebalance)
+	if err != nil {
+		return rebalanceStats, err
+	}
+
+	err = json.Unmarshal(responseBytes, &rebalanceStats)
+	if err != nil {
+		return rebalanceStats,
+			fmt.Errorf("Failed to unmarshal rebalance stats: %v", err)
+	}
+
+	return rebalanceStats, nil
+}
+
 func waitProgressBar(prefix string, wait time.Duration) {
 	const tickerStep = time.Second * 1
 
@@ -1391,7 +1405,7 @@ waitloop:
 }
 
 func getClusterStats(httpclient *http.Client, t *testing.T, proxyURL string) (stats dfc.ClusterStats) {
-	q := getWhatRawQuery(api.GetWhatStats)
+	q := tutils.GetWhatRawQuery(api.GetWhatStats, "")
 	url := fmt.Sprintf("%s?%s", proxyURL+common.URLPath(api.Version, api.Cluster), q)
 	resp, err := httpclient.Get(url)
 	if err != nil {
@@ -1417,7 +1431,7 @@ func getClusterStats(httpclient *http.Client, t *testing.T, proxyURL string) (st
 }
 
 func getDaemonStats(httpclient *http.Client, t *testing.T, url string) (stats map[string]interface{}) {
-	q := getWhatRawQuery(api.GetWhatStats)
+	q := tutils.GetWhatRawQuery(api.GetWhatStats, "")
 	url = fmt.Sprintf("%s?%s", url+common.URLPath(api.Version, api.Daemon), q)
 	resp, err := httpclient.Get(url)
 	if err != nil {
@@ -1446,13 +1460,13 @@ func getDaemonStats(httpclient *http.Client, t *testing.T, url string) (stats ma
 }
 
 func getClusterMap(t *testing.T, URL string) cluster.Smap {
-	smap, err := client.GetClusterMap(URL)
+	smap, err := tutils.GetClusterMap(URL)
 	tutils.CheckFatal(err, t)
 	return smap
 }
 
 func getConfig(URL string, httpclient *http.Client, t *testing.T) (dfcfg map[string]interface{}) {
-	q := getWhatRawQuery(api.GetWhatConfig)
+	q := tutils.GetWhatRawQuery(api.GetWhatConfig, "")
 	url := fmt.Sprintf("%s?%s", URL, q)
 	resp, err := httpclient.Get(url)
 	if err != nil {
@@ -1514,10 +1528,4 @@ func selectErr(errCh chan error, verb string, t *testing.T, errisfatal bool) {
 		}
 	default:
 	}
-}
-
-func getWhatRawQuery(getWhat string) string {
-	q := url.Values{}
-	q.Add(api.URLParamWhat, getWhat)
-	return q.Encode()
 }
