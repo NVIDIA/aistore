@@ -6,7 +6,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -109,7 +108,10 @@ type BucketProps struct {
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
 // Validation of the properties passed in is performed by DFC Proxy.
 func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props BucketProps) error {
-	var url = proxyURL + common.URLPath(Version, Buckets, bucket)
+	var (
+		url    = proxyURL + common.URLPath(Version, Buckets, bucket)
+		method = http.MethodPut
+	)
 
 	if props.Checksum == "" {
 		props.Checksum = ChecksumInherit
@@ -119,34 +121,26 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props Buck
 	if err != nil {
 		return err
 	}
+
+	return doHTTPRequest(httpClient, ActSetProps, method, url, b)
+}
+
+// ResetBucketProps API operation for DFC
+//
+// Reset the properties of a bucket, identified by its name, to the global configuration.
+func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
 	var (
-		req    *http.Request
+		url    = proxyURL + common.URLPath(Version, Buckets, bucket)
 		method = http.MethodPut
+		err    error
 	)
 
-	req, err = http.NewRequest(method, url, bytes.NewBuffer(b))
-
+	b, err := json.Marshal(ActionMsg{Action: ActResetProps})
 	if err != nil {
-		return fmt.Errorf("Failed to create request, err: %v", err)
+		return err
 	}
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("Failed to %s, err: %v", method, err)
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("Failed to read response, err: %v", err)
-		}
-
-		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
-	}
-	_, err = ioutil.ReadAll(resp.Body)
-	return err
+	return doHTTPRequest(httpClient, ActResetProps, method, url, b)
 }
 
 // HeadBucket API operation for DFC
@@ -214,5 +208,4 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*BucketProps,
 		CksumConfig:   cksumconf,
 		LRUConfig:     lruprops,
 	}, nil
-
 }

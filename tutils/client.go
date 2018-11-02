@@ -527,16 +527,6 @@ func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err er
 	return
 }
 
-func ResetBucketProps(proxyURL, bucket string) error {
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
-
-	b, err := json.Marshal(api.ActionMsg{Action: api.ActResetProps})
-	if err != nil {
-		return err
-	}
-	return HTTPRequest(http.MethodPut, url, NewBytesReader(b))
-}
-
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
 	url := proxyURL + common.URLPath(api.Version, api.Objects, bucket, objname) + "?" + api.URLParamCheckCached + "=true"
 	r, err := HTTPClient.Head(url)
