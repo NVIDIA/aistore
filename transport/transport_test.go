@@ -391,7 +391,6 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	size, num, prevsize := int64(0), 0, int64(0)
 	for time.Since(now) < duration {
 		hdr := genRandomHeader(random)
-		// hdr := genStaticHeader()
 		slab := Mem2.SelectSlab2(hdr.Dsize)
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil)
@@ -537,16 +536,16 @@ type randReaderCtx struct {
 	idx    int
 }
 
-func (rrc *randReaderCtx) sentCallback(reader io.ReadCloser, err error) {
+func (rrc *randReaderCtx) sentCallback(hdr transport.Header, reader io.ReadCloser, err error) {
 	if err != nil {
-		rrc.t.Errorf("sent-callback %d returned an error: %v", rrc.idx, err)
+		rrc.t.Errorf("sent-callback %d(%s/%s) returned an error: %v", rrc.idx, hdr.Bucket, hdr.Objname, err)
 	}
 	rr := rrc.rr
 	rr.slab.Free(rr.buf)
 	rrc.mu.Lock()
 	rrc.posted[rrc.idx] = nil
 	if rrc.idx > 0 && rrc.posted[rrc.idx-1] != nil {
-		rrc.t.Errorf("sent-callback %d fired out of order", rrc.idx)
+		rrc.t.Errorf("sent-callback %d(%s/%s) fired out of order", rrc.idx, hdr.Bucket, hdr.Objname)
 	}
 	rrc.posted[rrc.idx] = nil
 	rrc.mu.Unlock()

@@ -64,7 +64,7 @@ type (
 		postCh   chan struct{} // expired => posted transition: new HTTP/TCP session
 		callback SendCallback  // to free SGLs, close files, etc.
 		time     struct {
-			start   int64         // to support idle stats
+			start   int64         // to support idle(%)
 			idleOut time.Duration // inter-object timeout: when triggers, causes recycling of the underlying http request
 			idle    *time.Timer
 		}
@@ -80,15 +80,16 @@ type (
 		Ctx         context.Context // presumably, result of context.WithCancel(context.Background()) by the caller
 		Callback    SendCallback    // typical usage: to free SGLs, close files, etc.
 		Burst       int             // max num objects that can be posted for sending without any back-pressure
+		DryRun      bool            // dry run: short-circuit the stream on the send side
 	}
 	// stream stats
 	Stats struct {
 		Num     int64   // number of transferred objects
 		Size    int64   // transferred size, in bytes
 		Offset  int64   // stream offset, in bytes
-		IdleDur int64   // idle time elapsed since the previous GetStats call
-		TotlDur int64   // total time since the previous GetStats
-		IdlePct float64 // idle time (percentage)
+		IdleDur int64   // the time stream was idle since the previous GetStats call
+		TotlDur int64   // total time since --/---/---
+		IdlePct float64 // idle time % since --/---/--
 	}
 	EndpointStats map[int64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
 	// object header
@@ -106,7 +107,7 @@ type (
 	// This callback's latency adds to the latency of the entire stream operation on the send side.
 	// It is critically important, therefore, that user implementations do not take extra locks,
 	// do not execute system calls and, generally, return as soon as possible.
-	SendCallback func(io.ReadCloser, error)
+	SendCallback func(Header, io.ReadCloser, error)
 )
 
 // internal
@@ -128,10 +129,7 @@ type (
 // API: methods
 //
 func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
-	if client == nil {
-		glog.Errorln("nil client")
-		return
-	}
+	var dryrun bool
 	u, err := url.Parse(toURL)
 	if err != nil {
 		glog.Errorf("Failed to parse %s: %v", toURL, err)
@@ -145,6 +143,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		if extra.IdleTimeout > 0 {
 			s.time.idleOut = extra.IdleTimeout
 		}
+		dryrun = extra.DryRun
+		common.Assert(dryrun || client != nil)
 	}
 	if tm := time.Now().UnixNano(); tm&0xffff != 0 {
 		s.sessid = tm & 0xffff
@@ -185,9 +185,8 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 		ctx, _ = context.WithCancel(context.Background())
 	}
 	atomic.StoreInt64(&s.time.start, time.Now().UnixNano())
-	atomic.StoreInt64(&s.stats.IdleDur, 0)
 	s.wg.Add(1)
-	go s.doTx(ctx)
+	go s.doTx(ctx, dryrun)
 	return
 }
 
@@ -228,16 +227,13 @@ func (s *Stream) GetStats() (stats Stats) {
 	stats.Num = atomic.LoadInt64(&s.stats.Num)
 	stats.Offset = atomic.LoadInt64(&s.stats.Offset)
 	stats.Size = atomic.LoadInt64(&s.stats.Size)
-	// busy-idle stats
+	// idle(%)
 	now := time.Now().UnixNano()
 	stats.TotlDur = now - atomic.LoadInt64(&s.time.start)
 	stats.IdlePct = float64(atomic.LoadInt64(&s.stats.IdleDur)) * 100 / float64(stats.TotlDur)
-	if stats.IdlePct > 100 { // GetStats is async vis-à-vis IdleDur += deltas
-		stats.TotlDur = atomic.LoadInt64(&s.stats.IdleDur)
-		stats.IdlePct = 100
-	}
+	stats.IdlePct = common.MinF64(100, stats.IdlePct) // GetStats is async vis-à-vis IdleDur += deltas
 	atomic.StoreInt64(&s.time.start, now)
-	atomic.StoreInt64(&s.stats.IdleDur, 0) // NOTE zeroing out, to start afresh and accumulate until the next GetStats call
+	atomic.StoreInt64(&s.stats.IdleDur, 0)
 	return
 }
 
@@ -247,52 +243,55 @@ func (hdr *Header) IsLast() bool { return hdr.Dsize == lastMarker }
 // internal methods
 //
 // main loop
-func (s *Stream) doTx(ctx context.Context) {
-	var begin time.Time
-forever:
+func (s *Stream) doTx(ctx context.Context, dryrun bool) {
 	for {
 		if atomic.CompareAndSwapInt64(&s.lifecycle, posted, activated) {
 			if bool(glog.V(4)) || debug {
 				glog.Infof("%s posted => activated", s.lid)
 			}
-			if err := s.doRequest(ctx); err != nil {
+			if dryrun {
+				s.dryrun()
+			} else if err := s.doRequest(ctx); err != nil {
 				break
 			}
 		}
-		begin = time.Now()
-	newreq:
-		for {
-			select {
-			case <-ctx.Done():
-				glog.Infof("%s %v", s.lid, ctx.Err())
-				break forever
-			case <-s.lastCh:
-				if bool(glog.V(4)) || debug {
-					glog.Infof("%s end-of-stream", s.lid)
-				}
-				break forever
-			case <-s.stopCh:
-				glog.Infof("%s stopped", s.lid)
-				break forever
-			case <-s.postCh:
-				if v := atomic.LoadInt64(&s.lifecycle); v != expired {
-					if debug {
-						common.Assert(v == posted)
-					}
-					break newreq // new post after timeout: initiate new HTTP/TCP session
-				}
-			}
+		if !s.isNextReq(ctx) {
+			break
 		}
-		delta := int64(time.Since(begin))
-		atomic.AddInt64(&s.stats.IdleDur, delta)
 	}
-	delta := int64(time.Since(begin))
-	atomic.AddInt64(&s.stats.IdleDur, delta)
 	s.time.idle.Stop()
 	close(s.workCh)
 	close(s.lastCh)
 	close(s.stopCh)
 	s.wg.Done()
+}
+
+func (s *Stream) isNextReq(ctx context.Context) (next bool) {
+	beg := time.Now()
+	defer s.addIdle(beg)
+	for {
+		select {
+		case <-ctx.Done():
+			glog.Infof("%s %v", s.lid, ctx.Err())
+			return
+		case <-s.lastCh:
+			if bool(glog.V(4)) || debug {
+				glog.Infof("%s end-of-stream", s.lid)
+			}
+			return
+		case <-s.stopCh:
+			glog.Infof("%s stopped", s.lid)
+			return
+		case <-s.postCh:
+			if v := atomic.LoadInt64(&s.lifecycle); v != expired {
+				if debug {
+					common.Assert(v == posted)
+				}
+				next = true // initiate new HTTP/TCP session
+				return
+			}
+		}
+	}
 }
 
 func (s *Stream) doRequest(ctx context.Context) (err error) {
@@ -331,11 +330,8 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		}
 		return s.sendHdr(b)
 	}
-	begin := time.Now()
-	defer func(b time.Time) {
-		delta := int64(time.Since(b))
-		atomic.AddInt64(&s.stats.IdleDur, delta)
-	}(begin)
+	beg := time.Now()
+	defer s.addIdle(beg)
 	select {
 	// next object
 	case s.sendoff.obj = <-s.workCh:
@@ -439,9 +435,9 @@ func (s *Stream) eoObj(err error) {
 	}
 	s.time.idle.Reset(s.time.idleOut)
 	if obj.callback != nil {
-		obj.callback(obj.reader, err)
+		obj.callback(obj.hdr, obj.reader, err)
 	} else if s.callback != nil {
-		s.callback(obj.reader, err)
+		s.callback(obj.hdr, obj.reader, err)
 	}
 	s.sendoff = sendoff{}
 }
@@ -496,4 +492,27 @@ func insInt64(off int, to []byte, i int64) int {
 func insUint64(off int, to []byte, i uint64) int {
 	binary.BigEndian.PutUint64(to[off:], i)
 	return off + sizeofI64
+}
+
+// addIdle
+func (s *Stream) addIdle(beg time.Time) { atomic.AddInt64(&s.stats.IdleDur, int64(time.Since(beg))) }
+
+//
+// dry-run ---------------------------
+//
+func (s *Stream) dryrun() {
+	buf := make([]byte, common.KiB*32)
+	scloser := ioutil.NopCloser(s)
+	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, MaxHeaderSize)}
+	for {
+		objReader, _, _, err := it.next()
+		if objReader != nil {
+			written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
+			common.Assert(written == objReader.hdr.Dsize)
+			continue
+		}
+		if err != nil {
+			break
+		}
+	}
 }

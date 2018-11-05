@@ -18,25 +18,17 @@ func MinU64(a, b uint64) uint64 {
 	return b
 }
 
-// MinI64 returns min value of a and b for int64 types
-func MinI64(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// Min returns min value of a and b for int types
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // MaxU64 returns max value of a and b for uint64 types
 func MaxU64(a, b uint64) uint64 {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+// MinI64 returns min value of a and b for int64 types
+func MinI64(a, b int64) int64 {
+	if a < b {
 		return a
 	}
 	return b
@@ -50,8 +42,30 @@ func MaxI64(a, b int64) int64 {
 	return b
 }
 
+// Min returns min value of a and b for int types
+func Min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Max returns max value of a and b for int types
 func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func MinF64(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func MaxF64(a, b float64) float64 {
 	if a > b {
 		return a
 	}
