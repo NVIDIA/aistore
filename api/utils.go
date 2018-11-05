@@ -12,16 +12,16 @@ import (
 	"net/http"
 )
 
-func doHTTPRequest(httpClient *http.Client, action, method, url string, b []byte) error {
+func doHTTPRequest(httpClient *http.Client, method, url string, b []byte) ([]byte, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(b))
 
 	if err != nil {
-		return fmt.Errorf("Failed to create request, err: %v", err)
+		return nil, fmt.Errorf("Failed to create request, err: %v", err)
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Failed to %s on %s, err: %v", action, method, err)
+		return nil, fmt.Errorf("Failed to %s, err: %v", method, err)
 	}
 
 	defer resp.Body.Close()
@@ -29,11 +29,10 @@ func doHTTPRequest(httpClient *http.Client, action, method, url string, b []byte
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("Failed to read response, err: %v", err)
+			return nil, fmt.Errorf("Failed to read response, err: %v", err)
 		}
 
-		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
-	_, err = ioutil.ReadAll(resp.Body)
-	return err
+	return ioutil.ReadAll(resp.Body)
 }

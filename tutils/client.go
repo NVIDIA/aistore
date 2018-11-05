@@ -768,37 +768,6 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	return l, err
 }
 
-// ListBuckets returns all buckets in DFC (cloud and local)
-func ListBuckets(proxyURL string, local bool) (*api.BucketNames, error) {
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, "*")
-	if local {
-		url += fmt.Sprintf("?%s=true", api.URLParamLocal)
-	}
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp != nil && resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("HTTP failed, status = %d", resp.StatusCode)
-	}
-
-	var b []byte
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	buckets := &api.BucketNames{}
-	if len(b) != 0 {
-		err = json.Unmarshal(b, buckets)
-	}
-	return buckets, err
-}
-
 // GetClusterMap retrives a DFC's server map
 // Note: this may not be a good idea to expose the map to clients, but this how it is for now.
 func GetClusterMap(url string) (cluster.Smap, error) {
@@ -910,31 +879,10 @@ func HTTPRequestWithResp(method string, url string, msg Reader, headers ...map[s
 	return ioutil.ReadAll(resp.Body)
 }
 
-// GetLocalBucketNames returns list of all local buckets.
-func GetLocalBucketNames(proxyURL string) (*api.BucketNames, error) {
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, "*") + fmt.Sprintf("?%s=true", api.URLParamLocal)
-	b, err := HTTPRequestWithResp(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var buckets api.BucketNames
-	if len(b) != 0 {
-		err = json.Unmarshal(b, &buckets)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
-		}
-	} else {
-		return nil, fmt.Errorf("Empty response instead of empty bucket list from %s\n", proxyURL)
-	}
-
-	return &buckets, nil
-}
-
 // DoesLocalBucketExist queries a proxy or target to get a list of all local buckets, returns true if
 // the bucket exists.
 func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
-	buckets, err := GetLocalBucketNames(serverURL)
+	buckets, err := api.GetBucketNames(HTTPClient, serverURL, true)
 	if err != nil {
 		return false, err
 	}

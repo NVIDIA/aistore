@@ -458,46 +458,22 @@ func listObjects(t *testing.T, proxyURL string, msg *api.GetMsg, bucket string, 
 func Test_bucketnames(t *testing.T) {
 	var (
 		proxyURL = getPrimaryURL(t, proxyURLRO)
-		url      = proxyURL + common.URLPath(api.Version, api.Buckets, "*")
-		r        *http.Response
 		err      error
 	)
+	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, false)
+	if err != nil {
+		t.Errorf("%v", err)
+		return
+	}
 	tutils.Logf("local bucket names:\n")
-	urlLocalOnly := fmt.Sprintf("%s?%s=%t", url, api.URLParamLocal, true)
-	r, err = http.Get(urlLocalOnly)
-	if err != nil {
-		t.Errorf("%v", err)
-		return
-	}
-	printbucketnames(t, r)
+	printBucketNames(t, buckets.Local)
 
-	tutils.Logf("all bucket names:\n")
-	r, err = http.Get(url)
-	if err != nil {
-		t.Errorf("%v", err)
-		return
-	}
-	printbucketnames(t, r)
+	tutils.Logf("cloud bucket names:\n")
+	printBucketNames(t, buckets.Cloud)
 }
 
-func printbucketnames(t *testing.T, r *http.Response) {
-	defer r.Body.Close()
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		t.Errorf("Failed with HTTP status %d", r.StatusCode)
-		return
-	}
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		t.Errorf("Failed to read response body: %v", err)
-		return
-	}
-	bucketnames := &api.BucketNames{}
-	err = jsoniter.Unmarshal(b, bucketnames)
-	if err != nil {
-		t.Errorf("Failed to unmarshal bucket names, err: %v", err)
-		return
-	}
-	pretty, err := jsoniter.MarshalIndent(bucketnames, "", " ")
+func printBucketNames(t *testing.T, bucketNames []string) {
+	pretty, err := jsoniter.MarshalIndent(bucketNames, "", " ")
 	if err != nil {
 		t.Errorf("Failed to pretty-print bucket names, err: %v", err)
 		return
@@ -1453,7 +1429,7 @@ func evictobjects(t *testing.T, proxyURL string, fileslist []string) {
 }
 
 func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (created bool) {
-	buckets, err := tutils.ListBuckets(proxyURL, false)
+	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, false)
 	if err != nil {
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
@@ -1471,7 +1447,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 }
 
 func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
-	buckets, err := tutils.ListBuckets(proxyURL, false)
+	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, false)
 	if err != nil {
 		t.Fatalf("Failed to read bucket names: %v", err)
 	}

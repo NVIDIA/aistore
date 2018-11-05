@@ -324,7 +324,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 	destroyLocalBucket(t, proxyURL, renamedBucket)
 	defer destroyLocalBucket(t, proxyURL, renamedBucket)
 
-	b, err := tutils.ListBuckets(proxyURL, true)
+	b, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, true)
 	tutils.CheckFatal(err, t)
 
 	doBucketRegressionTest(t, proxyURL, regressionTestData{
@@ -1246,7 +1246,7 @@ func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 	err := tutils.RenameLocalBucket(proxyURL, rtd.bucket, rtd.renamedBucket)
 	tutils.CheckFatal(err, t)
 
-	buckets, err := tutils.ListBuckets(proxyURL, true)
+	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, true)
 	tutils.CheckFatal(err, t)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {

@@ -1597,7 +1597,7 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 				tutils.Logf("T2: re-registered target %s\n", target)
 			}
 		} else {
-			lbNames, err := tutils.GetLocalBucketNames(targetDirectURL)
+			lbNames, err := api.GetBucketNames(tutils.HTTPClient, targetDirectURL, true)
 			tutils.CheckFatal(err, m.t)
 			// T3
 			if common.StringInSlice(m.bucket, lbNames.Local) {

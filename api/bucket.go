@@ -111,6 +111,7 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props Buck
 	var (
 		url    = proxyURL + common.URLPath(Version, Buckets, bucket)
 		method = http.MethodPut
+		err    error
 	)
 
 	if props.Checksum == "" {
@@ -122,7 +123,8 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props Buck
 		return err
 	}
 
-	return doHTTPRequest(httpClient, ActSetProps, method, url, b)
+	_, err = doHTTPRequest(httpClient, method, url, b)
+	return err
 }
 
 // ResetBucketProps API operation for DFC
@@ -140,7 +142,8 @@ func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
 		return err
 	}
 
-	return doHTTPRequest(httpClient, ActResetProps, method, url, b)
+	_, err = doHTTPRequest(httpClient, method, url, b)
+	return err
 }
 
 // HeadBucket API operation for DFC
@@ -208,4 +211,30 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*BucketProps,
 		CksumConfig:   cksumconf,
 		LRUConfig:     lruprops,
 	}, nil
+}
+
+// GetBucketNames API operation for DFC
+//
+// If localOnly is false, returns two lists, one for local buckets and one for cloud buckets.
+// Otherwise, i.e. localOnly is true, still returns two lists, but the one for cloud buckets is empty
+func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*BucketNames, error) {
+	var (
+		method      = http.MethodGet
+		bucketNames BucketNames
+	)
+	url := proxyURL + common.URLPath(Version, Buckets, "*") +
+		fmt.Sprintf("?%s=%t", URLParamLocal, localOnly)
+	b, err := doHTTPRequest(httpClient, method, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) != 0 {
+		err = json.Unmarshal(b, &bucketNames)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
+		}
+	} else {
+		return nil, fmt.Errorf("Empty response instead of empty bucket list from %s", proxyURL)
+	}
+	return &bucketNames, nil
 }
