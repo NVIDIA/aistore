@@ -607,7 +607,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if !p.renamelocalbucket(bucketFrom, bucketTo, clone, props, &msg, r.Method) {
+		if !p.renameLB(bucketFrom, bucketTo, clone, props, &msg) {
 			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, errstr)
 		}
@@ -841,8 +841,8 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *bucketMD, props cmn.BucketProps,
-	msg *cmn.ActionMsg, method string) bool {
+func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props cmn.BucketProps,
+	msg *cmn.ActionMsg) bool {
 	smap4bcast := p.smapowner.get()
 
 	msg.Value = clone
@@ -852,7 +852,7 @@ func (p *proxyrunner) renamelocalbucket(bucketFrom, bucketTo string, clone *buck
 	res := p.broadcastTargets(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom),
 		nil, // query
-		method,
+		http.MethodPost,
 		jsbytes,
 		smap4bcast,
 		ctx.config.Timeout.Default,

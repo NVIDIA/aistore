@@ -1018,7 +1018,7 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
 	// Rename it
-	err = tutils.RenameLocalBucket(m.proxyURL, m.bucket, newTestLocalBucketName)
+	err = api.RenameLocalBucket(tutils.HTTPClient, m.proxyURL, m.bucket, newTestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	// Destroy renamed local bucket
@@ -1081,7 +1081,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	// Rename it
 	oldLocalBucketName := m.bucket
 	m.bucket = newTestLocalBucketName
-	err = tutils.RenameLocalBucket(m.proxyURL, oldLocalBucketName, m.bucket)
+	err = api.RenameLocalBucket(tutils.HTTPClient, m.proxyURL, oldLocalBucketName, m.bucket)
 	tutils.CheckFatal(err, t)
 
 	// Gets on renamed local bucket
@@ -1138,7 +1138,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	}
 
 	// Rename local bucket
-	err = tutils.RenameLocalBucket(m.proxyURL, m.bucket, newTestLocalBucketName)
+	err = api.RenameLocalBucket(tutils.HTTPClient, m.proxyURL, m.bucket, newTestLocalBucketName)
 	tutils.CheckFatal(err, t)
 	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not deleted")

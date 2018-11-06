@@ -947,7 +947,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Warningf("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
 		}
 		clone := bucketmd.clone()
-		if errstr := t.renamelocalbucket(bucketFrom, bucketTo, props, clone); errstr != "" {
+		if errstr := t.renameLB(bucketFrom, bucketTo, props, clone); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -1276,7 +1276,7 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renamelocalbucket(bucketFrom, bucketTo string, p cmn.BucketProps, clone *bucketMD) (errstr string) {
+func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p cmn.BucketProps, clone *bucketMD) (errstr string) {
 	// ready to receive migrated obj-s _after_ that point
 	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
 	clone.LBmap[bucketTo] = p

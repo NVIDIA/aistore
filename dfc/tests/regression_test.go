@@ -1243,7 +1243,7 @@ func TestStressDeleteRange(t *testing.T) {
 }
 
 func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
-	err := tutils.RenameLocalBucket(proxyURL, rtd.bucket, rtd.renamedBucket)
+	err := api.RenameLocalBucket(tutils.HTTPClient, proxyURL, rtd.bucket, rtd.renamedBucket)
 	tutils.CheckFatal(err, t)
 
 	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, true)

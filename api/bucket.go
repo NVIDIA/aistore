@@ -164,3 +164,16 @@ func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error 
 	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, b)
 	return err
 }
+
+// RenameLocalBucket API operation for DFC
+//
+// RenameLocalBucket changes the name of a bucket from oldBucketName to newBucketName
+func RenameLocalBucket(httpClient *http.Client, proxyURL, oldBucketName, newBucketName string) error {
+	b, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBucketName})
+	if err != nil {
+		return err
+	}
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, oldBucketName)
+	_, err = doHTTPRequest(httpClient, http.MethodPost, url, b)
+	return err
+}

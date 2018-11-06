@@ -672,27 +672,6 @@ func waitForNoLocalBucket(url, name string) error {
 	return nil
 }
 
-// RenameLocalBucket changes the name of a bucket to newBucketName
-func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBucketName})
-	if err != nil {
-		return err
-	}
-
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	err = HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
-	if err != nil {
-		return err
-	}
-
-	err = waitForNoLocalBucket(proxyURL, bucket)
-	if err != nil {
-		return err
-	}
-
-	return waitForLocalBucket(proxyURL, newBucketName)
-}
-
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &cmn.GetMsg{GetPrefix: prefix}
