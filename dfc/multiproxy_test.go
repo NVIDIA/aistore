@@ -48,7 +48,7 @@ func discoverServerDefaultHandler(sv int64, lv int64) *httptest.Server {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
 				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
-				BucketMD:       &bucketMD{Version: bmdVersion},
+				BucketMD:       &bucketMD{cluster.BMD{Version: bmdVersion}, ""},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -67,7 +67,7 @@ func discoverServerVoteOnceHandler(sv int64, lv int64) *httptest.Server {
 		msg := SmapVoteMsg{
 			VoteInProgress: cnt == 1,
 			Smap:           &smapX{cluster.Smap{Version: smapVersion}},
-			BucketMD:       &bucketMD{Version: bmdVersion},
+			BucketMD:       &bucketMD{cluster.BMD{Version: bmdVersion}, ""},
 		}
 		b, _ := jsoniter.Marshal(msg)
 		w.Write(b)
@@ -88,7 +88,7 @@ func discoverServerFailTwiceHandler(sv int64, lv int64) *httptest.Server {
 			msg := SmapVoteMsg{
 				VoteInProgress: false,
 				Smap:           &smapX{cluster.Smap{Version: smapVersion}},
-				BucketMD:       &bucketMD{Version: bmdVersion},
+				BucketMD:       &bucketMD{cluster.BMD{Version: bmdVersion}, ""},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)
@@ -116,7 +116,7 @@ func discoverServerVoteInProgressHandler(sv int64, lv int64) *httptest.Server {
 			msg := SmapVoteMsg{
 				VoteInProgress: true,
 				Smap:           &smapX{cluster.Smap{Version: 12345}},
-				BucketMD:       &bucketMD{Version: 67890},
+				BucketMD:       &bucketMD{cluster.BMD{Version: 67890}, ""},
 			}
 			b, _ := jsoniter.Marshal(msg)
 			w.Write(b)

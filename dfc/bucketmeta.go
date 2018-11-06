@@ -12,16 +12,31 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 )
 
+// NOTE: to access bucket metadata and related structures, external
+//       packages and HTTP clients must import dfcpub/cluster (and not dfc)
+
+// - bucketMD is a server-side extension of the cluster.BMD
+// - bucketMD represents buckets (that store objects) and associated metadata
+// - bucketMD (instance) can be obtained via bmdowner.get()
+// - bucketMD is immutable and versioned
+// - bucketMD versioning is monotonic and incremental
+//
+// - bucketMD typical update transaction:
+// lock -- clone() -- modify the clone -- bmdowner.put(clone) -- unlock
+//
+// (*) for merges and conflict resolution, check the current version prior to put()
+//     (note that version check must be protected by the same critical section)
+//
 type bucketMD struct {
-	LBmap   map[string]api.BucketProps `json:"l_bmap"`  // local cache-only buckets and their props
-	CBmap   map[string]api.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their DFC-only metadata
-	Version int64                      `json:"version"` // version - gets incremented on every update
-	vstr    string                     // itoa(Version), to have it handy for http redirects
+	cluster.BMD
+	vstr string // itoa(Version), to have it handy for http redirects
 }
 
+// implements cluster.Bowner interface
 type bmdowner struct {
 	sync.Mutex
 	bucketmd unsafe.Pointer
@@ -32,10 +47,11 @@ func (r *bmdowner) put(bucketmd *bucketMD) {
 	atomic.StorePointer(&r.bucketmd, unsafe.Pointer(bucketmd))
 }
 
-// the intended and implied usage of this inconspicuous method is CoW:
-// - read (shared/replicated bucket-metadata object) freely
-// - clone for writing
-// - and never-ever modify in place
+// implements cluster.Bowner.Get
+func (r *bmdowner) Get() *cluster.BMD {
+	bucketmd := (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
+	return &bucketmd.BMD
+}
 func (r *bmdowner) get() (bucketmd *bucketMD) {
 	bucketmd = (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
 	return
@@ -51,10 +67,9 @@ func NewBucketProps() *api.BucketProps {
 }
 
 func newBucketMD() *bucketMD {
-	return &bucketMD{
-		LBmap: make(map[string]api.BucketProps),
-		CBmap: make(map[string]api.BucketProps),
-	}
+	lbmap := make(map[string]api.BucketProps)
+	cbmap := make(map[string]api.BucketProps)
+	return &bucketMD{cluster.BMD{LBmap: lbmap, CBmap: cbmap}, ""}
 }
 
 func (m *bucketMD) add(b string, local bool, p api.BucketProps) bool {

@@ -20,21 +20,23 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// NOTE: to access Snode, Smap and related structures, external (to dfc)
-//       packages and HTTP clients must import dfcpub/cluster;
-//       direct import of the github.com/NVIDIA/dfcpub/dfc is permitted
-//       for testing only
+// NOTE: to access Snode, Smap and related structures, external
+//       packages and HTTP clients must import dfcpub/cluster (and not dfc)
 
 //=====================================================================
 //
-// smapX: server-side extension of the cluster.Smap
-// smapX is an immutable and versioned object
-// Executing Sowner.Get() gives an immutable version that won't change
-// smapX versioning is monotonic and incremental
-// smapX uniquely and solely defines the primary proxy
-// smapX updating involves the sequence:
-//    lock -- clone -- modify the clone -- smapowner.put(clone) -- unlock
-// Version check followed by the modification is protected by the same lock
+// - smapX is a server-side extension of the cluster.Smap
+// - smapX represents DFC cluster in terms of its nodes and their properties
+// - smapX (instance) can be obtained via smapowner.get()
+// - smapX is immutable and versioned
+// - smapX versioning is monotonic and incremental
+// - smapX uniquely and solely defines the current primary proxy in the DFC cluster
+//
+// smapX typical update transaction:
+// lock -- clone() -- modify the clone -- smapowner.put(clone) -- unlock
+//
+// (*) for merges and conflict resolution, check smapX version prior to put()
+//     (version check must be protected by the same critical section)
 //
 //=====================================================================
 type smapX struct {
@@ -182,7 +184,8 @@ func (r *smapowner) put(smap *smapX) {
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
 }
 
-func (r *smapowner) Get() (smap *cluster.Smap) {
+// implements cluster.Sowner.Get
+func (r *smapowner) Get() *cluster.Smap {
 	smapx := (*smapX)(atomic.LoadPointer(&r.smap))
 	return &smapx.Smap
 }

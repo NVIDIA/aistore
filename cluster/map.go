@@ -18,14 +18,8 @@ import (
 	"github.com/OneOfOne/xxhash"
 )
 
-//===============================================================
-//
-// Sowner interface: the intended and implied usage is CoW:
-// - read (shared/replicated bucket-metadata object) freely
-// - clone for writing
-// - never-ever modify in place
-//
-//===============================================================
+// interface to Get current cluster-map instance
+// (for implementation, see dfc/clustermap.go)
 type Sowner interface {
 	Get() (smap *Smap)
 }
