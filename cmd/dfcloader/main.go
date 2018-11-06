@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmd/dfcloader/stats"
 	"github.com/NVIDIA/dfcpub/common"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
@@ -759,7 +760,7 @@ func cleanUp() {
 	wg.Wait()
 
 	if runParams.isLocal {
-		tutils.DestroyLocalBucket(runParams.proxyURL, runParams.bucket)
+		api.DestroyLocalBucket(tutils.HTTPClient, runParams.proxyURL, runParams.bucket)
 	}
 
 	fmt.Println(prettyTimeStamp() + " Clean up done")

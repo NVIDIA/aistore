@@ -1654,7 +1654,7 @@ func destroyLocalBucket(t *testing.T, proxyURL, bucket string) {
 	exists, err := tutils.DoesLocalBucketExist(proxyURL, bucket)
 	tutils.CheckFatal(err, t)
 	if exists {
-		err = tutils.DestroyLocalBucket(proxyURL, bucket)
+		err = api.DestroyLocalBucket(tutils.HTTPClient, proxyURL, bucket)
 		tutils.CheckFatal(err, t)
 	}
 }

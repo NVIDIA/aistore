@@ -25,7 +25,7 @@ func (p *proxyServer) createBucket(bucket string) error {
 }
 
 func (p *proxyServer) deleteBucket(bucket string) error {
-	return tutils.DestroyLocalBucket(p.url, bucket)
+	return api.DestroyLocalBucket(tutils.HTTPClient, p.url, bucket)
 }
 
 func (p *proxyServer) doesBucketExist(bucket string) bool {

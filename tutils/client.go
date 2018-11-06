@@ -709,22 +709,6 @@ func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
 	return waitForLocalBucket(proxyURL, newBucketName)
 }
 
-// DestroyLocalBucket deletes a local bucket
-func DestroyLocalBucket(proxyURL, bucket string) error {
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActDestroyLB})
-	if err != nil {
-		return err
-	}
-
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodDelete, url, NewBytesReader(msg))
-	if err != nil {
-		return err
-	}
-
-	return waitForNoLocalBucket(proxyURL, bucket)
-}
-
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &api.GetMsg{GetPrefix: prefix}

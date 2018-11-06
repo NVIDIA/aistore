@@ -245,3 +245,17 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 	}
 	return &bucketNames, nil
 }
+
+// DestroyLocalBucket API operation for DFC
+//
+// Deletes a local bucket specified by its name
+func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
+	b, err := json.Marshal(ActionMsg{Action: ActDestroyLB})
+	if err != nil {
+		return err
+	}
+
+	url := proxyURL + common.URLPath(Version, Buckets, bucket)
+	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, b)
+	return err
+}
