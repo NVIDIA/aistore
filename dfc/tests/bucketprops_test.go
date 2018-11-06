@@ -12,25 +12,20 @@ import (
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
-func NewBucketProps(t *testing.T) *api.BucketProps {
-	var proxyURL = getPrimaryURL(t, proxyURLRO)
-
+func testBucketProps(t *testing.T) *api.BucketProps {
+	proxyURL := getPrimaryURL(t, proxyURLRO)
 	globalConfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
 	lruConfig := globalConfig["lru_config"].(map[string]interface{})
 
-	return &api.BucketProps{
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
-		},
-		LRUConfig: api.LRUConfig{
-			LowWM:              uint32(lruConfig["lowwm"].(float64)),
-			HighWM:             uint32(lruConfig["highwm"].(float64)),
-			AtimeCacheMax:      uint64(lruConfig["atime_cache_max"].(float64)),
-			DontEvictTimeStr:   lruConfig["dont_evict_time"].(string),
-			CapacityUpdTimeStr: lruConfig["capacity_upd_time"].(string),
-			LRUEnabled:         lruConfig["lru_enabled"].(bool),
-		},
+	LRUConf := &api.LRUConfig{
+		LowWM:              uint32(lruConfig["lowwm"].(float64)),
+		HighWM:             uint32(lruConfig["highwm"].(float64)),
+		AtimeCacheMax:      uint64(lruConfig["atime_cache_max"].(float64)),
+		DontEvictTimeStr:   lruConfig["dont_evict_time"].(string),
+		CapacityUpdTimeStr: lruConfig["capacity_upd_time"].(string),
+		LRUEnabled:         lruConfig["lru_enabled"].(bool),
 	}
+	return api.NewBucketProps(LRUConf)
 }
 
 func TestResetBucketProps(t *testing.T) {
@@ -54,7 +49,7 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.ValidateColdGet = cksumConfig["validate_checksum_cold_get"].(bool)
 	globalProps.ValidateWarmGet = cksumConfig["validate_checksum_warm_get"].(bool)
 	globalProps.EnableReadRangeChecksum = cksumConfig["enable_read_range_checksum"].(bool)
-	globalProps.LRUConfig = NewBucketProps(t).LRUConfig
+	globalProps.LRUConfig = testBucketProps(t).LRUConfig
 
 	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)

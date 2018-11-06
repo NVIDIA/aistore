@@ -56,14 +56,14 @@ func TestGetObjectInNextTier(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps := NewBucketProps(t)
+	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
 	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
-	bucketProps = NewBucketProps(t)
+	bucketProps = testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
 	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
@@ -116,7 +116,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	err = tutils.Evict(proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
-	bucketProps := NewBucketProps(t)
+	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
@@ -167,7 +167,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	err = tutils.Evict(proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
-	bucketProps := NewBucketProps(t)
+	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
@@ -233,14 +233,14 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	bucketProps := NewBucketProps(t)
+	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
 	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
-	bucketProps = NewBucketProps(t)
+	bucketProps = testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
 	bucketProps.WritePolicy = api.RWPolicyNextTier
@@ -283,7 +283,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	bucketProps := NewBucketProps(t)
+	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.ReadPolicy = api.RWPolicyCloud
@@ -324,7 +324,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	}))
 	defer nextTierMock.Close()
 
-	bucketProps := NewBucketProps(t)
+	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = api.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.WritePolicy = api.RWPolicyCloud
