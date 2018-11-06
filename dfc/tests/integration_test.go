@@ -1646,7 +1646,7 @@ func assertClusterState(m *metadata) {
 
 func createFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
 	destroyLocalBucket(t, proxyURL, bucketFQN)
-	err := tutils.CreateLocalBucket(proxyURL, bucketFQN)
+	err := api.CreateLocalBucket(tutils.HTTPClient, proxyURL, bucketFQN)
 	tutils.CheckFatal(err, t)
 }
 

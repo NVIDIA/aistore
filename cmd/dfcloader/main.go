@@ -208,7 +208,7 @@ func main() {
 		}
 
 		if !exists {
-			err := tutils.CreateLocalBucket(runParams.proxyURL, runParams.bucket)
+			err := api.CreateLocalBucket(tutils.HTTPClient, runParams.proxyURL, runParams.bucket)
 			if err != nil {
 				fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
 				return

@@ -115,12 +115,7 @@ func NewBucketProps(lruconf *LRUConfig) *BucketProps {
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
 // Validation of the properties passed in is performed by DFC Proxy.
 func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props BucketProps) error {
-	var (
-		url    = proxyURL + common.URLPath(Version, Buckets, bucket)
-		method = http.MethodPut
-		err    error
-	)
-
+	url := proxyURL + common.URLPath(Version, Buckets, bucket)
 	if props.Checksum == "" {
 		props.Checksum = ChecksumInherit
 	}
@@ -130,7 +125,7 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props Buck
 		return err
 	}
 
-	_, err = doHTTPRequest(httpClient, method, url, b)
+	_, err = doHTTPRequest(httpClient, http.MethodPut, url, b)
 	return err
 }
 
@@ -138,18 +133,13 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props Buck
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
-	var (
-		url    = proxyURL + common.URLPath(Version, Buckets, bucket)
-		method = http.MethodPut
-		err    error
-	)
-
+	url := proxyURL + common.URLPath(Version, Buckets, bucket)
 	b, err := json.Marshal(ActionMsg{Action: ActResetProps})
 	if err != nil {
 		return err
 	}
 
-	_, err = doHTTPRequest(httpClient, method, url, b)
+	_, err = doHTTPRequest(httpClient, http.MethodPut, url, b)
 	return err
 }
 
@@ -225,13 +215,10 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*BucketProps,
 // If localOnly is false, returns two lists, one for local buckets and one for cloud buckets.
 // Otherwise, i.e. localOnly is true, still returns two lists, but the one for cloud buckets is empty
 func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*BucketNames, error) {
-	var (
-		method      = http.MethodGet
-		bucketNames BucketNames
-	)
+	var bucketNames BucketNames
 	url := proxyURL + common.URLPath(Version, Buckets, "*") +
 		fmt.Sprintf("?%s=%t", URLParamLocal, localOnly)
-	b, err := doHTTPRequest(httpClient, method, url, nil)
+	b, err := doHTTPRequest(httpClient, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -246,9 +233,22 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 	return &bucketNames, nil
 }
 
+// CreateLocalBucket API operation for DFC
+//
+// CreateLocalBucket sends a HTTP request to a proxy to create a local bucket with the given name
+func CreateLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
+	msg, err := json.Marshal(ActionMsg{Action: ActCreateLB})
+	if err != nil {
+		return err
+	}
+	url := proxyURL + common.URLPath(Version, Buckets, bucket)
+	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
+	return err
+}
+
 // DestroyLocalBucket API operation for DFC
 //
-// Deletes a local bucket specified by its name
+// DestroyLocalBucket sends a HTTP request to a proxy to remove a local bucket with the given name
 func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
 	b, err := json.Marshal(ActionMsg{Action: ActDestroyLB})
 	if err != nil {

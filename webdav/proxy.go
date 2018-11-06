@@ -21,7 +21,7 @@ type proxyServer struct {
 
 // createBucket creates a new bucket
 func (p *proxyServer) createBucket(bucket string) error {
-	return tutils.CreateLocalBucket(p.url, bucket)
+	return api.CreateLocalBucket(tutils.HTTPClient, p.url, bucket)
 }
 
 func (p *proxyServer) deleteBucket(bucket string) error {

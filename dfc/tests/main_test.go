@@ -1438,7 +1438,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		return false
 	}
 
-	err = tutils.CreateLocalBucket(proxyURL, bucket)
+	err = api.CreateLocalBucket(tutils.HTTPClient, proxyURL, bucket)
 	if err != nil {
 		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
 	}

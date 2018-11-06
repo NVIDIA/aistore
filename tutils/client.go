@@ -610,22 +610,6 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string,
 	}
 }
 
-// CreateLocalBucket sends a HTTP request to a proxy and asks it to create a local bucket
-func CreateLocalBucket(proxyURL, bucket string) error {
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActCreateLB})
-	if err != nil {
-		return err
-	}
-
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
-	err = HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
-	if err != nil {
-		return err
-	}
-
-	return waitForLocalBucket(proxyURL, bucket)
-}
-
 // waitForLocalBucket wait until all targets have local bucket created or timeout
 func waitForLocalBucket(url, name string) error {
 	smap, err := GetClusterMap(url)
