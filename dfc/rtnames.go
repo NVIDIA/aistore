@@ -6,26 +6,33 @@
 package dfc
 
 import (
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/common"
 )
 
-// implements cluster.NameLocker interface
+const (
+	pollInterval = time.Second
+)
+
+// Implements cluster.NameLocker interface.
+// Locks objects stored in the cluster when there's a pending GET, PUT, etc. transaction
+// and we don't want the object in question to be updated or evicted concurrently.
+// Objects in the cluster are locked by their unique names aka unames.
+// The lock can be exclusive (write) or shared (read).
+
+var _ cluster.NameLocker = &rtnamemap{}
+
 type rtnamemap struct {
-	sync.Mutex
-	m       map[string]*pendinginfo
-	abrt    chan struct{}
-	aborted bool
+	mu *sync.Mutex
+	m  map[string]*pendinginfo
 }
 
-// in-progress file/object GETs, PUTs and DELETEs
 type pendinginfo struct {
 	time.Time
-	fqn       string
 	rc        int
 	exclusive bool
 }
@@ -33,105 +40,90 @@ type pendinginfo struct {
 //
 // methods
 //
-func (info *pendinginfo) String() string {
-	return info.fqn
-}
-
 func newrtnamemap(size int) *rtnamemap {
 	m := make(map[string]*pendinginfo, size)
-	return &rtnamemap{m: m, abrt: make(chan struct{})}
+	return &rtnamemap{mu: &sync.Mutex{}, m: m}
 }
 
-func (rtnamemap *rtnamemap) trylockname(name string, exclusive bool, info *pendinginfo) bool {
-	rtnamemap.Lock()
+func (rtnamemap *rtnamemap) TryLock(uname string, exclusive bool) bool {
+	rtnamemap.mu.Lock()
 
-	_, found := rtnamemap.m[name]
+	realinfo, found := rtnamemap.m[uname]
 	if found && exclusive {
-		rtnamemap.Unlock()
+		rtnamemap.mu.Unlock()
 		return false
 	}
+	info := &pendinginfo{Time: time.Now()}
 	if exclusive {
-		rtnamemap.m[name] = info
+		rtnamemap.m[uname] = info
 		info.exclusive = true
 		info.rc = 0
-		rtnamemap.Unlock()
+		rtnamemap.mu.Unlock()
 		return true
 	}
 	// rlock
-	var realinfo *pendinginfo
 	if found {
-		realinfo = rtnamemap.m[name]
 		if realinfo.exclusive {
-			rtnamemap.Unlock()
+			rtnamemap.mu.Unlock()
 			return false
 		}
 	} else {
-		rtnamemap.m[name] = info // the 1st rlock
+		rtnamemap.m[uname] = info // the 1st rlock
 		realinfo = info
 		realinfo.exclusive = false
 		realinfo.rc = 0
 	}
 	realinfo.rc++
-	rtnamemap.Unlock()
+	rtnamemap.mu.Unlock()
 	return true
 }
 
-func (rtnamemap *rtnamemap) downgradelock(name string) {
-	rtnamemap.Lock()
+// NOTE that Lock() stays in the loop for as long as needed to
+// acquire the lock.
+// The implementation is intentionally simple as we currently
+// don't need cancelation (via context.Context), timeout,
+// increasing/random polling intervals, sync.Cond -based wait
+// for Unlock - none of the above.
+// Use TryLock() to support any such semantics that makes sense.
 
-	info, found := rtnamemap.m[name]
+func (rtnamemap *rtnamemap) Lock(uname string, exclusive bool) {
+	if rtnamemap.TryLock(uname, exclusive) {
+		return
+	}
+	for {
+		time.Sleep(pollInterval)
+		if rtnamemap.TryLock(uname, exclusive) {
+			glog.Infof("Lock %s(%t) - success", uname, exclusive)
+			return
+		}
+		glog.Infof("Lock %s(%t) - retrying...", uname, exclusive)
+	}
+}
+
+func (rtnamemap *rtnamemap) DowngradeLock(uname string) {
+	rtnamemap.mu.Lock()
+
+	info, found := rtnamemap.m[uname]
 	common.Assert(found)
 	info.exclusive = false
 	info.rc++
 	common.Assert(info.rc == 1)
-	rtnamemap.Unlock()
+	rtnamemap.mu.Unlock()
 }
 
-func (rtnamemap *rtnamemap) unlockname(name string, exclusive bool) {
-	rtnamemap.Lock()
-	if rtnamemap.aborted {
-		rtnamemap.Unlock()
-		return
-	}
-	info, ok := rtnamemap.m[name]
+func (rtnamemap *rtnamemap) Unlock(uname string, exclusive bool) {
+	rtnamemap.mu.Lock()
+	info, ok := rtnamemap.m[uname]
 	common.Assert(ok)
 	if exclusive {
 		common.Assert(info.exclusive)
-		delete(rtnamemap.m, name)
-		rtnamemap.Unlock()
+		delete(rtnamemap.m, uname)
+		rtnamemap.mu.Unlock()
 		return
 	}
 	info.rc--
 	if info.rc == 0 {
-		delete(rtnamemap.m, name)
+		delete(rtnamemap.m, uname)
 	}
-	rtnamemap.Unlock()
-}
-
-// FIXME: TODO: support timeout
-func (rtnamemap *rtnamemap) lockname(name string, exclusive bool, info *pendinginfo, poll time.Duration) {
-	if rtnamemap.trylockname(name, exclusive, info) {
-		return
-	}
-	ticker := time.NewTicker(poll)
-	for {
-		select {
-		case <-ticker.C:
-			if rtnamemap.trylockname(name, exclusive, info) {
-				glog.Infof("rtnamemap: lockname %s (%v) done", info.fqn, exclusive)
-				ticker.Stop()
-				return
-			}
-			glog.Infof("rtnamemap: lockname %s (%v) - retrying...", info.fqn, exclusive)
-			time.Sleep(time.Millisecond * time.Duration(rand.Intn(10)+1))
-		case <-rtnamemap.abrt:
-			rtnamemap.aborted = true
-			ticker.Stop()
-			return
-		}
-	}
-}
-
-func (rtnamemap *rtnamemap) stop() {
-	close(rtnamemap.abrt)
+	rtnamemap.mu.Unlock()
 }

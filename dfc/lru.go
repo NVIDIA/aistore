@@ -308,8 +308,8 @@ func (t *targetrunner) lruEvict(fqn string) error {
 		return nil
 	}
 	uname := cluster.Uname(bucket, objname)
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, true)
+	t.rtnamemap.Lock(uname, true)
+	defer t.rtnamemap.Unlock(uname, true)
 
 	if err := os.Remove(fqn); err != nil {
 		return err

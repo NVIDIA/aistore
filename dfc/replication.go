@@ -208,8 +208,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	url := req.remoteDirectURL + common.URLPath(api.Version, api.Objects, bucket, object)
 
 	uname := cluster.Uname(bucket, object)
-	r.t.rtnamemap.lockname(uname, req.deleteObject, &pendinginfo{Time: time.Now(), fqn: req.fqn}, time.Second)
-	defer r.t.rtnamemap.unlockname(uname, req.deleteObject)
+	r.t.rtnamemap.Lock(uname, req.deleteObject)
+	defer r.t.rtnamemap.Unlock(uname, req.deleteObject)
 
 	file, err := os.Open(req.fqn)
 	if err != nil {

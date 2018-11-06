@@ -238,7 +238,6 @@ func (t *targetrunner) Run() error {
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.Getname(), err)
 	sleep := t.xactinp.abortAll()
-	t.rtnamemap.stop()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
@@ -431,9 +430,9 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		versioncfg = &ctx.config.Ver
 		ct         = t.contextWithAuth(r)
 	)
-	// lockname(ro)
+	// Lock(ro)
 	uname = cluster.Uname(bucket, objname)
-	t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	t.rtnamemap.Lock(uname, false)
 
 	// bucket-level checksumming should override global
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
@@ -488,7 +487,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		t.invalmsghdlr(w, r, errstr, errcode)
-		t.rtnamemap.unlockname(uname, false)
+		t.rtnamemap.Unlock(uname, false)
 		return
 	}
 
@@ -498,7 +497,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			if vchanged, errstr, errcode = t.checkCloudVersion(
 				ct, bucket, objname, version); errstr != "" {
 				t.invalmsghdlr(w, r, errstr, errcode)
-				t.rtnamemap.unlockname(uname, false)
+				t.rtnamemap.Unlock(uname, false)
 				return
 			}
 			// TODO: add a knob to return what's cached while upgrading the version async
@@ -509,7 +508,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-			t.rtnamemap.unlockname(uname, false)
+			t.rtnamemap.Unlock(uname, false)
 			return
 		}
 		if !validChecksum {
@@ -518,14 +517,14 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 					glog.Warningf("Bad checksum, failed to remove %s/%s, err: %v", bucket, objname, err)
 				}
 				t.invalmsghdlr(w, r, fmt.Sprintf("Bad checksum %s/%s", bucket, objname), http.StatusInternalServerError)
-				t.rtnamemap.unlockname(uname, false)
+				t.rtnamemap.Unlock(uname, false)
 				return
 			}
 			coldget = true
 		}
 	}
 	if coldget && !dryRun.disk {
-		t.rtnamemap.unlockname(uname, false)
+		t.rtnamemap.Unlock(uname, false)
 		if props, errstr, errcode = t.coldget(ct, bucket, objname, false); errstr != "" {
 			if errcode == 0 {
 				t.invalmsghdlr(w, r, errstr)
@@ -553,7 +552,7 @@ existslocally:
 	)
 	defer func() {
 		rahfcacher.got()
-		t.rtnamemap.unlockname(uname, false)
+		t.rtnamemap.Unlock(uname, false)
 		if file != nil {
 			file.Close()
 		}
@@ -1467,12 +1466,12 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	getfqn := t.fqn2workfile(fqn)
 	// one cold GET at a time
 	if prefetch {
-		if !t.rtnamemap.trylockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}) {
+		if !t.rtnamemap.TryLock(uname, true) {
 			glog.Infof("PREFETCH: cold GET race: %s/%s - skipping", bucket, objname)
 			return nil, "skip", 0
 		}
 	} else {
-		t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+		t.rtnamemap.Lock(uname, true)
 	}
 
 	// check if bucket-level checksumming configuration should override cluster-level configuration
@@ -1513,7 +1512,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	nextTierURL = bucketProps.NextTierURL
 	if nextTierURL != "" && bucketProps.ReadPolicy == api.RWPolicyNextTier {
 		if inNextTier, errstr, errcode = t.objectInNextTier(nextTierURL, bucket, objname); errstr != "" {
-			t.rtnamemap.unlockname(uname, true)
+			t.rtnamemap.Unlock(uname, true)
 			return
 		}
 	}
@@ -1525,13 +1524,13 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	if !inNextTier || (inNextTier && errstr != "") {
 		if props, errstr, errcode = getcloudif().getobj(ct, getfqn, bucket, objname); errstr != "" {
-			t.rtnamemap.unlockname(uname, true)
+			t.rtnamemap.Unlock(uname, true)
 			return
 		}
 	}
 	defer func() {
 		if errstr != "" {
-			t.rtnamemap.unlockname(uname, true)
+			t.rtnamemap.Unlock(uname, true)
 			if errRemove := os.Remove(getfqn); errRemove != nil {
 				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, getfqn, errRemove)
 				t.fshc(errRemove, getfqn)
@@ -1551,7 +1550,7 @@ ret:
 	// NOTE: GET - downgrade and keep the lock, PREFETCH - unlock
 	//
 	if prefetch {
-		t.rtnamemap.unlockname(uname, true)
+		t.rtnamemap.Unlock(uname, true)
 	} else {
 		if vchanged {
 			t.statsif.addMany(namedVal64{statGetColdCount, 1}, namedVal64{statGetColdSize, props.size},
@@ -1559,7 +1558,7 @@ ret:
 		} else {
 			t.statsif.addMany(namedVal64{statGetColdCount, 1}, namedVal64{statGetColdSize, props.size})
 		}
-		t.rtnamemap.downgradelock(uname)
+		t.rtnamemap.DowngradeLock(uname)
 	}
 	return
 }
@@ -2223,20 +2222,20 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 
 	// when all set and done:
 	uname := cluster.Uname(bucket, objname)
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	t.rtnamemap.Lock(uname, true)
 
 	if err = os.Rename(putfqn, fqn); err != nil {
-		t.rtnamemap.unlockname(uname, true)
+		t.rtnamemap.Unlock(uname, true)
 		errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", putfqn, fqn, err)
 		return
 	}
 	renamed = true
 	if errstr = t.finalizeobj(fqn, bucket, objprops); errstr != "" {
-		t.rtnamemap.unlockname(uname, true)
+		t.rtnamemap.Unlock(uname, true)
 		glog.Errorf("finalizeobj %s/%s: %s (%+v)", bucket, objname, errstr, objprops)
 		return
 	}
-	t.rtnamemap.unlockname(uname, true)
+	t.rtnamemap.Unlock(uname, true)
 	return
 }
 
@@ -2258,8 +2257,8 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		// the source
 		//
 		uname := cluster.Uname(bucket, objname)
-		t.rtnamemap.lockname(uname, false, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-		defer t.rtnamemap.unlockname(uname, false)
+		t.rtnamemap.Lock(uname, false)
+		defer t.rtnamemap.Unlock(uname, false)
 
 		finfo, err := os.Stat(fqn)
 		if glog.V(3) {
@@ -2336,8 +2335,8 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	}
 	uname := cluster.Uname(bucket, objname)
 
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
-	defer t.rtnamemap.unlockname(uname, true)
+	t.rtnamemap.Lock(uname, true)
+	defer t.rtnamemap.Unlock(uname, true)
 
 	if !islocal && !evict {
 		if errstr, errcode = getcloudif().deleteobj(ct, bucket, objname); errstr != "" {
@@ -2384,19 +2383,13 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg ap
 		return
 	}
 	newobjname := msg.Name
-	islocal := t.bmdowner.get().islocal(bucket)
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
-	if errstr != "" {
-		t.invalmsghdlr(w, r, errstr)
-		return
-	}
 	uname := cluster.Uname(bucket, objname)
-	t.rtnamemap.lockname(uname, true, &pendinginfo{Time: time.Now(), fqn: fqn}, time.Second)
+	t.rtnamemap.Lock(uname, true)
 
 	if errstr = t.renameobject(bucket, objname, bucket, newobjname); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
-	t.rtnamemap.unlockname(uname, true)
+	t.rtnamemap.Unlock(uname, true)
 }
 
 func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg api.ActionMsg) {
