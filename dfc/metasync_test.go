@@ -588,7 +588,7 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
 	bucketmd = bucketmd.clone()
-	bucketmd.add("bucket3", true, *NewBucketProps())
+	bucketmd.add("bucket3", true, *api.NewBucketProps(&ctx.config.LRU))
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)

@@ -14,6 +14,7 @@ import (
 	"github.com/NVIDIA/dfcpub/common"
 )
 
+// implements cluster.NameLocker interface
 type rtnamemap struct {
 	sync.Mutex
 	m       map[string]*pendinginfo

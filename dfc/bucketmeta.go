@@ -36,36 +36,7 @@ type bucketMD struct {
 	vstr string // itoa(Version), to have it handy for http redirects
 }
 
-// implements cluster.Bowner interface
-type bmdowner struct {
-	sync.Mutex
-	bucketmd unsafe.Pointer
-}
-
-func (r *bmdowner) put(bucketmd *bucketMD) {
-	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
-	atomic.StorePointer(&r.bucketmd, unsafe.Pointer(bucketmd))
-}
-
-// implements cluster.Bowner.Get
-func (r *bmdowner) Get() *cluster.BMD {
-	bucketmd := (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
-	return &bucketmd.BMD
-}
-func (r *bmdowner) get() (bucketmd *bucketMD) {
-	bucketmd = (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
-	return
-}
-
-func NewBucketProps() *api.BucketProps {
-	return &api.BucketProps{
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
-		},
-		LRUConfig: ctx.config.LRU,
-	}
-}
-
+// c-tor
 func newBucketMD() *bucketMD {
 	lbmap := make(map[string]api.BucketProps)
 	cbmap := make(map[string]api.BucketProps)
@@ -172,4 +143,31 @@ func (m *bucketMD) version() int64 { return m.Version }
 
 func (m *bucketMD) marshal() ([]byte, error) {
 	return jsonCompat.Marshal(m) // jsoniter + sorting
+}
+
+//=====================================================================
+//
+// bmdowner: implements cluster.Bowner interface
+//
+//=====================================================================
+var _ cluster.Bowner = &bmdowner{}
+
+type bmdowner struct {
+	sync.Mutex
+	bucketmd unsafe.Pointer
+}
+
+func (r *bmdowner) put(bucketmd *bucketMD) {
+	bucketmd.vstr = strconv.FormatInt(bucketmd.Version, 10)
+	atomic.StorePointer(&r.bucketmd, unsafe.Pointer(bucketmd))
+}
+
+// implements cluster.Bowner.Get
+func (r *bmdowner) Get() *cluster.BMD {
+	bucketmd := (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
+	return &bucketmd.BMD
+}
+func (r *bmdowner) get() (bucketmd *bucketMD) {
+	bucketmd = (*bucketMD)(atomic.LoadPointer(&r.bucketmd))
+	return
 }

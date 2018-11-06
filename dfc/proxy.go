@@ -563,7 +563,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.Lock()
 		clone := p.bmdowner.get().clone()
-		if !clone.add(lbucket, true, *NewBucketProps()) {
+		if !clone.add(lbucket, true, *api.NewBucketProps(&ctx.config.LRU)) {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
 			return
@@ -718,7 +718,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	exists, oldProps := clone.get(bucket, isLocal)
 	if !exists {
 		common.Assert(!isLocal)
-		oldProps = *NewBucketProps()
+		oldProps = *api.NewBucketProps(&ctx.config.LRU)
 		clone.add(bucket, false, oldProps)
 	}
 
@@ -731,7 +731,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 		p.copyBucketProps(&oldProps, props, bucket)
 	case api.ActResetProps:
-		oldProps = *NewBucketProps()
+		oldProps = *api.NewBucketProps(&ctx.config.LRU)
 	}
 
 	clone.set(bucket, isLocal, oldProps)

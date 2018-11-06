@@ -103,6 +103,13 @@ type BucketProps struct {
 	LRUConfig `json:"lru_props"`
 }
 
+func NewBucketProps(lruconf *LRUConfig) *BucketProps {
+	return &BucketProps{
+		CksumConfig: CksumConfig{Checksum: ChecksumInherit},
+		LRUConfig:   *lruconf,
+	}
+}
+
 // SetBucketProps API operation for DFC
 //
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.

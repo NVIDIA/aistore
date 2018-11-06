@@ -169,6 +169,8 @@ func (m *smapX) pp() string {
 // smapowner: implements cluster.Sowner
 //
 //=====================================================================
+var _ cluster.Sowner = &smapowner{}
+
 type smapowner struct {
 	sync.Mutex
 	smap unsafe.Pointer

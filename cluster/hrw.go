@@ -2,12 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-
-// Package cluster provides Smap (aka cluster map), Snode (member of a storage cluster, node in the Smap),
-// and read-only helpers.
-// In addition, there's the Sowner interface to Get a read-only copy of the Smap.
-// Finally, the package provides highest-random-weight selection of an Snode (target or proxy)
-// from a given Smap.
+// Package cluster provides local access to cluster-level metadata
 package cluster
 
 import (
