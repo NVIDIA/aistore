@@ -137,27 +137,30 @@ func (p *proxyrunner) Run() error {
 		p.registerPublicNetHandler("/", cmn.InvalidHandler)
 	}
 
-	// Internal network
-	p.registerInternalNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), p.metasyncHandler)
-	p.registerInternalNetHandler(cmn.URLPath(cmn.Version, cmn.Health), p.healthHandler)
-	p.registerInternalNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), p.voteHandler)
-	if ctx.config.Net.UseIntra {
+	// Intra control network
+	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), p.metasyncHandler)
+	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), p.healthHandler)
+	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), p.voteHandler)
+	if ctx.config.Net.UseIntraControl {
 		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
-			p.registerInternalNetHandler("/", p.reverseProxyHandler)
+			p.registerIntraControlNetHandler("/", p.reverseProxyHandler)
 		} else {
-			p.registerInternalNetHandler("/", cmn.InvalidHandler)
+			p.registerIntraControlNetHandler("/", cmn.InvalidHandler)
 		}
 	}
 
-	// Replication network
-	if ctx.config.Net.UseRepl {
-		p.registerReplNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", p.objectHandler)
-		p.registerReplNetHandler("/", cmn.InvalidHandler)
+	// Intra data network
+	if ctx.config.Net.UseIntraData {
+		p.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", p.objectHandler)
+		p.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
 
 	glog.Infof("%s: [public net] listening on: %s", p.si.DaemonID, p.si.PublicNet.DirectURL)
-	if p.si.PublicNet.DirectURL != p.si.InternalNet.DirectURL {
-		glog.Infof("%s: [internal net] listening on: %s", p.si.DaemonID, p.si.InternalNet.DirectURL)
+	if p.si.PublicNet.DirectURL != p.si.IntraControlNet.DirectURL {
+		glog.Infof("%s: [intra control net] listening on: %s", p.si.DaemonID, p.si.IntraControlNet.DirectURL)
+	}
+	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
+		glog.Infof("%s: [intra data net] listening on: %s", p.si.DaemonID, p.si.IntraDataNet.DirectURL)
 	}
 	if ctx.config.Net.HTTP.RevProxy != "" {
 		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", ctx.config.Net.HTTP.RevProxy)
@@ -386,7 +389,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		redirecturl = p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	} else {
 		// replication PUT
-		redirecturl = p.redirectURL(r, si.ReplNet.DirectURL, started, bucket)
+		redirecturl = p.redirectURL(r, si.IntraDataNet.DirectURL, started, bucket)
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
@@ -2501,14 +2504,14 @@ func (p *proxyrunner) broadcastTargets(path string, query url.Values, method str
 func (p *proxyrunner) urlOutsideCluster(url string) bool {
 	smap := p.smapowner.get()
 	for _, proxyInfo := range smap.Pmap {
-		if proxyInfo.InternalNet.DirectURL == url || proxyInfo.PublicNet.DirectURL == url ||
-			proxyInfo.ReplNet.DirectURL == url {
+		if proxyInfo.PublicNet.DirectURL == url || proxyInfo.IntraControlNet.DirectURL == url ||
+			proxyInfo.IntraDataNet.DirectURL == url {
 			return false
 		}
 	}
 	for _, targetInfo := range smap.Tmap {
-		if targetInfo.InternalNet.DirectURL == url || targetInfo.PublicNet.DirectURL == url ||
-			targetInfo.ReplNet.DirectURL == url {
+		if targetInfo.PublicNet.DirectURL == url || targetInfo.IntraControlNet.DirectURL == url ||
+			targetInfo.IntraDataNet.DirectURL == url {
 			return false
 		}
 	}

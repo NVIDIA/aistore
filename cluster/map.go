@@ -32,11 +32,11 @@ type NetInfo struct {
 //
 //==================================================================
 type Snode struct {
-	DaemonID    string  `json:"daemon_id"`
-	PublicNet   NetInfo `json:"public_net"`
-	InternalNet NetInfo `json:"internal_net"`
-	ReplNet     NetInfo `json:"repl_net"`
-	idDigest    uint64
+	DaemonID        string  `json:"daemon_id"`
+	PublicNet       NetInfo `json:"public_net"`
+	IntraControlNet NetInfo `json:"intra_control_net"`
+	IntraDataNet    NetInfo `json:"intra_data_net"`
+	idDigest        uint64
 }
 
 func (d *Snode) Digest() uint64 {
@@ -47,14 +47,15 @@ func (d *Snode) Digest() uint64 {
 }
 
 func (d *Snode) String() string {
-	f := "[\n\tDaemonID: %s,\n\tPublicNet: %s,\n\tInternalNet: %s,\n\tidDigest: %d]"
-	return fmt.Sprintf(f, d.DaemonID, d.PublicNet.DirectURL, d.InternalNet.DirectURL, d.idDigest)
+	f := "[\n\tDaemonID: %s,\n\tPublicNet: %s,\n\tIntraControlNet: %s,\n\tIntraDataNet: %s,\n\tidDigest: %d]"
+	return fmt.Sprintf(f, d.DaemonID, d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
 }
 
 func (a *Snode) Equals(b *Snode) bool {
 	return a.DaemonID == b.DaemonID &&
 		reflect.DeepEqual(a.PublicNet, b.PublicNet) &&
-		reflect.DeepEqual(a.InternalNet, b.InternalNet)
+		reflect.DeepEqual(a.IntraControlNet, b.IntraControlNet) &&
+		reflect.DeepEqual(a.IntraDataNet, b.IntraDataNet)
 }
 
 //===============================================================

@@ -172,8 +172,8 @@ type netServer struct {
 type httprunner struct {
 	cmn.Named
 	publicServer          *netServer
-	internalServer        *netServer
-	replServer            *netServer
+	intraControlServer    *netServer
+	intraDataServer       *netServer
 	glogger               *log.Logger
 	si                    *cluster.Snode
 	httpclient            *http.Client // http client for intra-cluster comm
@@ -225,17 +225,17 @@ func (h *httprunner) registerPublicNetHandler(path string, handler func(http.Res
 	}
 }
 
-func (h *httprunner) registerInternalNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	h.internalServer.mux.HandleFunc(path, handler)
+func (h *httprunner) registerIntraControlNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+	h.intraControlServer.mux.HandleFunc(path, handler)
 	if !strings.HasSuffix(path, "/") {
-		h.internalServer.mux.HandleFunc(path+"/", handler)
+		h.intraControlServer.mux.HandleFunc(path+"/", handler)
 	}
 }
 
-func (h *httprunner) registerReplNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
-	h.replServer.mux.HandleFunc(path, handler)
+func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.ResponseWriter, *http.Request)) {
+	h.intraDataServer.mux.HandleFunc(path, handler)
 	if !strings.HasSuffix(path, "/") {
-		h.replServer.mux.HandleFunc(path+"/", handler)
+		h.intraDataServer.mux.HandleFunc(path+"/", handler)
 	}
 }
 
@@ -263,15 +263,15 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	h.publicServer = &netServer{
 		mux: http.NewServeMux(),
 	}
-	h.internalServer = h.publicServer // by default internal net is the same as public
-	if ctx.config.Net.UseIntra {
-		h.internalServer = &netServer{
+	h.intraControlServer = h.publicServer // by default intra control net is the same as public
+	if ctx.config.Net.UseIntraControl {
+		h.intraControlServer = &netServer{
 			mux: http.NewServeMux(),
 		}
 	}
-	h.replServer = h.publicServer // by default replication net is the same as public
-	if ctx.config.Net.UseRepl {
-		h.replServer = &netServer{
+	h.intraDataServer = h.publicServer // by default intra data net is the same as public
+	if ctx.config.Net.UseIntraData {
+		h.intraDataServer = &netServer{
 			mux: http.NewServeMux(),
 		}
 	}
@@ -297,37 +297,37 @@ func (h *httprunner) initSI() {
 	}
 	glog.Infof("Configured PUBLIC NETWORK address: [%s:%d] (out of: %s)\n", ipAddr, ctx.config.Net.L4.Port, ctx.config.Net.IPv4)
 
-	ipAddrIntra := net.IP{}
-	if ctx.config.Net.UseIntra {
-		ipAddrIntra, err = getipv4addr(addrList, ctx.config.Net.IPv4Intra)
+	ipAddrIntraControl := net.IP{}
+	if ctx.config.Net.UseIntraControl {
+		ipAddrIntraControl, err = getipv4addr(addrList, ctx.config.Net.IPv4IntraControl)
 		if err != nil {
-			glog.Fatalf("Failed to get internal network address: %v", err)
+			glog.Fatalf("Failed to get intra control network address: %v", err)
 		}
-		glog.Infof("Configured INTERNAL NETWORK address: [%s:%d] (out of: %s)\n",
-			ipAddrIntra, ctx.config.Net.L4.PortIntra, ctx.config.Net.IPv4Intra)
+		glog.Infof("Configured INTRA CONTROL NETWORK address: [%s:%d] (out of: %s)\n",
+			ipAddrIntraControl, ctx.config.Net.L4.PortIntraControl, ctx.config.Net.IPv4IntraControl)
 	}
 
-	ipAddrRepl := net.IP{}
-	if ctx.config.Net.UseRepl {
-		ipAddrRepl, err = getipv4addr(addrList, ctx.config.Net.IPv4Repl)
+	ipAddrIntraData := net.IP{}
+	if ctx.config.Net.UseIntraData {
+		ipAddrIntraData, err = getipv4addr(addrList, ctx.config.Net.IPv4IntraData)
 		if err != nil {
-			glog.Fatalf("Failed to get replication network address: %v", err)
+			glog.Fatalf("Failed to get intra data network address: %v", err)
 		}
-		glog.Infof("Configured REPLICATION NETWORK address: [%s:%d] (out of: %s)\n",
-			ipAddrRepl, ctx.config.Net.L4.PortRepl, ctx.config.Net.IPv4Repl)
+		glog.Infof("Configured INTRA DATA NETWORK address: [%s:%d] (out of: %s)\n",
+			ipAddrIntraData, ctx.config.Net.L4.PortIntraData, ctx.config.Net.IPv4IntraData)
 	}
 
 	publicAddr := &net.TCPAddr{
 		IP:   ipAddr,
 		Port: ctx.config.Net.L4.Port,
 	}
-	internalAddr := &net.TCPAddr{
-		IP:   ipAddrIntra,
-		Port: ctx.config.Net.L4.PortIntra,
+	intraControlAddr := &net.TCPAddr{
+		IP:   ipAddrIntraControl,
+		Port: ctx.config.Net.L4.PortIntraControl,
 	}
-	replAddr := &net.TCPAddr{
-		IP:   ipAddrRepl,
-		Port: ctx.config.Net.L4.PortRepl,
+	intraDataAddr := &net.TCPAddr{
+		IP:   ipAddrIntraData,
+		Port: ctx.config.Net.L4.PortIntraData,
 	}
 
 	daemonID := os.Getenv("DFCDAEMONID")
@@ -339,7 +339,7 @@ func (h *httprunner) initSI() {
 		}
 	}
 
-	h.si = newSnode(daemonID, ctx.config.Net.HTTP.proto, publicAddr, internalAddr, replAddr)
+	h.si = newSnode(daemonID, ctx.config.Net.HTTP.proto, publicAddr, intraControlAddr, intraDataAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
@@ -371,25 +371,25 @@ func (h *httprunner) run() error {
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 
-	if ctx.config.Net.UseIntra || ctx.config.Net.UseRepl {
+	if ctx.config.Net.UseIntraControl || ctx.config.Net.UseIntraData {
 		var errCh chan error
-		if ctx.config.Net.UseIntra && ctx.config.Net.UseRepl {
+		if ctx.config.Net.UseIntraControl && ctx.config.Net.UseIntraData {
 			errCh = make(chan error, 3)
 		} else {
 			errCh = make(chan error, 2)
 		}
 
-		if ctx.config.Net.UseIntra {
+		if ctx.config.Net.UseIntraControl {
 			go func() {
-				addr := h.si.InternalNet.NodeIPAddr + ":" + h.si.InternalNet.DaemonPort
-				errCh <- h.internalServer.listenAndServe(addr, h.glogger)
+				addr := h.si.IntraControlNet.NodeIPAddr + ":" + h.si.IntraControlNet.DaemonPort
+				errCh <- h.intraControlServer.listenAndServe(addr, h.glogger)
 			}()
 		}
 
-		if ctx.config.Net.UseRepl {
+		if ctx.config.Net.UseIntraData {
 			go func() {
-				addr := h.si.ReplNet.NodeIPAddr + ":" + h.si.ReplNet.DaemonPort
-				errCh <- h.replServer.listenAndServe(addr, h.glogger)
+				addr := h.si.IntraDataNet.NodeIPAddr + ":" + h.si.IntraDataNet.DaemonPort
+				errCh <- h.intraDataServer.listenAndServe(addr, h.glogger)
 			}()
 		}
 
@@ -422,18 +422,18 @@ func (h *httprunner) stop(err error) {
 		wg.Done()
 	}()
 
-	if ctx.config.Net.UseIntra {
+	if ctx.config.Net.UseIntraControl {
 		wg.Add(1)
 		go func() {
-			h.internalServer.shutdown()
+			h.intraControlServer.shutdown()
 			wg.Done()
 		}()
 	}
 
-	if ctx.config.Net.UseRepl {
+	if ctx.config.Net.UseIntraData {
 		wg.Add(1)
 		go func() {
-			h.replServer.shutdown()
+			h.intraDataServer.shutdown()
 			wg.Done()
 		}()
 	}
@@ -574,7 +574,7 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 				}
 				args.req.base = ""
 				if bcastArgs.internal {
-					args.req.base = di.InternalNet.DirectURL
+					args.req.base = di.IntraControlNet.DirectURL
 				}
 
 				res := h.call(args)

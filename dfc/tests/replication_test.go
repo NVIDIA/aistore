@@ -31,7 +31,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	reader, err := tutils.NewRandReader(fileSize, false)
 	tutils.CheckFatal(err, t)
 
-	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
+	proxyURLData := getPrimaryIntraDataURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	xxhash := getXXHashChecksum(t, reader)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
@@ -39,13 +39,13 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", TestLocalBucketName, object, proxyURLRepl)
-	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, xxhash, reader)
+	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", TestLocalBucketName, object, proxyURLData)
+	err = httpReplicationPut(t, dummySrcURL, proxyURLData, TestLocalBucketName, object, xxhash, reader)
 	tutils.CheckFatal(err, t)
 
 	if isCloud {
-		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLRepl)
-		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, xxhash, reader)
+		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", clibucket, object, proxyURLData)
+		err = httpReplicationPut(t, dummySrcURL, proxyURLData, clibucket, object, xxhash, reader)
 		tutils.CheckFatal(err, t)
 		tutils.Del(proxyURL, clibucket, object, nil, nil, true)
 	}
@@ -60,18 +60,18 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	reader, err := tutils.NewRandReader(fileSize, false)
 	tutils.CheckFatal(err, t)
 
-	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
+	proxyURLData := getPrimaryIntraDataURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	url := proxyURLRepl + cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object)
+	url := proxyURLData + cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object)
 	headers := map[string]string{
 		cmn.HeaderDFCReplicationSrc: dummySrcURL,
 	}
-	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
+	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLData)
 	err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 
 	if err == nil {
@@ -79,8 +79,8 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	}
 
 	if isCloud {
-		url = proxyURLRepl + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
-		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
+		url = proxyURLData + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
+		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLData)
 		err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 
 		if err == nil {
@@ -97,22 +97,22 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	reader, err := tutils.NewRandReader(fileSize, false)
 	tutils.CheckFatal(err, t)
 
-	proxyURLRepl := getPrimaryReplicationURL(t, proxyURLRO)
+	proxyURLData := getPrimaryIntraDataURL(t, proxyURLRO)
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
-	err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, TestLocalBucketName, object, badChecksum, reader)
+	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLData)
+	err = httpReplicationPut(t, dummySrcURL, proxyURLData, TestLocalBucketName, object, badChecksum, reader)
 	if err == nil {
 		t.Error("Replication PUT to local bucket with bad checksum didn't fail")
 	}
 
 	if isCloud {
-		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
-		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, clibucket, object, clibucket, reader)
+		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLData)
+		err = httpReplicationPut(t, dummySrcURL, proxyURLData, clibucket, object, clibucket, reader)
 		if err == nil {
 			t.Error("Replication PUT to local bucket with bad checksum didn't fail")
 		}
@@ -126,7 +126,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		seedValue = int64(111)
 	)
 	var (
-		proxyURLRepl = getPrimaryReplicationURL(t, proxyURLRO)
+		proxyURLData = getPrimaryIntraDataURL(t, proxyURLRO)
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		bucket       = clibucket
 		size         = int64(fileSize)
@@ -177,7 +177,7 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		}
 
 		tutils.Logf("Receiving replica: %s (%d/%d)...\n", object, idx+1, numFiles)
-		err = httpReplicationPut(t, dummySrcURL, proxyURLRepl, bucket, object, r.XXHash(), r)
+		err = httpReplicationPut(t, dummySrcURL, proxyURLData, bucket, object, r.XXHash(), r)
 		if err != nil {
 			errCnt++
 			t.Errorf("ERROR: %v\n", err)
@@ -186,12 +186,12 @@ func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	tutils.Logf("Successful: %d/%d. Failed: %d/%d\n", numFiles-errCnt, numFiles, errCnt, numFiles)
 }
 
-func getPrimaryReplicationURL(t *testing.T, proxyURL string) string {
+func getPrimaryIntraDataURL(t *testing.T, proxyURL string) string {
 	smap, err := tutils.GetClusterMap(proxyURL)
 	if err != nil {
-		t.Fatalf("Failed to get primary proxy replication URL, error: %v", err)
+		t.Fatalf("Failed to get primary proxy intra data net URL, error: %v", err)
 	}
-	return smap.ProxySI.ReplNet.DirectURL
+	return smap.ProxySI.IntraDataNet.DirectURL
 }
 
 func getXXHashChecksum(t *testing.T, reader io.Reader) string {

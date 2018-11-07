@@ -242,29 +242,29 @@ func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
 // new cluster.Snode
 //
 //=====================================================================
-func newSnode(id, proto string, publicAddr, internalAddr, replAddr *net.TCPAddr) (snode *cluster.Snode) {
+func newSnode(id, proto string, publicAddr, intraControlAddr, intraDataAddr *net.TCPAddr) (snode *cluster.Snode) {
 	publicNet := cluster.NetInfo{
 		NodeIPAddr: publicAddr.IP.String(),
 		DaemonPort: strconv.Itoa(publicAddr.Port),
 		DirectURL:  proto + "://" + publicAddr.String(),
 	}
-	internalNet := publicNet
-	if len(internalAddr.IP) > 0 {
-		internalNet = cluster.NetInfo{
-			NodeIPAddr: internalAddr.IP.String(),
-			DaemonPort: strconv.Itoa(internalAddr.Port),
-			DirectURL:  proto + "://" + internalAddr.String(),
+	intraControlNet := publicNet
+	if len(intraControlAddr.IP) > 0 {
+		intraControlNet = cluster.NetInfo{
+			NodeIPAddr: intraControlAddr.IP.String(),
+			DaemonPort: strconv.Itoa(intraControlAddr.Port),
+			DirectURL:  proto + "://" + intraControlAddr.String(),
 		}
 	}
-	replNet := publicNet
-	if len(replAddr.IP) > 0 {
-		replNet = cluster.NetInfo{
-			NodeIPAddr: replAddr.IP.String(),
-			DaemonPort: strconv.Itoa(replAddr.Port),
-			DirectURL:  proto + "://" + replAddr.String(),
+	intraDataNet := publicNet
+	if len(intraDataAddr.IP) > 0 {
+		intraDataNet = cluster.NetInfo{
+			NodeIPAddr: intraDataAddr.IP.String(),
+			DaemonPort: strconv.Itoa(intraDataAddr.Port),
+			DirectURL:  proto + "://" + intraDataAddr.String(),
 		}
 	}
-	snode = &cluster.Snode{DaemonID: id, PublicNet: publicNet, InternalNet: internalNet, ReplNet: replNet}
+	snode = &cluster.Snode{DaemonID: id, PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
 	snode.Digest()
 	return
 }

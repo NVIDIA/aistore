@@ -225,7 +225,7 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
-			base:   si.InternalNet.DirectURL,
+			base:   si.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Health),
 			query:  query,
 		},
@@ -308,7 +308,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
-			base:   si.InternalNet.DirectURL,
+			base:   si.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Health),
 		},
 		timeout: defaultTimeout,

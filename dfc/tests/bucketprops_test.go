@@ -92,9 +92,9 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 	// Test Invalid Proxy URLs for NextTierURL property
 	for _, proxyInfo := range smap.Pmap {
 		invalidDaemonURLs = append(invalidDaemonURLs,
-			proxyInfo.InternalNet.DirectURL,
 			proxyInfo.PublicNet.DirectURL,
-			proxyInfo.ReplNet.DirectURL,
+			proxyInfo.IntraControlNet.DirectURL,
+			proxyInfo.IntraDataNet.DirectURL,
 		)
 		// Break early to avoid flooding the logs with too many error messages.
 		break
@@ -103,9 +103,9 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 	// Test Invalid Target URLs for NextTierURL property
 	for _, targetInfo := range smap.Tmap {
 		invalidDaemonURLs = append(invalidDaemonURLs,
-			targetInfo.InternalNet.DirectURL,
 			targetInfo.PublicNet.DirectURL,
-			targetInfo.ReplNet.DirectURL,
+			targetInfo.IntraControlNet.DirectURL,
+			targetInfo.IntraDataNet.DirectURL,
 		)
 		// Break early to avoid flooding the logs with too many error messages.
 		break

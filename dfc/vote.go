@@ -522,7 +522,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 		si: nextPrimaryProxy,
 		req: reqArgs{
 			method: http.MethodPut,
-			base:   nextPrimaryProxy.InternalNet.DirectURL,
+			base:   nextPrimaryProxy.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Vote, cmn.VoteInit),
 			body:   body,
 		},
@@ -575,7 +575,7 @@ func (p *proxyrunner) pingWithTimeout(si *cluster.Snode, timeout time.Duration) 
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
-			base:   si.InternalNet.DirectURL,
+			base:   si.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Health),
 		},
 		timeout: timeout,

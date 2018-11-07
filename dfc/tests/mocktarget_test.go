@@ -69,7 +69,8 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Sma
 			DaemonPort: mockTargetPort,
 			DirectURL:  "http://" + v.PublicNet.NodeIPAddr + ":" + mockTargetPort,
 		}
-		v.InternalNet = v.PublicNet
+		v.IntraControlNet = v.PublicNet
+		v.IntraDataNet = v.PublicNet
 		jsonDaemonInfo, err = jsoniter.Marshal(v)
 		if err != nil {
 			return err

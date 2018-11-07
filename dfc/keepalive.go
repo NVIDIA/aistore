@@ -271,7 +271,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 		si: to,
 		req: reqArgs{
 			method: http.MethodGet,
-			base:   to.InternalNet.DirectURL,
+			base:   to.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Health),
 			query:  query,
 		},

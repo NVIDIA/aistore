@@ -77,7 +77,7 @@ INT_NET="172.51.0"
 INT_SUBNET="${INT_NET}.0/24"
 
 IPV4LIST=""
-IPV4LIST_INTRA=""
+IPV4LIST_INTRA_CONTROL=""
 
 for i in `seq 2 $(( $TARGET_CNT + $PROXY_CNT + 1 ))`; do
     IPV4LIST="${IPV4LIST}${PUB_NET}.$i,"
@@ -88,9 +88,9 @@ fi
 
 if [ "$network" = "multi" ]; then
     for i in `seq 2 $(( $TARGET_CNT + $PROXY_CNT + 1 ))`; do
-        IPV4LIST_INTRA="${IPV4LIST_INTRA}${INT_NET}.$i,"
+        IPV4LIST_INTRA_CONTROL="${IPV4LIST_INTRA_CONTROL}${INT_NET}.$i,"
     done
-    IPV4LIST_INTRA=${IPV4LIST_INTRA::-1} # remove last ","
+    IPV4LIST_INTRA_CONTROL=${IPV4LIST_INTRA_CONTROL::-1} # remove last ","
 fi
 
 PORT=8080

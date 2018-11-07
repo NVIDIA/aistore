@@ -98,7 +98,7 @@ type replicationRunner struct {
 func (rr *replicationRunner) newMpathReplicator(mpath string) *mpathReplicator {
 	return &mpathReplicator{
 		t:         rr.t,
-		directURL: rr.t.si.ReplNet.DirectURL,
+		directURL: rr.t.si.IntraDataNet.DirectURL,
 		mpath:     mpath,
 		replReqCh: make(chan *replRequest, mpathReplicationRequestBufferSize),
 		once:      &sync.Once{},

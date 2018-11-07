@@ -193,20 +193,20 @@ func (t *targetrunner) Run() error {
 	transport.SetMux(cmn.NetworkPublic, t.publicServer.mux) // to register transport handlers at runtime
 	t.registerPublicNetHandler("/", cmn.InvalidHandler)
 
-	// Internal network
-	t.registerInternalNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), t.metasyncHandler)
-	t.registerInternalNetHandler(cmn.URLPath(cmn.Version, cmn.Health), t.healthHandler)
-	t.registerInternalNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), t.voteHandler)
-	if ctx.config.Net.UseIntra {
-		transport.SetMux(cmn.NetworkIntra, t.internalServer.mux) // to register transport handlers at runtime
-		t.registerInternalNetHandler("/", cmn.InvalidHandler)
+	// Intra control network
+	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), t.metasyncHandler)
+	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), t.healthHandler)
+	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), t.voteHandler)
+	if ctx.config.Net.UseIntraControl {
+		transport.SetMux(cmn.NetworkIntra, t.intraControlServer.mux) // to register transport handlers at runtime
+		t.registerIntraControlNetHandler("/", cmn.InvalidHandler)
 	}
 
-	// Replication network
-	if ctx.config.Net.UseRepl {
-		t.registerReplNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
-		transport.SetMux(cmn.NetworkReplication, t.replServer.mux) // to register transport handlers at runtime
-		t.registerReplNetHandler("/", cmn.InvalidHandler)
+	// Intra data network
+	if ctx.config.Net.UseIntraData {
+		transport.SetMux(cmn.NetworkReplication, t.intraDataServer.mux) // to register transport handlers at runtime
+		t.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
+		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
 
 	glog.Infof("Target %s is ready", t.si.DaemonID)
@@ -2660,7 +2660,7 @@ func (t *targetrunner) bmdVersionFixup() {
 		si: psi,
 		req: reqArgs{
 			method: http.MethodGet,
-			base:   psi.InternalNet.DirectURL,
+			base:   psi.IntraControlNet.DirectURL,
 			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 			query:  q,
 		},
@@ -2675,7 +2675,7 @@ func (t *targetrunner) bmdVersionFixup() {
 	err := jsoniter.Unmarshal(res.outjson, newbucketmd)
 	if err != nil {
 		glog.Errorf("Unexpected: failed to unmarshal get-what=%s response from %s, err: %v [%v]",
-			cmn.GetWhatBucketMeta, psi.InternalNet.DirectURL, err, string(res.outjson))
+			cmn.GetWhatBucketMeta, psi.IntraControlNet.DirectURL, err, string(res.outjson))
 		return
 	}
 	var msg = cmn.ActionMsg{Action: "get-what=" + cmn.GetWhatBucketMeta}
@@ -3613,7 +3613,7 @@ func (t *targetrunner) pollClusterStarted() {
 			si: psi,
 			req: reqArgs{
 				method: http.MethodGet,
-				base:   psi.InternalNet.DirectURL,
+				base:   psi.IntraControlNet.DirectURL,
 				path:   cmn.URLPath(cmn.Version, cmn.Health),
 			},
 			timeout: defaultTimeout,

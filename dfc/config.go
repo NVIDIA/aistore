@@ -131,23 +131,23 @@ type testfspathconf struct {
 }
 
 type netconfig struct {
-	IPv4      string  `json:"ipv4"`
-	IPv4Intra string  `json:"ipv4_intra"`
-	IPv4Repl  string  `json:"ipv4_repl"`
-	UseIntra  bool    `json:"-"`
-	UseRepl   bool    `json:"-"`
-	L4        l4cnf   `json:"l4"`
-	HTTP      httpcnf `json:"http"`
+	IPv4             string  `json:"ipv4"`
+	IPv4IntraControl string  `json:"ipv4_intra_control"`
+	IPv4IntraData    string  `json:"ipv4_intra_data"`
+	UseIntraControl  bool    `json:"-"`
+	UseIntraData     bool    `json:"-"`
+	L4               l4cnf   `json:"l4"`
+	HTTP             httpcnf `json:"http"`
 }
 
 type l4cnf struct {
-	Proto        string `json:"proto"` // tcp, udp
-	PortStr      string `json:"port"`  // listening port
-	Port         int    `json:"-"`
-	PortIntraStr string `json:"port_intra"` // listening port for intra network
-	PortIntra    int    `json:"-"`
-	PortReplStr  string `json:"port_repl"` // listening port for replication network
-	PortRepl     int    `json:"-"`
+	Proto               string `json:"proto"` // tcp, udp
+	PortStr             string `json:"port"`  // listening port
+	Port                int    `json:"-"`
+	PortIntraControlStr string `json:"port_intra_control"` // listening port for intra control network
+	PortIntraControl    int    `json:"-"`
+	PortIntraDataStr    string `json:"port_intra_data"` // listening port for intra data network
+	PortIntraData       int    `json:"-"`
 }
 
 type httpcnf struct {
@@ -238,18 +238,18 @@ func initconfigparam() error {
 		ctx.config.Net.HTTP.proto = "https"
 	}
 
-	differentIPs := ctx.config.Net.IPv4 != ctx.config.Net.IPv4Intra
-	differentPorts := ctx.config.Net.L4.Port != ctx.config.Net.L4.PortIntra
-	ctx.config.Net.UseIntra = false
-	if ctx.config.Net.IPv4Intra != "" && ctx.config.Net.L4.PortIntra != 0 && (differentIPs || differentPorts) {
-		ctx.config.Net.UseIntra = true
+	differentIPs := ctx.config.Net.IPv4 != ctx.config.Net.IPv4IntraControl
+	differentPorts := ctx.config.Net.L4.Port != ctx.config.Net.L4.PortIntraControl
+	ctx.config.Net.UseIntraControl = false
+	if ctx.config.Net.IPv4IntraControl != "" && ctx.config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts) {
+		ctx.config.Net.UseIntraControl = true
 	}
 
-	differentIPs = ctx.config.Net.IPv4 != ctx.config.Net.IPv4Repl
-	differentPorts = ctx.config.Net.L4.Port != ctx.config.Net.L4.PortRepl
-	ctx.config.Net.UseRepl = false
-	if ctx.config.Net.IPv4Repl != "" && ctx.config.Net.L4.PortRepl != 0 && (differentIPs || differentPorts) {
-		ctx.config.Net.UseRepl = true
+	differentIPs = ctx.config.Net.IPv4 != ctx.config.Net.IPv4IntraData
+	differentPorts = ctx.config.Net.L4.Port != ctx.config.Net.L4.PortIntraData
+	ctx.config.Net.UseIntraData = false
+	if ctx.config.Net.IPv4IntraData != "" && ctx.config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts) {
+		ctx.config.Net.UseIntraData = true
 	}
 
 	if build != "" {
@@ -368,39 +368,39 @@ func validateconf() (err error) {
 		return fmt.Errorf("Bad public port specified: %v", err)
 	}
 
-	ctx.config.Net.L4.PortIntra = 0
-	if ctx.config.Net.L4.PortIntraStr != "" {
-		if ctx.config.Net.L4.PortIntra, err = parsePort(ctx.config.Net.L4.PortIntraStr); err != nil {
+	ctx.config.Net.L4.PortIntraControl = 0
+	if ctx.config.Net.L4.PortIntraControlStr != "" {
+		if ctx.config.Net.L4.PortIntraControl, err = parsePort(ctx.config.Net.L4.PortIntraControlStr); err != nil {
 			return fmt.Errorf("Bad internal port specified: %v", err)
 		}
 	}
-	ctx.config.Net.L4.PortRepl = 0
-	if ctx.config.Net.L4.PortReplStr != "" {
-		if ctx.config.Net.L4.PortRepl, err = parsePort(ctx.config.Net.L4.PortReplStr); err != nil {
+	ctx.config.Net.L4.PortIntraData = 0
+	if ctx.config.Net.L4.PortIntraDataStr != "" {
+		if ctx.config.Net.L4.PortIntraData, err = parsePort(ctx.config.Net.L4.PortIntraDataStr); err != nil {
 			return fmt.Errorf("Bad replication port specified: %v", err)
 		}
 	}
 
 	ctx.config.Net.IPv4 = strings.Replace(ctx.config.Net.IPv4, " ", "", -1)
-	ctx.config.Net.IPv4Intra = strings.Replace(ctx.config.Net.IPv4Intra, " ", "", -1)
-	ctx.config.Net.IPv4Repl = strings.Replace(ctx.config.Net.IPv4Repl, " ", "", -1)
+	ctx.config.Net.IPv4IntraControl = strings.Replace(ctx.config.Net.IPv4IntraControl, " ", "", -1)
+	ctx.config.Net.IPv4IntraData = strings.Replace(ctx.config.Net.IPv4IntraData, " ", "", -1)
 
-	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4, ctx.config.Net.IPv4Intra); overlap {
+	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4, ctx.config.Net.IPv4IntraControl); overlap {
 		return fmt.Errorf(
 			"Public and internal addresses overlap: %s (public: %s; internal: %s)",
-			addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4Intra,
+			addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4IntraControl,
 		)
 	}
-	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4, ctx.config.Net.IPv4Repl); overlap {
+	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4, ctx.config.Net.IPv4IntraData); overlap {
 		return fmt.Errorf(
 			"Public and replication addresses overlap: %s (public: %s; replication: %s)",
-			addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4Repl,
+			addr, ctx.config.Net.IPv4, ctx.config.Net.IPv4IntraData,
 		)
 	}
-	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4Intra, ctx.config.Net.IPv4Repl); overlap {
+	if overlap, addr := ipv4ListsOverlap(ctx.config.Net.IPv4IntraControl, ctx.config.Net.IPv4IntraData); overlap {
 		return fmt.Errorf(
 			"Internal and replication addresses overlap: %s (internal: %s; replication: %s)",
-			addr, ctx.config.Net.IPv4Intra, ctx.config.Net.IPv4Repl,
+			addr, ctx.config.Net.IPv4IntraControl, ctx.config.Net.IPv4IntraData,
 		)
 	}
 

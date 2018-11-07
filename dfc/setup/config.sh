@@ -58,10 +58,10 @@ cat > $CONFFILE <<EOL
 		"replicate_on_lru_eviction": 	false
 	},
 	"cksum_config": {
-                 "checksum":                    "xxhash",
-                 "validate_checksum_cold_get":  true,
-                 "validate_checksum_warm_get":  false,
-                 "enable_read_range_checksum":  false
+		"checksum":                    "xxhash",
+		"validate_checksum_cold_get":  true,
+		"validate_checksum_warm_get":  false,
+		"enable_read_range_checksum":  false
 	},
 	"version_config": {
 		"validate_version_warm_get":    false,
@@ -76,14 +76,14 @@ cat > $CONFFILE <<EOL
 		"instance":		$c
 	},
 	"netconfig": {
-		"ipv4":       "${IPV4LIST}",
-		"ipv4_intra": "${IPV4LIST_INTRA}",
-		"ipv4_repl":  "${IPV4LIST_REPL}",
+		"ipv4":               "${IPV4LIST}",
+		"ipv4_intra_control": "${IPV4LIST_INTRA_CONTROL}",
+		"ipv4_intra_data":     "${IPV4LIST_INTRA_DATA}",
 		"l4": {
-			"proto":      "tcp",
-			"port":       "${PORT}",
-			"port_intra": "${PORT_INTRA}",
-			"port_repl":  "${PORT_REPL}"
+			"proto":              "tcp",
+			"port":	              "${PORT}",
+			"port_intra_control": "${PORT_INTRA_CONTROL}",
+			"port_intra_data":    "${PORT_INTRA_DATA}"
 		},
 		"http": {
 			"rproxy":		"",
