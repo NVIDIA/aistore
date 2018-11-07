@@ -376,7 +376,7 @@ func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T, riostat *iostatrunn
 	}
 
 	ctx.config.LRU.HighWM = uint32(curCapacity + 10)
-	lctx.thrctx.computeThrottle(lctx.newLRUThrottleParams("/"))
+	lctx.thrctx.computeThrottle(newLRUThrottleParams(lctx.fs, "/"))
 	sleepDuration = lctx.thrctx.sleep
 	if sleepDuration != initThrottleSleep {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", initThrottleSleep, sleepDuration)
@@ -397,7 +397,7 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T, riostat *iostatrunner) {
 		riostat.Disk[disk]["%util"] = "99"
 	}
 
-	lctx.thrctx.computeThrottle(lctx.newLRUThrottleParams("/"))
+	lctx.thrctx.computeThrottle(newLRUThrottleParams(lctx.fs, "/"))
 	sleepDuration = lctx.thrctx.sleep
 	if sleepDuration != 0 {
 		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
@@ -413,7 +413,7 @@ func getSleepDuration(diskUtil uint32, lctx *lructx, riostat *iostatrunner) time
 	lctx.thrctx.nextCapCheck = time.Time{}
 	lctx.thrctx.nextUtilCheck = time.Time{}
 
-	lctx.thrctx.computeThrottle(lctx.newLRUThrottleParams("/"))
+	lctx.thrctx.computeThrottle(newLRUThrottleParams(lctx.fs, "/"))
 	return lctx.thrctx.sleep
 }
 
@@ -424,4 +424,8 @@ func newLruContext() *lructx {
 		fs:   fileSystem,
 	}
 	return lruContext
+}
+
+func newLRUThrottleParams(fs, fqn string) *throttleParams {
+	return &throttleParams{throttle: onDiskUtil | onFSUsed, fs: fs, fqn: fqn}
 }

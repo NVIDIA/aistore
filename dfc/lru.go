@@ -36,148 +36,162 @@ import (
 // in accordance with the current storage-target's utilization (see xaction_throttle.go).
 //
 // There's only one API that this module provides to the rest of the code:
-//   - runLRU - to initiate a new LRU extended action on the receiving target
-//
-// All other methods are private to this module and used only internally, including:
-//   - oneLRU   - initiates LRU context and walks a given local filesystem processing each
-//                object (lruwalkfn method) to determine whether the object is to be evicted;
-//   - lruEvict - evicts a given file from the cache
+//   - runLRU - to initiate a new LRU extended action on the local target
+// All other methods are private to this module and are used only internally.
 //
 // ============================================= Summary ===========================================
 
-type fileInfo struct {
-	fqn     string
-	usetime time.Time
-	size    int64
-}
+// LRU defaults/tunables
+const (
+	minevict = common.MiB
+)
 
-type fileInfoMinHeap []*fileInfo
+type (
+	fileInfo struct {
+		fqn     string
+		usetime time.Time
+		size    int64
+	}
+	fileInfoMinHeap []*fileInfo
 
-type lructx struct {
-	cursize     int64
-	totsize     int64
-	newest      time.Time
-	xlru        *xactLRU
-	heap        *fileInfoMinHeap
-	oldwork     []*fileInfo
-	t           *targetrunner
-	fs          string
-	thrctx      throttleContext
-	atimeRespCh chan *atimeResponse
-}
+	// lructx represents a single LRU context that runs in a single goroutine (worker)
+	// that traverses and evicts a single given filesystem, or more exactly,
+	// subtree in this filesystem identified by the bucketdir
+	lructx struct {
+		// runtime
+		cursize int64
+		totsize int64
+		newest  time.Time
+		heap    *fileInfoMinHeap
+		oldwork []*fileInfo
+		// init-time
+		xlru        *xactLRU
+		t           *targetrunner // TODO: refactor to remove
+		fs          string
+		bucketdir   string
+		thrctx      throttleContext
+		thrparams   throttleParams
+		atimeRespCh chan *atimeResponse
+		namelocker  cluster.NameLocker
+	}
+)
+
+//
+// targetrunner: initiate a bunch of LRU contexts (lructx) and run them each of them in
+// the respective goroutines which then do rest of the work
+//
 
 func (t *targetrunner) runLRU() {
-	// FIXME: if LRU config has changed we need to force new LRU transaction
 	xlru := t.xactinp.renewLRU(t)
 	if xlru == nil {
 		return
 	}
-	fschkwg := &sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 
 	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
 
-	// copy available mountpaths
+	//
+	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
+	//
+
 	availablePaths, _ := fs.Mountpaths.Mountpaths()
-	for _, mpathInfo := range availablePaths {
-		fschkwg.Add(1)
-		go t.oneLRU(mpathInfo, fs.Mountpaths.MakePathLocal(mpathInfo.Path), fschkwg, xlru)
+	for path, mpathInfo := range availablePaths {
+		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
+		wg.Add(1)
+		go lctx.onelru(wg)
 	}
-	fschkwg.Wait()
-	for _, mpathInfo := range availablePaths {
-		fschkwg.Add(1)
-		go t.oneLRU(mpathInfo, fs.Mountpaths.MakePathCloud(mpathInfo.Path), fschkwg, xlru)
+	wg.Wait()
+	for path, mpathInfo := range availablePaths {
+		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path))
+		wg.Add(1)
+		go lctx.onelru(wg)
 	}
-	fschkwg.Wait()
+	wg.Wait()
 
-	// DEBUG
 	if glog.V(4) {
-		rr := getstorstatsrunner()
-		rr.Lock()
-		rr.updateCapacity()
-		for _, mpathInfo := range availablePaths {
-			fscapacity := rr.Capacity[mpathInfo.Path]
-			if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
-				glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
-					mpathInfo.Path, ctx.config.LRU.LowWM, fscapacity.Usedpct)
-			}
-		}
-		rr.Unlock()
+		lruCheckResults(availablePaths)
 	}
-
 	xlru.etime = time.Now()
 	glog.Infoln(xlru.tostring())
 	t.xactinp.del(xlru.id)
 }
 
-// TODO: local-buckets-first LRU policy
-func (t *targetrunner) oneLRU(mpathInfo *fs.MountpathInfo, bucketdir string, fschkwg *sync.WaitGroup, xlru *xactLRU) {
-	defer fschkwg.Done()
+// construct lructx
+func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
 	h := &fileInfoMinHeap{}
 	heap.Init(h)
-
-	toevict, err := getToEvict(bucketdir, ctx.config.LRU.HighWM, ctx.config.LRU.LowWM)
-	if err != nil {
-		return
-	}
-	glog.Infof("%s: evicting %.2f MB", bucketdir, float64(toevict)/common.MiB)
-
-	// init LRU context
-	var oldwork []*fileInfo
-
 	lctx := &lructx{
-		totsize:     toevict,
-		xlru:        xlru,
 		heap:        h,
-		oldwork:     oldwork,
+		oldwork:     make([]*fileInfo, 0, 64),
+		xlru:        xlru,
 		t:           t,
 		fs:          mpathInfo.FileSystem,
+		bucketdir:   bucketdir,
+		thrparams:   throttleParams{throttle: onDiskUtil | onFSUsed, fs: mpathInfo.FileSystem},
 		atimeRespCh: make(chan *atimeResponse, 1),
+		namelocker:  t.rtnamemap,
 	}
-	if err = filepath.Walk(bucketdir, lctx.lruwalkfn); err != nil {
+	return lctx
+}
+
+// onelru walks a given local filesystem to a) determine whether some of the
+// objects are to be evicted, and b) actually evicting those
+func (lctx *lructx) onelru(wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	if err := lctx.evictSize(); err != nil {
+		return
+	}
+	if lctx.totsize < minevict {
+		glog.Infof("%s: below threshold, nothing to do", lctx.bucketdir)
+		return
+	}
+	glog.Infof("%s: evicting %s", lctx.bucketdir, common.B2S(lctx.totsize, 2))
+
+	if err := filepath.Walk(lctx.bucketdir, lctx.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
-			glog.Infof("Stopping %q traversal: %s", bucketdir, s)
+			glog.Infof("%s: stopping traversal: %s", lctx.bucketdir, s)
 		} else {
-			glog.Errorf("Failed to traverse %q, err: %v", bucketdir, err)
+			glog.Errorf("%s: failed to traverse, err: %v", lctx.bucketdir, err)
 		}
 		return
 	}
-	if err := t.doLRU(toevict, bucketdir, lctx); err != nil {
-		glog.Errorf("doLRU %q, err: %v", bucketdir, err)
+	if err := lctx.evict(); err != nil {
+		glog.Errorf("%s: failed to evict, err: %v", lctx.bucketdir, err)
 	}
 }
 
-// the callback is executed by the LRU xaction (notice the receiver)
-func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
+func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
+	var (
+		iswork, isold bool
+		xlru, h       = lctx.xlru, lctx.heap
+	)
 	if err != nil {
-		glog.Errorf("walkfunc callback invoked with err: %v", err)
+		glog.Errorf("invoked with err: %v", err)
 		return err
 	}
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	var (
-		iswork, isold bool
-		xlru, h       = lctx.xlru, lctx.heap
-	)
 	if iswork, isold = lctx.t.isworkfile(fqn); iswork {
 		if !isold {
 			return nil
 		}
 	}
-
-	lctx.thrctx.throttle(lctx.newLRUThrottleParams(fqn))
+	lctx.thrparams.fqn = fqn
+	lctx.thrctx.throttle(&lctx.thrparams)
 
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {
-		glog.Infof("Warning (LRU race?): %s "+doesnotexist, fqn)
+		glog.Infof("Warning (race?): %s "+doesnotexist, fqn)
 		glog.Flush()
 		return nil
 	}
 	// abort?
 	select {
 	case <-xlru.abrt:
-		s := fmt.Sprintf("%s aborted, exiting lruwalkfn", xlru.tostring())
+		s := fmt.Sprintf("%s aborted, exiting", xlru.tostring())
 		glog.Infoln(s)
 		glog.Flush()
 		return errors.New(s)
@@ -185,16 +199,13 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 		break
 	}
 	if xlru.finished() {
-		return fmt.Errorf("%s aborted - exiting lruwalkfn", xlru.tostring())
+		return fmt.Errorf("%s aborted, exiting", xlru.tostring())
 	}
 
 	atime, mtime, stat := getAmTimes(osfi)
 	if isold {
-		fi := &fileInfo{
-			fqn:  fqn,
-			size: stat.Size,
-		}
-		lctx.oldwork = append(lctx.oldwork, fi)
+		fi := &fileInfo{fqn: fqn, size: stat.Size}
+		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		return nil
 	}
 
@@ -212,7 +223,7 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	dontevictime := now.Add(-ctx.config.LRU.DontEvictTime)
 	if usetime.After(dontevictime) {
 		if glog.V(4) {
-			glog.Infof("DEBUG: not evicting %s (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
+			glog.Infof("%s: not evicting (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
 		}
 		return nil
 	}
@@ -220,11 +231,8 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	// cleanup after rebalance
 	_, _, err = lctx.t.fqn2bckobj(fqn)
 	if err != nil {
-		glog.Infof("Found orphan file: %s", fqn)
-		fi := &fileInfo{
-			fqn:  fqn,
-			size: stat.Size,
-		}
+		glog.Infof("%s: is misplaced, err: %v", fqn, err)
+		fi := &fileInfo{fqn: fqn, size: stat.Size}
 		lctx.oldwork = append(lctx.oldwork, fi)
 		return nil
 	}
@@ -232,19 +240,15 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	// partial optimization:
 	// do nothing if the heap's cursize >= totsize &&
 	// the file is more recent then the the heap's newest
-	// full optimization (tbd) entails compacting the heap when its cursize >> totsize
+	// full optimization (TODO) entails compacting the heap when its cursize >> totsize
 	if lctx.cursize >= lctx.totsize && usetime.After(lctx.newest) {
-		if glog.V(3) {
-			glog.Infof("DEBUG: use-time-after (usetime=%v, newest=%v) %s", usetime, lctx.newest, fqn)
+		if glog.V(4) {
+			glog.Infof("%s: use-time-after (usetime=%v, newest=%v)", fqn, usetime, lctx.newest)
 		}
 		return nil
 	}
 	// push and update the context
-	fi := &fileInfo{
-		fqn:     fqn,
-		usetime: usetime,
-		size:    stat.Size,
-	}
+	fi := &fileInfo{fqn: fqn, usetime: usetime, size: stat.Size}
 	heap.Push(h, fi)
 	lctx.cursize += fi.size
 	if usetime.After(lctx.newest) {
@@ -253,18 +257,10 @@ func (lctx *lructx) lruwalkfn(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
-func (lctx *lructx) newLRUThrottleParams(fqn string) *throttleParams {
-	return &throttleParams{
-		throttle: onDiskUtil | onFSUsed,
-		fs:       lctx.fs,
-		fqn:      fqn,
-	}
-}
-
-func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) error {
-	h := lctx.heap
+func (lctx *lructx) evict() error {
 	var (
 		fevicted, bevicted int64
+		h, t               = lctx.heap, lctx.t
 	)
 	for _, fi := range lctx.oldwork {
 		if t.isRebalancing() {
@@ -279,16 +275,16 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 			glog.Warningf("LRU: failed to GC %q", fi.fqn)
 			continue
 		}
-		toevict -= fi.size
+		lctx.totsize -= fi.size
 		glog.Infof("LRU: GC-ed %q", fi.fqn)
 	}
-	for h.Len() > 0 && toevict > 0 {
+	for h.Len() > 0 && lctx.totsize > 0 {
 		fi := heap.Pop(h).(*fileInfo)
-		if err := t.lruEvict(fi.fqn); err != nil {
+		if err := lctx.evictFQN(fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}
-		toevict -= fi.size
+		lctx.totsize -= fi.size
 		bevicted += fi.size
 		fevicted++
 	}
@@ -297,8 +293,9 @@ func (t *targetrunner) doLRU(toevict int64, bucketdir string, lctx *lructx) erro
 	return nil
 }
 
-func (t *targetrunner) lruEvict(fqn string) error {
-	bucket, objname, err := t.fqn2bckobj(fqn)
+// evictFQN evicts a given file
+func (lctx *lructx) evictFQN(fqn string) error {
+	bucket, objname, err := lctx.t.fqn2bckobj(fqn)
 	if err != nil {
 		glog.Errorf("Evicting %q with error: %v", fqn, err)
 		if e := os.Remove(fqn); e != nil {
@@ -308,8 +305,8 @@ func (t *targetrunner) lruEvict(fqn string) error {
 		return nil
 	}
 	uname := cluster.Uname(bucket, objname)
-	t.rtnamemap.Lock(uname, true)
-	defer t.rtnamemap.Unlock(uname, true)
+	lctx.namelocker.Lock(uname, true)
+	defer lctx.namelocker.Unlock(uname, true)
 
 	if err := os.Remove(fqn); err != nil {
 		return err
@@ -318,7 +315,32 @@ func (t *targetrunner) lruEvict(fqn string) error {
 	return nil
 }
 
-// fileInfoMinHeap keeps fileInfo sorted by access time with oldest on top of the heap.
+func (lctx *lructx) evictSize() (err error) {
+	hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
+	blocks, bavail, bsize, err := getFSStats(lctx.bucketdir)
+	if err != nil {
+		return err
+	}
+	used := blocks - bavail
+	usedpct := used * 100 / blocks
+	if glog.V(4) {
+		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%",
+			lctx.bucketdir, blocks, bavail, usedpct, hwm, lwm)
+	}
+	if usedpct < uint64(hwm) {
+		return
+	}
+	lwmblocks := blocks * uint64(lwm) / 100
+	lctx.totsize = int64(used-lwmblocks) * bsize
+	return
+}
+
+//=======================================================================
+//
+// fileInfoMinHeap keeps fileInfo sorted by access time with oldest
+// on top of the heap.
+//
+//=======================================================================
 func (h fileInfoMinHeap) Len() int { return len(h) }
 
 func (h fileInfoMinHeap) Less(i, j int) bool {
@@ -339,4 +361,21 @@ func (h *fileInfoMinHeap) Pop() interface{} {
 	fi := old[n-1]
 	*h = old[0 : n-1]
 	return fi
+}
+
+//
+// check whether we have achieved the objective, and warn otherwise
+//
+func lruCheckResults(availablePaths map[string]*fs.MountpathInfo) {
+	rr := getstorstatsrunner()
+	rr.Lock()
+	rr.updateCapacity()
+	for _, mpathInfo := range availablePaths {
+		fscapacity := rr.Capacity[mpathInfo.Path]
+		if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
+			glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
+				mpathInfo.Path, ctx.config.LRU.LowWM, fscapacity.Usedpct)
+		}
+	}
+	rr.Unlock()
 }

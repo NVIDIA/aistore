@@ -738,21 +738,6 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) []byt
 	return jsonBytes
 }
 
-func getToEvict(mpath string, hwm uint32, lwm uint32) (int64, error) {
-	blocks, bavail, bsize, err := getFSStats(mpath)
-	if err != nil {
-		return -1, err
-	}
-	used := blocks - bavail
-	usedpct := used * 100 / blocks
-	glog.Infof("Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", blocks, bavail, usedpct, hwm, lwm)
-	if usedpct < uint64(hwm) {
-		return 0, nil // 0 to evict
-	}
-	lwmblocks := blocks * uint64(lwm) / 100
-	return int64(used-lwmblocks) * bsize, nil
-}
-
 func getFSUsedPercentage(path string) (usedPercentage uint64, ok bool) {
 	totalBlocks, blocksAvailable, _, err := getFSStats(path)
 	if err != nil {
