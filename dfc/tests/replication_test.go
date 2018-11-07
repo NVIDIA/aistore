@@ -13,8 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -68,9 +67,9 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	url := proxyURLRepl + common.URLPath(api.Version, api.Objects, TestLocalBucketName, object)
+	url := proxyURLRepl + cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object)
 	headers := map[string]string{
-		api.HeaderDFCReplicationSrc: dummySrcURL,
+		cmn.HeaderDFCReplicationSrc: dummySrcURL,
 	}
 	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLRepl)
 	err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
@@ -80,7 +79,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	}
 
 	if isCloud {
-		url = proxyURLRepl + common.URLPath(api.Version, api.Objects, clibucket, object)
+		url = proxyURLRepl + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
 		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLRepl)
 		err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 
@@ -197,7 +196,7 @@ func getPrimaryReplicationURL(t *testing.T, proxyURL string) string {
 
 func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 	buf, slab := memsys.AllocFromSlab(0)
-	xxHashVal, errstr := common.ComputeXXHash(reader, buf)
+	xxHashVal, errstr := cmn.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 	if errstr != "" {
 		t.Fatal("Failed to compute xxhash checksum")
@@ -206,11 +205,11 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 }
 
 func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader tutils.Reader) error {
-	url := dstProxyURL + common.URLPath(api.Version, api.Objects, bucket, object)
+	url := dstProxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	headers := map[string]string{
-		api.HeaderDFCReplicationSrc: srcURL,
-		api.HeaderDFCChecksumType:   api.ChecksumXXHash,
-		api.HeaderDFCChecksumVal:    xxhash,
+		cmn.HeaderDFCReplicationSrc: srcURL,
+		cmn.HeaderDFCChecksumType:   cmn.ChecksumXXHash,
+		cmn.HeaderDFCChecksumVal:    xxhash,
 	}
 	return tutils.HTTPRequest(http.MethodPut, url, reader, headers)
 }

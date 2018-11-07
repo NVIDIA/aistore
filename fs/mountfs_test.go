@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 func TestAddNonExistingMountpath(t *testing.T) {
@@ -53,7 +53,7 @@ func TestAddValidMountpaths(t *testing.T) {
 
 	for _, mpath := range mpaths {
 		if _, err := os.Stat(mpath); os.IsNotExist(err) {
-			common.CreateDir(mpath)
+			cmn.CreateDir(mpath)
 			defer os.RemoveAll(mpath)
 		}
 

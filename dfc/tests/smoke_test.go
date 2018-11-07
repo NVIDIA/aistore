@@ -12,14 +12,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 var (
-	filesizes = [3]int64{128 * common.KiB, 192 * common.KiB, 256 * common.KiB}
+	filesizes = [3]int64{128 * cmn.KiB, 192 * cmn.KiB, 256 * cmn.KiB}
 	ratios    = [5]float32{0, 0.25, 0.50, 0.75, 1} // #gets / #puts
 )
 
@@ -29,11 +28,11 @@ func Test_smoke(t *testing.T) {
 	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	if err := common.CreateDir(LocalDestDir); err != nil {
+	if err := cmn.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}
 
-	if err := common.CreateDir(SmokeDir); err != nil {
+	if err := cmn.CreateDir(SmokeDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", SmokeDir, err)
 	}
 
@@ -42,7 +41,7 @@ func Test_smoke(t *testing.T) {
 	bs := int64(baseseed)
 	for _, fs := range filesizes {
 		for _, r := range ratios {
-			s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", common.B2S(fs, 0), r*100)
+			s := fmt.Sprintf("size:%s,GET/PUT:%.0f%%", cmn.B2S(fs, 0), r*100)
 			t.Run(s, func(t *testing.T) { oneSmoke(t, proxyURL, fs, r, bs, fp) })
 			bs += int64(numworkers + 1)
 		}
@@ -137,7 +136,7 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 	src := rand.NewSource(seed)
 	random := rand.New(src)
 	getsGroup := &sync.WaitGroup{}
-	var msg = &api.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+	var msg = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
 		items, err := tutils.ListBucket(proxyURL, bucket, msg, 0)
 		if err != nil {
@@ -234,7 +233,7 @@ func putRandObjsFromList(proxyURL string, seed int64, fileSize uint64, objList [
 		objCh  = make(chan string, len(objList))
 	)
 	// if len(objList) < numworkers, only need as many workers as there are objects to be PUT
-	numworkers := common.Min(numworkers, len(objList))
+	numworkers := cmn.Min(numworkers, len(objList))
 	sgls := make([]*memsys.SGL, numworkers, numworkers)
 
 	// need an SGL for each worker with its size being that of the original SGL

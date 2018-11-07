@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
@@ -40,7 +40,7 @@ type (
 	}
 	readahead struct {
 		sync.Mutex
-		common.Named                       // to be a runner
+		cmn.Named                       // to be a runner
 		joggers      map[string]*rahjogger // mpath => jogger
 		stopCh       chan struct{}         // to stop
 	}
@@ -224,7 +224,7 @@ func (rj *rahjogger) jog() error {
 			if ok {
 				rj.Lock()
 				if e, ok := rj.rahmap[rahfcache.fqn]; !ok {
-					common.Assert(rahfcache.ts.get.IsZero())
+					cmn.Assert(rahfcache.ts.get.IsZero())
 					rahfcache.ts.head = time.Now()
 					rj.rahmap[rahfcache.fqn] = rahfcache
 					rj.Unlock()
@@ -282,7 +282,7 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		}
 		if rahfcache.sgl != nil {
 			rahfcache.size = size
-			common.Assert(rahfcache.sgl.Size() == size)
+			cmn.Assert(rahfcache.sgl.Size() == size)
 		}
 		rahfcache.Unlock()
 	}()
@@ -296,10 +296,10 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		return
 	}
 	if rahfcache.rangeLen == 0 {
-		fsize = common.MinI64(ctx.config.Readahead.ObjectMem, stat.Size())
+		fsize = cmn.MinI64(ctx.config.Readahead.ObjectMem, stat.Size())
 		reader = file
 	} else {
-		fsize = common.MinI64(ctx.config.Readahead.ObjectMem, rahfcache.rangeLen)
+		fsize = cmn.MinI64(ctx.config.Readahead.ObjectMem, rahfcache.rangeLen)
 		reader = io.NewSectionReader(file, rahfcache.rangeOff, rahfcache.rangeLen)
 	}
 	if !ctx.config.Readahead.Discard {

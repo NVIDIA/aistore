@@ -27,9 +27,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -105,11 +104,11 @@ type (
 const initialBucketListSize = 512
 
 type cloudif interface {
-	listbucket(ctx context.Context, bucket string, msg *api.GetMsg) (jsbytes []byte, errstr string, errcode int)
-	headbucket(ctx context.Context, bucket string) (bucketprops common.SimpleKVs, errstr string, errcode int)
+	listbucket(ctx context.Context, bucket string, msg *cmn.GetMsg) (jsbytes []byte, errstr string, errcode int)
+	headbucket(ctx context.Context, bucket string) (bucketprops cmn.SimpleKVs, errstr string, errcode int)
 	getbucketnames(ctx context.Context) (buckets []string, errstr string, errcode int)
 	//
-	headobject(ctx context.Context, bucket string, objname string) (objmeta common.SimpleKVs, errstr string, errcode int)
+	headobject(ctx context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int)
 	//
 	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
 	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
@@ -171,7 +170,7 @@ type netServer struct {
 }
 
 type httprunner struct {
-	common.Named
+	cmn.Named
 	publicServer          *netServer
 	internalServer        *netServer
 	replServer            *netServer
@@ -464,7 +463,7 @@ func (h *httprunner) call(args callArgs) callResult {
 		sid = args.si.DaemonID
 	}
 
-	common.Assert(args.si != nil || args.req.base != "") // either we have si or base
+	cmn.Assert(args.si != nil || args.req.base != "") // either we have si or base
 	if args.req.base == "" && args.si != nil {
 		args.req.base = args.si.PublicNet.DirectURL
 	}
@@ -598,7 +597,7 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 
 // remove validated fields and return the resulting slice
 func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, splitAfter bool, items ...string) ([]string, error) {
-	items, err := common.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items...)
+	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, splitAfter, items...)
 	if err != nil {
 		s := err.Error()
 		if _, file, line, ok := runtime.Caller(1); ok {
@@ -696,27 +695,27 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	var (
 		jsbytes []byte
 		err     error
-		getWhat = r.URL.Query().Get(api.URLParamWhat)
+		getWhat = r.URL.Query().Get(cmn.URLParamWhat)
 	)
 	switch getWhat {
-	case api.GetWhatConfig:
+	case cmn.GetWhatConfig:
 		jsbytes, err = jsoniter.Marshal(ctx.config)
-		common.Assert(err == nil, err)
-	case api.GetWhatSmap:
+		cmn.Assert(err == nil, err)
+	case cmn.GetWhatSmap:
 		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
-		common.Assert(err == nil, err)
-	case api.GetWhatBucketMeta:
+		cmn.Assert(err == nil, err)
+	case cmn.GetWhatBucketMeta:
 		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
-		common.Assert(err == nil, err)
-	case api.GetWhatSmapVote:
-		_, xx := h.xactinp.findL(api.ActElection)
+		cmn.Assert(err == nil, err)
+	case cmn.GetWhatSmapVote:
+		_, xx := h.xactinp.findL(cmn.ActElection)
 		vote := xx != nil
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		jsbytes, err = jsoniter.Marshal(msg)
-		common.Assert(err == nil, err)
-	case api.GetWhatDaemonInfo:
+		cmn.Assert(err == nil, err)
+	case cmn.GetWhatDaemonInfo:
 		jsbytes, err = jsoniter.Marshal(h.si)
-		common.Assert(err == nil, err)
+		cmn.Assert(err == nil, err)
 	default:
 		s := fmt.Sprintf("Invalid GET /daemon request: unrecognized what=%s", getWhat)
 		h.invalmsghdlr(w, r, s)
@@ -862,10 +861,10 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 			ctx.config.Ver.ValidateWarmGet = v
 		}
 	case "checksum":
-		if value == api.ChecksumXXHash || value == api.ChecksumNone {
+		if value == cmn.ChecksumXXHash || value == cmn.ChecksumNone {
 			ctx.config.Cksum.Checksum = value
 		} else {
-			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, api.ChecksumXXHash, api.ChecksumNone)
+			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, cmn.ChecksumXXHash, cmn.ChecksumNone)
 		}
 	case "versioning":
 		if err := validateVersion(value); err == nil {
@@ -899,7 +898,7 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 //=================
 
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
-	common.InvalidHandlerDetailed(w, r, msg, errCode...)
+	cmn.InvalidHandlerDetailed(w, r, msg, errCode...)
 	h.statsif.addErrorHTTP(r.Method, 1)
 }
 
@@ -908,11 +907,11 @@ func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg st
 // metasync Rx handlers
 //
 //=====================
-func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *smapX, msg *api.ActionMsg, errstr string) {
+func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msg *cmn.ActionMsg, errstr string) {
 	if _, ok := payload[smaptag]; !ok {
 		return
 	}
-	newsmap, msg = &smapX{}, &api.ActionMsg{}
+	newsmap, msg = &smapX{}, &cmn.ActionMsg{}
 	smapvalue := payload[smaptag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(smapvalue), newsmap); err != nil {
@@ -959,11 +958,11 @@ func (h *httprunner) extractSmap(payload common.SimpleKVs) (newsmap *smapX, msg 
 	return
 }
 
-func (h *httprunner) extractbucketmd(payload common.SimpleKVs) (newbucketmd *bucketMD, msg *api.ActionMsg, errstr string) {
+func (h *httprunner) extractbucketmd(payload cmn.SimpleKVs) (newbucketmd *bucketMD, msg *cmn.ActionMsg, errstr string) {
 	if _, ok := payload[bucketmdtag]; !ok {
 		return
 	}
-	newbucketmd, msg = &bucketMD{}, &api.ActionMsg{}
+	newbucketmd, msg = &bucketMD{}, &cmn.ActionMsg{}
 	bmdvalue := payload[bucketmdtag]
 	msgvalue := ""
 	if err := jsoniter.Unmarshal([]byte(bmdvalue), newbucketmd); err != nil {
@@ -987,13 +986,13 @@ func (h *httprunner) extractbucketmd(payload common.SimpleKVs) (newbucketmd *buc
 	return
 }
 
-func (h *httprunner) extractRevokedTokenList(payload common.SimpleKVs) (*TokenList, string) {
+func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList, string) {
 	bytes, ok := payload[tokentag]
 	if !ok {
 		return nil, ""
 	}
 
-	msg := api.ActionMsg{}
+	msg := cmn.ActionMsg{}
 	if _, ok := payload[tokentag+actiontag]; ok {
 		msgvalue := payload[tokentag+actiontag]
 		if err := jsoniter.Unmarshal([]byte(msgvalue), &msg); err != nil {
@@ -1079,14 +1078,14 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.Duration, isproxy bool, query url.Values,
 	keepalive bool) (res callResult) {
 	info, err := jsoniter.Marshal(h.si)
-	common.Assert(err == nil, err)
+	cmn.Assert(err == nil, err)
 
-	path := common.URLPath(api.Version, api.Cluster)
+	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	if isproxy {
-		path += common.URLPath(api.Proxy)
+		path += cmn.URLPath(cmn.Proxy)
 	}
 	if keepalive {
-		path += common.URLPath(api.Keepalive)
+		path += cmn.URLPath(cmn.Keepalive)
 	}
 
 	callArgs := callArgs{
@@ -1105,7 +1104,7 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 		if res.err == nil {
 			return
 		}
-		if common.IsErrConnectionRefused(res.err) {
+		if cmn.IsErrConnectionRefused(res.err) {
 			glog.Errorf("%s: (register => %s: connection refused)", h.si.DaemonID, path)
 		} else {
 			glog.Errorf("%s: (register => %s: %v)", h.si.DaemonID, path, res.err)
@@ -1146,6 +1145,6 @@ func (h *httprunner) initStatsD(daemonStr string) (err error) {
 }
 
 func isReplicationPUT(r *http.Request) (isreplica bool, replicasrc string) {
-	replicasrc = r.Header.Get(api.HeaderDFCReplicationSrc)
+	replicasrc = r.Header.Get(cmn.HeaderDFCReplicationSrc)
 	return replicasrc != "", replicasrc
 }

@@ -13,9 +13,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
 
@@ -65,15 +64,15 @@ type (
 
 // [METHOD] /v1/vote
 func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := t.checkRESTItems(w, r, 1, false, api.Version, api.Vote)
+	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
 	if err != nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodGet && apitems[0] == api.Proxy:
+	case r.Method == http.MethodGet && apitems[0] == cmn.Proxy:
 		t.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apitems[0] == api.Voteres:
+	case r.Method == http.MethodPut && apitems[0] == cmn.Voteres:
 		t.httpsetprimaryproxy(w, r)
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -83,17 +82,17 @@ func (t *targetrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // [METHOD] /v1/vote
 func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
-	apitems, err := p.checkRESTItems(w, r, 1, false, api.Version, api.Vote)
+	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Vote)
 	if err != nil {
 		return
 	}
 
 	switch {
-	case r.Method == http.MethodGet && apitems[0] == api.Proxy:
+	case r.Method == http.MethodGet && apitems[0] == cmn.Proxy:
 		p.httpproxyvote(w, r)
-	case r.Method == http.MethodPut && apitems[0] == api.Voteres:
+	case r.Method == http.MethodPut && apitems[0] == cmn.Voteres:
 		p.httpsetprimaryproxy(w, r)
-	case r.Method == http.MethodPut && apitems[0] == api.VoteInit:
+	case r.Method == http.MethodPut && apitems[0] == cmn.VoteInit:
 		p.httpRequestNewPrimary(w, r)
 	default:
 		s := fmt.Sprintf("Invalid HTTP Method: %v %s", r.Method, r.URL.Path)
@@ -103,7 +102,7 @@ func (p *proxyrunner) voteHandler(w http.ResponseWriter, r *http.Request) {
 
 // GET /v1/vote/proxy
 func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, api.Version, api.Vote, api.Proxy); err != nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Proxy); err != nil {
 		return
 	}
 
@@ -174,7 +173,7 @@ func (h *httprunner) httpproxyvote(w http.ResponseWriter, r *http.Request) {
 
 // PUT /v1/vote/result
 func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.checkRESTItems(w, r, 0, false, api.Version, api.Vote, api.Voteres); err != nil {
+	if _, err := h.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.Voteres); err != nil {
 		return
 	}
 
@@ -216,7 +215,7 @@ func (h *httprunner) httpsetprimaryproxy(w http.ResponseWriter, r *http.Request)
 
 // PUT /v1/vote/init
 func (p *proxyrunner) httpRequestNewPrimary(w http.ResponseWriter, r *http.Request) {
-	if _, err := p.checkRESTItems(w, r, 0, false, api.Version, api.Vote, api.VoteInit); err != nil {
+	if _, err := p.checkRESTItems(w, r, 0, false, cmn.Version, cmn.Vote, cmn.VoteInit); err != nil {
 		return
 	}
 
@@ -342,7 +341,7 @@ func (p *proxyrunner) electAmongProxies(vr *VoteRecord) (winner bool, errors map
 
 	for res := range resch {
 		if res.err != nil {
-			if common.IsErrConnectionRefused(res.err) {
+			if cmn.IsErrConnectionRefused(res.err) {
 				if res.daemonID == vr.Primary {
 					glog.Infof("Expected response from %s (current/failed primary): connection refused", res.daemonID)
 				} else {
@@ -377,12 +376,12 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 
 	msg := VoteMessage{Record: *vr}
 	jsbytes, err := jsoniter.Marshal(&msg)
-	common.Assert(err == nil, err)
+	cmn.Assert(err == nil, err)
 
 	q := url.Values{}
-	q.Set(api.URLParamPrimaryCandidate, p.si.DaemonID)
+	q.Set(cmn.URLParamPrimaryCandidate, p.si.DaemonID)
 	res := p.broadcastCluster(
-		common.URLPath(api.Version, api.Vote, api.Proxy),
+		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy),
 		q,
 		http.MethodGet,
 		jsbytes,
@@ -421,11 +420,11 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 				StartTime: time.Now(),
 				Initiator: p.si.DaemonID,
 			}})
-	common.Assert(err == nil, err)
+	cmn.Assert(err == nil, err)
 
 	smap := p.smapowner.get()
 	res := p.broadcastCluster(
-		common.URLPath(api.Version, api.Vote, api.Voteres),
+		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Voteres),
 		nil, // query
 		http.MethodPut,
 		jsbytes,
@@ -517,21 +516,21 @@ func (t *targetrunner) onPrimaryProxyFailure() {
 func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *cluster.Snode) {
 	msg := VoteInitiationMessage{Request: *vr}
 	body, err := jsoniter.Marshal(&msg)
-	common.Assert(err == nil, err)
+	cmn.Assert(err == nil, err)
 
 	args := callArgs{
 		si: nextPrimaryProxy,
 		req: reqArgs{
 			method: http.MethodPut,
 			base:   nextPrimaryProxy.InternalNet.DirectURL,
-			path:   common.URLPath(api.Version, api.Vote, api.VoteInit),
+			path:   cmn.URLPath(cmn.Version, cmn.Vote, cmn.VoteInit),
 			body:   body,
 		},
 		timeout: defaultTimeout,
 	}
 	res := h.call(args)
 	if res.err != nil {
-		if common.IsErrConnectionRefused(res.err) {
+		if cmn.IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
 				time.Sleep(ctx.config.Timeout.CplaneOperation)
 				res = h.call(args)
@@ -577,7 +576,7 @@ func (p *proxyrunner) pingWithTimeout(si *cluster.Snode, timeout time.Duration) 
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   common.URLPath(api.Version, api.Health),
+			path:   cmn.URLPath(cmn.Version, cmn.Health),
 		},
 		timeout: timeout,
 	}
@@ -586,7 +585,7 @@ func (p *proxyrunner) pingWithTimeout(si *cluster.Snode, timeout time.Duration) 
 		return true, nil
 	}
 
-	if res.err == context.DeadlineExceeded || common.IsErrConnectionRefused(res.err) {
+	if res.err == context.DeadlineExceeded || cmn.IsErrConnectionRefused(res.err) {
 		return false, nil
 	}
 

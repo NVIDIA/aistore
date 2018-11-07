@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/cloudfoundry/gosigar"
 )
 
@@ -90,9 +90,9 @@ const DEADBEEF = "DEADBEEF"
 const (
 	mindepth      = 128             // ring cap min; default ring growth increment
 	maxdepth      = 1024 * 24       // ring cap max
-	sizetoGC      = common.GiB * 2  // see heuristics ("Heu")
+	sizetoGC      = cmn.GiB * 2  // see heuristics ("Heu")
 	loadavg       = 10              // "idle" load average to deallocate Slabs when below
-	minMemFree    = common.GiB      // default minimum memory size that must remain available - see DFC_MINMEM_*
+	minMemFree    = cmn.GiB      // default minimum memory size that must remain available - see DFC_MINMEM_*
 	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
 	freeIdleMin   = memCheckAbove   // time to reduce an idle slab to a minimum depth (see mindepth)
 	freeIdleZero  = freeIdleMin * 2 // ... to zero
@@ -125,7 +125,7 @@ type (
 		Stats *Stats2
 	}
 	Mem2 struct {
-		common.Named
+		cmn.Named
 		swap   uint64
 		stopCh chan struct{}
 		statCh chan ReqStats2
@@ -167,7 +167,7 @@ type sortpair struct {
 
 func (r *Mem2) NewSGL(immediateSize int64 /* size to allocate at construction time */) *SGL {
 	slab := r.SelectSlab2(immediateSize)
-	n := common.DivCeil(immediateSize, slab.Size())
+	n := cmn.DivCeil(immediateSize, slab.Size())
 	sgl := make([][]byte, n)
 	slab.muget.Lock()
 	for i := 0; i < int(n); i++ {
@@ -206,7 +206,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
-			r.MinFree = common.MinU64(r.MinFree, x)
+			r.MinFree = cmn.MinU64(r.MinFree, x)
 		}
 	}
 	if r.MinPctFree > 0 {
@@ -214,28 +214,28 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 		if r.MinFree == 0 {
 			r.MinFree = x
 		} else {
-			r.MinFree = common.MinU64(r.MinFree, x)
+			r.MinFree = cmn.MinU64(r.MinFree, x)
 		}
 	}
 	if r.MinFree == 0 {
 		r.MinFree = minMemFree
 	}
-	if r.MinFree < common.GiB {
+	if r.MinFree < cmn.GiB {
 		if flag.Parsed() {
 			glog.Warningf("Warning: configured minimum free memory %s < 1GiB (actual free %s)\n",
-				common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 1))
+				cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 1))
 		}
 	}
 	// 3. validate and compute free memory "low watermark"
-	m, f := common.B2S(int64(r.MinFree), 2), common.B2S(int64(mem.ActualFree), 2)
+	m, f := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree < r.MinFree {
 		err = fmt.Errorf("Insufficient free memory %s, minimum required %s", f, m)
 		if !ignorerr {
 			panic(err)
 		}
 	}
-	x := common.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
-	r.lowwm = common.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
+	x := cmn.MaxU64(r.MinFree*2, (r.MinFree+mem.ActualFree)/2)
+	r.lowwm = cmn.MinU64(x, r.MinFree*3) // Heu #1: hysteresis
 
 	// 4. timer
 	if r.Period == 0 {
@@ -257,12 +257,12 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 
 	// init slabs
 	for i := range r.rings {
-		slab := &Slab2{bufsize: int64(common.KiB * 4 * (i + 1)),
+		slab := &Slab2{bufsize: int64(cmn.KiB * 4 * (i + 1)),
 			get: make([][]byte, 0, mindepth),
 			put: make([][]byte, 0, mindepth),
 		}
 		slab.l2cache = sync.Pool{New: nil}
-		slab.tag = r.Getname() + "." + common.B2S(slab.bufsize, 0)
+		slab.tag = r.Getname() + "." + cmn.B2S(slab.bufsize, 0)
 		slab.pmindepth = &r.mindepth
 		slab.debug = r.Debug
 		slab.usespool = false // NOTE: not using sync.Pool as l2
@@ -317,19 +317,19 @@ func (r *Mem2) Free(spec FreeSpec) {
 	}
 }
 
-// as a common.Runner
+// as a cmn.Runner
 func (r *Mem2) Run() error {
 	r.time.t = time.NewTimer(r.time.d)
 	mem := sigar.Mem{}
 	mem.Get()
-	m, l := common.B2S(int64(r.MinFree), 2), common.B2S(int64(r.lowwm), 2)
+	m, l := cmn.B2S(int64(r.MinFree), 2), cmn.B2S(int64(r.lowwm), 2)
 	str := fmt.Sprintf("Starting %s, minfree %s, low %s, timer %v", r.Getname(), m, l, r.time.d)
 	if flag.Parsed() {
 		glog.Infoln(str)
 	} else {
 		fmt.Println(str)
 	}
-	f := common.B2S(int64(mem.ActualFree), 2)
+	f := cmn.B2S(int64(mem.ActualFree), 2)
 	if mem.ActualFree > mem.Total-mem.Total/5 { // more than 80%
 		str = fmt.Sprintf("%s: free memory %s > 80%% total", r.Getname(), f)
 		if flag.Parsed() {
@@ -375,7 +375,7 @@ func (r *Mem2) Stop(err error) {
 }
 
 func (r *Mem2) GetSlab2(bufsize int64) (s *Slab2, err error) {
-	a, b := bufsize/(common.KiB*4), bufsize%(common.KiB*4)
+	a, b := bufsize/(cmn.KiB*4), bufsize%(cmn.KiB*4)
 	if b != 0 {
 		err = fmt.Errorf("bufsize %d must be multiple of 4K", bufsize)
 		return
@@ -392,7 +392,7 @@ func (r *Mem2) SelectSlab2(estimatedSize int64) *Slab2 {
 	if estimatedSize == 0 {
 		estimatedSize = minSizeUnknown
 	}
-	size := common.DivCeil(estimatedSize, countThreshold)
+	size := cmn.DivCeil(estimatedSize, countThreshold)
 	for _, slab := range r.rings {
 		if slab.Size() >= size {
 			return slab
@@ -439,7 +439,7 @@ func (s *Slab2) Free(buf []byte) {
 func (r *Mem2) env() (err error) {
 	var minfree int64
 	if a := os.Getenv("DFC_MINMEM_FREE"); a != "" {
-		if minfree, err = common.S2B(a); err != nil {
+		if minfree, err = cmn.S2B(a); err != nil {
 			return fmt.Errorf("Cannot parse DFC_MINMEM_FREE '%s'", a)
 		}
 		r.MinFree = uint64(minfree)
@@ -504,7 +504,7 @@ func (r *Mem2) work() {
 		x := uint64(maxdepth-mindepth) * (mem.ActualFree - r.MinFree)
 		depth = mindepth + int(x/(r.lowwm-r.MinFree)) // Heu #2
 		if r.Debug {
-			common.Assert(depth >= mindepth && depth <= maxdepth)
+			cmn.Assert(depth >= mindepth && depth <= maxdepth)
 		}
 		atomic.StoreInt64(&r.mindepth, int64(mindepth/4))
 	}
@@ -555,7 +555,7 @@ func (r *Mem2) setTimer(free, total uint64, swapping, reset bool) {
 	}
 	if reset {
 		if changed {
-			glog.Infof("timer %v, free %s", r.time.d, common.B2S(int64(free), 1))
+			glog.Infof("timer %v, free %s", r.time.d, cmn.B2S(int64(free), 1))
 		}
 		r.time.t.Reset(r.time.d)
 	}
@@ -581,7 +581,7 @@ func (r *Mem2) freeIdle(duration time.Duration) (freed int64) {
 				x := s.reduce(mindepth, true /* idle */, false /* force */)
 				freed += x
 				if x > 0 && (bool(glog.V(4)) || r.Debug) {
-					glog.Infof("%s: idle for %v - reduced %s", s.tag, elapsed, common.B2S(x, 1))
+					glog.Infof("%s: idle for %v - reduced %s", s.tag, elapsed, cmn.B2S(x, 1))
 				}
 			}
 		}
@@ -606,7 +606,7 @@ func (r *Mem2) doGC(free uint64, minsize int64, force, swapping bool) (gced bool
 	toGC := atomic.LoadInt64(&r.toGC)
 	if toGC > minsize {
 		str := fmt.Sprintf("GC(%t, %t) load %.2f free %s GC %s", force, swapping, avg.One,
-			common.B2S(int64(free), 1), common.B2S(toGC, 2))
+			cmn.B2S(int64(free), 1), cmn.B2S(toGC, 2))
 		if force || swapping { // Heu #4
 			glog.Errorf("%s - freeing memory to the OS...", str)
 			debug.FreeOSMemory() // forces GC followed by an attempt to return memory to the OS
@@ -670,7 +670,7 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 		curmindepth = 1
 	}
 	if s.debug {
-		common.Assert(len(s.get) == s.pos)
+		cmn.Assert(len(s.get) == s.pos)
 	}
 	s.muput.Lock()
 	lput = len(s.put)
@@ -679,8 +679,8 @@ func (s *Slab2) _allocSlow() (buf []byte) {
 	}
 	s.get, s.put = s.put, s.get
 	if s.debug {
-		common.Assert(len(s.put) == s.pos)
-		common.Assert(len(s.get) >= int(curmindepth))
+		cmn.Assert(len(s.put) == s.pos)
+		cmn.Assert(len(s.get) >= int(curmindepth))
 	}
 	s.put = s.put[:0]
 	s.muput.Unlock()
@@ -723,7 +723,7 @@ func (s *Slab2) grow(cnt int) bool {
 func (s *Slab2) _free(buf []byte) {
 	if len(s.put) < maxdepth {
 		if s.debug {
-			common.Assert(len(buf) == int(s.bufsize))
+			cmn.Assert(len(buf) == int(s.bufsize))
 			for i := 0; i < len(buf); i += len(DEADBEEF) {
 				copy(buf[i:], []byte(DEADBEEF))
 			}
@@ -740,9 +740,9 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 	cnt := lput - todepth
 	if isidle {
 		if force {
-			cnt = common.Max(cnt, lput/2) // Heu #6
+			cnt = cmn.Max(cnt, lput/2) // Heu #6
 		} else {
-			cnt = common.Min(cnt, lput/2) // Heu #7
+			cnt = cmn.Min(cnt, lput/2) // Heu #7
 		}
 	}
 	if cnt > 0 {
@@ -767,9 +767,9 @@ func (s *Slab2) reduce(todepth int, isidle, force bool) (freed int64) {
 	cnt = lget - todepth
 	if isidle {
 		if force {
-			cnt = common.Max(cnt, lget/2) // Heu #9
+			cnt = cmn.Max(cnt, lget/2) // Heu #9
 		} else {
-			cnt = common.Min(cnt, lget/2) // Heu #10
+			cnt = cmn.Min(cnt, lget/2) // Heu #10
 		}
 	}
 	if cnt > 0 {
@@ -803,7 +803,7 @@ func (s *Slab2) cleanup() (freed int64) {
 	s.put = s.put[:0]
 	s.pos = 0
 	if s.debug {
-		common.Assert(len(s.get) == 0 && len(s.put) == 0)
+		cmn.Assert(len(s.get) == 0 && len(s.put) == 0)
 	}
 	s.muput.Unlock()
 	s.muget.Unlock()

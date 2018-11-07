@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 const (
@@ -104,19 +104,19 @@ func (rtnamemap *rtnamemap) DowngradeLock(uname string) {
 	rtnamemap.mu.Lock()
 
 	info, found := rtnamemap.m[uname]
-	common.Assert(found)
+	cmn.Assert(found)
 	info.exclusive = false
 	info.rc++
-	common.Assert(info.rc == 1)
+	cmn.Assert(info.rc == 1)
 	rtnamemap.mu.Unlock()
 }
 
 func (rtnamemap *rtnamemap) Unlock(uname string, exclusive bool) {
 	rtnamemap.mu.Lock()
 	info, ok := rtnamemap.m[uname]
-	common.Assert(ok)
+	cmn.Assert(ok)
 	if exclusive {
-		common.Assert(info.exclusive)
+		cmn.Assert(info.exclusive)
 		delete(rtnamemap.m, uname)
 		rtnamemap.mu.Unlock()
 		return

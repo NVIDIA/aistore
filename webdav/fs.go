@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
-	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -835,7 +835,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 
 		for _, c := range n.children {
 			// adding a "/" at the end to indicate to DFC this is a directory
-			objs = append(objs, &api.BucketEntry{Name: c.name + separator})
+			objs = append(objs, &cmn.BucketEntry{Name: c.name + separator})
 		}
 
 		fis := group(objs, f.prefix)
@@ -1038,7 +1038,7 @@ func (d *inode) find(pth string) *inode {
 // output will be: loader(directory), obj3(file)
 // prefix is removed from object name before grouping.
 // do not expect duplicate keys (upper layer should not allow that to happen)
-func group(objs []*api.BucketEntry, prefix string) []os.FileInfo {
+func group(objs []*cmn.BucketEntry, prefix string) []os.FileInfo {
 	keys := make(map[string]bool) // string = first part after split by "/", bool = true if it is a file
 	var fis []os.FileInfo
 

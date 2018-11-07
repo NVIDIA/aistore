@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -115,27 +114,27 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 	}
 	defer file.Close()
 
-	xxHashBinary, errstr := Getxattr(fqn, api.XattrXXHashVal)
+	xxHashBinary, errstr := Getxattr(fqn, cmn.XattrXXHashVal)
 	if xxHashBinary != nil && errstr != "" {
 		// checksum already there, no need to compute a new one
 		return nil
 	} else if errstr != "" {
 		ioerr := errors.New(errstr)
-		glog.Warningf("failed to get attribute %s for file %s, error: %v", api.XattrXXHashVal, fqn, ioerr)
+		glog.Warningf("failed to get attribute %s for file %s, error: %v", cmn.XattrXXHashVal, fqn, ioerr)
 		rcksctx.t.fshc(ioerr, fqn)
 		return ioerr
 	}
 
 	buf, slab := gmem2.AllocFromSlab2(osfi.Size())
-	xxHashVal, errstr := common.ComputeXXHash(file, buf)
+	xxHashVal, errstr := cmn.ComputeXXHash(file, buf)
 	slab.Free(buf)
 	if errstr != "" {
 		glog.Warningf("failed to calculate hash on %s, error: %s", fqn, errstr)
 		return errors.New(errstr)
 	}
-	if errstr = Setxattr(fqn, api.XattrXXHashVal, []byte(xxHashVal)); errstr != "" {
+	if errstr = Setxattr(fqn, cmn.XattrXXHashVal, []byte(xxHashVal)); errstr != "" {
 		ioerr := errors.New(errstr)
-		glog.Warningf("failed to set attribute %s for file %s, error: %v", api.XattrXXHashVal, fqn, ioerr)
+		glog.Warningf("failed to set attribute %s for file %s, error: %v", cmn.XattrXXHashVal, fqn, ioerr)
 		rcksctx.t.fshc(ioerr, fqn)
 		return ioerr
 	}

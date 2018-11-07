@@ -17,9 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -513,7 +512,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 			break
 		}
 
-		url := v.PublicNet.DirectURL + common.URLPath(api.Version, api.Daemon, api.SyncSmap)
+		url := v.PublicNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.SyncSmap)
 		err := tutils.HTTPRequest(http.MethodPut, url, tutils.NewBytesReader(jsonMap))
 		tutils.CheckFatal(err, t)
 
@@ -792,7 +791,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
-	url := directURL + common.URLPath(api.Version, api.Cluster, api.Proxy, toID)
+	url := directURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, toID)
 	// http://host:8081/v1/cluster/proxy/15205:8080
 	tutils.Logf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
 	err := tutils.HTTPRequest(http.MethodPut, url, nil)
@@ -998,7 +997,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 	var loopCnt int = 0
 	for {
 		smap, err := tutils.GetClusterMap(proxyURL)
-		if err != nil && !common.IsErrConnectionRefused(err) {
+		if err != nil && !cmn.IsErrConnectionRefused(err) {
 			return cluster.Smap{}, err
 		}
 
@@ -1025,7 +1024,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 					break
 				}
 
-				if !common.IsErrConnectionRefused(err) {
+				if !cmn.IsErrConnectionRefused(err) {
 					return smap, err
 				}
 
@@ -1077,7 +1076,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	tutils.Logf("Setting primary proxy %s back to the original, Smap version %d\n", currID, smap.Version)
 
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	proxyconf := config["proxyconfig"].(map[string]interface{})
 	origURL := proxyconf["original_url"].(string)
 
@@ -1283,8 +1282,8 @@ func networkFailurePrimary(t *testing.T) {
 	}
 
 	// Forcefully set new primary for the original one
-	purl := oldPrimaryURL + common.URLPath(api.Version, api.Daemon, api.Proxy, newPrimaryID) +
-		fmt.Sprintf("?%s=true&%s=%s", api.URLParamForce, api.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
+	purl := oldPrimaryURL + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, newPrimaryID) +
+		fmt.Sprintf("?%s=true&%s=%s", cmn.URLParamForce, cmn.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
 
 	err = tutils.HTTPRequest(http.MethodPut, purl, nil)
 	tutils.CheckFatal(err, t)

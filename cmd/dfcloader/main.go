@@ -29,7 +29,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmd/dfcloader/stats"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -193,7 +193,7 @@ func main() {
 	}
 
 	if runParams.usingFile {
-		err = common.CreateDir(runParams.tmpDir + "/" + myName)
+		err = cmn.CreateDir(runParams.tmpDir + "/" + myName)
 		if err != nil {
 			fmt.Println("Failed to create local test directory", runParams.tmpDir, "err = ", err)
 			return
@@ -719,7 +719,7 @@ func cleanUp() {
 		defer wg.Done()
 
 		t := len(objs)
-		b := common.Min(t, runParams.batchSize)
+		b := cmn.Min(t, runParams.batchSize)
 		n := t / b
 		for i := 0; i < n; i++ {
 			err := tutils.DeleteList(runParams.proxyURL, runParams.bucket, objs[i*b:(i+1)*b], true /* wait */, 0 /* wait forever */)

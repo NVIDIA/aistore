@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -129,8 +129,8 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	numFilesTotal := 1000000
 
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 1),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
 	}
 	iostatr := newIostatRunner()
 	ctx.rg.add(iostatr, xiostat)
@@ -140,7 +140,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	fs.Mountpaths.DisableFsIDCheck()
 	cleanMountpaths()
 	for _, mpath := range mpaths {
-		common.CreateDir(mpath)
+		cmn.CreateDir(mpath)
 		fs.Mountpaths.AddMountpath(mpath)
 	}
 
@@ -171,11 +171,11 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	tutils.Logf("%v to touch %d files.\n", time.Since(start), numFilesTotal)
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]common.SimpleKVs)
+	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 	mpathInfo, _ := path2mpathInfo(mpaths[0])
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = diskUtil
 	}
 

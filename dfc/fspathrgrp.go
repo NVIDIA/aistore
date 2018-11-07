@@ -7,13 +7,13 @@ package dfc
 
 import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
 type (
 	fsprunner interface {
-		common.Runner
+		cmn.Runner
 		reqAddMountpath(mpath string)
 		reqRemoveMountpath(mpath string)
 		reqEnableMountpath(mpath string)

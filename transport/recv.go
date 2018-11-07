@@ -22,8 +22,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/xoshiro256"
 )
 
@@ -69,7 +68,7 @@ var (
 	mu       *sync.Mutex
 	debug    bool
 )
-var knownNetworks = []string{common.NetworkPublic, common.NetworkIntra, common.NetworkReplication}
+var knownNetworks = []string{cmn.NetworkPublic, cmn.NetworkIntra, cmn.NetworkReplication}
 
 func init() {
 	mu = &sync.Mutex{}
@@ -83,7 +82,7 @@ func init() {
 //
 
 func SetMux(network string, x *http.ServeMux) {
-	if !common.StringInSlice(network, knownNetworks) {
+	if !cmn.StringInSlice(network, knownNetworks) {
 		glog.Warningf("unknown network: %s, expected one of: %v", network, knownNetworks)
 	}
 	mu.Lock()
@@ -115,7 +114,7 @@ func Register(network, trname string, callback Receive) (path string, err error)
 	}
 
 	h := &handler{trname: trname, callback: callback}
-	path = common.URLPath(api.Version, api.Transport, trname)
+	path = cmn.URLPath(cmn.Version, cmn.Transport, trname)
 	mux.HandleFunc(path, h.receive)
 	if _, ok = handlers[network][trname]; ok {
 		glog.Errorf("Warning: re-registering transport handler '%s'", trname)
@@ -159,12 +158,12 @@ func GetNetworkStats(network string) (netstats map[string]EndpointStats, err err
 
 func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		common.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid http method %s", r.Method))
+		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid http method %s", r.Method))
 		return
 	}
 	trname := path.Base(r.URL.Path)
 	if trname != h.trname {
-		common.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
+		cmn.InvalidHandlerDetailed(w, r, fmt.Sprintf("Invalid transport handler name %s - expecting %s", trname, h.trname))
 		return
 	}
 	it := iterator{trname: trname, body: r.Body, headerBuf: make([]byte, MaxHeaderSize)}
@@ -210,7 +209,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 				h.oldSessions.Store(sessid, time.Now())
 			}
 			if err != io.EOF {
-				common.InvalidHandlerDetailed(w, r, err.Error())
+				cmn.InvalidHandlerDetailed(w, r, err.Error())
 			}
 			return
 		}
@@ -224,7 +223,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 	)
 	n, err = it.body.Read(it.headerBuf[:sizeofI64*2])
 	if n < sizeofI64*2 {
-		common.Assert(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
+		cmn.Assert(err != nil, "expecting an error or EOF as the reason for failing to read 16 bytes")
 		if err != io.EOF {
 			glog.Errorf("%s: %v", it.trname, err)
 		}
@@ -244,7 +243,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 		return
 	}
 	if debug {
-		common.Assert(hlen < len(it.headerBuf))
+		cmn.Assert(hlen < len(it.headerBuf))
 	}
 	hl64 += int64(sizeofI64) * 2 // to account for hlen and its checksum
 	n, err = it.body.Read(it.headerBuf[:hlen])
@@ -252,7 +251,7 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 		return
 	}
 	if debug {
-		common.Assert(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
+		cmn.Assert(n == hlen, fmt.Sprintf("%d != %d", n, hlen))
 	}
 	hdr, sessid = ExtHeader(it.headerBuf, hlen)
 	if hdr.IsLast() {
@@ -281,7 +280,7 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 		if obj.off >= obj.hdr.Dsize {
 			err = io.EOF
 			if debug {
-				common.Assert(obj.off == obj.hdr.Dsize)
+				cmn.Assert(obj.off == obj.hdr.Dsize)
 			}
 		}
 	case io.EOF:
@@ -305,7 +304,7 @@ func ExtHeader(body []byte, hlen int) (hdr Header, sessid int64) {
 	off, sessid = extInt64(off, body)
 	off, hdr.Dsize = extInt64(off, body)
 	if debug {
-		common.Assert(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
+		cmn.Assert(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
 	}
 	return
 }

@@ -15,8 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/json-iterator/go"
@@ -94,7 +93,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 		return mgr
 	}
 
-	if err = common.LocalLoad(dbPath, &mgr.Users); err != nil {
+	if err = cmn.LocalLoad(dbPath, &mgr.Users); err != nil {
 		glog.Fatalf("Failed to load user list: %v\n", err)
 	}
 	// update loaded list: create empty map for users who do not have credentials in saved file
@@ -118,7 +117,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 // It is called from functions of this module that acquire lock, so this
 //    function needs no locks
 func (m *userManager) saveUsers() (err error) {
-	if err = common.LocalSave(m.Path, &m.Users); err != nil {
+	if err = cmn.LocalSave(m.Path, &m.Users); err != nil {
 		err = fmt.Errorf("UserManager: Failed to save user list: %v", err)
 	}
 	return err
@@ -257,7 +256,7 @@ func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
 
 	tokenList := dfc.TokenList{Tokens: tokens}
 	injson, _ := jsoniter.Marshal(tokenList)
-	if err := m.proxyRequest(http.MethodDelete, api.Tokens, injson); err != nil {
+	if err := m.proxyRequest(http.MethodDelete, cmn.Tokens, injson); err != nil {
 		glog.Errorf("Failed to send token list: %v", err)
 	}
 }
@@ -290,7 +289,7 @@ func (m *userManager) userByToken(token string) (*userInfo, error) {
 func (m *userManager) proxyRequest(method, path string, injson []byte) error {
 	startRequest := time.Now()
 	for {
-		url := m.proxy.URL + common.URLPath(api.Version, path)
+		url := m.proxy.URL + cmn.URLPath(cmn.Version, path)
 		request, err := http.NewRequest(method, url, bytes.NewBuffer(injson))
 		if err != nil {
 			// Fatal - interrupt the loop

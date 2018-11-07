@@ -12,7 +12,7 @@ import (
 	"hash"
 	"io"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 type (
@@ -64,7 +64,7 @@ func (z *SGL) Write(p []byte) (n int, err error) {
 	}
 	idx, off, poff := z.woff/z.slab.Size(), z.woff%z.slab.Size(), 0
 	for wlen > 0 {
-		size := common.MinI64(z.slab.Size()-off, int64(wlen))
+		size := cmn.MinI64(z.slab.Size()-off, int64(wlen))
 		buf := z.sgl[idx]
 		src := p[poff : poff+int(size)]
 		copy(buf[off:], src) // assert(n == size)
@@ -103,13 +103,13 @@ func (z *SGL) readAtOffset(b []byte, roffin int64) (n int, err error, roff int64
 	}
 	idx, off := int(roff/z.slab.Size()), roff%z.slab.Size()
 	buf := z.sgl[idx]
-	size := common.MinI64(int64(len(b)), z.woff-roff)
+	size := cmn.MinI64(int64(len(b)), z.woff-roff)
 	n = copy(b[:size], buf[off:])
 	roff += int64(n)
 	for n < len(b) && idx < len(z.sgl)-1 {
 		idx++
 		buf = z.sgl[idx]
-		size = common.MinI64(int64(len(b)-n), z.woff-roff)
+		size = cmn.MinI64(int64(len(b)-n), z.woff-roff)
 		n1 := copy(b[n:n+int(size)], buf)
 		roff += int64(n1)
 		n += n1
@@ -198,7 +198,7 @@ func (r *SliceReader) Read(b []byte) (n int, err error) {
 	var (
 		offout int64
 		offin  = r.roff + r.soff
-		rem    = common.MinI64(r.z.woff-offin, r.slen-r.roff)
+		rem    = cmn.MinI64(r.z.woff-offin, r.slen-r.roff)
 	)
 	if rem < int64(len(b)) {
 		b = b[:int(rem)]
@@ -217,7 +217,7 @@ func (r *SliceReader) Seek(from int64, whence int) (offset int64, err error) {
 	case io.SeekCurrent:
 		offset = r.roff + from
 	case io.SeekEnd:
-		offset = common.MinI64(r.z.woff, r.roff+r.soff+r.slen) + from
+		offset = cmn.MinI64(r.z.woff, r.roff+r.soff+r.slen) + from
 	default:
 		return 0, errors.New("invalid whence")
 	}

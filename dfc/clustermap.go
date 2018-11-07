@@ -16,7 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -53,7 +53,7 @@ func (m *smapX) init(tsize, psize, elsize int) {
 	m.Tmap = make(map[string]*cluster.Snode, tsize)
 	m.Pmap = make(map[string]*cluster.Snode, psize)
 	if elsize > 0 {
-		m.NonElects = make(common.SimpleKVs, elsize)
+		m.NonElects = make(cmn.SimpleKVs, elsize)
 	}
 }
 
@@ -95,20 +95,20 @@ func (m *smapX) containsID(id string) bool {
 }
 
 func (m *smapX) addTarget(tsi *cluster.Snode) {
-	common.Assert(!m.containsID(tsi.DaemonID), "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
+	cmn.Assert(!m.containsID(tsi.DaemonID), "FATAL: duplicate daemon ID: '"+tsi.DaemonID+"'")
 	m.Tmap[tsi.DaemonID] = tsi
 	m.Version++
 }
 
 func (m *smapX) addProxy(psi *cluster.Snode) {
-	common.Assert(!m.containsID(psi.DaemonID), "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
+	cmn.Assert(!m.containsID(psi.DaemonID), "FATAL: duplicate daemon ID: '"+psi.DaemonID+"'")
 	m.Pmap[psi.DaemonID] = psi
 	m.Version++
 }
 
 func (m *smapX) delTarget(sid string) {
 	if m.GetTarget(sid) == nil {
-		common.Assert(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
+		cmn.Assert(false, fmt.Sprintf("FATAL: target: %s is not in the smap: %s", sid, m.pp()))
 	}
 	delete(m.Tmap, sid)
 	m.Version++
@@ -116,7 +116,7 @@ func (m *smapX) delTarget(sid string) {
 
 func (m *smapX) delProxy(pid string) {
 	if m.GetProxy(pid) == nil {
-		common.Assert(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
+		cmn.Assert(false, fmt.Sprintf("FATAL: proxy: %s is not in the smap: %s", pid, m.pp()))
 	}
 	delete(m.Pmap, pid)
 	m.Version++
@@ -129,7 +129,7 @@ func (m *smapX) clone() *smapX {
 }
 
 func (m *smapX) deepcopy(dst *smapX) {
-	common.CopyStruct(dst, m)
+	cmn.CopyStruct(dst, m)
 	dst.init(len(m.Tmap), len(m.Pmap), len(m.NonElects))
 	for id, v := range m.Tmap {
 		dst.Tmap[id] = v
@@ -222,7 +222,7 @@ func (r *smapowner) synchronize(newsmap *smapX, saveSmap, lesserVersionIsErr boo
 func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
 	origURL := ctx.config.Proxy.PrimaryURL
 	ctx.config.Proxy.PrimaryURL = newsmap.ProxySI.PublicNet.DirectURL
-	if err := common.LocalSave(clivars.conffile, ctx.config); err != nil {
+	if err := cmn.LocalSave(clivars.conffile, ctx.config); err != nil {
 		errstr = fmt.Sprintf("Error writing config file %s, err: %v", clivars.conffile, err)
 		ctx.config.Proxy.PrimaryURL = origURL
 		return
@@ -230,7 +230,7 @@ func (r *smapowner) persist(newsmap *smapX, saveSmap bool) (errstr string) {
 
 	if saveSmap {
 		smappathname := filepath.Join(ctx.config.Confdir, smapname)
-		if err := common.LocalSave(smappathname, newsmap); err != nil {
+		if err := cmn.LocalSave(smappathname, newsmap); err != nil {
 			glog.Errorf("Error writing smapX %s, err: %v", smappathname, err)
 		}
 	}

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -63,7 +63,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 		wg    = &sync.WaitGroup{}
 	)
 
-	common.CreateDir(smokeDir)
+	cmn.CreateDir(smokeDir)
 
 	for i := 1; i < numPuts+1; i++ {
 		r, err := tutils.NewRandReader(int64(fileSize), true /* withHash */)

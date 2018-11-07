@@ -11,12 +11,11 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 func (t *targetrunner) objectInNextTier(nextTierURL, bucket, object string) (in bool, errstr string, errcode int) {
-	url := nextTierURL + common.URLPath(api.Version, api.Objects, bucket, object) + fmt.Sprintf("?%s=true", api.URLParamCheckCached)
+	url := nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + fmt.Sprintf("?%s=true", cmn.URLParamCheckCached)
 
 	resp, err := t.httprunner.httpclientLongTimeout.Head(url)
 	if err != nil {
@@ -49,7 +48,7 @@ func (t *targetrunner) objectInNextTier(nextTierURL, bucket, object string) (in 
 }
 
 func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, object, fqn string) (p *objectProps, errstr string, errcode int) {
-	var url = nextTierURL + common.URLPath(api.Version, api.Objects, bucket, object)
+	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 
 	resp, err := t.httprunner.httpclientLongTimeout.Get(url)
 	if err != nil {
@@ -81,7 +80,7 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, object, fqn string
 
 func (t *targetrunner) putObjectNextTier(nextTierURL, bucket, object string, body io.ReadCloser,
 	reopenBody func() (io.ReadCloser, error)) (errstr string, errcode int) {
-	var url = nextTierURL + common.URLPath(api.Version, api.Objects, bucket, object)
+	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 
 	req, err := http.NewRequest(http.MethodPut, url, body)
 	if err != nil {

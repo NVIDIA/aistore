@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -288,7 +288,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewFileReader(path, fn, common.MiB, true /* withHash */)
+		r, err := tutils.NewFileReader(path, fn, cmn.MiB, true /* withHash */)
 		r.Close()
 		os.Remove(path + "/" + fn)
 		if err != nil {
@@ -299,7 +299,7 @@ func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkInMemReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewInMemReader(common.MiB, true /* withHash */)
+		r, err := tutils.NewInMemReader(cmn.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -309,7 +309,7 @@ func BenchmarkInMemReaderCreateWithHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewRandReader(common.MiB, true /* withHash */)
+		r, err := tutils.NewRandReader(cmn.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -318,12 +318,12 @@ func BenchmarkRandReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
-	sgl := tutils.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := tutils.NewSGReader(sgl, common.MiB, true /* withHash */)
+		r, err := tutils.NewSGReader(sgl, cmn.MiB, true /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -336,7 +336,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewFileReader(path, fn, common.MiB, false /* withHash */)
+		r, err := tutils.NewFileReader(path, fn, cmn.MiB, false /* withHash */)
 		r.Close()
 		os.Remove(path + "/" + fn)
 		if err != nil {
@@ -347,7 +347,7 @@ func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkInMemReaderCreateNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewInMemReader(common.MiB, false /* withHash */)
+		r, err := tutils.NewInMemReader(cmn.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -357,7 +357,7 @@ func BenchmarkInMemReaderCreateNoHash1M(b *testing.B) {
 
 func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewRandReader(common.MiB, false /* withHash */)
+		r, err := tutils.NewRandReader(cmn.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)
@@ -366,12 +366,12 @@ func BenchmarkRandReaderCreateNoHash1M(b *testing.B) {
 }
 
 func BenchmarkSGReaderCreateNoHash1M(b *testing.B) {
-	sgl := tutils.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
 		sgl.Reset()
-		r, err := tutils.NewSGReader(sgl, common.MiB, false /* withHash */)
+		r, err := tutils.NewSGReader(sgl, cmn.MiB, false /* withHash */)
 		r.Close()
 		if err != nil {
 			b.Fatal(err)

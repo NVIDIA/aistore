@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -107,8 +108,8 @@ func (p *proxyServer) deleteObject(bucket string, prefix string) error {
 }
 
 // listObjectsDetails returns details of all objects that matches the prefix in a bucket
-func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int) ([]*api.BucketEntry, error) {
-	msg := &api.GetMsg{
+func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int) ([]*cmn.BucketEntry, error) {
+	msg := &cmn.GetMsg{
 		GetPrefix: prefix,
 		GetProps:  "size, ctime",
 	}

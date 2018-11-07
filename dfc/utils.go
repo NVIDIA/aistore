@@ -17,8 +17,7 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -186,10 +185,10 @@ func newcksumvalue(kind string, val string) cksumvalue {
 		glog.Infof("Warning: checksum %s: empty value", kind)
 		return nil
 	}
-	if kind == api.ChecksumXXHash {
+	if kind == cmn.ChecksumXXHash {
 		return &cksumvalxxhash{kind, val}
 	}
-	common.Assert(kind == api.ChecksumMD5)
+	cmn.Assert(kind == cmn.ChecksumMD5)
 	return &cksumvalmd5{kind, val}
 }
 
@@ -358,7 +357,7 @@ func parsebool(s string) (value bool, err error) {
 	return
 }
 
-func maxUtilDisks(disksMetricsMap map[string]common.SimpleKVs, disks common.StringSet) (maxutil float64) {
+func maxUtilDisks(disksMetricsMap map[string]cmn.SimpleKVs, disks cmn.StringSet) (maxutil float64) {
 	maxutil = -1
 	util := func(disk string) (u float64) {
 		if ioMetrics, ok := disksMetricsMap[disk]; ok {
@@ -415,7 +414,7 @@ func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 	}
 	defer fileOut.Close()
 
-	buf, slab := gmem2.AllocFromSlab2(common.MiB)
+	buf, slab := gmem2.AllocFromSlab2(cmn.MiB)
 	defer slab.Free(buf)
 
 	if _, err = io.CopyBuffer(fileOut, fileIn, buf); err != nil {
@@ -428,8 +427,8 @@ func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 
 // query-able xactions
 func validateXactionQueryable(kind string) (errstr string) {
-	if kind == api.XactionRebalance || kind == api.XactionPrefetch {
+	if kind == cmn.XactionRebalance || kind == cmn.XactionPrefetch {
 		return
 	}
-	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, api.XactionRebalance, api.XactionPrefetch)
+	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, cmn.XactionRebalance, cmn.XactionPrefetch)
 }

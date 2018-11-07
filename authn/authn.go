@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 var (
@@ -25,7 +25,7 @@ func updateLogOptions() error {
 	if err != nil {
 		return fmt.Errorf("Failed to flag-set glog dir %q, err: %v", conf.Log.Dir, err)
 	}
-	if err = common.CreateDir(conf.Log.Dir); err != nil {
+	if err = cmn.CreateDir(conf.Log.Dir); err != nil {
 		return fmt.Errorf("Failed to create log dir %q, err: %v", conf.Log.Dir, err)
 	}
 
@@ -59,7 +59,7 @@ func main() {
 	if glog.V(4) {
 		log.Printf("Reading configuration from %s\n", configPath)
 	}
-	if err = common.LocalLoad(configPath, conf); err != nil {
+	if err = cmn.LocalLoad(configPath, conf); err != nil {
 		glog.Fatalf("Failed to load configuration: %v\n", err)
 	}
 	if err = conf.validate(); err != nil {

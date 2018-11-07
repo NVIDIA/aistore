@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
@@ -145,7 +145,7 @@ type targetCoreStats struct {
 
 type statsrunner struct {
 	sync.RWMutex
-	common.Named
+	cmn.Named
 	stopCh    chan struct{}
 	workCh    chan namedVal64
 	starttime time.Time
@@ -162,7 +162,7 @@ type storstatsrunner struct {
 	Capacity map[string]*fscapacity `json:"capacity"`
 	// iostat
 	CPUidle string                      `json:"cpuidle"`
-	Disk    map[string]common.SimpleKVs `json:"disk"`
+	Disk    map[string]cmn.SimpleKVs `json:"disk"`
 	// omitempty
 	timeUpdatedCapacity time.Time
 	timeCheckedLogSizes time.Time
@@ -181,13 +181,13 @@ type ClusterStatsRaw struct {
 
 type iostatrunner struct {
 	sync.RWMutex
-	common.Named
+	cmn.Named
 	stopCh      chan struct{}
 	CPUidle     string
 	metricnames []string
-	Disk        map[string]common.SimpleKVs
+	Disk        map[string]cmn.SimpleKVs
 	process     *os.Process // running iostat process. Required so it can be killed later
-	fsdisks     map[string]common.StringSet
+	fsdisks     map[string]cmn.StringSet
 }
 
 type (
@@ -239,13 +239,13 @@ type (
 //==================
 
 func (stats statsTracker) register(key string, kind string) {
-	common.Assert(kind == statsKindCounter || kind == statsKindLatency, "Invalid stats kind "+kind)
+	cmn.Assert(kind == statsKindCounter || kind == statsKindLatency, "Invalid stats kind "+kind)
 	stats[key] = &statsInstance{0, kind, 0}
 }
 
 // These stats are common to proxyCoreStats and targetCoreStats
 func (stats statsTracker) registerCommonStats() {
-	common.Assert(stats != nil, "Error attempting to register stats into nil map")
+	cmn.Assert(stats != nil, "Error attempting to register stats into nil map")
 
 	stats.register(statGetCount, statsKindCounter)
 	stats.register(statPutCount, statsKindCounter)
@@ -445,7 +445,7 @@ func (r *proxystatsrunner) doAdd(nv namedVal64) {
 
 func (s *proxyCoreStats) doAdd(name string, val int64) {
 	if v, ok := s.Tracker[name]; !ok {
-		common.Assert(false, "Invalid stats name "+name)
+		cmn.Assert(false, "Invalid stats name "+name)
 	} else if v.kind == statsKindLatency {
 		s.Tracker[name].associatedVal++
 		s.statsdC.Send(name,
@@ -480,7 +480,7 @@ func (r *storstatsrunner) Run() error {
 }
 
 func (r *storstatsrunner) init() {
-	r.Disk = make(map[string]common.SimpleKVs, 8)
+	r.Disk = make(map[string]cmn.SimpleKVs, 8)
 	r.updateCapacity()
 	r.Core = &targetCoreStats{}
 	r.Core.initStatsTracker()
@@ -670,7 +670,7 @@ func (r *storstatsrunner) doAdd(nv namedVal64) {
 
 func (s *targetCoreStats) doAdd(name string, val int64) {
 	if _, ok := s.Tracker[name]; !ok {
-		common.Assert(false, "Invalid stats name "+name)
+		cmn.Assert(false, "Invalid stats name "+name)
 	}
 
 	switch name {
@@ -718,7 +718,7 @@ func (p PrefetchTargetStats) getStats(allXactionDetails []XactionDetails) []byte
 	}
 	rstor.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
-	common.Assert(err == nil, err)
+	cmn.Assert(err == nil, err)
 	return jsonBytes
 }
 
@@ -734,7 +734,7 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) []byt
 	}
 	rstor.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
-	common.Assert(err == nil, err)
+	cmn.Assert(err == nil, err)
 	return jsonBytes
 }
 

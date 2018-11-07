@@ -27,7 +27,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 type (
@@ -238,7 +238,7 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan erro
 		defer wg.Done()
 	}
 
-	url += common.URLPath(api.Version, api.Objects, bucket, keyname)
+	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
@@ -257,11 +257,11 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan erro
 	tr.tsHTTPEnd = time.Now()
 
 	if validate && resp != nil {
-		hdhash = resp.Header.Get(api.HeaderDFCChecksumVal)
-		hdhashtype = resp.Header.Get(api.HeaderDFCChecksumType)
+		hdhash = resp.Header.Get(cmn.HeaderDFCChecksumVal)
+		hdhashtype = resp.Header.Get(cmn.HeaderDFCChecksumType)
 	}
 
-	v := hdhashtype == api.ChecksumXXHash
+	v := hdhashtype == cmn.ChecksumXXHash
 	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
 	if v {
 		if hdhash != hash {
@@ -321,7 +321,7 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errCh chan
 	if wg != nil {
 		defer wg.Done()
 	}
-	url := proxyURL + common.URLPath(api.Version, api.Objects, bucket, keyname)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
 	if !silent {
 		fmt.Printf("DEL: %s\n", keyname)
 	}
@@ -350,9 +350,9 @@ func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errCh chan
 
 // ListBucket returns list of objects in a bucket. objectCountLimit is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) (*api.BucketList, error) {
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
-	reslist := &api.BucketList{Entries: make([]*api.BucketEntry, 0, 1000)}
+func ListBucket(proxyURL, bucket string, msg *cmn.GetMsg, objectCountLimit int) (*cmn.BucketList, error) {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
 
 	// An optimization to read as few objects from bucket as possible.
 	// toRead is the current number of objects ListBucket must read before
@@ -364,7 +364,7 @@ func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) 
 		var resp *http.Response
 
 		if toRead != 0 {
-			if (msg.GetPageSize == 0 && toRead < api.DefaultPageSize) ||
+			if (msg.GetPageSize == 0 && toRead < cmn.DefaultPageSize) ||
 				(msg.GetPageSize != 0 && msg.GetPageSize > toRead) {
 				msg.GetPageSize = toRead
 			}
@@ -377,7 +377,7 @@ func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) 
 		if len(injson) == 0 {
 			resp, err = HTTPClient.Get(url)
 		} else {
-			injson, err = json.Marshal(api.ActionMsg{Action: api.ActListObjects, Value: msg})
+			injson, err = json.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
 			if err != nil {
 				return nil, err
 			}
@@ -394,8 +394,8 @@ func ListBucket(proxyURL, bucket string, msg *api.GetMsg, objectCountLimit int) 
 			}
 		}()
 
-		page := &api.BucketList{}
-		page.Entries = make([]*api.BucketEntry, 0, 1000)
+		page := &cmn.BucketList{}
+		page.Entries = make([]*cmn.BucketEntry, 0, 1000)
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to read http response body, err: %v", err)
@@ -433,14 +433,14 @@ func Evict(proxyURL, bucket string, fname string) error {
 		injson []byte
 		err    error
 	)
-	EvictMsg := api.ActionMsg{Action: api.ActEvict}
+	EvictMsg := cmn.ActionMsg{Action: cmn.ActEvict}
 	EvictMsg.Name = bucket + "/" + fname
 	injson, err = json.Marshal(EvictMsg)
 	if err != nil {
 		return fmt.Errorf("Failed to marshal EvictMsg, err: %v", err)
 	}
 
-	url := proxyURL + common.URLPath(api.Version, api.Objects, bucket, fname)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, fname)
 	return HTTPRequest(http.MethodDelete, url, NewBytesReader(injson))
 }
 
@@ -449,12 +449,12 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 		injson []byte
 		err    error
 	)
-	actionMsg := api.ActionMsg{Action: action, Value: listrangemsg}
+	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
 	injson, err = json.Marshal(actionMsg)
 	if err != nil {
-		return fmt.Errorf("Failed to marhsal api.ActionMsg, err: %v", err)
+		return fmt.Errorf("Failed to marhsal cmn.ActionMsg, err: %v", err)
 	}
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
@@ -463,44 +463,44 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 }
 
 func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg)
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeCall(proxyURL, bucket, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 func PrefetchRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	prefetchMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	prefetchMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActPrefetch, http.MethodPost, prefetchMsg)
+	prefetchMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	prefetchMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: prefetchMsgBase}
+	return doListRangeCall(proxyURL, bucket, cmn.ActPrefetch, http.MethodPost, prefetchMsg)
 }
 
 func DeleteList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg)
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeCall(proxyURL, bucket, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 func DeleteRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	deleteMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActDelete, http.MethodDelete, deleteMsg)
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	deleteMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeCall(proxyURL, bucket, cmn.ActDelete, http.MethodDelete, deleteMsg)
 }
 
 func EvictList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := api.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg)
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := cmn.ListMsg{Objnames: fileslist, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeCall(proxyURL, bucket, cmn.ActEvict, http.MethodDelete, evictMsg)
 }
 
 func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline time.Duration) error {
-	listRangeMsgBase := api.ListRangeMsgBase{Deadline: deadline, Wait: wait}
-	evictMsg := api.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
-	return doListRangeCall(proxyURL, bucket, api.ActEvict, http.MethodDelete, evictMsg)
+	listRangeMsgBase := cmn.ListRangeMsgBase{Deadline: deadline, Wait: wait}
+	evictMsg := cmn.RangeMsg{Prefix: prefix, Regex: regex, Range: rng, ListRangeMsgBase: listRangeMsgBase}
+	return doListRangeCall(proxyURL, bucket, cmn.ActEvict, http.MethodDelete, evictMsg)
 }
 
 func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err error) {
 	objProps = &ObjectProps{}
-	r, err := HTTPClient.Head(proxyURL + common.URLPath(api.Version, api.Objects, bucket, objname))
+	r, err := HTTPClient.Head(proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname))
 	if err != nil {
 		return
 	}
@@ -517,18 +517,18 @@ func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err er
 			bucket, objname, r.StatusCode, string(b))
 		return
 	}
-	size, err := strconv.Atoi(r.Header.Get(api.HeaderSize))
+	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderSize))
 	if err != nil {
 		return
 	}
 
 	objProps.Size = size
-	objProps.Version = r.Header.Get(api.HeaderVersion)
+	objProps.Version = r.Header.Get(cmn.HeaderVersion)
 	return
 }
 
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
-	url := proxyURL + common.URLPath(api.Version, api.Objects, bucket, objname) + "?" + api.URLParamCheckCached + "=true"
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckCached + "=true"
 	r, err := HTTPClient.Head(url)
 	if err != nil {
 		return false, err
@@ -554,7 +554,7 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 
 // Put sends a PUT request to the given URL
 func Put(proxyURL string, reader Reader, bucket string, key string, silent bool) error {
-	url := proxyURL + common.URLPath(api.Version, api.Objects, bucket, key)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, key)
 	if !silent {
 		fmt.Printf("PUT: %s/%s\n", bucket, key)
 	}
@@ -577,8 +577,8 @@ func Put(proxyURL string, reader Reader, bucket string, key string, silent bool)
 	}
 
 	if reader.XXHash() != "" {
-		req.Header.Set(api.HeaderDFCChecksumType, api.ChecksumXXHash)
-		req.Header.Set(api.HeaderDFCChecksumVal, reader.XXHash())
+		req.Header.Set(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
+		req.Header.Set(cmn.HeaderDFCChecksumVal, reader.XXHash())
 	}
 
 	resp, err := HTTPClient.Do(req)
@@ -674,12 +674,12 @@ func waitForNoLocalBucket(url, name string) error {
 
 // RenameLocalBucket changes the name of a bucket to newBucketName
 func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActRenameLB, Name: newBucketName})
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBucketName})
 	if err != nil {
 		return err
 	}
 
-	url := proxyURL + common.URLPath(api.Version, api.Buckets, bucket)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	err = HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
 	if err != nil {
 		return err
@@ -695,7 +695,7 @@ func RenameLocalBucket(proxyURL, bucket, newBucketName string) error {
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
-	msg := &api.GetMsg{GetPrefix: prefix}
+	msg := &cmn.GetMsg{GetPrefix: prefix}
 	data, err := ListBucket(proxyURL, bucket, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
@@ -715,9 +715,9 @@ func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]strin
 // GetConfig sends a {what:config} request to the url and discard the message
 // For testing purpose only
 func GetConfig(server string) (HTTPLatencies, error) {
-	url := server + common.URLPath(api.Version, api.Daemon)
+	url := server + cmn.URLPath(cmn.Version, cmn.Daemon)
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.URL.RawQuery = GetWhatRawQuery(api.GetWhatConfig, "")
+	req.URL.RawQuery = GetWhatRawQuery(cmn.GetWhatConfig, "")
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
 	resp, err := tracedClient.Do(req)
@@ -739,8 +739,8 @@ func GetConfig(server string) (HTTPLatencies, error) {
 // GetClusterMap retrives a DFC's server map
 // Note: this may not be a good idea to expose the map to clients, but this how it is for now.
 func GetClusterMap(url string) (cluster.Smap, error) {
-	q := GetWhatRawQuery(api.GetWhatSmap, "")
-	requestURL := fmt.Sprintf("%s?%s", url+common.URLPath(api.Version, api.Daemon), q)
+	q := GetWhatRawQuery(cmn.GetWhatSmap, "")
+	requestURL := fmt.Sprintf("%s?%s", url+cmn.URLPath(cmn.Version, cmn.Daemon), q)
 	r, err := HTTPClient.Get(requestURL)
 	defer func() {
 		if r != nil {
@@ -866,16 +866,16 @@ func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 
 func GetWhatRawQuery(getWhat string, getProps string) string {
 	q := url.Values{}
-	q.Add(api.URLParamWhat, getWhat)
+	q.Add(cmn.URLParamWhat, getWhat)
 	if getProps != "" {
-		q.Add(api.URLParamProps, getProps)
+		q.Add(cmn.URLParamProps, getProps)
 	}
 	return q.Encode()
 }
 
-func TargetMountpaths(targetUrl string) (*api.MountpathList, error) {
-	q := GetWhatRawQuery(api.GetWhatMountpaths, "")
-	url := fmt.Sprintf("%s?%s", targetUrl+common.URLPath(api.Version, api.Daemon), q)
+func TargetMountpaths(targetUrl string) (*cmn.MountpathList, error) {
+	q := GetWhatRawQuery(cmn.GetWhatMountpaths, "")
+	url := fmt.Sprintf("%s?%s", targetUrl+cmn.URLPath(cmn.Version, cmn.Daemon), q)
 
 	resp, err := HTTPClient.Get(url)
 	defer func() {
@@ -896,14 +896,14 @@ func TargetMountpaths(targetUrl string) (*api.MountpathList, error) {
 		return nil, fmt.Errorf("Failed to read response, err: %v", err)
 	}
 
-	mp := &api.MountpathList{}
+	mp := &cmn.MountpathList{}
 	err = json.Unmarshal(b, mp)
 	return mp, err
 }
 
 func EnableTargetMountpath(daemonUrl, mpath string) error {
-	url := daemonUrl + common.URLPath(api.Version, api.Daemon, api.Mountpaths)
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActMountpathEnable, Value: mpath})
+	url := daemonUrl + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathEnable, Value: mpath})
 	if err != nil {
 		return err
 	}
@@ -911,8 +911,8 @@ func EnableTargetMountpath(daemonUrl, mpath string) error {
 }
 
 func DisableTargetMountpath(daemonUrl, mpath string) error {
-	url := daemonUrl + common.URLPath(api.Version, api.Daemon, api.Mountpaths)
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActMountpathDisable, Value: mpath})
+	url := daemonUrl + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathDisable, Value: mpath})
 	if err != nil {
 		return err
 	}
@@ -920,8 +920,8 @@ func DisableTargetMountpath(daemonUrl, mpath string) error {
 }
 
 func AddTargetMountpath(daemonUrl, mpath string) error {
-	url := daemonUrl + common.URLPath(api.Version, api.Daemon, api.Mountpaths)
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActMountpathAdd, Value: mpath})
+	url := daemonUrl + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathAdd, Value: mpath})
 	if err != nil {
 		return err
 	}
@@ -929,8 +929,8 @@ func AddTargetMountpath(daemonUrl, mpath string) error {
 }
 
 func RemoveTargetMountpath(daemonUrl, mpath string) error {
-	url := daemonUrl + common.URLPath(api.Version, api.Daemon, api.Mountpaths)
-	msg, err := json.Marshal(api.ActionMsg{Action: api.ActMountpathRemove, Value: mpath})
+	url := daemonUrl + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActMountpathRemove, Value: mpath})
 	if err != nil {
 		return err
 	}
@@ -949,7 +949,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 		idsToIgnore = []string{target.DaemonID}
 	}
 
-	url := proxyURL + common.URLPath(api.Version, api.Cluster, api.Daemon, sid)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, sid)
 	if err = HTTPRequest(http.MethodDelete, url, nil); err != nil {
 		return err
 	}
@@ -965,7 +965,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 
 func RegisterTarget(sid, targetDirectURL string, smap cluster.Smap) error {
 	_, ok := smap.Tmap[sid]
-	url := targetDirectURL + common.URLPath(api.Version, api.Daemon, api.Register)
+	url := targetDirectURL + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register)
 	if err := HTTPRequest(http.MethodPost, url, nil); err != nil {
 		return err
 	}
@@ -1012,7 +1012,7 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 		}
 
 		daemonSmap, err := GetClusterMap(url)
-		if err != nil && !common.IsErrConnectionRefused(err) {
+		if err != nil && !cmn.IsErrConnectionRefused(err) {
 			return err
 		}
 
@@ -1033,8 +1033,8 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 }
 
 func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
-	q := GetWhatRawQuery(api.GetWhatXaction, kind)
-	url := fmt.Sprintf("%s?%s", proxyURL+common.URLPath(api.Version, api.Cluster), q)
+	q := GetWhatRawQuery(cmn.GetWhatXaction, kind)
+	url := fmt.Sprintf("%s?%s", proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), q)
 	r, err := HTTPClient.Get(url)
 	defer func() {
 		if r != nil {

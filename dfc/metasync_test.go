@@ -16,8 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
 
@@ -135,27 +134,27 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
-	bucketmd.add("bucket1", true, api.BucketProps{
-		CloudProvider: api.ProviderDFC,
+	bucketmd.add("bucket1", true, cmn.BucketProps{
+		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://foo.com",
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
+		CksumConfig: cmn.CksumConfig{
+			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, api.BucketProps{
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
+	bucketmd.add("bucket2", true, cmn.BucketProps{
+		CksumConfig: cmn.CksumConfig{
+			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket3", false, api.BucketProps{
-		CloudProvider: api.ProviderDFC,
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
+	bucketmd.add("bucket3", false, cmn.BucketProps{
+		CloudProvider: cmn.ProviderDFC,
+		CksumConfig: cmn.CksumConfig{
+			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket4", false, api.BucketProps{
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
+	bucketmd.add("bucket4", false, cmn.BucketProps{
+		CksumConfig: cmn.CksumConfig{
+			Checksum: cmn.ChecksumInherit,
 		},
 	})
 
@@ -401,7 +400,7 @@ func refused(t *testing.T, primary *proxyrunner, syncer *metasyncer) ([]transpor
 	)
 
 	// handler for /v1/metasync
-	http.HandleFunc(common.URLPath(api.Version, api.Metasync), func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc(cmn.URLPath(cmn.Version, cmn.Metasync), func(w http.ResponseWriter, r *http.Request) {
 		ch <- transportData{true, id, 1}
 	})
 
@@ -522,9 +521,9 @@ func TestMetaSyncData(t *testing.T) {
 		emptyActionMsg string
 	)
 
-	b, err := jsoniter.Marshal(api.ActionMsg{})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{})
 	if err != nil {
-		t.Fatal("Failed to marshal empty api.ActionMsg, err =", err)
+		t.Fatal("Failed to marshal empty cmn.ActionMsg, err =", err)
 	}
 
 	emptyActionMsg = string(b)
@@ -558,17 +557,17 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add("bucket1", true, api.BucketProps{
-		CloudProvider: api.ProviderDFC,
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
+	bucketmd.add("bucket1", true, cmn.BucketProps{
+		CloudProvider: cmn.ProviderDFC,
+		CksumConfig: cmn.CksumConfig{
+			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, api.BucketProps{
-		CloudProvider: api.ProviderDFC,
+	bucketmd.add("bucket2", true, cmn.BucketProps{
+		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
-		CksumConfig: api.CksumConfig{
-			Checksum: api.ChecksumInherit,
+		CksumConfig: cmn.CksumConfig{
+			Checksum: cmn.ChecksumInherit,
 		},
 	})
 	b, err = bucketmd.marshal()
@@ -588,7 +587,11 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
 	bucketmd = bucketmd.clone()
-	bucketmd.add("bucket3", true, *api.NewBucketProps(&ctx.config.LRU))
+	bprops := cmn.BucketProps{
+		CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
+		LRUConfig:   ctx.config.LRU,
+	}
+	bucketmd.add("bucket3", true, bprops)
 	b, err = bucketmd.marshal()
 	if err != nil {
 		t.Fatal("Failed to marshal bucketmd, err =", err)
@@ -713,7 +716,7 @@ func TestMetaSyncReceive(t *testing.T) {
 			}
 		}
 
-		emptyActionMsg := func(a *api.ActionMsg) {
+		emptyActionMsg := func(a *cmn.ActionMsg) {
 			if a.Action != "" || a.Name != "" || a.Value != nil {
 				t.Fatal("Expecting empty action message", a)
 			}

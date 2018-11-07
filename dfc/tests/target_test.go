@@ -9,8 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -31,7 +30,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		break
 	}
 
-	url := smap.Tmap[sid].PublicNet.DirectURL + common.URLPath(api.Version, api.Objects, bucket, object)
+	url := smap.Tmap[sid].PublicNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	if err := tutils.HTTPRequest(http.MethodPut, url, nil); err == nil {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
@@ -43,7 +42,7 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 
-	url := proxyURL + common.URLPath(api.Version, api.Cluster, api.Daemon, sid)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, sid)
 	if err := tutils.HTTPRequest(http.MethodDelete, url, nil); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}

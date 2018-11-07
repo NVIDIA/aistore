@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -28,7 +28,7 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 	return
 }
 
-func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *api.GetMsg,
+func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[string]string, msg *cmn.GetMsg,
 	versionEnabled bool, isLocalBucket bool) (newVersions map[string]string) {
 	newVersions = make(map[string]string, len(oldVersions))
 	tutils.Logf("Updating objects...\n")
@@ -101,7 +101,7 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, filelist map[string
 	}
 }
 
-func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string, msg *api.GetMsg, versionEnabled bool) {
+func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
 	// generate a object list to evict (evict 1/3 of total objects - random selection)
 	toEvict := len(objMap) / 3
 	if toEvict == 0 {
@@ -172,7 +172,7 @@ func propsEvict(t *testing.T, proxyURL, bucket string, objMap map[string]string,
 	}
 }
 
-func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]string, msg *api.GetMsg, versionEnabled bool) {
+func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]string, msg *cmn.GetMsg, versionEnabled bool) {
 	tutils.Logf("Refetching objects...\n")
 	propsReadObjects(t, proxyURL, bucket, objs)
 	tutils.Logf("Checking objects properties after refetching...\n")
@@ -211,7 +211,7 @@ func propsRecacheObjects(t *testing.T, proxyURL, bucket string, objs map[string]
 	}
 }
 
-func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *api.GetMsg, versionEnabled bool, isLocalBucket bool) {
+func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]string, msg *cmn.GetMsg, versionEnabled bool, isLocalBucket bool) {
 	propsCleanupObjects(t, proxyURL, bucket, objects)
 
 	smap := getClusterMap(t, proxyURL)
@@ -276,7 +276,7 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 			continue
 		}
 
-		if m.Status != api.ObjStatusOK {
+		if m.Status != cmn.ObjStatusOK {
 			continue
 		}
 
@@ -352,9 +352,9 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	}
 
 	// Read object versions
-	msg := &api.GetMsg{
+	msg := &cmn.GetMsg{
 		GetPrefix: versionDir,
-		GetProps:  api.GetPropsVersion + ", " + api.GetPropsIsCached + ", " + api.GetPropsAtime + ", " + api.GetPropsStatus,
+		GetProps:  cmn.GetPropsVersion + ", " + cmn.GetPropsIsCached + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus,
 	}
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
@@ -418,25 +418,25 @@ func propsMainTest(t *testing.T, versioning string) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	chkVersion := true
 
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	versionCfg := config["version_config"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	}
 	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("versioning", versioning, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		}
 		if oldVersioning != versioning {
-			setConfig("versioning", oldVersioning, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+			setConfig("versioning", oldVersioning, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		}
 		if created {
 			destroyLocalBucket(t, proxyURL, clibucket)
@@ -447,8 +447,8 @@ func propsMainTest(t *testing.T, versioning string) {
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}
-	versionEnabled := props.Versioning != api.VersionNone
-	isLocalBucket := props.CloudProvider == api.ProviderDFC
+	versionEnabled := props.Versioning != cmn.VersionNone
+	isLocalBucket := props.CloudProvider == cmn.ProviderDFC
 	propsTestCore(t, versionEnabled, isLocalBucket)
 }
 
@@ -457,7 +457,7 @@ func TestObjPropsVersionEnabled(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	propsMainTest(t, api.VersionAll)
+	propsMainTest(t, cmn.VersionAll)
 }
 
 func TestObjPropsVersionDisabled(t *testing.T) {
@@ -465,5 +465,5 @@ func TestObjPropsVersionDisabled(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	propsMainTest(t, api.VersionNone)
+	propsMainTest(t, cmn.VersionNone)
 }

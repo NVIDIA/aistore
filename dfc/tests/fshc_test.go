@@ -13,8 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -30,7 +29,7 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 	var err error
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
-	var newMpaths *api.MountpathList
+	var newMpaths *cmn.MountpathList
 	for detectLimit.After(time.Now()) {
 		newMpaths, err = tutils.TargetMountpaths(target)
 		if err != nil {
@@ -70,7 +69,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	// cleanup
 	// restore original mountpath
 	os.Remove(mpath)
-	common.CreateDir(mpath)
+	cmn.CreateDir(mpath)
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
@@ -78,7 +77,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 	tutils.Logf("Recheck mountpaths\n")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
-	var mpaths *api.MountpathList
+	var mpaths *cmn.MountpathList
 	// Wait for fsckeeper detects that the mountpath is accessible now
 	for detectLimit.After(time.Now()) {
 		mpaths, err = tutils.TargetMountpaths(target)
@@ -184,7 +183,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	mpList := make(map[string]string, 0)
-	allMps := make(map[string]*api.MountpathList, 0)
+	allMps := make(map[string]*cmn.MountpathList, 0)
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
 		tutils.Logf("Target: %s\n", target)
@@ -206,7 +205,7 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// select random target and mountpath
 	failedTarget, failedMpath := "", ""
-	var failedMap *api.MountpathList
+	var failedMap *cmn.MountpathList
 	for m, t := range mpList {
 		failedTarget, failedMpath = t, m
 		failedMap = allMps[failedTarget]
@@ -271,8 +270,8 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// try PUT and GET with disabled FSChecker
 	tutils.Logf("*** Testing with disabled FSHC***\n")
-	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
-	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	fileList := []string{}
 	for n := 0; n < 5; n++ {
@@ -334,7 +333,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	mpList := make(map[string]string, 0)
-	allMps := make(map[string]*api.MountpathList, 0)
+	allMps := make(map[string]*cmn.MountpathList, 0)
 	origAvail := 0
 	origOff := 0
 	for target, tinfo := range smap.Tmap {

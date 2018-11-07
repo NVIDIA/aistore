@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -134,7 +134,7 @@ func TestFqn2Info(t *testing.T) {
 			mfs.DisableFsIDCheck()
 			for _, mpath := range tt.mpaths {
 				if _, err := os.Stat(mpath); os.IsNotExist(err) {
-					common.CreateDir(mpath)
+					cmn.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
 				err := mfs.AddMountpath(mpath)
@@ -192,7 +192,7 @@ func TestBytesToStr(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		s := common.B2S(tst.val, tst.num)
+		s := cmn.B2S(tst.val, tst.num)
 		if s != tst.str {
 			t.Errorf("Expected %s got %s", tst.str, s)
 		}
@@ -218,7 +218,7 @@ func TestStrToBytes(t *testing.T) {
 	}
 
 	for _, tst := range tests {
-		n, e := common.S2B(tst.str)
+		n, e := cmn.S2B(tst.str)
 		if e != nil {
 			t.Errorf("Failed to convert %s: %v", tst.str, e)
 		}

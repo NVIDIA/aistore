@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -68,7 +68,7 @@ func (a *Snode) Equals(b *Snode) bool {
 type Smap struct {
 	Tmap      map[string]*Snode `json:"tmap"` // daemonID -> Snode
 	Pmap      map[string]*Snode `json:"pmap"` // proxyID -> proxyInfo
-	NonElects common.SimpleKVs  `json:"non_electable"`
+	NonElects cmn.SimpleKVs     `json:"non_electable"`
 	ProxySI   *Snode            `json:"proxy_si"`
 	Version   int64             `json:"version"`
 }

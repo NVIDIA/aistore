@@ -27,14 +27,14 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/xoshiro256"
 )
 
 // transport defaults
 const (
 	MaxHeaderSize  = 1024
-	lastMarker     = common.MaxInt64
+	lastMarker     = cmn.MaxInt64
 	defaultIdleOut = time.Second
 	sizeofI64      = int(unsafe.Sizeof(uint64(0)))
 	burstNum       = 64 // default max num objects that can be posted for sending without any back-pressure
@@ -144,7 +144,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 			s.time.idleOut = extra.IdleTimeout
 		}
 		dryrun = extra.DryRun
-		common.Assert(dryrun || client != nil)
+		cmn.Assert(dryrun || client != nil)
 	}
 	if tm := time.Now().UnixNano(); tm&0xffff != 0 {
 		s.sessid = tm & 0xffff
@@ -231,7 +231,7 @@ func (s *Stream) GetStats() (stats Stats) {
 	now := time.Now().UnixNano()
 	stats.TotlDur = now - atomic.LoadInt64(&s.time.start)
 	stats.IdlePct = float64(atomic.LoadInt64(&s.stats.IdleDur)) * 100 / float64(stats.TotlDur)
-	stats.IdlePct = common.MinF64(100, stats.IdlePct) // GetStats is async vis-à-vis IdleDur += deltas
+	stats.IdlePct = cmn.MinF64(100, stats.IdlePct) // GetStats is async vis-à-vis IdleDur += deltas
 	atomic.StoreInt64(&s.time.start, now)
 	atomic.StoreInt64(&s.stats.IdleDur, 0)
 	return
@@ -285,7 +285,7 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 		case <-s.postCh:
 			if v := atomic.LoadInt64(&s.lifecycle); v != expired {
 				if debug {
-					common.Assert(v == posted)
+					cmn.Assert(v == posted)
 				}
 				next = true // initiate new HTTP/TCP session
 				return
@@ -362,7 +362,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	s.sendoff.off += int64(n)
 	if s.sendoff.off >= int64(len(s.header)) {
 		if debug {
-			common.Assert(s.sendoff.off == int64(len(s.header)))
+			cmn.Assert(s.sendoff.off == int64(len(s.header)))
 		}
 		atomic.AddInt64(&s.stats.Offset, s.sendoff.off)
 		if bool(glog.V(4)) || debug {
@@ -412,7 +412,7 @@ func (s *Stream) eoObj(err error) {
 	if s.sendoff.off != obj.hdr.Dsize {
 		if debug {
 			errstr := fmt.Sprintf("%s: hdr: %v; offset %d != %d size", s.lid, string(s.header), s.sendoff.off, obj.hdr.Dsize)
-			common.Assert(false, errstr)
+			cmn.Assert(false, errstr)
 		} else {
 			glog.Errorf("%s offset %d != %d size", s.lid, s.sendoff.off, obj.hdr.Dsize)
 		}
@@ -424,7 +424,7 @@ func (s *Stream) eoObj(err error) {
 
 	if closeErr := obj.reader.Close(); closeErr != nil {
 		if debug {
-			common.Assert(false, fmt.Sprintf("%s: hdr: %v; failed to close reader %v", s.lid, string(s.header), closeErr))
+			cmn.Assert(false, fmt.Sprintf("%s: hdr: %v; failed to close reader %v", s.lid, string(s.header), closeErr))
 		} else {
 			glog.Errorf("%s: failed to close reader %v", s.lid, closeErr)
 		}
@@ -447,7 +447,7 @@ func (s *Stream) eoObj(err error) {
 //
 func (s *Stream) insHeader(hdr Header) (l int) {
 	if debug {
-		common.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < MaxHeaderSize-12*sizeofI64)
+		cmn.Assert(len(hdr.Bucket)+len(hdr.Objname)+len(hdr.Opaque) < MaxHeaderSize-12*sizeofI64)
 	}
 	l = sizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
@@ -468,7 +468,7 @@ func insString(off int, to []byte, str string) int {
 	off += sizeofI64
 	n := copy(to[off:], str)
 	if debug {
-		common.Assert(n == l)
+		cmn.Assert(n == l)
 	}
 	return off + l
 }
@@ -479,7 +479,7 @@ func insByte(off int, to []byte, b []byte) int {
 	off += sizeofI64
 	n := copy(to[off:], b)
 	if debug {
-		common.Assert(n == l)
+		cmn.Assert(n == l)
 	}
 	return off + l
 }
@@ -501,14 +501,14 @@ func (s *Stream) addIdle(beg time.Time) { atomic.AddInt64(&s.stats.IdleDur, int6
 // dry-run ---------------------------
 //
 func (s *Stream) dryrun() {
-	buf := make([]byte, common.KiB*32)
+	buf := make([]byte, cmn.KiB*32)
 	scloser := ioutil.NopCloser(s)
 	it := iterator{trname: s.trname, body: scloser, headerBuf: make([]byte, MaxHeaderSize)}
 	for {
 		objReader, _, _, err := it.next()
 		if objReader != nil {
 			written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
-			common.Assert(written == objReader.hdr.Dsize)
+			cmn.Assert(written == objReader.hdr.Dsize)
 			continue
 		}
 		if err != nil {

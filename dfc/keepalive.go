@@ -14,9 +14,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 const (
@@ -59,7 +58,7 @@ type proxyKeepaliveRunner struct {
 }
 
 type keepalive struct {
-	common.Named
+	cmn.Named
 	k                          keepaliver
 	kt                         KeepaliveTracker
 	tt                         *timeoutTracker
@@ -265,7 +264,7 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 
 func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delta time.Duration) {
 	query := url.Values{}
-	query.Add(api.URLParamFromID, pkr.p.si.DaemonID)
+	query.Add(cmn.URLParamFromID, pkr.p.si.DaemonID)
 
 	timeout := time.Duration(pkr.timeoutStatsForDaemon(to.DaemonID).timeout)
 	args := callArgs{
@@ -273,7 +272,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   to.InternalNet.DirectURL,
-			path:   common.URLPath(api.Version, api.Health),
+			path:   cmn.URLPath(cmn.Version, cmn.Health),
 			query:  query,
 		},
 		timeout: timeout,
@@ -318,7 +317,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 					", removing daemon %s from smap", si.DaemonID)
 				return false, false
 			}
-			if common.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
+			if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 				continue
 			}
 			glog.Warningf("keepalive: Unexpected status %d, err: %v", res.status, res.err)
@@ -397,7 +396,7 @@ func (k *keepalive) register(r registerer, statsif statsif, primaryProxyID strin
 					"daemon failed to register after retrying three times, removing from smap")
 				return true
 			}
-			if common.IsErrConnectionRefused(err) || s == http.StatusRequestTimeout {
+			if cmn.IsErrConnectionRefused(err) || s == http.StatusRequestTimeout {
 				continue
 			}
 			glog.Warningf(
@@ -446,7 +445,7 @@ func (k *keepalive) timeoutStatsForDaemon(sid string) *timeoutStats {
 }
 
 func (k *keepalive) onerr(err error, status int) {
-	if common.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+	if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 		k.controlCh <- controlSignal{msg: someError, err: err}
 	}
 }

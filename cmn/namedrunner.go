@@ -3,8 +3,8 @@
  *
  */
 
-// Package common provides common low-level types and utilities for all dfcpub projects
-package common
+// Package cmn provides common low-level types and utilities for all dfcpub projects
+package cmn
 
 type Named struct {
 	name string

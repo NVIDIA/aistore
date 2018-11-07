@@ -5,7 +5,11 @@
 // Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/NVIDIA/dfcpub/cmn"
+)
 
 //
 // empty stubs to have it running on Mac with no iostats
@@ -14,18 +18,18 @@ func newIostatRunner() *iostatrunner {
 	return &iostatrunner{
 		chsts:       make(chan struct{}, 1),
 		CPUidle:     "(error: iostat unavailable)",
-		Disk:        make(map[string]common.SimpleKVs, 0),
+		Disk:        make(map[string]cmn.SimpleKVs, 0),
 		metricnames: make([]string, 0),
 	}
 }
 
 func (r *iostatrunner) run() (err error) {
-	common.Assert(false, "niy")
+	cmn.Assert(false, "niy")
 	return nil
 }
 
 func (r *iostatrunner) stop(err error) {
-	common.Assert(false, "niy")
+	cmn.Assert(false, "niy")
 }
 
 func (r *iostatrunner) isZeroUtil(dev string) bool {
@@ -44,10 +48,10 @@ func (r *iostatrunner) diskUtilFromFQN(path string) (utilization float32, ok boo
 	return float32(-1), false
 }
 
-func fs2disks(fileSystem string) (disks common.StringSet) {
-	return make(common.StringSet)
+func fs2disks(fileSystem string) (disks cmn.StringSet) {
+	return make(cmn.StringSet)
 }
 
-func lsblkOutput2disks(lsblkOutputBytes []byte, fileSystem string) (disks common.StringSet) {
-	return make(common.StringSet)
+func lsblkOutput2disks(lsblkOutputBytes []byte, fileSystem string) (disks cmn.StringSet) {
+	return make(cmn.StringSet)
 }

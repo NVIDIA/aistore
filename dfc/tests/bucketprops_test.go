@@ -8,16 +8,16 @@ import (
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
-func testBucketProps(t *testing.T) *api.BucketProps {
+func testBucketProps(t *testing.T) *cmn.BucketProps {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	globalConfig := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+	globalConfig := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	lruConfig := globalConfig["lru_config"].(map[string]interface{})
 
-	LRUConf := &api.LRUConfig{
+	LRUConf := cmn.LRUConfig{
 		LowWM:              uint32(lruConfig["lowwm"].(float64)),
 		HighWM:             uint32(lruConfig["highwm"].(float64)),
 		AtimeCacheMax:      uint64(lruConfig["atime_cache_max"].(float64)),
@@ -25,14 +25,17 @@ func testBucketProps(t *testing.T) *api.BucketProps {
 		CapacityUpdTimeStr: lruConfig["capacity_upd_time"].(string),
 		LRUEnabled:         lruConfig["lru_enabled"].(bool),
 	}
-	return api.NewBucketProps(LRUConf)
+	return &cmn.BucketProps{
+		CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
+		LRUConfig:   LRUConf,
+	}
 }
 
 func TestResetBucketProps(t *testing.T) {
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
-		globalProps  api.BucketProps
-		globalConfig = getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+		globalProps  cmn.BucketProps
+		globalConfig = getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 		cksumConfig  = globalConfig["cksum_config"].(map[string]interface{})
 	)
 
@@ -40,11 +43,11 @@ func TestResetBucketProps(t *testing.T) {
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := defaultBucketProps()
-	bucketProps.Checksum = api.ChecksumNone
+	bucketProps.Checksum = cmn.ChecksumNone
 	bucketProps.ValidateWarmGet = true
 	bucketProps.EnableReadRangeChecksum = true
 
-	globalProps.CloudProvider = api.ProviderDFC
+	globalProps.CloudProvider = cmn.ProviderDFC
 	globalProps.Checksum = cksumConfig["checksum"].(string)
 	globalProps.ValidateColdGet = cksumConfig["validate_checksum_cold_get"].(bool)
 	globalProps.ValidateWarmGet = cksumConfig["validate_checksum_warm_get"].(bool)
@@ -72,7 +75,7 @@ func TestResetBucketProps(t *testing.T) {
 func TestSetBucketNextTierURLInvalid(t *testing.T) {
 	var (
 		proxyURL          = getPrimaryURL(t, proxyURLRO)
-		bucketProps       api.BucketProps
+		bucketProps       cmn.BucketProps
 		invalidDaemonURLs []string
 	)
 

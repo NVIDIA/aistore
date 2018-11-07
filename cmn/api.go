@@ -2,7 +2,9 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package api
+
+// Package cmn provides common low-level types and utilities for all dfcpub projects
+package cmn
 
 import (
 	"time"
@@ -294,3 +296,90 @@ const (
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
 )
+
+const (
+	RWPolicyCloud    = "cloud"
+	RWPolicyNextTier = "next_tier"
+)
+
+type CksumConfig struct {
+
+	// Checksum: hashing algorithm used to check for object corruption
+	// Values: none, xxhash, md5, inherit
+	// Value of 'none' disables hash checking
+	Checksum string `json:"checksum"`
+
+	// ValidateColdGet determines whether or not the checksum of received object
+	// is checked after downloading it from the cloud or next tier
+	ValidateColdGet bool `json:"validate_checksum_cold_get"`
+
+	// ValidateWarmGet: if enabled, the object's version (if in Cloud-based bucket)
+	// and checksum are checked. If either value fail to match, the object
+	// is removed from local storage
+	ValidateWarmGet bool `json:"validate_checksum_warm_get"`
+
+	// EnableReadRangeChecksum: Return read range checksum otherwise return entire object checksum
+	EnableReadRangeChecksum bool `json:"enable_read_range_checksum"`
+}
+
+type LRUConfig struct {
+
+	// LowWM: Self-throttling mechanisms are suspended if disk utilization is below LowWM
+	LowWM uint32 `json:"lowwm"`
+
+	// HighWM: Self-throttling mechanisms are fully engaged if disk utilization is above HighWM
+	HighWM uint32 `json:"highwm"`
+
+	// AtimeCacheMax represents the maximum number of entries
+	AtimeCacheMax uint64 `json:"atime_cache_max"`
+
+	// DontEvictTimeStr denotes the period of time during which eviction of an object
+	// is forbidden [atime, atime + DontEvictTime]
+	DontEvictTimeStr string `json:"dont_evict_time"`
+
+	// DontEvictTime is the parsed value of DontEvictTimeStr
+	DontEvictTime time.Duration `json:"-"`
+
+	// CapacityUpdTimeStr denotes the frequency with which DFC updates filesystem usage
+	CapacityUpdTimeStr string `json:"capacity_upd_time"`
+
+	// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
+	CapacityUpdTime time.Duration `json:"-"`
+
+	// LRUEnabled: LRU will only run when set to true
+	LRUEnabled bool `json:"lru_enabled"`
+}
+
+// BucketProps defines the configuration of the bucket with regard to
+// its type, checksum, and LRU. These characteristics determine its behaviour
+// in response to operations on the bucket itself or the objects inside the bucket.
+type BucketProps struct {
+
+	// CloudProvider can be "aws", "gcp", or "dfc".
+	// If a bucket is local, CloudProvider must be "dfc".
+	// Otherwise, it must be "aws" or "gcp".
+	CloudProvider string `json:"cloud_provider,omitempty"`
+
+	// Versioning defines what kind of buckets should use versioning to
+	// detect if the object must be redownloaded.
+	// Values: "all", "cloud", "local" or "none".
+	Versioning string
+
+	// NextTierURL is an absolute URI corresponding to the primary proxy
+	// of the next tier configured for the bucket specified
+	NextTierURL string `json:"next_tier_url,omitempty"`
+
+	// ReadPolicy determines if a read will be from cloud or next tier
+	// specified by NextTierURL. Default: "next_tier"
+	ReadPolicy string `json:"read_policy,omitempty"`
+
+	// WritePolicy determines if a write will be to cloud or next tier
+	// specified by NextTierURL. Default: "cloud"
+	WritePolicy string `json:"write_policy,omitempty"`
+
+	// CksumConfig is the embedded struct of the same name
+	CksumConfig `json:"cksum_config"`
+
+	// LRUConfig is the embedded struct of the same name
+	LRUConfig `json:"lru_props"`
+}

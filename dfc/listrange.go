@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
 
@@ -51,12 +51,12 @@ type xactEvictDelete struct {
 
 type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
 
-func getCloudBucketPage(ct context.Context, bucket string, msg *api.GetMsg) (bucketList *api.BucketList, err error) {
+func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.GetMsg) (bucketList *cmn.BucketList, err error) {
 	jsbytes, errstr, errcode := getcloudif().listbucket(ct, bucket, msg)
 	if errstr != "" {
 		return nil, fmt.Errorf("Error listing cloud bucket %s: %d(%s)", bucket, errcode, errstr)
 	}
-	bucketList = &api.BucketList{}
+	bucketList = &cmn.BucketList{}
 	if err := jsoniter.Unmarshal(jsbytes, bucketList); err != nil {
 		return nil, fmt.Errorf("Error unmarshalling BucketList: %v", err)
 	}
@@ -65,11 +65,11 @@ func getCloudBucketPage(ct context.Context, bucket string, msg *api.GetMsg) (buc
 
 func (t *targetrunner) getOpFromActionMsg(action string) listf {
 	switch action {
-	case api.ActPrefetch:
+	case cmn.ActPrefetch:
 		return t.addPrefetchList
-	case api.ActEvict:
+	case cmn.ActEvict:
 		return t.doListEvict
-	case api.ActDelete:
+	case cmn.ActDelete:
 		return t.doListDelete
 	default:
 		return nil
@@ -154,9 +154,9 @@ func (q *xactInProgress) newEvictDelete(evict bool) *xactEvictDelete {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	xact := api.ActDelete
+	xact := cmn.ActDelete
 	if evict {
-		xact = api.ActEvict
+		xact = cmn.ActEvict
 	}
 
 	id := q.uniqueid()
@@ -276,14 +276,14 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket
 func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	_, xx := q.findU(api.ActPrefetch)
+	_, xx := q.findU(cmn.ActPrefetch)
 	if xx != nil {
 		xpre := xx.(*xactPrefetch)
 		glog.Infof("%s already running, nothing to do", xpre.tostring())
 		return nil
 	}
 	id := q.uniqueid()
-	xpre := &xactPrefetch{xactBase: *newxactBase(id, api.ActPrefetch)}
+	xpre := &xactPrefetch{xactBase: *newxactBase(id, cmn.ActPrefetch)}
 	xpre.targetrunner = t
 	q.add(xpre)
 	return xpre
@@ -316,9 +316,9 @@ func unmarshalMsgValue(jsmap map[string]interface{}, key string) (val string, er
 	return
 }
 
-func parseBaseMsg(jsmap map[string]interface{}) (pbm *api.ListRangeMsgBase, errstr string) {
+func parseBaseMsg(jsmap map[string]interface{}) (pbm *cmn.ListRangeMsgBase, errstr string) {
 	const s = "Error parsing BaseMsg:"
-	pbm = &api.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
+	pbm = &cmn.ListRangeMsgBase{Deadline: defaultDeadline, Wait: defaultWait}
 	if v, ok := jsmap["deadline"]; ok {
 		deadline, err := time.ParseDuration(v.(string))
 		if err != nil {
@@ -336,13 +336,13 @@ func parseBaseMsg(jsmap map[string]interface{}) (pbm *api.ListRangeMsgBase, errs
 	return
 }
 
-func parseListMsg(jsmap map[string]interface{}) (pm *api.ListMsg, errstr string) {
+func parseListMsg(jsmap map[string]interface{}) (pm *cmn.ListMsg, errstr string) {
 	const s = "Error parsing ListMsg: "
 	pbm, errstr := parseBaseMsg(jsmap)
 	if errstr != "" {
 		return
 	}
-	pm = &api.ListMsg{ListRangeMsgBase: *pbm}
+	pm = &cmn.ListMsg{ListRangeMsgBase: *pbm}
 	v, ok := jsmap["objnames"]
 	if !ok {
 		return pm, s + "No objnames field"
@@ -362,13 +362,13 @@ func parseListMsg(jsmap map[string]interface{}) (pm *api.ListMsg, errstr string)
 	return
 }
 
-func parseRangeMsg(jsmap map[string]interface{}) (pm *api.RangeMsg, errstr string) {
+func parseRangeMsg(jsmap map[string]interface{}) (pm *cmn.RangeMsg, errstr string) {
 	const s = "Error parsing RangeMsg: %s"
 	pbm, errstr := parseBaseMsg(jsmap)
 	if errstr != "" {
 		return
 	}
-	pm = &api.RangeMsg{ListRangeMsgBase: *pbm}
+	pm = &cmn.RangeMsg{ListRangeMsgBase: *pbm}
 
 	prefix, errstr := unmarshalMsgValue(jsmap, rangePrefix)
 	if errstr != "" {
@@ -426,7 +426,7 @@ func parseRange(rangestr string) (min, max int64, err error) {
 //
 //=======================================================================
 
-func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg api.ActionMsg) error {
+func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg cmn.ActionMsg) error {
 	operation := t.getOpFromActionMsg(msg.Action)
 	if operation == nil {
 		return fmt.Errorf("Invalid Operation")
@@ -435,7 +435,7 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg
 	detail := fmt.Sprintf(" (%s, %s, %T)", msg.Action, msg.Name, msg.Value)
 	jsmap, ok := msg.Value.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("invalid api.ActionMsg.Value format" + detail)
+		return fmt.Errorf("invalid cmn.ActionMsg.Value format" + detail)
 	}
 	if _, ok := jsmap["objnames"]; !ok {
 		// Parse map into RangeMsg, convert to and process ListMsg page-by-page
@@ -453,7 +453,7 @@ func (t *targetrunner) listRangeOperation(r *http.Request, apitems []string, msg
 	return t.listOperation(r, apitems, listMsg, operation)
 }
 
-func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg *api.ListMsg, f listf) error {
+func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg *cmn.ListMsg, f listf) error {
 	var err error
 	bucket := apitems[0]
 	objs := make([]string, 0, len(listMsg.Objnames))
@@ -492,14 +492,14 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 	return err
 }
 
-func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, rangeMsg *api.RangeMsg, operation listf) error {
+func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string, rangeMsg *cmn.RangeMsg, operation listf) error {
 	var (
-		bucketListPage *api.BucketList
+		bucketListPage *cmn.BucketList
 		err            error
 		bucket         = apitems[0]
 		prefix         = rangeMsg.Prefix
 		ct             = t.contextWithAuth(r)
-		msg            = &api.GetMsg{GetPrefix: prefix, GetProps: api.GetPropsStatus}
+		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
 		islocal        = t.bmdowner.get().islocal(bucket)
 	)
 
@@ -528,7 +528,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 
 		matchingEntries := make([]string, 0, len(bucketListPage.Entries))
 		for _, be := range bucketListPage.Entries {
-			if be.Status != api.ObjStatusOK {
+			if be.Status != cmn.ObjStatusOK {
 				continue
 			}
 			if !acceptRegexRange(be.Name, prefix, re, min, max) {
@@ -539,7 +539,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 
 		if len(matchingEntries) != 0 {
 			// Create a ListMsg with a single page of BucketList containing BucketEntries
-			listMsg := &api.ListMsg{
+			listMsg := &cmn.ListMsg{
 				ListRangeMsgBase: rangeMsg.ListRangeMsgBase,
 				Objnames:         matchingEntries,
 			}

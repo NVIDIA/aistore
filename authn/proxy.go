@@ -9,7 +9,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -32,7 +32,7 @@ type (
 // If primary proxy change is detected then the current Smap is saved
 func newProxy(configPath, defaultURL string) *proxy {
 	p := &proxy{}
-	err := common.LocalLoad(configPath, p)
+	err := cmn.LocalLoad(configPath, p)
 	if err != nil {
 		// first run: read the current Smap and save to local file
 		smap, err := tutils.GetClusterMap(defaultURL)
@@ -55,7 +55,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 }
 
 func (p *proxy) saveSmap() {
-	err := common.LocalSave(p.configPath, p)
+	err := cmn.LocalSave(p.configPath, p)
 	if err != nil {
 		glog.Errorf("Failed to save configuration: %v", err)
 	}

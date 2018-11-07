@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -92,7 +92,7 @@ var atimeSyncTime = time.Minute * 3
 // atimerunner will also periodically call its mpathAtimeRunners that it manages
 // to flush files (read description above).
 type atimerunner struct {
-	common.Named
+	cmn.Named
 	requestCh    chan *atimeRequest // Requests for file access times or set access times
 	stopCh       chan struct{}      // Control channel for stopping
 	mpathReqCh   chan mpathReq
@@ -274,7 +274,7 @@ func (r *atimerunner) addMpathAtimeRunner(mpath string) {
 	}
 	mpathInfo, _ := path2mpathInfo(mpath)
 	if mpathInfo == nil {
-		common.Assert(false, fmt.Sprintf("Attempted to add a mpath %q with no corresponding filesystem", mpath))
+		cmn.Assert(false, fmt.Sprintf("Attempted to add a mpath %q with no corresponding filesystem", mpath))
 	}
 
 	r.mpathRunners[mpath] = r.newMpathAtimeRunner(mpath, mpathInfo.FileSystem)
@@ -283,7 +283,7 @@ func (r *atimerunner) addMpathAtimeRunner(mpath string) {
 
 func (r *atimerunner) removeMpathAtimeRunner(mpath string) {
 	mpathRunner, ok := r.mpathRunners[mpath]
-	common.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
+	cmn.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
 	mpathRunner.stop()
 	delete(r.mpathRunners, mpath)
 }
@@ -353,7 +353,7 @@ func (m *mpathAtimeRunner) getNumberItemsToFlush() (n int) {
 		return
 	}
 
-	filling := common.MinU64(100, uint64(atimeMapSize)*100/ctx.config.LRU.AtimeCacheMax)
+	filling := cmn.MinU64(100, uint64(atimeMapSize)*100/ctx.config.LRU.AtimeCacheMax)
 	riostat := getiostatrunner()
 
 	maxDiskUtil := float32(-1)

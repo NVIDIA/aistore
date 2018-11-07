@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -157,7 +157,7 @@ func Test_matchdelete(t *testing.T) {
 	}
 
 	// list the bucket
-	var msg = &api.GetMsg{GetPageSize: int(pagesize)}
+	var msg = &cmn.GetMsg{GetPageSize: int(pagesize)}
 	reslist, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
@@ -209,7 +209,7 @@ func Test_putdeleteRange(t *testing.T) {
 	var sgl *memsys.SGL
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 
-	if err := common.CreateDir(DeleteDir); err != nil {
+	if err := cmn.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
@@ -276,7 +276,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	totalFiles := numfiles
 	for idx, test := range tests {
-		msg := &api.GetMsg{GetPrefix: commonPrefix + "/"}
+		msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
 
 		err := tutils.DeleteRange(proxyURL, clibucket, test.prefix, test.regexStr, test.rangeStr, true, 0)
@@ -297,7 +297,7 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	tutils.Logf("Cleaning up remained objects...\n")
-	msg := &api.GetMsg{GetPrefix: commonPrefix + "/"}
+	msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
 	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
@@ -345,7 +345,7 @@ func Test_putdelete(t *testing.T) {
 	}
 
 	var sgl *memsys.SGL
-	if err := common.CreateDir(DeleteDir); err != nil {
+	if err := cmn.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
 
@@ -400,18 +400,18 @@ func Test_putdelete(t *testing.T) {
 	selectErr(errCh, "delete", t, false)
 }
 
-func listObjects(t *testing.T, proxyURL string, msg *api.GetMsg, bucket string, objLimit int) (*api.BucketList, error) {
+func listObjects(t *testing.T, proxyURL string, msg *cmn.GetMsg, bucket string, objLimit int) (*cmn.BucketList, error) {
 	var (
 		copy    bool
 		file    *os.File
 		err     error
-		reslist *api.BucketList
+		reslist *cmn.BucketList
 	)
 	tutils.Logf("LIST %s [prefix %s]\n", bucket, msg.GetPrefix)
 	fname := LocalDestDir + "/" + bucket
 	if copy {
 		// Write list to a local filename = bucket
-		if err = common.CreateDir(LocalDestDir); err != nil {
+		if err = cmn.CreateDir(LocalDestDir); err != nil {
 			t.Errorf("Failed to create dir %s, err: %v", LocalDestDir, err)
 			return nil, err
 		}
@@ -500,11 +500,11 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 
 	ldir := LocalSrcDir + "/" + ColdValidStr
-	if err := common.CreateDir(ldir); err != nil {
+	if err := cmn.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
@@ -522,7 +522,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	}
 	start := time.Now()
 	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
@@ -535,7 +535,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errCh, "get", t, false)
 	evictobjects(t, proxyURL, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -546,7 +546,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
 cleanup:
-	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	for _, fn := range fileslist {
 		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
@@ -590,7 +590,7 @@ func TestHeadCloudBucket(t *testing.T) {
 		t.Skip("TestHeadCloudBucket requires a cloud bucket")
 	}
 	bucketProps := defaultBucketProps()
-	bucketProps.CloudProvider = api.ProviderAmazon
+	bucketProps.CloudProvider = cmn.ProviderAmazon
 	bucketProps.ValidateWarmGet = true
 	bucketProps.ValidateColdGet = true
 	bucketProps.LRUEnabled = true
@@ -602,8 +602,8 @@ func TestHeadCloudBucket(t *testing.T) {
 	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, clibucket)
 	tutils.CheckFatal(err, t)
 
-	versionModes := []string{api.VersionAll, api.VersionCloud, api.VersionLocal, api.VersionNone}
-	if !common.StringInSlice(p.Versioning, versionModes) {
+	versionModes := []string{cmn.VersionAll, cmn.VersionCloud, cmn.VersionLocal, cmn.VersionNone}
+	if !cmn.StringInSlice(p.Versioning, versionModes) {
 		t.Errorf("Invalid bucket %s versioning mode: %s [must be one of %s]",
 			clibucket, p.Versioning, strings.Join(versionModes, ", "))
 	}
@@ -680,7 +680,7 @@ func TestHeadObjectCheckCached(t *testing.T) {
 
 func getAndCopyTmp(proxyURL string, id int, keynames <-chan string, t *testing.T, wg *sync.WaitGroup,
 	errCh chan error, resch chan workres, bucket string) {
-	geturl := proxyURL + common.URLPath(api.Version, api.Objects)
+	geturl := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects)
 	res := workres{0, 0}
 	defer func() {
 		close(resch)
@@ -688,7 +688,7 @@ func getAndCopyTmp(proxyURL string, id int, keynames <-chan string, t *testing.T
 	}()
 
 	for keyname := range keynames {
-		url := geturl + common.URLPath(bucket, keyname)
+		url := geturl + cmn.URLPath(bucket, keyname)
 		written, failed := getAndCopyOne(id, t, errCh, bucket, keyname, url)
 		if failed {
 			t.Fail()
@@ -726,12 +726,12 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 		return
 	}
 
-	hdhash := resp.Header.Get(api.HeaderDFCChecksumVal)
-	hdhashtype := resp.Header.Get(api.HeaderDFCChecksumType)
+	hdhash := resp.Header.Get(cmn.HeaderDFCChecksumVal)
+	hdhashtype := resp.Header.Get(cmn.HeaderDFCChecksumType)
 
 	// Create a local copy
 	fname := LocalDestDir + "/" + keyname
-	file, err := common.CreateFile(fname)
+	file, err := cmn.CreateFile(fname)
 	if err != nil {
 		t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
 		failed = true
@@ -743,9 +743,9 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 			t.Errorf("Worker %2d: %s", id, errstr)
 		}
 	}()
-	if hdhashtype == api.ChecksumXXHash {
+	if hdhashtype == cmn.ChecksumXXHash {
 		xx := xxhash.New64()
-		written, err = common.ReceiveAndChecksum(file, resp.Body, nil, xx)
+		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil, xx)
 		if err != nil {
 			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
 			failed = true
@@ -756,14 +756,14 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 		binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
 		hash := hex.EncodeToString(hashInBytes)
 		if hdhash != hash {
-			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, api.ChecksumXXHash, hdhash, hash)
+			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, cmn.ChecksumXXHash, hdhash, hash)
 			failed = true
 			return
 		}
-		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, api.ChecksumXXHash, hdhash, hash)
-	} else if hdhashtype == api.ChecksumMD5 {
+		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, cmn.ChecksumXXHash, hdhash, hash)
+	} else if hdhashtype == cmn.ChecksumMD5 {
 		md5 := md5.New()
-		written, err = common.ReceiveAndChecksum(file, resp.Body, nil, md5)
+		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil, md5)
 		if err != nil {
 			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
 			return
@@ -771,18 +771,18 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 		hashInBytes := md5.Sum(nil)[:16]
 		md5hash := hex.EncodeToString(hashInBytes)
 		if errstr != "" {
-			t.Errorf("Worker %2d: failed to compute %s, err: %s", id, api.ChecksumMD5, errstr)
+			t.Errorf("Worker %2d: failed to compute %s, err: %s", id, cmn.ChecksumMD5, errstr)
 			failed = true
 			return
 		}
 		if hdhash != md5hash {
-			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, api.ChecksumMD5, hdhash, md5hash)
+			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, cmn.ChecksumMD5, hdhash, md5hash)
 			failed = true
 			return
 		}
-		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, api.ChecksumMD5, hdhash, md5hash)
+		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, cmn.ChecksumMD5, hdhash, md5hash)
 	} else {
-		written, err = common.ReceiveAndChecksum(file, resp.Body, nil)
+		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil)
 		if err != nil {
 			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
 			failed = true
@@ -803,7 +803,7 @@ func deleteFiles(proxyURL string, keynames <-chan string, t *testing.T, wg *sync
 }
 
 func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []chan string, outputChan chan string, t *testing.T) int {
-	var msg = &api.GetMsg{GetPageSize: int(pagesize)}
+	var msg = &cmn.GetMsg{GetPageSize: int(pagesize)}
 	reslist := testListBucket(t, proxyURL, bucket, msg, 0)
 	if reslist == nil {
 		return 0
@@ -834,7 +834,7 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 	return num
 }
 
-func testListBucket(t *testing.T, proxyURL, bucket string, msg *api.GetMsg, limit int) *api.BucketList {
+func testListBucket(t *testing.T, proxyURL, bucket string, msg *cmn.GetMsg, limit int) *cmn.BucketList {
 	tutils.Logf("LIST bucket %s (%s)\n", bucket, proxyURL)
 	reslist, err := tutils.ListBucket(proxyURL, bucket, msg, limit)
 	if err != nil {
@@ -896,13 +896,13 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		return nil
 	}
 
-	url := proxyURL + common.URLPath(api.Version, api.Daemon)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Daemon)
 	config := getConfig(url, t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
 	oldChecksum := checksumConfig["checksum"].(string)
 	if !oldWarmGet {
-		url := proxyURL + common.URLPath(api.Version, api.Cluster)
+		url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
 		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), url, t)
 		if t.Failed() {
 			goto cleanup
@@ -930,7 +930,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		t.Errorf("Failed while reading the bucket from the local file system. Error: [%v]", err)
 	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	errstr = dfc.Setxattr(fqn, api.XattrXXHashVal, []byte("01234abcde"))
+	errstr = dfc.Setxattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -940,12 +940,12 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	filepath.Walk(rootDir, fsWalkFunc)
-	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("checksum", cmn.ChecksumNone, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	if t.Failed() {
 		goto cleanup
 	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	errstr = dfc.Setxattr(fqn, api.XattrXXHashVal, []byte("01234abcde"))
+	errstr = dfc.Setxattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -956,8 +956,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
-	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
-	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
 		if usingFile {
@@ -1023,7 +1023,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
 	oldChecksum := checksumConfig["checksum"].(string)
@@ -1040,7 +1040,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}
 
 	if !oldWarmGet {
-		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1058,7 +1058,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	errstr = dfc.Setxattr(fqn, api.XattrXXHashVal, []byte("01234abcde"))
+	errstr = dfc.Setxattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -1067,12 +1067,12 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	// Test for none checksum algo
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
-	setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("checksum", cmn.ChecksumNone, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	if t.Failed() {
 		goto cleanup
 	}
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	errstr = dfc.Setxattr(fqn, api.XattrXXHashVal, []byte("01234abcde"))
+	errstr = dfc.Setxattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -1084,8 +1084,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 cleanup:
 	// Restore old config
 	destroyLocalBucket(t, proxyURL, bucketName)
-	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
-	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	close(errCh)
 	close(fileNameCh)
 }
@@ -1129,7 +1129,7 @@ func TestRangeRead(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getConfig(proxyURL+common.URLPath(api.Version, api.Daemon), t)
+	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldEnableReadRangeChecksum := checksumConfig["enable_read_range_checksum"].(bool)
 
@@ -1137,7 +1137,7 @@ func TestRangeRead(t *testing.T) {
 	tutils.Logln("Testing valid cases.")
 	// Validate entire object checksum is being returned
 	if oldEnableReadRangeChecksum {
-		setConfig("enable_read_range_checksum", fmt.Sprint(false), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("enable_read_range_checksum", fmt.Sprint(false), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1146,7 +1146,7 @@ func TestRangeRead(t *testing.T) {
 
 	// Validate only range checksum is being returned
 	if !oldEnableReadRangeChecksum {
-		setConfig("enable_read_range_checksum", fmt.Sprint(true), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("enable_read_range_checksum", fmt.Sprint(true), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1172,7 +1172,7 @@ cleanup:
 	go tutils.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
-	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	close(errCh)
 	close(fileNameCh)
 
@@ -1207,8 +1207,8 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 	filepath.Walk(rootDir, fsWalkFunc)
 
 	q := url.Values{}
-	q.Add(api.URLParamOffset, strconv.FormatInt(offset, 10))
-	q.Add(api.URLParamLength, strconv.FormatInt(length, 10))
+	q.Add(cmn.URLParamOffset, strconv.FormatInt(offset, 10))
+	q.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
 	_, _, err := tutils.GetFileWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, true, true, w, q)
@@ -1222,7 +1222,7 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
 				}
 				defer file.Close()
-				hash, errstr := common.ComputeXXHash(file, nil)
+				hash, errstr := cmn.ComputeXXHash(file, nil)
 				if errstr != "" {
 					t.Errorf("Unable to compute cksum of file: %s. Error:  %s", fqn, errstr)
 				}
@@ -1267,8 +1267,8 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 
 func verifyInvalidParams(t *testing.T, proxyURL, bucketName string, fileName string, offset string, length string) {
 	q := url.Values{}
-	q.Add(api.URLParamOffset, offset)
-	q.Add(api.URLParamLength, length)
+	q.Add(cmn.URLParamOffset, offset)
+	q.Add(cmn.URLParamLength, length)
 	_, _, err := tutils.GetWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, false, true, q)
 	if err == nil {
 		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
@@ -1296,12 +1296,12 @@ func Test_checksum(t *testing.T) {
 
 	created := createLocalBucketIfNotExists(t, proxyURL, bucket)
 	ldir := LocalSrcDir + "/" + ChksumValidStr
-	if err := common.CreateDir(ldir); err != nil {
+	if err := cmn.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
 	// Get Current Config
-	url := proxyURL + common.URLPath(api.Version, api.Daemon)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Daemon)
 	config := getConfig(url, t)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_checksum_cold_get"].(bool)
@@ -1323,15 +1323,15 @@ func Test_checksum(t *testing.T) {
 	// Delete it from cache.
 	evictobjects(t, proxyURL, fileslist)
 	// Disable checkum
-	if ochksum != api.ChecksumNone {
-		setConfig("checksum", api.ChecksumNone, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	if ochksum != cmn.ChecksumNone {
+		setConfig("checksum", cmn.ChecksumNone, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_checksum_cold_get", fmt.Sprint("false"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("false"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -1348,22 +1348,22 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	switch clichecksum {
 	case "all":
-		setConfig("checksum", api.ChecksumXXHash, proxyURL+common.URLPath(api.Version, api.Cluster), t)
-		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("checksum", cmn.ChecksumXXHash, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
-	case api.ChecksumXXHash:
-		setConfig("checksum", api.ChecksumXXHash, proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	case cmn.ChecksumXXHash:
+		setConfig("checksum", cmn.ChecksumXXHash, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 		if t.Failed() {
 			goto cleanup
 		}
-	case api.ChecksumNone:
+	case cmn.ChecksumNone:
 		// do nothing
 		tutils.Logf("Checksum validation has been disabled \n")
 		goto cleanup
@@ -1380,8 +1380,8 @@ func Test_checksum(t *testing.T) {
 cleanup:
 	deletefromfilelist(t, proxyURL, bucket, errCh, fileslist)
 	// restore old config
-	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+common.URLPath(api.Version, api.Cluster), t)
-	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+common.URLPath(api.Version, api.Cluster), t)
+	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
 
 	if created {
 		destroyLocalBucket(t, proxyURL, bucket)
@@ -1434,7 +1434,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
 
-	if common.StringInSlice(bucket, buckets.Local) || common.StringInSlice(bucket, buckets.Cloud) {
+	if cmn.StringInSlice(bucket, buckets.Local) || cmn.StringInSlice(bucket, buckets.Cloud) {
 		return false
 	}
 
@@ -1452,7 +1452,7 @@ func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
 		t.Fatalf("Failed to read bucket names: %v", err)
 	}
 
-	return common.StringInSlice(bucket, buckets.Cloud)
+	return cmn.StringInSlice(bucket, buckets.Cloud)
 }
 
 func getPrimaryURL(t *testing.T, proxyURL string) string {
@@ -1464,7 +1464,7 @@ func getPrimaryURL(t *testing.T, proxyURL string) string {
 	return url
 }
 
-func validateBucketProps(t *testing.T, expected, actual api.BucketProps) {
+func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 	if actual.CloudProvider != expected.CloudProvider {
 		t.Errorf("Expected cloud provider: %s, received cloud provider: %s",
 			expected.CloudProvider, actual.CloudProvider)
@@ -1521,19 +1521,19 @@ func validateBucketProps(t *testing.T, expected, actual api.BucketProps) {
 	}
 }
 
-func defaultBucketProps() api.BucketProps {
-	return api.BucketProps{
-		CloudProvider: api.ProviderDFC,
+func defaultBucketProps() cmn.BucketProps {
+	return cmn.BucketProps{
+		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://foo.com",
-		ReadPolicy:    api.RWPolicyNextTier,
-		WritePolicy:   api.RWPolicyNextTier,
-		CksumConfig: api.CksumConfig{
-			Checksum:                api.ChecksumXXHash,
+		ReadPolicy:    cmn.RWPolicyNextTier,
+		WritePolicy:   cmn.RWPolicyNextTier,
+		CksumConfig: cmn.CksumConfig{
+			Checksum:                cmn.ChecksumXXHash,
 			ValidateColdGet:         false,
 			ValidateWarmGet:         false,
 			EnableReadRangeChecksum: false,
 		},
-		LRUConfig: api.LRUConfig{
+		LRUConfig: cmn.LRUConfig{
 			LowWM:              (uint32)(10),
 			HighWM:             (uint32)(50),
 			AtimeCacheMax:      (uint64)(9999),

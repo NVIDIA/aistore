@@ -35,7 +35,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -191,7 +191,7 @@ func Test_CancelStream(t *testing.T) {
 	defer ts.Close()
 
 	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
-		slab := Mem2.SelectSlab2(common.GiB)
+		slab := Mem2.SelectSlab2(cmn.GiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != nil && err != io.EOF {
@@ -220,8 +220,8 @@ func Test_CancelStream(t *testing.T) {
 		stream.Send(hdr, reader, nil)
 		num++
 		size += hdr.Dsize
-		if size-prevsize >= common.GiB {
-			tutils.Logf("[%2d]: %d GiB\n", 88, size/common.GiB)
+		if size-prevsize >= cmn.GiB {
+			tutils.Logf("[%2d]: %d GiB\n", 88, size/cmn.GiB)
 			prevsize = size
 			if num > 10 && random.Int63()%3 == 0 {
 				cancel()
@@ -396,8 +396,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 		stream.Send(hdr, reader, nil)
 		num++
 		size += hdr.Dsize
-		if size-prevsize >= common.GiB {
-			tutils.Logf("[%2d]: %d GiB\n", ii, size/common.GiB)
+		if size-prevsize >= cmn.GiB {
+			tutils.Logf("[%2d]: %d GiB\n", ii, size/cmn.GiB)
 			prevsize = size
 			if random.Int63()%7 == 0 {
 				time.Sleep(time.Second * 2) // simulate occasional timeout
@@ -429,7 +429,7 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
 	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
-		slab := Mem2.SelectSlab2(32 * common.KiB)
+		slab := Mem2.SelectSlab2(32 * cmn.KiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != io.EOF {
@@ -453,14 +453,14 @@ func genStaticHeader() (hdr transport.Header) {
 	hdr.Bucket = "a"
 	hdr.Objname = "b"
 	hdr.Opaque = []byte("c")
-	hdr.Dsize = common.GiB
+	hdr.Dsize = cmn.GiB
 	return
 }
 
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	x := random.Int63()
 	hdr.Bucket = strconv.FormatInt(x, 10)
-	hdr.Objname = hdr.Bucket + "/" + strconv.FormatInt(common.MaxInt64-x, 10)
+	hdr.Objname = hdr.Bucket + "/" + strconv.FormatInt(cmn.MaxInt64-x, 10)
 	pos := x % int64(len(text))
 	hdr.Opaque = []byte(text[int(pos):])
 	y := x & 3
@@ -500,7 +500,7 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) 
 }
 
 func makeRandReader() (transport.Header, *randReader) {
-	slab := Mem2.SelectSlab2(32 * common.KiB)
+	slab := Mem2.SelectSlab2(32 * cmn.KiB)
 	random := newRand(time.Now().UnixNano())
 	hdr := genRandomHeader(random)
 	reader := newRandReader(random, hdr, slab)
@@ -513,7 +513,7 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 		if rem == 0 {
 			return n, io.EOF
 		}
-		l64 := common.MinI64(rem, int64(len(p)-n))
+		l64 := cmn.MinI64(rem, int64(len(p)-n))
 		if l64 == 0 {
 			return
 		}

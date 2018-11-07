@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
@@ -38,7 +38,7 @@ const (
 // for mountpath definition, see fs/mountfs.go
 type (
 	fshc struct {
-		common.Named
+		cmn.Named
 		stopCh        chan struct{}
 		fileListCh    chan string
 		reqCh         chan fshcReq

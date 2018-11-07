@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/json-iterator/go"
@@ -54,8 +54,8 @@ type (
 	}
 
 	rungroup struct {
-		runarr []common.Runner
-		runmap map[string]common.Runner // redundant, named
+		runarr []cmn.Runner
+		runmap map[string]cmn.Runner // redundant, named
 		errCh  chan error
 		stopCh chan error
 	}
@@ -91,7 +91,7 @@ var (
 // rungroup
 //
 //====================
-func (g *rungroup) add(r common.Runner, name string) {
+func (g *rungroup) add(r cmn.Runner, name string) {
 	r.Setname(name)
 	g.runarr = append(g.runarr, r)
 	g.runmap[name] = r
@@ -104,7 +104,7 @@ func (g *rungroup) run() error {
 	g.errCh = make(chan error, len(g.runarr))
 	g.stopCh = make(chan error, 1)
 	for i, r := range g.runarr {
-		go func(i int, r common.Runner) {
+		go func(i int, r cmn.Runner) {
 			err := r.Run()
 			glog.Warningf("Runner [%s] threw error [%v].", r.Getname(), err)
 			g.errCh <- err
@@ -150,14 +150,14 @@ func dryinit() {
 	}
 	str = os.Getenv("DFCDRYOBJSIZE")
 	if str != "" {
-		if size, err := common.S2B(str); size > 0 && err == nil {
+		if size, err := cmn.S2B(str); size > 0 && err == nil {
 			dryRun.size = size
 		}
 	}
 	if dryRun.disk {
 		warning := "Dry-run: disk IO will be disabled"
 		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, common.B2S(dryRun.size, 0))
+		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, cmn.B2S(dryRun.size, 0))
 	}
 	if dryRun.network {
 		warning := "Dry-run: GET won't return objects, PUT won't send objects"
@@ -175,9 +175,9 @@ func dfcinit() {
 	var err error
 
 	flag.Parse()
-	common.Assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
+	cmn.Assert(clivars.role == xproxy || clivars.role == xtarget, "Invalid flag: role="+clivars.role)
 
-	dryRun.size, err = common.S2B(dryRun.sizeStr)
+	dryRun.size, err = cmn.S2B(dryRun.sizeStr)
 	if dryRun.size < 1 || err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid object size: %d [%s]\n", dryRun.size, dryRun.sizeStr)
 	}
@@ -196,8 +196,8 @@ func dfcinit() {
 	// NOTE: proxy and, respectively, target terminations are executed in the same
 	//       exact order as the initializations below
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 8),
-		runmap: make(map[string]common.Runner, 8),
+		runarr: make([]cmn.Runner, 0, 8),
+		runmap: make(map[string]cmn.Runner, 8),
 	}
 	if clivars.role == xproxy {
 		p := &proxyrunner{}
@@ -225,7 +225,7 @@ func dfcinit() {
 		t.fsprg.init(t) // subgroup of the ctx.rg rungroup
 
 		// system-wide gen-purpose memory manager and slab/SGL allocator
-		mem := &memsys.Mem2{MinPctTotal: 4, MinFree: common.GiB * 2} // free mem: try to maintain at least the min of these two
+		mem := &memsys.Mem2{MinPctTotal: 4, MinFree: cmn.GiB * 2} // free mem: try to maintain at least the min of these two
 		_ = mem.Init(false)                                          // don't ignore init-time errors
 		ctx.rg.add(mem, xmem)                                        // to periodically house-keep
 		gmem2 = getmem2()                                            // making it global; getmem2() can still be used
@@ -303,83 +303,83 @@ m:
 func getproxystatsrunner() *proxystatsrunner {
 	r := ctx.rg.runmap[xproxystats]
 	rr, ok := r.(*proxystatsrunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getproxykeepalive() *proxyKeepaliveRunner {
 	r := ctx.rg.runmap[xproxykeepalive]
 	rr, ok := r.(*proxyKeepaliveRunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func gettarget() *targetrunner {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getmem2() *memsys.Mem2 {
 	r := ctx.rg.runmap[xmem]
 	rr, ok := r.(*memsys.Mem2)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func gettargetkeepalive() *targetKeepaliveRunner {
 	r := ctx.rg.runmap[xtargetkeepalive]
 	rr, ok := r.(*targetKeepaliveRunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getreplicationrunner() *replicationRunner {
 	r := ctx.rg.runmap[xreplication]
 	rr, ok := r.(*replicationRunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getstorstatsrunner() *storstatsrunner {
 	r := ctx.rg.runmap[xstorstats]
 	rr, ok := r.(*storstatsrunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getiostatrunner() *iostatrunner {
 	r := ctx.rg.runmap[xiostat]
 	rr, ok := r.(*iostatrunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getatimerunner() *atimerunner {
 	r := ctx.rg.runmap[xatime]
 	rr, ok := r.(*atimerunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getcloudif() cloudif {
 	r := ctx.rg.runmap[xtarget]
 	rr, ok := r.(*targetrunner)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr.cloudif
 }
 
 func getmetasyncer() *metasyncer {
 	r := ctx.rg.runmap[xmetasyncer]
 	rr, ok := r.(*metasyncer)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }
 
 func getfshealthchecker() *fshc {
 	r := ctx.rg.runmap[xfshc]
 	rr, ok := r.(*fshc)
-	common.Assert(ok)
+	cmn.Assert(ok)
 	return rr
 }

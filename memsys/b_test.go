@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
 )
 
 func Test_sglhash(t *testing.T) {
-	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: common.GiB, Name: "amem", Debug: verbose}
+	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
 		t.Fatal(err)
@@ -26,7 +26,7 @@ func Test_sglhash(t *testing.T) {
 	seed := time.Now().UnixNano()
 
 	rnd0 := rand.New(rand.NewSource(seed))
-	size := rnd0.Int63n(common.GiB) + common.KiB
+	size := rnd0.Int63n(cmn.GiB) + cmn.KiB
 
 	rnd1 := rand.New(rand.NewSource(seed))
 	xxh1 := xxhash.New64()
@@ -57,13 +57,13 @@ func Test_sglhash(t *testing.T) {
 func copyRand(dst io.Writer, rnd *rand.Rand, size int64, buf []byte) error {
 	l64 := int64(len(buf))
 	for rem, i := size, int64(0); i <= size/l64; i++ {
-		n := int(common.MinI64(l64, rem))
+		n := int(cmn.MinI64(l64, rem))
 		rnd.Read(buf[:n])
 		m, err := dst.Write(buf[:n])
 		if err != nil {
 			return err
 		}
-		common.Assert(m == n)
+		cmn.Assert(m == n)
 		rem -= int64(m)
 	}
 	return nil

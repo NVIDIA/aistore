@@ -15,7 +15,7 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/OneOfOne/xxhash"
 )
 
@@ -76,7 +76,7 @@ func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (s
 		shash string
 		h     *xxhash.XXHash64
 	)
-	buf, s := Mem2.AllocFromSlab2(common.MiB)
+	buf, s := Mem2.AllocFromSlab2(cmn.MiB)
 	blkSize := int64(len(buf))
 	defer s.Free(buf)
 
@@ -84,7 +84,7 @@ func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (s
 		h = xxhash.New64()
 	}
 	for i := int64(0); i <= size/blkSize; i++ {
-		n := int(common.MinI64(blkSize, rem))
+		n := int(cmn.MinI64(blkSize, rem))
 		rnd.Read(buf[:n])
 		m, err := w.Write(buf[:n])
 		if err != nil {
@@ -94,7 +94,7 @@ func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (s
 		if withHash {
 			h.Write(buf[:m])
 		}
-		common.Assert(m == n)
+		cmn.Assert(m == n)
 		rem -= int64(m)
 	}
 	if withHash {

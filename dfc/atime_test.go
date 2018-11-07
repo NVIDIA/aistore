@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -252,8 +252,8 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 4),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 4),
+		runmap: make(map[string]cmn.Runner),
 	}
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
@@ -286,8 +286,8 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	ctx.config.LRU.AtimeCacheMax = 1
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 1),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
 	}
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
@@ -295,8 +295,8 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	fs.Mountpaths.AddMountpath(mpath)
 
 	iostatr := newIostatRunner()
-	iostatr.Disk = map[string]common.SimpleKVs{
-		"disk1": common.SimpleKVs{
+	iostatr.Disk = map[string]cmn.SimpleKVs{
+		"disk1": cmn.SimpleKVs{
 			"%util": "21.34",
 		},
 	}
@@ -337,8 +337,8 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount)
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 1),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
 	}
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
@@ -369,11 +369,11 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]common.SimpleKVs)
+	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 	mpathInfo, _ := path2mpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
@@ -390,8 +390,8 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount*(200-atimeHWM)/100) + 10
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 1),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
 	}
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
@@ -421,11 +421,11 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]common.SimpleKVs)
+	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 	mpathInfo, _ := path2mpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
@@ -443,8 +443,8 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount*(200-atimeLWM)/100) + 10
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 1),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
 	}
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
@@ -475,11 +475,11 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]common.SimpleKVs)
+	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 	mpathInfo, _ := path2mpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
@@ -497,8 +497,8 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	ctx.config.LRU.AtimeCacheMax = uint64(itemCount * 1000)
 	ctx.config.Periodic.StatsTime = 1 * time.Second
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 1),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
 	}
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
@@ -530,11 +530,11 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	time.Sleep(time.Millisecond * 10) // wait for runner to process
 
 	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]common.SimpleKVs)
+	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 	mpathInfo, _ := path2mpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
-		iostatr.Disk[disk] = make(common.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = "99.34"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()

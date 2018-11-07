@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
@@ -27,11 +27,11 @@ func testTmpFileName(fname string) string {
 }
 
 func testCheckerMountPaths() *fs.MountedFS {
-	common.CreateDir(fsCheckerTmpDir)
-	common.CreateDir(fsCheckerTmpDir + "/1")
-	common.CreateDir(fsCheckerTmpDir + "/2")
-	common.CreateDir(fsCheckerTmpDir + "/3")
-	common.CreateDir(fsCheckerTmpDir + "/4")
+	cmn.CreateDir(fsCheckerTmpDir)
+	cmn.CreateDir(fsCheckerTmpDir + "/1")
+	cmn.CreateDir(fsCheckerTmpDir + "/2")
+	cmn.CreateDir(fsCheckerTmpDir + "/3")
+	cmn.CreateDir(fsCheckerTmpDir + "/4")
 
 	mountedFS := fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	mountedFS.DisableFsIDCheck()

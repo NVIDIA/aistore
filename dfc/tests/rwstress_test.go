@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -305,7 +305,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 }
 
 func rwstress(t *testing.T) {
-	if err := common.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir)); err != nil {
+	if err := cmn.CreateDir(fmt.Sprintf("%s/%s", baseDir, rwdir)); err != nil {
 		t.Fatalf("Failed to create dir %s/%s, err: %v", baseDir, rwdir, err)
 	}
 

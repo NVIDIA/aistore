@@ -17,7 +17,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -43,7 +43,7 @@ import (
 
 // LRU defaults/tunables
 const (
-	minevict = common.MiB
+	minevict = cmn.MiB
 )
 
 type (
@@ -146,7 +146,7 @@ func (lctx *lructx) onelru(wg *sync.WaitGroup) {
 		glog.Infof("%s: below threshold, nothing to do", lctx.bucketdir)
 		return
 	}
-	glog.Infof("%s: evicting %s", lctx.bucketdir, common.B2S(lctx.totsize, 2))
+	glog.Infof("%s: evicting %s", lctx.bucketdir, cmn.B2S(lctx.totsize, 2))
 
 	if err := filepath.Walk(lctx.bucketdir, lctx.walk); err != nil {
 		s := err.Error()

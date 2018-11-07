@@ -15,8 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
 
@@ -40,11 +39,11 @@ func (p *proxyrunner) bootstrap() {
 	// step 1: load a local copy of the cluster map and
 	//         try to use it for discovery of the current one
 	smap = newSmap()
-	if err := common.LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
+	if err := cmn.LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
 		if smap.CountTargets() > 0 || smap.CountProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
-			q.Add(api.URLParamWhat, api.GetWhatSmapVote)
-			res := p.broadcastCluster(common.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, smap, tout, false)
+			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
+			res := p.broadcastCluster(cmn.URLPath(cmn.Version, cmn.Daemon), q, http.MethodGet, nil, smap, tout, false)
 			for re := range res {
 				if re.err != nil {
 					continue
@@ -106,7 +105,7 @@ func (p *proxyrunner) bootstrap() {
 	// step 3: join as a non-primary, or
 	// 	   keep starting up as a primary
 	if !guessAmPrimary {
-		common.Assert(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
+		cmn.Assert(getSmapURL != p.si.PublicNet.DirectURL, getSmapURL)
 		glog.Infof("%s: starting up as non-primary, joining => %s", p.si.DaemonID, getSmapURL)
 		p.secondaryStartup(getSmapURL)
 		return
@@ -118,11 +117,11 @@ func (p *proxyrunner) bootstrap() {
 // no change of mind when on the "secondary" track
 func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 	query := url.Values{}
-	query.Add(api.URLParamWhat, api.GetWhatSmap)
+	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	req := reqArgs{
 		method: http.MethodGet,
 		base:   getSmapURL,
-		path:   common.URLPath(api.Version, api.Daemon),
+		path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 		query:  query,
 	}
 
@@ -137,7 +136,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		for i := 0; i < maxRetrySeconds; i++ {
 			res = p.call(args)
 			if res.err != nil {
-				if common.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
+				if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si.DaemonID, getSmapURL)
 					time.Sleep(ctx.config.Timeout.CplaneOperation)
 					continue
@@ -151,7 +150,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 		}
 		smap := &smapX{}
 		if err := jsoniter.Unmarshal(res.outjson, smap); err != nil {
-			common.Assert(false, err)
+			cmn.Assert(false, err)
 		}
 		if !smap.isValid() {
 			s := fmt.Sprintf("Invalid Smap at startup/registration: %s", smap.pp())
@@ -194,7 +193,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 		metaction2 = "primary-started-up"
 	)
 	// (i) initialize empty Smap
-	common.Assert(p.smapowner.get() == nil)
+	cmn.Assert(p.smapowner.get() == nil)
 	p.smapowner.Lock()
 	startupSmap := newSmap()
 	startupSmap.Pmap[p.si.DaemonID] = p.si
@@ -215,7 +214,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 	haveRegistratons := false
 	p.smapowner.Lock()
 	if smap.version() > 0 {
-		common.Assert(smap.CountTargets() > 0 || smap.CountProxies() > 1)
+		cmn.Assert(smap.CountTargets() > 0 || smap.CountProxies() > 1)
 		haveRegistratons = true
 		guessSmap.merge(smap)
 		p.smapowner.put(smap)
@@ -329,9 +328,9 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 		tout           = ctx.config.Timeout.CplaneOperation
 		keeptrying     = true
 	)
-	q.Add(api.URLParamWhat, api.GetWhatSmapVote)
+	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
-		res := p.broadcastCluster(common.URLPath(api.Version, api.Daemon), q, http.MethodGet, nil, bcastSmap, tout, false)
+		res := p.broadcastCluster(cmn.URLPath(cmn.Version, cmn.Daemon), q, http.MethodGet, nil, bcastSmap, tout, false)
 		keeptrying = false
 		for re := range res {
 			if re.err != nil {
@@ -381,7 +380,7 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 
 func (p *proxyrunner) registerWithRetry() error {
 	if status, err := p.register(false, defaultTimeout); err != nil {
-		if common.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
+		if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Errorf("%s: retrying...", p.si.DaemonID)
 			time.Sleep(ctx.config.Timeout.CplaneOperation)
 			if _, err = p.register(false, defaultTimeout); err != nil {

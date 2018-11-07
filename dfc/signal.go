@@ -12,7 +12,7 @@ import (
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 type signalError struct {
@@ -29,7 +29,7 @@ func (se *signalError) Error() string {
 //
 //===========================================================================
 type sigrunner struct {
-	common.Named
+	cmn.Named
 	chsig chan os.Signal
 }
 

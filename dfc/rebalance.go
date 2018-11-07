@@ -17,9 +17,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
@@ -191,7 +190,7 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 		glog.Infof("%s => %s", fqn, newFQN)
 	}
 	dir := filepath.Dir(newFQN)
-	if err := common.CreateDir(dir); err != nil {
+	if err := cmn.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
 		rb.xreb.abort()
 		rb.t.fshc(err, newFQN)
@@ -219,7 +218,7 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 // false otherwise.
 func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, deadline time.Duration) bool {
 	query := url.Values{}
-	query.Add(api.URLParamFromID, t.si.DaemonID)
+	query.Add(cmn.URLParamFromID, t.si.DaemonID)
 
 	pollstarted, ok := time.Now(), false
 	callArgs := callArgs{
@@ -227,7 +226,7 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   common.URLPath(api.Version, api.Health),
+			path:   cmn.URLPath(cmn.Version, cmn.Health),
 			query:  query,
 		},
 		timeout: timeout,
@@ -263,12 +262,12 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersion int64) {
 	// Phase 1: Call and check if smap is at least our version.
 	query := url.Values{}
-	query.Add(api.URLParamWhat, api.GetWhatSmap)
+	query.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	args := callArgs{
 		si: si,
 		req: reqArgs{
 			method: http.MethodGet,
-			path:   common.URLPath(api.Version, api.Daemon),
+			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 			query:  query,
 		},
 		timeout: defaultTimeout,
@@ -310,7 +309,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		req: reqArgs{
 			method: http.MethodGet,
 			base:   si.InternalNet.DirectURL,
-			path:   common.URLPath(api.Version, api.Health),
+			path:   cmn.URLPath(cmn.Version, cmn.Health),
 		},
 		timeout: defaultTimeout,
 	}
@@ -386,7 +385,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		return
 	}
 	pmarker := t.xactinp.rebalanceInProgress()
-	file, err := common.CreateFile(pmarker)
+	file, err := cmn.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""
@@ -464,7 +463,7 @@ func (t *targetrunner) runLocalRebalance() {
 	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 
 	pmarker := t.xactinp.localRebalanceInProgress()
-	file, err := common.CreateFile(pmarker)
+	file, err := cmn.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""

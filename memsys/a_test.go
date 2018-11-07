@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -57,7 +57,7 @@ func init() {
 }
 
 func Test_Sleep(t *testing.T) {
-	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: common.GiB, Name: "amem", Debug: verbose}
+	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
 	if err != nil {
 		t.Fatal(err)
@@ -70,17 +70,17 @@ func Test_Sleep(t *testing.T) {
 		ttl := time.Duration(random.Int63n(int64(time.Millisecond*100))) + time.Millisecond
 		var siz, tot int64
 		if i%2 == 0 {
-			siz = random.Int63n(common.MiB*10) + common.KiB
+			siz = random.Int63n(cmn.MiB*10) + cmn.KiB
 		} else {
-			siz = random.Int63n(common.KiB*100) + common.KiB
+			siz = random.Int63n(cmn.KiB*100) + cmn.KiB
 		}
-		tot = random.Int63n(common.DivCeil(common.MiB*50, siz))*siz + common.KiB
+		tot = random.Int63n(cmn.DivCeil(cmn.MiB*50, siz))*siz + cmn.KiB
 		wg.Add(1)
 		go memstress(mem, i, ttl, siz, tot, wg)
 	}
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.Free(memsys.FreeSpec{IdleDuration: 1, MinSize: common.MiB})
+		mem.Free(memsys.FreeSpec{IdleDuration: 1, MinSize: cmn.MiB})
 	}
 	wg.Wait()
 	mem.Stop(nil)
@@ -98,14 +98,14 @@ func Test_NoSleep(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < 500; i++ {
-		siz := random.Int63n(common.MiB) + common.KiB
-		tot := random.Int63n(common.DivCeil(common.MiB*10, siz))*siz + common.KiB
+		siz := random.Int63n(cmn.MiB) + cmn.KiB
+		tot := random.Int63n(cmn.DivCeil(cmn.MiB*10, siz))*siz + cmn.KiB
 		wg.Add(1)
 		go memstress(mem, i, time.Millisecond, siz, tot, wg)
 	}
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
-		mem.Free(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: common.MiB * 10})
+		mem.Free(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cmn.MiB * 10})
 	}
 	wg.Wait()
 	mem.Stop(nil)
@@ -114,7 +114,7 @@ func Test_NoSleep(t *testing.T) {
 func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *sync.WaitGroup) {
 	defer wg.Done()
 	sgls := make([]*memsys.SGL, 0, 128)
-	x := common.B2S(siz, 1) + "/" + common.B2S(tot, 1)
+	x := cmn.B2S(siz, 1) + "/" + cmn.B2S(tot, 1)
 	if id%100 == 0 && verbose {
 		if ttl > time.Millisecond {
 			tutils.Logf("%4d: %-19s ttl %v\n", id, x, ttl)
@@ -176,7 +176,7 @@ func printstats(mem *memsys.Mem2) {
 		}
 		str := ""
 		for i := 0; i < memsys.Numslabs; i++ {
-			slab, err := mem.GetSlab2(int64(i+1) * common.KiB * 4)
+			slab, err := mem.GetSlab2(int64(i+1) * cmn.KiB * 4)
 			if err != nil {
 				fmt.Println(err)
 				return

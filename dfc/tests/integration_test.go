@@ -19,7 +19,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -1385,7 +1385,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	// Add new mountpath to all targets
 	for idx, target := range targets {
 		mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
-		common.CreateDir(mountpath)
+		cmn.CreateDir(mountpath)
 		err = tutils.AddTargetMountpath(target.directURL, mountpath)
 		tutils.CheckFatal(err, t)
 	}
@@ -1600,7 +1600,7 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 			lbNames, err := api.GetBucketNames(tutils.HTTPClient, targetDirectURL, true)
 			tutils.CheckFatal(err, m.t)
 			// T3
-			if common.StringInSlice(m.bucket, lbNames.Local) {
+			if cmn.StringInSlice(m.bucket, lbNames.Local) {
 				s := atomic.CompareAndSwapUint64(&m.reregistered, 0, 1)
 				if !s {
 					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
@@ -1665,7 +1665,7 @@ func checkObjectDistribution(t *testing.T, m *metadata) {
 		targetObjectCount = make(map[string]int64)
 	)
 	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
-	bucketList, err := tutils.ListBucket(m.proxyURL, m.bucket, &api.GetMsg{GetProps: api.GetTargetURL}, 0)
+	bucketList, err := tutils.ListBucket(m.proxyURL, m.bucket, &cmn.GetMsg{GetProps: cmn.GetTargetURL}, 0)
 	tutils.CheckFatal(err, t)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL] += 1
@@ -1779,7 +1779,7 @@ func TestAtimeRebalance(t *testing.T) {
 		filenameCh  = make(chan string, m.num)
 		errCh       = make(chan error, m.num)
 		sgl         *memsys.SGL
-		bucketProps api.BucketProps
+		bucketProps cmn.BucketProps
 	)
 
 	if usingSG {
@@ -1823,7 +1823,7 @@ func TestAtimeRebalance(t *testing.T) {
 	close(filenameCh)
 	close(errCh)
 	objNames := make(map[string]string, 0)
-	msg := &api.GetMsg{GetProps: api.GetPropsAtime + ", " + api.GetPropsStatus}
+	msg := &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
 	bucketList, err := tutils.ListBucket(m.proxyURL, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 
@@ -1852,7 +1852,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	itemCount := 0
 	for _, entry := range bucketListReb.Entries {
-		if entry.Status != api.ObjStatusOK {
+		if entry.Status != cmn.ObjStatusOK {
 			continue
 		}
 		itemCount++

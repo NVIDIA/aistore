@@ -10,16 +10,16 @@ package memsys
 import (
 	"sync"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 const (
 	countThreshold = 32 // exceeding this scatter-gather count warrants selecting a larger-size Slab
-	minSizeUnknown = 32 * common.KiB
+	minSizeUnknown = 32 * cmn.KiB
 )
 
 var (
-	fixedSizes = []int64{4 * common.KiB, 8 * common.KiB, 16 * common.KiB, 32 * common.KiB, 64 * common.KiB, 96 * common.KiB, 128 * common.KiB}
+	fixedSizes = []int64{4 * cmn.KiB, 8 * cmn.KiB, 16 * cmn.KiB, 32 * cmn.KiB, 64 * cmn.KiB, 96 * cmn.KiB, 128 * cmn.KiB}
 	allSlabs   = []*Slab{nil, nil, nil, nil, nil, nil, nil} // the length of allSlabs must equal the length of fixedSizes.
 )
 
@@ -47,7 +47,7 @@ func SelectSlab(estimatedSize int64) *Slab {
 	if estimatedSize == 0 {
 		estimatedSize = minSizeUnknown
 	}
-	size := common.DivCeil(estimatedSize, countThreshold)
+	size := cmn.DivCeil(estimatedSize, countThreshold)
 	for _, slab := range allSlabs {
 		if slab.Size() >= size {
 			return slab

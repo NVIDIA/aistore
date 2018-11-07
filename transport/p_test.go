@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -22,7 +22,7 @@ var buf1 []byte
 
 func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
 	written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
-	common.Assert(written == hdr.Dsize)
+	cmn.Assert(written == hdr.Dsize)
 }
 
 func Test_OneStream10G(t *testing.T) {
@@ -46,21 +46,21 @@ func Test_OneStream10G(t *testing.T) {
 	stream := transport.NewStream(httpclient, url, &transport.Extra{Burst: 2})
 	trname, sessid := stream.ID()
 
-	slab := Mem2.SelectSlab2(common.MiB)
+	slab := Mem2.SelectSlab2(cmn.MiB)
 	buf1 = slab.Alloc()
 
 	random := newRand(time.Now().UnixNano())
-	slab, _ = Mem2.GetSlab2(common.KiB * 32)
+	slab, _ = Mem2.GetSlab2(cmn.KiB * 32)
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
 
-	for size < common.GiB*10 {
+	for size < cmn.GiB*10 {
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil)
 		num++
 		size += hdr.Dsize
-		if size-prevsize >= common.GiB {
-			tutils.Logf("[10G]: %d GiB\n", size/common.GiB)
+		if size-prevsize >= cmn.GiB {
+			tutils.Logf("[10G]: %d GiB\n", size/cmn.GiB)
 			prevsize = size
 			stats := stream.GetStats()
 			tutils.Logf("send$ %s[%d]: idle=%.2f%%\n", trname, sessid, stats.IdlePct)
@@ -82,19 +82,19 @@ func Test_DryRunTB(t *testing.T) {
 	stream := transport.NewStream(nil, "dummy/null", &transport.Extra{DryRun: true})
 
 	random := newRand(time.Now().UnixNano())
-	slab, _ := Mem2.GetSlab2(common.KiB * 32)
+	slab, _ := Mem2.GetSlab2(cmn.KiB * 32)
 	size, num, prevsize := int64(0), 0, int64(0)
 	hdr := genStaticHeader()
 
-	for size < common.TiB {
+	for size < cmn.TiB {
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil)
 		num++
 		size += hdr.Dsize
-		if size-prevsize >= common.GiB*100 {
+		if size-prevsize >= cmn.GiB*100 {
 			prevsize = size
 			stats := stream.GetStats()
-			tutils.Logf("[dry]: %d GiB, idle=%.2f%%\n", size/common.GiB, stats.IdlePct)
+			tutils.Logf("[dry]: %d GiB, idle=%.2f%%\n", size/cmn.GiB, stats.IdlePct)
 		}
 	}
 	go stream.Fin()

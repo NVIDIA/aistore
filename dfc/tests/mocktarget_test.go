@@ -10,9 +10,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/tutils"
 	jsoniter "github.com/json-iterator/go"
@@ -31,11 +30,11 @@ type targetMocker interface {
 func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch chan struct{}, smap *cluster.Smap) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(common.URLPath(api.Version, api.Buckets), mocktgt.filehdlr)
-	mux.HandleFunc(common.URLPath(api.Version, api.Objects), mocktgt.filehdlr)
-	mux.HandleFunc(common.URLPath(api.Version, api.Daemon), mocktgt.daemonhdlr)
-	mux.HandleFunc(common.URLPath(api.Version, api.Vote), mocktgt.votehdlr)
-	mux.HandleFunc(common.URLPath(api.Version, api.Health), func(w http.ResponseWriter, r *http.Request) {})
+	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Buckets), mocktgt.filehdlr)
+	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Objects), mocktgt.filehdlr)
+	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Daemon), mocktgt.daemonhdlr)
+	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Vote), mocktgt.votehdlr)
+	mux.HandleFunc(cmn.URLPath(cmn.Version, cmn.Health), func(w http.ResponseWriter, r *http.Request) {})
 
 	ip := ""
 	for _, v := range smap.Tmap {
@@ -79,12 +78,12 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Sma
 		break
 	}
 
-	url := proxyURL + common.URLPath(api.Version, api.Cluster)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
 	return tutils.HTTPRequest(http.MethodPost, url, tutils.NewBytesReader(jsonDaemonInfo))
 }
 
 func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
-	url := proxyURL + common.URLPath(api.Version, api.Cluster, api.Daemon, "MOCK")
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, "MOCK")
 	return tutils.HTTPRequest(http.MethodDelete, url, nil)
 }
 

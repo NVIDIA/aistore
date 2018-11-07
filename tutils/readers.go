@@ -16,7 +16,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/OneOfOne/xxhash"
 )
@@ -66,7 +66,7 @@ func (r *randReader) Read(buf []byte) (int, error) {
 	}
 
 	want := int64(len(buf))
-	n := common.MinI64(want, available)
+	n := cmn.MinI64(want, available)
 	actual, err := r.rnd.Read(buf[:n])
 	if err != nil {
 		return 0, nil
@@ -147,7 +147,7 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 		err  error
 		seed = time.Now().UnixNano()
 	)
-	slab, err := Mem2.GetSlab2(common.KiB * 32)
+	slab, err := Mem2.GetSlab2(cmn.KiB * 32)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 	rr := &rrLimited{rand1, size, 0}
 	if withHash {
 		xx := xxhash.New64()
-		_, err := common.ReceiveAndChecksum(ioutil.Discard, rr, buf, xx)
+		_, err := cmn.ReceiveAndChecksum(ioutil.Discard, rr, buf, xx)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +182,7 @@ type rrLimited struct {
 }
 
 func (rr *rrLimited) Read(p []byte) (n int, err error) {
-	rem := int(common.MinI64(rr.size-rr.off, int64(len(p))))
+	rem := int(cmn.MinI64(rr.size-rr.off, int64(len(p))))
 	n, _ = rr.random.Read(p[:rem]) // never fails
 	rr.off += int64(n)
 	if rem < len(p) {

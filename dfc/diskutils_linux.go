@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
 )
@@ -29,7 +29,7 @@ const (
 func newIostatRunner() *iostatrunner {
 	return &iostatrunner{
 		stopCh:      make(chan struct{}, 1),
-		Disk:        make(map[string]common.SimpleKVs),
+		Disk:        make(map[string]cmn.SimpleKVs),
 		metricnames: make([]string, 0),
 	}
 }
@@ -89,11 +89,11 @@ func (r *iostatrunner) Run() error {
 				r.Lock()
 				device := fields[0]
 				var (
-					iometrics common.SimpleKVs
+					iometrics cmn.SimpleKVs
 					ok        bool
 				)
 				if iometrics, ok = r.Disk[device]; !ok {
-					iometrics = make(common.SimpleKVs, len(fields)-1) // first time
+					iometrics = make(cmn.SimpleKVs, len(fields)-1) // first time
 				}
 				for i := 1; i < len(fields); i++ {
 					name := r.metricnames[i-1]
@@ -139,7 +139,7 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 func (r *iostatrunner) updateFSDisks() {
 	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	r.Lock()
-	r.fsdisks = make(map[string]common.StringSet, len(availablePaths))
+	r.fsdisks = make(map[string]cmn.StringSet, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		disks := fs2disks(mpathInfo.FileSystem)
 		if len(disks) == 0 {
@@ -178,7 +178,7 @@ func (r *iostatrunner) maxUtilFS(fs string) (util float32, ok bool) {
 // Do not use this in code paths which are executed per object.
 // This method is used only while starting the iostat runner to
 // retrieve the disks associated with a file system.
-func fs2disks(fs string) (disks common.StringSet) {
+func fs2disks(fs string) (disks cmn.StringSet) {
 	getDiskCommand := exec.Command("lsblk", "-no", "name", "-J")
 	outputBytes, err := getDiskCommand.Output()
 	if err != nil || len(outputBytes) == 0 {
@@ -204,7 +204,7 @@ func childMatches(devList []BlockDevice, device string) bool {
 	return false
 }
 
-func findDevDisks(devList []BlockDevice, device string, disks common.StringSet) {
+func findDevDisks(devList []BlockDevice, device string, disks cmn.StringSet) {
 	for _, bd := range devList {
 		if bd.Name == device {
 			disks[bd.Name] = struct{}{}
@@ -218,8 +218,8 @@ func findDevDisks(devList []BlockDevice, device string, disks common.StringSet) 
 	}
 }
 
-func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks common.StringSet) {
-	disks = make(common.StringSet)
+func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks cmn.StringSet) {
+	disks = make(cmn.StringSet)
 	device := strings.TrimPrefix(fs, "/dev/")
 	var lsBlkOutput LsBlk
 	err := jsoniter.Unmarshal(lsblkOutputBytes, &lsBlkOutput)

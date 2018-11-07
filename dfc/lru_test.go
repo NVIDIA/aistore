@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -126,16 +126,16 @@ func TestLRUThrottling(t *testing.T) {
 
 	disks := fs2disks(fileSystem)
 	riostat := newIostatRunner()
-	riostat.fsdisks = make(map[string]common.StringSet, len(available))
+	riostat.fsdisks = make(map[string]cmn.StringSet, len(available))
 	riostat.fsdisks[fileSystem] = disks
 	for disk := range disks {
-		riostat.Disk[disk] = make(common.SimpleKVs, 0)
+		riostat.Disk[disk] = make(cmn.SimpleKVs, 0)
 		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
 
 	}
 	ctx.rg = &rungroup{
-		runarr: make([]common.Runner, 0, 4),
-		runmap: make(map[string]common.Runner),
+		runarr: make([]cmn.Runner, 0, 4),
+		runmap: make(map[string]cmn.Runner),
 	}
 	ctx.rg.add(riostat, xiostat)
 

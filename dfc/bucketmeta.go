@@ -11,9 +11,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 // NOTE: to access bucket metadata and related structures, external
@@ -38,12 +37,12 @@ type bucketMD struct {
 
 // c-tor
 func newBucketMD() *bucketMD {
-	lbmap := make(map[string]api.BucketProps)
-	cbmap := make(map[string]api.BucketProps)
+	lbmap := make(map[string]cmn.BucketProps)
+	cbmap := make(map[string]cmn.BucketProps)
 	return &bucketMD{cluster.BMD{LBmap: lbmap, CBmap: cbmap}, ""}
 }
 
-func (m *bucketMD) add(b string, local bool, p api.BucketProps) bool {
+func (m *bucketMD) add(b string, local bool, p cmn.BucketProps) bool {
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
@@ -69,7 +68,7 @@ func (m *bucketMD) del(b string, local bool) bool {
 	return true
 }
 
-func (m *bucketMD) get(b string, local bool) (bool, api.BucketProps) {
+func (m *bucketMD) get(b string, local bool) (bool, cmn.BucketProps) {
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
@@ -78,13 +77,13 @@ func (m *bucketMD) get(b string, local bool) (bool, api.BucketProps) {
 	return ok, p
 }
 
-func (m *bucketMD) set(b string, local bool, p api.BucketProps) {
+func (m *bucketMD) set(b string, local bool, p cmn.BucketProps) {
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
 	}
 	if _, ok := mm[b]; !ok {
-		common.Assert(false)
+		cmn.Assert(false)
 	}
 
 	m.Version++
@@ -96,10 +95,10 @@ func (m *bucketMD) islocal(bucket string) bool {
 	return ok
 }
 
-func (m *bucketMD) propsAndChecksum(bucket string) (p api.BucketProps, checksum string, defined bool) {
+func (m *bucketMD) propsAndChecksum(bucket string) (p cmn.BucketProps, checksum string, defined bool) {
 	var ok bool
 	ok, p = m.get(bucket, m.islocal(bucket))
-	if !ok || p.Checksum == api.ChecksumInherit {
+	if !ok || p.Checksum == cmn.ChecksumInherit {
 		return p, "", false
 	}
 	return p, p.Checksum, true
@@ -122,11 +121,11 @@ func (m *bucketMD) clone() *bucketMD {
 }
 
 func (m *bucketMD) deepcopy(dst *bucketMD) {
-	common.CopyStruct(dst, m)
-	dst.LBmap = make(map[string]api.BucketProps, len(m.LBmap))
-	dst.CBmap = make(map[string]api.BucketProps, len(m.CBmap))
-	inmaps := [2]map[string]api.BucketProps{m.LBmap, m.CBmap}
-	outmaps := [2]map[string]api.BucketProps{dst.LBmap, dst.CBmap}
+	cmn.CopyStruct(dst, m)
+	dst.LBmap = make(map[string]cmn.BucketProps, len(m.LBmap))
+	dst.CBmap = make(map[string]cmn.BucketProps, len(m.CBmap))
+	inmaps := [2]map[string]cmn.BucketProps{m.LBmap, m.CBmap}
+	outmaps := [2]map[string]cmn.BucketProps{dst.LBmap, dst.CBmap}
 	for i := 0; i < len(inmaps); i++ {
 		mm := outmaps[i]
 		for name, props := range inmaps[i] {

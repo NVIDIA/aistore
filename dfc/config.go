@@ -13,8 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 // $CONFDIR/*
@@ -37,27 +36,27 @@ const (
 //
 //==============================
 type dfconfig struct {
-	Confdir          string            `json:"confdir"`
-	CloudProvider    string            `json:"cloudprovider"`
-	CloudBuckets     string            `json:"cloud_buckets"`
-	LocalBuckets     string            `json:"local_buckets"`
-	Readahead        rahconfig         `json:"readahead"`
-	Log              logconfig         `json:"log"`
-	Periodic         periodic          `json:"periodic"`
-	Timeout          timeoutconfig     `json:"timeout"`
-	Proxy            proxyconfig       `json:"proxyconfig"`
-	LRU              api.LRUConfig     `json:"lru_config"`
-	Xaction          xactionConfig     `json:"xaction_config"`
-	Rebalance        rebalanceconf     `json:"rebalance_conf"`
-	Replication      replicationconfig `json:"replication"`
-	Cksum            api.CksumConfig   `json:"cksum_config"`
-	Ver              versionconfig     `json:"version_config"`
-	FSpaths          common.SimpleKVs  `json:"fspaths"`
-	TestFSP          testfspathconf    `json:"test_fspaths"`
-	Net              netconfig         `json:"netconfig"`
-	FSHC             fshcconf          `json:"fshc"`
-	Auth             authconf          `json:"auth"`
-	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
+	Confdir          string             `json:"confdir"`
+	CloudProvider    string             `json:"cloudprovider"`
+	CloudBuckets     string             `json:"cloud_buckets"`
+	LocalBuckets     string             `json:"local_buckets"`
+	Readahead        rahconfig          `json:"readahead"`
+	Log              logconfig          `json:"log"`
+	Periodic         periodic           `json:"periodic"`
+	Timeout          timeoutconfig      `json:"timeout"`
+	Proxy            proxyconfig        `json:"proxyconfig"`
+	LRU              cmn.LRUConfig   `json:"lru_config"`
+	Xaction          xactionConfig      `json:"xaction_config"`
+	Rebalance        rebalanceconf      `json:"rebalance_conf"`
+	Replication      replicationconfig  `json:"replication"`
+	Cksum            cmn.CksumConfig `json:"cksum_config"`
+	Ver              versionconfig      `json:"version_config"`
+	FSpaths          cmn.SimpleKVs   `json:"fspaths"`
+	TestFSP          testfspathconf     `json:"test_fspaths"`
+	Net              netconfig          `json:"netconfig"`
+	FSHC             fshcconf           `json:"fshc"`
+	Auth             authconf           `json:"auth"`
+	KeepaliveTracker keepaliveTrackers  `json:"keepalivetracker"`
 }
 
 type xactionConfig struct {
@@ -203,7 +202,7 @@ func initconfigparam() error {
 	if err != nil {
 		glog.Errorf("Failed to flag-set glog dir %q, err: %v", ctx.config.Log.Dir, err)
 	}
-	if err = common.CreateDir(ctx.config.Log.Dir); err != nil {
+	if err = cmn.CreateDir(ctx.config.Log.Dir); err != nil {
 		glog.Errorf("Failed to create log dir %q, err: %v", ctx.config.Log.Dir, err)
 		return err
 	}
@@ -212,9 +211,9 @@ func initconfigparam() error {
 	}
 	// glog rotate
 	glog.MaxSize = ctx.config.Log.MaxSize
-	if glog.MaxSize > common.GiB {
+	if glog.MaxSize > cmn.GiB {
 		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
-		glog.MaxSize = common.MiB
+		glog.MaxSize = cmn.MiB
 	}
 	// CLI override
 	if clivars.statstime != 0 {
@@ -263,7 +262,7 @@ func initconfigparam() error {
 }
 
 func getConfig(fpath string) {
-	err := common.LocalLoad(fpath, &ctx.config)
+	err := cmn.LocalLoad(fpath, &ctx.config)
 	if err != nil {
 		glog.Errorf("Failed to load config %q, err: %v", fpath, err)
 		os.Exit(1)
@@ -271,7 +270,7 @@ func getConfig(fpath string) {
 }
 
 func validateVersion(version string) error {
-	versions := []string{api.VersionAll, api.VersionCloud, api.VersionLocal, api.VersionNone}
+	versions := []string{cmn.VersionAll, cmn.VersionCloud, cmn.VersionLocal, cmn.VersionNone}
 	versionValid := false
 	for _, v := range versions {
 		if v == version {
@@ -322,8 +321,8 @@ func validateconf() (err error) {
 		return fmt.Errorf("Invalid Xaction configuration %+v", ctx.config.Xaction)
 	}
 
-	if ctx.config.Cksum.Checksum != api.ChecksumXXHash && ctx.config.Cksum.Checksum != api.ChecksumNone {
-		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.Cksum.Checksum, api.ChecksumXXHash, api.ChecksumNone)
+	if ctx.config.Cksum.Checksum != cmn.ChecksumXXHash && ctx.config.Cksum.Checksum != cmn.ChecksumNone {
+		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", ctx.config.Cksum.Checksum, cmn.ChecksumXXHash, cmn.ChecksumNone)
 	}
 	if err := validateVersion(ctx.config.Ver.Versioning); err != nil {
 		return err

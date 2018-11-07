@@ -17,8 +17,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
 
@@ -62,13 +61,13 @@ func isSyscallWriteError(err error) bool {
 }
 
 func isValidProvider(prov string) bool {
-	return prov == api.ProviderAmazon || prov == api.ProviderGoogle || prov == api.ProviderDFC
+	return prov == cmn.ProviderAmazon || prov == cmn.ProviderGoogle || prov == cmn.ProviderDFC
 }
 
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items ...string) ([]string, error) {
-	items, err := common.MatchRESTItems(r.URL.Path, itemsAfter, true, items...)
+	items, err := cmn.MatchRESTItems(r.URL.Path, itemsAfter, true, items...)
 	if err != nil {
-		common.InvalidHandlerWithMsg(w, r, err.Error())
+		cmn.InvalidHandlerWithMsg(w, r, err.Error())
 		return nil, err
 	}
 
@@ -131,8 +130,8 @@ func (a *authServ) registerHandler(path string, handler func(http.ResponseWriter
 }
 
 func (a *authServ) registerPublicHandlers() {
-	a.registerHandler(common.URLPath(api.Version, pathUsers), a.userHandler)
-	a.registerHandler(common.URLPath(api.Version, pathTokens), a.tokenHandler)
+	a.registerHandler(cmn.URLPath(cmn.Version, pathUsers), a.userHandler)
+	a.registerHandler(cmn.URLPath(cmn.Version, pathTokens), a.tokenHandler)
 }
 
 func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +143,7 @@ func (a *authServ) userHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		a.httpUserPut(w, r)
 	default:
-		common.InvalidHandlerWithMsg(w, r, "Unsupported method for /users handler")
+		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /users handler")
 	}
 }
 
@@ -153,13 +152,13 @@ func (a *authServ) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		a.httpRevokeToken(w, r)
 	default:
-		common.InvalidHandlerWithMsg(w, r, "Unsupported method for /token handler")
+		cmn.InvalidHandlerWithMsg(w, r, "Unsupported method for /token handler")
 	}
 }
 
 // Deletes existing token, a.k.a log out
 func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
-	if _, err := checkRESTItems(w, r, 0, api.Version, pathTokens); err != nil {
+	if _, err := checkRESTItems(w, r, 0, cmn.Version, pathTokens); err != nil {
 		return
 	}
 
@@ -173,7 +172,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 1, api.Version, pathUsers)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, pathUsers)
 	if err != nil {
 		return
 	}
@@ -186,7 +185,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 	if len(apiItems) == 1 {
 		if err := a.users.delUser(apiItems[0]); err != nil {
 			glog.Errorf("Failed to delete user: %v\n", err)
-			common.InvalidHandlerWithMsg(w, r, "Failed to delete user")
+			cmn.InvalidHandlerWithMsg(w, r, "Failed to delete user")
 		}
 	} else {
 		a.userRemoveCredentials(w, r)
@@ -194,7 +193,7 @@ func (a *authServ) httpUserDel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
-	if apiItems, err := checkRESTItems(w, r, 0, api.Version, pathUsers); err != nil {
+	if apiItems, err := checkRESTItems(w, r, 0, cmn.Version, pathUsers); err != nil {
 		return
 	} else if len(apiItems) == 0 {
 		a.userAdd(w, r)
@@ -207,7 +206,7 @@ func (a *authServ) httpUserPost(w http.ResponseWriter, r *http.Request) {
 // If user did not have credentials before updating or the credentials changes
 //   then new user list is saved and sent to the proxy to update the cluster
 func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 2, api.Version, pathUsers)
+	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, pathUsers)
 	if err != nil {
 		return
 	}
@@ -221,7 +220,7 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 
 	b, err := ioutil.ReadAll(r.Body)
 	if len(b) == 0 {
-		common.InvalidHandlerWithMsg(w, r, "Invalid request")
+		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
 		return
 	}
 
@@ -230,7 +229,7 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := a.users.updateCredentials(userID, provider, string(b)); err != nil {
-		common.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to update credentials: %v", err), http.StatusInternalServerError)
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to update credentials: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -251,7 +250,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.users.addUser(info.UserID, info.Password); err != nil {
-		common.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to add user: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if glog.V(4) {
@@ -268,24 +267,24 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) error {
 	s := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
 	if len(s) != 2 {
-		common.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("Invalid header")
 	}
 
 	b, err := base64.StdEncoding.DecodeString(s[1])
 	if err != nil {
-		common.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("Invalid header authorization")
 	}
 
 	pair := strings.SplitN(string(b), ":", 2)
 	if len(pair) != 2 {
-		common.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("Invalid header authorization")
 	}
 
 	if pair[0] != conf.Auth.Username || pair[1] != conf.Auth.Password {
-		common.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return fmt.Errorf("Invalid credentials")
 	}
 
@@ -298,7 +297,7 @@ func (a *authServ) checkAuthorization(w http.ResponseWriter, r *http.Request) er
 func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	var err error
 
-	apiItems, err := checkRESTItems(w, r, 1, api.Version, pathUsers)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, pathUsers)
 	if err != nil {
 		return
 	}
@@ -310,7 +309,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if msg.Password == "" {
-		common.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -323,7 +322,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	tokenString, err := a.users.issueToken(userID, pass)
 	if err != nil {
 		glog.Errorf("Failed to generate token: %v\n", err)
-		common.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
+		cmn.InvalidHandlerWithMsg(w, r, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -331,7 +330,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, r, []byte(repl), "auth")
 }
 
-// Borrowed from DFC (modified common.InvalidHandler calls)
+// Borrowed from DFC (modified cmn.InvalidHandler calls)
 func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (ok bool) {
 	w.Header().Set("Content-Type", "application/json")
 	var err error
@@ -346,15 +345,15 @@ func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []b
 		return
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
-	common.InvalidHandlerWithMsg(w, r, errstr, http.StatusInternalServerError)
+	cmn.InvalidHandlerWithMsg(w, r, errstr, http.StatusInternalServerError)
 	return
 }
 
-// Borrowed from DFC (modified common.InvalidHandler calls)
+// Borrowed from DFC (modified cmn.InvalidHandler calls)
 func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	b, err := ioutil.ReadAll(r.Body)
 	if len(b) == 0 {
-		common.InvalidHandlerWithMsg(w, r, "request body is empty")
+		cmn.InvalidHandlerWithMsg(w, r, "request body is empty")
 		return fmt.Errorf("%s", "Invalid request")
 	}
 	if err != nil {
@@ -366,7 +365,7 @@ func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interfac
 			}
 		}
 		glog.Errorf(s)
-		common.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
+		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
 		return err
 	}
 
@@ -374,7 +373,7 @@ func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interfac
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
 		glog.Errorf(s)
-		common.InvalidHandlerWithMsg(w, r, "incorrect input data format")
+		cmn.InvalidHandlerWithMsg(w, r, "incorrect input data format")
 		return err
 	}
 	return nil
@@ -384,7 +383,7 @@ func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interfac
 // On successful update the function sends new credentials list to primary
 //   proxy to update the cluster
 func (a *authServ) userRemoveCredentials(w http.ResponseWriter, r *http.Request) {
-	apiItems, err := checkRESTItems(w, r, 2, api.Version, pathUsers)
+	apiItems, err := checkRESTItems(w, r, 2, cmn.Version, pathUsers)
 	if err != nil {
 		return
 	}
@@ -393,7 +392,7 @@ func (a *authServ) userRemoveCredentials(w http.ResponseWriter, r *http.Request)
 	provider := apiItems[1]
 	if !isValidProvider(provider) {
 		errmsg := fmt.Sprintf("Invalid cloud provider: %s", provider)
-		common.InvalidHandlerWithMsg(w, r, errmsg, http.StatusBadRequest)
+		cmn.InvalidHandlerWithMsg(w, r, errmsg, http.StatusBadRequest)
 		return
 	}
 
@@ -402,7 +401,7 @@ func (a *authServ) userRemoveCredentials(w http.ResponseWriter, r *http.Request)
 	}
 
 	if _, err = a.users.deleteCredentials(userID, provider); err != nil {
-		common.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to delete credentials: %v", err), http.StatusBadRequest)
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("Failed to delete credentials: %v", err), http.StatusBadRequest)
 		return
 	}
 

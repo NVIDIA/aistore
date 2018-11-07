@@ -19,8 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
@@ -122,7 +121,7 @@ func BenchmarkPutRandWithHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGWithHash1M(b *testing.B) {
-	sgl := tutils.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -161,7 +160,7 @@ func BenchmarkPutRandNoHash1M(b *testing.B) {
 }
 
 func BenchmarkPutSGNoHash1M(b *testing.B) {
-	sgl := tutils.Mem2.NewSGL(common.MiB)
+	sgl := tutils.Mem2.NewSGL(cmn.MiB)
 	defer sgl.Free()
 
 	for i := 0; i < b.N; i++ {
@@ -207,7 +206,7 @@ func BenchmarkPutRandWithHash1MParallel(b *testing.B) {
 
 func BenchmarkPutSGWithHash1MParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
-		sgl := tutils.Mem2.NewSGL(common.MiB)
+		sgl := tutils.Mem2.NewSGL(cmn.MiB)
 		defer sgl.Free()
 
 		for pb.Next() {
@@ -240,8 +239,8 @@ func TestMain(m *testing.M) {
 		}
 
 		// Verify hash
-		t := r.Header.Get(api.HeaderDFCChecksumType)
-		if t != api.ChecksumXXHash {
+		t := r.Header.Get(cmn.HeaderDFCChecksumType)
+		if t != cmn.ChecksumXXHash {
 			errf(http.StatusBadRequest, fmt.Sprintf("Do not know how to handle hash type %s", t))
 			return
 		}
@@ -257,7 +256,7 @@ func TestMain(m *testing.M) {
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(hasher.Sum64()))
 		hash := hex.EncodeToString(b)
-		v := r.Header.Get(api.HeaderDFCChecksumVal)
+		v := r.Header.Get(cmn.HeaderDFCChecksumVal)
 		if hash != v {
 			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", v, hash))
 		}

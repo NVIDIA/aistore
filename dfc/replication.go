@@ -16,9 +16,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
@@ -87,7 +86,7 @@ type mpathReplicator struct {
 }
 
 type replicationRunner struct {
-	common.Named
+	cmn.Named
 	t                *targetrunner
 	replReqCh        chan *replRequest
 	mpathReqCh       chan mpathReq
@@ -205,7 +204,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return errors.New(errstr)
 	}
 
-	url := req.remoteDirectURL + common.URLPath(api.Version, api.Objects, bucket, object)
+	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 
 	uname := cluster.Uname(bucket, object)
 	r.t.rtnamemap.Lock(uname, req.deleteObject)
@@ -223,11 +222,11 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	}
 	defer file.Close()
 
-	xxHashBinary, errstr := Getxattr(req.fqn, api.XattrXXHashVal)
+	xxHashBinary, errstr := Getxattr(req.fqn, cmn.XattrXXHashVal)
 	xxHashVal := ""
 	if errstr != "" {
 		buf, slab := gmem2.AllocFromSlab2(0)
-		xxHashVal, errstr = common.ComputeXXHash(file, buf)
+		xxHashVal, errstr = cmn.ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if errstr != "" {
 			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", req.fqn, errstr)
@@ -267,19 +266,19 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	}
 
 	// obtain the version of the file
-	if version, errstr := Getxattr(req.fqn, api.XattrObjVersion); errstr != "" {
-		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, api.XattrObjVersion, errstr)
+	if version, errstr := Getxattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, cmn.XattrObjVersion, errstr)
 	} else if len(version) != 0 {
-		httpReq.Header.Add(api.HeaderDFCObjVersion, string(version))
+		httpReq.Header.Add(cmn.HeaderDFCObjVersion, string(version))
 	}
 
 	// specify source direct URL in request header
-	httpReq.Header.Add(api.HeaderDFCReplicationSrc, r.directURL)
+	httpReq.Header.Add(cmn.HeaderDFCReplicationSrc, r.directURL)
 
-	httpReq.Header.Add(api.HeaderDFCChecksumType, api.ChecksumXXHash)
-	httpReq.Header.Add(api.HeaderDFCChecksumVal, xxHashVal)
+	httpReq.Header.Add(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
+	httpReq.Header.Add(cmn.HeaderDFCChecksumVal, xxHashVal)
 	if okAccessTime {
-		httpReq.Header.Add(api.HeaderDFCObjAtime, string(accessTime.Format(api.RFC822)))
+		httpReq.Header.Add(cmn.HeaderDFCObjAtime, string(accessTime.Format(cmn.RFC822)))
 	}
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
@@ -331,34 +330,34 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 
-	hdhobj := newcksumvalue(httpr.Header.Get(api.HeaderDFCChecksumType), httpr.Header.Get(api.HeaderDFCChecksumVal))
+	hdhobj := newcksumvalue(httpr.Header.Get(cmn.HeaderDFCChecksumType), httpr.Header.Get(cmn.HeaderDFCChecksumVal))
 	if hdhobj == nil {
 		errstr = fmt.Sprintf("Failed to extract checksum from replication PUT request for %s/%s", bucket, object)
 		return errors.New(errstr)
 	}
 
-	if accessTimeStr := httpr.Header.Get(api.HeaderDFCObjAtime); accessTimeStr != "" {
+	if accessTimeStr := httpr.Header.Get(cmn.HeaderDFCObjAtime); accessTimeStr != "" {
 		if parsedTime, err := time.Parse(time.RFC822, accessTimeStr); err == nil {
 			accessTime = parsedTime
 		}
 	}
 
 	hdhtype, hdhval := hdhobj.get()
-	if hdhtype != api.ChecksumXXHash {
+	if hdhtype != cmn.ChecksumXXHash {
 		errstr = fmt.Sprintf("Unsupported checksum type: %q", hdhtype)
 		return errors.New(errstr)
 	}
 
 	// Avoid replication by checking if cheksums from header and existing file match
 	// Attempt to access the checksum Xattr if it already exists
-	if xxHashBinary, errstr := Getxattr(req.fqn, api.XattrXXHashVal); errstr != "" && xxHashBinary != nil && string(xxHashBinary) == hdhval {
+	if xxHashBinary, errstr := Getxattr(req.fqn, cmn.XattrXXHashVal); errstr != "" && xxHashBinary != nil && string(xxHashBinary) == hdhval {
 		glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
 		return nil
 	}
 	// Calculate the checksum when the Xattr does not exit
 	if file, err := os.Open(req.fqn); err == nil {
 		buf, slab := gmem2.AllocFromSlab2(0)
-		xxHashVal, errstr := common.ComputeXXHash(file, buf)
+		xxHashVal, errstr := cmn.ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if err = file.Close(); err != nil {
 			glog.Warningf("Unexpected failure to close %s once xxhash has been computed, error: %v", req.fqn, err)
@@ -380,7 +379,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 
 	if nhobj != nil {
 		nhtype, nhval = nhobj.get()
-		common.Assert(hdhtype == nhtype)
+		cmn.Assert(hdhtype == nhtype)
 	}
 	if hdhval != "" && nhval != "" && hdhval != nhval {
 		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %s... != %s...", bucket, object, nhtype, hdhval[:8], nhval[:8])
@@ -393,7 +392,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return nil
 	}
 
-	props := &objectProps{nhobj: nhobj, version: httpr.Header.Get(api.HeaderDFCObjVersion)}
+	props := &objectProps{nhobj: nhobj, version: httpr.Header.Get(cmn.HeaderDFCObjVersion)}
 	if !accessTime.IsZero() {
 		props.atime = accessTime
 	}
@@ -454,7 +453,7 @@ func (rr *replicationRunner) dispatchRequest(req *replRequest) {
 	mpath := mpathInfo.Path
 
 	r, ok := rr.mpathReplicators[mpath]
-	common.Assert(ok, "Invalid mountpath given in replication request")
+	cmn.Assert(ok, "Invalid mountpath given in replication request")
 
 	go r.once.Do(r.Run) // only run replicator if there is at least one replication request
 	r.replReqCh <- req
@@ -520,7 +519,7 @@ func (rr *replicationRunner) addMpath(mpath string) {
 
 func (rr *replicationRunner) removeMpath(mpath string) {
 	replicator, ok := rr.mpathReplicators[mpath]
-	common.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
+	cmn.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
 	replicator.Stop()
 	delete(rr.mpathReplicators, mpath)
 }

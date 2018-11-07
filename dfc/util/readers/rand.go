@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/common"
+	"github.com/NVIDIA/dfcpub/cmn"
 )
 
 const randReaderBufferSize = 64 * 1024 // size of internal buffer filled with random data
@@ -38,11 +38,11 @@ func (r *randReader) Read(buf []byte) (int, error) {
 
 	// duplicate internal buffer with random data until the
 	// destination buffer is full
-	want := common.MinI64(int64(len(buf)), r.size-r.offset)
+	want := cmn.MinI64(int64(len(buf)), r.size-r.offset)
 	bytesLeft := want
 	written := int64(0)
 	for bytesLeft > 0 {
-		toWrite := common.MinI64(bytesLeft, randReaderBufferSize)
+		toWrite := cmn.MinI64(bytesLeft, randReaderBufferSize)
 		copy(buf[written:], r.buf[:toWrite])
 		bytesLeft -= toWrite
 		written += toWrite
@@ -61,7 +61,7 @@ func (r *randReader) WriteTo(w io.Writer) (int64, error) {
 	bytesLeft := want
 	written := int64(0)
 	for bytesLeft > 0 {
-		toWrite := common.MinI64(bytesLeft, randReaderBufferSize)
+		toWrite := cmn.MinI64(bytesLeft, randReaderBufferSize)
 		w.Write(r.buf[:toWrite])
 		bytesLeft -= toWrite
 		written += toWrite
