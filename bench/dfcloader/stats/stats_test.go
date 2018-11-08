@@ -1,10 +1,13 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
 package stats_test
 
 import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmd/dfcloader/stats"
+	"github.com/NVIDIA/dfcpub/bench/dfcloader/stats"
 )
 
 func verify(t *testing.T, msg string, exp, act int64) {

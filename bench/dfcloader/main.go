@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/cmd/dfcloader/stats"
+	"github.com/NVIDIA/dfcpub/bench/dfcloader/stats"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/tutils"

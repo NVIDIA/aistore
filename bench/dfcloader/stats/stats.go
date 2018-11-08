@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
 // Package stats provides various structs for collecting stats
 package stats
 
