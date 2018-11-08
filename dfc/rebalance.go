@@ -67,8 +67,8 @@ func (rcl *xrebpathrunner) oneRebalance() {
 func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) error {
 	// Check if we should abort
 	select {
-	case <-rcl.xreb.abrt:
-		err = fmt.Errorf("%s: aborted for path %s", rcl.xreb.tostring(), rcl.mpathplus)
+	case <-rcl.xreb.ChanAbort():
+		err = fmt.Errorf("%s: aborted for path %s", rcl.xreb, rcl.mpathplus)
 		glog.Infoln(err)
 		glog.Flush()
 		rcl.aborted = true
@@ -147,8 +147,8 @@ func (rb *localRebPathRunner) run() {
 func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) error {
 	// Check if we should abort
 	select {
-	case <-rb.xreb.abrt:
-		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rb.xreb.tostring(), rb.mpath)
+	case <-rb.xreb.ChanAbort():
+		err = fmt.Errorf("%s aborted, exiting rebwalkf path %s", rb.xreb, rb.mpath)
 		glog.Infoln(err)
 		glog.Flush()
 		rb.aborted = true
@@ -393,7 +393,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		_ = file.Close()
 	}
 
-	glog.Infoln(xreb.tostring())
+	glog.Infoln(xreb.String())
 	wg = &sync.WaitGroup{}
 
 	allr := make([]*xrebpathrunner, 0, runnerCnt)
@@ -434,9 +434,9 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		glog.Infof("rebalance: %s <= self", newtargetid)
 		t.pollRebalancingDone(newsmap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
-	xreb.etime = time.Now()
-	glog.Infoln(xreb.tostring())
-	t.xactinp.del(xreb.id)
+	xreb.EndTime(time.Now())
+	glog.Infoln(xreb.String())
+	t.xactinp.del(xreb.ID())
 }
 
 func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
@@ -514,7 +514,7 @@ func (t *targetrunner) runLocalRebalance() {
 		}
 	}
 
-	xreb.etime = time.Now()
-	glog.Infoln(xreb.tostring())
-	t.xactinp.del(xreb.id)
+	xreb.EndTime(time.Now())
+	glog.Infoln(xreb.String())
+	t.xactinp.del(xreb.ID())
 }

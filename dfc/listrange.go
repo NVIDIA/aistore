@@ -40,12 +40,12 @@ type filesWithDeadline struct {
 }
 
 type xactPrefetch struct {
-	xactBase
+	cmn.XactBase
 	targetrunner *targetrunner
 }
 
 type xactEvictDelete struct {
-	xactBase
+	cmn.XactBase
 	targetrunner *targetrunner
 }
 
@@ -113,7 +113,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if done != nil {
 			done <- struct{}{}
 		}
-		t.xactinp.del(xdel.id)
+		t.xactinp.del(xdel.ID())
 	}()
 
 	var absdeadline time.Time
@@ -124,7 +124,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 
 	for _, objname := range objs {
 		select {
-		case <-xdel.abrt:
+		case <-xdel.ChanAbort():
 			return nil
 		default:
 		}
@@ -160,18 +160,18 @@ func (q *xactInProgress) newEvictDelete(evict bool) *xactEvictDelete {
 	}
 
 	id := q.uniqueid()
-	xpre := &xactEvictDelete{xactBase: *newxactBase(id, xact)}
+	xpre := &xactEvictDelete{XactBase: *cmn.NewXactBase(id, xact)}
 	q.add(xpre)
 	return xpre
 }
 
 func (xact *xactEvictDelete) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime())
-	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+	start := xact.StartTime().Sub(xact.targetrunner.starttime())
+	if !xact.Finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.Kind(), xact.ID(), start)
 	}
 	fin := time.Since(xact.targetrunner.starttime())
-	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.Kind(), xact.ID(), start, fin)
 }
 
 //=========
@@ -208,8 +208,8 @@ loop:
 		}
 	}
 
-	xpre.etime = time.Now()
-	t.xactinp.del(xpre.id)
+	xpre.EndTime(time.Now())
+	t.xactinp.del(xpre.ID())
 }
 
 func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket string) {
@@ -283,19 +283,19 @@ func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
 		return nil
 	}
 	id := q.uniqueid()
-	xpre := &xactPrefetch{xactBase: *newxactBase(id, cmn.ActPrefetch)}
+	xpre := &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch)}
 	xpre.targetrunner = t
 	q.add(xpre)
 	return xpre
 }
 
 func (xact *xactPrefetch) tostring() string {
-	start := xact.stime.Sub(xact.targetrunner.starttime())
-	if !xact.finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.kind, xact.id, start)
+	start := xact.StartTime().Sub(xact.targetrunner.starttime())
+	if !xact.Finished() {
+		return fmt.Sprintf("xaction %s:%d started %v", xact.Kind(), xact.ID(), start)
 	}
 	fin := time.Since(xact.targetrunner.starttime())
-	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.kind, xact.id, start, fin)
+	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.Kind(), xact.ID(), start, fin)
 }
 
 //================

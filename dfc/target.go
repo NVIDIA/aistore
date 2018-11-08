@@ -2753,7 +2753,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 					if glog.V(3) {
 						glog.Infof("Aborting LRU due to lru_enabled config change")
 					}
-					lruxact.abort()
+					lruxact.Abort()
 				}
 			}
 		}
@@ -2881,16 +2881,16 @@ func (t *targetrunner) getXactionStatsRetriever(kind string) XactionStatsRetriev
 func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 	allXactionDetails := []XactionDetails{}
 	for _, xaction := range t.xactinp.xactinp {
-		if xaction.getkind() == kind {
+		if xaction.Kind() == kind {
 			status := cmn.XactionStatusCompleted
-			if !xaction.finished() {
+			if !xaction.Finished() {
 				status = cmn.XactionStatusInProgress
 			}
 
 			xactionStats := XactionDetails{
-				Id:        xaction.getid(),
-				StartTime: xaction.getStartTime(),
-				EndTime:   xaction.getEndTime(),
+				Id:        xaction.ID(),
+				StartTime: xaction.StartTime(),
+				EndTime:   xaction.EndTime(),
 				Status:    status,
 			}
 
@@ -3819,4 +3819,61 @@ func (t *targetrunner) isRebalancing() bool {
 	_, running := t.xactinp.isAbortedOrRunningRebalance()
 	_, runningLocal := t.xactinp.isAbortedOrRunningLocalRebalance()
 	return running || runningLocal
+}
+
+//====================== LRU: initiation  ======================================
+//
+// construct LRU contexts (lructx) and run them each of them in
+// the respective goroutines which then do rest of the work - see lru.go
+//
+//==============================================================================
+
+func (t *targetrunner) runLRU() {
+	xlru := t.xactinp.renewLRU(t)
+	if xlru == nil {
+		return
+	}
+	wg := &sync.WaitGroup{}
+
+	glog.Infof("LRU: %s started: dont-evict-time %v", xlru, ctx.config.LRU.DontEvictTime)
+
+	//
+	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
+	//
+
+	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	for path, mpathInfo := range availablePaths {
+		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
+		wg.Add(1)
+		go lctx.onelru(wg)
+	}
+	wg.Wait()
+	for path, mpathInfo := range availablePaths {
+		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path))
+		wg.Add(1)
+		go lctx.onelru(wg)
+	}
+	wg.Wait()
+
+	if glog.V(4) {
+		lruCheckResults(availablePaths)
+	}
+	xlru.EndTime(time.Now())
+	glog.Infoln(xlru.String())
+	t.xactinp.del(xlru.ID())
+}
+
+// construct lructx
+func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
+	lctx := &lructx{
+		oldwork:     make([]*fileInfo, 0, 64),
+		xlru:        xlru,
+		t:           t,
+		fs:          mpathInfo.FileSystem,
+		bucketdir:   bucketdir,
+		thrparams:   throttleParams{throttle: onDiskUtil | onFSUsed, fs: mpathInfo.FileSystem},
+		atimeRespCh: make(chan *atimeResponse, 1),
+		namelocker:  t.rtnamemap,
+	}
+	return lctx
 }

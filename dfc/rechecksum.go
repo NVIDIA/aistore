@@ -38,7 +38,7 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 	}
 
 	// re-checksum every object in a given bucket
-	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum.tostring(), bucket)
+	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum, bucket)
 	availablePaths, _ := fs.Mountpaths.Mountpaths()
 	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range availablePaths {
@@ -59,9 +59,9 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 	wg.Wait()
 
 	// finish up
-	xrcksum.etime = time.Now()
-	glog.Infoln(xrcksum.tostring())
-	t.xactinp.del(xrcksum.id)
+	xrcksum.EndTime(time.Now())
+	glog.Infoln(xrcksum.String())
+	t.xactinp.del(xrcksum.ID())
 }
 
 func (t *targetrunner) oneRechecksumBucket(mpathInfo *fs.MountpathInfo, bucketDir string, xrcksum *xactRechecksum) {
@@ -94,8 +94,8 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 
 	// stop traversing if xaction is aborted
 	select {
-	case <-rcksctx.xrcksum.abrt:
-		glog.Infof("%s aborted, exiting rechecksum walk function", rcksctx.xrcksum.tostring())
+	case <-rcksctx.xrcksum.ChanAbort():
+		glog.Infof("%s aborted, exiting rechecksum walk function", rcksctx.xrcksum)
 		glog.Flush()
 		return errors.New("rechecksumming aborted") // returning error stops bucket directory traversal
 	case <-time.After(time.Millisecond):

@@ -65,7 +65,7 @@ type (
 		heap    *fileInfoMinHeap
 		oldwork []*fileInfo
 		// init-time
-		xlru        *xactLRU
+		xlru        cmn.XactInterface
 		t           *targetrunner // TODO: refactor to remove
 		fs          string
 		bucketdir   string
@@ -76,69 +76,13 @@ type (
 	}
 )
 
-//
-// targetrunner: initiate a bunch of LRU contexts (lructx) and run them each of them in
-// the respective goroutines which then do rest of the work
-//
-
-func (t *targetrunner) runLRU() {
-	xlru := t.xactinp.renewLRU(t)
-	if xlru == nil {
-		return
-	}
-	wg := &sync.WaitGroup{}
-
-	glog.Infof("LRU: %s started: dont-evict-time %v", xlru.tostring(), ctx.config.LRU.DontEvictTime)
-
-	//
-	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
-	//
-
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
-	for path, mpathInfo := range availablePaths {
-		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
-		wg.Add(1)
-		go lctx.onelru(wg)
-	}
-	wg.Wait()
-	for path, mpathInfo := range availablePaths {
-		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path))
-		wg.Add(1)
-		go lctx.onelru(wg)
-	}
-	wg.Wait()
-
-	if glog.V(4) {
-		lruCheckResults(availablePaths)
-	}
-	xlru.etime = time.Now()
-	glog.Infoln(xlru.tostring())
-	t.xactinp.del(xlru.id)
-}
-
-// construct lructx
-func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
-	h := &fileInfoMinHeap{}
-	heap.Init(h)
-	lctx := &lructx{
-		heap:        h,
-		oldwork:     make([]*fileInfo, 0, 64),
-		xlru:        xlru,
-		t:           t,
-		fs:          mpathInfo.FileSystem,
-		bucketdir:   bucketdir,
-		thrparams:   throttleParams{throttle: onDiskUtil | onFSUsed, fs: mpathInfo.FileSystem},
-		atimeRespCh: make(chan *atimeResponse, 1),
-		namelocker:  t.rtnamemap,
-	}
-	return lctx
-}
-
 // onelru walks a given local filesystem to a) determine whether some of the
 // objects are to be evicted, and b) actually evicting those
 func (lctx *lructx) onelru(wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	lctx.heap = &fileInfoMinHeap{}
+	heap.Init(lctx.heap)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
@@ -190,16 +134,16 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 	// abort?
 	select {
-	case <-xlru.abrt:
-		s := fmt.Sprintf("%s aborted, exiting", xlru.tostring())
+	case <-xlru.ChanAbort():
+		s := fmt.Sprintf("%s aborted, exiting", xlru)
 		glog.Infoln(s)
 		glog.Flush()
 		return errors.New(s)
 	case <-time.After(time.Millisecond):
 		break
 	}
-	if xlru.finished() {
-		return fmt.Errorf("%s aborted, exiting", xlru.tostring())
+	if xlru.Finished() {
+		return fmt.Errorf("%s aborted, exiting", xlru)
 	}
 
 	atime, mtime, stat := getAmTimes(osfi)
