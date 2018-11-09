@@ -383,3 +383,9 @@ type BucketProps struct {
 	// LRUConfig is the embedded struct of the same name
 	LRUConfig `json:"lru_props"`
 }
+
+// ObjectProps
+type ObjectProps struct {
+	Size    int
+	Version string
+}

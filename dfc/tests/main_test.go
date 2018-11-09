@@ -629,19 +629,19 @@ func TestHeadObject(t *testing.T) {
 		t.Fatalf("tutils.Put failed, err = %v", err)
 	}
 
-	propsExp := &tutils.ObjectProps{Size: fileSize, Version: "1"}
-	props, err := tutils.HeadObject(proxyURL, TestLocalBucketName, fileName)
+	propsExp := &cmn.ObjectProps{Size: fileSize, Version: "1"}
+	props, err := api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, fileName)
 	if err != nil {
-		t.Errorf("tutils.HeadObject failed, err = %v", err)
+		t.Errorf("api.HeadObject failed, err = %v", err)
 	}
 
 	if !reflect.DeepEqual(props, propsExp) {
 		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
 	}
 
-	props, err = tutils.HeadObject(proxyURL, TestLocalBucketName, "this_file_should_not_exist")
+	props, err = api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, "this_file_should_not_exist")
 	if err == nil {
-		t.Errorf("Expected non-nil error (404) from tutils.HeadObject, received nil error")
+		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}
 }
 

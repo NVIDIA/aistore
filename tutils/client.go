@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -134,11 +133,6 @@ type ReqError struct {
 type InvalidCksumError struct {
 	ExpectedHash string
 	ActualHash   string
-}
-
-type ObjectProps struct {
-	Size    int
-	Version string
 }
 
 func (err ReqError) Error() string {
@@ -498,35 +492,6 @@ func EvictRange(proxyURL, bucket, prefix, regex, rng string, wait bool, deadline
 	return doListRangeCall(proxyURL, bucket, cmn.ActEvict, http.MethodDelete, evictMsg)
 }
 
-func HeadObject(proxyURL, bucket, objname string) (objProps *ObjectProps, err error) {
-	objProps = &ObjectProps{}
-	r, err := HTTPClient.Head(proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname))
-	if err != nil {
-		return
-	}
-	defer func() {
-		r.Body.Close()
-	}()
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		b, ioErr := ioutil.ReadAll(r.Body)
-		if ioErr != nil {
-			err = fmt.Errorf("Failed to read response, err: %v", ioErr)
-			return
-		}
-		err = fmt.Errorf("HEAD bucket/object: %s/%s failed, HTTP status: %d, HTTP response: %s",
-			bucket, objname, r.StatusCode, string(b))
-		return
-	}
-	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderSize))
-	if err != nil {
-		return
-	}
-
-	objProps.Size = size
-	objProps.Version = r.Header.Get(cmn.HeaderVersion)
-	return
-}
-
 func IsCached(proxyURL, bucket, objname string) (bool, error) {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname) + "?" + cmn.URLParamCheckCached + "=true"
 	r, err := HTTPClient.Head(url)
@@ -608,68 +573,6 @@ func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string,
 			errCh <- err
 		}
 	}
-}
-
-// waitForLocalBucket wait until all targets have local bucket created or timeout
-func waitForLocalBucket(url, name string) error {
-	smap, err := GetClusterMap(url)
-	if err != nil {
-		return err
-	}
-
-	to := time.Now().Add(time.Minute)
-	for _, s := range smap.Tmap {
-	loop_bucket:
-		for {
-			exists, err := DoesLocalBucketExist(s.PublicNet.DirectURL, name)
-			if err != nil {
-				return err
-			}
-
-			if exists {
-				break loop_bucket
-			}
-
-			if time.Now().After(to) {
-				return fmt.Errorf("wait for local bucket timed out, target = %s", s.PublicNet.DirectURL)
-			}
-
-			time.Sleep(time.Second)
-		}
-	}
-
-	return nil
-}
-
-// waitForNoLocalBucket wait until all targets do not have local bucket anymore or timeout
-func waitForNoLocalBucket(url, name string) error {
-	smap, err := GetClusterMap(url)
-	if err != nil {
-		return err
-	}
-
-	to := time.Now().Add(time.Minute)
-	for _, s := range smap.Tmap {
-	loop_bucket:
-		for {
-			exists, err := DoesLocalBucketExist(s.PublicNet.DirectURL, name)
-			if err != nil {
-				return err
-			}
-
-			if !exists {
-				break loop_bucket
-			}
-
-			if time.Now().After(to) {
-				return fmt.Errorf("timed out waiting for local bucket %s being removed, target %s", name, s.PublicNet.DirectURL)
-			}
-
-			time.Sleep(time.Second)
-		}
-	}
-
-	return nil
 }
 
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
