@@ -43,3 +43,12 @@ func HeadObject(httpClient *http.Client, proxyURL, bucket, object string) (*cmn.
 		Version: r.Header.Get(cmn.HeaderVersion),
 	}, nil
 }
+
+// DeleteObject API operation for DFC
+//
+// Deletes an object specified by bucket/object
+func DeleteObject(httpClient *http.Client, proxyURL, bucket, object string) (err error) {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, nil)
+	return err
+}

@@ -311,34 +311,15 @@ func GetFileWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, er
 	return get(url, bucket, keyname, wg, errCh, silent, validate, w, query)
 }
 
-func Del(proxyURL, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error, silent bool) (err error) {
+func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
 	if !silent {
-		fmt.Printf("DEL: %s\n", keyname)
+		fmt.Printf("DEL: %s\n", object)
 	}
-	req, httperr := http.NewRequest(http.MethodDelete, url, nil)
-	if httperr != nil {
-		err = fmt.Errorf("Failed to create new HTTP request, err: %v", httperr)
-		emitError(nil, err, errCh)
-		return err
-	}
-
-	r, httperr := HTTPClient.Do(req)
-	if httperr != nil {
-		err = fmt.Errorf("Failed to delete file, err: %v", httperr)
-		emitError(nil, err, errCh)
-		return err
-	}
-
-	defer func() {
-		r.Body.Close()
-	}()
-
-	_, err = discardResponse(r, err, "DELETE")
-	emitError(r, err, errCh)
+	err := api.DeleteObject(HTTPClient, proxyURL, bucket, object)
+	emitError(nil, err, errCh)
 	return err
 }
 
