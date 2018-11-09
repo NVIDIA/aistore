@@ -7,7 +7,7 @@
 package cmn
 
 const (
-	NetworkPublic      = "public"
-	NetworkIntra       = "intra"
-	NetworkReplication = "replication"
+	NetworkPublic       = "public"
+	NetworkIntraControl = "intra_control"
+	NetworkIntraData    = "intra_data"
 )

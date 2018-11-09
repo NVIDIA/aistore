@@ -197,13 +197,13 @@ func (t *targetrunner) Run() error {
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), t.healthHandler)
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), t.voteHandler)
 	if ctx.config.Net.UseIntraControl {
-		transport.SetMux(cmn.NetworkIntra, t.intraControlServer.mux) // to register transport handlers at runtime
+		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux) // to register transport handlers at runtime
 		t.registerIntraControlNetHandler("/", cmn.InvalidHandler)
 	}
 
 	// Intra data network
 	if ctx.config.Net.UseIntraData {
-		transport.SetMux(cmn.NetworkReplication, t.intraDataServer.mux) // to register transport handlers at runtime
+		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux) // to register transport handlers at runtime
 		t.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
 		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}

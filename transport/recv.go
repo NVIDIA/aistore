@@ -68,7 +68,7 @@ var (
 	mu       *sync.Mutex
 	debug    bool
 )
-var knownNetworks = []string{cmn.NetworkPublic, cmn.NetworkIntra, cmn.NetworkReplication}
+var knownNetworks = []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}
 
 func init() {
 	mu = &sync.Mutex{}
