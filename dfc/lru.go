@@ -146,7 +146,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	atime, mtime, stat := getAmTimes(osfi)
-	if info.Old {
+	if info != nil && info.Old {
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
 		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		return nil
