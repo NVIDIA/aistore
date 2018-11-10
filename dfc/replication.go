@@ -87,7 +87,7 @@ type mpathReplicator struct {
 
 type replicationRunner struct {
 	cmn.Named
-	t                *targetrunner
+	t                *targetrunner // FIXME: package out
 	replReqCh        chan *replRequest
 	mpathReqCh       chan mpathReq
 	mountpaths       *fs.MountedFS
@@ -441,7 +441,7 @@ func (rr *replicationRunner) Stop(err error) {
 }
 
 func (rr *replicationRunner) dispatchRequest(req *replRequest) {
-	mpathInfo, _ := path2mpathInfo(req.fqn)
+	mpathInfo, _ := rr.mountpaths.Path2MpathInfo(req.fqn)
 	if mpathInfo == nil {
 		errmsg := fmt.Sprintf("Failed to get mountpath for file %q", req.fqn)
 		glog.Error(errmsg)

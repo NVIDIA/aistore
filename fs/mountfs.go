@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
 package fs
 
 import (
@@ -21,6 +19,7 @@ import (
 
 const MLCG32 = 1103515245
 
+// globals
 var (
 	Mountpaths *MountedFS
 )

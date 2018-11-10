@@ -212,7 +212,7 @@ func (r *atimerunner) Stop(err error) {
 // Note this method should only be called on objects belonging to buckets that have
 // LRU Enabled.
 func (r *atimerunner) touch(fqn string, setTime ...time.Time) {
-	mpathInfo, _ := path2mpathInfo(fqn)
+	mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn)
 	if mpathInfo == nil {
 		return
 	}
@@ -250,7 +250,7 @@ func (r *atimerunner) atime(fqn string, customRespCh ...chan *atimeResponse) (re
 		responseCh = make(chan *atimeResponse, 1)
 	}
 	var mpath string
-	if mpathInfo, _ := path2mpathInfo(fqn); mpathInfo != nil {
+	if mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn); mpathInfo != nil {
 		mpath = mpathInfo.Path
 		request := &atimeRequest{
 			responseCh:  responseCh,
@@ -272,7 +272,7 @@ func (r *atimerunner) addMpathAtimeRunner(mpath string) {
 		glog.Warningf("Attempted to add already existing mpath: %q", mpath)
 		return
 	}
-	mpathInfo, _ := path2mpathInfo(mpath)
+	mpathInfo, _ := r.mountpaths.Path2MpathInfo(mpath)
 	if mpathInfo == nil {
 		cmn.Assert(false, fmt.Sprintf("Attempted to add a mpath %q with no corresponding filesystem", mpath))
 	}

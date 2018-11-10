@@ -11,14 +11,12 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/fs"
 )
 
 const (
@@ -195,107 +193,6 @@ func newcksumvalue(kind string, val string) cksumvalue {
 func (v *cksumvalxxhash) get() (string, string) { return v.tag, v.val }
 
 func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
-
-//===========================================================================
-//
-// FQN
-//
-//===========================================================================
-
-type fqnParsed struct {
-	mpathInfo *fs.MountpathInfo
-	bucket    string
-	objname   string
-	islocal   bool
-}
-
-// A simplified version of the Rel function in https://golang.org/src/path/filepath/path.go
-// that determines the relative path of targ (target) to mpath. Note mpath and
-// targ must be clean paths. pathPrefixMatch will only return true if the targ is equivalent to
-// mpath + relative path, otherwise it will return false.
-// Refer to https://golang.org/pkg/path/filepath/#Clean for the definition of a 'clean' path.
-func pathPrefixMatch(mpath, targ string) (rel string, match bool) {
-	if len(mpath) == len(targ) && mpath == targ {
-		return ".", true
-	}
-	bl := len(mpath)
-	tl := len(targ)
-	var b0, bi, t0, ti int
-	for {
-		for bi < bl && mpath[bi] != filepath.Separator {
-			bi++
-		}
-		for ti < tl && targ[ti] != filepath.Separator {
-			ti++
-		}
-		if targ[t0:ti] != mpath[b0:bi] {
-			break
-		}
-		if bi < bl {
-			bi++
-		}
-		if ti < tl {
-			ti++
-		}
-		b0 = bi
-		t0 = ti
-	}
-	if b0 != bl {
-		return "", false
-	}
-	return targ[t0:], true
-}
-
-// path2mpathInfo takes in a path (fqn or mpath) and returns the mpathInfo of the mpath with the longest
-// common prefix to path. It also returns the relative path to this mpath.
-func path2mpathInfo(path string) (info *fs.MountpathInfo, relativePath string) {
-	var max int
-
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
-	cleanedPath := filepath.Clean(path)
-
-	for mpath, mpathInfo := range availablePaths {
-		rel, ok := pathPrefixMatch(mpath, cleanedPath)
-		if ok && len(mpath) > max {
-			info = mpathInfo
-			max = len(mpath)
-			relativePath = rel
-			if relativePath == "." {
-				break
-			}
-		}
-	}
-	return
-}
-
-// mpathInfo, bucket, objname, isLocal, err
-func fqn2info(fqn string) (parsed fqnParsed, err error) {
-	var rel string
-
-	parsed.mpathInfo, rel = path2mpathInfo(fqn)
-	if parsed.mpathInfo == nil {
-		err = fmt.Errorf("fqn %s is invalid", fqn)
-		return
-	}
-
-	sep := string(filepath.Separator)
-	items := strings.SplitN(rel, sep, 3)
-
-	if len(items) < 3 {
-		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
-	} else if items[1] == "" {
-		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
-	} else if items[2] == "" {
-		err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
-	} else if items[0] != ctx.config.LocalBuckets && items[0] != ctx.config.CloudBuckets {
-		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[0], fqn)
-	} else {
-		parsed.islocal, parsed.bucket, parsed.objname = (items[0] == ctx.config.LocalBuckets), items[1], items[2]
-	}
-	return
-}
-
-//=================================== FQN ========================================
 
 // FIXME: usage
 // mentioned in the https://github.com/golang/go/issues/11745#issuecomment-123555313 thread

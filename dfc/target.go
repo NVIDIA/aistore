@@ -3110,15 +3110,13 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error) {
 	var (
 		isLocal   bool
-		parsedFQN fqnParsed
+		parsedFQN fs.FQNparsed
 	)
-
-	parsedFQN, err = fqn2info(fqn)
+	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
 	if err != nil {
 		return
 	}
-
-	bucket, objName, isLocal = parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
+	bucket, objName, isLocal = parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
 	bucketmd := t.bmdowner.get()
 	realFQN, errstr := cluster.FQN(bucket, objName, isLocal)
 	if errstr != "" {
@@ -3128,7 +3126,6 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error
 		err = fmt.Errorf("Cannot convert %q => %s/%s - localbuckets or device mountpaths changed?", fqn, bucket, objName)
 		return
 	}
-
 	return
 }
 
@@ -3136,11 +3133,11 @@ func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error
 // situation can happen when new mountpath is added or mountpath is moved from
 // disabled to enabled.
 func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
-	parsedFQN, err := fqn2info(fqn)
+	parsedFQN, err := fs.Mountpaths.FQN2Info(fqn)
 	if err != nil {
 		return false, "", err
 	}
-	bucket, objName, isLocal := parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
+	bucket, objName, isLocal := parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
 	newFQN, errstr := cluster.FQN(bucket, objName, isLocal)
 	if errstr != "" {
 		return false, "", errors.New(errstr)
@@ -3313,7 +3310,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	if !isIOError(err) {
 		return
 	}
-	mpathInfo, _ := path2mpathInfo(filepath)
+	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(filepath)
 	if mpathInfo != nil {
 		keyName := mpathInfo.Path
 		// keyName is the mountpath is the fspath - counting IO errors on a per basis..

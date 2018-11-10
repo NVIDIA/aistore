@@ -26,8 +26,9 @@ const (
 )
 
 // newIostatRunner initalizes iostatrunner struct with default values
-func newIostatRunner() *iostatrunner {
+func newIostatRunner(mountpaths *fs.MountedFS) *iostatrunner {
 	return &iostatrunner{
+		mountpaths:  mountpaths,
 		stopCh:      make(chan struct{}, 1),
 		Disk:        make(map[string]cmn.SimpleKVs),
 		metricnames: make([]string, 0),
@@ -152,7 +153,7 @@ func (r *iostatrunner) updateFSDisks() {
 }
 
 func (r *iostatrunner) diskUtilFromFQN(fqn string) (util float32, ok bool) {
-	mpathInfo, _ := path2mpathInfo(fqn)
+	mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn)
 	if mpathInfo == nil {
 		return
 	}

@@ -252,7 +252,7 @@ func (f *fshc) runMpathTest(mpath, filepath string) {
 }
 
 func (f *fshc) checkFile(filepath string) {
-	mpathInfo, _ := path2mpathInfo(filepath)
+	mpathInfo, _ := f.mountpaths.Path2MpathInfo(filepath)
 	if mpathInfo == nil {
 		glog.Errorf("Failed to get mountpath for file %s", filepath)
 		return

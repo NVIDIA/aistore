@@ -128,14 +128,6 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	numFiles := 100000
 	numFilesTotal := 1000000
 
-	ctx.rg = &rungroup{
-		runarr: make([]cmn.Runner, 0, 1),
-		runmap: make(map[string]cmn.Runner),
-	}
-	iostatr := newIostatRunner()
-	ctx.rg.add(iostatr, xiostat)
-
-	target := newFakeTargetRunner()
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	fs.Mountpaths.DisableFsIDCheck()
 	cleanMountpaths()
@@ -143,6 +135,15 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 		cmn.CreateDir(mpath)
 		fs.Mountpaths.AddMountpath(mpath)
 	}
+
+	ctx.rg = &rungroup{
+		runarr: make([]cmn.Runner, 0, 1),
+		runmap: make(map[string]cmn.Runner),
+	}
+	iostatr := newIostatRunner(fs.Mountpaths)
+	ctx.rg.add(iostatr, xiostat)
+
+	target := newFakeTargetRunner()
 
 	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
@@ -172,7 +173,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	mpathInfo, _ := path2mpathInfo(mpaths[0])
+	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpaths[0])
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)

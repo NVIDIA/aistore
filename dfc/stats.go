@@ -161,7 +161,7 @@ type storstatsrunner struct {
 	Core     *targetCoreStats       `json:"core"`
 	Capacity map[string]*fscapacity `json:"capacity"`
 	// iostat
-	CPUidle string                      `json:"cpuidle"`
+	CPUidle string                   `json:"cpuidle"`
 	Disk    map[string]cmn.SimpleKVs `json:"disk"`
 	// omitempty
 	timeUpdatedCapacity time.Time
@@ -182,6 +182,7 @@ type ClusterStatsRaw struct {
 type iostatrunner struct {
 	sync.RWMutex
 	cmn.Named
+	mountpaths  *fs.MountedFS
 	stopCh      chan struct{}
 	CPUidle     string
 	metricnames []string

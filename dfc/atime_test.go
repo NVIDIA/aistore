@@ -263,7 +263,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 
 	atimer := newAtimeRunner(target, fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
-	ctx.rg.add(newIostatRunner(), xiostat)
+	ctx.rg.add(newIostatRunner(fs.Mountpaths), xiostat)
 	go ctx.rg.run()
 	atimer.reqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -294,7 +294,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	cleanMountpaths()
 	fs.Mountpaths.AddMountpath(mpath)
 
-	iostatr := newIostatRunner()
+	iostatr := newIostatRunner(fs.Mountpaths)
 	iostatr.Disk = map[string]cmn.SimpleKVs{
 		"disk1": cmn.SimpleKVs{
 			"%util": "21.34",
@@ -345,7 +345,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	cleanMountpaths()
 	fs.Mountpaths.AddMountpath(mpath)
 
-	iostatr := newIostatRunner()
+	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
@@ -370,7 +370,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	mpathInfo, _ := path2mpathInfo(mpath)
+	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
@@ -397,7 +397,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	cleanMountpaths()
 	fs.Mountpaths.AddMountpath(mpath)
 
-	iostatr := newIostatRunner()
+	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
@@ -422,7 +422,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	mpathInfo, _ := path2mpathInfo(mpath)
+	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
@@ -451,7 +451,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	cleanMountpaths()
 	fs.Mountpaths.AddMountpath(mpath)
 
-	iostatr := newIostatRunner()
+	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
 
 	target := newFakeTargetRunner()
@@ -476,7 +476,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	mpathInfo, _ := path2mpathInfo(mpath)
+	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
@@ -505,7 +505,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	cleanMountpaths()
 	fs.Mountpaths.AddMountpath(mpath)
 
-	iostatr := newIostatRunner()
+	iostatr := newIostatRunner(fs.Mountpaths)
 
 	ctx.rg.add(iostatr, xiostat)
 
@@ -531,7 +531,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	mpathInfo, _ := path2mpathInfo(mpath)
+	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpath)
 	disks := fs2disks(mpathInfo.FileSystem)
 	for disk := range disks {
 		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)

@@ -125,7 +125,7 @@ func TestLRUThrottling(t *testing.T) {
 	fileSystem := available["/"].FileSystem
 
 	disks := fs2disks(fileSystem)
-	riostat := newIostatRunner()
+	riostat := newIostatRunner(fs.Mountpaths)
 	riostat.fsdisks = make(map[string]cmn.StringSet, len(available))
 	riostat.fsdisks[fileSystem] = disks
 	for disk := range disks {

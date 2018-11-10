@@ -145,7 +145,7 @@ func TestFqn2Info(t *testing.T) {
 			}
 			fs.Mountpaths = mfs
 
-			parsedFQN, err := fqn2info(tt.fqn)
+			parsedFQN, err := mfs.FQN2Info(tt.fqn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("fqn2info() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -153,7 +153,7 @@ func TestFqn2Info(t *testing.T) {
 			if err != nil {
 				return
 			}
-			mpathInfo, gotBucket, gotObjName, gotIsLocal := parsedFQN.mpathInfo, parsedFQN.bucket, parsedFQN.objname, parsedFQN.islocal
+			mpathInfo, gotBucket, gotObjName, gotIsLocal := parsedFQN.MpathInfo, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
 			gotMPath := mpathInfo.Path
 			if gotMPath != tt.wantMPath {
 				t.Errorf("fqn2info() gotMPath = %v, want %v", gotMPath, tt.wantMPath)

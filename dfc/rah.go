@@ -40,9 +40,10 @@ type (
 	}
 	readahead struct {
 		sync.Mutex
-		cmn.Named                       // to be a runner
-		joggers      map[string]*rahjogger // mpath => jogger
-		stopCh       chan struct{}         // to stop
+		cmn.Named                        // to be a runner
+		mountpaths *fs.MountedFS         //
+		joggers    map[string]*rahjogger // mpath => jogger
+		stopCh     chan struct{}         // to stop
 	}
 	rahjogger struct {
 		sync.Mutex
@@ -190,7 +191,7 @@ func (rahfcache *rahfcache) got() {
 
 // external API helper: route to the appropriate (jogger) child
 func (r *readahead) demux(fqn string) *rahjogger {
-	mpathInfo, _ := path2mpathInfo(fqn)
+	mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn)
 	if mpathInfo == nil {
 		glog.Errorf("Failed to get mountpath for %s", fqn)
 		return nil

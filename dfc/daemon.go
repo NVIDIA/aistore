@@ -226,15 +226,12 @@ func dfcinit() {
 
 		// system-wide gen-purpose memory manager and slab/SGL allocator
 		mem := &memsys.Mem2{MinPctTotal: 4, MinFree: cmn.GiB * 2} // free mem: try to maintain at least the min of these two
-		_ = mem.Init(false)                                          // don't ignore init-time errors
-		ctx.rg.add(mem, xmem)                                        // to periodically house-keep
-		gmem2 = getmem2()                                            // making it global; getmem2() can still be used
+		_ = mem.Init(false)                                       // don't ignore init-time errors
+		ctx.rg.add(mem, xmem)                                     // to periodically house-keep
+		gmem2 = getmem2()                                         // making it global; getmem2() can still be used
 
-		iostat := newIostatRunner()
-		ctx.rg.add(iostat, xiostat)
-		t.fsprg.add(iostat)
-
-		// for mountpath definition, see fs/mountfs.go
+		// fs.Mountpaths must be inited prior to all runners that utilize all
+		// or run per filesystem(s); for mountpath definition, see fs/mountfs.go
 		if testingFSPpaths() {
 			glog.Infof("Warning: configuring %d fspaths for testing", ctx.config.TestFSP.Count)
 			fs.Mountpaths.DisableFsIDCheck()
@@ -249,6 +246,10 @@ func dfcinit() {
 				glog.Fatal(err)
 			}
 		}
+
+		iostat := newIostatRunner(fs.Mountpaths)
+		ctx.rg.add(iostat, xiostat)
+		t.fsprg.add(iostat)
 
 		fshc := newFSHC(fs.Mountpaths, &ctx.config.FSHC)
 		ctx.rg.add(fshc, xfshc)
