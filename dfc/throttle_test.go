@@ -15,7 +15,30 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
+const fmstr = "Expected [%v] actual [%v]"
+
+type Test struct {
+	name   string
+	method func(*testing.T)
+}
+
 type fileInfos []fileInfo
+
+var riostat *iostatrunner
+var aTests = []Test{
+	{"testHighDiskUtilization", testHighDiskUtilization},
+	{"testLowDiskUtilization", testLowDiskUtilization},
+	{"testHighDiskUtilizationShortDuration", testHighDiskUtilizationShortDuration},
+	{"testHighDiskUtilizationLongDuration", testHighDiskUtilizationLongDuration},
+	{"testIncreasingDiskUtilization", testIncreasingDiskUtilization},
+	{"testDecreasingDiskUtilization", testDecreasingDiskUtilization},
+	{"testMediumDiskUtilization", testMediumDiskUtilization},
+	{"testConstantDiskUtilization", testConstantDiskUtilization},
+	{"testMultipleLRUContexts", testMultipleLRUContexts},
+
+	{"testChangedFSUsedPercentageBeforeCapCheck", testChangedFSUsedPercentageBeforeCapCheck},
+	{"testChangedDiskUtilBeforeUtilCheck", testChangedDiskUtilBeforeUtilCheck},
+}
 
 func (fis fileInfos) Len() int {
 	return len(fis)
@@ -29,7 +52,7 @@ func (fis fileInfos) Swap(i, j int) {
 	fis[i], fis[j] = fis[j], fis[i]
 }
 
-func TestLRUBasic(t *testing.T) {
+func Test_HeapEqual(t *testing.T) {
 	tcs := []fileInfos{
 		{
 			{
@@ -106,7 +129,7 @@ func TestLRUBasic(t *testing.T) {
 	}
 }
 
-func TestLRUThrottling(t *testing.T) {
+func Test_Throttle(t *testing.T) {
 	oldLRULWM := ctx.config.LRU.LowWM
 	oldLRUHWM := ctx.config.LRU.HighWM
 	oldDiskLWM := ctx.config.Xaction.DiskUtilLowWM
@@ -120,12 +143,13 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.config.Xaction.DiskUtilHighWM = 40
 	ctx.config.Periodic.StatsTime = -1 * time.Second
 
-	fs.Mountpaths.AddMountpath("/")
-	available, _ := fs.Mountpaths.Mountpaths()
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths.Add("/")
+	available, _ := fs.Mountpaths.Get()
 	fileSystem := available["/"].FileSystem
 
 	disks := fs2disks(fileSystem)
-	riostat := newIostatRunner(fs.Mountpaths)
+	riostat = newIostatRunner(fs.Mountpaths)
 	riostat.fsdisks = make(map[string]cmn.StringSet, len(available))
 	riostat.fsdisks[fileSystem] = disks
 	for disk := range disks {
@@ -139,20 +163,13 @@ func TestLRUThrottling(t *testing.T) {
 	}
 	ctx.rg.add(riostat, xiostat)
 
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM-10, riostat)
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM+10, riostat)
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilHighWM+10, riostat)
-	testHighDiskUtilization(t, riostat)
-	testLowDiskUtilization(t, riostat)
-	testHighDiskUtilizationShortDuration(t, riostat)
-	testHighDiskUtilizationLongDuration(t, riostat)
-	testIncreasingDiskUtilization(t, riostat)
-	testDecreasingDiskUtilization(t, riostat)
-	testMediumDiskUtilization(t, riostat)
-	testConstantDiskUtilization(t, riostat)
-	testMultipleLRUContexts(t, riostat)
-	testChangedFSUsedPercentageBeforeCapCheck(t, riostat)
-	testChangedDiskUtilBeforeUtilCheck(t, riostat)
+	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM-10)
+	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM+10)
+	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilHighWM+10)
+
+	for _, test := range aTests {
+		t.Run(test.name, test.method)
+	}
 
 	ctx.config.LRU.LowWM = oldLRULWM
 	ctx.config.LRU.HighWM = oldLRUHWM
@@ -162,142 +179,131 @@ func TestLRUThrottling(t *testing.T) {
 	ctx.rg = oldRg
 }
 
-func testHighFSCapacityUsed(t *testing.T, diskUtil uint32, riostat *iostatrunner) {
+func testHighFSCapacityUsed(t *testing.T, diskUtil uint32) {
 	curCapacity, _ := getFSUsedPercentage("/")
 	oldLRUHWM := ctx.config.LRU.HighWM
 	ctx.config.LRU.HighWM = uint32(curCapacity - 1)
-	lctx := newLruContext()
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	thrctx := newThrottleContext()
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 	ctx.config.LRU.HighWM = oldLRUHWM
 }
 
-func testHighDiskUtilization(t *testing.T, riostat *iostatrunner) {
+func testHighDiskUtilization(t *testing.T) {
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
-	lctx := newLruContext()
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	thrctx := newThrottleContext()
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration != expectedDuration {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
+		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 }
 
-func testLowDiskUtilization(t *testing.T, riostat *iostatrunner) {
+func testLowDiskUtilization(t *testing.T) {
 	diskUtil := ctx.config.Xaction.DiskUtilLowWM - 10
-	lctx := newLruContext()
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	thrctx := newThrottleContext()
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 }
 
-func testHighDiskUtilizationShortDuration(t *testing.T, riostat *iostatrunner) {
+func testHighDiskUtilizationShortDuration(t *testing.T) {
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 5
-	lctx := newLruContext()
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	thrctx := newThrottleContext()
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != initThrottleSleep {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			initThrottleSleep, sleepDuration)
+		t.Errorf(fmstr, initThrottleSleep, sleepDuration)
 	}
 
 	counter := 3
 	for i := 0; i < counter; i++ {
 		diskUtil += 5
-		sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+		sleepDuration := getSleepDuration(diskUtil, thrctx)
 		expectedDuration := time.Duration(1<<uint(i+1)) * time.Millisecond
 		if sleepDuration != expectedDuration {
-			t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-				expectedDuration, sleepDuration)
+			t.Errorf(fmstr, expectedDuration, sleepDuration)
 		}
 	}
 }
 
-func testHighDiskUtilizationLongDuration(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testHighDiskUtilizationLongDuration(t *testing.T) {
+	thrctx := newThrottleContext()
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 5
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != initThrottleSleep {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			initThrottleSleep, sleepDuration)
+		t.Errorf(fmstr, initThrottleSleep, sleepDuration)
 	}
 
 	counter := 9
 	for i := 0; i < counter; i++ {
 		diskUtil += 5
-		sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+		sleepDuration := getSleepDuration(diskUtil, thrctx)
 		expectedDuration := time.Duration(1<<uint(i+1)) * time.Millisecond
 		if sleepDuration != expectedDuration {
-			t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-				expectedDuration, sleepDuration)
+			t.Errorf(fmstr, expectedDuration, sleepDuration)
 		}
 	}
 
 	diskUtil += 5
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Second
 	if sleepDuration != expectedDuration {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
+		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 }
 
-func testIncreasingDiskUtilization(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testIncreasingDiskUtilization(t *testing.T) {
+	thrctx := newThrottleContext()
 	diskUtil := ctx.config.Xaction.DiskUtilLowWM - 10
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
 	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 10
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
 		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
 	expectedDuration := sleepDuration * 2
 	diskUtil = ctx.config.Xaction.DiskUtilHighWM + 10
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != expectedDuration {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
+		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 }
 
-func testDecreasingDiskUtilization(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testDecreasingDiskUtilization(t *testing.T) {
+	thrctx := newThrottleContext()
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration != expectedDuration {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
+		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 
 	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 10
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
 		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
 	diskUtil = ctx.config.Xaction.DiskUtilLowWM - 10
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf("Throttling is not required when disk utilization [%d] is lower than LowWM [%d].",
 			diskUtil, ctx.config.Xaction.DiskUtilLowWM)
 	}
 }
 
-func testMediumDiskUtilization(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testMediumDiskUtilization(t *testing.T) {
+	thrctx := newThrottleContext()
 	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 5
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
@@ -305,25 +311,24 @@ func testMediumDiskUtilization(t *testing.T, riostat *iostatrunner) {
 	}
 
 	diskUtil += 5
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
 		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
 	expectedDuration = sleepDuration
 	diskUtil += 5
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
 			sleepDuration, expectedDuration, expectedDuration*2)
 	}
 }
 
-func testConstantDiskUtilization(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
-
+func testConstantDiskUtilization(t *testing.T) {
+	thrctx := newThrottleContext()
 	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 10
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
@@ -331,17 +336,16 @@ func testConstantDiskUtilization(t *testing.T, riostat *iostatrunner) {
 	}
 
 	expectedDuration = sleepDuration
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
+		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 }
 
-func testMultipleLRUContexts(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testMultipleLRUContexts(t *testing.T) {
+	thrctx := newThrottleContext()
 	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 10
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf("Sleep duration [%v] expected between [%v] and [%v]",
@@ -349,83 +353,84 @@ func testMultipleLRUContexts(t *testing.T, riostat *iostatrunner) {
 	}
 	expectedDuration = sleepDuration
 
-	lctx2 := newLruContext()
+	thrctx2 := newThrottleContext()
 	diskUtil = ctx.config.Xaction.DiskUtilLowWM - 10
-	sleepDuration = getSleepDuration(diskUtil, lctx2, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx2)
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
 	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 11
-	sleepDuration = getSleepDuration(diskUtil, lctx, riostat)
+	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]",
-			expectedDuration, sleepDuration)
+		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 }
 
-func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T) {
+	thrctx := newThrottleContext()
 	oldLRUHWM := ctx.config.LRU.HighWM
 	curCapacity, _ := getFSUsedPercentage("/")
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
 	ctx.config.LRU.HighWM = uint32(curCapacity - 2)
-	sleepDuration := getSleepDuration(diskUtil, lctx, riostat)
+	thrctx.capUsedHigh = int64(ctx.config.LRU.HighWM) // NOTE: init time only
+	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
 	ctx.config.LRU.HighWM = uint32(curCapacity + 10)
-	lctx.thrctx.computeThrottle(newLRUThrottleParams(lctx.fs, "/"))
-	sleepDuration = lctx.thrctx.sleep
+	thrctx.capUsedHigh = int64(ctx.config.LRU.HighWM)
+	thrctx.recompute()
+	sleepDuration = thrctx.sleep
 	if sleepDuration != initThrottleSleep {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", initThrottleSleep, sleepDuration)
+		t.Errorf(fmstr, initThrottleSleep, sleepDuration)
 	}
 	ctx.config.LRU.HighWM = oldLRUHWM
 }
 
-func testChangedDiskUtilBeforeUtilCheck(t *testing.T, riostat *iostatrunner) {
-	lctx := newLruContext()
+func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
+	thrctx := newThrottleContext()
 	oldStatsTime := ctx.config.Periodic.StatsTime
 	ctx.config.Periodic.StatsTime = 10 * time.Minute
-	sleepDuration := getSleepDuration(0, lctx, riostat)
+	thrctx.period = ctx.config.Periodic.StatsTime // NOTE: ditto
+	sleepDuration := getSleepDuration(0, thrctx)
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
 	for disk := range riostat.Disk {
 		riostat.Disk[disk]["%util"] = "99"
 	}
 
-	lctx.thrctx.computeThrottle(newLRUThrottleParams(lctx.fs, "/"))
-	sleepDuration = lctx.thrctx.sleep
+	thrctx.recompute()
+	sleepDuration = thrctx.sleep
 	if sleepDuration != 0 {
-		t.Errorf("Expected sleep duration [%v] Actual sleep duration: [%v]", 0, sleepDuration)
+		t.Errorf(fmstr, 0, sleepDuration)
 	}
 	ctx.config.Periodic.StatsTime = oldStatsTime
 }
 
-func getSleepDuration(diskUtil uint32, lctx *lructx, riostat *iostatrunner) time.Duration {
+func getSleepDuration(diskUtil uint32, thrctx *throttleContext) time.Duration {
 	for disk := range riostat.Disk {
 		riostat.Disk[disk]["%util"] = strconv.Itoa(int(diskUtil))
 	}
 
-	lctx.thrctx.nextCapCheck = time.Time{}
-	lctx.thrctx.nextUtilCheck = time.Time{}
+	thrctx.nextCapCheck = time.Time{}
+	thrctx.nextUtilCheck = time.Time{}
 
-	lctx.thrctx.computeThrottle(newLRUThrottleParams(lctx.fs, "/"))
-	return lctx.thrctx.sleep
+	thrctx.recompute()
+	return thrctx.sleep
 }
 
-func newLruContext() *lructx {
+func newThrottleContext() *throttleContext {
 	fileSystem, _ := fs.Fqn2fsAtStartup("/")
-	lruContext := &lructx{
-		xlru: new(xactLRU),
-		fs:   fileSystem,
-	}
-	return lruContext
-}
-
-func newLRUThrottleParams(fs, fqn string) *throttleParams {
-	return &throttleParams{throttle: onDiskUtil | onFSUsed, fs: fs, fqn: fqn}
+	return &throttleContext{
+		capUsedHigh:  int64(ctx.config.LRU.HighWM),
+		diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
+		diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
+		period:       ctx.config.Periodic.StatsTime,
+		path:         "/",
+		fs:           fileSystem,
+		flag:         onDiskUtil | onFSUsed}
 }

@@ -37,7 +37,7 @@ func TestGetFSDiskUtil(t *testing.T) {
 	}
 
 	tempRoot := "/tmp"
-	fs.Mountpaths.AddMountpath(tempRoot)
+	fs.Mountpaths.Add(tempRoot)
 
 	riostat := newIostatRunner(fs.Mountpaths)
 	go riostat.Run()
@@ -143,7 +143,7 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 
 func TestGetMaxUtil(t *testing.T) {
 	tempRoot := "/tmp"
-	fs.Mountpaths.AddMountpath(tempRoot)
+	fs.Mountpaths.Add(tempRoot)
 	riostat := newIostatRunner(fs.Mountpaths)
 	riostat.Disk = make(map[string]cmn.SimpleKVs, 2)
 	disks := make(cmn.StringSet)
@@ -172,7 +172,7 @@ func TestGetMaxUtil(t *testing.T) {
 
 func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 	tempRoot := "/tmp"
-	fs.Mountpaths.AddMountpath(tempRoot)
+	fs.Mountpaths.Add(tempRoot)
 	riostat := newIostatRunner(fs.Mountpaths)
 	_, ok := riostat.diskUtilFromFQN("test")
 	if ok {
@@ -272,14 +272,14 @@ func TestSimilarCasesWithRoot(t *testing.T) {
 func setAvailableMountPaths(paths ...string) []string {
 	fs.Mountpaths.DisableFsIDCheck()
 
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	oldPaths := make([]string, 0, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		oldPaths = append(oldPaths, mpathInfo.Path)
 	}
 
 	for _, mpathInfo := range availablePaths {
-		fs.Mountpaths.RemoveMountpath(mpathInfo.Path)
+		fs.Mountpaths.Remove(mpathInfo.Path)
 	}
 
 	for _, path := range paths {
@@ -287,7 +287,7 @@ func setAvailableMountPaths(paths ...string) []string {
 			continue
 		}
 
-		fs.Mountpaths.AddMountpath(path)
+		fs.Mountpaths.Add(path)
 	}
 
 	return oldPaths

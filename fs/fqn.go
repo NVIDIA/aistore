@@ -48,7 +48,7 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed FQNparsed, err error) {
 func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relativePath string) {
 	var (
 		max               int
-		availablePaths, _ = mfs.Mountpaths()
+		availablePaths, _ = mfs.Get()
 		cleanedPath       = filepath.Clean(path)
 	)
 	for mpath, mpathInfo := range availablePaths {

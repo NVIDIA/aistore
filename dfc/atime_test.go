@@ -21,7 +21,7 @@ func TestAtimerunnerStop(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	fs.Mountpaths.DisableFsIDCheck()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	target := newFakeTargetRunner()
 	atimer := newAtimeRunner(target, fs.Mountpaths)
@@ -50,7 +50,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 	fileName := "/tmp/local/bck1/fqn1"
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 	target := newFakeTargetRunner()
 	atimer := newAtimeRunner(target, fs.Mountpaths)
 
@@ -102,7 +102,7 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
-	fs.Mountpaths.AddMountpath("/tmp")
+	fs.Mountpaths.Add("/tmp")
 	atimer := newAtimeRunner(newFakeTargetRunner(), fs.Mountpaths)
 	go atimer.Run()
 	atimer.reqAddMountpath("/tmp")
@@ -131,7 +131,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	atimer := newAtimeRunner(target, fs.Mountpaths)
 	go atimer.Run()
@@ -177,7 +177,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	atimer := newAtimeRunner(target, fs.Mountpaths)
 	go atimer.Run()
@@ -216,7 +216,7 @@ func TestAtimerunnerFlush(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	target := newFakeTargetRunner()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	atimer := newAtimeRunner(target, fs.Mountpaths)
 	go atimer.Run()
@@ -258,7 +258,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 	target := newFakeTargetRunner()
 
 	atimer := newAtimeRunner(target, fs.Mountpaths)
@@ -292,7 +292,7 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	iostatr := newIostatRunner(fs.Mountpaths)
 	iostatr.Disk = map[string]cmn.SimpleKVs{
@@ -343,7 +343,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
@@ -395,7 +395,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	}
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
@@ -449,7 +449,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
@@ -503,7 +503,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 
 	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	cleanMountpaths()
-	fs.Mountpaths.AddMountpath(mpath)
+	fs.Mountpaths.Add(mpath)
 
 	iostatr := newIostatRunner(fs.Mountpaths)
 
@@ -546,11 +546,11 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 }
 
 func cleanMountpaths() {
-	availableMountpaths, disabledMountpaths := fs.Mountpaths.Mountpaths()
+	availableMountpaths, disabledMountpaths := fs.Mountpaths.Get()
 	for _, mpathInfo := range availableMountpaths {
-		fs.Mountpaths.RemoveMountpath(mpathInfo.Path)
+		fs.Mountpaths.Remove(mpathInfo.Path)
 	}
 	for _, mpathInfo := range disabledMountpaths {
-		fs.Mountpaths.RemoveMountpath(mpathInfo.Path)
+		fs.Mountpaths.Remove(mpathInfo.Path)
 	}
 }

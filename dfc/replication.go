@@ -404,7 +404,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 }
 
 func (rr *replicationRunner) init() {
-	availablePaths, disabledPaths := rr.mountpaths.Mountpaths()
+	availablePaths, disabledPaths := rr.mountpaths.Get()
 	for mpath := range availablePaths {
 		rr.addMpath(mpath)
 	}

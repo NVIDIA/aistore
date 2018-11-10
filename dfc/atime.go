@@ -150,7 +150,7 @@ func newAtimeRunner(t *targetrunner, mountpaths *fs.MountedFS) (r *atimerunner) 
 }
 
 func (r *atimerunner) init() {
-	availablePaths, disabledPaths := r.mountpaths.Mountpaths()
+	availablePaths, disabledPaths := r.mountpaths.Get()
 	for mpath := range availablePaths {
 		r.addMpathAtimeRunner(mpath)
 	}

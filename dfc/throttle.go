@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 )
 
+// tunable defaults
 const (
 	initThrottleSleep  = time.Millisecond
 	maxThrottleSleep   = time.Second
@@ -22,89 +24,87 @@ const (
 	onFSUsed
 )
 
+// implements cluster.Throttler
+var _ cluster.Throttler = &throttleContext{}
+
 type throttleContext struct {
+	// runtime
 	sleep         time.Duration
 	nextUtilCheck time.Time
 	nextCapCheck  time.Time
 	prevUtilPct   float32
 	prevFSUsedPct uint64
+	// init-time
+	capUsedHigh  int64
+	diskUtilLow  int64
+	diskUtilHigh int64
+	period       time.Duration
+	path         string
+	fs           string
+	flag         uint64
 }
 
-type throttleParams struct {
-	throttle uint64 // flag field that indicates on what to perform throttling
-	fs       string
-	fqn      string
-}
-
-func (thrctx *throttleContext) throttle(params *throttleParams) {
-	// compute sleeping time and update context
-	thrctx.computeThrottle(params)
-
-	if thrctx.sleep > 0 {
-		if glog.V(4) {
-			glog.Infof("%s: sleeping %v", params.fqn, thrctx.sleep)
-		}
-		time.Sleep(thrctx.sleep)
+func (u *throttleContext) Throttle() {
+	u.recompute()
+	if u.sleep > 0 {
+		time.Sleep(u.sleep)
 	}
 }
 
-func (thrctx *throttleContext) computeThrottle(params *throttleParams) {
+// recompute sleep time
+func (u *throttleContext) recompute() {
 	var (
 		ok  bool
-		now = time.Now()
+		now = time.Now() // FIXME: this may cost if the caller's coming here every ms or so..
 	)
-
-	if (params.throttle & onFSUsed) != 0 {
-		usedFSPercentage := thrctx.prevFSUsedPct
-		if now.After(thrctx.nextCapCheck) {
-			usedFSPercentage, ok = getFSUsedPercentage(params.fqn)
-			thrctx.nextCapCheck = now.Add(fsCapCheckDuration)
+	if (u.flag & onFSUsed) != 0 {
+		usedFSPercentage := u.prevFSUsedPct
+		if now.After(u.nextCapCheck) {
+			usedFSPercentage, ok = getFSUsedPercentage(u.path)
+			u.nextCapCheck = now.Add(fsCapCheckDuration)
 			if !ok {
-				glog.Errorf("Unable to retrieve used capacity for fs %s", params.fs)
-				thrctx.sleep = 0
+				glog.Errorf("Unable to retrieve used capacity for fs %s", u.fs)
+				u.sleep = 0
 				return
 			}
-			thrctx.prevFSUsedPct = usedFSPercentage
+			u.prevFSUsedPct = usedFSPercentage
 		}
-
-		if usedFSPercentage >= uint64(ctx.config.LRU.HighWM) {
-			thrctx.sleep = 0
+		if usedFSPercentage >= uint64(u.capUsedHigh) {
+			u.sleep = 0
 			return
 		}
 	}
-
-	if (params.throttle & onDiskUtil) != 0 {
+	if (u.flag & onDiskUtil) != 0 {
 		iostatr := getiostatrunner()
-		curUtilPct := thrctx.prevUtilPct
+		curUtilPct := u.prevUtilPct
 
-		if now.After(thrctx.nextUtilCheck) {
-			curUtilPct, ok = iostatr.maxUtilFS(params.fs)
-			thrctx.nextUtilCheck = now.Add(ctx.config.Periodic.StatsTime)
+		if now.After(u.nextUtilCheck) {
+			curUtilPct, ok = iostatr.maxUtilFS(u.fs)
+			u.nextUtilCheck = now.Add(u.period)
 			if !ok {
-				curUtilPct = thrctx.prevUtilPct
-				glog.Errorf("Unable to retrieve disk utilization for fs %s", params.fs)
+				curUtilPct = u.prevUtilPct
+				glog.Errorf("Unable to retrieve disk utilization for fs %s", u.fs)
 			}
 		}
 
-		if curUtilPct > float32(ctx.config.Xaction.DiskUtilHighWM) {
-			if thrctx.sleep < initThrottleSleep {
-				thrctx.sleep = initThrottleSleep
+		if curUtilPct > float32(u.diskUtilHigh) {
+			if u.sleep < initThrottleSleep {
+				u.sleep = initThrottleSleep
 			} else {
-				thrctx.sleep *= 2
+				u.sleep *= 2
 			}
-		} else if curUtilPct < float32(ctx.config.Xaction.DiskUtilLowWM) {
-			thrctx.sleep = 0
+		} else if curUtilPct < float32(u.diskUtilLow) {
+			u.sleep = 0
 		} else {
-			if thrctx.sleep < initThrottleSleep {
-				thrctx.sleep = initThrottleSleep
+			if u.sleep < initThrottleSleep {
+				u.sleep = initThrottleSleep
 			}
-			multiplier := (curUtilPct - float32(ctx.config.Xaction.DiskUtilLowWM)) /
-				float32(ctx.config.Xaction.DiskUtilHighWM-ctx.config.Xaction.DiskUtilLowWM)
-			thrctx.sleep = thrctx.sleep + time.Duration(multiplier*float32(thrctx.sleep))
+			multiplier := (curUtilPct - float32(u.diskUtilLow)) / float32(u.diskUtilHigh-u.diskUtilLow)
+			u.sleep = u.sleep + time.Duration(multiplier*float32(u.sleep))
 		}
-		if thrctx.sleep > maxThrottleSleep {
-			thrctx.sleep = maxThrottleSleep
+		if u.sleep > maxThrottleSleep {
+			u.sleep = maxThrottleSleep
 		}
-		thrctx.prevUtilPct = curUtilPct
+		u.prevUtilPct = curUtilPct
 	}
 }

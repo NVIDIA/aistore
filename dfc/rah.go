@@ -131,7 +131,7 @@ func newRahJogger(mpath string) (rj *rahjogger) {
 // as a runner
 func (r *readahead) Run() error {
 	glog.Infof("Starting %s", r.Getname())
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	for mpath := range availablePaths {
 		r.addmp(mpath, "added")
 	}

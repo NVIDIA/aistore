@@ -91,7 +91,7 @@ type (
 	}
 
 	fspathDispatcher interface {
-		DisableMountpath(path string, why string) (disabled, exists bool)
+		Disable(path string, why string) (disabled, exists bool)
 	}
 )
 
@@ -1283,7 +1283,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p cmn.BucketProps, 
 
 	wg := &sync.WaitGroup{}
 
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	ch := make(chan string, len(availablePaths))
 	for _, mpathInfo := range availablePaths {
 		// Create directory for new local bucket
@@ -1628,7 +1628,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 		err        error
 	}
 
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	ch := make(chan *mresp, len(availablePaths))
 	wg := &sync.WaitGroup{}
 
@@ -2836,7 +2836,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
-		availablePaths, disabledPaths := fs.Mountpaths.Mountpaths()
+		availablePaths, disabledPaths := fs.Mountpaths.Get()
 		mpList.Available = make([]string, len(availablePaths))
 		mpList.Disabled = make([]string, len(disabledPaths))
 
@@ -3161,7 +3161,7 @@ func (t *targetrunner) testCachepathMounts() {
 			os.Exit(1)
 		}
 
-		err := fs.Mountpaths.AddMountpath(mpath)
+		err := fs.Mountpaths.Add(mpath)
 		cmn.Assert(err == nil, err)
 	}
 }
@@ -3170,7 +3170,7 @@ func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath stri
 	if basename == "" {
 		return fmt.Errorf("empty basename for the %s buckets directory - update your config", s)
 	}
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	for _, mpathInfo := range availablePaths {
 		dir := f(mpathInfo.Path)
 		if _, exists := availablePaths[dir]; exists {
@@ -3201,7 +3201,7 @@ func (t *targetrunner) detectMpathChanges() {
 		}
 	)
 
-	availablePaths, disabledPath := fs.Mountpaths.Mountpaths()
+	availablePaths, disabledPath := fs.Mountpaths.Get()
 	for mpath := range availablePaths {
 		newfs.Available[mpath] = struct{}{}
 	}
@@ -3468,7 +3468,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	// Remove buckets which don't exist in newbucketmd
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
@@ -3751,15 +3751,15 @@ func (t *targetrunner) enable() error {
 	return nil
 }
 
-// DisableMountpath implements fspathDispatcher interface
-func (t *targetrunner) DisableMountpath(mountpath string, why string) (disabled, exists bool) {
+// Disable implements fspathDispatcher interface
+func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists bool) {
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
 	return t.fsprg.disableMountpath(mountpath)
 }
 
 func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (fqn string, size int64) {
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	fn := fs.Mountpaths.MakePathCloud
 	if islocal {
 		fn = fs.Mountpaths.MakePathLocal
@@ -3803,7 +3803,7 @@ func (t *targetrunner) runLRU() {
 	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
 	//
 
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	for path, mpathInfo := range availablePaths {
 		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
 		wg.Add(1)
@@ -3828,12 +3828,19 @@ func (t *targetrunner) runLRU() {
 // construct lructx
 func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
 	lctx := &lructx{
-		oldwork:     make([]*fileInfo, 0, 64),
-		xlru:        xlru,
-		t:           t,
-		fs:          mpathInfo.FileSystem,
-		bucketdir:   bucketdir,
-		thrparams:   throttleParams{throttle: onDiskUtil | onFSUsed, fs: mpathInfo.FileSystem},
+		oldwork:   make([]*fileInfo, 0, 64),
+		xlru:      xlru,
+		t:         t,
+		fs:        mpathInfo.FileSystem,
+		bucketdir: bucketdir,
+		throttler: &throttleContext{
+			capUsedHigh:  int64(ctx.config.LRU.HighWM),
+			diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
+			diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
+			period:       ctx.config.Periodic.StatsTime,
+			path:         mpathInfo.Path,
+			fs:           mpathInfo.FileSystem,
+			flag:         onDiskUtil | onFSUsed},
 		atimeRespCh: make(chan *atimeResponse, 1),
 		namelocker:  t.rtnamemap,
 	}

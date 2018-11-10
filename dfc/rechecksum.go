@@ -19,10 +19,10 @@ import (
 )
 
 type recksumctx struct {
-	xrcksum *xactRechecksum
-	t       *targetrunner
-	fs      string
-	thrctx  throttleContext
+	xrcksum   *xactRechecksum
+	t         *targetrunner
+	fs        string
+	throttler cluster.Throttler
 }
 
 // TODO:
@@ -40,7 +40,7 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 
 	// re-checksum every object in a given bucket
 	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum, bucket)
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	wg := &sync.WaitGroup{}
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
@@ -70,7 +70,16 @@ func (t *targetrunner) oneRechecksumBucket(mpathInfo *fs.MountpathInfo, bucketDi
 		xrcksum: xrcksum,
 		t:       t,
 		fs:      mpathInfo.FileSystem,
+		throttler: &throttleContext{
+			capUsedHigh:  int64(ctx.config.LRU.HighWM),
+			diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
+			diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
+			period:       ctx.config.Periodic.StatsTime,
+			path:         mpathInfo.Path,
+			fs:           mpathInfo.FileSystem,
+			flag:         onDiskUtil},
 	}
+
 	if err := filepath.Walk(bucketDir, rcksctx.walkFunc); err != nil {
 		glog.Errorf("failed to traverse %q, error: %v", bucketDir, err)
 	}
@@ -91,7 +100,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 		return nil
 	}
 
-	rcksctx.thrctx.throttle(rcksctx.newRechecksumThrottleParams())
+	rcksctx.throttler.Throttle()
 
 	// stop traversing if xaction is aborted
 	select {
@@ -140,11 +149,4 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 		return ioerr
 	}
 	return nil
-}
-
-func (rcksctx *recksumctx) newRechecksumThrottleParams() *throttleParams {
-	return &throttleParams{
-		throttle: onDiskUtil,
-		fs:       rcksctx.fs,
-	}
 }

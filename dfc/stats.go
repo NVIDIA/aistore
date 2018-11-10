@@ -642,7 +642,7 @@ func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []o
 }
 
 func (r *storstatsrunner) updateCapacity() (runlru bool) {
-	availableMountpaths, _ := fs.Mountpaths.Mountpaths()
+	availableMountpaths, _ := fs.Mountpaths.Get()
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
 
 	for mpath := range availableMountpaths {

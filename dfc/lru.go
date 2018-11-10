@@ -69,8 +69,7 @@ type (
 		t           *targetrunner // TODO: refactor to remove
 		fs          string
 		bucketdir   string
-		thrctx      throttleContext
-		thrparams   throttleParams
+		throttler   cluster.Throttler
 		atimeRespCh chan *atimeResponse
 		namelocker  cluster.NameLocker
 	}
@@ -122,8 +121,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if spec, info = cluster.FileSpec(fqn); spec != nil && !spec.PermToEvict() && !info.Old {
 		return nil
 	}
-	lctx.thrparams.fqn = fqn
-	lctx.thrctx.throttle(&lctx.thrparams)
+	lctx.throttler.Throttle()
 
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {

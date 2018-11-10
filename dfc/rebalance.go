@@ -377,7 +377,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 
 	// find and abort in-progress x-action if exists and if its smap version is lower
 	// start new x-action unless the one for the current version is already in progress
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	runnerCnt := len(availablePaths) * 2
 
 	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnerCnt)
@@ -458,7 +458,7 @@ func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
 }
 
 func (t *targetrunner) runLocalRebalance() {
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	runnerCnt := len(availablePaths) * 2
 	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 

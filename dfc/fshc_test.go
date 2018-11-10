@@ -33,11 +33,11 @@ func testCheckerMountPaths() *fs.MountedFS {
 	mountedFS.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		mountedFS.AddMountpath(name)
+		mountedFS.Add(name)
 	}
 
 	os.RemoveAll(fsCheckerTmpDir + "/3") // one folder is deleted
-	mountedFS.DisableMountpath(fsCheckerTmpDir + "/4")
+	mountedFS.Disable(fsCheckerTmpDir + "/4")
 	return mountedFS
 }
 
@@ -59,7 +59,7 @@ func newMockFSDispatcher(mpathToFail string) *MockFSDispatcher {
 	}
 }
 
-func (d *MockFSDispatcher) DisableMountpath(path, why string) (disabled, exists bool) {
+func (d *MockFSDispatcher) Disable(path, why string) (disabled, exists bool) {
 	d.faultDetected = path == d.faultyPath
 	return d.faultDetected, true
 }
@@ -77,7 +77,7 @@ func TestFSCheckerMain(t *testing.T) {
 	}
 
 	// intial state = 2 availble FSes - must pass
-	availablePaths, disabledPaths := fshc.mountpaths.Mountpaths()
+	availablePaths, disabledPaths := fshc.mountpaths.Get()
 	if len(availablePaths) != 3 || len(disabledPaths) != 1 {
 		t.Errorf("Invalid number of mountpaths at start: %v - %v",
 			availablePaths, disabledPaths)

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
 // Package cluster provides local access to cluster-level metadata
 package cluster
@@ -71,7 +70,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
 }
 
 func hrwMpath(bucket, objname string) (mpath string, errstr string) {
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
 		errstr = fmt.Sprintf("Cannot select mountpath for %s/%s", bucket, objname)
 		return

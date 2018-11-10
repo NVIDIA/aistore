@@ -138,7 +138,7 @@ func (r *iostatrunner) isZeroUtil(dev string) bool {
 }
 
 func (r *iostatrunner) updateFSDisks() {
-	availablePaths, _ := fs.Mountpaths.Mountpaths()
+	availablePaths, _ := fs.Mountpaths.Get()
 	r.Lock()
 	r.fsdisks = make(map[string]cmn.StringSet, len(availablePaths))
 	for _, mpathInfo := range availablePaths {

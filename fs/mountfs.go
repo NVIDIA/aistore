@@ -92,7 +92,7 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 	}
 
 	for _, path := range fsPaths {
-		if err := mfs.AddMountpath(path); err != nil {
+		if err := mfs.Add(path); err != nil {
 			return err
 		}
 	}
@@ -100,8 +100,8 @@ func (mfs *MountedFS) Init(fsPaths []string) error {
 	return nil
 }
 
-// AddMountpath adds new mountpath to the target's mountpaths.
-func (mfs *MountedFS) AddMountpath(mpath string) error {
+// Add adds new mountpath to the target's mountpaths.
+func (mfs *MountedFS) Add(mpath string) error {
 	seperator := string(filepath.Separator)
 	for _, bucket := range []string{mfs.localBuckets, mfs.cloudBuckets} {
 		invalidMpath := seperator + bucket
@@ -146,10 +146,10 @@ func (mfs *MountedFS) AddMountpath(mpath string) error {
 	return nil
 }
 
-// RemoveMountpath removes mountpaths from the target's mountpaths. It searches
+// Remove removes mountpaths from the target's mountpaths. It searches
 // for the mountpath in available and disabled (if the mountpath is not found
 // in available).
-func (mfs *MountedFS) RemoveMountpath(mpath string) error {
+func (mfs *MountedFS) Remove(mpath string) error {
 	var (
 		mp     *MountpathInfo
 		exists bool
@@ -181,10 +181,10 @@ func (mfs *MountedFS) RemoveMountpath(mpath string) error {
 	return nil
 }
 
-// EnableMountpath enables previously disabled mountpath. enabled is set to
+// Enable enables previously disabled mountpath. enabled is set to
 // true if mountpath has been moved from disabled to available and exists is
 // set to true if such mountpath even exists.
-func (mfs *MountedFS) EnableMountpath(mpath string) (enabled, exists bool) {
+func (mfs *MountedFS) Enable(mpath string) (enabled, exists bool) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
@@ -204,10 +204,10 @@ func (mfs *MountedFS) EnableMountpath(mpath string) (enabled, exists bool) {
 	return
 }
 
-// DisableMountpath disables an available mountpath. disabled is set to true if
+// Disable disables an available mountpath. disabled is set to true if
 // mountpath has been moved from available to disabled and exists is set to
 // true if such mountpath even exists.
-func (mfs *MountedFS) DisableMountpath(mpath string) (disabled, exists bool) {
+func (mfs *MountedFS) Disable(mpath string) (disabled, exists bool) {
 	mfs.mu.Lock()
 	defer mfs.mu.Unlock()
 
@@ -228,7 +228,7 @@ func (mfs *MountedFS) DisableMountpath(mpath string) (disabled, exists bool) {
 }
 
 // Mountpaths returns both available and disabled mountpaths.
-func (mfs *MountedFS) Mountpaths() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
+func (mfs *MountedFS) Get() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
 	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
 	disabled := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.disabled))
 	if available == nil {
@@ -256,7 +256,7 @@ func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo)
 
 // mountpathsCopy returns shallow copy of current mountpaths
 func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
-	available, disabled := mfs.Mountpaths()
+	available, disabled := mfs.Get()
 	availableCopy := make(map[string]*MountpathInfo, len(available))
 	disabledCopy := make(map[string]*MountpathInfo, len(available))
 

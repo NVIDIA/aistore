@@ -133,7 +133,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	cleanMountpaths()
 	for _, mpath := range mpaths {
 		cmn.CreateDir(mpath)
-		fs.Mountpaths.AddMountpath(mpath)
+		fs.Mountpaths.Add(mpath)
 	}
 
 	ctx.rg = &rungroup{

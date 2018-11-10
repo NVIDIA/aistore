@@ -183,7 +183,7 @@ func (f *fshc) runMountpathChecker(r *mountpathChecker) {
 }
 
 func (f *fshc) init() {
-	availablePaths, disabledPaths := f.mountpaths.Mountpaths()
+	availablePaths, disabledPaths := f.mountpaths.Get()
 	for mpath := range availablePaths {
 		f.addmp(mpath)
 	}
@@ -243,7 +243,7 @@ func (f *fshc) runMpathTest(mpath, filepath string) {
 		glog.Errorf("Disabling mountpath %s...", mpath)
 
 		if f.dispatcher != nil {
-			disabled, exists := f.dispatcher.DisableMountpath(mpath, why)
+			disabled, exists := f.dispatcher.Disable(mpath, why)
 			if !disabled && exists {
 				glog.Errorf("Failed to disable mountpath: %s", mpath)
 			}

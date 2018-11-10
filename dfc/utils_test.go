@@ -137,7 +137,7 @@ func TestFqn2Info(t *testing.T) {
 					cmn.CreateDir(mpath)
 					defer os.RemoveAll(mpath)
 				}
-				err := mfs.AddMountpath(mpath)
+				err := mfs.Add(mpath)
 				if err != nil {
 					t.Errorf("error in add mountpath: %v", err)
 					return
