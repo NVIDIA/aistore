@@ -96,7 +96,7 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 		return nil
 	}
 	// rebalance maybe
-	bucket, objname, err := rcl.t.fqn2bckobj(fqn)
+	bucket, objname, err := cluster.ResolveFQN(fqn, rcl.t.bmdowner)
 	if err != nil {
 		// It may happen that local rebalance have not yet moved this particular
 		// file and we got and error in fqn2bckobj. Since we might need still

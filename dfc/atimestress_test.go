@@ -143,9 +143,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	iostatr := newIostatRunner(fs.Mountpaths)
 	ctx.rg.add(iostatr, xiostat)
 
-	target := newFakeTargetRunner()
-
-	atimer := newAtimeRunner(target, fs.Mountpaths)
+	atimer := newAtimeRunner(fs.Mountpaths)
 	ctx.rg.add(atimer, xatime)
 
 	go atimer.Run()

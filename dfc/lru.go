@@ -66,12 +66,14 @@ type (
 		oldwork []*fileInfo
 		// init-time
 		xlru        cmn.XactInterface
-		t           *targetrunner // TODO: refactor to remove
 		fs          string
 		bucketdir   string
 		throttler   cluster.Throttler
 		atimeRespCh chan *atimeResponse
 		namelocker  cluster.NameLocker
+		bmdowner    cluster.Bowner
+		statsif     statsif
+		rebalancer  cluster.Rebalancer
 	}
 )
 
@@ -170,7 +172,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	// cleanup after rebalance
-	_, _, err = lctx.t.fqn2bckobj(fqn)
+	_, _, err = cluster.ResolveFQN(fqn, lctx.bmdowner)
 	if err != nil {
 		glog.Infof("%s: is misplaced, err: %v", fqn, err)
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
@@ -201,11 +203,11 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 func (lctx *lructx) evict() error {
 	var (
 		fevicted, bevicted int64
-		h, t               = lctx.heap, lctx.t
+		h                  = lctx.heap
 	)
 	for _, fi := range lctx.oldwork {
-		if t.isRebalancing() {
-			_, _, err := t.fqn2bckobj(fi.fqn)
+		if lctx.rebalancer.IsRebalancing() {
+			_, _, err := cluster.ResolveFQN(fi.fqn, lctx.bmdowner)
 			// keep a copy of a rebalanced file while rebalance is running
 			if spec, _ := cluster.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
 				continue
@@ -228,14 +230,14 @@ func (lctx *lructx) evict() error {
 		bevicted += fi.size
 		fevicted++
 	}
-	t.statsif.add(statLruEvictSize, bevicted)
-	t.statsif.add(statLruEvictCount, fevicted)
+	lctx.statsif.add(statLruEvictSize, bevicted)
+	lctx.statsif.add(statLruEvictCount, fevicted)
 	return nil
 }
 
 // evictFQN evicts a given file
 func (lctx *lructx) evictFQN(fqn string) error {
-	bucket, objname, err := lctx.t.fqn2bckobj(fqn)
+	bucket, objname, err := cluster.ResolveFQN(fqn, lctx.bmdowner)
 	if err != nil {
 		glog.Errorf("Evicting %q with error: %v", fqn, err)
 		if e := os.Remove(fqn); e != nil {

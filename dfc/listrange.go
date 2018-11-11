@@ -219,7 +219,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 		props             *objectProps
 	)
 	versioncfg := &ctx.config.Ver
-	islocal := t.bmdowner.get().islocal(bucket)
+	islocal := t.bmdowner.get().IsLocal(bucket)
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		glog.Error(errstr)
@@ -261,7 +261,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 
 func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket string,
 	deadline time.Duration, done chan struct{}) error {
-	if t.bmdowner.get().islocal(bucket) {
+	if t.bmdowner.get().IsLocal(bucket) {
 		return fmt.Errorf("Cannot prefetch from a local bucket: %s", bucket)
 	}
 	var absdeadline time.Time
@@ -500,7 +500,7 @@ func (t *targetrunner) iterateBucketListPages(r *http.Request, apitems []string,
 		prefix         = rangeMsg.Prefix
 		ct             = t.contextWithAuth(r)
 		msg            = &cmn.GetMsg{GetPrefix: prefix, GetProps: cmn.GetPropsStatus}
-		islocal        = t.bmdowner.get().islocal(bucket)
+		islocal        = t.bmdowner.get().IsLocal(bucket)
 	)
 
 	min, max, err := parseRange(rangeMsg.Range)

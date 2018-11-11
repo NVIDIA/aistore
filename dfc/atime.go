@@ -98,7 +98,6 @@ type atimerunner struct {
 	mpathReqCh   chan mpathReq
 	mpathRunners map[string]*mpathAtimeRunner // mpath -> mpathAtimeRunner
 	mountpaths   *fs.MountedFS
-	t            *targetrunner
 }
 
 // Each mpathAtimeRunner corresponds to a mpath. All atime request for any file belonging
@@ -138,14 +137,13 @@ type atimeResponse struct {
 
 //================================ atimerunner ==========================================
 
-func newAtimeRunner(t *targetrunner, mountpaths *fs.MountedFS) (r *atimerunner) {
+func newAtimeRunner(mountpaths *fs.MountedFS) (r *atimerunner) {
 	return &atimerunner{
 		stopCh:       make(chan struct{}, 4),
 		mpathReqCh:   make(chan mpathReq, 1),
 		mpathRunners: make(map[string]*mpathAtimeRunner, mpathRunnersMapSize),
 		mountpaths:   mountpaths,
 		requestCh:    make(chan *atimeRequest),
-		t:            t,
 	}
 }
 

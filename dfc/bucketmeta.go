@@ -90,14 +90,9 @@ func (m *bucketMD) set(b string, local bool, p cmn.BucketProps) {
 	mm[b] = p
 }
 
-func (m *bucketMD) islocal(bucket string) bool {
-	_, ok := m.LBmap[bucket]
-	return ok
-}
-
 func (m *bucketMD) propsAndChecksum(bucket string) (p cmn.BucketProps, checksum string, defined bool) {
 	var ok bool
-	ok, p = m.get(bucket, m.islocal(bucket))
+	ok, p = m.get(bucket, m.IsLocal(bucket))
 	if !ok || p.Checksum == cmn.ChecksumInherit {
 		return p, "", false
 	}
@@ -107,7 +102,7 @@ func (m *bucketMD) propsAndChecksum(bucket string) (p cmn.BucketProps, checksum 
 // lruEnabled returns whether or not LRU is enabled
 // for the bucket. Returns the global setting if bucket not found
 func (m *bucketMD) lruEnabled(bucket string) bool {
-	ok, p := m.get(bucket, m.islocal(bucket))
+	ok, p := m.get(bucket, m.IsLocal(bucket))
 	if !ok {
 		return ctx.config.LRU.LRUEnabled
 	}

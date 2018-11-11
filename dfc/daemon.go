@@ -268,7 +268,7 @@ func dfcinit() {
 		ctx.rg.add(replRunner, xreplication)
 		t.fsprg.add(replRunner)
 
-		atime := newAtimeRunner(t, fs.Mountpaths)
+		atime := newAtimeRunner(fs.Mountpaths)
 		ctx.rg.add(atime, xatime)
 		t.fsprg.add(atime)
 	}

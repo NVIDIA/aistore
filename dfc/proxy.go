@@ -413,7 +413,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketmd := p.bmdowner.get()
-		if !bucketmd.islocal(bucket) {
+		if !bucketmd.IsLocal(bucket) {
 			p.invalmsghdlr(w, r, fmt.Sprintf("Bucket %s does not appear to be local", bucket))
 			return
 		}
@@ -719,7 +719,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	isLocal := clone.islocal(bucket)
+	isLocal := clone.IsLocal(bucket)
 
 	exists, oldProps := clone.get(bucket, isLocal)
 	if !exists {
@@ -922,7 +922,7 @@ func (p *proxyrunner) redirectURL(r *http.Request, to string, ts time.Time, buck
 	var (
 		query    = url.Values{}
 		bucketmd = p.bmdowner.get()
-		islocal  = bucketmd.islocal(bucket)
+		islocal  = bucketmd.IsLocal(bucket)
 	)
 	redirect = to + r.URL.Path + "?"
 	if r.URL.RawQuery != "" {
@@ -1285,7 +1285,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 		return
 	}
 
-	if p.bmdowner.get().islocal(bucket) {
+	if p.bmdowner.get().IsLocal(bucket) {
 		allentries, err = p.getLocalBucketObjects(bucket, listmsgjson)
 	} else {
 		allentries, err = p.getCloudBucketObjects(r, bucket, listmsgjson)
@@ -1316,7 +1316,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 		return
 	}
 	lbucket, objname := apitems[0], apitems[1]
-	if !p.bmdowner.get().islocal(lbucket) {
+	if !p.bmdowner.get().IsLocal(lbucket) {
 		s := fmt.Sprintf("Rename/move is supported only for cache-only buckets (%s does not appear to be local)", lbucket)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -1376,7 +1376,7 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 		return
 	}
 	bucket := apitems[0]
-	islocal := p.bmdowner.get().islocal(bucket)
+	islocal := p.bmdowner.get().IsLocal(bucket)
 	wait := false
 	if jsmap, ok := actionMsg.Value.(map[string]interface{}); !ok {
 		s := fmt.Sprintf("Failed to unmarshal JSMAP: Not a map[string]interface")

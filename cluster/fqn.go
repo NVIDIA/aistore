@@ -6,6 +6,7 @@
 package cluster
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/fs"
 )
 
 /*
@@ -156,17 +158,9 @@ func FileSpec(fqn string) (resolver ContentResolver, info *ContentInfo) {
 	}
 }
 
-func (wf *DefaultWorkfile) PermToMove() bool {
-	return false
-}
-
-func (wf *DefaultWorkfile) PermToEvict() bool {
-	return false
-}
-
-func (wf *DefaultWorkfile) PermToProcess() bool {
-	return false
-}
+func (wf *DefaultWorkfile) PermToMove() bool    { return false }
+func (wf *DefaultWorkfile) PermToEvict() bool   { return false }
+func (wf *DefaultWorkfile) PermToProcess() bool { return false }
 
 func (wf *DefaultWorkfile) GenUniqueFQN(base string) string {
 	tieBreaker := strconv.FormatInt(time.Now().UnixNano(), 16)
@@ -188,4 +182,48 @@ func (wf *DefaultWorkfile) ParseUniqueFQN(base string) (orig string, old bool, o
 	}
 
 	return base[:tieIndex], filePID != pid, true
+}
+
+//
+// (bucket, object) => FQN => (bucket, object)
+//
+
+// (bucket, object) => (local hashed path, fully qualified name aka fqn & error)
+func FQN(bucket, objname string, islocal bool) (string, string) {
+	mpath, errstr := hrwMpath(bucket, objname)
+	if errstr != "" {
+		return "", errstr
+	}
+	if islocal {
+		return filepath.Join(fs.Mountpaths.MakePathLocal(mpath), bucket, objname), ""
+	}
+	return filepath.Join(fs.Mountpaths.MakePathCloud(mpath), bucket, objname), ""
+}
+
+// fqn => (bucket, objname, err)
+func ResolveFQN(fqn string, bowner Bowner) (bucket, objname string, err error) {
+	var (
+		islocal   bool
+		parsedFQN fs.FQNparsed
+	)
+	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
+	if err != nil {
+		return
+	}
+	bucket, objname, islocal = parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
+	resfqn, errstr := FQN(bucket, objname, islocal)
+	if errstr != "" {
+		err = errors.New(errstr)
+		return
+	}
+	errstr = fmt.Sprintf("Cannot convert %s => %s/%s", fqn, bucket, objname)
+	if resfqn != fqn {
+		err = fmt.Errorf("%s - %q misplaced", errstr, resfqn)
+		return
+	}
+	bmd := bowner.Get()
+	if bmd.IsLocal(bucket) != islocal {
+		err = fmt.Errorf("%s - islocal mismatch(%t, %t)", errstr, bmd.IsLocal(bucket), islocal)
+	}
+	return
 }

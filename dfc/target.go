@@ -396,7 +396,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.islocal(bucket)
+	islocal := bucketmd.IsLocal(bucket)
 	fqn, errstr = cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
@@ -1017,7 +1017,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
-	islocal = bucketmd.islocal(bucket)
+	islocal = bucketmd.IsLocal(bucket)
 	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -1094,7 +1094,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
 	}
 	bucketmd := t.bmdowner.get()
-	islocal = bucketmd.islocal(bucket)
+	islocal = bucketmd.IsLocal(bucket)
 	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -1338,7 +1338,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToProcess() { // FIXME: workfiles indicate work in progress..
 		return nil
 	}
-	bucket, objname, err := renctx.t.fqn2bckobj(fqn)
+	bucket, objname, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
 	if err == nil {
 		if bucket != renctx.bucketFrom {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
@@ -1446,7 +1446,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
 		bucketmd    = t.bmdowner.get()
-		islocal     = bucketmd.islocal(bucket)
+		islocal     = bucketmd.IsLocal(bucket)
 		uname       = cluster.Uname(bucket, objname)
 		versioncfg  = &ctx.config.Ver
 		cksumcfg    = &ctx.config.Cksum
@@ -1658,7 +1658,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	// If any mountpoint traversing fails others keep running until they complete.
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
-	islocal := t.bmdowner.get().islocal(bucket)
+	islocal := t.bmdowner.get().IsLocal(bucket)
 	for _, mpathInfo := range availablePaths {
 		wg.Add(1)
 		var localDir string
@@ -1778,7 +1778,7 @@ func (t *targetrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.islocal(bucket)
+	islocal := bucketmd.IsLocal(bucket)
 	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
@@ -1975,7 +1975,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 
 	objStatus := cmn.ObjStatusOK
 	if ci.needStatus {
-		bucket, objname, err := ci.t.fqn2bckobj(fqn)
+		bucket, objname, err := cluster.ResolveFQN(fqn, ci.t.bmdowner)
 		if err != nil {
 			glog.Warning(err)
 			objStatus = cmn.ObjStatusMoved
@@ -2007,7 +2007,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		started                    time.Time
 	)
 	started = time.Now()
-	islocal := t.bmdowner.get().islocal(bucket)
+	islocal := t.bmdowner.get().IsLocal(bucket)
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return errstr, http.StatusBadRequest
@@ -2085,7 +2085,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 
 	var (
 		started = time.Now()
-		islocal = t.bmdowner.get().islocal(bucket)
+		islocal = t.bmdowner.get().IsLocal(bucket)
 	)
 
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
@@ -2171,7 +2171,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 	var (
 		file     *os.File
 		bucketmd = t.bmdowner.get()
-		islocal  = bucketmd.islocal(bucket)
+		islocal  = bucketmd.IsLocal(bucket)
 	)
 	reopenFile := func() (io.ReadCloser, error) {
 		return os.Open(putfqn)
@@ -2245,7 +2245,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 	}
 	var size int64
 	bucketmd := t.bmdowner.get()
-	fqn, errstr := cluster.FQN(bucket, objname, bucketmd.islocal(bucket))
+	fqn, errstr := cluster.FQN(bucket, objname, bucketmd.IsLocal(bucket))
 	if errstr != "" {
 		return
 	}
@@ -2326,7 +2326,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		errstr  string
 		errcode int
 	)
-	islocal := t.bmdowner.get().islocal(bucket)
+	islocal := t.bmdowner.get().IsLocal(bucket)
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
 		return errors.New(errstr)
@@ -2400,7 +2400,7 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn
 		return
 	}
 	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.islocal(bucket)
+	islocal := bucketmd.IsLocal(bucket)
 	fqn, errstr := cluster.FQN(bucket, object, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
@@ -2437,7 +2437,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 		return
 	}
 	bucketmd := t.bmdowner.get()
-	islocalFrom := bucketmd.islocal(bucketFrom)
+	islocalFrom := bucketmd.IsLocal(bucketFrom)
 	fqn, errstr := cluster.FQN(bucketFrom, objnameFrom, islocalFrom)
 	if errstr != "" {
 		return
@@ -2449,7 +2449,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	}
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
-		islocalTo := bucketmd.islocal(bucketTo)
+		islocalTo := bucketmd.IsLocal(bucketTo)
 		newfqn, errstr = cluster.FQN(bucketTo, objnameTo, islocalTo)
 		if errstr != "" {
 			return
@@ -2496,7 +2496,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	url := destsi.PublicNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Objects, newbucket, newobjname)
 	url += fmt.Sprintf("?%s=%s&%s=%s", cmn.URLParamFromID, fromid, cmn.URLParamToID, toid)
 	bucketmd := t.bmdowner.get()
-	islocal := bucketmd.islocal(bucket)
+	islocal := bucketmd.IsLocal(bucket)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConfig
@@ -2637,7 +2637,7 @@ func (t *targetrunner) checkIsLocal(bucket string, bucketmd *bucketMD, q url.Val
 		} else if v > bucketmd.version() { // fixup
 			glog.Errorf("Warning: bucket-metadata v%d < v%d (primary) - updating...", bucketmd.version(), v)
 			t.bmdVersionFixup()
-			islocal := t.bmdowner.get().islocal(bucket)
+			islocal := t.bmdowner.get().IsLocal(bucket)
 			if islocal == proxylocal {
 				glog.Infof("Success: updated bucket-metadata to v%d - resolved 'islocal' mismatch", bucketmd.version())
 				errstr, errcode = "", 0
@@ -2981,7 +2981,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		return
 	}
 	// try to override cksum config with bucket-level config
-	if bucket, _, err := t.fqn2bckobj(fqn); err == nil {
+	if bucket, _, err := cluster.ResolveFQN(fqn, t.bmdowner); err == nil {
 		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 			cksumcfg = &bucketProps.CksumConfig
 		}
@@ -3106,29 +3106,6 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	return
 }
 
-// the opposite
-func (t *targetrunner) fqn2bckobj(fqn string) (bucket, objName string, err error) {
-	var (
-		isLocal   bool
-		parsedFQN fs.FQNparsed
-	)
-	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
-	if err != nil {
-		return
-	}
-	bucket, objName, isLocal = parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
-	bucketmd := t.bmdowner.get()
-	realFQN, errstr := cluster.FQN(bucket, objName, isLocal)
-	if errstr != "" {
-		return "", "", errors.New(errstr)
-	}
-	if realFQN != fqn || bucketmd.islocal(bucket) != isLocal {
-		err = fmt.Errorf("Cannot convert %q => %s/%s - localbuckets or device mountpaths changed?", fqn, bucket, objName)
-		return
-	}
-	return
-}
-
 // changedMountpath checks if the mountpath for provided fqn has changed. This
 // situation can happen when new mountpath is added or mountpath is moved from
 // disabled to enabled.
@@ -3244,7 +3221,7 @@ func (t *targetrunner) detectMpathChanges() {
 //    save/read/update version using xattrs. And the function returns that the
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
 func (t *targetrunner) versioningConfigured(bucket string) bool {
-	islocal := t.bmdowner.get().islocal(bucket)
+	islocal := t.bmdowner.get().IsLocal(bucket)
 	versioning := ctx.config.Ver.Versioning
 	if islocal {
 		return versioning == cmn.VersionAll || versioning == cmn.VersionLocal
@@ -3777,7 +3754,10 @@ func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (f
 	return "", 0
 }
 
-func (t *targetrunner) isRebalancing() bool {
+// implements cluster.Rebalance interface
+var _ cluster.Rebalancer = &targetrunner{}
+
+func (t *targetrunner) IsRebalancing() bool {
 	_, running := t.xactinp.isAbortedOrRunningRebalance()
 	_, runningLocal := t.xactinp.isAbortedOrRunningLocalRebalance()
 	return running || runningLocal
@@ -3827,22 +3807,26 @@ func (t *targetrunner) runLRU() {
 
 // construct lructx
 func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
+	thrctx := &throttleContext{
+		capUsedHigh:  int64(ctx.config.LRU.HighWM),
+		diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
+		diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
+		period:       ctx.config.Periodic.StatsTime,
+		path:         mpathInfo.Path,
+		fs:           mpathInfo.FileSystem,
+		flag:         onDiskUtil | onFSUsed}
+
 	lctx := &lructx{
-		oldwork:   make([]*fileInfo, 0, 64),
-		xlru:      xlru,
-		t:         t,
-		fs:        mpathInfo.FileSystem,
-		bucketdir: bucketdir,
-		throttler: &throttleContext{
-			capUsedHigh:  int64(ctx.config.LRU.HighWM),
-			diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
-			diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
-			period:       ctx.config.Periodic.StatsTime,
-			path:         mpathInfo.Path,
-			fs:           mpathInfo.FileSystem,
-			flag:         onDiskUtil | onFSUsed},
+		oldwork:     make([]*fileInfo, 0, 64),
+		xlru:        xlru,
+		fs:          mpathInfo.FileSystem,
+		bucketdir:   bucketdir,
+		throttler:   thrctx,
 		atimeRespCh: make(chan *atimeResponse, 1),
 		namelocker:  t.rtnamemap,
+		bmdowner:    t.bmdowner,
+		statsif:     t.statsif,
+		rebalancer:  t,
 	}
 	return lctx
 }

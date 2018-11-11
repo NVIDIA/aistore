@@ -6,7 +6,6 @@ package cluster
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/xoshiro256"
@@ -87,16 +86,4 @@ func hrwMpath(bucket, objname string) (mpath string, errstr string) {
 		}
 	}
 	return
-}
-
-// (bucket, object) => (local hashed path, fully qualified name aka fqn & error)
-func FQN(bucket, objname string, islocal bool) (string, string) {
-	mpath, errstr := hrwMpath(bucket, objname)
-	if errstr != "" {
-		return "", errstr
-	}
-	if islocal {
-		return filepath.Join(fs.Mountpaths.MakePathLocal(mpath), bucket, objname), ""
-	}
-	return filepath.Join(fs.Mountpaths.MakePathCloud(mpath), bucket, objname), ""
 }
