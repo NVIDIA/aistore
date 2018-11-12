@@ -156,16 +156,14 @@ func CreateFile(fname string) (file *os.File, err error) {
 
 // ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
 // xxHash on the data.
-func ReadWriteWithHash(r io.Reader, w io.Writer, slabuf []byte) (int64, string, error) {
+func ReadWriteWithHash(r io.Reader, w io.Writer, buf []byte) (int64, string, error) {
 	var (
 		total int64
-		buf   []byte
 	)
-	if slabuf != nil {
-		buf = slabuf
-	} else {
+	if buf == nil {
 		buf = make([]byte, DefaultBufSize)
 	}
+
 	h := xxhash.New64()
 	mw := io.MultiWriter(h, w)
 	for {

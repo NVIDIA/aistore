@@ -118,7 +118,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		if _, ok := targets[e.TargetURL]; !ok {
 			targets[e.TargetURL] = struct{}{}
 		}
-		l, _, err := tutils.Get(e.TargetURL, bucket, e.Name, nil, nil, false, false)
+		l, err := api.GetObject(tutils.HTTPClient, e.TargetURL, bucket, e.Name)
 		tutils.CheckFatal(err, t)
 		if uint64(l) != filesize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", filesize, l)
@@ -209,8 +209,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		if _, ok := targets[object.TargetURL]; !ok {
 			targets[object.TargetURL] = struct{}{}
 		}
-		objectSize, _, err := tutils.Get(object.TargetURL, bucketName, object.Name,
-			nil, nil, false, false)
+		objectSize, err := api.GetObject(tutils.HTTPClient, object.TargetURL, bucketName, object.Name)
 		tutils.CheckFatal(err, t)
 		if uint64(objectSize) != fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", fileSize, objectSize)
@@ -286,7 +285,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.Logf("Corrupting file data[%s]: %s\n", fName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	tutils.CheckFatal(err, t)
-	_, _, err = tutils.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
+	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, SmokeStr+"/"+fName)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
@@ -298,7 +297,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	if errstr := dfc.Setxattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = tutils.Get(proxyURL, bucket, SmokeStr+"/"+fName, nil, nil, false, true)
+	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, SmokeStr+"/"+fName)
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
@@ -503,8 +502,10 @@ func TestRenameObjects(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, fname := range bnewnames {
-		tutils.Get(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, nil,
-			errCh, !testing.Verbose(), false /* validate */)
+		_, err := api.GetObject(tutils.HTTPClient, proxyURL, RenameLocalBucketName, RenameStr+"/"+fname)
+		if err != nil {
+			errCh <- err
+		}
 	}
 	selectErr(errCh, "get", t, false)
 }

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -167,7 +168,13 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 
 		keyname := files[random.Intn(len(files))]
 		getsGroup.Add(1)
-		go tutils.Get(proxyURL, bucket, keyname, getsGroup, errCh, !testing.Verbose(), false /* validate */)
+		go func() {
+			_, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, keyname)
+			if err != nil {
+				errCh <- err
+			}
+			getsGroup.Done()
+		}()
 	}
 
 	getsGroup.Wait()

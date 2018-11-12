@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -590,18 +591,13 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 
-		err = tutils.Put(proxyURL, reader, clibucket, keyname, true /* silent */)
-		if err != nil {
+		if err = tutils.Put(proxyURL, reader, clibucket, keyname, true /* silent */); err != nil {
 			return fmt.Errorf("Error executing put: %v", err)
 		}
-
-		tutils.Get(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */, false /* validate */)
-		if err != nil {
+		if _, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, keyname); err != nil {
 			return fmt.Errorf("Error executing get: %v", err)
 		}
-
-		err = tutils.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */)
-		if err != nil {
+		if err = tutils.Del(proxyURL, clibucket, keyname, nil /* wg */, nil /* errCh */, true /* silent */); err != nil {
 			return fmt.Errorf("Error executing del: %v", err)
 		}
 	}
@@ -658,8 +654,7 @@ loop:
 			errCh <- err
 			continue
 		}
-
-		_, _, err = tutils.Get(proxyURL, localBucketName, keyname, nil, errCh, true, false)
+		_, err = api.GetObject(tutils.HTTPClient, proxyURL, localBucketName, keyname)
 		if err != nil {
 			errCh <- err
 		}

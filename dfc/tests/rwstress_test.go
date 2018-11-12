@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -274,12 +275,19 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					tutils.Get(proxyURL, clibucket, keyname, wg, errCh, true, false)
+					_, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, keyname)
+					if err != nil {
+						errCh <- err
+					}
 					unlockFile(localIdx, rwFileExists)
 					atomic.AddInt64(&getCounter, -1)
+					wg.Done()
 				}()
 			} else {
-				tutils.Get(proxyURL, clibucket, keyname, nil, errCh, true, false)
+				_, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, keyname)
+				if err != nil {
+					errCh <- err
+				}
 				unlockFile(idx, rwFileExists)
 			}
 			currIdx = idx + 1

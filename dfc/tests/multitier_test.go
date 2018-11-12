@@ -70,13 +70,13 @@ func TestGetObjectInNextTier(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := tutils.Get(proxyURL, TestLocalBucketName, object, nil, nil, false, false)
+	n, err := api.GetObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, object)
 	tutils.CheckFatal(err, t)
 	if int(n) != len(localData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(localData), int(n))
 	}
 
-	n, _, err = tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 	if int(n) != len(cloudData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(cloudData), int(n))
@@ -123,7 +123,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != len(data) {
@@ -174,7 +174,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, _, err := tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != filesize {
@@ -300,7 +300,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	err = tutils.Evict(proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
-	n, _, err := tutils.Get(proxyURL, clibucket, object, nil, nil, false, false)
+	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != len(data) {

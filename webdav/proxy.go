@@ -98,8 +98,8 @@ func (p *proxyServer) putObject(localPath string, bucket string, prefix string) 
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).
 func (p *proxyServer) getObject(bucket string, prefix string, w io.Writer) error {
-	_, _, err := tutils.GetFile(p.url, bucket, prefix, nil /* wg */, nil, /* errCh */
-		true /* silent */, true /* validate */, w)
+	options := api.GetObjectInput{Writer: w}
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, p.url, bucket, prefix, options)
 	return err
 }
 

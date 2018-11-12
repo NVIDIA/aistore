@@ -38,7 +38,7 @@ func doPut(wo *workOrder) {
 }
 
 func doGet(wo *workOrder) {
-	wo.size, wo.latencies, wo.err = tutils.Get(wo.proxyURL, wo.bucket, wo.objName, nil /* wg */, nil /* errCh */, true, /* silent */
+	wo.size, wo.latencies, wo.err = tutils.GetWithMetrics(wo.proxyURL, wo.bucket, wo.objName, true, /* silent */
 		runParams.verifyHash /* validate */)
 }
 

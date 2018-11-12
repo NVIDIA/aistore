@@ -1543,7 +1543,7 @@ func doGetsInParallel(m *metadata) {
 				repFile.repetitions -= 1
 				m.repFilenameCh <- repFile
 			}
-			_, _, err := tutils.Get(m.proxyURL, m.bucket, SmokeStr+"/"+repFile.filename, nil, nil, false, false)
+			_, err := api.GetObject(tutils.HTTPClient, m.proxyURL, m.bucket, SmokeStr+"/"+repFile.filename)
 			if err != nil {
 				r := atomic.LoadUint64(&(m.reregistered))
 				if r == 1 {

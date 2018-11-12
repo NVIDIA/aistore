@@ -129,30 +129,14 @@ type ReqError struct {
 	message string
 }
 
-type InvalidCksumError struct {
-	ExpectedHash string
-	ActualHash   string
-}
-
 func (err ReqError) Error() string {
 	return err.message
 }
 
-func (e InvalidCksumError) Error() string {
-	return fmt.Sprintf("Expected Hash: [%s] Actual Hash: [%s]", e.ExpectedHash, e.ActualHash)
-}
-
-func newReqError(msg string, code int) ReqError {
+func NewReqError(msg string, code int) ReqError {
 	return ReqError{
 		code:    code,
 		message: msg,
-	}
-}
-
-func newInvalidCksumError(eHash string, aHash string) InvalidCksumError {
-	return InvalidCksumError{
-		ActualHash:   aHash,
-		ExpectedHash: eHash,
 	}
 }
 
@@ -186,6 +170,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		}
 
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
+		defer slab.Free(buf)
 		if validate {
 			length, hash, err = cmn.ReadWriteWithHash(r.Body, w, buf)
 			if err != nil {
@@ -196,7 +181,6 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
 		}
-		slab.Free(buf)
 	} else {
 		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
 	}
@@ -215,30 +199,25 @@ func emitError(r *http.Response, err error, errCh chan error) {
 	}
 
 	if r != nil {
-		errObj := newReqError(err.Error(), r.StatusCode)
+		errObj := NewReqError(err.Error(), r.StatusCode)
 		errCh <- errObj
 	} else {
 		errCh <- err
 	}
 }
 
-func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
-	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
+// Get sends a GET request to url and discards returned data
+func GetWithMetrics(url, bucket string, keyname string, silent bool, validate bool) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
+		w                        = ioutil.Discard
 	)
-
-	if wg != nil {
-		defer wg.Done()
-	}
 
 	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
 	}
-	req.URL.RawQuery = query.Encode() // golang handles query == nil
-
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
 	resp, err := tracedClient.Do(req)
@@ -257,12 +236,12 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan erro
 
 	v := hdhashtype == cmn.ChecksumXXHash
 	len, hash, err := readResponse(resp, w, err, fmt.Sprintf("GET (object %s from bucket %s)", keyname, bucket), v)
+	if err != nil {
+		return 0, HTTPLatencies{}, err
+	}
 	if v {
 		if hdhash != hash {
-			err = newInvalidCksumError(hdhash, hash)
-			if errCh != nil {
-				errCh <- err
-			}
+			err = cmn.NewInvalidCksumError(hdhash, hash)
 		} else {
 			if !silent {
 				fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
@@ -270,7 +249,6 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan erro
 		}
 	}
 
-	emitError(resp, err, errCh)
 	l := HTTPLatencies{
 		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
 		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
@@ -285,30 +263,6 @@ func get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan erro
 		TargetFirstResponse: tr.tsTargetFirstResponse.Sub(tr.tsTargetWroteRequest),
 	}
 	return len, l, err
-}
-
-// Get sends a GET request to url and discards returned data
-func Get(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
-	silent bool, validate bool) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errCh, silent, validate, ioutil.Discard, nil)
-}
-
-// Get sends a GET request to url and discards the return
-func GetWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
-	silent bool, validate bool, q url.Values) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errCh, silent, validate, ioutil.Discard, q)
-}
-
-// GetFile sends a GET request to url and writes the data to io.Writer
-func GetFile(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
-	silent bool, validate bool, w io.Writer) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errCh, silent, validate, w, nil)
-}
-
-// GetFile sends a GET request to url and writes the data to io.Writer
-func GetFileWithQuery(url, bucket string, keyname string, wg *sync.WaitGroup, errCh chan error,
-	silent bool, validate bool, w io.Writer, query url.Values) (int64, HTTPLatencies, error) {
-	return get(url, bucket, keyname, wg, errCh, silent, validate, w, query)
 }
 
 func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {

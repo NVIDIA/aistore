@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -147,7 +148,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 				default:
 				}
 			case "GET":
-				_, _, _ = tutils.Get(proxyURL, bucket, fshcDir+"/"+fname, nil, nil, true, false)
+				api.GetObject(tutils.HTTPClient, proxyURL, bucket, fshcDir+"/"+fname)
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -260,7 +261,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	{
 		tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 		for n := 1; n < 10; n++ {
-			_, _, err = tutils.Get(proxyURL, bucket, fmt.Sprintf("%s/%d", fshcDir, n), nil, nil, true, false)
+			_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, fmt.Sprintf("%s/%d", fshcDir, n))
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting non-existing objects should not disable mountpath")
@@ -307,7 +308,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		}
 		f.Close()
 		for _, n := range fileList {
-			_, _, err = tutils.Get(proxyURL, bucket, n, nil, nil, true, false)
+			_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, n)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")

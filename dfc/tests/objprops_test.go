@@ -80,14 +80,14 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 	return
 }
 
-func propsReadObjects(t *testing.T, proxyURL, bucket string, filelist map[string]string) {
+func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]string) {
 	versChanged, bytesChanged := propsStats(t, proxyURL)
 	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
-	for fname := range filelist {
-		_, _, err := tutils.Get(proxyURL, bucket, fname, nil, nil, false, false)
+	for object := range objList {
+		_, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, object)
 		if err != nil {
-			t.Errorf("Failed to read %s/%s, err: %v", bucket, fname, err)
+			t.Errorf("Failed to read %s/%s, err: %v", bucket, object, err)
 			continue
 		}
 	}

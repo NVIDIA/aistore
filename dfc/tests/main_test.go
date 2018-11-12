@@ -884,7 +884,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	// Fetch the file from cloud bucket.
-	_, _, err := tutils.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName)
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
 	}
@@ -949,7 +949,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = tutils.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName)
 	if err != nil {
 		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
 	}
@@ -977,7 +977,7 @@ func validateGETUponFileChangeForChecksumValidation(
 	t *testing.T, proxyURL, fileName string, newFileInfo os.FileInfo, fqn string,
 	oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
-	_, _, err := tutils.Get(proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName)
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
@@ -1076,7 +1076,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, _, err = tutils.Get(proxyURL, bucketName, ChecksumWarmValidateStr+"/"+fileName, nil, nil, false, true)
+	_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucketName, ChecksumWarmValidateStr+"/"+fileName)
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
@@ -1091,17 +1091,17 @@ cleanup:
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, t *testing.T) {
-	_, _, err := tutils.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName)
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
-	} else if !strings.Contains(err.Error(), "status 500") {
+	} else if !strings.Contains(err.Error(), "500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
-	_, _, err = tutils.Get(proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName, nil, nil, false, true)
+	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName)
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
-	} else if !strings.Contains(err.Error(), "status 404") {
+	} else if !strings.Contains(err.Error(), "404") {
 		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%s]", err.Error())
 	}
 }
@@ -1211,12 +1211,13 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 	q.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
-	_, _, err := tutils.GetFileWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, true, true, w, q)
+	options := api.GetObjectInput{Writer: w, Query: q}
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, RangeGetStr+"/"+fileName, options)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bucketName, fileName, err)
 		} else {
-			if ckErr, ok := err.(tutils.InvalidCksumError); ok {
+			if ckErr, ok := err.(cmn.InvalidCksumError); ok {
 				file, err := os.Open(fqn)
 				if err != nil {
 					t.Fatalf("Unable to open file: %s. Error:  %v", fqn, err)
@@ -1269,7 +1270,8 @@ func verifyInvalidParams(t *testing.T, proxyURL, bucketName string, fileName str
 	q := url.Values{}
 	q.Add(cmn.URLParamOffset, offset)
 	q.Add(cmn.URLParamLength, length)
-	_, _, err := tutils.GetWithQuery(proxyURL, bucketName, RangeGetStr+"/"+fileName, nil, nil, false, true, q)
+	options := api.GetObjectInput{Query: q}
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, RangeGetStr+"/"+fileName, options)
 	if err == nil {
 		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
 	}
@@ -1415,7 +1417,18 @@ func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fi
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
-			go tutils.Get(proxyURL, bucket, fileslist[i], getsGroup, errCh, !testing.Verbose(), validate)
+			go func(i int) {
+				var err error
+				if validate {
+					_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, fileslist[i])
+				} else {
+					_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, fileslist[i])
+				}
+				if err != nil {
+					errCh <- err
+				}
+				getsGroup.Done()
+			}(i)
 		}
 	}
 	getsGroup.Wait()

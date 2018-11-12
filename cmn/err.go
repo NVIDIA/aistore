@@ -5,6 +5,7 @@
 package cmn
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -59,5 +60,27 @@ func IsIOError(err error) bool {
 		return isIO(e.Err)
 	default:
 		return false
+	}
+}
+
+//===========================================================================
+//
+// Common errors reusable in API or client
+//
+//===========================================================================
+
+type InvalidCksumError struct {
+	ExpectedHash string
+	ActualHash   string
+}
+
+func (e InvalidCksumError) Error() string {
+	return fmt.Sprintf("Expected Hash: [%s] Actual Hash: [%s]", e.ExpectedHash, e.ActualHash)
+}
+
+func NewInvalidCksumError(eHash string, aHash string) InvalidCksumError {
+	return InvalidCksumError{
+		ActualHash:   aHash,
+		ExpectedHash: eHash,
 	}
 }
