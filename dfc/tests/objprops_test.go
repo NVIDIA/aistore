@@ -38,10 +38,9 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 		t.Fail()
 	}
 	for fname := range oldVersions {
-		err = tutils.Put(proxyURL, r, bucket, fname, !testing.Verbose())
+		err = api.PutObject(tutils.HTTPClient, proxyURL, bucket, fname, r.XXHash(), r)
 		if err != nil {
 			t.Errorf("Failed to put new data to object %s/%s, err: %v", bucket, fname, err)
-			t.Fail()
 		}
 	}
 

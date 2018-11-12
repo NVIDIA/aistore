@@ -168,12 +168,12 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					wg.Add(1)
 					localIdx := idx
 					go func() {
-						tutils.PutAsync(&wg, proxyURL, r, clibucket, keyname, errCh, true /* silent */)
+						tutils.PutAsync(&wg, proxyURL, clibucket, keyname, r, errCh)
 						unlockFile(localIdx, rwFileCreated)
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					err = tutils.Put(proxyURL, r, clibucket, keyname, true /* silent */)
+					err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, keyname, r.XXHash(), r)
 					if err != nil {
 						errCh <- err
 					}

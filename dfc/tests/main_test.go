@@ -616,21 +616,20 @@ func TestHeadObject(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	fileName := "headobject_test_file"
-	fileSize := 1024
-	r, frErr := tutils.NewRandReader(int64(fileSize), false)
+	objName := "headobject_test_obj"
+	objSize := 1024
+	r, rrErr := tutils.NewRandReader(int64(objSize), false)
 	defer r.Close()
 
-	if frErr != nil {
-		t.Fatalf("tutils.NewFileReader failed, err = %v", frErr)
+	if rrErr != nil {
+		t.Fatalf("tutils.NewRandReader failed, err = %v", rrErr)
+	}
+	if err := api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objName, r.XXHash(), r); err != nil {
+		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
-	if err := tutils.Put(proxyURL, r, TestLocalBucketName, fileName, true); err != nil {
-		t.Fatalf("tutils.Put failed, err = %v", err)
-	}
-
-	propsExp := &cmn.ObjectProps{Size: fileSize, Version: "1"}
-	props, err := api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, fileName)
+	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1"}
+	props, err := api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
 	}
@@ -639,7 +638,7 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
 	}
 
-	props, err = api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, "this_file_should_not_exist")
+	props, err = api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, "this_object_should_not_exist")
 	if err == nil {
 		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}
@@ -656,10 +655,10 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	defer r.Close()
 
 	if err != nil {
-		t.Fatalf("tutils.NewFileReader failed, err = %v", err)
+		t.Fatalf("tutils.NewRandReader failed, err = %v", err)
 	}
 
-	err = tutils.Put(proxyURL, r, clibucket, fileName, true)
+	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, fileName, r.XXHash(), r)
 	tutils.CheckFatal(err, t)
 
 	b, err := tutils.IsCached(proxyURL, clibucket, fileName)

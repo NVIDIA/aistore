@@ -587,11 +587,9 @@ func proxyPutGetDelete(seed int64, count int, proxyURL string) error {
 		if err != nil {
 			return fmt.Errorf("Error creating reader: %v", err)
 		}
-
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
-
-		if err = tutils.Put(proxyURL, reader, clibucket, keyname, true /* silent */); err != nil {
+		if err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, keyname, reader.XXHash(), reader); err != nil {
 			return fmt.Errorf("Error executing put: %v", err)
 		}
 		if _, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, keyname); err != nil {
@@ -649,7 +647,7 @@ loop:
 		fname := tutils.FastRandomFilename(random, fnlen)
 		keyname := fmt.Sprintf("%s/%s", localBucketDir, fname)
 
-		err = tutils.Put(proxyURL, reader, localBucketName, keyname, true /* silent */)
+		err = api.PutObject(tutils.HTTPClient, proxyURL, localBucketName, keyname, reader.XXHash(), reader)
 		if err != nil {
 			errCh <- err
 			continue

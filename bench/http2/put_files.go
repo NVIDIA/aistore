@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"sync"
-	"testing"
 
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -74,7 +73,7 @@ func putSpecificFiles(fileSize uint64, numPuts int, bucket string, pool chan fun
 		fname := fmt.Sprintf("l%d", i)
 		wg.Add(1)
 		pool <- func() {
-			tutils.PutAsync(wg, url, r, bucket, "__bench/"+fname, errCh, !testing.Verbose())
+			tutils.PutAsync(wg, url, bucket, "__bench/"+fname, r, errCh)
 		}
 	}
 	close(pool)

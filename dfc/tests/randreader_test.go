@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -36,7 +37,6 @@ func TestRandomReaderPutStress(t *testing.T) {
 	}
 	wg.Wait()
 	destroyLocalBucket(t, proxyURL, bucket)
-
 }
 
 func putRR(t *testing.T, id int, proxyURL string, seed int64, reader tutils.Reader, bucket string, numobjects int) {
@@ -45,7 +45,7 @@ func putRR(t *testing.T, id int, proxyURL string, seed int64, reader tutils.Read
 	for i := 0; i < numobjects; i++ {
 		fname := tutils.FastRandomFilename(random, fnlen)
 		objname := filepath.Join(subdir, fname)
-		err := tutils.Put(proxyURL, reader, bucket, objname, true)
+		err := api.PutObject(tutils.HTTPClient, proxyURL, bucket, objname, reader.XXHash(), reader)
 		tutils.CheckFatal(err, t)
 
 		if i%100 == 0 && id%100 == 0 {

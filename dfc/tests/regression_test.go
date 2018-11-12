@@ -964,7 +964,7 @@ func TestDeleteList(t *testing.T) {
 		keyname := fmt.Sprintf("%s%d", prefix, i)
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, r, clibucket, keyname, errCh, true)
+		go tutils.PutAsync(wg, proxyURL, clibucket, keyname, r, errCh)
 		files = append(files, keyname)
 
 	}
@@ -1103,7 +1103,7 @@ func TestDeleteRange(t *testing.T) {
 		tutils.CheckFatal(err, t)
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, r, clibucket, fmt.Sprintf("%s%d", prefix, i), errCh, true)
+		go tutils.PutAsync(wg, proxyURL, clibucket, fmt.Sprintf("%s%d", prefix, i), r, errCh)
 	}
 	wg.Wait()
 	selectErr(errCh, "put", t, true)
@@ -1187,7 +1187,7 @@ func TestStressDeleteRange(t *testing.T) {
 		go func(i int, reader tutils.Reader) {
 			for j := 0; j < numFiles/numReaders; j++ {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
-				err := tutils.Put(proxyURL, reader, TestLocalBucketName, objname, true)
+				err = api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objname, reader.XXHash(), reader)
 				if err != nil {
 					errCh <- err
 				}

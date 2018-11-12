@@ -57,9 +57,9 @@ func HeadObject(httpClient *http.Client, proxyURL, bucket, object string) (*cmn.
 // DeleteObject API operation for DFC
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(httpClient *http.Client, proxyURL, bucket, object string) (err error) {
+func DeleteObject(httpClient *http.Client, proxyURL, bucket, object string) error {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, nil)
+	_, err := doHTTPRequest(httpClient, http.MethodDelete, url, nil)
 	return err
 }
 
@@ -142,4 +142,48 @@ func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object s
 		return 0, fmt.Errorf("Can't validate hash types other than %s, object's hash type: %s", cmn.ChecksumXXHash, hdrHashType)
 	}
 	return n, nil
+}
+
+// PutObject API operation for DFC
+//
+// Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
+// The object name is specified by the 'object' argument.
+// If the object hash passed in is not empty, the value is set
+// in the request header with the default checksum type "xxhash"
+func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, reader cmn.ReadOpenCloser) error {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	handle, err := reader.Open()
+	if err != nil {
+		return fmt.Errorf("Failed to open reader, err: %v", err)
+	}
+	defer handle.Close()
+
+	req, err := http.NewRequest(http.MethodPut, url, handle)
+	if err != nil {
+		return fmt.Errorf("Failed to create new http request, err: %v", err)
+	}
+
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return reader.Open()
+	}
+	if hash != "" {
+		req.Header.Set(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
+		req.Header.Set(cmn.HeaderDFCChecksumVal, hash)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("Failed to PUT, err: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("Failed to read response, err: %v", err)
+		}
+		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	}
+	return nil
 }

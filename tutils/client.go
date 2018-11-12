@@ -453,55 +453,10 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 	return true, nil
 }
 
-// Put sends a PUT request to the given URL
-func Put(proxyURL string, reader Reader, bucket string, key string, silent bool) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, key)
-	if !silent {
-		fmt.Printf("PUT: %s/%s\n", bucket, key)
-	}
-
-	handle, err := reader.Open() // FIXME: wrong semantics for in-mem readers
-	if err != nil {
-		return fmt.Errorf("Failed to open reader, err: %v", err)
-	}
-	defer handle.Close()
-
-	req, err := http.NewRequest(http.MethodPut, url, handle)
-	if err != nil {
-		return fmt.Errorf("Failed to create new http request, err: %v", err)
-	}
-
-	// The HTTP package doesn't automatically set this for files, so it has to be done manually
-	// If it wasn't set, we would need to deal with the redirect manually.
-	req.GetBody = func() (io.ReadCloser, error) {
-		return reader.Open()
-	}
-
-	if reader.XXHash() != "" {
-		req.Header.Set(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
-		req.Header.Set(cmn.HeaderDFCChecksumVal, reader.XXHash())
-	}
-
-	resp, err := HTTPClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("Failed to PUT, err: %v", err)
-	}
-	defer func() {
-		resp.Body.Close()
-	}()
-
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("Failed to read HTTP response, err: %v", err)
-	}
-	return nil
-}
-
 // PutAsync sends a PUT request to the given URL
-func PutAsync(wg *sync.WaitGroup, proxyURL string, reader Reader, bucket string, key string,
-	errCh chan error, silent bool) {
+func PutAsync(wg *sync.WaitGroup, proxyURL, bucket, object string, reader Reader, errCh chan error) {
 	defer wg.Done()
-	err := Put(proxyURL, reader, bucket, key, silent)
+	err := api.PutObject(HTTPClient, proxyURL, bucket, object, reader.XXHash(), reader)
 	if err != nil {
 		if errCh == nil {
 			fmt.Println("Error channel is not given, do not know how to report error", err)

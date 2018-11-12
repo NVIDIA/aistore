@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -54,9 +55,7 @@ func putFile(size int64, withHash bool) error {
 	if err != nil {
 		return err
 	}
-
-	err = tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
-
+	err = api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
 	r.Close()
 	os.Remove(dir + "/" + fn)
 	return err
@@ -68,8 +67,7 @@ func putInMem(size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-
-	return tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
+	return api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
 }
 
 func putRand(size int64, withHash bool) error {
@@ -78,8 +76,7 @@ func putRand(size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-
-	return tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
+	return api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
 }
 
 func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
@@ -89,8 +86,7 @@ func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-
-	return tutils.Put(server.URL, r, "bucket", "key", true /* silent */)
+	return api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {

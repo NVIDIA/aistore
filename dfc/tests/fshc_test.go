@@ -292,11 +292,8 @@ func TestFSCheckerDetection(t *testing.T) {
 		}
 		f.Close()
 		filesPutCh := make(chan string, len(fileList))
-		errCh := make(chan error, len(fileList))
-		putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errCh, filesPutCh, ldir, fshcDir, true, sgl)
-		selectErr(errCh, "put", t, false)
+		putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, nil, filesPutCh, ldir, fshcDir, true, sgl)
 		close(filesPutCh)
-		close(errCh)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}

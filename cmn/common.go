@@ -136,6 +136,11 @@ func CopyStruct(dst interface{}, src interface{}) {
 // files, IO, hash
 //
 
+type ReadOpenCloser interface {
+	io.ReadCloser
+	Open() (io.ReadCloser, error)
+}
+
 const DefaultBufSize = 32 * KiB
 
 func CreateDir(dirname string) error {

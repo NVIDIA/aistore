@@ -92,8 +92,7 @@ func (p *proxyServer) putObject(localPath string, bucket string, prefix string) 
 	if err != nil {
 		return err
 	}
-
-	return tutils.Put(p.url, r, bucket, prefix, true /* silent */)
+	return api.PutObject(tutils.HTTPClient, p.url, bucket, prefix, r.XXHash(), r)
 }
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).

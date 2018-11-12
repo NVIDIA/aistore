@@ -215,8 +215,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 
 	reader, err := tutils.NewRandReader(int64(filesize), false)
 	tutils.CheckFatal(err, t)
-
-	err = tutils.Put(proxyURL, reader, clibucket, object, true)
+	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, reader.XXHash(), reader)
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 

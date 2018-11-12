@@ -76,7 +76,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		}
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
+		go tutils.PutAsync(wg, proxyURL, clibucket, keyName, r, errCh)
 		fileNames = append(fileNames, fileName)
 	}
 
@@ -91,7 +91,7 @@ func prefixCreateFiles(t *testing.T, proxyURL string) {
 		}
 
 		wg.Add(1)
-		go tutils.PutAsync(wg, proxyURL, r, clibucket, keyName, errCh, !testing.Verbose())
+		go tutils.PutAsync(wg, proxyURL, clibucket, keyName, r, errCh)
 		fileNames = append(fileNames, fName)
 	}
 

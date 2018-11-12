@@ -71,7 +71,7 @@ func (r *randReader) WriteTo(w io.Writer) (int64, error) {
 	return want, nil
 }
 
-// Seek implements the readers.Reader interface.
+// Seek implements the tutils.Reader interface.
 func (r *randReader) Seek(offset int64, whence int) (int64, error) {
 	var abs int64
 

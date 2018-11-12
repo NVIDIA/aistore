@@ -220,10 +220,10 @@ func putObjsWithRandData(proxyURL, bucket, dir, keystr string, random *rand.Rand
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		err = tutils.Put(proxyURL, reader, bucket, objname, silent)
+		err = api.PutObject(tutils.HTTPClient, proxyURL, bucket, objname, reader.XXHash(), reader)
 		if err != nil {
 			if errCh == nil {
-				tutils.Logf("Error performing PUT of object with random data, provided error channel is nil")
+				tutils.Logf("Error performing PUT of object with random data, provided error channel is nil\n")
 			} else {
 				errCh <- err
 			}
