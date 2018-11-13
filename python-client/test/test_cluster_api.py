@@ -42,7 +42,7 @@ class TestClusterApi(unittest.TestCase):
         """
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
         target =  smap.tmap.values()[1]
-        daemon_info = self.models.DaemonInfo(target.daemon_id, public_net=target.public_net, internal_net=target.internal_net, repl_net=target.repl_net)
+        daemon_info = self.models.Snode(target.daemon_id, public_net=target.public_net, intra_control_net=target.intra_control_net, intra_data_net=target.intra_data_net)
 
         self.cluster.unregister_target(daemon_info.daemon_id)
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))

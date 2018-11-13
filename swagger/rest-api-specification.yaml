@@ -503,7 +503,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DaemonInfo'
+              $ref: '#/components/schemas/Snode'
       responses:
         '200':
           description: Target registered successfully
@@ -817,16 +817,16 @@ components:
     Version:
       type: string
       enum: [all, cloud, local, none]
-    DaemonInfo:
+    Snode:
       type: object
       properties:
         daemon_id:
           type: string
         public_net:
           $ref: '#/components/schemas/NetInfo'
-        internal_net:
+        intra_control_net:
           $ref: '#/components/schemas/NetInfo'
-        repl_net:
+        intra_data_net:
           $ref: '#/components/schemas/NetInfo'
     NetInfo:
       type: object
@@ -854,13 +854,13 @@ components:
         tmap:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/DaemonInfo'
+            $ref: '#/components/schemas/Snode'
         pmap:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/DaemonInfo'
+            $ref: '#/components/schemas/Snode'
         proxy_si:
-          $ref: '#/components/schemas/DaemonInfo'
+          $ref: '#/components/schemas/Snode'
         version:
           type: integer
           format: int64

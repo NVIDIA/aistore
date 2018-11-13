@@ -16,12 +16,12 @@ from __future__ import absolute_import
 import unittest
 
 import openapi_client
-from openapi_client.models.daemon_info import DaemonInfo  # noqa: E501
+from openapi_client.models.snode import Snode  # noqa: E501
 from openapi_client.rest import ApiException
 
 
-class TestDaemonInfo(unittest.TestCase):
-    """DaemonInfo unit test stubs"""
+class TestSnode(unittest.TestCase):
+    """Snode unit test stubs"""
 
     def setUp(self):
         pass
@@ -29,10 +29,10 @@ class TestDaemonInfo(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def testDaemonInfo(self):
-        """Test DaemonInfo"""
+    def testSnode(self):
+        """Test Snode"""
         # FIXME: construct object with mandatory attributes with example values
-        # model = openapi_client.models.daemon_info.DaemonInfo()  # noqa: E501
+        # model = openapi_client.models.snode.Snode()  # noqa: E501
         pass
 
 

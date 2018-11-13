@@ -32,9 +32,9 @@ class ClusterMap(object):
                             and the value is json key in definition.
     """
     openapi_types = {
-        'tmap': 'dict(str, DaemonInfo)',
-        'pmap': 'dict(str, DaemonInfo)',
-        'proxy_si': 'DaemonInfo',
+        'tmap': 'dict(str, Snode)',
+        'pmap': 'dict(str, Snode)',
+        'proxy_si': 'Snode',
         'version': 'int'
     }
 
@@ -69,7 +69,7 @@ class ClusterMap(object):
 
 
         :return: The tmap of this ClusterMap.  # noqa: E501
-        :rtype: dict(str, DaemonInfo)
+        :rtype: dict(str, Snode)
         """
         return self._tmap
 
@@ -79,7 +79,7 @@ class ClusterMap(object):
 
 
         :param tmap: The tmap of this ClusterMap.  # noqa: E501
-        :type: dict(str, DaemonInfo)
+        :type: dict(str, Snode)
         """
 
         self._tmap = tmap
@@ -90,7 +90,7 @@ class ClusterMap(object):
 
 
         :return: The pmap of this ClusterMap.  # noqa: E501
-        :rtype: dict(str, DaemonInfo)
+        :rtype: dict(str, Snode)
         """
         return self._pmap
 
@@ -100,7 +100,7 @@ class ClusterMap(object):
 
 
         :param pmap: The pmap of this ClusterMap.  # noqa: E501
-        :type: dict(str, DaemonInfo)
+        :type: dict(str, Snode)
         """
 
         self._pmap = pmap
@@ -111,7 +111,7 @@ class ClusterMap(object):
 
 
         :return: The proxy_si of this ClusterMap.  # noqa: E501
-        :rtype: DaemonInfo
+        :rtype: Snode
         """
         return self._proxy_si
 
@@ -121,7 +121,7 @@ class ClusterMap(object):
 
 
         :param proxy_si: The proxy_si of this ClusterMap.  # noqa: E501
-        :type: DaemonInfo
+        :type: Snode
         """
 
         self._proxy_si = proxy_si

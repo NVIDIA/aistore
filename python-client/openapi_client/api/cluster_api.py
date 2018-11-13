@@ -229,37 +229,37 @@ class ClusterApi(object):
             _request_timeout=local_var_params.get('_request_timeout'),
             collection_formats=collection_formats)
 
-    def register_target(self, daemon_info, **kwargs):  # noqa: E501
+    def register_target(self, snode, **kwargs):  # noqa: E501
         """Register storage target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.register_target(daemon_info, async_req=True)
+        >>> thread = api.register_target(snode, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param DaemonInfo daemon_info: (required)
+        :param Snode snode: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
         """
         kwargs['_return_http_data_only'] = True
         if kwargs.get('async_req'):
-            return self.register_target_with_http_info(daemon_info, **kwargs)  # noqa: E501
+            return self.register_target_with_http_info(snode, **kwargs)  # noqa: E501
         else:
-            (data) = self.register_target_with_http_info(daemon_info, **kwargs)  # noqa: E501
+            (data) = self.register_target_with_http_info(snode, **kwargs)  # noqa: E501
             return data
 
-    def register_target_with_http_info(self, daemon_info, **kwargs):  # noqa: E501
+    def register_target_with_http_info(self, snode, **kwargs):  # noqa: E501
         """Register storage target  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
-        >>> thread = api.register_target_with_http_info(daemon_info, async_req=True)
+        >>> thread = api.register_target_with_http_info(snode, async_req=True)
         >>> result = thread.get()
 
         :param async_req bool
-        :param DaemonInfo daemon_info: (required)
+        :param Snode snode: (required)
         :return: None
                  If the method is called asynchronously,
                  returns the request thread.
@@ -267,7 +267,7 @@ class ClusterApi(object):
 
         local_var_params = locals()
 
-        all_params = ['daemon_info']  # noqa: E501
+        all_params = ['snode']  # noqa: E501
         all_params.append('async_req')
         all_params.append('_return_http_data_only')
         all_params.append('_preload_content')
@@ -281,10 +281,10 @@ class ClusterApi(object):
                 )
             local_var_params[key] = val
         del local_var_params['kwargs']
-        # verify the required parameter 'daemon_info' is set
-        if ('daemon_info' not in local_var_params or
-                local_var_params['daemon_info'] is None):
-            raise ValueError("Missing the required parameter `daemon_info` when calling `register_target`")  # noqa: E501
+        # verify the required parameter 'snode' is set
+        if ('snode' not in local_var_params or
+                local_var_params['snode'] is None):
+            raise ValueError("Missing the required parameter `snode` when calling `register_target`")  # noqa: E501
 
         collection_formats = {}
 
@@ -298,8 +298,8 @@ class ClusterApi(object):
         local_var_files = {}
 
         body_params = None
-        if 'daemon_info' in local_var_params:
-            body_params = local_var_params['daemon_info']
+        if 'snode' in local_var_params:
+            body_params = local_var_params['snode']
         # HTTP header `Accept`
         header_params['Accept'] = self.api_client.select_header_accept(
             ['text/plain'])  # noqa: E501

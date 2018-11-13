@@ -105,7 +105,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **register_target**
-> register_target(daemon_info)
+> register_target(snode)
 
 Register storage target
 
@@ -119,11 +119,11 @@ from pprint import pprint
 
 # create an instance of the API class
 api_instance = openapi_client.ClusterApi()
-daemon_info = openapi_client.DaemonInfo() # DaemonInfo | 
+snode = openapi_client.Snode() # Snode | 
 
 try:
     # Register storage target
-    api_instance.register_target(daemon_info)
+    api_instance.register_target(snode)
 except ApiException as e:
     print("Exception when calling ClusterApi->register_target: %s\n" % e)
 ```
@@ -132,7 +132,7 @@ except ApiException as e:
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **daemon_info** | [**DaemonInfo**](DaemonInfo.md)|  | 
+ **snode** | [**Snode**](Snode.md)|  | 
 
 ### Return type
 
