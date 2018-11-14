@@ -16,9 +16,11 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/ios"
 )
 
 // ============================================= Summary ===========================================
@@ -69,7 +71,7 @@ type (
 		fs          string
 		bucketdir   string
 		throttler   cluster.Throttler
-		atimeRespCh chan *atimeResponse
+		atimeRespCh chan *atime.Response
 		namelocker  cluster.NameLocker
 		bmdowner    cluster.Bowner
 		statsif     statsif
@@ -145,7 +147,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		return fmt.Errorf("%s aborted, exiting", xlru)
 	}
 
-	atime, mtime, stat := getAmTimes(osfi)
+	atime, mtime, stat := ios.GetAmTimes(osfi)
 	if info != nil && info.Old {
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
 		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
@@ -155,8 +157,8 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// object eviction: access time
 	usetime := atime
 
-	atimeResponse := <-getatimerunner().atime(fqn, lctx.atimeRespCh)
-	accessTime, ok := atimeResponse.accessTime, atimeResponse.ok
+	atimeResponse := <-getatimerunner().Atime(fqn, lctx.atimeRespCh)
+	accessTime, ok := atimeResponse.AccessTime, atimeResponse.Ok
 	if ok {
 		usetime = accessTime
 	} else if mtime.After(atime) {
@@ -259,7 +261,7 @@ func (lctx *lructx) evictFQN(fqn string) error {
 
 func (lctx *lructx) evictSize() (err error) {
 	hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
-	blocks, bavail, bsize, err := getFSStats(lctx.bucketdir)
+	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bucketdir)
 	if err != nil {
 		return err
 	}

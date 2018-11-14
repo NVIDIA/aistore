@@ -14,10 +14,19 @@ import (
 	"unsafe"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/OneOfOne/xxhash"
 )
 
 const MLCG32 = 1103515245
+
+// Mountpath Change enum
+const (
+	Add     = "add-mp"
+	Remove  = "remove-mp"
+	Enable  = "enable-mp"
+	Disable = "disable-mp"
+)
 
 // globals
 var (
@@ -32,6 +41,13 @@ var (
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
 type (
+	PathRunner interface {
+		cmn.Runner
+		ReqAddMountpath(mpath string)
+		ReqRemoveMountpath(mpath string)
+		ReqEnableMountpath(mpath string)
+		ReqDisableMountpath(mpath string)
+	}
 	MountpathInfo struct {
 		Path       string // Cleaned OrigPath
 		OrigPath   string // As entered by the user, must be used for logging / returning errors
@@ -60,7 +76,16 @@ type (
 		localBuckets string
 		cloudBuckets string
 	}
+	ChangeReq struct {
+		Action string // MountPath action enum (above)
+		Path   string // path
+	}
 )
+
+func MountpathAdd(p string) ChangeReq { return ChangeReq{Action: Add, Path: p} }
+func MountpathRem(p string) ChangeReq { return ChangeReq{Action: Remove, Path: p} }
+func MountpathEnb(p string) ChangeReq { return ChangeReq{Action: Enable, Path: p} }
+func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: p} }
 
 func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	cleanPath := filepath.Clean(path)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/ios"
 )
 
 const fmstr = "Expected [%v] actual [%v]"
@@ -24,7 +25,8 @@ type Test struct {
 
 type fileInfos []fileInfo
 
-var riostat *iostatrunner
+var riostat *ios.IostatRunner
+
 var aTests = []Test{
 	{"testHighDiskUtilization", testHighDiskUtilization},
 	{"testLowDiskUtilization", testLowDiskUtilization},
@@ -35,7 +37,6 @@ var aTests = []Test{
 	{"testMediumDiskUtilization", testMediumDiskUtilization},
 	{"testConstantDiskUtilization", testConstantDiskUtilization},
 	{"testMultipleLRUContexts", testMultipleLRUContexts},
-
 	{"testChangedFSUsedPercentageBeforeCapCheck", testChangedFSUsedPercentageBeforeCapCheck},
 	{"testChangedDiskUtilBeforeUtilCheck", testChangedDiskUtilBeforeUtilCheck},
 }
@@ -130,29 +131,24 @@ func Test_HeapEqual(t *testing.T) {
 }
 
 func Test_Throttle(t *testing.T) {
-	oldLRULWM := ctx.config.LRU.LowWM
-	oldLRUHWM := ctx.config.LRU.HighWM
-	oldDiskLWM := ctx.config.Xaction.DiskUtilLowWM
-	oldDiskHWM := ctx.config.Xaction.DiskUtilHighWM
-	oldStatsTime := ctx.config.Periodic.StatsTime
-	oldRg := ctx.rg
-
+	var dcopy = *ctx
+	cmn.CopyStruct(&dcopy, ctx)
+	defer func() { cmn.CopyStruct(ctx, &dcopy) }()
 	ctx.config.LRU.LowWM = 0
 	ctx.config.LRU.HighWM = 90
 	ctx.config.Xaction.DiskUtilLowWM = 10
 	ctx.config.Xaction.DiskUtilHighWM = 40
-	ctx.config.Periodic.StatsTime = -1 * time.Second
+	ctx.config.Periodic.StatsTime = time.Second
 
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	fs.Mountpaths.Add("/")
-	available, _ := fs.Mountpaths.Get()
-	fileSystem := available["/"].FileSystem
 
-	disks := fs2disks(fileSystem)
-	riostat = newIostatRunner(fs.Mountpaths)
-	riostat.fsdisks = make(map[string]cmn.StringSet, len(available))
-	riostat.fsdisks[fileSystem] = disks
-	for disk := range disks {
+	riostat = ios.NewIostatRunner(fs.Mountpaths, &ctx.config.Periodic.StatsTime)
+	go riostat.Run()
+	time.Sleep(time.Second)
+	defer func() { riostat.Stop(nil) }()
+
+	for disk := range riostat.Disk {
 		riostat.Disk[disk] = make(cmn.SimpleKVs, 0)
 		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
 
@@ -170,17 +166,10 @@ func Test_Throttle(t *testing.T) {
 	for _, test := range aTests {
 		t.Run(test.name, test.method)
 	}
-
-	ctx.config.LRU.LowWM = oldLRULWM
-	ctx.config.LRU.HighWM = oldLRUHWM
-	ctx.config.Xaction.DiskUtilLowWM = oldDiskLWM
-	ctx.config.Xaction.DiskUtilHighWM = oldDiskHWM
-	ctx.config.Periodic.StatsTime = oldStatsTime
-	ctx.rg = oldRg
 }
 
 func testHighFSCapacityUsed(t *testing.T, diskUtil uint32) {
-	curCapacity, _ := getFSUsedPercentage("/")
+	curCapacity, _ := ios.GetFSUsedPercentage("/")
 	oldLRUHWM := ctx.config.LRU.HighWM
 	ctx.config.LRU.HighWM = uint32(curCapacity - 1)
 	thrctx := newThrottleContext()
@@ -370,7 +359,7 @@ func testMultipleLRUContexts(t *testing.T) {
 func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T) {
 	thrctx := newThrottleContext()
 	oldLRUHWM := ctx.config.LRU.HighWM
-	curCapacity, _ := getFSUsedPercentage("/")
+	curCapacity, _ := ios.GetFSUsedPercentage("/")
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
 	ctx.config.LRU.HighWM = uint32(curCapacity - 2)
 	thrctx.capUsedHigh = int64(ctx.config.LRU.HighWM) // NOTE: init time only

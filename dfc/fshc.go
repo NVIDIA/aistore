@@ -26,11 +26,6 @@ const (
 	fshcMaxFileList  = 100              // maximum number of files to read by Readdir
 )
 
-const (
-	fshcReqAddMountpath    = "fshc_addmountpath"
-	fshcReqRemoveMountpath = "fshc_removemountpath"
-)
-
 // fshc is a basic mountpath health monitor.
 // When an IO error is triggered, it runs a few tests to make sure that the
 // failed mountpath is healthy. Once the mountpath is considered faulty the
@@ -42,7 +37,7 @@ type (
 		cmn.Named
 		stopCh        chan struct{}
 		fileListCh    chan string
-		reqCh         chan fshcReq
+		reqCh         chan fs.ChangeReq
 		mpathCheckers map[string]*mountpathChecker
 
 		// pointers to common data
@@ -58,24 +53,15 @@ type (
 		fileCh chan string
 		mpath  string
 	}
-
-	fshcReq struct {
-		ty   string
-		body string
-	}
 )
 
-// as an fsprunner
-func (f *fshc) reqEnableMountpath(mpath string) {}
+// as an fs.PathRunner
+var _ fs.PathRunner = &fshc{}
 
-func (f *fshc) reqDisableMountpath(mpath string) {}
-
-func (f *fshc) reqAddMountpath(mpath string) {
-	f.reqCh <- fshcReq{ty: fshcReqAddMountpath, body: mpath}
-}
-func (f *fshc) reqRemoveMountpath(mpath string) {
-	f.reqCh <- fshcReq{ty: fshcReqRemoveMountpath, body: mpath}
-}
+func (f *fshc) ReqAddMountpath(mpath string)     { f.reqCh <- fs.MountpathAdd(mpath) }
+func (f *fshc) ReqRemoveMountpath(mpath string)  { f.reqCh <- fs.MountpathRem(mpath) }
+func (f *fshc) ReqEnableMountpath(mpath string)  {}
+func (f *fshc) ReqDisableMountpath(mpath string) {}
 
 // as a runner
 func (f *fshc) Run() error {
@@ -87,11 +73,11 @@ func (f *fshc) Run() error {
 		case filepath := <-f.fileListCh:
 			f.checkFile(filepath)
 		case request := <-f.reqCh:
-			switch request.ty {
-			case fshcReqAddMountpath:
-				f.addmp(request.body)
-			case fshcReqRemoveMountpath:
-				f.delmp(request.body)
+			switch request.Action {
+			case fs.Add:
+				f.addmp(request.Path)
+			case fs.Remove:
+				f.delmp(request.Path)
 			}
 		case <-f.stopCh:
 			return nil
@@ -162,7 +148,7 @@ func newFSHC(mounts *fs.MountedFS, conf *fshcconf) *fshc {
 		config:        conf,
 		stopCh:        make(chan struct{}, 4),
 		fileListCh:    make(chan string, 32),
-		reqCh:         make(chan fshcReq),
+		reqCh:         make(chan fs.ChangeReq), // NOTE: unbuffered
 		mpathCheckers: make(map[string]*mountpathChecker),
 	}
 }

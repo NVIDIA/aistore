@@ -179,18 +179,6 @@ type ClusterStatsRaw struct {
 	Target map[string]jsoniter.RawMessage `json:"target"`
 }
 
-type iostatrunner struct {
-	sync.RWMutex
-	cmn.Named
-	mountpaths  *fs.MountedFS
-	stopCh      chan struct{}
-	CPUidle     string
-	metricnames []string
-	Disk        map[string]cmn.SimpleKVs
-	process     *os.Process // running iostat process. Required so it can be killed later
-	fsdisks     map[string]cmn.StringSet
-}
-
 type (
 	XactionStatsRetriever interface {
 		getStats([]XactionDetails) []byte
@@ -532,7 +520,7 @@ func (r *storstatsrunner) log() (runlru bool) {
 	r.CPUidle = riostat.CPUidle
 	for dev, iometrics := range riostat.Disk {
 		r.Disk[dev] = iometrics
-		if riostat.isZeroUtil(dev) {
+		if riostat.IsZeroUtil(dev) {
 			continue // skip zeros
 		}
 		b, err := jsoniter.Marshal(r.Disk[dev])
@@ -737,13 +725,4 @@ func (r RebalanceTargetStats) getStats(allXactionDetails []XactionDetails) []byt
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
 	cmn.Assert(err == nil, err)
 	return jsonBytes
-}
-
-func getFSUsedPercentage(path string) (usedPercentage uint64, ok bool) {
-	totalBlocks, blocksAvailable, _, err := getFSStats(path)
-	if err != nil {
-		return
-	}
-	usedBlocks := totalBlocks - blocksAvailable
-	return usedBlocks * 100 / totalBlocks, true
 }

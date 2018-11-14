@@ -10,6 +10,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
+	"github.com/NVIDIA/dfcpub/ios"
 )
 
 // tunable defaults
@@ -60,7 +61,7 @@ func (u *throttleContext) recompute() {
 	if (u.flag & onFSUsed) != 0 {
 		usedFSPercentage := u.prevFSUsedPct
 		if now.After(u.nextCapCheck) {
-			usedFSPercentage, ok = getFSUsedPercentage(u.path)
+			usedFSPercentage, ok = ios.GetFSUsedPercentage(u.path)
 			u.nextCapCheck = now.Add(fsCapCheckDuration)
 			if !ok {
 				glog.Errorf("Unable to retrieve used capacity for fs %s", u.fs)
@@ -79,7 +80,7 @@ func (u *throttleContext) recompute() {
 		curUtilPct := u.prevUtilPct
 
 		if now.After(u.nextUtilCheck) {
-			curUtilPct, ok = iostatr.maxUtilFS(u.fs)
+			curUtilPct, ok = iostatr.MaxUtilFS(u.fs)
 			u.nextUtilCheck = now.Add(u.period)
 			if !ok {
 				curUtilPct = u.prevUtilPct

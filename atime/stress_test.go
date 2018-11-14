@@ -1,8 +1,8 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-package dfc
+// Package atime tracks object access times in the system while providing a number of performance enhancements.
+package atime
 
 //================================= How to Run ========================
 // 1.To run the test for a specified duration while redirecting errors to stderror:
@@ -29,6 +29,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -61,36 +62,32 @@ func init() {
 	}
 
 	atimeSyncTime = flushFreq
-	ctx.config.CloudBuckets = "cloud"
-	ctx.config.LocalBuckets = "local"
-	ctx.config.LRU.AtimeCacheMax = atimeCacheFlushThreshold * 2
-	ctx.config.Periodic.StatsTime = time.Second
 }
 
 // used to insert new files into the mapth's corresponding atimerunner
-func touchFakeFiles(r *atimerunner, mpath, fqn1, fqn2 string, numFiles int) {
+func touchFakeFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int) {
 	start := time.Now()
 	for j := 0; j < numFiles/2; j++ {
 		numStr := strconv.Itoa(j)
-		r.touch(fqn1 + numStr)
-		r.touch(fqn2 + numStr)
+		r.Touch(fqn1 + numStr)
+		r.Touch(fqn2 + numStr)
 	}
 	tutils.Logf("%v to touch %d files in %s\n", time.Since(start), numFiles, mpath)
 }
 
-func touchRandomFiles(r *atimerunner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
+func touchRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
 	numTouches := 0
 	fileRange := numFiles / 2
 	for start := time.Now(); time.Since(start) < duration; {
 		numStr := strconv.Itoa(rand.Intn(fileRange))
-		r.touch(fqn1 + numStr)
-		r.touch(fqn2 + numStr)
+		r.Touch(fqn1 + numStr)
+		r.Touch(fqn2 + numStr)
 		numTouches += 2
 	}
 	tutils.Logf("Mpath: %q. Touched %d files.\n", mpath, numTouches)
 }
 
-func atimeRandomFiles(r *atimerunner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
+func atimeRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
 	numOk := 0
 	numAccesses := 0
 	fileRange := numFiles / 2
@@ -98,13 +95,13 @@ func atimeRandomFiles(r *atimerunner, mpath, fqn1, fqn2 string, numFiles int, du
 		randomInt := rand.Intn(fileRange)
 		numStr := strconv.Itoa(randomInt)
 		if randomInt%2 == 0 {
-			response := <-r.atime(fqn1 + numStr)
-			if response.ok {
+			response := <-r.Atime(fqn1 + numStr)
+			if response.Ok {
 				numOk++
 			}
 		} else {
-			response := <-r.atime(fqn2 + numStr)
-			if response.ok {
+			response := <-r.Atime(fqn2 + numStr)
+			if response.Ok {
 				numOk++
 			}
 		}
@@ -128,7 +125,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	numFiles := 100000
 	numFilesTotal := 1000000
 
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	fs.Mountpaths.DisableFsIDCheck()
 	cleanMountpaths()
 	for _, mpath := range mpaths {
@@ -136,19 +133,15 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 		fs.Mountpaths.Add(mpath)
 	}
 
-	ctx.rg = &rungroup{
-		runarr: make([]cmn.Runner, 0, 1),
-		runmap: make(map[string]cmn.Runner),
-	}
-	iostatr := newIostatRunner(fs.Mountpaths)
-	ctx.rg.add(iostatr, xiostat)
-
-	atimer := newAtimeRunner(fs.Mountpaths)
-	ctx.rg.add(atimer, xatime)
+	maxMapSize = atimeCacheFlushThreshold * 2
+	statsPeriod = time.Second
+	iostatr := ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
 
 	go atimer.Run()
+	go iostatr.Run()
 	for _, mpath := range mpaths {
-		atimer.reqAddMountpath(mpath)
+		atimer.ReqAddMountpath(mpath)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if len(atimer.mpathRunners) != len(mpaths) {
@@ -171,9 +164,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(mpaths[0])
-	disks := fs2disks(mpathInfo.FileSystem)
-	for disk := range disks {
+	for disk := range iostatr.Disk {
 		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
 		iostatr.Disk[disk]["%util"] = diskUtil
 	}

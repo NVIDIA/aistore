@@ -62,3 +62,13 @@ func newFakeTargetRunner() *targetrunner {
 	t.si = newSnode(fakeDaemonID, httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	return t
 }
+
+func cleanMountpaths() {
+	availableMountpaths, disabledMountpaths := fs.Mountpaths.Get()
+	for _, mpathInfo := range availableMountpaths {
+		fs.Mountpaths.Remove(mpathInfo.Path)
+	}
+	for _, mpathInfo := range disabledMountpaths {
+		fs.Mountpaths.Remove(mpathInfo.Path)
+	}
+}

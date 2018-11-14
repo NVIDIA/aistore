@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/json-iterator/go"
 )
@@ -218,7 +220,7 @@ func dfcinit() {
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
 
 		// iostat is required: ensure that it is installed and its version is right
-		if err := checkIostatVersion(); err != nil {
+		if err := ios.CheckIostatVersion(); err != nil {
 			glog.Exit(err)
 		}
 
@@ -247,7 +249,7 @@ func dfcinit() {
 			}
 		}
 
-		iostat := newIostatRunner(fs.Mountpaths)
+		iostat := ios.NewIostatRunner(fs.Mountpaths, &ctx.config.Periodic.StatsTime)
 		ctx.rg.add(iostat, xiostat)
 		t.fsprg.add(iostat)
 
@@ -268,7 +270,7 @@ func dfcinit() {
 		ctx.rg.add(replRunner, xreplication)
 		t.fsprg.add(replRunner)
 
-		atime := newAtimeRunner(fs.Mountpaths)
+		atime := atime.NewRunner(fs.Mountpaths, &ctx.config.LRU.AtimeCacheMax, iostat)
 		ctx.rg.add(atime, xatime)
 		t.fsprg.add(atime)
 	}
@@ -350,16 +352,16 @@ func getstorstatsrunner() *storstatsrunner {
 	return rr
 }
 
-func getiostatrunner() *iostatrunner {
+func getiostatrunner() *ios.IostatRunner {
 	r := ctx.rg.runmap[xiostat]
-	rr, ok := r.(*iostatrunner)
+	rr, ok := r.(*ios.IostatRunner)
 	cmn.Assert(ok)
 	return rr
 }
 
-func getatimerunner() *atimerunner {
+func getatimerunner() *atime.Runner {
 	r := ctx.rg.runmap[xatime]
-	rr, ok := r.(*atimerunner)
+	rr, ok := r.(*atime.Runner)
 	cmn.Assert(ok)
 	return rr
 }

@@ -1,7 +1,9 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+// Package ios is a collection of interfaces to the local storage subsystem;
+// the package includes OS-dependent implementations for those interfaces.
+package ios
 
 import (
 	"fmt"
@@ -17,30 +19,19 @@ import (
 )
 
 func init() {
-	ctx.config.CloudBuckets = "cloud"
-	ctx.config.LocalBuckets = "local"
-}
-
-func TestGetFSUsedPercentage(t *testing.T) {
-	percentage, ok := getFSUsedPercentage("/")
-	if !ok {
-		t.Error("Unable to retrieve FS used percentage!")
-	}
-	if percentage > 100 {
-		t.Errorf("Invalid FS used percentage [%d].", percentage)
-	}
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 }
 
 func TestGetFSDiskUtil(t *testing.T) {
-	if err := checkIostatVersion(); err != nil {
+	if err := CheckIostatVersion(); err != nil {
 		t.Skip("iostat version is not okay.")
 	}
 
 	tempRoot := "/tmp"
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	fs.Mountpaths.Add(tempRoot)
-
-	riostat := newIostatRunner(fs.Mountpaths)
+	statsPeriod := time.Second
+	riostat := NewIostatRunner(fs.Mountpaths, &statsPeriod)
 	go riostat.Run()
 
 	time.Sleep(50 * time.Millisecond)
@@ -145,7 +136,8 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 func TestGetMaxUtil(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths.Add(tempRoot)
-	riostat := newIostatRunner(fs.Mountpaths)
+	statsPeriod := time.Second
+	riostat := NewIostatRunner(fs.Mountpaths, &statsPeriod)
 	riostat.Disk = make(map[string]cmn.SimpleKVs, 2)
 	disks := make(cmn.StringSet)
 	disk1 := "disk1"
@@ -174,7 +166,8 @@ func TestGetMaxUtil(t *testing.T) {
 func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths.Add(tempRoot)
-	riostat := newIostatRunner(fs.Mountpaths)
+	statsPeriod := time.Second
+	riostat := NewIostatRunner(fs.Mountpaths, &statsPeriod)
 	_, ok := riostat.diskUtilFromFQN("test")
 	if ok {
 		t.Errorf("Expected to fail since no file system.")
@@ -186,7 +179,7 @@ func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 }
 
 func TestSearchValidMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/abc")
 	longestPrefix := mpathInfo.Path
@@ -195,7 +188,7 @@ func TestSearchValidMountPath(t *testing.T) {
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -203,7 +196,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 }
 
 func TestSearchWithNoMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -211,7 +204,7 @@ func TestSearchWithNoMountPath(t *testing.T) {
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -232,7 +225,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 }
 
 func TestSimilarCases(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -253,7 +246,7 @@ func TestSimilarCases(t *testing.T) {
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/tmp")

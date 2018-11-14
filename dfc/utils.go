@@ -254,35 +254,6 @@ func parsebool(s string) (value bool, err error) {
 	return
 }
 
-func maxUtilDisks(disksMetricsMap map[string]cmn.SimpleKVs, disks cmn.StringSet) (maxutil float64) {
-	maxutil = -1
-	util := func(disk string) (u float64) {
-		if ioMetrics, ok := disksMetricsMap[disk]; ok {
-			if utilStr, ok := ioMetrics["%util"]; ok {
-				var err error
-				if u, err = strconv.ParseFloat(utilStr, 32); err == nil {
-					return
-				}
-			}
-		}
-		return
-	}
-	if len(disks) > 0 {
-		for disk := range disks {
-			if u := util(disk); u > maxutil {
-				maxutil = u
-			}
-		}
-		return
-	}
-	for disk := range disksMetricsMap {
-		if u := util(disk); u > maxutil {
-			maxutil = u
-		}
-	}
-	return
-}
-
 func parsePort(p string) (int, error) {
 	port, err := strconv.Atoi(p)
 	if err != nil {

@@ -29,11 +29,13 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
@@ -65,7 +67,7 @@ type (
 		needChkSum   bool
 		needVersion  bool
 		needStatus   bool
-		atimeRespCh  chan *atimeResponse
+		atimeRespCh  chan *atime.Response
 	}
 
 	uxprocess struct {
@@ -678,7 +680,7 @@ send:
 	}
 
 	if !coldget && bucketmd.lruEnabled(bucket) {
-		getatimerunner().touch(fqn)
+		getatimerunner().Touch(fqn)
 	}
 	if glog.V(4) {
 		s := fmt.Sprintf("GET: %s/%s, %.2f MB, %d µs", bucket, objname, float64(written)/cmn.MiB, time.Since(started)/1000)
@@ -1857,7 +1859,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *cmn.GetMsg) *allfinfos {
 		needChkSum:   strings.Contains(msg.GetProps, cmn.GetPropsChecksum),
 		needVersion:  strings.Contains(msg.GetProps, cmn.GetPropsVersion),
 		needStatus:   strings.Contains(msg.GetProps, cmn.GetPropsStatus),
-		atimeRespCh:  make(chan *atimeResponse, 1),
+		atimeRespCh:  make(chan *atime.Response, 1),
 	}
 
 	if msg.GetPageSize != 0 {
@@ -1915,10 +1917,10 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		Status:   objStatus,
 	}
 	if ci.needAtime {
-		atimeResponse := <-getatimerunner().atime(fqn, ci.atimeRespCh)
-		atime, ok := atimeResponse.accessTime, atimeResponse.ok
+		atimeResponse := <-getatimerunner().Atime(fqn, ci.atimeRespCh)
+		atime, ok := atimeResponse.AccessTime, atimeResponse.Ok
 		if !ok {
-			atime, _, _ = getAmTimes(osfi)
+			atime, _, _ = ios.GetAmTimes(osfi)
 		}
 		if ci.msg.GetTimeFormat == "" {
 			fileInfo.Atime = atime.Format(cmn.RFC822)
@@ -2509,8 +2511,8 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	var accessTime time.Time
 	var ok bool
 	if bucketmd.lruEnabled(bucket) {
-		atimeResponse := <-getatimerunner().atime(fqn)
-		accessTime, ok = atimeResponse.accessTime, atimeResponse.ok
+		atimeResponse := <-getatimerunner().Atime(fqn)
+		accessTime, ok = atimeResponse.AccessTime, atimeResponse.Ok
 	}
 
 	// must read a file access before any operation: the next Open changes atime
@@ -2520,7 +2522,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	} else {
 		fileInfo, err := os.Stat(fqn)
 		if err == nil {
-			atime, mtime, _ := getAmTimes(fileInfo)
+			atime, mtime, _ := ios.GetAmTimes(fileInfo)
 			if mtime.After(atime) {
 				atime = mtime
 			}
@@ -3243,7 +3245,7 @@ func (t *targetrunner) finalizeobj(fqn, bucket string, objprops *objectProps) (e
 	}
 
 	if !objprops.atime.IsZero() && t.bucketLRUEnabled(bucket) {
-		getatimerunner().touch(fqn, objprops.atime)
+		getatimerunner().Touch(fqn, objprops.atime)
 	}
 
 	return
@@ -3822,7 +3824,7 @@ func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucket
 		fs:          mpathInfo.FileSystem,
 		bucketdir:   bucketdir,
 		throttler:   thrctx,
-		atimeRespCh: make(chan *atimeResponse, 1),
+		atimeRespCh: make(chan *atime.Response, 1),
 		namelocker:  t.rtnamemap,
 		bmdowner:    t.bmdowner,
 		statsif:     t.statsif,
