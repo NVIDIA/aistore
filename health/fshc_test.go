@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package health
 
 import (
 	"fmt"
@@ -17,6 +17,8 @@ const (
 	fsCheckerTmpDir = "/tmp/fshc"
 )
 
+var gmem2 *memsys.Mem2
+
 func testMemInit(name string) {
 	gmem2 = &memsys.Mem2{Name: name}
 	_ = gmem2.Init(false /* ignore init-time errors */)
@@ -29,7 +31,7 @@ func testCheckerMountPaths() *fs.MountedFS {
 	cmn.CreateDir(fsCheckerTmpDir + "/3")
 	cmn.CreateDir(fsCheckerTmpDir + "/4")
 
-	mountedFS := fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	mountedFS := fs.NewMountedFS("local", "cloud")
 	mountedFS.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
@@ -41,8 +43,8 @@ func testCheckerMountPaths() *fs.MountedFS {
 	return mountedFS
 }
 
-func testCheckerConfig() *fshcconf {
-	return &fshcconf{
+func testCheckerConfig() *FSHCConf {
+	return &FSHCConf{
 		Enabled:    true,
 		ErrorLimit: 2,
 	}
@@ -70,7 +72,7 @@ func testCheckerCleanup() {
 
 func TestFSCheckerMain(t *testing.T) {
 	testMemInit("fshctest")
-	fshc := newFSHC(testCheckerMountPaths(), testCheckerConfig())
+	fshc := NewFSHC(testCheckerMountPaths(), testCheckerConfig(), gmem2)
 
 	if fshc == nil {
 		t.Error("Failed to create fshc")

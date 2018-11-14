@@ -107,7 +107,7 @@ func atimeRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duratio
 		}
 		numAccesses++
 	}
-	tutils.Logf("Mpath: %q. Successfully accessed %d files. Total access atempts %d\n", mpath, numOk, numAccesses)
+	tutils.Logf("Mpath: %q. Successfully accessed %d files. Total access attempts %d\n", mpath, numOk, numAccesses)
 }
 
 func cleanDirectories(dir string) {

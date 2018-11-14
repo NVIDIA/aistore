@@ -90,12 +90,18 @@ const DEADBEEF = "DEADBEEF"
 const (
 	mindepth      = 128             // ring cap min; default ring growth increment
 	maxdepth      = 1024 * 24       // ring cap max
-	sizetoGC      = cmn.GiB * 2  // see heuristics ("Heu")
+	sizetoGC      = cmn.GiB * 2     // see heuristics ("Heu")
 	loadavg       = 10              // "idle" load average to deallocate Slabs when below
-	minMemFree    = cmn.GiB      // default minimum memory size that must remain available - see DFC_MINMEM_*
+	minMemFree    = cmn.GiB         // default minimum memory size that must remain available - see DFC_MINMEM_*
 	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
 	freeIdleMin   = memCheckAbove   // time to reduce an idle slab to a minimum depth (see mindepth)
 	freeIdleZero  = freeIdleMin * 2 // ... to zero
+)
+
+// slab constants
+const (
+	countThreshold = 32 // exceeding this scatter-gather count warrants selecting a larger-size Slab
+	minSizeUnknown = 32 * cmn.KiB
 )
 
 //

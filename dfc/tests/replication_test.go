@@ -195,7 +195,7 @@ func getPrimaryIntraDataURL(t *testing.T, proxyURL string) string {
 }
 
 func getXXHashChecksum(t *testing.T, reader io.Reader) string {
-	buf, slab := memsys.AllocFromSlab(0)
+	buf, slab := tutils.Mem2.AllocFromSlab2(0)
 	xxHashVal, errstr := cmn.ComputeXXHash(reader, buf)
 	slab.Free(buf)
 	if errstr != "" {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/health"
 )
 
 // $CONFDIR/*
@@ -54,7 +55,7 @@ type dfconfig struct {
 	FSpaths          cmn.SimpleKVs     `json:"fspaths"`
 	TestFSP          testfspathconf    `json:"test_fspaths"`
 	Net              netconfig         `json:"netconfig"`
-	FSHC             fshcconf          `json:"fshc"`
+	FSHC             health.FSHCConf   `json:"fshc"`
 	Auth             authconf          `json:"auth"`
 	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
 }
@@ -162,12 +163,6 @@ type httpcnf struct {
 type versionconfig struct {
 	ValidateWarmGet bool   `json:"validate_version_warm_get"` // True: validate object version upon warm GET
 	Versioning      string `json:"versioning"`                // types of objects versioning is enabled for: all, cloud, local, none
-}
-
-type fshcconf struct {
-	Enabled       bool `json:"fshc_enabled"`
-	TestFileCount int  `json:"fshc_test_files"`  // the number of files to read and write during a test
-	ErrorLimit    int  `json:"fshc_error_limit"` // thresholds of number of errors, exceeding any of them results in disabling a mountpath
 }
 
 type authconf struct {

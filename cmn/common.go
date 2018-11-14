@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
 // Package cmn provides common low-level types and utilities for all dfcpub projects
 package cmn
 
@@ -13,15 +11,12 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
@@ -193,20 +188,6 @@ func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
 	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
 	csum = hex.EncodeToString(hashInBytes)
 	return csum, ""
-}
-
-// as of 1.9 net/http does not appear to provide any better way..
-func IsErrConnectionRefused(err error) (yes bool) {
-	if uerr, ok := err.(*url.Error); ok {
-		if noerr, ok := uerr.Err.(*net.OpError); ok {
-			if scerr, ok := noerr.Err.(*os.SyscallError); ok {
-				if scerr.Err == syscall.ECONNREFUSED {
-					yes = true
-				}
-			}
-		}
-	}
-	return
 }
 
 //===========================================================================

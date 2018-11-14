@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/health"
 	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/json-iterator/go"
@@ -253,7 +254,7 @@ func dfcinit() {
 		ctx.rg.add(iostat, xiostat)
 		t.fsprg.add(iostat)
 
-		fshc := newFSHC(fs.Mountpaths, &ctx.config.FSHC)
+		fshc := health.NewFSHC(fs.Mountpaths, &ctx.config.FSHC, gmem2)
 		ctx.rg.add(fshc, xfshc)
 		t.fsprg.add(fshc)
 
@@ -380,9 +381,9 @@ func getmetasyncer() *metasyncer {
 	return rr
 }
 
-func getfshealthchecker() *fshc {
+func getfshealthchecker() *health.FSHC {
 	r := ctx.rg.runmap[xfshc]
-	rr, ok := r.(*fshc)
+	rr, ok := r.(*health.FSHC)
 	cmn.Assert(ok)
 	return rr
 }

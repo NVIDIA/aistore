@@ -91,10 +91,6 @@ type (
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
-
-	fspathDispatcher interface {
-		Disable(path string, why string) (disabled, exists bool)
-	}
 )
 
 //===========================================================================
@@ -3286,7 +3282,7 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 func (t *targetrunner) fshc(err error, filepath string) {
 	glog.Errorf("FSHC called with error: %#v, file: %s", err, filepath)
 
-	if !isIOError(err) {
+	if !cmn.IsIOError(err) {
 		return
 	}
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(filepath)
@@ -3297,7 +3293,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 	}
 
 	if ctx.config.FSHC.Enabled {
-		getfshealthchecker().onerr(filepath)
+		getfshealthchecker().OnErr(filepath)
 	}
 }
 
