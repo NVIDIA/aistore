@@ -1534,9 +1534,9 @@ func defaultBucketProps() cmn.BucketProps {
 			EnableReadRangeChecksum: false,
 		},
 		LRUConfig: cmn.LRUConfig{
-			LowWM:              (uint32)(10),
-			HighWM:             (uint32)(50),
-			AtimeCacheMax:      (uint64)(9999),
+			LowWM:              int64(10),
+			HighWM:             int64(50),
+			AtimeCacheMax:      uint64(9999),
 			DontEvictTimeStr:   "1m",
 			CapacityUpdTimeStr: "2m",
 			LRUEnabled:         false,

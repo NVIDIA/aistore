@@ -18,8 +18,8 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 	lruConfig := globalConfig["lru_config"].(map[string]interface{})
 
 	LRUConf := cmn.LRUConfig{
-		LowWM:              uint32(lruConfig["lowwm"].(float64)),
-		HighWM:             uint32(lruConfig["highwm"].(float64)),
+		LowWM:              int64(lruConfig["lowwm"].(float64)),
+		HighWM:             int64(lruConfig["highwm"].(float64)),
 		AtimeCacheMax:      uint64(lruConfig["atime_cache_max"].(float64)),
 		DontEvictTimeStr:   lruConfig["dont_evict_time"].(string),
 		CapacityUpdTimeStr: lruConfig["capacity_upd_time"].(string),

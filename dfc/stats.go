@@ -97,7 +97,7 @@ type metric = statsd.Metric // type alias
 type fscapacity struct {
 	Used    uint64 `json:"used"`    // bytes
 	Avail   uint64 `json:"avail"`   // ditto
-	Usedpct uint32 `json:"usedpct"` // reduntant ok
+	Usedpct int64  `json:"usedpct"` // reduntant ok
 }
 
 // implemented by the stats runners
@@ -457,10 +457,11 @@ func (s *proxyCoreStats) doAdd(name string, val int64) {
 //
 //================
 func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
+	pct := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
 	return &fscapacity{
 		Used:    (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize),
 		Avail:   statfs.Bavail * uint64(statfs.Bsize),
-		Usedpct: uint32((statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks),
+		Usedpct: int64(pct),
 	}
 }
 

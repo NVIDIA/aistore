@@ -679,12 +679,12 @@ func TestGetClusterStats(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Could not decode Target Stats: fstats.Usedpct")
 			}
-			if uint64(used) != fstats.Used || uint64(avail) != fstats.Avail || uint32(usedpct) != fstats.Usedpct {
+			if used != int64(fstats.Used) || avail != int64(fstats.Avail) || usedpct != fstats.Usedpct {
 				t.Errorf("Stats are different when queried from Target and Proxy: "+
 					"Used: %v, %v | Available:  %v, %v | Percentage: %v, %v",
 					tfstats["used"], fstats.Used, tfstats["avail"], fstats.Avail, tfstats["usedpct"], fstats.Usedpct)
 			}
-			if fstats.Usedpct > HighWaterMark {
+			if fstats.Usedpct > int64(HighWaterMark) {
 				t.Error("Used Percentage above High Watermark")
 			}
 		}
@@ -870,7 +870,7 @@ func TestLRU(t *testing.T) {
 			continue
 		}
 		for mpath, c := range v.Capacity {
-			if c.Usedpct < uint32(lowwm)-1 || c.Usedpct > uint32(lowwm)+1 {
+			if c.Usedpct < int64(lowwm-1) || c.Usedpct > int64(lowwm+1) {
 				t.Errorf("Target %s failed to reach lwm %d%%: mpath %s, used space %d%%", k, lowwm, mpath, c.Usedpct)
 			}
 		}

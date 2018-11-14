@@ -36,32 +36,32 @@ const (
 //
 //==============================
 type dfconfig struct {
-	Confdir          string             `json:"confdir"`
-	CloudProvider    string             `json:"cloudprovider"`
-	CloudBuckets     string             `json:"cloud_buckets"`
-	LocalBuckets     string             `json:"local_buckets"`
-	Readahead        rahconfig          `json:"readahead"`
-	Log              logconfig          `json:"log"`
-	Periodic         periodic           `json:"periodic"`
-	Timeout          timeoutconfig      `json:"timeout"`
-	Proxy            proxyconfig        `json:"proxyconfig"`
-	LRU              cmn.LRUConfig   `json:"lru_config"`
-	Xaction          xactionConfig      `json:"xaction_config"`
-	Rebalance        rebalanceconf      `json:"rebalance_conf"`
-	Replication      replicationconfig  `json:"replication"`
-	Cksum            cmn.CksumConfig `json:"cksum_config"`
-	Ver              versionconfig      `json:"version_config"`
-	FSpaths          cmn.SimpleKVs   `json:"fspaths"`
-	TestFSP          testfspathconf     `json:"test_fspaths"`
-	Net              netconfig          `json:"netconfig"`
-	FSHC             fshcconf           `json:"fshc"`
-	Auth             authconf           `json:"auth"`
-	KeepaliveTracker keepaliveTrackers  `json:"keepalivetracker"`
+	Confdir          string            `json:"confdir"`
+	CloudProvider    string            `json:"cloudprovider"`
+	CloudBuckets     string            `json:"cloud_buckets"`
+	LocalBuckets     string            `json:"local_buckets"`
+	Readahead        rahconfig         `json:"readahead"`
+	Log              logconfig         `json:"log"`
+	Periodic         periodic          `json:"periodic"`
+	Timeout          timeoutconfig     `json:"timeout"`
+	Proxy            proxyconfig       `json:"proxyconfig"`
+	LRU              cmn.LRUConfig     `json:"lru_config"`
+	Xaction          xactionConfig     `json:"xaction_config"`
+	Rebalance        rebalanceconf     `json:"rebalance_conf"`
+	Replication      replicationconfig `json:"replication"`
+	Cksum            cmn.CksumConfig   `json:"cksum_config"`
+	Ver              versionconfig     `json:"version_config"`
+	FSpaths          cmn.SimpleKVs     `json:"fspaths"`
+	TestFSP          testfspathconf    `json:"test_fspaths"`
+	Net              netconfig         `json:"netconfig"`
+	FSHC             fshcconf          `json:"fshc"`
+	Auth             authconf          `json:"auth"`
+	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
 }
 
 type xactionConfig struct {
-	DiskUtilLowWM  uint32 `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
-	DiskUtilHighWM uint32 `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
+	DiskUtilLowWM  int64 `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
+	DiskUtilHighWM int64 `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
 }
 
 type rahconfig struct {

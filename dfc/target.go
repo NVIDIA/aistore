@@ -3809,21 +3809,21 @@ func (t *targetrunner) runLRU() {
 
 // construct lructx
 func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
-	thrctx := &throttleContext{
-		capUsedHigh:  int64(ctx.config.LRU.HighWM),
-		diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
-		diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
-		period:       ctx.config.Periodic.StatsTime,
-		path:         mpathInfo.Path,
-		fs:           mpathInfo.FileSystem,
-		flag:         onDiskUtil | onFSUsed}
-
+	throttler := &cluster.Throttle{
+		Riostat:      getiostatrunner(),
+		CapUsedHigh:  &ctx.config.LRU.HighWM,
+		DiskUtilLow:  &ctx.config.Xaction.DiskUtilLowWM,
+		DiskUtilHigh: &ctx.config.Xaction.DiskUtilHighWM,
+		Period:       &ctx.config.Periodic.StatsTime,
+		Path:         mpathInfo.Path,
+		FS:           mpathInfo.FileSystem,
+		Flag:         cluster.OnDiskUtil | cluster.OnFSUsed}
 	lctx := &lructx{
 		oldwork:     make([]*fileInfo, 0, 64),
 		xlru:        xlru,
 		fs:          mpathInfo.FileSystem,
 		bucketdir:   bucketdir,
-		throttler:   thrctx,
+		throttler:   throttler,
 		atimeRespCh: make(chan *atime.Response, 1),
 		namelocker:  t.rtnamemap,
 		bmdowner:    t.bmdowner,

@@ -90,10 +90,10 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketPr
 	}
 
 	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRULowWM), 10, 32); err == nil {
-		lruprops.LowWM = uint32(b)
+		lruprops.LowWM = int64(b)
 	}
 	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketLRUHighWM), 10, 32); err == nil {
-		lruprops.HighWM = uint32(b)
+		lruprops.HighWM = int64(b)
 	}
 
 	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {

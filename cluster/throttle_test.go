@@ -1,12 +1,10 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+// Package cluster provides common interfaces and local access to cluster-level metadata
+package cluster
 
 import (
-	"container/heap"
-	"reflect"
-	"sort"
 	"strconv"
 	"testing"
 	"time"
@@ -23,9 +21,23 @@ type Test struct {
 	method func(*testing.T)
 }
 
-type fileInfos []fileInfo
+type ctxT struct {
+	config struct {
+		LRU struct {
+			LowWM, HighWM int64
+		}
+		Xaction struct {
+			DiskUtilLowWM, DiskUtilHighWM int64
+		}
+		Periodic struct {
+			StatsTime time.Duration
+		}
+	}
+}
 
 var riostat *ios.IostatRunner
+
+var ctx = &ctxT{}
 
 var aTests = []Test{
 	{"testHighDiskUtilization", testHighDiskUtilization},
@@ -41,93 +53,12 @@ var aTests = []Test{
 	{"testChangedDiskUtilBeforeUtilCheck", testChangedDiskUtilBeforeUtilCheck},
 }
 
-func (fis fileInfos) Len() int {
-	return len(fis)
-}
-
-func (fis fileInfos) Less(i, j int) bool {
-	return fis[i].usetime.Before(fis[j].usetime)
-}
-
-func (fis fileInfos) Swap(i, j int) {
-	fis[i], fis[j] = fis[j], fis[i]
-}
-
-func Test_HeapEqual(t *testing.T) {
-	tcs := []fileInfos{
-		{
-			{
-				"o1",
-				time.Date(2018, time.June, 26, 1, 2, 3, 0, time.UTC),
-				1024,
-			},
-			{
-				"o2",
-				time.Date(2018, time.June, 26, 1, 3, 3, 0, time.UTC),
-				1025,
-			},
-		},
-		{
-			{
-				"o3",
-				time.Date(2018, time.June, 26, 1, 5, 3, 0, time.UTC),
-				1024,
-			},
-			{
-				"o4",
-				time.Date(2018, time.June, 26, 1, 4, 3, 0, time.UTC),
-				1025,
-			},
-		},
-		{
-			{
-				"o5",
-				time.Date(2018, time.June, 26, 1, 5, 3, 0, time.UTC),
-				1024,
-			},
-		},
-		{
-			{
-				"o6",
-				time.Date(2018, time.June, 26, 1, 5, 3, 0, time.UTC),
-				10240,
-			},
-			{
-				"o7",
-				time.Date(2018, time.June, 28, 1, 4, 3, 0, time.UTC),
-				102500,
-			},
-			{
-				"o8",
-				time.Date(2018, time.June, 30, 1, 5, 3, 0, time.UTC),
-				1024,
-			},
-			{
-				"o9",
-				time.Date(2018, time.June, 20, 1, 4, 3, 0, time.UTC),
-				10250,
-			},
-		},
-	}
-
-	h := &fileInfoMinHeap{}
-	heap.Init(h)
-
-	for tcNum, tc := range tcs {
-		for i := range tc {
-			heap.Push(h, &tc[i])
-		}
-
-		act := make(fileInfos, len(tc))
-		for i := 0; i < len(tc); i++ {
-			act[i] = *heap.Pop(h).(*fileInfo)
-		}
-
-		sort.Sort(tc)
-		if !reflect.DeepEqual(act, tc) {
-			t.Fatalf("Test case %d failed", tcNum+1)
-		}
-	}
+func init() {
+	ctx.config.LRU.LowWM = 75
+	ctx.config.LRU.HighWM = 90
+	ctx.config.Xaction.DiskUtilLowWM = 60
+	ctx.config.Xaction.DiskUtilHighWM = 80
+	ctx.config.Periodic.StatsTime = time.Second
 }
 
 func Test_Throttle(t *testing.T) {
@@ -153,11 +84,6 @@ func Test_Throttle(t *testing.T) {
 		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
 
 	}
-	ctx.rg = &rungroup{
-		runarr: make([]cmn.Runner, 0, 4),
-		runmap: make(map[string]cmn.Runner),
-	}
-	ctx.rg.add(riostat, xiostat)
 
 	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM-10)
 	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM+10)
@@ -168,10 +94,10 @@ func Test_Throttle(t *testing.T) {
 	}
 }
 
-func testHighFSCapacityUsed(t *testing.T, diskUtil uint32) {
+func testHighFSCapacityUsed(t *testing.T, diskUtil int64) {
 	curCapacity, _ := ios.GetFSUsedPercentage("/")
 	oldLRUHWM := ctx.config.LRU.HighWM
-	ctx.config.LRU.HighWM = uint32(curCapacity - 1)
+	ctx.config.LRU.HighWM = int64(curCapacity - 1)
 	thrctx := newThrottleContext()
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
@@ -361,15 +287,15 @@ func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T) {
 	oldLRUHWM := ctx.config.LRU.HighWM
 	curCapacity, _ := ios.GetFSUsedPercentage("/")
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
-	ctx.config.LRU.HighWM = uint32(curCapacity - 2)
-	thrctx.capUsedHigh = int64(ctx.config.LRU.HighWM) // NOTE: init time only
+	ctx.config.LRU.HighWM = int64(curCapacity - 2)
+	*thrctx.CapUsedHigh = ctx.config.LRU.HighWM // NOTE: init time only
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
-	ctx.config.LRU.HighWM = uint32(curCapacity + 10)
-	thrctx.capUsedHigh = int64(ctx.config.LRU.HighWM)
+	ctx.config.LRU.HighWM = int64(curCapacity + 10)
+	*thrctx.CapUsedHigh = ctx.config.LRU.HighWM
 	thrctx.recompute()
 	sleepDuration = thrctx.sleep
 	if sleepDuration != initThrottleSleep {
@@ -382,7 +308,7 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 	thrctx := newThrottleContext()
 	oldStatsTime := ctx.config.Periodic.StatsTime
 	ctx.config.Periodic.StatsTime = 10 * time.Minute
-	thrctx.period = ctx.config.Periodic.StatsTime // NOTE: ditto
+	*thrctx.Period = ctx.config.Periodic.StatsTime // NOTE: ditto
 	sleepDuration := getSleepDuration(0, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
@@ -400,7 +326,7 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 	ctx.config.Periodic.StatsTime = oldStatsTime
 }
 
-func getSleepDuration(diskUtil uint32, thrctx *throttleContext) time.Duration {
+func getSleepDuration(diskUtil int64, thrctx *Throttle) time.Duration {
 	for disk := range riostat.Disk {
 		riostat.Disk[disk]["%util"] = strconv.Itoa(int(diskUtil))
 	}
@@ -412,14 +338,15 @@ func getSleepDuration(diskUtil uint32, thrctx *throttleContext) time.Duration {
 	return thrctx.sleep
 }
 
-func newThrottleContext() *throttleContext {
+func newThrottleContext() *Throttle {
 	fileSystem, _ := fs.Fqn2fsAtStartup("/")
-	return &throttleContext{
-		capUsedHigh:  int64(ctx.config.LRU.HighWM),
-		diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
-		diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
-		period:       ctx.config.Periodic.StatsTime,
-		path:         "/",
-		fs:           fileSystem,
-		flag:         onDiskUtil | onFSUsed}
+	return &Throttle{
+		Riostat:      riostat,
+		CapUsedHigh:  &ctx.config.LRU.HighWM,
+		DiskUtilLow:  &ctx.config.Xaction.DiskUtilLowWM,
+		DiskUtilHigh: &ctx.config.Xaction.DiskUtilHighWM,
+		Period:       &ctx.config.Periodic.StatsTime,
+		Path:         "/",
+		FS:           fileSystem,
+		Flag:         OnDiskUtil | OnFSUsed}
 }

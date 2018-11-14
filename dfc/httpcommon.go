@@ -730,9 +730,9 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 func (h *httprunner) setconfig(name, value string) (errstr string) {
 	lm, hm := ctx.config.LRU.LowWM, ctx.config.LRU.HighWM
 	checkwm := false
-	atoi := func(value string) (uint32, error) {
+	atoi := func(value string) (int64, error) {
 		v, err := strconv.Atoi(value)
-		return uint32(v), err
+		return int64(v), err
 	}
 	switch name {
 	case "vmodule":

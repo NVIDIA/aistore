@@ -325,10 +325,10 @@ type CksumConfig struct {
 type LRUConfig struct {
 
 	// LowWM: Self-throttling mechanisms are suspended if disk utilization is below LowWM
-	LowWM uint32 `json:"lowwm"`
+	LowWM int64 `json:"lowwm"`
 
 	// HighWM: Self-throttling mechanisms are fully engaged if disk utilization is above HighWM
-	HighWM uint32 `json:"highwm"`
+	HighWM int64 `json:"highwm"`
 
 	// AtimeCacheMax represents the maximum number of entries
 	AtimeCacheMax uint64 `json:"atime_cache_max"`

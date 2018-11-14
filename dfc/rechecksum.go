@@ -66,18 +66,20 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 }
 
 func (t *targetrunner) oneRechecksumBucket(mpathInfo *fs.MountpathInfo, bucketDir string, xrcksum *xactRechecksum) {
+	throttler := &cluster.Throttle{
+		Riostat:      getiostatrunner(),
+		CapUsedHigh:  &ctx.config.LRU.HighWM,
+		DiskUtilLow:  &ctx.config.Xaction.DiskUtilLowWM,
+		DiskUtilHigh: &ctx.config.Xaction.DiskUtilHighWM,
+		Period:       &ctx.config.Periodic.StatsTime,
+		Path:         mpathInfo.Path,
+		FS:           mpathInfo.FileSystem,
+		Flag:         cluster.OnDiskUtil}
 	rcksctx := &recksumctx{
-		xrcksum: xrcksum,
-		t:       t,
-		fs:      mpathInfo.FileSystem,
-		throttler: &throttleContext{
-			capUsedHigh:  int64(ctx.config.LRU.HighWM),
-			diskUtilLow:  int64(ctx.config.Xaction.DiskUtilLowWM),
-			diskUtilHigh: int64(ctx.config.Xaction.DiskUtilHighWM),
-			period:       ctx.config.Periodic.StatsTime,
-			path:         mpathInfo.Path,
-			fs:           mpathInfo.FileSystem,
-			flag:         onDiskUtil},
+		xrcksum:   xrcksum,
+		t:         t,
+		fs:        mpathInfo.FileSystem,
+		throttler: throttler,
 	}
 
 	if err := filepath.Walk(bucketDir, rcksctx.walkFunc); err != nil {
@@ -100,7 +102,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 		return nil
 	}
 
-	rcksctx.throttler.Throttle()
+	rcksctx.throttler.Sleep()
 
 	// stop traversing if xaction is aborted
 	select {
