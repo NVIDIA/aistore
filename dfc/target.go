@@ -2955,7 +2955,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 		gettargetkeepalive().keepalive.controlCh <- controlSignal{msg: unregister}
 		return
 	default:
-		t.invalmsghdlr(w, r, "unrecognized path in /daemon DELETE")
+		t.invalmsghdlr(w, r, fmt.Sprintf("unrecognized path: %q in /daemon DELETE", apiItems[0]))
 		return
 	}
 }

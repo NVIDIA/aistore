@@ -37,6 +37,7 @@ func TestGetFSDiskUtil(t *testing.T) {
 	}
 
 	tempRoot := "/tmp"
+	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
 	fs.Mountpaths.Add(tempRoot)
 
 	riostat := newIostatRunner(fs.Mountpaths)

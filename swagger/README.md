@@ -2,7 +2,7 @@
 
 1. Obtain swagger-codegen jar by running the following command:
     ```shell
-    wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.1/openapi-generator-cli-3.3.1.jar -O openapi-generator-cli.jar
+    wget http://central.maven.org/maven2/org/openapitools/openapi-generator-cli/3.3.2/openapi-generator-cli-3.3.2.jar -O openapi-generator-cli.jar
     ```
    Source: [openapitools/openapi-generator](https://github.com/openapitools/openapi-generator)
 

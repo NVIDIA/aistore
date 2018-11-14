@@ -562,6 +562,9 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 
 	for _, serverMap := range bcastArgs.servers {
 		for sid, serverInfo := range serverMap {
+			if _, exists := bcastArgs.serversToIgnore[sid]; exists {
+				continue
+			}
 			if sid == h.si.DaemonID {
 				continue
 			}

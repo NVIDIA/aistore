@@ -324,11 +324,14 @@ func (r *sgReader) XXHash() string {
 }
 
 // NewSGReader returns a new sgReader
-func NewSGReader(sgl *memsys.SGL, size int64, withHash bool) (Reader, error) {
+func NewSGReader(sgl *memsys.SGL, size int64, withHash bool) (reader Reader, err error) {
+	var hash string
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	hash, err := copyRandWithHash(sgl, size, withHash, rnd)
-	if err != nil {
-		return nil, err
+	if size > 0 {
+		hash, err = copyRandWithHash(sgl, size, withHash, rnd)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	r := memsys.NewReader(sgl)
