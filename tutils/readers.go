@@ -300,7 +300,9 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 
 	var hash string
 	if withHash {
-		_, hash, err = ReadWriteWithHash(f, ioutil.Discard)
+		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
+		_, hash, err = cmn.ReadWriteWithHash(f, ioutil.Discard, buf)
+		slab.Free(buf)
 	}
 
 	return &fileReader{nil, fn, "" /* dfc prefix */, hash}, nil
@@ -397,34 +399,4 @@ func NewReader(p ParamReader) (Reader, error) {
 	default:
 		return nil, fmt.Errorf("Unknown memory type for creating inmem reader")
 	}
-}
-
-// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and calculate
-// xxHash on the data.
-func ReadWriteWithHash(r io.Reader, w io.Writer) (int64, string, error) {
-	var (
-		total   int64
-		bufSize = 32768
-	)
-
-	buf := make([]byte, bufSize)
-	h := xxhash.New64()
-	mw := io.MultiWriter(h, w)
-	for {
-		n, err := r.Read(buf)
-		total += int64(n)
-		if err != nil && err != io.EOF {
-			return 0, "", err
-		}
-
-		if n == 0 {
-			break
-		}
-
-		mw.Write(buf[:n])
-	}
-
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
-	return total, hex.EncodeToString(b), nil
 }

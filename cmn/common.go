@@ -133,6 +133,9 @@ func CopyStruct(dst interface{}, src interface{}) {
 //
 // files, IO, hash
 //
+
+const DefaultBufSize = 32 * KiB
+
 func CreateDir(dirname string) error {
 	stat, err := os.Stat(dirname)
 	if err == nil && stat.IsDir() {
@@ -151,6 +154,39 @@ func CreateFile(fname string) (file *os.File, err error) {
 	return
 }
 
+// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
+// xxHash on the data.
+func ReadWriteWithHash(r io.Reader, w io.Writer, slabuf []byte) (int64, string, error) {
+	var (
+		total int64
+		buf   []byte
+	)
+	if slabuf != nil {
+		buf = slabuf
+	} else {
+		buf = make([]byte, DefaultBufSize)
+	}
+	h := xxhash.New64()
+	mw := io.MultiWriter(h, w)
+	for {
+		n, err := r.Read(buf)
+		total += int64(n)
+		if err != nil && err != io.EOF {
+			return 0, "", err
+		}
+
+		if n == 0 {
+			break
+		}
+
+		mw.Write(buf[:n])
+	}
+
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
+	return total, hex.EncodeToString(b), nil
+}
+
 func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
 	buf []byte, hashes ...hash.Hash) (written int64, err error) {
 	var writer io.Writer
@@ -164,22 +200,14 @@ func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
 		hashwriters[len(hashes)] = filewriter
 		writer = io.MultiWriter(hashwriters...)
 	}
-	if buf == nil {
-		written, err = io.Copy(writer, rrbody)
-	} else {
-		written, err = io.CopyBuffer(writer, rrbody, buf)
-	}
+	written, err = io.CopyBuffer(writer, rrbody, buf)
 	return
 }
 
 func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
 	var err error
 	var xx hash.Hash64 = xxhash.New64()
-	if buf == nil {
-		_, err = io.Copy(xx.(io.Writer), reader)
-	} else {
-		_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
-	}
+	_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
 	if err != nil {
 		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
 	}

@@ -141,7 +141,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 	xxHashVal, errstr := cmn.ComputeXXHash(file, buf)
 	slab.Free(buf)
 	if errstr != "" {
-		glog.Warningf("failed to calculate hash on %s, error: %s", fqn, errstr)
+		glog.Warningf("failed to compute hash on %s, error: %s", fqn, errstr)
 		return errors.New(errstr)
 	}
 	if errstr = Setxattr(fqn, cmn.XattrXXHashVal, []byte(xxHashVal)); errstr != "" {

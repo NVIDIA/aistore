@@ -46,7 +46,7 @@ import (
 // TODO
 // * Replication bucket-specific configuration
 // * Add a check validating that sending and receiving targets are not inside the same cluster
-// * On the receiving side do not calculate checksum of existing file if it's stored as xattr
+// * On the receiving side do not compute checksum of existing file if it's stored as xattr
 
 const (
 	replicationPolicyNone  = "none"
@@ -222,7 +222,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		xxHashVal, errstr = cmn.ComputeXXHash(file, buf)
 		slab.Free(buf)
 		if errstr != "" {
-			errstr = fmt.Sprintf("Failed to calculate checksum on %s, error: %s", req.fqn, errstr)
+			errstr = fmt.Sprintf("Failed to compute checksum on %s, error: %s", req.fqn, errstr)
 			return errors.New(errstr)
 		}
 		if _, err = file.Seek(0, os.SEEK_SET); err != nil {
@@ -347,7 +347,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
 		return nil
 	}
-	// Calculate the checksum when the Xattr does not exit
+	// Compute the checksum when the Xattr does not exit
 	if file, err := os.Open(req.fqn); err == nil {
 		buf, slab := gmem2.AllocFromSlab2(0)
 		xxHashVal, errstr := cmn.ComputeXXHash(file, buf)

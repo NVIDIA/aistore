@@ -10,7 +10,6 @@
 package tutils
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -186,17 +185,18 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 			}
 		}
 
-		bufreader := bufio.NewReader(r.Body)
+		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
 		if validate {
-			length, hash, err = ReadWriteWithHash(bufreader, w)
+			length, hash, err = cmn.ReadWriteWithHash(r.Body, w, buf)
 			if err != nil {
 				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
 		} else {
-			if length, err = io.Copy(w, bufreader); err != nil {
+			if length, err = io.CopyBuffer(w, r.Body, buf); err != nil {
 				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
 		}
+		slab.Free(buf)
 	} else {
 		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
 	}
