@@ -1540,13 +1540,13 @@ func defaultBucketProps() cmn.BucketProps {
 		NextTierURL:   "http://foo.com",
 		ReadPolicy:    cmn.RWPolicyNextTier,
 		WritePolicy:   cmn.RWPolicyNextTier,
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum:                cmn.ChecksumXXHash,
 			ValidateColdGet:         false,
 			ValidateWarmGet:         false,
 			EnableReadRangeChecksum: false,
 		},
-		LRUConfig: cmn.LRUConfig{
+		LRUConf: cmn.LRUConf{
 			LowWM:              int64(10),
 			HighWM:             int64(50),
 			AtimeCacheMax:      uint64(9999),

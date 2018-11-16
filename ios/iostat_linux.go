@@ -28,7 +28,7 @@ const (
 
 type IostatRunner struct {
 	sync.RWMutex
-	cmn.Named
+	cmn.NamedConfigured
 	// public
 	Disk    map[string]cmn.SimpleKVs
 	CPUidle string
@@ -38,16 +38,14 @@ type IostatRunner struct {
 	metricnames []string
 	process     *os.Process // running iostat process. Required so it can be killed later
 	fsdisks     map[string]cmn.StringSet
-	period      *time.Duration
 }
 
-func NewIostatRunner(mountpaths *fs.MountedFS, period *time.Duration) *IostatRunner {
+func NewIostatRunner(mountpaths *fs.MountedFS) *IostatRunner {
 	return &IostatRunner{
 		mountpaths:  mountpaths,
 		stopCh:      make(chan struct{}, 1),
 		Disk:        make(map[string]cmn.SimpleKVs),
 		metricnames: make([]string, 0),
-		period:      period,
 	}
 }
 
@@ -66,7 +64,8 @@ func (r *IostatRunner) ReqRemoveMountpath(mpath string)  { r.updateFSDisks() }
 // iostat -cdxtm 10
 func (r *IostatRunner) Run() error {
 	r.updateFSDisks()
-	refreshPeriod := int(*r.period / time.Second)
+	period := r.Getconf().Periodic.StatsTime
+	refreshPeriod := int(period / time.Second)
 	cmd := exec.Command("iostat", "-cdxtm", strconv.Itoa(refreshPeriod))
 	stdout, err := cmd.StdoutPipe()
 	reader := bufio.NewReader(stdout)

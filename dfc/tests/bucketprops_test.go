@@ -17,7 +17,7 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 	globalConfig := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
 	lruConfig := globalConfig["lru_config"].(map[string]interface{})
 
-	LRUConf := cmn.LRUConfig{
+	LRUConf := cmn.LRUConf{
 		LowWM:              int64(lruConfig["lowwm"].(float64)),
 		HighWM:             int64(lruConfig["highwm"].(float64)),
 		AtimeCacheMax:      uint64(lruConfig["atime_cache_max"].(float64)),
@@ -26,8 +26,8 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 		LRUEnabled:         lruConfig["lru_enabled"].(bool),
 	}
 	return &cmn.BucketProps{
-		CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
-		LRUConfig:   LRUConf,
+		CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		LRUConf:   LRUConf,
 	}
 }
 
@@ -52,7 +52,7 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.ValidateColdGet = cksumConfig["validate_checksum_cold_get"].(bool)
 	globalProps.ValidateWarmGet = cksumConfig["validate_checksum_warm_get"].(bool)
 	globalProps.EnableReadRangeChecksum = cksumConfig["enable_read_range_checksum"].(bool)
-	globalProps.LRUConfig = testBucketProps(t).LRUConfig
+	globalProps.LRUConf = testBucketProps(t).LRUConf
 
 	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)

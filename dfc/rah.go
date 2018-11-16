@@ -40,7 +40,7 @@ type (
 	}
 	readahead struct {
 		sync.Mutex
-		cmn.Named                        // to be a runner
+		cmn.Named
 		mountpaths *fs.MountedFS         //
 		joggers    map[string]*rahjogger // mpath => jogger
 		stopCh     chan struct{}         // to stop

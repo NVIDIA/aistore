@@ -71,7 +71,7 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketPr
 			bucket, r.StatusCode, string(b))
 	}
 
-	cksumconf := cmn.CksumConfig{
+	cksumconf := cmn.CksumConf{
 		Checksum: r.Header.Get(cmn.HeaderBucketChecksumType),
 	}
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketValidateColdGet)); err == nil {
@@ -84,7 +84,7 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketPr
 		cksumconf.EnableReadRangeChecksum = b
 	}
 
-	lruprops := cmn.LRUConfig{
+	lruprops := cmn.LRUConf{
 		DontEvictTimeStr:   r.Header.Get(cmn.HeaderBucketDontEvictTime),
 		CapacityUpdTimeStr: r.Header.Get(cmn.HeaderBucketCapUpdTime),
 	}
@@ -110,8 +110,8 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketPr
 		NextTierURL:   r.Header.Get(cmn.HeaderNextTierURL),
 		ReadPolicy:    r.Header.Get(cmn.HeaderReadPolicy),
 		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
-		CksumConfig:   cksumconf,
-		LRUConfig:     lruprops,
+		CksumConf:   cksumconf,
+		LRUConf:     lruprops,
 	}, nil
 }
 

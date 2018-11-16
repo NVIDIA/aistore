@@ -432,7 +432,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 
 	// bucket-level checksumming should override global
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
-		cksumcfg = &bucketProps.CksumConfig
+		cksumcfg = &bucketProps.CksumConf
 	}
 
 	// existence, access & versioning
@@ -999,7 +999,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		errstr      string
 		errcode     int
 		bucketprops cmn.SimpleKVs
-		cksumcfg    *cmn.CksumConfig
+		cksumcfg    *cmn.CksumConf
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -1050,7 +1050,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	// include checksumming settings in the response
 	cksumcfg = &ctx.config.Cksum
 	if defined {
-		cksumcfg = &props.CksumConfig
+		cksumcfg = &props.CksumConf
 	}
 
 	// include lru settings in the response
@@ -1473,7 +1473,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	// check if bucket-level checksumming configuration should override cluster-level configuration
 	bucketProps, _, defined := bucketmd.propsAndChecksum(bucket)
 	if defined {
-		cksumcfg = &bucketProps.CksumConfig
+		cksumcfg = &bucketProps.CksumConf
 	}
 
 	// existence, access & versioning
@@ -2013,7 +2013,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	putfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
-		cksumcfg = &bucketProps.CksumConfig
+		cksumcfg = &bucketProps.CksumConf
 	}
 	hdhobj = newcksumvalue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
 
@@ -2497,7 +2497,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	islocal := bucketmd.IsLocal(bucket)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
-		cksumcfg = &bucketProps.CksumConfig
+		cksumcfg = &bucketProps.CksumConf
 	}
 	fqn, errstr := cluster.FQN(bucket, objname, islocal)
 	if errstr != "" {
@@ -2981,7 +2981,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	// try to override cksum config with bucket-level config
 	if bucket, _, err := cluster.ResolveFQN(fqn, t.bmdowner); err == nil {
 		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
-			cksumcfg = &bucketProps.CksumConfig
+			cksumcfg = &bucketProps.CksumConf
 		}
 	}
 

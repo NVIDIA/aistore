@@ -86,6 +86,7 @@ cat > $CONFFILE <<EOL
 			"port_intra_data":    "${PORT_INTRA_DATA}"
 		},
 		"http": {
+			"proto":		"http",
 			"rproxy":		"",
 			"server_certificate":	"server.crt",
 			"server_key":		"server.key",

@@ -53,7 +53,7 @@ type (
 		nhobj   cksumvalue
 	}
 
-	// callResult contains data returned by a server to server call
+	// callResult contains http response
 	callResult struct {
 		si      *cluster.Snode
 		outjson []byte
@@ -62,7 +62,7 @@ type (
 		status  int
 	}
 
-	// reqArgs contains information about the http request which we want to send
+	// reqArgs is the http request that we want to send
 	reqArgs struct {
 		method string      // GET, POST, ...
 		header http.Header // request headers
@@ -240,8 +240,7 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 }
 
 func (h *httprunner) init(s statsif, isproxy bool) {
-	// clivars proxyurl overrides config proxy settings.
-	// If it is set, the proxy will not register as the primary proxy.
+	// cli proxyurl overrides config proxy settings - if set, the proxy won't register as the primary
 	if clivars.proxyurl != "" {
 		ctx.config.Proxy.PrimaryURL = clivars.proxyurl
 	}
@@ -281,9 +280,7 @@ func (h *httprunner) init(s statsif, isproxy bool) {
 	h.xactinp = newxactinp() // extended actions
 }
 
-// initSI initialize a daemon's identification (never changes once it is set)
-// Note: Sadly httprunner has become the sharing point where common code for
-//       proxyrunner and targetrunner exist.
+// initSI initializes this cluster.Snode
 func (h *httprunner) initSI() {
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
 	addrList, err := getLocalIPv4List(allowLoopback)
@@ -339,7 +336,7 @@ func (h *httprunner) initSI() {
 		}
 	}
 
-	h.si = newSnode(daemonID, ctx.config.Net.HTTP.proto, publicAddr, intraControlAddr, intraDataAddr)
+	h.si = newSnode(daemonID, ctx.config.Net.HTTP.Proto, publicAddr, intraControlAddr, intraDataAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {

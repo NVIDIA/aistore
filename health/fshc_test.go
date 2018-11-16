@@ -43,11 +43,11 @@ func testCheckerMountPaths() *fs.MountedFS {
 	return mountedFS
 }
 
-func testCheckerConfig() *FSHCConf {
-	return &FSHCConf{
-		Enabled:    true,
-		ErrorLimit: 2,
-	}
+func testCheckerConfig() *cmn.Config {
+	config := cmn.Config{}
+	config.FSHC.Enabled = true
+	config.FSHC.ErrorLimit = 2
+	return &config
 }
 
 type MockFSDispatcher struct {
@@ -72,11 +72,11 @@ func testCheckerCleanup() {
 
 func TestFSCheckerMain(t *testing.T) {
 	testMemInit("fshctest")
-	fshc := NewFSHC(testCheckerMountPaths(), testCheckerConfig(), gmem2)
-
+	fshc := NewFSHC(testCheckerMountPaths(), gmem2)
 	if fshc == nil {
 		t.Error("Failed to create fshc")
 	}
+	fshc.Setconf(testCheckerConfig())
 
 	// intial state = 2 availble FSes - must pass
 	availablePaths, disabledPaths := fshc.mountpaths.Get()

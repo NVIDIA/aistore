@@ -566,8 +566,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.bmdowner.Lock()
 		clone := p.bmdowner.get().clone()
 		bprops := cmn.BucketProps{
-			CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
-			LRUConfig:   ctx.config.LRU,
+			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRUConf:   ctx.config.LRU,
 		}
 		if !clone.add(lbucket, true, bprops) {
 			p.bmdowner.Unlock()
@@ -725,8 +725,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		cmn.Assert(!isLocal)
 		oldProps = cmn.BucketProps{
-			CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
-			LRUConfig:   ctx.config.LRU,
+			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRUConf:   ctx.config.LRU,
 		}
 		clone.add(bucket, false, oldProps)
 	}
@@ -741,8 +741,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		p.copyBucketProps(&oldProps, props, bucket)
 	case cmn.ActResetProps:
 		oldProps = cmn.BucketProps{
-			CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
-			LRUConfig:   ctx.config.LRU,
+			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRUConf:   ctx.config.LRU,
 		}
 	}
 

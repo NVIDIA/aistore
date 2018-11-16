@@ -30,8 +30,11 @@ func TestGetFSDiskUtil(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	fs.Mountpaths.Add(tempRoot)
-	statsPeriod := time.Second
-	riostat := NewIostatRunner(fs.Mountpaths, &statsPeriod)
+
+	config := testConfig(time.Second)
+	riostat := NewIostatRunner(fs.Mountpaths)
+	riostat.Setconf(config)
+
 	go riostat.Run()
 
 	time.Sleep(50 * time.Millisecond)
@@ -136,8 +139,11 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 func TestGetMaxUtil(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths.Add(tempRoot)
-	statsPeriod := time.Second
-	riostat := NewIostatRunner(fs.Mountpaths, &statsPeriod)
+
+	config := testConfig(time.Second)
+	riostat := NewIostatRunner(fs.Mountpaths)
+	riostat.Setconf(config)
+
 	riostat.Disk = make(map[string]cmn.SimpleKVs, 2)
 	disks := make(cmn.StringSet)
 	disk1 := "disk1"
@@ -166,8 +172,11 @@ func TestGetMaxUtil(t *testing.T) {
 func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths.Add(tempRoot)
-	statsPeriod := time.Second
-	riostat := NewIostatRunner(fs.Mountpaths, &statsPeriod)
+
+	config := testConfig(time.Second)
+	riostat := NewIostatRunner(fs.Mountpaths)
+	riostat.Setconf(config)
+
 	_, ok := riostat.diskUtilFromFQN("test")
 	if ok {
 		t.Errorf("Expected to fail since no file system.")
@@ -365,4 +374,10 @@ func TestLsblk(t *testing.T) {
 			}
 		}
 	}
+}
+
+func testConfig(d time.Duration) *cmn.Config {
+	config := cmn.Config{}
+	config.Periodic.StatsTime = d
+	return &config
 }

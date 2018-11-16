@@ -14,7 +14,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/health"
 )
 
 // $CONFDIR/*
@@ -30,160 +29,6 @@ const (
 	RevProxyCloud  = "cloud"
 	RevProxyTarget = "target"
 )
-
-//==============================
-//
-// config types
-//
-//==============================
-type dfconfig struct {
-	Confdir          string            `json:"confdir"`
-	CloudProvider    string            `json:"cloudprovider"`
-	CloudBuckets     string            `json:"cloud_buckets"`
-	LocalBuckets     string            `json:"local_buckets"`
-	Readahead        rahconfig         `json:"readahead"`
-	Log              logconfig         `json:"log"`
-	Periodic         periodic          `json:"periodic"`
-	Timeout          timeoutconfig     `json:"timeout"`
-	Proxy            proxyconfig       `json:"proxyconfig"`
-	LRU              cmn.LRUConfig     `json:"lru_config"`
-	Xaction          xactionConfig     `json:"xaction_config"`
-	Rebalance        rebalanceconf     `json:"rebalance_conf"`
-	Replication      replicationconfig `json:"replication"`
-	Cksum            cmn.CksumConfig   `json:"cksum_config"`
-	Ver              versionconfig     `json:"version_config"`
-	FSpaths          cmn.SimpleKVs     `json:"fspaths"`
-	TestFSP          testfspathconf    `json:"test_fspaths"`
-	Net              netconfig         `json:"netconfig"`
-	FSHC             health.FSHCConf   `json:"fshc"`
-	Auth             authconf          `json:"auth"`
-	KeepaliveTracker keepaliveTrackers `json:"keepalivetracker"`
-}
-
-type xactionConfig struct {
-	DiskUtilLowWM  int64 `json:"disk_util_low_wm"`  // Low watermark below which no throttling is required
-	DiskUtilHighWM int64 `json:"disk_util_high_wm"` // High watermark above which throttling is required for longer duration
-}
-
-type rahconfig struct {
-	ObjectMem int64 `json:"rahobjectmem"`
-	TotalMem  int64 `json:"rahtotalmem"`
-	ByProxy   bool  `json:"rahbyproxy"`
-	Discard   bool  `json:"rahdiscard"`
-	Enabled   bool  `json:"rahenabled"`
-}
-
-type logconfig struct {
-	Dir      string `json:"logdir"`      // log directory
-	Level    string `json:"loglevel"`    // log level aka verbosity
-	MaxSize  uint64 `json:"logmaxsize"`  // size that triggers log rotation
-	MaxTotal uint64 `json:"logmaxtotal"` // max total size of all the logs in the log directory
-}
-
-type periodic struct {
-	StatsTimeStr     string `json:"stats_time"`
-	RetrySyncTimeStr string `json:"retry_sync_time"`
-	// omitempty
-	StatsTime     time.Duration `json:"-"`
-	RetrySyncTime time.Duration `json:"-"`
-}
-
-// timeoutconfig contains timeouts used for intra-cluster communication
-type timeoutconfig struct {
-	DefaultStr         string        `json:"default_timeout"`
-	Default            time.Duration `json:"-"` // omitempty
-	DefaultLongStr     string        `json:"default_long_timeout"`
-	DefaultLong        time.Duration `json:"-"` //
-	MaxKeepaliveStr    string        `json:"max_keepalive"`
-	MaxKeepalive       time.Duration `json:"-"` //
-	ProxyPingStr       string        `json:"proxy_ping"`
-	ProxyPing          time.Duration `json:"-"` //
-	CplaneOperationStr string        `json:"cplane_operation"`
-	CplaneOperation    time.Duration `json:"-"` //
-	SendFileStr        string        `json:"send_file_time"`
-	SendFile           time.Duration `json:"-"` //
-	StartupStr         string        `json:"startup_time"`
-	Startup            time.Duration `json:"-"` //
-}
-
-type proxyconfig struct {
-	NonElectable bool   `json:"non_electable"`
-	PrimaryURL   string `json:"primary_url"`
-	OriginalURL  string `json:"original_url"`
-	DiscoveryURL string `json:"discovery_url"`
-}
-
-type rebalanceconf struct {
-	DestRetryTimeStr string        `json:"dest_retry_time"`
-	DestRetryTime    time.Duration `json:"-"` //
-	Enabled          bool          `json:"rebalancing_enabled"`
-}
-
-type replicationconfig struct {
-	ReplicateOnColdGet     bool `json:"replicate_on_cold_get"`     // object replication on cold GET request
-	ReplicateOnPut         bool `json:"replicate_on_put"`          // object replication on PUT request
-	ReplicateOnLRUEviction bool `json:"replicate_on_lru_eviction"` // object replication on LRU eviction
-}
-
-type testfspathconf struct {
-	Root     string `json:"root"`
-	Count    int    `json:"count"`
-	Instance int    `json:"instance"`
-}
-
-type netconfig struct {
-	IPv4             string  `json:"ipv4"`
-	IPv4IntraControl string  `json:"ipv4_intra_control"`
-	IPv4IntraData    string  `json:"ipv4_intra_data"`
-	UseIntraControl  bool    `json:"-"`
-	UseIntraData     bool    `json:"-"`
-	L4               l4cnf   `json:"l4"`
-	HTTP             httpcnf `json:"http"`
-}
-
-type l4cnf struct {
-	Proto               string `json:"proto"` // tcp, udp
-	PortStr             string `json:"port"`  // listening port
-	Port                int    `json:"-"`
-	PortIntraControlStr string `json:"port_intra_control"` // listening port for intra control network
-	PortIntraControl    int    `json:"-"`
-	PortIntraDataStr    string `json:"port_intra_data"` // listening port for intra data network
-	PortIntraData       int    `json:"-"`
-}
-
-type httpcnf struct {
-	proto         string // http or https
-	RevProxy      string `json:"rproxy"`             // RevProxy* enum
-	Certificate   string `json:"server_certificate"` // HTTPS: openssl certificate
-	Key           string `json:"server_key"`         // HTTPS: openssl key
-	MaxNumTargets int    `json:"max_num_targets"`    // estimated max num targets (to count idle conns)
-	UseHTTPS      bool   `json:"use_https"`          // use HTTPS instead of HTTP
-}
-
-type versionconfig struct {
-	ValidateWarmGet bool   `json:"validate_version_warm_get"` // True: validate object version upon warm GET
-	Versioning      string `json:"versioning"`                // types of objects versioning is enabled for: all, cloud, local, none
-}
-
-type authconf struct {
-	Secret  string `json:"secret"`
-	Enabled bool   `json:"enabled"`
-	CredDir string `json:"creddir"`
-}
-
-// config for one keepalive tracker
-// all type of trackers share the same struct, not all fields are used by all trackers
-type keepaliveTrackerConf struct {
-	IntervalStr string        `json:"interval"` // keepalives are sent(target)/checked(promary proxy) every interval
-	Interval    time.Duration `json:"-"`
-	Name        string        `json:"name"`   // "heartbeat", "average"
-	Factor      int           `json:"factor"` // "average" only
-}
-
-type keepaliveTrackers struct {
-	Proxy  keepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
-	Target keepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
-}
 
 //==============================
 //
@@ -228,9 +73,9 @@ func initconfigparam() error {
 	}
 
 	// Set helpers
-	ctx.config.Net.HTTP.proto = "http"
+	ctx.config.Net.HTTP.Proto = "http" // not validating: read-only, and can take only two values
 	if ctx.config.Net.HTTP.UseHTTPS {
-		ctx.config.Net.HTTP.proto = "https"
+		ctx.config.Net.HTTP.Proto = "https"
 	}
 
 	differentIPs := ctx.config.Net.IPv4 != ctx.config.Net.IPv4IntraControl

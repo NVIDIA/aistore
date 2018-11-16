@@ -22,17 +22,7 @@ type Test struct {
 }
 
 type ctxT struct {
-	config struct {
-		LRU struct {
-			LowWM, HighWM int64
-		}
-		Xaction struct {
-			DiskUtilLowWM, DiskUtilHighWM int64
-		}
-		Periodic struct {
-			StatsTime time.Duration
-		}
-	}
+	config cmn.Config
 }
 
 var riostat *ios.IostatRunner
@@ -74,7 +64,9 @@ func Test_Throttle(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	fs.Mountpaths.Add("/")
 
-	riostat = ios.NewIostatRunner(fs.Mountpaths, &ctx.config.Periodic.StatsTime)
+	riostat = ios.NewIostatRunner(fs.Mountpaths)
+	riostat.Setconf(&ctx.config)
+
 	go riostat.Run()
 	time.Sleep(time.Second)
 	defer func() { riostat.Stop(nil) }()

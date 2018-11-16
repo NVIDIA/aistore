@@ -52,7 +52,7 @@ type (
 
 	// daemon instance: proxy or storage target
 	daemon struct {
-		config dfconfig
+		config cmn.Config
 		rg     *rungroup
 	}
 
@@ -94,10 +94,14 @@ var (
 // rungroup
 //
 //====================
-func (g *rungroup) add(r cmn.Runner, name string) {
+func (g *rungroup) add(r cmn.Runner, name string, config *cmn.Config) {
 	r.Setname(name)
 	g.runarr = append(g.runarr, r)
 	g.runmap[name] = r
+	if config != nil {
+		rc := r.(cmn.Configured)
+		rc.Setconf(config)
+	}
 }
 
 func (g *rungroup) run() error {
@@ -205,20 +209,20 @@ func dfcinit() {
 	if clivars.role == xproxy {
 		p := &proxyrunner{}
 		p.initSI()
-		ctx.rg.add(p, xproxy)
+		ctx.rg.add(p, xproxy, nil)
 		ps := &proxystatsrunner{}
 		ps.init()
-		ctx.rg.add(ps, xproxystats)
-		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
-		ctx.rg.add(newmetasyncer(p), xmetasyncer)
+		ctx.rg.add(ps, xproxystats, &ctx.config)
+		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive, nil)
+		ctx.rg.add(newmetasyncer(p), xmetasyncer, &ctx.config)
 	} else {
 		t := &targetrunner{}
 		t.initSI()
-		ctx.rg.add(t, xtarget)
+		ctx.rg.add(t, xtarget, nil)
 		ts := &storstatsrunner{}
 		ts.init()
-		ctx.rg.add(ts, xstorstats)
-		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
+		ctx.rg.add(ts, xstorstats, &ctx.config)
+		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive, nil)
 
 		// iostat is required: ensure that it is installed and its version is right
 		if err := ios.CheckIostatVersion(); err != nil {
@@ -230,7 +234,7 @@ func dfcinit() {
 		// system-wide gen-purpose memory manager and slab/SGL allocator
 		mem := &memsys.Mem2{MinPctTotal: 4, MinFree: cmn.GiB * 2} // free mem: try to maintain at least the min of these two
 		_ = mem.Init(false)                                       // don't ignore init-time errors
-		ctx.rg.add(mem, xmem)                                     // to periodically house-keep
+		ctx.rg.add(mem, xmem, nil)                                // to periodically house-keep
 		gmem2 = getmem2()                                         // making it global; getmem2() can still be used
 
 		// fs.Mountpaths must be inited prior to all runners that utilize all
@@ -250,17 +254,17 @@ func dfcinit() {
 			}
 		}
 
-		iostat := ios.NewIostatRunner(fs.Mountpaths, &ctx.config.Periodic.StatsTime)
-		ctx.rg.add(iostat, xiostat)
+		iostat := ios.NewIostatRunner(fs.Mountpaths)
+		ctx.rg.add(iostat, xiostat, &ctx.config)
 		t.fsprg.add(iostat)
 
-		fshc := health.NewFSHC(fs.Mountpaths, &ctx.config.FSHC, gmem2)
-		ctx.rg.add(fshc, xfshc)
+		fshc := health.NewFSHC(fs.Mountpaths, gmem2)
+		ctx.rg.add(fshc, xfshc, &ctx.config)
 		t.fsprg.add(fshc)
 
 		if ctx.config.Readahead.Enabled {
 			readaheader := newReadaheader()
-			ctx.rg.add(readaheader, xreadahead)
+			ctx.rg.add(readaheader, xreadahead, nil)
 			t.fsprg.add(readaheader)
 			t.readahead = readaheader
 		} else {
@@ -268,14 +272,14 @@ func dfcinit() {
 		}
 
 		replRunner := newReplicationRunner(t, fs.Mountpaths)
-		ctx.rg.add(replRunner, xreplication)
+		ctx.rg.add(replRunner, xreplication, nil)
 		t.fsprg.add(replRunner)
 
 		atime := atime.NewRunner(fs.Mountpaths, &ctx.config.LRU.AtimeCacheMax, iostat)
-		ctx.rg.add(atime, xatime)
+		ctx.rg.add(atime, xatime, nil)
 		t.fsprg.add(atime)
 	}
-	ctx.rg.add(&sigrunner{}, xsignal)
+	ctx.rg.add(&sigrunner{}, xsignal, nil)
 }
 
 // Run is the 'main' where everything gets started

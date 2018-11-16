@@ -109,11 +109,11 @@ type (
 )
 
 type metasyncer struct {
-	cmn.Named
+	cmn.NamedConfigured
 	p            *proxyrunner          // parent
 	revsmap      map[string]revsdaemon // sync-ed versions (cluster-wide, by DaemonID)
 	last         map[string]revs       // last/current sync-ed
-	lastclone    cmn.SimpleKVs      // to enforce CoW
+	lastclone    cmn.SimpleKVs         // to enforce CoW
 	stopCh       chan struct{}         // stop channel
 	workCh       chan revsReq          // work channel
 	retryTimer   *time.Timer           // timer to sync pending
@@ -140,7 +140,7 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 
 func (y *metasyncer) Run() error {
 	glog.Infof("Starting %s", y.Getname())
-
+	config := y.Getconf()
 	for {
 		select {
 		case revsReq, ok := <-y.workCh:
@@ -158,14 +158,14 @@ func (y *metasyncer) Run() error {
 					revsReq.wg.Done()
 				}
 				if cnt > 0 && y.timerStopped {
-					y.retryTimer.Reset(ctx.config.Periodic.RetrySyncTime)
+					y.retryTimer.Reset(config.Periodic.RetrySyncTime)
 					y.timerStopped = false
 				}
 			}
 		case <-y.retryTimer.C:
 			cnt := y.handlePending()
 			if cnt > 0 {
-				y.retryTimer.Reset(ctx.config.Periodic.RetrySyncTime)
+				y.retryTimer.Reset(config.Periodic.RetrySyncTime)
 				y.timerStopped = false
 			} else {
 				y.timerStopped = true
@@ -235,6 +235,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		refused        map[string]*cluster.Snode
 		payload        = make(cmn.SimpleKVs)
 		smap           = y.p.smapowner.get()
+		config         = y.Getconf()
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -310,7 +311,7 @@ OUTER:
 		http.MethodPut,
 		jsbytes,
 		smap,
-		ctx.config.Timeout.CplaneOperation,
+		config.Timeout.CplaneOperation,
 		true,
 	)
 
@@ -336,7 +337,7 @@ OUTER:
 			break
 		}
 
-		time.Sleep(ctx.config.Timeout.CplaneOperation)
+		time.Sleep(config.Timeout.CplaneOperation)
 		smap = y.p.smapowner.get()
 		if !smap.isPrimary(y.p.si) {
 			y.becomeNonPrimary()
@@ -369,6 +370,7 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 }
 
 func (y *metasyncer) handleRefused(urlPath string, body []byte, refused map[string]*cluster.Snode, pairs []revspair) {
+	config := y.Getconf()
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,
@@ -376,7 +378,7 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused map[stri
 			body:   body,
 		},
 		internal: true,
-		timeout:  ctx.config.Timeout.CplaneOperation,
+		timeout:  config.Timeout.CplaneOperation,
 		servers:  []map[string]*cluster.Snode{refused},
 	}
 	res := y.p.broadcast(bcastArgs)
@@ -436,6 +438,7 @@ func (y *metasyncer) pending(needMap bool) (count int, pending map[string]*clust
 
 // gets invoked when retryTimer fires; returns updated number of still pending
 func (y *metasyncer) handlePending() (cnt int) {
+	config := y.Getconf()
 	count, pending := y.pending(true)
 	if count == 0 {
 		glog.Infof("no pending revs - all good")
@@ -465,7 +468,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 			body:   body,
 		},
 		internal: true,
-		timeout:  ctx.config.Timeout.CplaneOperation,
+		timeout:  config.Timeout.CplaneOperation,
 		servers:  []map[string]*cluster.Snode{pending},
 	}
 	res := y.p.broadcast(bcastArgs)

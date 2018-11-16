@@ -26,7 +26,9 @@ func init() {
 	mpath := "/tmp"
 	fs.Mountpaths.Add(mpath)
 
-	riostat = ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	riostat = ios.NewIostatRunner(fs.Mountpaths)
+	config := testConfig(statsPeriod)
+	riostat.Setconf(config)
 }
 
 func TestAtimerunnerStop(t *testing.T) {
@@ -90,7 +92,10 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
 	defer func() { fs.Mountpaths = q }()
 
-	iostatr := ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	config := testConfig(statsPeriod)
+	iostatr.Setconf(config)
+
 	fileName := "/tmp/local/bck1/fqn1"
 
 	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
@@ -311,7 +316,10 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	maxMapSize = uint64(itemCount)
 	statsPeriod = time.Second
 
-	iostatr := ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	config := testConfig(statsPeriod)
+	iostatr.Setconf(config)
+
 	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
@@ -350,7 +358,10 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	maxMapSize = uint64(itemCount*(200-atimeHWM)/100) + 10
 	statsPeriod = time.Second
 
-	iostatr := ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	config := testConfig(statsPeriod)
+	iostatr.Setconf(config)
+
 	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
 
 	go iostatr.Run()
@@ -390,7 +401,10 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	maxMapSize = uint64(itemCount*(200-atimeLWM)/100) + 10
 	statsPeriod = time.Second
 
-	iostatr := ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	config := testConfig(statsPeriod)
+	iostatr.Setconf(config)
+
 	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
@@ -429,7 +443,10 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	maxMapSize = uint64(itemCount * 1000)
 	statsPeriod = time.Second
 
-	iostatr := ios.NewIostatRunner(fs.Mountpaths, &statsPeriod)
+	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	config := testConfig(statsPeriod)
+	iostatr.Setconf(config)
+
 	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
@@ -470,4 +487,10 @@ func cleanMountpaths() {
 	for _, mpathInfo := range disabledMountpaths {
 		fs.Mountpaths.Remove(mpathInfo.Path)
 	}
+}
+
+func testConfig(d time.Duration) *cmn.Config {
+	config := cmn.Config{}
+	config.Periodic.StatsTime = d
+	return &config
 }

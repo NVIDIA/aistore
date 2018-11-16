@@ -145,7 +145,7 @@ type targetCoreStats struct {
 
 type statsrunner struct {
 	sync.RWMutex
-	cmn.Named
+	cmn.NamedConfigured
 	stopCh    chan struct{}
 	workCh    chan namedVal64
 	starttime time.Time
@@ -327,7 +327,8 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	r.starttime = time.Now()
 
 	glog.Infof("Starting %s", r.Getname())
-	ticker := time.NewTicker(ctx.config.Periodic.StatsTime)
+	config := r.Getconf()
+	ticker := time.NewTicker(config.Periodic.StatsTime)
 	for {
 		select {
 		case nv, ok := <-r.workCh:
@@ -504,7 +505,8 @@ func (r *storstatsrunner) log() (runlru bool) {
 		lines = append(lines, string(b))
 	}
 	// capacity
-	if time.Since(r.timeUpdatedCapacity) >= ctx.config.LRU.CapacityUpdTime {
+	config := r.Getconf()
+	if time.Since(r.timeUpdatedCapacity) >= config.LRU.CapacityUpdTime {
 		runlru = r.updateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for mpath, fsCapacity := range r.Capacity {
@@ -552,9 +554,11 @@ func (r *storstatsrunner) log() (runlru bool) {
 }
 
 func (r *storstatsrunner) housekeep(runlru bool) {
-	t := gettarget()
-
-	if runlru && ctx.config.LRU.LRUEnabled {
+	var (
+		t      = gettarget()
+		config = r.Getconf()
+	)
+	if runlru && config.LRU.LRUEnabled {
 		go t.runLRU()
 	}
 
@@ -565,15 +569,16 @@ func (r *storstatsrunner) housekeep(runlru bool) {
 
 	// keep total log size below the configured max
 	if time.Since(r.timeCheckedLogSizes) >= logsTotalSizeCheckTime {
-		go r.removeLogs(ctx.config.Log.MaxTotal)
+		go r.removeLogs(config.Log.MaxTotal)
 		r.timeCheckedLogSizes = time.Now()
 	}
 }
 
 func (r *storstatsrunner) removeLogs(maxtotal uint64) {
-	logfinfos, err := ioutil.ReadDir(ctx.config.Log.Dir)
+	config := r.Getconf()
+	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
 	if err != nil {
-		glog.Errorf("GC logs: cannot read log dir %s, err: %v", ctx.config.Log.Dir, err)
+		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
 		return // ignore error
 	}
 	// sample name dfc.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
@@ -597,7 +602,7 @@ func (r *storstatsrunner) removeLogs(maxtotal uint64) {
 		}
 		if tot > int64(maxtotal) {
 			if len(infos) <= 1 {
-				glog.Errorf("GC logs: %s, total %d for type %s, max %d", ctx.config.Log.Dir, tot, logtype, maxtotal)
+				glog.Errorf("GC logs: %s, total %d for type %s, max %d", config.Log.Dir, tot, logtype, maxtotal)
 				continue
 			}
 			r.removeOlderLogs(tot, int64(maxtotal), infos)
@@ -613,8 +618,9 @@ func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []o
 		glog.Infof("GC logs: started")
 	}
 	sort.Slice(filteredInfos, fiLess)
+	config := r.Getconf()
 	for _, logfi := range filteredInfos[:len(filteredInfos)-1] { // except last = current
-		logfqn := ctx.config.Log.Dir + "/" + logfi.Name()
+		logfqn := config.Log.Dir + "/" + logfi.Name()
 		if err := os.Remove(logfqn); err == nil {
 			tot -= logfi.Size()
 			glog.Infof("GC logs: removed %s", logfqn)
@@ -633,7 +639,7 @@ func (r *storstatsrunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []o
 func (r *storstatsrunner) updateCapacity() (runlru bool) {
 	availableMountpaths, _ := fs.Mountpaths.Get()
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
-
+	config := r.Getconf()
 	for mpath := range availableMountpaths {
 		statfs := &syscall.Statfs_t{}
 		if err := syscall.Statfs(mpath, statfs); err != nil {
@@ -642,7 +648,7 @@ func (r *storstatsrunner) updateCapacity() (runlru bool) {
 		}
 		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
-		if fsCap.Usedpct >= ctx.config.LRU.HighWM {
+		if fsCap.Usedpct >= config.LRU.HighWM {
 			runlru = true
 		}
 	}

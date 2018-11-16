@@ -137,23 +137,23 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd.add("bucket1", true, cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://foo.com",
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, cmn.BucketProps{
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket3", false, cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket4", false, cmn.BucketProps{
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
@@ -191,7 +191,7 @@ func TestMetaSyncTransport(t *testing.T) {
 
 	for _, tc := range tcs {
 		primary := newPrimary()
-		syncer := newmetasyncer(primary)
+		syncer := testSyncer(primary)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -515,7 +515,7 @@ func TestMetaSyncData(t *testing.T) {
 		exp            = make(map[string]string)
 		expRetry       = make(map[string]string)
 		primary        = newPrimary()
-		syncer         = newmetasyncer(primary)
+		syncer         = testSyncer(primary)
 		ch             = make(chan data, 5)
 		bucketmd       = newBucketMD()
 		emptyActionMsg string
@@ -559,14 +559,14 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail target and retry
 	bucketmd.add("bucket1", true, cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
-		CksumConfig: cmn.CksumConfig{
+		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
@@ -588,8 +588,8 @@ func TestMetaSyncData(t *testing.T) {
 	// after rejecting a few sync requests
 	bucketmd = bucketmd.clone()
 	bprops := cmn.BucketProps{
-		CksumConfig: cmn.CksumConfig{Checksum: cmn.ChecksumInherit},
-		LRUConfig:   ctx.config.LRU,
+		CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		LRUConf:   ctx.config.LRU,
 	}
 	bucketmd.add("bucket3", true, bprops)
 	b, err = bucketmd.marshal()
@@ -606,7 +606,7 @@ func TestMetaSyncMembership(t *testing.T) {
 	{
 		// pending server dropped without sync
 		primary := newPrimary()
-		syncer := newmetasyncer(primary)
+		syncer := testSyncer(primary)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -647,7 +647,7 @@ func TestMetaSyncMembership(t *testing.T) {
 	}
 
 	primary := newPrimary()
-	syncer := newmetasyncer(primary)
+	syncer := testSyncer(primary)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -735,7 +735,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		}
 
 		primary := newPrimary()
-		syncer := newmetasyncer(primary)
+		syncer := testSyncer(primary)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -786,4 +786,10 @@ func TestMetaSyncReceive(t *testing.T) {
 		emptyActionMsg(actMsg)
 		nilSMap(newSMap)
 	}
+}
+
+func testSyncer(p *proxyrunner) (syncer *metasyncer) {
+	syncer = newmetasyncer(p)
+	syncer.Setconf(&ctx.config)
+	return
 }

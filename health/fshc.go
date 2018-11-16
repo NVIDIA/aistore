@@ -32,23 +32,17 @@ const (
 //
 // for mountpath definition, see fs/mountfs.go
 type (
-	FSHCConf struct {
-		Enabled       bool `json:"fshc_enabled"`
-		TestFileCount int  `json:"fshc_test_files"`  // the number of files to read and write during a test
-		ErrorLimit    int  `json:"fshc_error_limit"` // max number of errors (exceeding any results in disabling mpath)
-	}
 	fspathDispatcher interface {
 		Disable(path string, why string) (disabled, exists bool)
 	}
 	FSHC struct {
-		cmn.Named
+		cmn.NamedConfigured
 		stopCh        chan struct{}
 		fileListCh    chan string
 		reqCh         chan fs.ChangeReq
 		mpathCheckers map[string]*mountpathChecker
 
 		// pointers to common data
-		config     *FSHCConf
 		mountpaths *fs.MountedFS
 		mem2       *memsys.Mem2
 
@@ -74,10 +68,9 @@ func (f *FSHC) ReqRemoveMountpath(mpath string)  { f.reqCh <- fs.MountpathRem(mp
 func (f *FSHC) ReqEnableMountpath(mpath string)  {}
 func (f *FSHC) ReqDisableMountpath(mpath string) {}
 
-func NewFSHC(mounts *fs.MountedFS, conf *FSHCConf, mem2 *memsys.Mem2) *FSHC {
+func NewFSHC(mounts *fs.MountedFS, mem2 *memsys.Mem2) *FSHC {
 	return &FSHC{
 		mountpaths:    mounts,
-		config:        conf,
 		mem2:          mem2,
 		stopCh:        make(chan struct{}, 4),
 		fileListCh:    make(chan string, 32),
@@ -119,7 +112,7 @@ func (f *FSHC) Stop(err error) {
 }
 
 func (f *FSHC) OnErr(fqn string) {
-	if !f.config.Enabled {
+	if !f.Getconf().FSHC.Enabled {
 		return
 	}
 
@@ -222,15 +215,16 @@ func (f *FSHC) addmp(mpath string) {
 
 func (f *FSHC) isTestPassed(mpath string, readErrors,
 	writeErrors int, available bool) (passed bool, whyFailed string) {
+	config := &f.Getconf().FSHC
 	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
-		readErrors, f.config.ErrorLimit, fshcFileSize,
-		writeErrors, f.config.ErrorLimit)
+		readErrors, config.ErrorLimit, fshcFileSize,
+		writeErrors, config.ErrorLimit)
 	if !available {
 		return false, "Mountpath is unavailable"
 	}
 
-	passed = readErrors < f.config.ErrorLimit && writeErrors < f.config.ErrorLimit
+	passed = readErrors < config.ErrorLimit && writeErrors < config.ErrorLimit
 	if !passed {
 		whyFailed = fmt.Sprintf("Too many errors: %d read error(s), %d write error(s)", readErrors, writeErrors)
 	}
@@ -239,7 +233,8 @@ func (f *FSHC) isTestPassed(mpath string, readErrors,
 }
 
 func (f *FSHC) runMpathTest(mpath, filepath string) {
-	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath, f.config.TestFileCount, fshcFileSize)
+	config := &f.Getconf().FSHC
+	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath, config.TestFileCount, fshcFileSize)
 
 	if passed, why := f.isTestPassed(mpath, readErrs, writeErrs, exists); !passed {
 		glog.Errorf("Disabling mountpath %s...", mpath)
