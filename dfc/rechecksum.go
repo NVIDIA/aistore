@@ -41,23 +41,29 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 	// re-checksum every object in a given bucket
 	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum, bucket)
 	availablePaths, _ := fs.Mountpaths.Get()
-	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mpathInfo *fs.MountpathInfo) {
-			t.oneRechecksumBucket(mpathInfo, fs.Mountpaths.MakePathLocal(mpathInfo.Path), xrcksum)
-			wg.Done()
-		}(mpathInfo)
+	for contentType, contentResolver := range fs.RegisteredContentTypes {
+		if !contentResolver.PermToProcess() { // FIXME: PermToRechecksum?
+			continue
+		}
+
+		wg := &sync.WaitGroup{}
+		for _, mpathInfo := range availablePaths {
+			wg.Add(1)
+			go func(mpathInfo *fs.MountpathInfo) {
+				t.oneRechecksumBucket(mpathInfo, fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), xrcksum)
+				wg.Done()
+			}(mpathInfo)
+		}
+		wg.Wait()
+		for _, mpathInfo := range availablePaths {
+			wg.Add(1)
+			go func(mpathInfo *fs.MountpathInfo) {
+				t.oneRechecksumBucket(mpathInfo, fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), xrcksum)
+				wg.Done()
+			}(mpathInfo)
+		}
+		wg.Wait()
 	}
-	wg.Wait()
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mpathInfo *fs.MountpathInfo) {
-			t.oneRechecksumBucket(mpathInfo, fs.Mountpaths.MakePathCloud(mpathInfo.Path), xrcksum)
-			wg.Done()
-		}(mpathInfo)
-	}
-	wg.Wait()
 
 	// finish up
 	xrcksum.EndTime(time.Now())
@@ -98,7 +104,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 	if osfi.IsDir() {
 		return nil
 	}
-	if spec, info := cluster.FileSpec(fqn); info != nil && (!spec.PermToProcess() || info.Old) {
+	if _, info := fs.FileSpec(fqn); info != nil && info.Old {
 		return nil
 	}
 

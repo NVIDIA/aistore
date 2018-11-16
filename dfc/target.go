@@ -140,13 +140,21 @@ func (t *targetrunner) Run() error {
 
 	go t.pollClusterStarted()
 
-	err := t.createBucketDirs("local", ctx.config.LocalBuckets, fs.Mountpaths.MakePathLocal)
-	if err != nil {
+	// register object type and workfile type
+	if err := fs.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
-	err = t.createBucketDirs("cloud", ctx.config.CloudBuckets, fs.Mountpaths.MakePathCloud)
-	if err != nil {
+	if err := fs.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
+
+	if err := fs.Mountpaths.CreateBucketDir(fs.BucketLocalType); err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
+	if err := fs.Mountpaths.CreateBucketDir(fs.BucketCloudType); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
@@ -321,18 +329,24 @@ func (t *targetrunner) RunLRU() {
 	//
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	for path, mpathInfo := range availablePaths {
-		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
-		wg.Add(1)
-		go lctx.onelru(wg)
+	for contentType, contentResolver := range fs.RegisteredContentTypes {
+		if !contentResolver.PermToEvict() {
+			continue
+		}
+
+		for path, mpathInfo := range availablePaths {
+			lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path, contentType))
+			wg.Add(1)
+			go lctx.onelru(wg)
+		}
+		wg.Wait()
+		for path, mpathInfo := range availablePaths {
+			lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path, contentType))
+			wg.Add(1)
+			go lctx.onelru(wg)
+		}
+		wg.Wait()
 	}
-	wg.Wait()
-	for path, mpathInfo := range availablePaths {
-		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path))
-		wg.Add(1)
-		go lctx.onelru(wg)
-	}
-	wg.Wait()
 
 	if glog.V(4) {
 		lruCheckResults(availablePaths)
@@ -472,7 +486,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.IsLocal(bucket)
-	fqn, errstr = cluster.FQN(bucket, objname, islocal)
+	fqn, errstr = cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -1176,7 +1190,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if islocal || checkCached {
-		fqn, errstr := cluster.FQN(bucket, objname, islocal)
+		fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
@@ -1359,22 +1373,24 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p cmn.BucketProps, 
 	wg := &sync.WaitGroup{}
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan string, len(availablePaths))
-	for _, mpathInfo := range availablePaths {
-		// Create directory for new local bucket
-		toDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucketTo)
-		if err := cmn.CreateDir(toDir); err != nil {
-			ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
-			continue
-		}
+	ch := make(chan string, len(fs.RegisteredContentTypes)*len(availablePaths))
+	for contentType := range fs.RegisteredContentTypes {
+		for _, mpathInfo := range availablePaths {
+			// Create directory for new local bucket
+			toDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketTo)
+			if err := cmn.CreateDir(toDir); err != nil {
+				ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
+				continue
+			}
 
-		wg.Add(1)
-		fromdir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucketFrom)
-		go func(fromdir string, wg *sync.WaitGroup) {
-			time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
-			ch <- t.renameOne(fromdir, bucketFrom, bucketTo)
-			wg.Done()
-		}(fromdir, wg)
+			wg.Add(1)
+			fromDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketFrom)
+			go func(fromDir string) {
+				time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
+				ch <- t.renameOne(fromDir, bucketFrom, bucketTo)
+				wg.Done()
+			}(fromDir)
+		}
 	}
 	wg.Wait()
 	close(ch)
@@ -1383,10 +1399,12 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p cmn.BucketProps, 
 			return
 		}
 	}
-	for _, mpathInfo := range availablePaths {
-		fromdir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucketFrom)
-		if err := os.RemoveAll(fromdir); err != nil {
-			glog.Errorf("Failed to remove dir %s", fromdir)
+	for contentType := range fs.RegisteredContentTypes {
+		for _, mpathInfo := range availablePaths {
+			fromDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketFrom)
+			if err := os.RemoveAll(fromDir); err != nil {
+				glog.Errorf("Failed to remove dir %s", fromDir)
+			}
 		}
 	}
 	clone.del(bucketFrom, true)
@@ -1410,16 +1428,18 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToProcess() { // FIXME: workfiles indicate work in progress..
+	// FIXME: workfiles indicate work in progress. Renaming could break ongoing
+	// operations and not renaming it probably result in having file in wrong directory.
+	if spec, _ := fs.FileSpec(fqn); spec != nil && !spec.PermToProcess() {
 		return nil
 	}
-	bucket, objname, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
+	contentType, bucket, objname, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
 	if err == nil {
 		if bucket != renctx.bucketFrom {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
-	if errstr := renctx.t.renameobject(bucket, objname, renctx.bucketTo, objname); errstr != "" {
+	if errstr := renctx.t.renameobject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil
@@ -1480,13 +1500,13 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		hdhobj  = newcksumvalue(htype, hval)
 		version = response.Header.Get(cmn.HeaderDFCObjVersion)
 	)
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		response.Body.Close()
 		glog.Error(errstr)
 		return
 	}
-	getfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
+	getfqn := fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRemote)
 	if _, nhobj, size, errstr = t.receive(getfqn, objname, "", hdhobj, response.Body); errstr != "" {
 		response.Body.Close()
 		glog.Errorf(errstr)
@@ -1502,7 +1522,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		}
 	}
 	// commit
-	if err = os.Rename(getfqn, fqn); err != nil {
+	if err = cmn.MvFile(getfqn, fqn); err != nil {
 		glog.Errorf("Failed to rename %s => %s, err: %v", getfqn, fqn, err)
 		return
 	}
@@ -1532,11 +1552,11 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 		bucketProps cmn.BucketProps
 		err         error
 	)
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		return nil, errstr, http.StatusBadRequest
 	}
-	getfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
+	getfqn := fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileColdget)
 	// one cold GET at a time
 	if prefetch {
 		if !t.rtnamemap.TryLock(uname, true) {
@@ -1610,7 +1630,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 			}
 		}
 	}()
-	if err = os.Rename(getfqn, fqn); err != nil {
+	if err = cmn.MvFile(getfqn, fqn); err != nil {
 		errstr = fmt.Sprintf("Unexpected failure to rename %s => %s, err: %v", getfqn, fqn, err)
 		t.fshc(err, fqn)
 		return
@@ -1704,7 +1724,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	}
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan *mresp, len(availablePaths))
+	ch := make(chan *mresp, len(fs.RegisteredContentTypes)*len(availablePaths))
 	wg := &sync.WaitGroup{}
 
 	// function to traverse one mountpoint
@@ -1734,16 +1754,21 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
 	islocal := t.bmdowner.get().IsLocal(bucket)
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		var localDir string
-		if islocal {
-			localDir = filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucket)
-		} else {
-			localDir = filepath.Join(fs.Mountpaths.MakePathCloud(mpathInfo.Path), bucket)
+	for contentType, contentResolver := range fs.RegisteredContentTypes {
+		if !contentResolver.PermToProcess() {
+			continue
 		}
+		for _, mpathInfo := range availablePaths {
+			wg.Add(1)
+			var localDir string
+			if islocal {
+				localDir = filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
+			} else {
+				localDir = filepath.Join(fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), bucket)
+			}
 
-		go walkMpath(localDir)
+			go walkMpath(localDir)
+		}
 	}
 	wg.Wait()
 	close(ch)
@@ -2044,13 +2069,9 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.IsDir() {
 		return ci.processDir(fqn)
 	}
-	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToProcess() {
-		return nil
-	}
-
 	objStatus := cmn.ObjStatusOK
 	if ci.needStatus {
-		bucket, objname, err := cluster.ResolveFQN(fqn, ci.t.bmdowner)
+		_, bucket, objname, err := cluster.ResolveFQN(fqn, ci.t.bmdowner)
 		if err != nil {
 			glog.Warning(err)
 			objStatus = cmn.ObjStatusMoved
@@ -2083,11 +2104,11 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	)
 	started = time.Now()
 	islocal := t.bmdowner.get().IsLocal(bucket)
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		return errstr, http.StatusBadRequest
 	}
-	putfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
+	putfqn := fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfilePut)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
@@ -2163,7 +2184,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 		islocal = t.bmdowner.get().IsLocal(bucket)
 	)
 
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		return errstr
 	}
@@ -2297,7 +2318,7 @@ func (t *targetrunner) doPutCommit(ct context.Context, bucket, objname, putfqn, 
 	uname := cluster.Uname(bucket, objname)
 	t.rtnamemap.Lock(uname, true)
 
-	if err = os.Rename(putfqn, fqn); err != nil {
+	if err = cmn.MvFile(putfqn, fqn); err != nil {
 		t.rtnamemap.Unlock(uname, true)
 		errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", putfqn, fqn, err)
 		return
@@ -2319,8 +2340,10 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		return
 	}
 	var size int64
+	putfqn := ""
 	bucketmd := t.bmdowner.get()
-	fqn, errstr := cluster.FQN(bucket, objname, bucketmd.IsLocal(bucket))
+	islocal := bucketmd.IsLocal(bucket)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		return
 	}
@@ -2360,12 +2383,12 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		if glog.V(4) {
 			glog.Infof("Rebalance %s/%s from %s to %s (self, %s, ver %d)", bucket, objname, from, to, fqn, ver)
 		}
-		putfqn := cluster.GenContentFQN(fqn, cluster.DefaultWorkfileType)
 		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) {
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
 		}
+		putfqn = fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRebalance)
 		var (
 			hdhobj = newcksumvalue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
 			props  = &objectProps{version: r.Header.Get(cmn.HeaderDFCObjVersion)}
@@ -2402,7 +2425,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		errcode int
 	)
 	islocal := t.bmdowner.get().IsLocal(bucket)
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		return errors.New(errstr)
 	}
@@ -2459,7 +2482,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg cm
 	uname := cluster.Uname(bucket, objname)
 	t.rtnamemap.Lock(uname, true)
 
-	if errstr = t.renameobject(bucket, objname, bucket, newobjname); errstr != "" {
+	if errstr = t.renameobject(fs.ObjectType, bucket, objname, bucket, newobjname); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
 	t.rtnamemap.Unlock(uname, true)
@@ -2476,7 +2499,7 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn
 	}
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.IsLocal(bucket)
-	fqn, errstr := cluster.FQN(bucket, object, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, object, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 		return
@@ -2503,7 +2526,7 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn
 	}
 }
 
-func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
+func (t *targetrunner) renameobject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
 	var (
 		si     *cluster.Snode
 		newfqn string
@@ -2513,7 +2536,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	}
 	bucketmd := t.bmdowner.get()
 	islocalFrom := bucketmd.IsLocal(bucketFrom)
-	fqn, errstr := cluster.FQN(bucketFrom, objnameFrom, islocalFrom)
+	fqn, errstr := cluster.FQN(contentType, bucketFrom, objnameFrom, islocalFrom)
 	if errstr != "" {
 		return
 	}
@@ -2525,14 +2548,11 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		islocalTo := bucketmd.IsLocal(bucketTo)
-		newfqn, errstr = cluster.FQN(bucketTo, objnameTo, islocalTo)
+		newfqn, errstr = cluster.FQN(contentType, bucketTo, objnameTo, islocalTo)
 		if errstr != "" {
 			return
 		}
-		dirname := filepath.Dir(newfqn)
-		if err := cmn.CreateDir(dirname); err != nil {
-			errstr = fmt.Sprintf("Unexpected failure to create local dir %s, err: %v", dirname, err)
-		} else if err := os.Rename(fqn, newfqn); err != nil {
+		if err := cmn.MvFile(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 		} else {
 			t.statsif.Add(stats.RenameCount, 1)
@@ -2576,7 +2596,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		return errstr
 	}
@@ -3049,7 +3069,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		return
 	}
 	// try to override cksum config with bucket-level config
-	if bucket, _, err := cluster.ResolveFQN(fqn, t.bmdowner); err == nil {
+	if _, bucket, _, err := cluster.ResolveFQN(fqn, t.bmdowner); err == nil {
 		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 			cksumcfg = &bucketProps.CksumConf
 		}
@@ -3182,8 +3202,8 @@ func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
 	if err != nil {
 		return false, "", err
 	}
-	bucket, objName, isLocal := parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
-	newFQN, errstr := cluster.FQN(bucket, objName, isLocal)
+	contentType, bucket, objName, isLocal := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
+	newFQN, errstr := cluster.FQN(contentType, bucket, objName, isLocal)
 	if errstr != "" {
 		return false, "", errors.New(errstr)
 	}
@@ -3209,23 +3229,6 @@ func (t *targetrunner) testCachepathMounts() {
 		err := fs.Mountpaths.Add(mpath)
 		cmn.Assert(err == nil, err)
 	}
-}
-
-func (t *targetrunner) createBucketDirs(s, basename string, f func(basePath string) string) error {
-	if basename == "" {
-		return fmt.Errorf("empty basename for the %s buckets directory - update your config", s)
-	}
-	availablePaths, _ := fs.Mountpaths.Get()
-	for _, mpathInfo := range availablePaths {
-		dir := f(mpathInfo.Path)
-		if _, exists := availablePaths[dir]; exists {
-			return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo.Path, dir)
-		}
-		if err := cmn.CreateDir(dir); err != nil {
-			return fmt.Errorf("cannot create %s buckets dir %q, err: %v", s, dir, err)
-		}
-	}
-	return nil
 }
 
 func (t *targetrunner) detectMpathChanges() {
@@ -3518,10 +3521,12 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
-			for _, mpathInfo := range availablePaths {
-				localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucket)
-				if err := os.RemoveAll(localbucketfqn); err != nil {
-					glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
+			for contentType := range fs.RegisteredContentTypes {
+				for _, mpathInfo := range availablePaths {
+					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
+					if err := os.RemoveAll(localbucketfqn); err != nil {
+						glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
+					}
 				}
 			}
 		}
@@ -3530,10 +3535,12 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	// Create buckets which don't exist in (old)bucketmd
 	for bucket := range newbucketmd.LBmap {
 		if _, ok := bucketmd.LBmap[bucket]; !ok {
-			for _, mpathInfo := range availablePaths {
-				localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path), bucket)
-				if err := cmn.CreateDir(localbucketfqn); err != nil {
-					glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
+			for contentType := range fs.RegisteredContentTypes {
+				for _, mpathInfo := range availablePaths {
+					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
+					if err := cmn.CreateDir(localbucketfqn); err != nil {
+						glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
+					}
 				}
 			}
 		}
@@ -3810,7 +3817,7 @@ func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (f
 		fn = fs.Mountpaths.MakePathLocal
 	}
 	for _, mpathInfo := range availablePaths {
-		dir := fn(mpathInfo.Path)
+		dir := fn(mpathInfo.Path, fs.ObjectType)
 
 		filePath := filepath.Join(dir, bucket, object)
 		stat, err := os.Stat(filePath)

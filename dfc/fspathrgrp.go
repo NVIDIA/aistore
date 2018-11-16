@@ -81,12 +81,10 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 		return
 	}
 
-	err = g.t.createBucketDirs("local", ctx.config.LocalBuckets, fs.Mountpaths.MakePathLocal)
-	if err != nil {
+	if err = fs.Mountpaths.CreateBucketDir(fs.BucketLocalType); err != nil {
 		return
 	}
-	err = g.t.createBucketDirs("cloud", ctx.config.CloudBuckets, fs.Mountpaths.MakePathCloud)
-	if err != nil {
+	if err = fs.Mountpaths.CreateBucketDir(fs.BucketCloudType); err != nil {
 		return
 	}
 

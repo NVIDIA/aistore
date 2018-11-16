@@ -7,13 +7,29 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/NVIDIA/dfcpub/cmn"
+)
+
+const (
+	BucketLocalType = "local"
+	BucketCloudType = "cloud"
+
+	// prefixes for workfiles created by various services
+	WorkfileReplication = "repl"   // replication runner
+	WorkfileRemote      = "remote" // getting object from neighbor target while rebalance is running
+	WorkfileColdget     = "cold"   // object GET: coldget
+	WorkfilePut         = "put"    // object PUT
+	WorkfileRebalance   = "reb"    // rebalance
+	WorkfileFSHC        = "fshc"   // FSHC test file
 )
 
 type FQNparsed struct {
-	MpathInfo *MountpathInfo
-	Bucket    string
-	Objname   string
-	IsLocal   bool
+	MpathInfo   *MountpathInfo
+	ContentType string
+	Bucket      string
+	Objname     string
+	IsLocal     bool
 }
 
 // mpathInfo, bucket, objname, isLocal, err
@@ -27,18 +43,20 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed FQNparsed, err error) {
 	}
 
 	sep := string(filepath.Separator)
-	items := strings.SplitN(rel, sep, 3)
+	items := strings.SplitN(rel, sep, 4)
 
-	if len(items) < 3 {
+	if len(items) < 4 {
 		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
-	} else if items[1] == "" {
-		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
+	} else if _, ok := RegisteredContentTypes[items[0]]; !ok {
+		err = fmt.Errorf("invalid fqn %s: unrecognized content type", fqn)
 	} else if items[2] == "" {
+		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
+	} else if items[3] == "" {
 		err = fmt.Errorf("invalid fqn %s: object name is empty", fqn)
-	} else if items[0] != mfs.localBuckets && items[0] != mfs.cloudBuckets {
-		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[0], fqn)
+	} else if items[1] != mfs.localBuckets && items[1] != mfs.cloudBuckets {
+		err = fmt.Errorf("invalid bucket type %q for fqn %s", items[1], fqn)
 	} else {
-		parsed.IsLocal, parsed.Bucket, parsed.Objname = (items[0] == mfs.localBuckets), items[1], items[2]
+		parsed.ContentType, parsed.IsLocal, parsed.Bucket, parsed.Objname = items[0], (items[1] == mfs.localBuckets), items[2], items[3]
 	}
 	return
 }
@@ -63,6 +81,31 @@ func (mfs *MountedFS) Path2MpathInfo(path string) (info *MountpathInfo, relative
 		}
 	}
 	return
+}
+
+func (mfs *MountedFS) CreateBucketDir(bucketType string) error {
+	if !cmn.StringInSlice(bucketType, []string{BucketLocalType, BucketCloudType}) {
+		return fmt.Errorf("unknown bucket type: %s", bucketType)
+	}
+	availablePaths, _ := Mountpaths.Get()
+
+	makeBucket := mfs.MakePathLocal
+	if bucketType == BucketCloudType {
+		makeBucket = mfs.MakePathCloud
+	}
+
+	for contentType := range RegisteredContentTypes {
+		for _, mpathInfo := range availablePaths {
+			dir := makeBucket(mpathInfo.Path, contentType)
+			if _, exists := availablePaths[dir]; exists {
+				return fmt.Errorf("local namespace partitioning conflict: %s vs %s", mpathInfo.Path, dir)
+			}
+			if err := cmn.CreateDir(dir); err != nil {
+				return fmt.Errorf("cannot create %s buckets dir %q, err: %v", bucketType, dir, err)
+			}
+		}
+	}
+	return nil
 }
 
 // A simplified version of the filepath.Rel that determines the

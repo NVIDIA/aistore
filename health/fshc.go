@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
@@ -307,7 +306,7 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 			glog.Errorf("Failed to clean up temporary directory: %v", err)
 		}
 	}()
-	tmpfilename := cluster.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), cluster.DefaultWorkfileType)
+	tmpfilename := fs.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), fs.WorkfileType, fs.WorkfileFSHC)
 	tmpfile, err := os.OpenFile(tmpfilename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		glog.Errorf("Failed to create temporary file: %v", err)

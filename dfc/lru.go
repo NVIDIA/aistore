@@ -112,8 +112,8 @@ func (lctx *lructx) onelru(wg *sync.WaitGroup) {
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	var (
-		spec    cluster.ContentResolver
-		info    *cluster.ContentInfo
+		spec    fs.ContentResolver
+		info    *fs.ContentInfo
 		xlru, h = lctx.xlru, lctx.heap
 	)
 	if err != nil {
@@ -123,7 +123,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if spec, info = cluster.FileSpec(fqn); spec != nil && !spec.PermToEvict() && !info.Old {
+	if spec, info = fs.FileSpec(fqn); spec != nil && !spec.PermToEvict() && !info.Old {
 		return nil
 	}
 	lctx.throttler.Sleep()
@@ -175,7 +175,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	// cleanup after rebalance
-	_, _, err = cluster.ResolveFQN(fqn, lctx.bmdowner)
+	_, _, _, err = cluster.ResolveFQN(fqn, lctx.bmdowner)
 	if err != nil {
 		glog.Infof("%s: is misplaced, err: %v", fqn, err)
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
@@ -210,9 +210,9 @@ func (lctx *lructx) evict() error {
 	)
 	for _, fi := range lctx.oldwork {
 		if lctx.targetrunner.IsRebalancing() {
-			_, _, err := cluster.ResolveFQN(fi.fqn, lctx.bmdowner)
+			_, _, _, err := cluster.ResolveFQN(fi.fqn, lctx.bmdowner)
 			// keep a copy of a rebalanced file while rebalance is running
-			if spec, _ := cluster.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
+			if spec, _ := fs.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
 				continue
 			}
 		}
@@ -240,7 +240,7 @@ func (lctx *lructx) evict() error {
 
 // evictFQN evicts a given file
 func (lctx *lructx) evictFQN(fqn string) error {
-	bucket, objname, err := cluster.ResolveFQN(fqn, lctx.bmdowner)
+	_, bucket, objname, err := cluster.ResolveFQN(fqn, lctx.bmdowner)
 	if err != nil {
 		glog.Errorf("Evicting %q with error: %v", fqn, err)
 		if e := os.Remove(fqn); e != nil {

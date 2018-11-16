@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
@@ -189,7 +190,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	)
 	versioncfg := &ctx.config.Ver
 	islocal := t.bmdowner.get().IsLocal(bucket)
-	fqn, errstr := cluster.FQN(bucket, objname, islocal)
+	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {
 		glog.Error(errstr)
 		return

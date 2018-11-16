@@ -77,11 +77,6 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 	default:
 		break
 	}
-
-	// Skip files which are not movable (for example workfiles)
-	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToMove() {
-		return nil
-	}
 	if err != nil {
 		// If we are traversing non-existing file we should not care
 		if os.IsNotExist(err) {
@@ -97,7 +92,7 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 		return nil
 	}
 	// rebalance maybe
-	bucket, objname, err := cluster.ResolveFQN(fqn, rcl.t.bmdowner)
+	_, bucket, objname, err := cluster.ResolveFQN(fqn, rcl.t.bmdowner)
 	if err != nil {
 		// It may happen that local rebalance have not yet moved this particular
 		// file and we got and error in fqn2bckobj. Since we might need still
@@ -158,10 +153,6 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 		break
 	}
 
-	// Skip files which are not movable (for example workfiles)
-	if spec, _ := cluster.FileSpec(fqn); spec != nil && !spec.PermToMove() {
-		return nil
-	}
 	if err != nil {
 		// If we are traversing non-existing file we should not care
 		if os.IsNotExist(err) {
@@ -379,7 +370,15 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	// find and abort in-progress x-action if exists and if its smap version is lower
 	// start new x-action unless the one for the current version is already in progress
 	availablePaths, _ := fs.Mountpaths.Get()
-	runnerCnt := len(availablePaths) * 2
+
+	// FIXME: It is a little bit hacky... Duplication is not the best idea..
+	contentRebalancers := 0
+	for _, contentResolver := range fs.RegisteredContentTypes {
+		if contentResolver.PermToMove() {
+			contentRebalancers++
+		}
+	}
+	runnerCnt := contentRebalancers * len(availablePaths) * 2
 
 	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnerCnt)
 	if xreb == nil {
@@ -398,16 +397,25 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	wg = &sync.WaitGroup{}
 
 	allr := make([]*xrebpathrunner, 0, runnerCnt)
-	for _, mpathInfo := range availablePaths {
-		rc := &xrebpathrunner{t: t, mpathplus: fs.Mountpaths.MakePathCloud(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
-		wg.Add(1)
-		go rc.oneRebalance()
-		allr = append(allr, rc)
+	for contentType, contentResolver := range fs.RegisteredContentTypes {
+		// Do not start rebalance if given content type has no permission to move.
+		// NOTE: In the future we might have case where we would like to check it
+		// per object/workfile basis rather that directory level.
+		if !contentResolver.PermToMove() {
+			continue
+		}
 
-		rl := &xrebpathrunner{t: t, mpathplus: fs.Mountpaths.MakePathLocal(mpathInfo.Path), xreb: xreb, wg: wg, newsmap: newsmap}
-		wg.Add(1)
-		go rl.oneRebalance()
-		allr = append(allr, rl)
+		for _, mpathInfo := range availablePaths {
+			rc := &xrebpathrunner{t: t, mpathplus: fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), xreb: xreb, wg: wg, newsmap: newsmap}
+			wg.Add(1)
+			go rc.oneRebalance()
+			allr = append(allr, rc)
+
+			rl := &xrebpathrunner{t: t, mpathplus: fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), xreb: xreb, wg: wg, newsmap: newsmap}
+			wg.Add(1)
+			go rl.oneRebalance()
+			allr = append(allr, rl)
+		}
 	}
 	wg.Wait()
 
@@ -460,7 +468,14 @@ func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
 
 func (t *targetrunner) runLocalRebalance() {
 	availablePaths, _ := fs.Mountpaths.Get()
-	runnerCnt := len(availablePaths) * 2
+	// FIXME: It is a little bit hacky... Duplication is not the best idea..
+	contentRebalancers := 0
+	for _, contentResolver := range fs.RegisteredContentTypes {
+		if contentResolver.PermToMove() {
+			contentRebalancers++
+		}
+	}
+	runnerCnt := contentRebalancers * len(availablePaths) * 2
 	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
 
 	pmarker := t.xactinp.localRebalanceInProgress()
@@ -475,22 +490,31 @@ func (t *targetrunner) runLocalRebalance() {
 
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
-	for _, mpathInfo := range availablePaths {
-		runner := &localRebPathRunner{t: t, mpath: fs.Mountpaths.MakePathCloud(mpathInfo.Path), xreb: xreb}
-		wg.Add(1)
-		go func(runner *localRebPathRunner) {
-			runner.run()
-			wg.Done()
-		}(runner)
-		allr = append(allr, runner)
+	for contentType, contentResolver := range fs.RegisteredContentTypes {
+		// Do not start rebalance if given content type has no permission to move.
+		// NOTE: In the future we might have case where we would like to check it
+		// per object/workfile basis rather that directory level.
+		if !contentResolver.PermToMove() {
+			continue
+		}
 
-		runner = &localRebPathRunner{t: t, mpath: fs.Mountpaths.MakePathLocal(mpathInfo.Path), xreb: xreb}
-		wg.Add(1)
-		go func(runner *localRebPathRunner) {
-			runner.run()
-			wg.Done()
-		}(runner)
-		allr = append(allr, runner)
+		for _, mpathInfo := range availablePaths {
+			runner := &localRebPathRunner{t: t, mpath: fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), xreb: xreb}
+			wg.Add(1)
+			go func(runner *localRebPathRunner) {
+				runner.run()
+				wg.Done()
+			}(runner)
+			allr = append(allr, runner)
+
+			runner = &localRebPathRunner{t: t, mpath: fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), xreb: xreb}
+			wg.Add(1)
+			go func(runner *localRebPathRunner) {
+				runner.run()
+				wg.Done()
+			}(runner)
+			allr = append(allr, runner)
+		}
 	}
 	wg.Wait()
 

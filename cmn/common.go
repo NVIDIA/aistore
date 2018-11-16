@@ -154,6 +154,23 @@ func CreateFile(fname string) (file *os.File, err error) {
 	return
 }
 
+// Renames file ensuring that the directory of dst exists (creates when it doesn't exist).
+func MvFile(src, dst string) error {
+	dir, _ := filepath.Split(dst)
+	if _, err := os.Stat(dir); err != nil {
+		if !os.IsNotExist(err) {
+			return err // error when doing os.Stat
+		}
+
+		// Create directory because it does not exist
+		if err := CreateDir(dir); err != nil {
+			return err
+		}
+	}
+
+	return os.Rename(src, dst)
+}
+
 // ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
 // xxHash on the data.
 func ReadWriteWithHash(r io.Reader, w io.Writer, buf []byte) (int64, string, error) {

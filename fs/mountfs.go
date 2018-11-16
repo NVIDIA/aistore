@@ -297,11 +297,11 @@ func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*M
 }
 
 // builds fqn of directory for local buckets from mountpath
-func (mfs *MountedFS) MakePathLocal(basePath string) string {
-	return filepath.Join(basePath, mfs.localBuckets)
+func (mfs *MountedFS) MakePathLocal(basePath, contentType string) string {
+	return filepath.Join(basePath, contentType, mfs.localBuckets)
 }
 
 // builds fqn of directory for cloud buckets from mountpath
-func (mfs *MountedFS) MakePathCloud(basePath string) string {
-	return filepath.Join(basePath, mfs.cloudBuckets)
+func (mfs *MountedFS) MakePathCloud(basePath, contentType string) string {
+	return filepath.Join(basePath, contentType, mfs.cloudBuckets)
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -1118,7 +1119,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 		if localBucketDir != "" {
 			return filepath.SkipDir
 		}
-		if strings.HasSuffix(path, "/local") {
+		if strings.HasSuffix(path, "/local") && strings.Contains(path, fs.ObjectType) {
 			localBucketDir = path
 			return filepath.SkipDir
 		}

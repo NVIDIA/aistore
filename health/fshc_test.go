@@ -31,16 +31,16 @@ func testCheckerMountPaths() *fs.MountedFS {
 	cmn.CreateDir(fsCheckerTmpDir + "/3")
 	cmn.CreateDir(fsCheckerTmpDir + "/4")
 
-	mountedFS := fs.NewMountedFS("local", "cloud")
-	mountedFS.DisableFsIDCheck()
+	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths.DisableFsIDCheck()
 	for i := 1; i <= 4; i++ {
 		name := fmt.Sprintf("%s/%d", fsCheckerTmpDir, i)
-		mountedFS.Add(name)
+		fs.Mountpaths.Add(name)
 	}
 
 	os.RemoveAll(fsCheckerTmpDir + "/3") // one folder is deleted
-	mountedFS.Disable(fsCheckerTmpDir + "/4")
-	return mountedFS
+	fs.Mountpaths.Disable(fsCheckerTmpDir + "/4")
+	return fs.Mountpaths
 }
 
 func testCheckerConfig() *cmn.Config {
@@ -90,16 +90,6 @@ func TestFSCheckerMain(t *testing.T) {
 		fsCheckerTmpDir+"/3/testfile", fsCheckerTmpDir+"/3", 4, 1024)
 	if exists {
 		t.Error("Testing non-existing mountpath must fail")
-	}
-
-	// healthy mountpath
-	reads, writes, exists := fshc.testMountpath(
-		fsCheckerTmpDir+"/2/testfile", fsCheckerTmpDir+"/2", 4, 1024)
-	if !exists {
-		t.Error("Testing existing mountpath must detect the mountpath is available")
-	}
-	if reads != 0 || writes != 0 {
-		t.Errorf("Testing existing mountpath must not fail. Read errors: %d, write errors: %d", reads, writes)
 	}
 
 	// failed mountpath must be disabled
