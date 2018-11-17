@@ -58,8 +58,8 @@ type (
 	}
 	Trunner struct {
 		statsrunner
-		TargetRunner cluster.Target
-		Riostat      *ios.IostatRunner
+		TargetRunner cluster.Target         `json:"-"`
+		Riostat      *ios.IostatRunner      `json:"-"`
 		Core         *targetCoreStats       `json:"core"`
 		Capacity     map[string]*fscapacity `json:"capacity"`
 		// iostat
