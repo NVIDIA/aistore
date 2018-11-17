@@ -32,11 +32,12 @@ import (
 	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/stats"
+	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
@@ -69,49 +70,42 @@ type (
 		needStatus   bool
 		atimeRespCh  chan *atime.Response
 	}
-
 	uxprocess struct {
 		starttime time.Time
 		spid      string
 		pid       int64
 	}
-
 	thealthstatus struct {
 		IsRebalancing bool `json:"is_rebalancing"`
 		// NOTE: include core stats and other info as needed
 	}
-
 	renamectx struct {
 		bucketFrom string
 		bucketTo   string
 		t          *targetrunner
 	}
-
 	regstate struct {
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
+	targetrunner struct {
+		httprunner
+		cloudif        cloudif // multi-cloud backend
+		uxprocess      *uxprocess
+		rtnamemap      *rtnamemap
+		prefetchQueue  chan filesWithDeadline
+		authn          *authManager
+		clusterStarted int64
+		regstate       regstate // registration state - the state of being registered (with the proxy) or maybe not
+		fsprg          fsprungroup
+		readahead      readaheader
+	}
 )
 
-//===========================================================================
 //
 // target runner
 //
-//===========================================================================
-type targetrunner struct {
-	httprunner
-	cloudif        cloudif // multi-cloud backend
-	uxprocess      *uxprocess
-	rtnamemap      *rtnamemap
-	prefetchQueue  chan filesWithDeadline
-	authn          *authManager
-	clusterStarted int64
-	regstate       regstate // registration state - the state of being registered (with the proxy) or maybe not
-	fsprg          fsprungroup
-	readahead      readaheader
-}
 
-// start target runner
 func (t *targetrunner) Run() error {
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
@@ -213,7 +207,7 @@ func (t *targetrunner) Run() error {
 
 	_ = t.initStatsD("dfctarget")
 	sr := getstorstatsrunner()
-	sr.Core.statsdC = &t.statsdC
+	sr.Core.StatsdC = &t.statsdC
 
 	getfshealthchecker().SetDispatcher(t)
 
@@ -296,6 +290,89 @@ func (t *targetrunner) unregister() (int, error) {
 func (t *targetrunner) bucketLRUEnabled(bucket string) bool {
 	bucketmd := t.bmdowner.get()
 	return bucketmd.lruEnabled(bucket)
+}
+
+//===========================================================================================
+//
+// targetrunner's API for external packages
+//
+//===========================================================================================
+
+// implements cluster.Target interfaces
+var _ cluster.Target = &targetrunner{}
+
+func (t *targetrunner) IsRebalancing() bool {
+	_, running := t.xactinp.isAbortedOrRunningRebalance()
+	_, runningLocal := t.xactinp.isAbortedOrRunningLocalRebalance()
+	return running || runningLocal
+}
+
+func (t *targetrunner) RunLRU() {
+	xlru := t.xactinp.renewLRU(t)
+	if xlru == nil {
+		return
+	}
+	wg := &sync.WaitGroup{}
+
+	glog.Infof("LRU: %s started: dont-evict-time %v", xlru, ctx.config.LRU.DontEvictTime)
+
+	//
+	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
+	//
+
+	availablePaths, _ := fs.Mountpaths.Get()
+	for path, mpathInfo := range availablePaths {
+		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
+		wg.Add(1)
+		go lctx.onelru(wg)
+	}
+	wg.Wait()
+	for path, mpathInfo := range availablePaths {
+		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path))
+		wg.Add(1)
+		go lctx.onelru(wg)
+	}
+	wg.Wait()
+
+	if glog.V(4) {
+		lruCheckResults(availablePaths)
+	}
+	xlru.EndTime(time.Now())
+	glog.Infoln(xlru.String())
+	t.xactinp.del(xlru.ID())
+}
+
+func (t *targetrunner) PrefetchQueueLen() int { return len(t.prefetchQueue) }
+
+func (t *targetrunner) Prefetch() {
+	xpre := t.xactinp.renewPrefetch(t)
+	if xpre == nil {
+		return
+	}
+loop:
+	for {
+		select {
+		case fwd := <-t.prefetchQueue:
+			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
+				continue
+			}
+			bucket := fwd.bucket
+			for _, objname := range fwd.objnames {
+				t.prefetchMissing(fwd.ctx, objname, bucket)
+			}
+
+			// Signal completion of prefetch
+			if fwd.done != nil {
+				fwd.done <- struct{}{}
+			}
+		default:
+			// When there is nothing left to fetch, the prefetch routine ends
+			break loop
+
+		}
+	}
+	xpre.EndTime(time.Now())
+	t.xactinp.del(xpre.ID())
 }
 
 //===========================================================================================
@@ -411,7 +488,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
 	}
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
-		t.statsif.add(statGetRedirLatency, redelta)
+		t.statsif.Add(stats.GetRedirLatency, redelta)
 	}
 	errstr, errcode = t.checkIsLocal(bucket, bucketmd, query, islocal)
 	if errstr != "" {
@@ -582,13 +659,13 @@ existslocally:
 			rd := readers.NewRandReader(dryRun.size)
 			if _, err = io.Copy(w, rd); err != nil {
 				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
-				t.statsif.add(statErrGetCount, 1)
+				t.statsif.Add(stats.ErrGetCount, 1)
 				return
 			}
 		}
 
 		delta := time.Since(started)
-		t.statsif.addMany(namedVal64{statGetCount, 1}, namedVal64{statGetLatency, int64(delta)})
+		t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
 		return
 	}
 	if size == 0 {
@@ -666,7 +743,7 @@ send:
 			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", fqn, err)
 		}
 		t.fshc(err, fqn)
-		t.statsif.add(statErrGetCount, 1)
+		t.statsif.Add(stats.ErrGetCount, 1)
 		return
 	}
 	if sendMore {
@@ -687,7 +764,7 @@ send:
 	}
 
 	delta := time.Since(started)
-	t.statsif.addMany(namedVal64{statGetCount, 1}, namedVal64{statGetLatency, int64(delta)})
+	t.statsif.AddMany(stats.NamedVal64{stats.GetCount, 1}, stats.NamedVal64{stats.GetLatency, int64(delta)})
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
@@ -764,7 +841,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if redelta := t.redirectLatency(time.Now(), query); redelta != 0 {
-			t.statsif.add(statPutRedirLatency, redelta)
+			t.statsif.Add(stats.PutRedirLatency, redelta)
 		}
 		// PUT
 		pid := query.Get(cmn.URLParamProxyID)
@@ -958,7 +1035,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		tag, ok := t.listbucket(w, r, lbucket, &msg)
 		if ok {
 			delta := time.Since(started)
-			t.statsif.addMany(namedVal64{statListCount, 1}, namedVal64{statListLatency, int64(delta)})
+			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 			if glog.V(3) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
@@ -1549,10 +1626,10 @@ ret:
 		t.rtnamemap.Unlock(uname, true)
 	} else {
 		if vchanged {
-			t.statsif.addMany(namedVal64{statGetColdCount, 1}, namedVal64{statGetColdSize, props.size},
-				namedVal64{statVerChangeSize, props.size}, namedVal64{statVerChangeCount, 1})
+			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, props.size},
+				stats.NamedVal64{stats.VerChangeSize, props.size}, stats.NamedVal64{stats.VerChangeCount, 1})
 		} else {
-			t.statsif.addMany(namedVal64{statGetColdCount, 1}, namedVal64{statGetColdSize, props.size})
+			t.statsif.AddMany(stats.NamedVal64{stats.GetColdCount, 1}, stats.NamedVal64{stats.GetColdSize, props.size})
 		}
 		t.rtnamemap.DowngradeLock(uname)
 	}
@@ -2066,7 +2143,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		}
 		if errstr == "" {
 			delta := time.Since(started)
-			t.statsif.addMany(namedVal64{statPutCount, 1}, namedVal64{statPutLatency, int64(delta)})
+			t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
 			if glog.V(4) {
 				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 			}
@@ -2097,7 +2174,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	}
 
 	delta := time.Since(started)
-	t.statsif.addMany(namedVal64{statReplPutCount, 1}, namedVal64{statReplPutLatency, int64(delta / time.Microsecond)})
+	t.statsif.AddMany(stats.NamedVal64{stats.ReplPutCount, 1}, stats.NamedVal64{stats.ReplPutLatency, int64(delta / time.Microsecond)})
 	if glog.V(4) {
 		glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 	}
@@ -2313,7 +2390,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		errstr, _ = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, true /*rebalance*/)
 		if errstr == "" {
-			t.statsif.addMany(namedVal64{statRxCount, 1}, namedVal64{statRxSize, size})
+			t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, size})
 		}
 	}
 	return
@@ -2342,7 +2419,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 			return fmt.Errorf("%d: %s", errcode, errstr)
 		}
 
-		t.statsif.add(statDeleteCount, 1)
+		t.statsif.Add(stats.DeleteCount, 1)
 	}
 
 	finfo, err := os.Stat(fqn)
@@ -2361,7 +2438,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		if err := os.Remove(fqn); err != nil {
 			return err
 		} else if evict {
-			t.statsif.addMany(namedVal64{statLruEvictCount, 1}, namedVal64{statLruEvictSize, finfo.Size()})
+			t.statsif.AddMany(stats.NamedVal64{stats.LruEvictCount, 1}, stats.NamedVal64{stats.LruEvictSize, finfo.Size()})
 		}
 	}
 	return nil
@@ -2458,7 +2535,7 @@ func (t *targetrunner) renameobject(bucketFrom, objnameFrom, bucketTo, objnameTo
 		} else if err := os.Rename(fqn, newfqn); err != nil {
 			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
 		} else {
-			t.statsif.add(statRenameCount, 1)
+			t.statsif.Add(stats.RenameCount, 1)
 			if glog.V(3) {
 				glog.Infof("Renamed %s => %s", fqn, newfqn)
 			}
@@ -2596,7 +2673,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	}
 	response.Body.Close()
 	// stats
-	t.statsif.addMany(namedVal64{statTxCount, 1}, namedVal64{statTxSize, size})
+	t.statsif.AddMany(stats.NamedVal64{stats.TxCount, 1}, stats.NamedVal64{stats.TxSize, size})
 	return ""
 }
 
@@ -2828,9 +2905,17 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-		xactionStatsRetriever := t.getXactionStatsRetriever(kind) // FIXME
-		allXactionDetails := t.getXactionsByType(kind)
-		jsbytes := xactionStatsRetriever.getStats(allXactionDetails)
+		var (
+			jsbytes           []byte
+			sts               = getstorstatsrunner()
+			allXactionDetails = t.getXactionsByType(kind)
+		)
+		if kind == cmn.XactionRebalance {
+			jsbytes = sts.GetRebalanceStats(allXactionDetails)
+		} else {
+			cmn.Assert(kind == cmn.XactionPrefetch)
+			jsbytes = sts.GetPrefetchStats(allXactionDetails)
+		}
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatMountpaths:
 		mpList := cmn.MountpathList{}
@@ -2860,23 +2945,8 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) getXactionStatsRetriever(kind string) XactionStatsRetriever {
-	var xactionStatsRetriever XactionStatsRetriever
-
-	// No need to handle default since kind has already been validated by
-	// this point.
-	switch kind {
-	case cmn.XactionRebalance:
-		xactionStatsRetriever = RebalanceTargetStats{}
-	case cmn.XactionPrefetch:
-		xactionStatsRetriever = PrefetchTargetStats{}
-	}
-
-	return xactionStatsRetriever
-}
-
-func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
-	allXactionDetails := []XactionDetails{}
+func (t *targetrunner) getXactionsByType(kind string) []stats.XactionDetails {
+	allXactionDetails := []stats.XactionDetails{}
 	for _, xaction := range t.xactinp.xactinp {
 		if xaction.Kind() == kind {
 			status := cmn.XactionStatusCompleted
@@ -2884,7 +2954,7 @@ func (t *targetrunner) getXactionsByType(kind string) []XactionDetails {
 				status = cmn.XactionStatusInProgress
 			}
 
-			xactionStats := XactionDetails{
+			xactionStats := stats.XactionDetails{
 				Id:        xaction.ID(),
 				StartTime: xaction.StartTime(),
 				EndTime:   xaction.EndTime(),
@@ -3048,7 +3118,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 				errstr = fmt.Sprintf("Bad checksum: %s %s %.8s... != %.8s... computed for the %q",
 					objname, cksumcfg.Checksum, ohval, nhval, fqn)
 
-				t.statsif.addMany(namedVal64{statErrCksumCount, 1}, namedVal64{statErrCksumSize, written})
+				t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 				return
 			}
 		}
@@ -3065,7 +3135,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 			errstr = fmt.Sprintf("Bad checksum: cold GET %s md5 %.8s... != %.8s... computed for the %q",
 				objname, ohval, nhval, fqn)
 
-			t.statsif.addMany(namedVal64{statErrCksumCount, 1}, namedVal64{statErrCksumSize, written})
+			t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}
 	} else {
@@ -3559,13 +3629,13 @@ func (t *targetrunner) pollClusterStarted() {
 		if res.err != nil {
 			continue
 		}
-		proxystats := &proxyCoreStats{}
+		proxystats := &stats.ProxyCoreStats{} // FIXME
 		err := jsoniter.Unmarshal(res.outjson, proxystats)
 		if err != nil {
 			glog.Errorf("Unexpected: failed to unmarshal %s response, err: %v [%v]", psi.PublicNet.DirectURL, err, string(res.outjson))
 			continue
 		}
-		if proxystats.Tracker[statUptimeLatency].Value != 0 {
+		if proxystats.Tracker[stats.Uptime].Value != 0 {
 			break
 		}
 	}
@@ -3752,15 +3822,6 @@ func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (f
 	return "", 0
 }
 
-// implements cluster.Rebalance interface
-var _ cluster.Rebalancer = &targetrunner{}
-
-func (t *targetrunner) IsRebalancing() bool {
-	_, running := t.xactinp.isAbortedOrRunningRebalance()
-	_, runningLocal := t.xactinp.isAbortedOrRunningLocalRebalance()
-	return running || runningLocal
-}
-
 //====================== LRU: initiation  ======================================
 //
 // construct LRU contexts (lructx) and run them each of them in
@@ -3768,42 +3829,6 @@ func (t *targetrunner) IsRebalancing() bool {
 //
 //==============================================================================
 
-func (t *targetrunner) runLRU() {
-	xlru := t.xactinp.renewLRU(t)
-	if xlru == nil {
-		return
-	}
-	wg := &sync.WaitGroup{}
-
-	glog.Infof("LRU: %s started: dont-evict-time %v", xlru, ctx.config.LRU.DontEvictTime)
-
-	//
-	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
-	//
-
-	availablePaths, _ := fs.Mountpaths.Get()
-	for path, mpathInfo := range availablePaths {
-		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path))
-		wg.Add(1)
-		go lctx.onelru(wg)
-	}
-	wg.Wait()
-	for path, mpathInfo := range availablePaths {
-		lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path))
-		wg.Add(1)
-		go lctx.onelru(wg)
-	}
-	wg.Wait()
-
-	if glog.V(4) {
-		lruCheckResults(availablePaths)
-	}
-	xlru.EndTime(time.Now())
-	glog.Infoln(xlru.String())
-	t.xactinp.del(xlru.ID())
-}
-
-// construct lructx
 func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
 	throttler := &cluster.Throttle{
 		Riostat:      getiostatrunner(),
@@ -3815,16 +3840,16 @@ func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucket
 		FS:           mpathInfo.FileSystem,
 		Flag:         cluster.OnDiskUtil | cluster.OnFSUsed}
 	lctx := &lructx{
-		oldwork:     make([]*fileInfo, 0, 64),
-		xlru:        xlru,
-		fs:          mpathInfo.FileSystem,
-		bucketdir:   bucketdir,
-		throttler:   throttler,
-		atimeRespCh: make(chan *atime.Response, 1),
-		namelocker:  t.rtnamemap,
-		bmdowner:    t.bmdowner,
-		statsif:     t.statsif,
-		rebalancer:  t,
+		oldwork:      make([]*fileInfo, 0, 64),
+		xlru:         xlru,
+		fs:           mpathInfo.FileSystem,
+		bucketdir:    bucketdir,
+		throttler:    throttler,
+		atimeRespCh:  make(chan *atime.Response, 1),
+		namelocker:   t.rtnamemap,
+		bmdowner:     t.bmdowner,
+		statsif:      t.statsif,
+		targetrunner: t, // as cluster.Target i/f
 	}
 	return lctx
 }

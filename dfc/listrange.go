@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
 
@@ -180,38 +181,6 @@ func (xact *xactEvictDelete) tostring() string {
 //
 //=========
 
-func (t *targetrunner) doPrefetch() {
-	xpre := t.xactinp.renewPrefetch(t)
-	if xpre == nil {
-		return
-	}
-loop:
-	for {
-		select {
-		case fwd := <-t.prefetchQueue:
-			if !fwd.deadline.IsZero() && time.Now().After(fwd.deadline) {
-				continue
-			}
-			bucket := fwd.bucket
-			for _, objname := range fwd.objnames {
-				t.prefetchMissing(fwd.ctx, objname, bucket)
-			}
-
-			// Signal completion of prefetch
-			if fwd.done != nil {
-				fwd.done <- struct{}{}
-			}
-		default:
-			// When there is nothing left to fetch, the prefetch routine ends
-			break loop
-
-		}
-	}
-
-	xpre.EndTime(time.Now())
-	t.xactinp.del(xpre.ID())
-}
-
 func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket string) {
 	var (
 		errstr, version   string
@@ -251,11 +220,11 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	if glog.V(4) {
 		glog.Infof("PREFETCH: %s/%s", bucket, objname)
 	}
-	t.statsif.add(statPrefetchCount, 1)
-	t.statsif.add(statPrefetchSize, props.size)
+	t.statsif.Add(stats.PrefetchCount, 1)
+	t.statsif.Add(stats.PrefetchSize, props.size)
 	if vchanged {
-		t.statsif.add(statVerChangeSize, props.size)
-		t.statsif.add(statVerChangeCount, 1)
+		t.statsif.Add(stats.VerChangeSize, props.size)
+		t.statsif.Add(stats.VerChangeCount, 1)
 	}
 }
 
@@ -479,7 +448,7 @@ func (t *targetrunner) listOperation(r *http.Request, apitems []string, listMsg 
 			err := f(t.contextWithAuth(r), objs, bucket, listMsg.Deadline, done)
 			if err != nil {
 				glog.Errorf("Error performing list function: %v", err)
-				t.statsif.add(statErrListCount, 1)
+				t.statsif.Add(stats.ErrListCount, 1)
 			}
 			errCh <- err
 		}()

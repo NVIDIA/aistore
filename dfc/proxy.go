@@ -26,6 +26,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
 
@@ -169,7 +170,7 @@ func (p *proxyrunner) Run() error {
 
 	_ = p.initStatsD("dfcproxy")
 	sr := getproxystatsrunner()
-	sr.Core.statsdC = &p.statsdC
+	sr.Core.StatsdC = &p.statsdC
 
 	return p.httprunner.run()
 }
@@ -334,7 +335,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		p.reverseDP(w, r, si)
 		delta := time.Since(started)
-		p.statsif.add(statGetLatency, int64(delta))
+		p.statsif.Add(stats.GetLatency, int64(delta))
 	} else {
 		if glog.V(4) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si.DaemonID)
@@ -360,7 +361,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, redirecturl, http.StatusMovedPermanently)
 	}
-	p.statsif.add(statGetCount, 1)
+	p.statsif.Add(stats.GetCount, 1)
 }
 
 // PUT /v1/objects
@@ -393,7 +394,7 @@ func (p *proxyrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add(statPutCount, 1)
+	p.statsif.Add(stats.PutCount, 1)
 }
 
 // DELETE { action } /v1/buckets
@@ -461,7 +462,7 @@ func (p *proxyrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add(statDeleteCount, 1)
+	p.statsif.Add(stats.DeleteCount, 1)
 }
 
 // [METHOD] /v1/metasync
@@ -532,9 +533,9 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
 	rr.Lock()
-	rr.Core.Tracker[statUptimeLatency].Value = int64(time.Since(p.starttime) / time.Microsecond)
+	rr.Core.Tracker[stats.Uptime].Value = int64(time.Since(p.starttime) / time.Microsecond)
 	if p.startedup(0) == 0 {
-		rr.Core.Tracker[statUptimeLatency].Value = 0
+		rr.Core.Tracker[stats.Uptime].Value = 0
 	}
 	jsbytes, err := jsoniter.Marshal(rr.Core)
 	rr.Unlock()
@@ -632,7 +633,7 @@ func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
-		p.statsif.addMany(namedVal64{statListCount, 1}, namedVal64{statListLatency, int64(delta)})
+		p.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
 		if glog.V(3) {
 			lat := int64(delta / time.Microsecond)
 			if pagemarker != "" {
@@ -1338,7 +1339,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 	redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, lbucket)
 	http.Redirect(w, r, redirecturl, http.StatusTemporaryRedirect)
 
-	p.statsif.add(statRenameCount, 1)
+	p.statsif.Add(stats.RenameCount, 1)
 }
 
 func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
@@ -1997,7 +1998,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 		p.invalmsghdlr(w, r, errstr)
 		return false
 	}
-	outputXactionStats := &XactionStats{}
+	outputXactionStats := &stats.XactionStats{}
 	outputXactionStats.Kind = kind
 	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
 	if !ok {
@@ -2060,7 +2061,7 @@ func (p *proxyrunner) invokeHttpGetClusterStats(w http.ResponseWriter, r *http.R
 		return false
 	}
 
-	out := &ClusterStatsRaw{}
+	out := &stats.ClusterStatsRaw{}
 	out.Target = targetStats
 	rr := getproxystatsrunner()
 	rr.RLock()
@@ -2137,7 +2138,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.statsif.add(statPostCount, 1)
+	p.statsif.Add(stats.PostCount, 1)
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()

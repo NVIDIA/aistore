@@ -21,6 +21,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
+	"github.com/NVIDIA/dfcpub/stats"
 )
 
 // ============================================= Summary ===========================================
@@ -67,15 +68,15 @@ type (
 		heap    *fileInfoMinHeap
 		oldwork []*fileInfo
 		// init-time
-		xlru        cmn.XactInterface
-		fs          string
-		bucketdir   string
-		throttler   cluster.Throttler
-		atimeRespCh chan *atime.Response
-		namelocker  cluster.NameLocker
-		bmdowner    cluster.Bowner
-		statsif     statsif
-		rebalancer  cluster.Rebalancer
+		xlru         cmn.XactInterface
+		fs           string
+		bucketdir    string
+		throttler    cluster.Throttler
+		atimeRespCh  chan *atime.Response
+		namelocker   cluster.NameLocker
+		bmdowner     cluster.Bowner
+		statsif      stats.Tracker
+		targetrunner cluster.Target
 	}
 )
 
@@ -208,7 +209,7 @@ func (lctx *lructx) evict() error {
 		h                  = lctx.heap
 	)
 	for _, fi := range lctx.oldwork {
-		if lctx.rebalancer.IsRebalancing() {
+		if lctx.targetrunner.IsRebalancing() {
 			_, _, err := cluster.ResolveFQN(fi.fqn, lctx.bmdowner)
 			// keep a copy of a rebalanced file while rebalance is running
 			if spec, _ := cluster.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
@@ -232,8 +233,8 @@ func (lctx *lructx) evict() error {
 		bevicted += fi.size
 		fevicted++
 	}
-	lctx.statsif.add(statLruEvictSize, bevicted)
-	lctx.statsif.add(statLruEvictCount, fevicted)
+	lctx.statsif.Add(stats.LruEvictSize, bevicted)
+	lctx.statsif.Add(stats.LruEvictCount, fevicted)
 	return nil
 }
 
@@ -313,7 +314,7 @@ func (h *fileInfoMinHeap) Pop() interface{} {
 func lruCheckResults(availablePaths map[string]*fs.MountpathInfo) {
 	rr := getstorstatsrunner()
 	rr.Lock()
-	rr.updateCapacity()
+	rr.UpdateCapacity()
 	for _, mpathInfo := range availablePaths {
 		fscapacity := rr.Capacity[mpathInfo.Path]
 		if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {

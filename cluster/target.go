@@ -4,8 +4,11 @@
 // Package cluster provides local access to cluster-level metadata
 package cluster
 
-// For implementation, please refer to dfc/target.go
+// For implementations, please refer to dfc/target.go
 
-type Rebalancer interface {
+type Target interface {
 	IsRebalancing() bool
+	RunLRU()
+	PrefetchQueueLen() int
+	Prefetch()
 }

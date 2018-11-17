@@ -29,7 +29,8 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/stats"
+	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/OneOfOne/xxhash"
 	"github.com/json-iterator/go"
 	"golang.org/x/net/http2"
@@ -46,6 +47,7 @@ const ( //  h.call(timeout)
 )
 
 type (
+	metric      = statsd.Metric // type alias
 	objectProps struct {
 		version string
 		atime   time.Time
@@ -182,7 +184,7 @@ type httprunner struct {
 	smapowner             *smapowner
 	bmdowner              *bmdowner
 	xactinp               *xactInProgress
-	statsif               statsif
+	statsif               stats.Tracker
 	statsdC               statsd.Client
 }
 
@@ -239,7 +241,7 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 	}
 }
 
-func (h *httprunner) init(s statsif, isproxy bool) {
+func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 	// cli proxyurl overrides config proxy settings - if set, the proxy won't register as the primary
 	if clivars.proxyurl != "" {
 		ctx.config.Proxy.PrimaryURL = clivars.proxyurl
@@ -661,7 +663,7 @@ func (h *httprunner) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes [
 			s += fmt.Sprintf("(%s, #%d)", f, line)
 		}
 		glog.Errorln(s)
-		h.statsif.addErrorHTTP(r.Method, 1)
+		h.statsif.AddErrorHTTP(r.Method, 1)
 		return
 	}
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
@@ -899,7 +901,7 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 
 func (h *httprunner) invalmsghdlr(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	cmn.InvalidHandlerDetailed(w, r, msg, errCode...)
-	h.statsif.addErrorHTTP(r.Method, 1)
+	h.statsif.AddErrorHTTP(r.Method, 1)
 }
 
 //=====================

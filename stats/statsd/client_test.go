@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/stats/statsd"
 )
 
 var (

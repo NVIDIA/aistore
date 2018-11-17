@@ -16,7 +16,8 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/stats"
+	"github.com/NVIDIA/dfcpub/stats/statsd"
 )
 
 const (
@@ -256,10 +257,10 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 		}
 	}
 	if min != time.Duration(time.Hour) {
-		pkr.p.statsif.add(statKeepAliveMinLatency, int64(min/time.Microsecond))
+		pkr.p.statsif.Add(stats.KeepAliveMinLatency, int64(min/time.Microsecond))
 	}
 	if max != 0 {
-		pkr.p.statsif.add(statKeepAliveMaxLatency, int64(max/time.Microsecond))
+		pkr.p.statsif.Add(stats.KeepAliveMaxLatency, int64(max/time.Microsecond))
 	}
 }
 
@@ -282,7 +283,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	res := pkr.p.call(args)
 	delta = time.Since(t)
 	pkr.updateTimeoutForDaemon(to.DaemonID, delta)
-	pkr.p.statsif.add(statKeepAliveLatency, int64(delta/time.Microsecond))
+	pkr.p.statsif.Add(stats.KeepAliveLatency, int64(delta/time.Microsecond))
 
 	if res.err == nil {
 		return true, false, delta
@@ -365,12 +366,12 @@ func (k *keepalive) Run() error {
 }
 
 // register is called by non-primary proxies and targets to send a keepalive to the primary proxy.
-func (k *keepalive) register(r registerer, statsif statsif, primaryProxyID string) (stopped bool) {
+func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID string) (stopped bool) {
 	timeout := time.Duration(k.timeoutStatsForDaemon(primaryProxyID).timeout)
 	now := time.Now()
 	s, err := r.register(true, timeout)
 	delta := time.Since(now)
-	statsif.add(statKeepAliveLatency, int64(delta/time.Microsecond))
+	statsif.Add(stats.KeepAliveLatency, int64(delta/time.Microsecond))
 	timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
 	if err == nil {
 		return

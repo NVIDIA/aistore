@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
 
@@ -426,8 +427,8 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 			}
 		}
 		if totalMovedN > 0 {
-			t.statsif.add(statRebalGlobalCount, totalMovedN)
-			t.statsif.add(statRebalGlobalSize, totalMovedBytes)
+			t.statsif.Add(stats.RebalGlobalCount, totalMovedN)
+			t.statsif.Add(stats.RebalGlobalSize, totalMovedBytes)
 		}
 	}
 	if newtargetid == t.si.DaemonID {
@@ -509,8 +510,8 @@ func (t *targetrunner) runLocalRebalance() {
 			}
 		}
 		if totalMovedN > 0 {
-			t.statsif.add(statRebalLocalCount, totalMovedN)
-			t.statsif.add(statRebalLocalSize, totalMovedBytes)
+			t.statsif.Add(stats.RebalLocalCount, totalMovedN)
+			t.statsif.Add(stats.RebalLocalSize, totalMovedBytes)
 		}
 	}
 

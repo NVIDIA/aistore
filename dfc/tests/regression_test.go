@@ -28,6 +28,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/json-iterator/go"
 )
@@ -1373,8 +1374,8 @@ OUTER:
 	}
 }
 
-func getXactionRebalance(proxyURL string) (dfc.RebalanceStats, error) {
-	var rebalanceStats dfc.RebalanceStats
+func getXactionRebalance(proxyURL string) (stats.RebalanceStats, error) {
+	var rebalanceStats stats.RebalanceStats
 	responseBytes, err := tutils.GetXactionResponse(proxyURL, cmn.XactionRebalance)
 	if err != nil {
 		return rebalanceStats, err
@@ -1408,7 +1409,7 @@ waitloop:
 	ticker.Stop()
 }
 
-func getClusterStats(t *testing.T, proxyURL string) (stats dfc.ClusterStats) {
+func getClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
 	q := tutils.GetWhatRawQuery(cmn.GetWhatStats, "")
 	url := fmt.Sprintf("%s?%s", proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), q)
 	resp, err := tutils.BaseHTTPClient.Get(url)

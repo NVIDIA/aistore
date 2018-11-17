@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/dfcpub/health"
 	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
 
@@ -210,8 +211,8 @@ func dfcinit() {
 		p := &proxyrunner{}
 		p.initSI()
 		ctx.rg.add(p, xproxy, nil)
-		ps := &proxystatsrunner{}
-		ps.init()
+		ps := &stats.Prunner{}
+		ps.Init()
 		ctx.rg.add(ps, xproxystats, &ctx.config)
 		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive, nil)
 		ctx.rg.add(newmetasyncer(p), xmetasyncer, &ctx.config)
@@ -219,8 +220,8 @@ func dfcinit() {
 		t := &targetrunner{}
 		t.initSI()
 		ctx.rg.add(t, xtarget, nil)
-		ts := &storstatsrunner{}
-		ts.init()
+		ts := &stats.Trunner{TargetRunner: t} // iostat below
+		ts.Init()
 		ctx.rg.add(ts, xstorstats, &ctx.config)
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive, nil)
 
@@ -257,6 +258,7 @@ func dfcinit() {
 		iostat := ios.NewIostatRunner(fs.Mountpaths)
 		ctx.rg.add(iostat, xiostat, &ctx.config)
 		t.fsprg.add(iostat)
+		ts.Riostat = iostat
 
 		fshc := health.NewFSHC(fs.Mountpaths, gmem2)
 		ctx.rg.add(fshc, xfshc, &ctx.config)
@@ -308,9 +310,9 @@ m:
 // global helpers
 //
 //==================
-func getproxystatsrunner() *proxystatsrunner {
+func getproxystatsrunner() *stats.Prunner {
 	r := ctx.rg.runmap[xproxystats]
-	rr, ok := r.(*proxystatsrunner)
+	rr, ok := r.(*stats.Prunner)
 	cmn.Assert(ok)
 	return rr
 }
@@ -350,9 +352,9 @@ func getreplicationrunner() *replicationRunner {
 	return rr
 }
 
-func getstorstatsrunner() *storstatsrunner {
+func getstorstatsrunner() *stats.Trunner {
 	r := ctx.rg.runmap[xstorstats]
-	rr, ok := r.(*storstatsrunner)
+	rr, ok := r.(*stats.Trunner)
 	cmn.Assert(ok)
 	return rr
 }

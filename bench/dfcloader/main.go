@@ -30,7 +30,7 @@ import (
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/bench/dfcloader/stats"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dfc/statsd"
+	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
