@@ -125,7 +125,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	numFiles := 100000
 	numFilesTotal := 1000000
 
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.DisableFsIDCheck()
 	cleanMountpaths()
 	for _, mpath := range mpaths {

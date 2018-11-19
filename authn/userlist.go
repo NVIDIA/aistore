@@ -150,7 +150,7 @@ func (m *userManager) delUser(userID string) error {
 	m.mtx.Lock()
 	if _, ok := m.Users[userID]; !ok {
 		m.mtx.Unlock()
-		return fmt.Errorf("User %s does not exist", userID)
+		return fmt.Errorf("User %s %s", userID, cmn.DoesNotExist)
 	}
 	delete(m.Users, userID)
 	token, ok := m.tokens[userID]
@@ -335,7 +335,7 @@ func (m *userManager) updateCredentials(userID, provider, userCreds string) (boo
 
 	user, ok := m.Users[userID]
 	if !ok {
-		err := fmt.Errorf("User %s does not exist", userID)
+		err := fmt.Errorf("User %s %s", userID, cmn.DoesNotExist)
 		return false, err
 	}
 
@@ -367,7 +367,7 @@ func (m *userManager) deleteCredentials(userID, provider string) (bool, error) {
 
 	user, ok := m.Users[userID]
 	if !ok {
-		return false, fmt.Errorf("User %s does not exist", userID)
+		return false, fmt.Errorf("User %s %s", userID, cmn.DoesNotExist)
 	}
 	if _, ok = user.Creds[provider]; ok {
 		delete(user.Creds, provider)

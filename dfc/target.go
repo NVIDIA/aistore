@@ -35,6 +35,7 @@ import (
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
+	"github.com/NVIDIA/dfcpub/lru"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/stats/statsd"
@@ -46,7 +47,6 @@ import (
 const (
 	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
 	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
-	doesnotexist     = "does not exist"
 	maxBytesInMem    = 256 * cmn.KiB
 )
 
@@ -315,42 +315,25 @@ func (t *targetrunner) IsRebalancing() bool {
 	return running || runningLocal
 }
 
+// gets triggered by the stats evaluation of a remaining capacity
+// and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU() {
 	xlru := t.xactinp.renewLRU(t)
 	if xlru == nil {
 		return
 	}
-	wg := &sync.WaitGroup{}
-
-	glog.Infof("LRU: %s started: dont-evict-time %v", xlru, ctx.config.LRU.DontEvictTime)
-
-	//
-	// NOTE the sequence: LRU local buckets first, Cloud buckets - second
-	//
-
-	availablePaths, _ := fs.Mountpaths.Get()
-	for contentType, contentResolver := range fs.RegisteredContentTypes {
-		if !contentResolver.PermToEvict() {
-			continue
-		}
-
-		for path, mpathInfo := range availablePaths {
-			lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathLocal(path, contentType))
-			wg.Add(1)
-			go lctx.onelru(wg)
-		}
-		wg.Wait()
-		for path, mpathInfo := range availablePaths {
-			lctx := t.newlru(xlru, mpathInfo, fs.Mountpaths.MakePathCloud(path, contentType))
-			wg.Add(1)
-			go lctx.onelru(wg)
-		}
-		wg.Wait()
+	ini := lru.InitLRU{
+		Config:     &ctx.config,
+		Riostat:    getiostatrunner(),
+		Ratime:     getatimerunner(),
+		Xlru:       xlru,
+		Namelocker: t.rtnamemap,
+		Bmdowner:   t.bmdowner,
+		Statsif:    t.statsif,
+		Targetif:   t,
 	}
+	lru.InitAndRun(&ini) // blocking
 
-	if glog.V(4) {
-		lruCheckResults(availablePaths)
-	}
 	xlru.EndTime(time.Now())
 	glog.Infoln(xlru.String())
 	t.xactinp.del(xlru.ID())
@@ -530,7 +513,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if coldget, size, version, errstr = t.lookupLocally(bucket, objname, fqn); islocal && errstr != "" {
 		errcode = http.StatusInternalServerError
 		// given certain conditions (below) make an effort to locate the object
-		if strings.Contains(errstr, doesnotexist) {
+		if strings.Contains(errstr, cmn.DoesNotExist) {
 			errcode = http.StatusNotFound
 
 			// check FS-wide (local rebalance is running)
@@ -1015,7 +998,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		bucketmd := t.bmdowner.get()
 		ok, props := bucketmd.get(bucketFrom, true)
 		if !ok {
-			s := fmt.Sprintf("Local bucket %s does not exist", bucketFrom)
+			s := fmt.Sprintf("Local bucket %s %s", bucketFrom, cmn.DoesNotExist)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
@@ -1665,7 +1648,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 	if err != nil {
 		switch {
 		case os.IsNotExist(err):
-			errstr = fmt.Sprintf("GET local: %s (%s/%s) %s", fqn, bucket, objname, doesnotexist)
+			errstr = fmt.Sprintf("GET local: %s (%s/%s) %s", fqn, bucket, objname, cmn.DoesNotExist)
 			coldget = true
 			return
 		case os.IsPermission(err):
@@ -2361,7 +2344,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("Rebalance %s/%s from %s (self) to %s", bucket, objname, from, to)
 		}
 		if err != nil && os.IsNotExist(err) {
-			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, doesnotexist, t.si.DaemonID)
+			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, cmn.DoesNotExist, t.si.DaemonID)
 			return
 		}
 		si := t.smapowner.get().GetTarget(to)
@@ -2449,7 +2432,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	if err != nil {
 		if os.IsNotExist(err) {
 			if islocal && !evict {
-				return fmt.Errorf("DELETE local: file %s (local bucket %s, object %s) %s", fqn, bucket, objname, doesnotexist)
+				return fmt.Errorf("DELETE local: file %s (local bucket %s, object %s) %s", fqn, bucket, objname, cmn.DoesNotExist)
 			}
 
 			// Do try to delete non-cached objects.
@@ -3827,36 +3810,4 @@ func (t *targetrunner) getFromNeighborFS(bucket, object string, islocal bool) (f
 	}
 
 	return "", 0
-}
-
-//====================== LRU: initiation  ======================================
-//
-// construct LRU contexts (lructx) and run them each of them in
-// the respective goroutines which then do rest of the work - see lru.go
-//
-//==============================================================================
-
-func (t *targetrunner) newlru(xlru *xactLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
-	throttler := &cluster.Throttle{
-		Riostat:      getiostatrunner(),
-		CapUsedHigh:  &ctx.config.LRU.HighWM,
-		DiskUtilLow:  &ctx.config.Xaction.DiskUtilLowWM,
-		DiskUtilHigh: &ctx.config.Xaction.DiskUtilHighWM,
-		Period:       &ctx.config.Periodic.StatsTime,
-		Path:         mpathInfo.Path,
-		FS:           mpathInfo.FileSystem,
-		Flag:         cluster.OnDiskUtil | cluster.OnFSUsed}
-	lctx := &lructx{
-		oldwork:      make([]*fileInfo, 0, 64),
-		xlru:         xlru,
-		fs:           mpathInfo.FileSystem,
-		bucketdir:    bucketdir,
-		throttler:    throttler,
-		atimeRespCh:  make(chan *atime.Response, 1),
-		namelocker:   t.rtnamemap,
-		bmdowner:     t.bmdowner,
-		statsif:      t.statsif,
-		targetrunner: t, // as cluster.Target i/f
-	}
-	return lctx
 }

@@ -350,7 +350,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
-		errstr = fmt.Sprintf("The object %s/%s either does not exist or is not accessible, err: %v", bucket, objname, err)
+		errstr = fmt.Sprintf("The object %s/%s either %s or is not accessible, err: %v", bucket, objname, cmn.DoesNotExist, err)
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.

@@ -80,7 +80,7 @@ func (rcl *xrebpathrunner) rebwalkf(fqn string, osfi os.FileInfo, err error) err
 	if err != nil {
 		// If we are traversing non-existing file we should not care
 		if os.IsNotExist(err) {
-			glog.Warningf("%s does not exist", fqn)
+			glog.Warningf("%s %s", fqn, cmn.DoesNotExist)
 			return nil
 		}
 		// Otherwise we care
@@ -156,7 +156,7 @@ func (rb *localRebPathRunner) walk(fqn string, fileInfo os.FileInfo, err error) 
 	if err != nil {
 		// If we are traversing non-existing file we should not care
 		if os.IsNotExist(err) {
-			glog.Warningf("%s does not exist", fqn)
+			glog.Warningf("%s %s", fqn, cmn.DoesNotExist)
 			return nil
 		}
 		// Otherwise we care

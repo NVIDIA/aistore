@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/ios"
 )
 
@@ -36,14 +37,11 @@ type (
 		prevUtilPct   float32
 		prevFSUsedPct uint64
 		// init-time
-		Riostat      *ios.IostatRunner
-		CapUsedHigh  *int64
-		DiskUtilLow  *int64
-		DiskUtilHigh *int64
-		Period       *time.Duration
-		Path         string
-		FS           string
-		Flag         uint64
+		Config  *cmn.Config
+		Riostat *ios.IostatRunner
+		Path    string
+		FS      string
+		Flag    uint64
 	}
 )
 
@@ -74,7 +72,7 @@ func (u *Throttle) recompute() {
 			}
 			u.prevFSUsedPct = usedFSPercentage
 		}
-		if usedFSPercentage >= uint64(*u.CapUsedHigh) {
+		if usedFSPercentage >= uint64(u.Config.LRU.HighWM) {
 			u.sleep = 0
 			return
 		}
@@ -84,26 +82,27 @@ func (u *Throttle) recompute() {
 
 		if now.After(u.nextUtilCheck) {
 			curUtilPct, ok = u.Riostat.MaxUtilFS(u.FS)
-			u.nextUtilCheck = now.Add(*u.Period)
+			u.nextUtilCheck = now.Add(u.Config.Periodic.StatsTime)
 			if !ok {
 				curUtilPct = u.prevUtilPct
 				glog.Errorf("Unable to retrieve disk utilization for FS %s", u.FS)
 			}
 		}
 
-		if curUtilPct > float32(*u.DiskUtilHigh) {
+		if curUtilPct > float32(u.Config.Xaction.DiskUtilHighWM) {
 			if u.sleep < initThrottleSleep {
 				u.sleep = initThrottleSleep
 			} else {
 				u.sleep *= 2
 			}
-		} else if curUtilPct < float32(*u.DiskUtilLow) {
+		} else if curUtilPct < float32(u.Config.Xaction.DiskUtilLowWM) {
 			u.sleep = 0
 		} else {
 			if u.sleep < initThrottleSleep {
 				u.sleep = initThrottleSleep
 			}
-			multiplier := (curUtilPct - float32(*u.DiskUtilLow)) / float32(*u.DiskUtilHigh-*u.DiskUtilLow)
+			x := float32(u.Config.Xaction.DiskUtilHighWM - u.Config.Xaction.DiskUtilLowWM)
+			multiplier := (curUtilPct - float32(u.Config.Xaction.DiskUtilLowWM)) / x
 			u.sleep = u.sleep + time.Duration(multiplier*float32(u.sleep))
 		}
 		if u.sleep > maxThrottleSleep {

@@ -422,7 +422,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		clone := bucketmd.clone()
 		if !clone.del(bucket, true) {
 			p.bmdowner.Unlock()
-			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucket)
+			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucket)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
@@ -598,7 +598,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		clone := p.bmdowner.get().clone()
 		ok, props := clone.get(bucketFrom, true)
 		if !ok {
-			s := fmt.Sprintf("Local bucket %s "+doesnotexist, bucketFrom)
+			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucketFrom)
 			p.invalmsghdlr(w, r, s)
 			return
 		}

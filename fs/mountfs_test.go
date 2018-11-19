@@ -12,8 +12,7 @@ import (
 )
 
 func TestAddNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/nonexistingpath")
 	if err == nil {
 		t.Error("adding non-existing mountpath succeded")
@@ -23,8 +22,7 @@ func TestAddNonExistingMountpath(t *testing.T) {
 }
 
 func TestAddInvalidMountpaths(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	mpaths := []string{
 		"/local",
 		"/cloud",
@@ -46,8 +44,7 @@ func TestAddInvalidMountpaths(t *testing.T) {
 }
 
 func TestAddValidMountpaths(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	mfs.DisableFsIDCheck()
 	mpaths := []string{"/tmp/clouder", "/tmp/locals", "/tmp/locals/err"}
 
@@ -73,8 +70,7 @@ func TestAddValidMountpaths(t *testing.T) {
 }
 
 func TestAddExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -84,8 +80,7 @@ func TestAddExistingMountpath(t *testing.T) {
 }
 
 func TestAddAlreadyAddedMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -102,8 +97,7 @@ func TestAddAlreadyAddedMountpath(t *testing.T) {
 }
 
 func TestRemoveNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Remove("/nonexistingpath")
 	if err == nil {
 		t.Error("removing non-existing mountpath succeded")
@@ -113,8 +107,7 @@ func TestRemoveNonExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -129,8 +122,7 @@ func TestRemoveExistingMountpath(t *testing.T) {
 }
 
 func TestRemoveDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -148,8 +140,7 @@ func TestRemoveDisabledMountpath(t *testing.T) {
 }
 
 func TestDisableNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	disabled, exists := mfs.Disable("/tmp")
 	if disabled || exists {
 		t.Error("disabling was successful or mountpath exists")
@@ -159,8 +150,7 @@ func TestDisableNonExistingMountpath(t *testing.T) {
 }
 
 func TestDisableExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -175,8 +165,7 @@ func TestDisableExistingMountpath(t *testing.T) {
 }
 
 func TestDisableAlreadyDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -196,8 +185,7 @@ func TestDisableAlreadyDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableNonExistingMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	enabled, exists := mfs.Enable("/tmp")
 	if enabled || exists {
 		t.Error("enabling was successful or mountpath exists")
@@ -207,8 +195,7 @@ func TestEnableNonExistingMountpath(t *testing.T) {
 }
 
 func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -223,8 +210,7 @@ func TestEnableExistingButNotDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableExistingAndDisabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -244,8 +230,7 @@ func TestEnableExistingAndDisabledMountpath(t *testing.T) {
 }
 
 func TestEnableAlreadyEnabledMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -272,8 +257,7 @@ func TestEnableAlreadyEnabledMountpath(t *testing.T) {
 }
 
 func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")
@@ -288,8 +272,7 @@ func TestAddMultipleMountpathsWithSameFSID(t *testing.T) {
 }
 
 func TestAddAndDisableMultipleMountpath(t *testing.T) {
-	// FIXME: do not use "cloud" and "local" hard-coded values when calling NewMountedFS()
-	mfs := NewMountedFS("cloud", "local")
+	mfs := NewMountedFS()
 	err := mfs.Add("/tmp")
 	if err != nil {
 		t.Error("adding existing mountpath failed")

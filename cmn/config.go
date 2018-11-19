@@ -10,14 +10,18 @@ import (
 	"time"
 )
 
+// as in: mountpath/<content-type>/<CloudBs|LocalBs>/<bucket-name>/...
+const (
+	CloudBs = "cloud"
+	LocalBs = "local"
+)
+
 //
 // CONFIGURATION
 //
 type Config struct {
 	Confdir          string          `json:"confdir"`
 	CloudProvider    string          `json:"cloudprovider"`
-	CloudBuckets     string          `json:"cloud_buckets"`
-	LocalBuckets     string          `json:"local_buckets"`
 	Readahead        RahConf         `json:"readahead"`
 	Log              LogConf         `json:"log"`
 	Periodic         PeriodConf      `json:"periodic"`

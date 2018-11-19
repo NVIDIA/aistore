@@ -99,12 +99,12 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 }
 
 // NewMountedFS returns initialized instance of MountedFS struct.
-func NewMountedFS(localBuckets, cloudBuckets string) *MountedFS {
+func NewMountedFS() *MountedFS {
 	return &MountedFS{
 		fsIDs:        make(map[syscall.Fsid]string),
 		checkFsID:    true,
-		localBuckets: localBuckets,
-		cloudBuckets: cloudBuckets,
+		localBuckets: cmn.LocalBs,
+		cloudBuckets: cmn.CloudBs,
 	}
 }
 
@@ -140,7 +140,7 @@ func (mfs *MountedFS) Add(mpath string) error {
 	}
 
 	if _, err := os.Stat(mpath); err != nil {
-		return fmt.Errorf("fspath %q does not exists, err: %v", mpath, err)
+		return fmt.Errorf("fspath %q %s, err: %v", mpath, cmn.DoesNotExist, err)
 	}
 	statfs := syscall.Statfs_t{}
 	if err := syscall.Statfs(mpath, &statfs); err != nil {

@@ -45,6 +45,8 @@ var toBiBytes = map[string]int64{
 	"TIB": TiB,
 }
 
+const DoesNotExist = "does not exist"
+
 type (
 	StringSet map[string]struct{}
 	SimpleKVs map[string]string

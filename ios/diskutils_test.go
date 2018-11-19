@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 }
 
 func TestGetFSDiskUtil(t *testing.T) {
@@ -28,7 +28,7 @@ func TestGetFSDiskUtil(t *testing.T) {
 	}
 
 	tempRoot := "/tmp"
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.Add(tempRoot)
 
 	config := testConfig(time.Second)
@@ -188,7 +188,7 @@ func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 }
 
 func TestSearchValidMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/abc")
 	longestPrefix := mpathInfo.Path
@@ -197,7 +197,7 @@ func TestSearchValidMountPath(t *testing.T) {
 }
 
 func TestSearchInvalidMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	oldMPs := setAvailableMountPaths("/")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -205,7 +205,7 @@ func TestSearchInvalidMountPath(t *testing.T) {
 }
 
 func TestSearchWithNoMountPath(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	oldMPs := setAvailableMountPaths("")
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("xabc")
 	testAssert(t, mpathInfo == nil, "Expected a nil mountpath info for fqn %q", "xabc")
@@ -213,7 +213,7 @@ func TestSearchWithNoMountPath(t *testing.T) {
 }
 
 func TestSearchWithASuffixToAnotherValue(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	dirs := []string{"/tmp/x", "/tmp/xabc", "/tmp/x/abc"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -234,7 +234,7 @@ func TestSearchWithASuffixToAnotherValue(t *testing.T) {
 }
 
 func TestSimilarCases(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	dirs := []string{"/tmp/abc", "/tmp/abx"}
 	createDirs(dirs...)
 	defer removeDirs(dirs...)
@@ -255,7 +255,7 @@ func TestSimilarCases(t *testing.T) {
 }
 
 func TestSimilarCasesWithRoot(t *testing.T) {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	oldMPs := setAvailableMountPaths("/tmp", "/")
 
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo("/tmp")

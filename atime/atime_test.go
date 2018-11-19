@@ -22,7 +22,7 @@ var (
 )
 
 func init() {
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	mpath := "/tmp"
 	fs.Mountpaths.Add(mpath)
 
@@ -89,7 +89,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 
 func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	q := fs.Mountpaths
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	defer func() { fs.Mountpaths = q }()
 
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)

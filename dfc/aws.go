@@ -268,7 +268,7 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 	_, err := svc.HeadBucket(input)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
+		errstr = fmt.Sprintf("The bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
 		return
 	}
 	bucketprops[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
@@ -277,7 +277,7 @@ func (awsimpl *awsimpl) headbucket(ct context.Context, bucket string) (bucketpro
 	result, err := svc.GetBucketVersioning(inputVers)
 	if err != nil {
 		errcode = awsErrorToHTTP(err)
-		errstr = fmt.Sprintf("The bucket %s either does not exist or is not accessible, err: %v", bucket, err)
+		errstr = fmt.Sprintf("The bucket %s either %s or is not accessible, err: %v", bucket, cmn.DoesNotExist, err)
 	} else {
 		if result.Status != nil && *result.Status == s3.BucketVersioningStatusEnabled {
 			bucketprops[cmn.HeaderVersioning] = cmn.VersionCloud

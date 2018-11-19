@@ -1,9 +1,9 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
-package dfc
+// Package lru provides atime-based least recently used cache replacement policy for stored objects
+// and serves as a generic garbage-collection mechanism for orhaned workfiles.
+package lru
 
 import (
 	"container/heap"
@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
@@ -24,65 +23,10 @@ import (
 	"github.com/NVIDIA/dfcpub/stats"
 )
 
-// ============================================= Summary ===========================================
-//
-// The LRU module implements a well-known least-recently-used cache replacement policy.
-//
-// In DFC, LRU-driven eviction is based on the two configurable watermarks: ctx.config.LRU.LowWM and
-// ctx.config.LRU.HighWM (section "lru_config" in the setup/config.sh).
-// When and if exceeded, DFC storage target will start gradually evicting objects from its
-// stable storage: oldest first access-time wise.
-//
-// LRU is implemented as a so-called extended action (aka x-action, see xaction.go) that gets
-// triggered when/if a used local capacity exceeds high watermark (ctx.config.LRU.HighWM). LRU then
-// runs automatically. In order to reduce its impact on the live workload, LRU throttles itself
-// in accordance with the current storage-target's utilization (see xaction_throttle.go).
-//
-// There's only one API that this module provides to the rest of the code:
-//   - runLRU - to initiate a new LRU extended action on the local target
-// All other methods are private to this module and are used only internally.
-//
-// ============================================= Summary ===========================================
+// contextual LRU "jogger" traverses a given (cloud/ or local/) subdirectory to
+// evict or delete selected objects and workfiles
 
-// LRU defaults/tunables
-const (
-	minevict = cmn.MiB
-)
-
-type (
-	fileInfo struct {
-		fqn     string
-		usetime time.Time
-		size    int64
-	}
-	fileInfoMinHeap []*fileInfo
-
-	// lructx represents a single LRU context that runs in a single goroutine (worker)
-	// that traverses and evicts a single given filesystem, or more exactly,
-	// subtree in this filesystem identified by the bucketdir
-	lructx struct {
-		// runtime
-		cursize int64
-		totsize int64
-		newest  time.Time
-		heap    *fileInfoMinHeap
-		oldwork []*fileInfo
-		// init-time
-		xlru         cmn.XactInterface
-		fs           string
-		bucketdir    string
-		throttler    cluster.Throttler
-		atimeRespCh  chan *atime.Response
-		namelocker   cluster.NameLocker
-		bmdowner     cluster.Bowner
-		statsif      stats.Tracker
-		targetrunner cluster.Target
-	}
-)
-
-// onelru walks a given local filesystem to a) determine whether some of the
-// objects are to be evicted, and b) actually evicting those
-func (lctx *lructx) onelru(wg *sync.WaitGroup) {
+func (lctx *lructx) jog(wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	lctx.heap = &fileInfoMinHeap{}
@@ -114,7 +58,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	var (
 		spec    fs.ContentResolver
 		info    *fs.ContentInfo
-		xlru, h = lctx.xlru, lctx.heap
+		xlru, h = lctx.ini.Xlru, lctx.heap
 	)
 	if err != nil {
 		glog.Errorf("invoked with err: %v", err)
@@ -130,7 +74,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {
-		glog.Infof("Warning (race?): %s "+doesnotexist, fqn)
+		glog.Infof("Warning (race?): %s "+cmn.DoesNotExist, fqn)
 		glog.Flush()
 		return nil
 	}
@@ -158,7 +102,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// object eviction: access time
 	usetime := atime
 
-	atimeResponse := <-getatimerunner().Atime(fqn, lctx.atimeRespCh)
+	atimeResponse := <-lctx.ini.Ratime.Atime(fqn, lctx.atimeRespCh)
 	accessTime, ok := atimeResponse.AccessTime, atimeResponse.Ok
 	if ok {
 		usetime = accessTime
@@ -166,7 +110,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		usetime = mtime
 	}
 	now := time.Now()
-	dontevictime := now.Add(-ctx.config.LRU.DontEvictTime)
+	dontevictime := now.Add(-lctx.ini.Config.LRU.DontEvictTime)
 	if usetime.After(dontevictime) {
 		if glog.V(4) {
 			glog.Infof("%s: not evicting (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
@@ -175,7 +119,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	// cleanup after rebalance
-	_, _, _, err = cluster.ResolveFQN(fqn, lctx.bmdowner)
+	_, _, _, err = cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
 	if err != nil {
 		glog.Infof("%s: is misplaced, err: %v", fqn, err)
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
@@ -209,8 +153,8 @@ func (lctx *lructx) evict() error {
 		h                  = lctx.heap
 	)
 	for _, fi := range lctx.oldwork {
-		if lctx.targetrunner.IsRebalancing() {
-			_, _, _, err := cluster.ResolveFQN(fi.fqn, lctx.bmdowner)
+		if lctx.ini.Targetif.IsRebalancing() {
+			_, _, _, err := cluster.ResolveFQN(fi.fqn, lctx.ini.Bmdowner)
 			// keep a copy of a rebalanced file while rebalance is running
 			if spec, _ := fs.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
 				continue
@@ -233,14 +177,14 @@ func (lctx *lructx) evict() error {
 		bevicted += fi.size
 		fevicted++
 	}
-	lctx.statsif.Add(stats.LruEvictSize, bevicted)
-	lctx.statsif.Add(stats.LruEvictCount, fevicted)
+	lctx.ini.Statsif.Add(stats.LruEvictSize, bevicted)
+	lctx.ini.Statsif.Add(stats.LruEvictCount, fevicted)
 	return nil
 }
 
 // evictFQN evicts a given file
 func (lctx *lructx) evictFQN(fqn string) error {
-	_, bucket, objname, err := cluster.ResolveFQN(fqn, lctx.bmdowner)
+	_, bucket, objname, err := cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
 	if err != nil {
 		glog.Errorf("Evicting %q with error: %v", fqn, err)
 		if e := os.Remove(fqn); e != nil {
@@ -250,8 +194,8 @@ func (lctx *lructx) evictFQN(fqn string) error {
 		return nil
 	}
 	uname := cluster.Uname(bucket, objname)
-	lctx.namelocker.Lock(uname, true)
-	defer lctx.namelocker.Unlock(uname, true)
+	lctx.ini.Namelocker.Lock(uname, true)
+	defer lctx.ini.Namelocker.Unlock(uname, true)
 
 	if err := os.Remove(fqn); err != nil {
 		return err
@@ -261,7 +205,7 @@ func (lctx *lructx) evictFQN(fqn string) error {
 }
 
 func (lctx *lructx) evictSize() (err error) {
-	hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
+	hwm, lwm := lctx.ini.Config.LRU.HighWM, lctx.ini.Config.LRU.LowWM
 	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bucketdir)
 	if err != nil {
 		return err
@@ -306,21 +250,4 @@ func (h *fileInfoMinHeap) Pop() interface{} {
 	fi := old[n-1]
 	*h = old[0 : n-1]
 	return fi
-}
-
-//
-// check whether we have achieved the objective, and warn otherwise
-//
-func lruCheckResults(availablePaths map[string]*fs.MountpathInfo) {
-	rr := getstorstatsrunner()
-	rr.Lock()
-	rr.UpdateCapacity()
-	for _, mpathInfo := range availablePaths {
-		fscapacity := rr.Capacity[mpathInfo.Path]
-		if fscapacity.Usedpct > ctx.config.LRU.LowWM+1 {
-			glog.Warningf("LRU mpath %s: failed to reach lwm %d%% (used %d%%)",
-				mpathInfo.Path, ctx.config.LRU.LowWM, fscapacity.Usedpct)
-		}
-	}
-	rr.Unlock()
 }

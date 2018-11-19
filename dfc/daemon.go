@@ -200,7 +200,7 @@ func dfcinit() {
 	}
 
 	// init daemon
-	fs.Mountpaths = fs.NewMountedFS(ctx.config.LocalBuckets, ctx.config.CloudBuckets)
+	fs.Mountpaths = fs.NewMountedFS()
 	// NOTE: proxy and, respectively, target terminations are executed in the same
 	//       exact order as the initializations below
 	ctx.rg = &rungroup{

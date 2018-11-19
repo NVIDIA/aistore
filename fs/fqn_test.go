@@ -123,7 +123,7 @@ func TestFQN2Info(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			mfs := NewMountedFS("local", "cloud")
+			mfs := NewMountedFS()
 			mfs.DisableFsIDCheck()
 
 			for _, mpath := range tt.mpaths {

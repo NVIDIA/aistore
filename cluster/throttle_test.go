@@ -61,7 +61,7 @@ func Test_Throttle(t *testing.T) {
 	ctx.config.Xaction.DiskUtilHighWM = 40
 	ctx.config.Periodic.StatsTime = time.Second
 
-	fs.Mountpaths = fs.NewMountedFS("local", "cloud")
+	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.Add("/")
 
 	riostat = ios.NewIostatRunner(fs.Mountpaths)
@@ -280,14 +280,12 @@ func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T) {
 	curCapacity, _ := ios.GetFSUsedPercentage("/")
 	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
 	ctx.config.LRU.HighWM = int64(curCapacity - 2)
-	*thrctx.CapUsedHigh = ctx.config.LRU.HighWM // NOTE: init time only
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
 	ctx.config.LRU.HighWM = int64(curCapacity + 10)
-	*thrctx.CapUsedHigh = ctx.config.LRU.HighWM
 	thrctx.recompute()
 	sleepDuration = thrctx.sleep
 	if sleepDuration != initThrottleSleep {
@@ -300,7 +298,6 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 	thrctx := newThrottleContext()
 	oldStatsTime := ctx.config.Periodic.StatsTime
 	ctx.config.Periodic.StatsTime = 10 * time.Minute
-	*thrctx.Period = ctx.config.Periodic.StatsTime // NOTE: ditto
 	sleepDuration := getSleepDuration(0, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
@@ -333,12 +330,9 @@ func getSleepDuration(diskUtil int64, thrctx *Throttle) time.Duration {
 func newThrottleContext() *Throttle {
 	fileSystem, _ := fs.Fqn2fsAtStartup("/")
 	return &Throttle{
-		Riostat:      riostat,
-		CapUsedHigh:  &ctx.config.LRU.HighWM,
-		DiskUtilLow:  &ctx.config.Xaction.DiskUtilLowWM,
-		DiskUtilHigh: &ctx.config.Xaction.DiskUtilHighWM,
-		Period:       &ctx.config.Periodic.StatsTime,
-		Path:         "/",
-		FS:           fileSystem,
-		Flag:         OnDiskUtil | OnFSUsed}
+		Riostat: riostat,
+		Config:  &ctx.config,
+		Path:    "/",
+		FS:      fileSystem,
+		Flag:    OnDiskUtil | OnFSUsed}
 }
