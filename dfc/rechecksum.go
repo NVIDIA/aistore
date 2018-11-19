@@ -41,7 +41,7 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 	// re-checksum every object in a given bucket
 	glog.Infof("Re-checksum: %s started: bucket: %s", xrcksum, bucket)
 	availablePaths, _ := fs.Mountpaths.Get()
-	for contentType, contentResolver := range fs.RegisteredContentTypes {
+	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToProcess() { // FIXME: PermToRechecksum?
 			continue
 		}
@@ -101,7 +101,7 @@ func (rcksctx *recksumctx) walkFunc(fqn string, osfi os.FileInfo, err error) err
 	if osfi.IsDir() {
 		return nil
 	}
-	if _, info := fs.FileSpec(fqn); info != nil && info.Old {
+	if _, isOld := fs.CSM.PermToEvict(fqn); isOld {
 		return nil
 	}
 

@@ -373,7 +373,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 
 	// FIXME: It is a little bit hacky... Duplication is not the best idea..
 	contentRebalancers := 0
-	for _, contentResolver := range fs.RegisteredContentTypes {
+	for _, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if contentResolver.PermToMove() {
 			contentRebalancers++
 		}
@@ -397,7 +397,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	wg = &sync.WaitGroup{}
 
 	allr := make([]*xrebpathrunner, 0, runnerCnt)
-	for contentType, contentResolver := range fs.RegisteredContentTypes {
+	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		// Do not start rebalance if given content type has no permission to move.
 		// NOTE: In the future we might have case where we would like to check it
 		// per object/workfile basis rather that directory level.
@@ -470,7 +470,7 @@ func (t *targetrunner) runLocalRebalance() {
 	availablePaths, _ := fs.Mountpaths.Get()
 	// FIXME: It is a little bit hacky... Duplication is not the best idea..
 	contentRebalancers := 0
-	for _, contentResolver := range fs.RegisteredContentTypes {
+	for _, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if contentResolver.PermToMove() {
 			contentRebalancers++
 		}
@@ -490,7 +490,7 @@ func (t *targetrunner) runLocalRebalance() {
 
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
-	for contentType, contentResolver := range fs.RegisteredContentTypes {
+	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		// Do not start rebalance if given content type has no permission to move.
 		// NOTE: In the future we might have case where we would like to check it
 		// per object/workfile basis rather that directory level.

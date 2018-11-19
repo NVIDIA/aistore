@@ -45,14 +45,15 @@ const (
 
 type (
 	InitLRU struct {
-		Config     *cmn.Config
-		Riostat    *ios.IostatRunner
-		Ratime     *atime.Runner
-		Xlru       cmn.XactInterface
-		Namelocker cluster.NameLocker
-		Bmdowner   cluster.Bowner
-		Statsif    stats.Tracker
-		Targetif   cluster.Target
+		Config      *cmn.Config
+		Riostat     *ios.IostatRunner
+		Ratime      *atime.Runner
+		Xlru        cmn.XactInterface
+		Namelocker  cluster.NameLocker
+		Bmdowner    cluster.Bowner
+		Statsif     stats.Tracker
+		Targetif    cluster.Target
+		CtxResolver *fs.ContentSpecMgr
 	}
 
 	fileInfo struct {
@@ -78,6 +79,7 @@ type (
 		bucketdir   string
 		throttler   cluster.Throttler
 		atimeRespCh chan *atime.Response
+		ctxResolver *fs.ContentSpecMgr
 	}
 )
 
@@ -93,7 +95,7 @@ func InitAndRun(ini *InitLRU) {
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, ini.Config.LRU.DontEvictTime)
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	for contentType, contentResolver := range fs.RegisteredContentTypes {
+	for contentType, contentResolver := range ini.CtxResolver.RegisteredContentTypes {
 		if !contentResolver.PermToEvict() {
 			continue
 		}
@@ -129,6 +131,7 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx
 		bucketdir:   bucketdir,
 		throttler:   throttler,
 		atimeRespCh: make(chan *atime.Response, 1),
+		ctxResolver: ini.CtxResolver,
 	}
 	return lctx
 }

@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/stats"
 )
@@ -56,9 +55,8 @@ func (lctx *lructx) jog(wg *sync.WaitGroup) {
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	var (
-		spec    fs.ContentResolver
-		info    *fs.ContentInfo
-		xlru, h = lctx.ini.Xlru, lctx.heap
+		evictOK, isOld bool
+		xlru, h        = lctx.ini.Xlru, lctx.heap
 	)
 	if err != nil {
 		glog.Errorf("invoked with err: %v", err)
@@ -67,7 +65,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if spec, info = fs.FileSpec(fqn); spec != nil && !spec.PermToEvict() && !info.Old {
+	if evictOK, isOld = lctx.ctxResolver.PermToEvict(fqn); !evictOK && !isOld {
 		return nil
 	}
 	lctx.throttler.Sleep()
@@ -93,7 +91,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	atime, mtime, stat := ios.GetAmTimes(osfi)
-	if info != nil && info.Old {
+	if isOld {
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
 		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		return nil
@@ -156,7 +154,7 @@ func (lctx *lructx) evict() error {
 		if lctx.ini.Targetif.IsRebalancing() {
 			_, _, _, err := cluster.ResolveFQN(fi.fqn, lctx.ini.Bmdowner)
 			// keep a copy of a rebalanced file while rebalance is running
-			if spec, _ := fs.FileSpec(fi.fqn); spec != nil && spec.PermToMove() && err != nil {
+			if movable := lctx.ctxResolver.PermToMove(fi.fqn); movable && err != nil {
 				continue
 			}
 		}

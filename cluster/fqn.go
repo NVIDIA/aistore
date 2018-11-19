@@ -43,5 +43,5 @@ func FQN(contentType, bucket, objname string, isLocal bool) (string, string) {
 	if errstr != "" {
 		return "", errstr
 	}
-	return fs.FQN(mpath, contentType, isLocal, bucket, objname)
+	return fs.CSM.FQN(mpath, contentType, isLocal, bucket, objname)
 }

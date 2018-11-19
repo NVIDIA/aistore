@@ -72,7 +72,7 @@ func testCheckerCleanup() {
 
 func TestFSCheckerMain(t *testing.T) {
 	testMemInit("fshctest")
-	fshc := NewFSHC(testCheckerMountPaths(), gmem2)
+	fshc := NewFSHC(testCheckerMountPaths(), gmem2, fs.CSM)
 	if fshc == nil {
 		t.Error("Failed to create fshc")
 	}

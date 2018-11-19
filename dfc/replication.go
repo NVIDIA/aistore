@@ -321,7 +321,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)
 		return errors.New(errstr)
 	}
-	putfqn := fs.GenContentFQN(req.fqn, fs.WorkfileType, fs.WorkfileReplication)
+	putfqn := fs.CSM.GenContentFQN(req.fqn, fs.WorkfileType, fs.WorkfileReplication)
 	if errstr != "" {
 		return errors.New(errstr)
 	}

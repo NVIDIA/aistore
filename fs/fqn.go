@@ -47,7 +47,7 @@ func (mfs *MountedFS) FQN2Info(fqn string) (parsed FQNparsed, err error) {
 
 	if len(items) < 4 {
 		err = fmt.Errorf("fqn %s is invalid: %+v", fqn, items)
-	} else if _, ok := RegisteredContentTypes[items[0]]; !ok {
+	} else if _, ok := CSM.RegisteredContentTypes[items[0]]; !ok {
 		err = fmt.Errorf("invalid fqn %s: unrecognized content type", fqn)
 	} else if items[2] == "" {
 		err = fmt.Errorf("invalid fqn %s: bucket name is empty", fqn)
@@ -94,7 +94,7 @@ func (mfs *MountedFS) CreateBucketDir(bucketType string) error {
 		makeBucket = mfs.MakePathCloud
 	}
 
-	for contentType := range RegisteredContentTypes {
+	for contentType := range CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
 			dir := makeBucket(mpathInfo.Path, contentType)
 			if _, exists := availablePaths[dir]; exists {

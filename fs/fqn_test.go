@@ -138,7 +138,7 @@ func TestFQN2Info(t *testing.T) {
 				}
 			}
 			Mountpaths = mfs
-			RegisterFileType(ObjectType, &ObjectContentResolver{})
+			CSM.RegisterFileType(ObjectType, &ObjectContentResolver{})
 
 			parsedFQN, err := mfs.FQN2Info(tt.fqn)
 			if (err != nil) != tt.wantErr {

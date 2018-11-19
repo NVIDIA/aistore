@@ -260,7 +260,7 @@ func dfcinit() {
 		t.fsprg.add(iostat)
 		ts.Riostat = iostat
 
-		fshc := health.NewFSHC(fs.Mountpaths, gmem2)
+		fshc := health.NewFSHC(fs.Mountpaths, gmem2, fs.CSM)
 		ctx.rg.add(fshc, xfshc, &ctx.config)
 		t.fsprg.add(fshc)
 

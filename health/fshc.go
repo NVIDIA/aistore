@@ -47,6 +47,9 @@ type (
 
 		// listener is notified in case of a mountpath is disabled
 		dispatcher fspathDispatcher
+
+		// temp file name generator
+		ctxResolver *fs.ContentSpecMgr
 	}
 	mountpathChecker struct {
 		stopCh chan struct{}
@@ -67,7 +70,7 @@ func (f *FSHC) ReqRemoveMountpath(mpath string)  { f.reqCh <- fs.MountpathRem(mp
 func (f *FSHC) ReqEnableMountpath(mpath string)  {}
 func (f *FSHC) ReqDisableMountpath(mpath string) {}
 
-func NewFSHC(mounts *fs.MountedFS, mem2 *memsys.Mem2) *FSHC {
+func NewFSHC(mounts *fs.MountedFS, mem2 *memsys.Mem2, ctxResolver *fs.ContentSpecMgr) *FSHC {
 	return &FSHC{
 		mountpaths:    mounts,
 		mem2:          mem2,
@@ -75,6 +78,7 @@ func NewFSHC(mounts *fs.MountedFS, mem2 *memsys.Mem2) *FSHC {
 		fileListCh:    make(chan string, 32),
 		reqCh:         make(chan fs.ChangeReq), // NOTE: unbuffered
 		mpathCheckers: make(map[string]*mountpathChecker),
+		ctxResolver:   ctxResolver,
 	}
 }
 
@@ -306,7 +310,7 @@ func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) err
 			glog.Errorf("Failed to clean up temporary directory: %v", err)
 		}
 	}()
-	tmpfilename := fs.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), fs.WorkfileType, fs.WorkfileFSHC)
+	tmpfilename := f.ctxResolver.GenContentFQN(filepath.Join(tmpdir, fshcNameTemplate), fs.WorkfileType, fs.WorkfileFSHC)
 	tmpfile, err := os.OpenFile(tmpfilename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		glog.Errorf("Failed to create temporary file: %v", err)

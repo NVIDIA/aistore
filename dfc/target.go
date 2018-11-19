@@ -141,11 +141,11 @@ func (t *targetrunner) Run() error {
 	go t.pollClusterStarted()
 
 	// register object type and workfile type
-	if err := fs.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
+	if err := fs.CSM.RegisterFileType(fs.ObjectType, &fs.ObjectContentResolver{}); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
-	if err := fs.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
+	if err := fs.CSM.RegisterFileType(fs.WorkfileType, &fs.WorkfileContentResolver{}); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
@@ -323,14 +323,15 @@ func (t *targetrunner) RunLRU() {
 		return
 	}
 	ini := lru.InitLRU{
-		Config:     &ctx.config,
-		Riostat:    getiostatrunner(),
-		Ratime:     getatimerunner(),
-		Xlru:       xlru,
-		Namelocker: t.rtnamemap,
-		Bmdowner:   t.bmdowner,
-		Statsif:    t.statsif,
-		Targetif:   t,
+		Config:      &ctx.config,
+		Riostat:     getiostatrunner(),
+		Ratime:      getatimerunner(),
+		Xlru:        xlru,
+		Namelocker:  t.rtnamemap,
+		Bmdowner:    t.bmdowner,
+		Statsif:     t.statsif,
+		Targetif:    t,
+		CtxResolver: fs.CSM,
 	}
 	lru.InitAndRun(&ini) // blocking
 
@@ -1356,8 +1357,8 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p cmn.BucketProps, 
 	wg := &sync.WaitGroup{}
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan string, len(fs.RegisteredContentTypes)*len(availablePaths))
-	for contentType := range fs.RegisteredContentTypes {
+	ch := make(chan string, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
+	for contentType := range fs.CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
 			// Create directory for new local bucket
 			toDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketTo)
@@ -1382,7 +1383,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p cmn.BucketProps, 
 			return
 		}
 	}
-	for contentType := range fs.RegisteredContentTypes {
+	for contentType := range fs.CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
 			fromDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketFrom)
 			if err := os.RemoveAll(fromDir); err != nil {
@@ -1413,7 +1414,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	}
 	// FIXME: workfiles indicate work in progress. Renaming could break ongoing
 	// operations and not renaming it probably result in having file in wrong directory.
-	if spec, _ := fs.FileSpec(fqn); spec != nil && !spec.PermToProcess() {
+	if !fs.CSM.PermToProcess(fqn) {
 		return nil
 	}
 	contentType, bucket, objname, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
@@ -1489,7 +1490,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		glog.Error(errstr)
 		return
 	}
-	getfqn := fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRemote)
+	getfqn := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRemote)
 	if _, nhobj, size, errstr = t.receive(getfqn, objname, "", hdhobj, response.Body); errstr != "" {
 		response.Body.Close()
 		glog.Errorf(errstr)
@@ -1539,7 +1540,7 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	if errstr != "" {
 		return nil, errstr, http.StatusBadRequest
 	}
-	getfqn := fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileColdget)
+	getfqn := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileColdget)
 	// one cold GET at a time
 	if prefetch {
 		if !t.rtnamemap.TryLock(uname, true) {
@@ -1707,7 +1708,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	}
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	ch := make(chan *mresp, len(fs.RegisteredContentTypes)*len(availablePaths))
+	ch := make(chan *mresp, len(fs.CSM.RegisteredContentTypes)*len(availablePaths))
 	wg := &sync.WaitGroup{}
 
 	// function to traverse one mountpoint
@@ -1737,7 +1738,7 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	// But in this case all collected data is thrown away because the partial result
 	// makes paging inconsistent
 	islocal := t.bmdowner.get().IsLocal(bucket)
-	for contentType, contentResolver := range fs.RegisteredContentTypes {
+	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToProcess() {
 			continue
 		}
@@ -2091,7 +2092,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	if errstr != "" {
 		return errstr, http.StatusBadRequest
 	}
-	putfqn := fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfilePut)
+	putfqn := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfilePut)
 	cksumcfg := &ctx.config.Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
@@ -2371,7 +2372,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
 			return // not an error, nothing to do
 		}
-		putfqn = fs.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRebalance)
+		putfqn = fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRebalance)
 		var (
 			hdhobj = newcksumvalue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
 			props  = &objectProps{version: r.Header.Get(cmn.HeaderDFCObjVersion)}
@@ -3507,7 +3508,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			glog.Infof("Destroy local bucket %s", bucket)
-			for contentType := range fs.RegisteredContentTypes {
+			for contentType := range fs.CSM.RegisteredContentTypes {
 				for _, mpathInfo := range availablePaths {
 					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
 					if err := os.RemoveAll(localbucketfqn); err != nil {
@@ -3521,7 +3522,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	// Create buckets which don't exist in (old)bucketmd
 	for bucket := range newbucketmd.LBmap {
 		if _, ok := bucketmd.LBmap[bucket]; !ok {
-			for contentType := range fs.RegisteredContentTypes {
+			for contentType := range fs.CSM.RegisteredContentTypes {
 				for _, mpathInfo := range availablePaths {
 					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
 					if err := cmn.CreateDir(localbucketfqn); err != nil {
