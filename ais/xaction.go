@@ -18,7 +18,9 @@ import (
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
+	"github.com/NVIDIA/aistore/www"
 )
 
 type (
@@ -59,6 +61,7 @@ type (
 	}
 )
 
+//===================
 //
 // xactions
 //
@@ -415,6 +418,24 @@ func (xs *xactions) abortBucketSpecific(bucket string) {
 		}(k, wg)
 		wg.Wait()
 	}
+}
+
+func (xs *xactions) renewDownloader(t *targetrunner) (xdl *www.Downloader) {
+	kind := cmn.Download
+	xs.Lock()
+	xx := xs.findU(kind)
+	if xx != nil {
+		xdl = xx.(*www.Downloader)
+		xdl.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+		xs.Unlock()
+		return
+	}
+	id := xs.uniqueid()
+	xdl = www.NewDownloader(t, fs.Mountpaths, id, kind)
+	xs.add(xdl)
+	go xdl.Run()
+	xs.Unlock()
+	return
 }
 
 func (xs *xactions) abortAll() (sleep bool) {

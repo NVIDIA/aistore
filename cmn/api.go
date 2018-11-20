@@ -5,6 +5,8 @@
 package cmn
 
 import (
+	"errors"
+	"fmt"
 	"time"
 )
 
@@ -54,6 +56,7 @@ const (
 	ActEvict       = "evict"
 	ActDelete      = "delete"
 	ActPrefetch    = "prefetch"
+	ActDownload    = "download"
 	ActRegTarget   = "regtarget"
 	ActRegProxy    = "regproxy"
 	ActUnregTarget = "unregtarget"
@@ -297,6 +300,7 @@ const (
 	// l2
 	Buckets   = "buckets"
 	Objects   = "objects"
+	Download  = "download"
 	Daemon    = "daemon"
 	Cluster   = "cluster"
 	Push      = "push"
@@ -324,8 +328,78 @@ const (
 	Records     = "records"
 	Shards      = "shards"
 	FinishedAck = "finished-ack"
+
+	//====== download endpoint (l3) =======
+	DownloadSingle = "single"
+	DownloadMulti  = "multi"
+	DownloadList   = "list"
 )
+
+type DlBase struct {
+	Headers map[string]interface{} `json:"headers,omitempty"`
+	Bucket  string                 `json:"bucket"`
+}
+
+type DlBody struct {
+	DlBase
+	Link    string `json:"link"`
+	Objname string `json:"objname"`
+}
+
+func (b *DlBody) String() (str string) {
+	str = fmt.Sprintf("Link: %q, Bucket: %q, Objname: %q.", b.Link, b.Bucket, b.Objname)
+	if len(b.Headers) != 0 {
+		str += fmt.Sprintf("\nHeaders: %v", b.Headers)
+	}
+	return
+}
+
+func (b *DlBody) Validate() (err error) {
+	if b.Link == "" {
+		return errors.New("Missing the download url from the request body.")
+	}
+
+	if b.Bucket == "" {
+		return errors.New("Missing the bucket name from the request body.")
+	}
+
+	if b.Objname == "" {
+		return errors.New("Missing the objname name from the request body.")
+	}
+	return nil
+}
+
+type DlListBody struct {
+	DlBase
+	Base       string `json:"base"`
+	Prefix     string `json:"prefix"`
+	Suffix     string `json:"suffix"`
+	Start      uint   `json:"start"`
+	End        uint   `json:"end"`
+	Step       uint   `json:"step"`
+	DigitCount uint   `json:"digitCount"`
+}
+
+func (b *DlListBody) String() (str string) {
+	return fmt.Sprintf(
+		"bucket: %q, base: %q, prefix: %q, suffix: %q, start %v, end %v, step %v, digitCount %v",
+		b.Bucket, b.Base, b.Prefix, b.Suffix, b.Start, b.End, b.Step, b.DigitCount,
+	)
+}
+
+type DlMultiBody struct {
+	DlBase
+	ObjectMap  map[string]interface{} `json:"objectMap"`
+	ObjectList []interface{}          `json:"objectList"`
+}
+
 const (
+	// Used by various Xaction APIs
+	XactionRebalance = ActGlobalReb
+	XactionPrefetch  = ActPrefetch
+	XactionDownload  = ActDownload
+
+	// Denote the status of an Xaction
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
 )

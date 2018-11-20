@@ -238,7 +238,7 @@ do
     file_path_join $dir $log_file_name
 done
 
-if [ ${#errors[@]} -eq 0 ]; then
+if [ ${files[@]} -eq 0 ]; then
     echo No valid log files found. Exiting...
 else
     command="$commandPrefix ${files[@]}"

@@ -134,6 +134,7 @@ func (p *proxyrunner) Run() error {
 		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", p.objectHandler)
 	}
 
+	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Download), p.downloadHandler)
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Daemon), p.daemonHandler)
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Cluster), p.clusterHandler)
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), p.tokenHandler)
@@ -550,6 +551,34 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
+// createLocalBucket returns true if the bucket already exists or is successfully created
+func (p *proxyrunner) createLocalBucket(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg, lbucket string) bool {
+	config := cmn.GCO().Get()
+
+	p.bmdowner.Lock()
+	clone := p.bmdowner.get().clone()
+	bprops := cmn.BucketProps{
+		CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+		LRUConf:    cmn.GCO.Get().LRU,
+		MirrorConf: config.Mirror,
+	}
+	if !clone.add(lbucket, true, &bprops) {
+		p.bmdowner.Unlock()
+		p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
+		return false
+	}
+	if errstr := p.savebmdconf(clone); errstr != "" {
+		p.bmdowner.Unlock()
+		p.invalmsghdlr(w, r, errstr)
+		return false
+	}
+	p.bmdowner.put(clone)
+	p.bmdowner.Unlock()
+	msg.Action = path.Join(msg.Action, lbucket)
+	p.metasyncer.sync(true, clone, &msg)
+	return true
+}
+
 // POST { action } /v1/buckets/bucket-name
 func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
@@ -571,27 +600,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		p.bmdowner.Lock()
-		clone := p.bmdowner.get().clone()
-		bprops := cmn.BucketProps{
-			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:    config.LRU,
-			MirrorConf: config.Mirror,
-		}
-		if !clone.add(bucket, true /*bucket is local*/, &bprops) {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", bucket))
-			return
-		}
-		if errstr := p.savebmdconf(clone, config); errstr != "" {
-			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, errstr)
-			return
-		}
-		p.bmdowner.put(clone)
-		p.bmdowner.Unlock()
-		msg.Action = path.Join(msg.Action, bucket)
-		p.metasyncer.sync(true, clone, &msg)
+		p.createLocalBucket(w, r, msg, lbucket)
 	case cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
@@ -1673,7 +1682,6 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 
 		h.ServeHTTP(w, r)
 	}
-
 	return wrappedFunc
 }
 

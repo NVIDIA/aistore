@@ -752,9 +752,282 @@ paths:
             text/plain:
               schema:
                 type: string
-
+  /download:
+    delete:
+      summary: Cancel a previous download request
+      operationId: downloadCancel
+      tags:
+        - Download
+      requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadAdmin'
+      responses:
+        '200':
+          description: Download cancel request was successfully added to the download manager.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Download cancel request failed, file already finished downloaded.
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+    get:
+        summary: Get the download status of a previously requested download. 
+        operationId: downloadStatus
+        tags:
+          - Download
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadAdmin'
+        responses:
+          '200':
+            description: Current status and progress if it is currently being downloaded.
+            content:
+              text/plain:
+                schema:
+                  type: string
+          default:
+            description: An unexpected error was encountered
+            content:
+              text/plain:
+                schema:
+                  type: string
+  /download/single:
+    post:
+      summary: Queues a single object to be downloaded by DFC.
+      operationId: downloadSingleObject
+      tags:
+        - Download
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DownloadSingle'
+      responses:
+        '200':
+          description: Download request was successfully added to download queue.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Bad request, check formatting and/or fields provided in the request body.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '409':
+          description: Object with the same bucket and objname already exists on DFC.
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /download/multi:
+    post:
+      summary: Queues multiple objects to be downloaded by DFC. Requires either an objectMap or ObjectList request body field.
+      operationId: downloadMultipleObjects
+      tags:
+        - Download
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DownloadMulti'
+      responses:
+        '200':
+          description: Download request consisting of multiple objects were successfully added to download queue.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Bad request, check formatting and/or fields provided in the request body.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '409':
+          description: Object with the same bucket and objname already exists on DFC.
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
+  /download/list:
+    post:
+      summary: Queues for download all the objects that can be constructed from url= base + prefix + n + suffix. Where n is known as the key space. start <= n <= end. The key space can be modified using the step and digitCount modifiers in the request body.
+      operationId: downloadObjectList
+      tags:
+        - Download
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DownloadList'
+      responses:
+        '200':
+          description: Download list request was successfully processed and objects were successfully added to download queue.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '400':
+          description: Bad request, check formatting and/or fields provided in the request body.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '409':
+          description: Object with the same bucket and objname already exists on DFC.
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          description: An unexpected error was encountered
+          content:
+            text/plain:
+              schema:
+                type: string
 components:
   schemas:
+    DownloadAdmin:
+      type: object
+      properties:
+        link:
+          type: string
+          description: URL of the object that was added to the download queue
+          example: "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+        bucket:
+          type: string
+          description: bucket where the download was supposed to be saved to
+          example: "testbucket"
+        objname:
+          type: string
+          description: name of the object the download was supposed to be saved as
+          example: "dataset.gz"
+      required:
+        - bucket
+        - link
+        - objname
+    DownloadSingle:
+      type: object
+      properties:
+        link:
+          type: string
+          description: URL of where the object will be downloaded from.
+          example: "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+        bucket:
+          type: string
+          description: bucket where the download will be saved to
+          example: "testbucket"
+        objname:
+          type: string
+          description: name of the object the download will be saved as. If no objname is provided, then the objname will be the last element in the URL's path.
+          example: "dataset.gz"
+        headers:
+          type: object
+          description: JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when DFC actually makes the GET request to download the object from the link.
+      required:
+        - bucket
+        - link
+    DownloadList:
+      type: object
+      properties:
+        bucket:
+          type: string
+          description: bucket where the downloaded objects will be saved to
+          example: "testbucket"
+        headers:
+          type: object
+          description: JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when DFC actually makes the GET request to download each object.
+        base:
+          type: string
+          description: The base URL of the object that will be used to formulate the download url
+          example: "http://yann.lecun.com/exdb/mnist/"
+        prefix:
+          type: string
+          description: Is the first thing appended to the base string to formulate the download url
+          example: "train-images-idx"
+        suffix:
+          type: string
+          description: the suffix follows the object index to formulate the download url of the object being downloaded.
+          example: "-ubyte.gz"
+        start:
+          type: integer
+          description: The index of the first object in the object space to be downloaded. Defualt is 0 if not provided.
+          example: "5"
+          minimum: 0
+        end:
+          type: integer
+          description: The upper bound of the range of objects to be downloaded in the object space. Defualt is 0 if not provided.
+          example: "75"
+          minimum: 0
+        step:
+          type: integer
+          description: Used to download every nth object (where n = step) in the object space starting from start and ending at end. Default is 1 if not provided.
+          example: "5"
+          minimum: 1
+        digitCount:
+          type: integer
+          description: Used to ensure that each key coforms to n digits (where n = digitCount). Basically prepends as many 0s as needed. i.e. if n == 4, then the key 45 will be 0045 and if n == 5, then key 45 wil be 00045. Not providing this field will mean no 0s are prepended to any index in the key space.
+          example: "4"
+          minimum: 0
+      required:
+        - bucket
+        - base  
+    DownloadMulti:
+      type: object
+      properties:
+        bucket:
+          type: string
+          description: bucket where the downloaded objects will be saved to
+          example: "testbucket"
+        headers:
+          type: object
+          description: JSON object where the key is a header name and the value is the corresponding header value(string). These values are used as the header values for when DFC actually makes the GET request to download the object.
+        objectMap:
+          type: object
+          description: JSON object where the key is a URL (string) pointing to some file and the corresponding value (string) is the objname the object will be saved as.
+        objectList:
+          type: array
+          description: JSON array where each item is a URL (string) pointing to some file. The objname for each file will be the last element in the URL's path. 
+          items:
+            type: string
+            example: http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
+          minItems: 1
+      required:
+        - bucket
+        - base  
     SortSpec:
       type: object
       properties:

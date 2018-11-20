@@ -228,6 +228,7 @@ func (t *targetrunner) Run() error {
 	// Public network
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Buckets)+"/", t.bucketHandler)
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
+	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Download), t.downloadHandler)
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Daemon), t.daemonHandler)
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Push)+"/", t.pushHandler)
 	t.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), t.tokenHandler)
@@ -241,6 +242,7 @@ func (t *targetrunner) Run() error {
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Sort), dsort.SortHandler)
 	if config.Net.UseIntraControl {
 		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux) // to register transport handlers at runtime
+		t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Download), t.downloadHandler)
 		t.registerIntraControlNetHandler("/", cmn.InvalidHandler)
 	}
 
@@ -482,6 +484,22 @@ func (t *targetrunner) GetAtimeRunner() *atime.Runner { return getatimerunner() 
 func (t *targetrunner) GetMem2() *memsys.Mem2         { return gmem2 }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup     { return &t.fsprg }
 
+func (t *targetrunner) RegPathRunner(r fs.PathRunner) {
+	t.fsprg.Reg(r)
+}
+
+func (t *targetrunner) UnregPathRunner(r fs.PathRunner) {
+	t.fsprg.Unreg(r)
+}
+
+func (t *targetrunner) Receive(workfqn string, lom *cluster.LOM, omd5 string, reader io.Reader) (sgl *memsys.SGL /* NIY */, nhobj cmn.CksumValue, written int64, errstr string) {
+	return t.receive(workfqn, lom, omd5, reader)
+}
+
+func (t *targetrunner) Commit(ct context.Context, lom *cluster.LOM, tempfqn string, rebalance bool) (errstr string, errcode int) {
+	return t.putCommit(ct, lom, tempfqn, rebalance)
+}
+
 //===========================================================================================
 //
 // http handlers: data and metadata
@@ -539,6 +557,70 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 	}
 	s := fmt.Sprintf("Invalid route /buckets/%s", bucket)
 	t.invalmsghdlr(w, r, s)
+}
+
+// verifyProxyRedirection returns if the http request was redirected from a proxy
+func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Request, bucket, objname, action string) bool {
+	query := r.URL.Query()
+	pid := query.Get(cmn.URLParamProxyID)
+	if pid == "" {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s %s requests are expected to be redirected", r.Method, action))
+		return false
+	}
+	if t.smapowner.get().GetProxy(pid) == nil {
+		t.invalmsghdlr(w, r, fmt.Sprintf("%s %s request from an unknown proxy/gateway ID '%s' - Smap out of sync?", r.Method, action, pid))
+		return false
+	}
+	if glog.V(4) {
+		glog.Infof("%s %s %s/%s <= %s", r.Method, action, bucket, objname, pid)
+	}
+	return true
+}
+
+func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	payload := cmn.DlBody{}
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if glog.V(4) {
+		glog.Infof("downloadHandler payload %v", payload)
+	}
+
+	if err := payload.Validate(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	if !t.verifyProxyRedirection(w, r, payload.Bucket, payload.Objname, cmn.Download) {
+		return
+	}
+
+	var (
+		response   string
+		err        error
+		statusCode int
+	)
+	switch r.Method {
+	case http.MethodGet:
+		glog.Infof("Getting status of download: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t).Status(&payload)
+	case http.MethodDelete:
+		glog.Infof("Cancelling download: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t).Cancel(&payload)
+	case http.MethodPost:
+		glog.Infof("Downloading: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t).Download(&payload)
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
+		return
+	}
+
+	if statusCode >= http.StatusBadRequest {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), statusCode)
+		return
+	}
+	w.Write([]byte(response))
 }
 
 // GET /v1/objects/bucket[+"/"+objname]
@@ -937,16 +1019,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		t.statsif.Add(stats.PutRedirLatency, redelta)
 	}
 	// PUT
-	pid := query.Get(cmn.URLParamProxyID)
-	if glog.V(4) {
-		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
-	}
-	if pid == "" {
-		t.invalmsghdlr(w, r, "PUT requests are expected to be redirected")
-		return
-	}
-	if t.smapowner.get().GetProxy(pid) == nil {
-		t.invalmsghdlr(w, r, fmt.Sprintf("PUT from an unknown proxy/gateway ID '%s' - Smap out of sync?", pid))
+	if !t.verifyProxyRedirection(w, r, bucket, objname, cmn.Objects) {
 		return
 	}
 
