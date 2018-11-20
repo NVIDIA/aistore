@@ -1343,6 +1343,9 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 }
 
 func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
+	p.invalmsghdlr(w, r, "not supported yet") // see also: daemon.go, config.sh, and tests/replication
+	return
+
 	started := time.Now()
 	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {

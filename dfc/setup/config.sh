@@ -50,11 +50,6 @@ cat > $CONFFILE <<EOL
 		"dest_retry_time":	"2m",
 		"rebalancing_enabled": 	true
 	},
-	"replication": {
-		"replicate_on_cold_get": 		false,
-		"replicate_on_put": 			false,
-		"replicate_on_lru_eviction": 	false
-	},
 	"cksum_config": {
 		"checksum":                    "xxhash",
 		"validate_checksum_cold_get":  true,

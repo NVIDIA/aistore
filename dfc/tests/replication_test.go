@@ -23,7 +23,26 @@ const (
 	badChecksum = "badChecksumValue"
 )
 
-func TestReplicationReceiveOneObject(t *testing.T) {
+var (
+	// TODO: not ready yet but will be - see daemon.go as well
+	replTests = []Test{
+		//	{"testReplicationReceiveOneObject", testReplicationReceiveOneObject},
+		//	{"testReplicationReceiveOneObjectNoChecksum", testReplicationReceiveOneObjectNoChecksum},
+		//	{"testReplicationReceiveOneObjectBadChecksum", testReplicationReceiveOneObjectBadChecksum},
+		//	{"testReplicationReceiveManyObjectsCloudBucket", testReplicationReceiveManyObjectsCloudBucket},
+	}
+)
+
+func TestReplication(t *testing.T) {
+	for _, test := range replTests {
+		t.Run(test.name, test.method)
+		if t.Failed() && abortonerr {
+			t.FailNow()
+		}
+	}
+}
+
+func testReplicationReceiveOneObject(t *testing.T) {
 	const (
 		object   = "TestReplicationReceiveOneObject"
 		fileSize = int64(1024)
@@ -52,7 +71,7 @@ func TestReplicationReceiveOneObject(t *testing.T) {
 
 }
 
-func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
+func testReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	const (
 		object   = "TestReplicationReceiveOneObjectNoChecksum"
 		fileSize = int64(1024)
@@ -89,7 +108,7 @@ func TestReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	}
 }
 
-func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
+func testReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	const (
 		object   = "TestReplicationReceiveOneObjectBadChecksum"
 		fileSize = int64(1024)
@@ -119,7 +138,7 @@ func TestReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	}
 }
 
-func TestReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
+func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	const (
 		fileSize  = 1024
 		numFiles  = 100

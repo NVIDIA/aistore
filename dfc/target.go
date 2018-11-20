@@ -2472,6 +2472,9 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg cm
 }
 
 func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
+	t.invalmsghdlr(w, r, "not supported yet") // see also: daemon.go, proxy.go, config.sh, and tests/replication
+	return
+
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return

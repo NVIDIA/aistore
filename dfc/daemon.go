@@ -273,9 +273,10 @@ func dfcinit() {
 			t.readahead = &dummyreadahead{}
 		}
 
-		replRunner := newReplicationRunner(t, fs.Mountpaths)
-		ctx.rg.add(replRunner, xreplication, nil)
-		t.fsprg.add(replRunner)
+		// TODO: not ready yet but will be
+		// replRunner := newReplicationRunner(t, fs.Mountpaths)
+		// ctx.rg.add(replRunner, xreplication, nil)
+		// t.fsprg.add(replRunner)
 
 		atime := atime.NewRunner(fs.Mountpaths, &ctx.config.LRU.AtimeCacheMax, iostat)
 		ctx.rg.add(atime, xatime, nil)
