@@ -85,7 +85,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 	)
 
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 	if len(smap.Tmap) == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
@@ -169,7 +169,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		t.Skip("TestCloudListBucketGetTargetURL requires a cloud bucket")
 	}
 
-	clusterMap, err := tutils.GetClusterMap(proxyURL)
+	clusterMap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 	if len(clusterMap.Tmap) == 1 {
 		tutils.Logln("Warning: more than 1 target should deployed for best utility of this test.")
@@ -1465,7 +1465,7 @@ func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 }
 
 func getClusterMap(t *testing.T, URL string) cluster.Smap {
-	smap, err := tutils.GetClusterMap(URL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, URL)
 	tutils.CheckFatal(err, t)
 	return smap
 }

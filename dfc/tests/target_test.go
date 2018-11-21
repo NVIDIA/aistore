@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -23,7 +24,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
 
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 
 	for sid = range smap.Tmap {

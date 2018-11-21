@@ -82,7 +82,7 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 
 	if len(smap.Tmap) < 1 || len(smap.Pmap) < 1 {

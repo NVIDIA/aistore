@@ -927,7 +927,7 @@ func getProcess(port string) (string, string, []string, error) {
 // Read Pmap from all proxies and checks versions. If any proxy's smap version
 // differs from primary's one then an error returned
 func checkPmapVersions(proxyURL string) error {
-	smapPrimary, err := tutils.GetClusterMap(proxyURL)
+	smapPrimary, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	if err != nil {
 		return err
 	}
@@ -936,7 +936,7 @@ func checkPmapVersions(proxyURL string) error {
 		if proxyURL == proxyInfo.PublicNet.DirectURL {
 			continue
 		}
-		smap, err := tutils.GetClusterMap(proxyInfo.PublicNet.DirectURL)
+		smap, err := api.GetClusterMap(tutils.HTTPClient, proxyInfo.PublicNet.DirectURL)
 		if err != nil {
 			return err
 		}
@@ -989,7 +989,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 
 	var loopCnt int = 0
 	for {
-		smap, err := tutils.GetClusterMap(proxyURL)
+		smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 		if err != nil && !cmn.IsErrConnectionRefused(err) {
 			return cluster.Smap{}, err
 		}
@@ -1012,7 +1012,7 @@ func waitForPrimaryProxy(proxyURL, reason string, origVersion int64, verbose boo
 		// if the primary's map changed to the state we want, wait for the map get populated
 		if err == nil && smap.Version == lastVersion && smap.Version > origVersion && doCheckSMap {
 			for {
-				smap, err = tutils.GetClusterMap(proxyURL)
+				smap, err = api.GetClusterMap(tutils.HTTPClient, proxyURL)
 				if err == nil {
 					break
 				}
@@ -1265,7 +1265,7 @@ func networkFailurePrimary(t *testing.T) {
 	// connections and starts talking to neighbors
 	waitProgressBar("Wait for old primary is connected to network", 5*time.Second)
 
-	oldSmap, err := tutils.GetClusterMap(oldPrimaryURL)
+	oldSmap, err := api.GetClusterMap(tutils.HTTPClient, oldPrimaryURL)
 	tutils.CheckFatal(err, t)
 
 	// the original primary still thinks that it is the primary, so its smap

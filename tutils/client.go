@@ -538,48 +538,9 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	return l, err
 }
 
-// GetClusterMap retrives a DFC's server map
-// Note: this may not be a good idea to expose the map to clients, but this how it is for now.
-func GetClusterMap(url string) (cluster.Smap, error) {
-	q := GetWhatRawQuery(cmn.GetWhatSmap, "")
-	requestURL := fmt.Sprintf("%s?%s", url+cmn.URLPath(cmn.Version, cmn.Daemon), q)
-	r, err := HTTPClient.Get(requestURL)
-	defer func() {
-		if r != nil {
-			r.Body.Close()
-		}
-	}()
-
-	if err != nil {
-		// Note: might return connection refused if the servet is not ready
-		//       caller can retry in that case
-		return cluster.Smap{}, err
-	}
-
-	if r != nil && r.StatusCode >= http.StatusBadRequest {
-		return cluster.Smap{}, fmt.Errorf("get Smap, HTTP status %d", r.StatusCode)
-	}
-
-	var (
-		b    []byte
-		smap cluster.Smap
-	)
-	b, err = ioutil.ReadAll(r.Body)
-	if err != nil {
-		return cluster.Smap{}, fmt.Errorf("Failed to read response, err: %v", err)
-	}
-
-	err = json.Unmarshal(b, &smap)
-	if err != nil {
-		return cluster.Smap{}, fmt.Errorf("Failed to unmarshal Smap, err: %v", err)
-	}
-
-	return smap, nil
-}
-
 // GetPrimaryProxy returns the primary proxy's url of a cluster
 func GetPrimaryProxy(url string) (string, error) {
-	smap, err := GetClusterMap(url)
+	smap, err := api.GetClusterMap(HTTPClient, url)
 	if err != nil {
 		return "", err
 	}
@@ -740,9 +701,9 @@ func RemoveTargetMountpath(daemonUrl, mpath string) error {
 }
 
 func UnregisterTarget(proxyURL, sid string) error {
-	smap, err := GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(HTTPClient, proxyURL)
 	if err != nil {
-		return fmt.Errorf("GetClusterMap() failed, err: %v", err)
+		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
 
 	target, ok := smap.Tmap[sid]
@@ -813,7 +774,7 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 			break
 		}
 
-		daemonSmap, err := GetClusterMap(url)
+		daemonSmap, err := api.GetClusterMap(HTTPClient, url)
 		if err != nil && !cmn.IsErrConnectionRefused(err) {
 			return err
 		}

@@ -6,11 +6,13 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 type (
@@ -20,6 +22,12 @@ type (
 		URL        string        `json:"url"`
 		Smap       *cluster.Smap `json:"smap"`
 		configPath string
+	}
+)
+
+var (
+	HTTPClient = &http.Client{
+		Timeout: 600 * time.Second,
 	}
 )
 
@@ -35,7 +43,7 @@ func newProxy(configPath, defaultURL string) *proxy {
 	err := cmn.LocalLoad(configPath, p)
 	if err != nil {
 		// first run: read the current Smap and save to local file
-		smap, err := tutils.GetClusterMap(defaultURL)
+		smap, err := api.GetClusterMap(HTTPClient, defaultURL)
 		if err != nil {
 			glog.Errorf("Failed to get cluster map: %v", err)
 			return &proxy{configPath: configPath, URL: defaultURL}
@@ -67,7 +75,7 @@ func (p *proxy) saveSmap() {
 //   config and saves new valid Smap
 // Returns error if the node failed to respond
 func (p *proxy) comparePrimaryURL(url string) error {
-	smap, err := tutils.GetClusterMap(url)
+	smap, err := api.GetClusterMap(HTTPClient, url)
 	if err != nil {
 		return err
 	}

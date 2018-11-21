@@ -377,7 +377,7 @@ func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 }
 
 func getPrimaryIntraDataURL(t *testing.T, proxyURL string) string {
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	if err != nil {
 		t.Fatalf("Failed to get primary proxy intra data net URL, error: %v", err)
 	}

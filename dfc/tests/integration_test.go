@@ -1638,7 +1638,7 @@ func doReregisterTarget(target, targetDirectURL string, m *metadata) {
 func saveClusterState(m *metadata) {
 	var err error
 	m.proxyURL = getPrimaryURL(m.t, proxyURLRO)
-	m.smap, err = tutils.GetClusterMap(m.proxyURL)
+	m.smap, err = api.GetClusterMap(tutils.HTTPClient, m.proxyURL)
 	tutils.CheckFatal(err, m.t)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)

@@ -37,26 +37,27 @@ func doHTTPRequest(httpClient *http.Client, method, url string, b []byte) ([]byt
 }
 
 func doHTTPRequestGetResp(httpClient *http.Client, method, url string, b []byte, query ...url.Values) (*http.Response, error) {
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(b))
-	if len(query) > 0 && len(query[0]) > 0 {
-		req.URL.RawQuery = query[0].Encode()
+	var reqBody io.Reader
+	if b != nil {
+		reqBody = bytes.NewBuffer(b)
 	}
-
+	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request, err: %v", err)
+	}
+	if len(query) > 0 && len(query[0]) > 0 {
+		req.URL.RawQuery = query[0].Encode()
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to %s, err: %v", method, err)
 	}
-
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to read response, err: %v", err)
 		}
-
 		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
 	return resp, nil

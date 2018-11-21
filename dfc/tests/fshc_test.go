@@ -184,7 +184,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 
 	mpList := make(map[string]string, 0)
@@ -331,7 +331,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		bucket = TestLocalBucketName
 	}
 
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 
 	mpList := make(map[string]string, 0)
@@ -380,7 +380,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 
 func TestFSCheckerTargetDisable(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	smap, err := tutils.GetClusterMap(proxyURL)
+	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
 	tutils.CheckFatal(err, t)
 
 	proxyCnt := len(smap.Pmap)
