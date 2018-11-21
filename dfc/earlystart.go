@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
@@ -43,7 +44,8 @@ func (p *proxyrunner) bootstrap() {
 		if smap.CountTargets() > 0 || smap.CountProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
-			res := p.broadcastCluster(cmn.URLPath(cmn.Version, cmn.Daemon), q, http.MethodGet, nil, smap, tout, false)
+			url := cmn.URLPath(cmn.Version, cmn.Daemon)
+			res := p.broadcastTo(url, q, http.MethodGet, nil, smap, tout, cmn.NetworkIntraControl, cluster.AllNodes)
 			for re := range res {
 				if re.err != nil {
 					continue
@@ -330,7 +332,8 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 	)
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
 	for keeptrying && time.Now().Before(deadline) {
-		res := p.broadcastCluster(cmn.URLPath(cmn.Version, cmn.Daemon), q, http.MethodGet, nil, bcastSmap, tout, false)
+		url := cmn.URLPath(cmn.Version, cmn.Daemon)
+		res := p.broadcastTo(url, q, http.MethodGet, nil, bcastSmap, tout, cmn.NetworkIntraControl, cluster.AllNodes)
 		keeptrying = false
 		for re := range res {
 			if re.err != nil {

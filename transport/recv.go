@@ -68,7 +68,6 @@ var (
 	mu       *sync.Mutex
 	debug    bool
 )
-var knownNetworks = []string{cmn.NetworkPublic, cmn.NetworkIntraControl, cmn.NetworkIntraData}
 
 func init() {
 	mu = &sync.Mutex{}
@@ -82,8 +81,8 @@ func init() {
 //
 
 func SetMux(network string, x *http.ServeMux) {
-	if !cmn.StringInSlice(network, knownNetworks) {
-		glog.Warningf("unknown network: %s, expected one of: %v", network, knownNetworks)
+	if !cmn.NetworkIsKnown(network) {
+		glog.Warningf("Unknown network %s, expecting one of: %v", network, cmn.KnownNetworks)
 	}
 	mu.Lock()
 	muxers[network] = x

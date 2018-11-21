@@ -232,7 +232,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 	var (
 		jsbytes, jsmsg []byte
 		err            error
-		refused        map[string]*cluster.Snode
+		refused        cluster.NodeMap
 		payload        = make(cmn.SimpleKVs)
 		smap           = y.p.smapowner.get()
 		config         = y.Getconf()
@@ -305,14 +305,15 @@ OUTER:
 
 	// step 3: b-cast
 	urlPath := cmn.URLPath(cmn.Version, cmn.Metasync)
-	res := y.p.broadcastCluster(
+	res := y.p.broadcastTo(
 		urlPath,
 		nil, // query
 		http.MethodPut,
 		jsbytes,
 		smap,
 		config.Timeout.CplaneOperation,
-		true,
+		cmn.NetworkIntraControl,
+		cluster.AllNodes,
 	)
 
 	// step 4: count failures and fill-in refused
@@ -324,7 +325,7 @@ OUTER:
 		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
 		if cmn.IsErrConnectionRefused(r.err) {
 			if refused == nil {
-				refused = make(map[string]*cluster.Snode)
+				refused = make(cluster.NodeMap)
 			}
 			refused[r.si.DaemonID] = r.si
 		} else {
@@ -369,7 +370,7 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 	}
 }
 
-func (y *metasyncer) handleRefused(urlPath string, body []byte, refused map[string]*cluster.Snode, pairs []revspair) {
+func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair) {
 	config := y.Getconf()
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
@@ -377,9 +378,9 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused map[stri
 			path:   urlPath,
 			body:   body,
 		},
-		internal: true,
-		timeout:  config.Timeout.CplaneOperation,
-		servers:  []map[string]*cluster.Snode{refused},
+		network: cmn.NetworkIntraControl,
+		timeout: config.Timeout.CplaneOperation,
+		nodes:   []cluster.NodeMap{refused},
 	}
 	res := y.p.broadcast(bcastArgs)
 
@@ -396,13 +397,13 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused map[stri
 
 // pending (map), if requested, contains only those daemons that need
 // to get at least one of the most recently sync-ed tag-ed revs
-func (y *metasyncer) pending(needMap bool) (count int, pending map[string]*cluster.Snode) {
+func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap) {
 	smap := y.p.smapowner.get()
 	if !smap.isPrimary(y.p.si) {
 		y.becomeNonPrimary()
 		return
 	}
-	for _, serverMap := range []map[string]*cluster.Snode{smap.Tmap, smap.Pmap} {
+	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for id, si := range serverMap {
 			revsdaemon, ok := y.revsmap[id]
 			if !ok {
@@ -428,7 +429,7 @@ func (y *metasyncer) pending(needMap bool) (count int, pending map[string]*clust
 				}
 			}
 			if pending == nil {
-				pending = make(map[string]*cluster.Snode)
+				pending = make(cluster.NodeMap)
 			}
 			pending[id] = si
 		}
@@ -467,9 +468,9 @@ func (y *metasyncer) handlePending() (cnt int) {
 			path:   cmn.URLPath(cmn.Version, cmn.Metasync),
 			body:   body,
 		},
-		internal: true,
-		timeout:  config.Timeout.CplaneOperation,
-		servers:  []map[string]*cluster.Snode{pending},
+		network: cmn.NetworkIntraControl,
+		timeout: config.Timeout.CplaneOperation,
+		nodes:   []cluster.NodeMap{pending},
 	}
 	res := y.p.broadcast(bcastArgs)
 	for r := range res {
@@ -510,7 +511,7 @@ func (y *metasyncer) lversion(tag string) int64 {
 }
 
 func (y *metasyncer) countNewMembers(smap *smapX) (count int) {
-	for _, serverMap := range []map[string]*cluster.Snode{smap.Tmap, smap.Pmap} {
+	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for id, _ := range serverMap {
 			if _, ok := y.revsmap[id]; !ok {
 				count++

@@ -170,7 +170,7 @@ func (pkr *proxyKeepaliveRunner) pingAllOthers() (stopped bool) {
 		toRemoveCh = make(chan string, daemonCnt)
 		latencyCh  = make(chan time.Duration, daemonCnt)
 	)
-	for _, daemons := range []map[string]*cluster.Snode{smap.Tmap, smap.Pmap} {
+	for _, daemons := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
 		for sid, si := range daemons {
 			if sid == pkr.p.si.DaemonID {
 				continue

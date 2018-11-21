@@ -380,14 +380,15 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 
 	q := url.Values{}
 	q.Set(cmn.URLParamPrimaryCandidate, p.si.DaemonID)
-	res := p.broadcastCluster(
+	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Proxy),
 		q,
 		http.MethodGet,
 		jsbytes,
 		smap,
 		ctx.config.Timeout.CplaneOperation,
-		true,
+		cmn.NetworkIntraControl,
+		cluster.AllNodes,
 	)
 
 	for r := range res {
@@ -423,14 +424,15 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 	cmn.Assert(err == nil, err)
 
 	smap := p.smapowner.get()
-	res := p.broadcastCluster(
+	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Vote, cmn.Voteres),
 		nil, // query
 		http.MethodPut,
 		jsbytes,
 		smap,
 		ctx.config.Timeout.CplaneOperation,
-		true,
+		cmn.NetworkIntraControl,
+		cluster.AllNodes,
 	)
 
 	errors := make(map[string]bool)

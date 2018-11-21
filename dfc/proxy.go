@@ -850,13 +850,15 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	jsbytes, err := jsoniter.Marshal(msg)
 	cmn.Assert(err == nil, err)
 
-	res := p.broadcastTargets(
+	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucketFrom),
 		nil, // query
 		http.MethodPost,
 		jsbytes,
 		smap4bcast,
 		ctx.config.Timeout.Default,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
 	)
 
 	for r := range res {
@@ -1422,13 +1424,15 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	}
 
 	smap := p.smapowner.get()
-	results = p.broadcastTargets(
+	results = p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		q,
 		method,
 		jsonbytes,
 		smap,
 		timeout,
+		cmn.NetworkIntraData,
+		cluster.Targets,
 	)
 
 	for result := range results {
@@ -1867,14 +1871,15 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 	q := url.Values{}
 	q.Set(cmn.URLParamPrepare, "true")
 	method := http.MethodPut
-	results := p.broadcastCluster(
+	results := p.broadcastTo(
 		urlPath,
 		q,
 		method,
 		nil, // body
 		smap,
 		ctx.config.Timeout.CplaneOperation,
-		false,
+		cmn.NetworkIntraControl,
+		cluster.AllNodes,
 	)
 	for result := range results {
 		if result.err != nil {
@@ -1897,14 +1902,15 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 
 	// (II) commit phase
 	q.Set(cmn.URLParamPrepare, "false")
-	results = p.broadcastCluster(
+	results = p.broadcastTo(
 		urlPath,
 		q,
 		method,
 		nil, // body
 		p.smapowner.get(),
 		ctx.config.Timeout.CplaneOperation,
-		false,
+		cmn.NetworkIntraControl,
+		cluster.AllNodes,
 	)
 
 	// FIXME: retry
@@ -2027,13 +2033,15 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 }
 
 func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
-	results := p.broadcastTargets(
+	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Daemon),
 		r.URL.Query(),
 		r.Method,
 		nil, // message
 		p.smapowner.get(),
 		ctx.config.Timeout.Default,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
 	)
 
 	targetResults := make(map[string]jsoniter.RawMessage, p.smapowner.get().CountTargets())
@@ -2394,14 +2402,15 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 			msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets and proxies
 			cmn.Assert(err == nil, err)
 
-			results := p.broadcastCluster(
+			results := p.broadcastTo(
 				cmn.URLPath(cmn.Version, cmn.Daemon),
 				nil, // query
 				http.MethodPut,
 				msgbytes,
 				p.smapowner.get(),
 				defaultTimeout,
-				false,
+				cmn.NetworkIntraControl,
+				cluster.AllNodes,
 			)
 
 			for result := range results {
@@ -2420,14 +2429,15 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		msgbytes, err := jsoniter.Marshal(msg) // same message -> all targets
 		cmn.Assert(err == nil, err)
 
-		p.broadcastCluster(
+		p.broadcastTo(
 			cmn.URLPath(cmn.Version, cmn.Daemon),
 			nil, // query
 			http.MethodPut,
 			msgbytes,
 			p.smapowner.get(),
 			defaultTimeout,
-			false,
+			cmn.NetworkIntraControl,
+			cluster.AllNodes,
 		)
 
 		time.Sleep(time.Second)
@@ -2468,41 +2478,6 @@ func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg)
 	}
 	p.bmdowner.Unlock()
 	return
-}
-
-// broadcastCluster sends a message ([]byte) to all proxies and targets belongs to a smap
-func (p *proxyrunner) broadcastCluster(path string, query url.Values, method string, body []byte,
-	smap *smapX, timeout time.Duration, internal bool) chan callResult {
-
-	bcastArgs := bcastCallArgs{
-		req: reqArgs{
-			method: method,
-			path:   path,
-			query:  query,
-			body:   body,
-		},
-		internal: internal,
-		timeout:  timeout,
-		servers:  []map[string]*cluster.Snode{smap.Pmap, smap.Tmap},
-	}
-	return p.broadcast(bcastArgs)
-}
-
-// broadcastTargets sends a message ([]byte) to all targets belongs to a smap
-func (p *proxyrunner) broadcastTargets(path string, query url.Values, method string, body []byte,
-	smap *smapX, timeout time.Duration) chan callResult {
-
-	bcastArgs := bcastCallArgs{
-		req: reqArgs{
-			method: method,
-			path:   path,
-			query:  query,
-			body:   body,
-		},
-		timeout: timeout,
-		servers: []map[string]*cluster.Snode{smap.Tmap},
-	}
-	return p.broadcast(bcastArgs)
 }
 
 func (p *proxyrunner) urlOutsideCluster(url string) bool {
@@ -2608,15 +2583,16 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 	jsbytes, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRechecksum})
 	cmn.Assert(err == nil, err)
 
-	res := p.broadcastTargets(
+	res := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
 		nil,
 		http.MethodPost,
 		jsbytes,
 		p.smapowner.get(),
 		ctx.config.Timeout.Default,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
 	)
-
 	for r := range res {
 		if r.err != nil {
 			glog.Warningf("Target %s failed to re-checksum objects in bucket %s", r.si.DaemonID, bucket)

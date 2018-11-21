@@ -1668,13 +1668,15 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 }
 
 func (t *targetrunner) lookupRemotely(bucket, objname string) *cluster.Snode {
-	res := t.broadcastNeighbors(
+	res := t.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname),
 		nil, // query
 		http.MethodHead,
 		nil,
 		t.smapowner.get(),
 		ctx.config.Timeout.MaxKeepalive,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
 	)
 
 	for r := range res {
@@ -3635,30 +3637,6 @@ func (t *targetrunner) pollClusterStarted() {
 	}
 	atomic.StoreInt64(&t.clusterStarted, 1)
 	glog.Infoln("cluster started up")
-}
-
-// broadcastNeighbors sends a message ([]byte) to all neighboring targets belongs to a smap
-func (t *targetrunner) broadcastNeighbors(path string, query url.Values, method string, body []byte,
-	smap *smapX, timeout time.Duration) chan callResult {
-
-	if len(smap.Tmap) < 2 {
-		// no neighbor, returns empty channel, so caller doesnt have to check channel is nil
-		ch := make(chan callResult)
-		close(ch)
-		return ch
-	}
-
-	bcastArgs := bcastCallArgs{
-		req: reqArgs{
-			method: method,
-			path:   path,
-			query:  query,
-			body:   body,
-		},
-		timeout: timeout,
-		servers: []map[string]*cluster.Snode{smap.Tmap},
-	}
-	return t.broadcast(bcastArgs)
 }
 
 func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {

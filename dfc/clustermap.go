@@ -50,8 +50,8 @@ func newSmap() (smap *smapX) {
 }
 
 func (m *smapX) init(tsize, psize, elsize int) {
-	m.Tmap = make(map[string]*cluster.Snode, tsize)
-	m.Pmap = make(map[string]*cluster.Snode, psize)
+	m.Tmap = make(cluster.NodeMap, tsize)
+	m.Pmap = make(cluster.NodeMap, psize)
 	if elsize > 0 {
 		m.NonElects = make(cmn.SimpleKVs, elsize)
 	}
@@ -166,15 +166,30 @@ func (m *smapX) pp() string {
 
 //=====================================================================
 //
-// smapowner: implements cluster.Sowner
+// smapowner
 //
 //=====================================================================
-var _ cluster.Sowner = &smapowner{}
 
 type smapowner struct {
 	sync.Mutex
 	smap unsafe.Pointer
+	a    *smaplisteners
 }
+
+// implements cluster.Sowner
+var _ cluster.Sowner = &smapowner{}
+
+func (r *smapowner) Get() *cluster.Smap {
+	smapx := (*smapX)(atomic.LoadPointer(&r.smap))
+	return &smapx.Smap
+}
+func (r *smapowner) Listeners() cluster.SmapListeners {
+	return r.a
+}
+
+//
+// private to the package
+//
 
 func (r *smapowner) put(smap *smapX) {
 	for _, snode := range smap.Tmap {
@@ -184,13 +199,12 @@ func (r *smapowner) put(smap *smapX) {
 		snode.Digest()
 	}
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
+
+	if r.a != nil {
+		r.a.notify() // notify of Smap change all listeners (cluster.Slistener)
+	}
 }
 
-// implements cluster.Sowner.Get
-func (r *smapowner) Get() *cluster.Smap {
-	smapx := (*smapX)(atomic.LoadPointer(&r.smap))
-	return &smapx.Smap
-}
 func (r *smapowner) get() (smap *smapX) {
 	return (*smapX)(atomic.LoadPointer(&r.smap))
 }
@@ -267,4 +281,57 @@ func newSnode(id, proto string, publicAddr, intraControlAddr, intraDataAddr *net
 	snode = &cluster.Snode{DaemonID: id, PublicNet: publicNet, IntraControlNet: intraControlNet, IntraDataNet: intraDataNet}
 	snode.Digest()
 	return
+}
+
+//=====================================================================
+//
+// smaplisteners: implements cluster.Listeners interface
+//
+//=====================================================================
+var _ cluster.SmapListeners = &smaplisteners{}
+
+type smaplisteners struct {
+	sync.RWMutex
+	vec []cluster.Slistener
+}
+
+func (a *smaplisteners) Reg(sl cluster.Slistener) {
+	a.Lock()
+	l := len(a.vec)
+	for k := 0; k < l; k++ {
+		if a.vec[k] == sl {
+			cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s(%+v) is already registered", sl.Tag(), sl))
+		}
+		if a.vec[k].Tag() == sl.Tag() {
+			glog.Errorf("Warning: duplicate smap-listener tag %s(%+v)", sl.Tag(), a.vec[k])
+		}
+	}
+	a.vec = append(a.vec, sl)
+	a.Unlock()
+}
+
+func (a *smaplisteners) Unreg(sl cluster.Slistener) {
+	a.Lock()
+	l := len(a.vec)
+	for k := 0; k < l; k++ {
+		if a.vec[k] == sl {
+			if k < l-1 {
+				copy(a.vec[k:], a.vec[k+1:])
+			}
+			a.vec[l-1] = nil
+			a.vec = a.vec[:l-1]
+			a.Unlock()
+			return
+		}
+	}
+	a.Unlock()
+	cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s(%+v) is not registered", sl.Tag(), sl))
+}
+
+func (a *smaplisteners) notify() {
+	a.RLock()
+	for k := 0; k < len(a.vec); k++ {
+		a.vec[k].SmapChanged()
+	}
+	a.RUnlock()
 }

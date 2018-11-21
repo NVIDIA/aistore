@@ -64,7 +64,7 @@ type (
 		status  int
 	}
 
-	// reqArgs is the http request that we want to send
+	// reqArgs specifies http request that we want to send
 	reqArgs struct {
 		method string      // GET, POST, ...
 		header http.Header // request headers
@@ -74,20 +74,19 @@ type (
 		body   []byte      // body for POST, PUT, ...
 	}
 
-	// callArgs contains arguments for a server call
+	// callArgs contains arguments for a peer-to-peer control plane call
 	callArgs struct {
 		req     reqArgs
 		timeout time.Duration
 		si      *cluster.Snode
 	}
 
-	// bcastCallArgs contains arguments for a broadcast server call
+	// bcastCallArgs contains arguments for an intra-cluster broadcast call
 	bcastCallArgs struct {
-		req             reqArgs
-		internal        bool // specifies if the call is the internal communication
-		timeout         time.Duration
-		servers         []map[string]*cluster.Snode
-		serversToIgnore map[string]struct{}
+		req     reqArgs
+		network string // on of the cmn.KnownNetworks
+		timeout time.Duration
+		nodes   []cluster.NodeMap
 	}
 
 	// SmapVoteMsg contains the cluster map and a bool representing whether or not a vote is currently happening.
@@ -182,6 +181,7 @@ type httprunner struct {
 	httpclientLongTimeout *http.Client // http client for long-wait intra-cluster comm
 	keepalive             keepaliver
 	smapowner             *smapowner
+	smaplisteners         *smaplisteners
 	bmdowner              *bmdowner
 	xactinp               *xactInProgress
 	statsif               stats.Tracker
@@ -277,7 +277,8 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 		}
 	}
 
-	h.smapowner = &smapowner{}
+	h.smaplisteners = &smaplisteners{vec: make([]cluster.Slistener, 0, 8)}
+	h.smapowner = &smapowner{a: h.smaplisteners}
 	h.bmdowner = &bmdowner{}
 	h.xactinp = newxactinp() // extended actions
 }
@@ -549,21 +550,55 @@ func (h *httprunner) call(args callArgs) callResult {
 	return callResult{args.si, outjson, err, errstr, status}
 }
 
-// broadcast sends a http call to all servers in parallel, wait until all calls are returned
-// NOTE: 'u' has only the path and query part, host portion will be set by this function.
-func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
-	serverCount := 0
-	for _, serverMap := range bcastArgs.servers {
-		serverCount += len(serverMap)
+//
+// broadcast
+//
+
+func (h *httprunner) broadcastTo(path string, query url.Values, method string, body []byte,
+	smap *smapX, timeout time.Duration, network string, to int) chan callResult {
+	var nodes []cluster.NodeMap
+
+	switch to {
+	case cluster.Targets:
+		nodes = []cluster.NodeMap{smap.Tmap}
+	case cluster.Proxies:
+		nodes = []cluster.NodeMap{smap.Pmap}
+	case cluster.AllNodes:
+		nodes = []cluster.NodeMap{smap.Pmap, smap.Tmap}
+	default:
+		cmn.Assert(false)
 	}
-	ch := make(chan callResult, serverCount)
+	cmn.Assert(cmn.NetworkIsKnown(network), "unknown network '"+network+"'")
+	bcastArgs := bcastCallArgs{
+		req: reqArgs{
+			method: method,
+			path:   path,
+			query:  query,
+			body:   body,
+		},
+		network: network,
+		timeout: timeout,
+		nodes:   nodes,
+	}
+	return h.broadcast(bcastArgs)
+}
+
+// NOTE: 'u' has only the path and query part, host portion will be set by this method.
+func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
+	nodeCount := 0
+	for _, nodeMap := range bcastArgs.nodes {
+		nodeCount += len(nodeMap)
+	}
+	if nodeCount < 2 {
+		ch := make(chan callResult)
+		close(ch)
+		return ch
+	}
+	ch := make(chan callResult, nodeCount)
 	wg := &sync.WaitGroup{}
 
-	for _, serverMap := range bcastArgs.servers {
-		for sid, serverInfo := range serverMap {
-			if _, exists := bcastArgs.serversToIgnore[sid]; exists {
-				continue
-			}
+	for _, nodeMap := range bcastArgs.nodes {
+		for sid, serverInfo := range nodeMap {
 			if sid == h.si.DaemonID {
 				continue
 			}
@@ -574,10 +609,7 @@ func (h *httprunner) broadcast(bcastArgs bcastCallArgs) chan callResult {
 					req:     bcastArgs.req,
 					timeout: bcastArgs.timeout,
 				}
-				args.req.base = ""
-				if bcastArgs.internal {
-					args.req.base = di.IntraControlNet.DirectURL
-				}
+				args.req.base = di.URL(bcastArgs.network)
 
 				res := h.call(args)
 				ch <- res
