@@ -169,10 +169,6 @@ func (p *proxyrunner) Run() error {
 	}
 	p.starttime = time.Now()
 
-	_ = p.initStatsD("dfcproxy")
-	sr := getproxystatsrunner()
-	sr.Core.StatsdC = &p.statsdC
-
 	return p.httprunner.run()
 }
 

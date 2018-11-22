@@ -215,10 +215,6 @@ func (t *targetrunner) Run() error {
 	pid := int64(os.Getpid())
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
 
-	_ = t.initStatsD("dfctarget")
-	sr := getstorstatsrunner()
-	sr.Core.StatsdC = &t.statsdC
-
 	getfshealthchecker().SetDispatcher(t)
 
 	aborted, _ := t.xactinp.isAbortedOrRunningLocalRebalance()

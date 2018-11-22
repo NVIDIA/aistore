@@ -22,42 +22,87 @@ For introduction to Docker, please watch [Docker 101 youtube](https://www.youtub
 
 This README documents the steps to install and run DFC
 
-## Install Docker
+## Install Docker and Docker Compose
+Note: Using docker requires one of the following versions of Ubuntu:
+* Bionic 18.04 (LTS)
+* Xenial 16.04 (LTS)
+* Trusty 14.04 (LTS)
+  
+1. Uninstall any old versions of docker:
+    ```
+    $sudo apt-get remove docker docker-engine docker.io    
+    ```
+It’s OK if apt-get reports that none of these packages are installed.
 
-1. Install [Docker](https://docs.docker.com/install/linux/docker-ce/ubuntu/#set-up-the-repository):
+2. Update the apt package index:
+    ```
+    $sudo apt-get update    
+    ```
 
-2. Add your current user to the docker group (but only if you are not the root). After executing the command, log off and then log in again for it to take effect.
+3. Install packages to allow apt to use a repository over HTTPS:
+    ```
+    $sudo apt-get install \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        software-properties-common    
+    ```
+4. Install Docker
+    ```
+    $sudo apt-get install docker-ce
+    ```
+5. Verify that Docker CE is installed correctly by running the hello-world image.
+    ```
+    $sudo docker run hello-world
+    ```
+6.  Add your current user to the docker group (but only if you are not the root). After executing the command, restart your machine for it to take effect.    
+    ```    
+    $sudo usermod -aG docker $(whoami)       
+    ```    
+7. Install docker compose using python pip. Install pip if you don't have it:
+    ```
+    $sudo apt-get install -y python-pip
+    $sudo pip install docker-compose
 
     ```
-    sudo usermod -aG docker $(whoami)
+8. Test the installation:
     ```
+    $docker-compose --version
+    docker-compose version 1.23.1, build 1719ceb
+    ```
+9. If you have any troubles with your installation, consider using the latest version of [docker](https://docs.docker.com/install/) and [docker-compose](https://github.com/docker/compose/releases).
 
-3. Enable and start docker service
-
-```
-$ sudo systemctl enable docker.service
-$ sudo systemctl start docker.service
-```
-
-4. Verify that docker service is running:
-
-```
-sudo systemctl status docker.service
-```
-
-5. Install [Docker Compose](https://docs.docker.com/compose/install/)
+## Uninstall Docker and Docker Compose
+1. To uninstall Docker, run the following:
+    ```
+    $sudo apt-get purge docker-ce
+    $sudo apt-get purge docker-ce-cli
+    ```
+2. Ensure docker is completely uninstalled by running the following command:
+    ```
+    dpkg -l | grep -i docker
+    ```
+    There should be no docker-ce and docker-ce-cli packages listed.
+3. To uninstall Docker-Compose, run the following:
+   ```
+   $pip uninstall docker-compose
+   ```
+4. Images, containers, volumes, or customized configuration files on your host are not automatically removed. To delete all images, containers, and volumes:
+    ```
+    $sudo rm -rf /var/lib/docker
+    ```
 
 ## Starting DFC
 1. If you have already installed go and configured $GOPATH execute the below command to download DFC source code and all its dependencies.
 ```
-$ go get -u -v github.com/NVIDIA/dfcpub/dfc
+$go get -u -v github.com/NVIDIA/dfcpub/dfc
 ```
 
 2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command. 
 To run DFC docker containers, you will need to pass your AWS config and credential directory via flag -a=<aws directory> CLI. By default, AWS stores config and credential files in `~/.aws/`
 Example:
 ```
-./deploy_docker.sh -a=~/.aws/
+$./deploy_docker.sh -a=~/.aws/
 ```
 
 3. To deploy DFC, refer to the deployment scripts in `docker/dev`, `docker/prod`, and `docker/quick_start`.
@@ -74,14 +119,14 @@ List all of the running containers using `docker ps`. Many commands require the 
 
 Lists all containers (not only the running ones).
 ```
-    docker ps -a
+$docker ps -a
 ```
 
 ### View Container Logs
 
 To view docker logs, use `docker logs <container_name>`. Example:
 ```
-    docker logs dfc0_proxy_1
+    $docker logs dfc0_proxy_1
 
     I 21:23:56.400794 metasync.go:142] Starting metasyncer
     I 21:24:06.415473 stats.go:422] {"err.n":0,"get.n":0,"del.n":0,"get.μs":0,"kalive.μs":0,"err.get.n":0,"err.list.n":0,"pst.n":0,"ren.n":0,
@@ -103,7 +148,7 @@ Note:
 ### SSH Into a Container
 
 ```
-    docker exec -it CONTAINER_NAME /bin/bash
+    $docker exec -it CONTAINER_NAME /bin/bash
 ```
 Note:
 * In production mode, the logs are expected to be in `/var/log/dfc/`.By deafult (Devlopment mode) the logs are under `tmp/dfc/log`
@@ -111,7 +156,7 @@ Note:
 
 ### List Docker Images
 ```
-    docker image ls
+    $docker image ls
 
     REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
     dfc1_proxy          latest              ced2cbd2ff2f        27 minutes ago      676MB
@@ -122,7 +167,7 @@ Note:
 
 ### List Docker Networks
 ```
-    docker network ls
+    $docker network ls
 
     NETWORK ID          NAME                    DRIVER              SCOPE
     cb05b22edcb3        bridge                  bridge              local
@@ -137,67 +182,67 @@ Note:
 ### Start a Container
 
 ```
-    docker start CONTAINER_NAME
+    $docker start CONTAINER_NAME
 ```
 
 ### Stop a Container
 
 ```
-    docker stop CONTAINER_NAME
+    $docker stop CONTAINER_NAME
 ```
 
 ### Restart a Container
 
 ```
-    docker restart CONTAINER_NAME
+    $docker restart CONTAINER_NAME
 ```
 
 ### Kill a Container
 
 ```
-    docker kill CONTAINER_NAME
+    $docker kill CONTAINER_NAME
 ```
 
 ### View Resource Usage Statistics for all Containers
 
 ```
-    docker stats
+    $docker stats
 ```
 
 ### Remove Unused Images
 
 ```
-    docker image prune -f
+    $docker image prune -f
 ```
 
 ### Remove all Stopped Containers
 
 ```
-    docker container prune -f
+    $docker container prune -f
 ```
 
 ### Remove all Unused Networks
 
 ```
-    docker network prune -f
+    $docker network prune -f
 ```
 
 ### Stop all Running Containers
 
 ```
-    docker stop $(docker ps -a -q)
+    $docker stop $(docker ps -a -q)
 ```
 
 ### Delete all Existing Containers
 
 ```
-    docker rm $(docker ps -a -q)
+    $docker rm $(docker ps -a -q)
 ```
 
 ### Delete all Existing Images
 
 ```
-    docker rmi $(docker images -q -a)
+    $docker rmi $(docker images -q -a)
 ```
 
 

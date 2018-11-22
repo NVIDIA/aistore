@@ -70,6 +70,12 @@ container_name_to_folder() {
 get_container_names() {
     for container_name in $(docker ps --format "{{.Names}}"); do
         if  [[ $container_name == dfc* ]]; then
+            if [[ $container_name =~ ^dfc[0-9]*_(proxy|target)_[0-9]* ]]; then
+                container_name=${BASH_REMATCH[0]}
+            else
+                echo Invalid container name format
+                exit 1
+            fi
             container_name_to_folder $container_name
         fi
     done
@@ -232,5 +238,9 @@ do
     file_path_join $dir $log_file_name
 done
 
-command="$commandPrefix ${files[@]}"
-eval $command
+if [ ${#errors[@]} -eq 0 ]; then
+    echo No valid log files found. Exiting...
+else
+    command="$commandPrefix ${files[@]}"
+    eval $command
+fi

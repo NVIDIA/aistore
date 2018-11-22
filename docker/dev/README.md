@@ -55,7 +55,7 @@ When deploying multi-cluster configurations, each cluster will have the same num
 
 Example:
 ```
-./deploy_docker.sh -c=3 -p=3 -t=3 -l=2
+./deploy_docker.sh -c=3 -p=3 -t=3 -d=2
 ```
 * The command deploys three clusters, each with 3 proxies, 3 targets and 2 local directories in testing mode.
 
@@ -87,6 +87,11 @@ To stop the cluster, run one of the following scripts:
 ./stop_docker.sh -c=NUM_CLUSTERS
 ```
 These commands stop all containers (even stopped and dead ones), and remove docker networks used by dfc. Refer to the stop_docker.sh script for more details about its usage.
+
+After the cluster has been stopped, delete the `/tmp/dfc/` directory on your local machine. The following command does this (note Docker protects the contents of this directory):
+```
+sudo rm -rf /tmp/dfc
+```
 
 ## Viewing the Local Filesystem of a Container
 The docker compose file is currently set to mount the /tmp/dfc/c${i}\_${target,proxy}\_${j} directory, where *i* is the cluster number and *j* is the daemon number, to /tmp/dfc inside the container.
