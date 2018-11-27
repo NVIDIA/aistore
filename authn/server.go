@@ -8,7 +8,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/json-iterator/go"
 )
 
 const (
@@ -163,7 +161,7 @@ func (a *authServ) httpRevokeToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := &tokenMsg{}
-	if err := a.readJSON(w, r, msg); err != nil || msg.Token == "" {
+	if err := cmn.ReadJSON(w, r, msg); err != nil || msg.Token == "" {
 		glog.Errorf("Failed to read request: %v\n", err)
 		return
 	}
@@ -244,7 +242,7 @@ func (a *authServ) userAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info := &userInfo{}
-	if err := a.readJSON(w, r, info); err != nil {
+	if err := cmn.ReadJSON(w, r, info); err != nil {
 		glog.Errorf("Failed to read credentials: %v\n", err)
 		return
 	}
@@ -303,7 +301,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := &loginMsg{}
-	if err = a.readJSON(w, r, msg); err != nil {
+	if err = cmn.ReadJSON(w, r, msg); err != nil {
 		glog.Errorf("Failed to read request body: %v\n", err)
 		return
 	}
@@ -347,36 +345,6 @@ func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []b
 	errstr := fmt.Sprintf("%s: Failed to write json, err: %v", tag, err)
 	cmn.InvalidHandlerWithMsg(w, r, errstr, http.StatusInternalServerError)
 	return
-}
-
-// Borrowed from DFC (modified cmn.InvalidHandler calls)
-func (a *authServ) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
-	b, err := ioutil.ReadAll(r.Body)
-	if len(b) == 0 {
-		cmn.InvalidHandlerWithMsg(w, r, "request body is empty")
-		return fmt.Errorf("%s", "Invalid request")
-	}
-	if err != nil {
-		s := fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
-		if err == io.EOF {
-			trailer := r.Trailer.Get("Error")
-			if trailer != "" {
-				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-			}
-		}
-		glog.Errorf(s)
-		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
-		return err
-	}
-
-	err = jsoniter.Unmarshal(b, out)
-	if err != nil {
-		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		glog.Errorf(s)
-		cmn.InvalidHandlerWithMsg(w, r, "incorrect input data format")
-		return err
-	}
-	return nil
 }
 
 // Removes user credentials

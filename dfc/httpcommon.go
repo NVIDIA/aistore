@@ -645,37 +645,6 @@ func (h *httprunner) checkRESTItems(w http.ResponseWriter, r *http.Request, item
 	return items, nil
 }
 
-func (h *httprunner) readJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		s := fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
-		if err == io.EOF {
-			trailer := r.Trailer.Get("Error")
-			if trailer != "" {
-				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
-			}
-		}
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		h.invalmsghdlr(w, r, s)
-		return err
-	}
-
-	err = jsoniter.Unmarshal(b, out)
-	if err != nil {
-		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
-		h.invalmsghdlr(w, r, s)
-		return err
-	}
-	return nil
-}
-
 // NOTE: must be the last error-generating-and-handling call in the http handler
 //       writes http body and header
 //       calls invalmsghdlr() on err

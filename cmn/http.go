@@ -9,6 +9,8 @@ package cmn
 import (
 	"fmt"
 	"html"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // URLPath returns a HTTP URL path by joining all segments with "/"
@@ -120,4 +123,35 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 
 	glog.Errorln(errMsg)
 	http.Error(w, errMsg, status)
+}
+
+func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		s := fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
+		if err == io.EOF {
+			trailer := r.Trailer.Get("Error")
+			if trailer != "" {
+				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+			}
+		}
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+		InvalidHandlerDetailed(w, r, s)
+		return err
+	}
+
+	err = jsoniter.Unmarshal(b, out)
+	if err != nil {
+		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
+		if _, file, line, ok := runtime.Caller(1); ok {
+			f := filepath.Base(file)
+			s += fmt.Sprintf("(%s, #%d)", f, line)
+		}
+		InvalidHandlerDetailed(w, r, s)
+		return err
+	}
+	return nil
 }

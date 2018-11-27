@@ -405,7 +405,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bucket := apitems[0]
-	if err := p.readJSON(w, r, &msg); err != nil {
+	if err := cmn.ReadJSON(w, r, &msg); err != nil {
 		return
 	}
 	switch msg.Action {
@@ -486,7 +486,7 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var payload = make(cmn.SimpleKVs)
-	if err := p.readJSON(w, r, &payload); err != nil {
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		p.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -556,7 +556,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, lbucket) {
 		return
 	}
-	if p.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -656,7 +656,7 @@ func (p *proxyrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, lbucket) {
 		return
 	}
-	if p.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -709,7 +709,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	}
 	props := &cmn.BucketProps{} // every field has to have zero value
 	msg := cmn.ActionMsg{Value: props}
-	if p.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	if msg.Action != cmn.ActSetProps && msg.Action != cmn.ActResetProps {
@@ -1469,7 +1469,7 @@ func (p *proxyrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := p.readJSON(w, r, tokenList); err != nil {
+	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
 		s := fmt.Sprintf("Invalid token list: %v", err)
 		p.invalmsghdlr(w, r, s)
 		return
@@ -1594,7 +1594,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.SyncSmap:
 			var newsmap = &smapX{}
-			if p.readJSON(w, r, newsmap) != nil {
+			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
 			if !newsmap.isValid() {
@@ -1622,7 +1622,7 @@ func (p *proxyrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	// other PUT /daemon actions
 	//
 	var msg cmn.ActionMsg
-	if p.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -2115,7 +2115,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if p.readJSON(w, r, &nsi) != nil {
+	if cmn.ReadJSON(w, r, &nsi) != nil {
 		return
 	}
 	if len(apitems) > 0 {
@@ -2384,7 +2384,7 @@ func (p *proxyrunner) httpcluput(w http.ResponseWriter, r *http.Request) {
 		p.httpclusetprimaryproxy(w, r)
 		return
 	}
-	if p.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	if p.forwardCP(w, r, &msg, "", nil) {

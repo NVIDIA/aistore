@@ -977,7 +977,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	var msg cmn.ActionMsg
-	if t.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -1053,7 +1053,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 // POST /v1/objects/bucket-name/object-name
 func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	var msg cmn.ActionMsg
-	if t.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -1233,7 +1233,7 @@ func (t *targetrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 // PUT /v1/metasync
 func (t *targetrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	var payload = make(cmn.SimpleKVs)
-	if err := t.readJSON(w, r, &payload); err != nil {
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
 		t.invalmsghdlr(w, r, err.Error())
 		return
 	}
@@ -2801,7 +2801,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			return
 		case cmn.SyncSmap:
 			var newsmap = &smapX{}
-			if t.readJSON(w, r, newsmap) != nil {
+			if cmn.ReadJSON(w, r, newsmap) != nil {
 				return
 			}
 			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
@@ -2819,7 +2819,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 	// other PUT /daemon actions
 	//
 	var msg cmn.ActionMsg
-	if t.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
 	switch msg.Action {
@@ -3413,7 +3413,7 @@ func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
 
 func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request) {
 	msg := cmn.ActionMsg{}
-	if t.readJSON(w, r, &msg) != nil {
+	if cmn.ReadJSON(w, r, &msg) != nil {
 		t.invalmsghdlr(w, r, "Invalid mountpath request")
 		return
 	}
@@ -3645,7 +3645,7 @@ func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := t.readJSON(w, r, tokenList); err != nil {
+	if err := cmn.ReadJSON(w, r, tokenList); err != nil {
 		s := fmt.Sprintf("Invalid token list: %v", err)
 		t.invalmsghdlr(w, r, s)
 		return

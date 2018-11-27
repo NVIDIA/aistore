@@ -471,7 +471,7 @@ func TestMetaSyncData(t *testing.T) {
 			}
 
 			d := make(map[string]string)
-			err := primary.readJSON(w, r, &d)
+			err := cmn.ReadJSON(w, r, &d)
 			ch <- data{d, err}
 		}
 
@@ -747,7 +747,7 @@ func TestMetaSyncReceive(t *testing.T) {
 		chProxy := make(chan map[string]string, 10)
 		fProxy := func(w http.ResponseWriter, r *http.Request) {
 			d := make(map[string]string)
-			primary.readJSON(w, r, &d) // ignore json error
+			cmn.ReadJSON(w, r, &d) // ignore json error
 			chProxy <- d
 		}
 
