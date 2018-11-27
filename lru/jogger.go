@@ -108,7 +108,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 		usetime = mtime
 	}
 	now := time.Now()
-	dontevictime := now.Add(-lctx.ini.Config.LRU.DontEvictTime)
+	dontevictime := now.Add(-cmn.GCO.Get().LRU.DontEvictTime)
 	if usetime.After(dontevictime) {
 		if glog.V(4) {
 			glog.Infof("%s: not evicting (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
@@ -203,7 +203,8 @@ func (lctx *lructx) evictFQN(fqn string) error {
 }
 
 func (lctx *lructx) evictSize() (err error) {
-	hwm, lwm := lctx.ini.Config.LRU.HighWM, lctx.ini.Config.LRU.LowWM
+	config := cmn.GCO.Get()
+	hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
 	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bucketdir)
 	if err != nil {
 		return err

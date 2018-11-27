@@ -22,13 +22,13 @@ import (
 //
 // The LRU module implements a well-known least-recently-used cache replacement policy.
 //
-// In DFC, LRU-driven eviction is based on the two configurable watermarks: ctx.config.LRU.LowWM and
-// ctx.config.LRU.HighWM (section "lru_config" in the setup/config.sh).
+// In DFC, LRU-driven eviction is based on the two configurable watermarks: config.LRU.LowWM and
+// config.LRU.HighWM (section "lru_config" in the setup/config.sh).
 // When and if exceeded, DFC storage target will start gradually evicting objects from its
 // stable storage: oldest first access-time wise.
 //
 // LRU is implemented as a so-called extended action (aka x-action, see xaction.go) that gets
-// triggered when/if a used local capacity exceeds high watermark (ctx.config.LRU.HighWM). LRU then
+// triggered when/if a used local capacity exceeds high watermark (config.LRU.HighWM). LRU then
 // runs automatically. In order to reduce its impact on the live workload, LRU throttles itself
 // in accordance with the current storage-target's utilization (see xaction_throttle.go).
 //
@@ -45,7 +45,6 @@ const (
 
 type (
 	InitLRU struct {
-		Config      *cmn.Config
 		Riostat     *ios.IostatRunner
 		Ratime      *atime.Runner
 		Xlru        cmn.XactInterface
@@ -92,7 +91,7 @@ type (
 
 func InitAndRun(ini *InitLRU) {
 	wg := &sync.WaitGroup{}
-	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, ini.Config.LRU.DontEvictTime)
+	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, cmn.GCO.Get().LRU.DontEvictTime)
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range ini.CtxResolver.RegisteredContentTypes {
@@ -120,7 +119,6 @@ func InitAndRun(ini *InitLRU) {
 func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
 	throttler := &cluster.Throttle{
 		Riostat: ini.Riostat,
-		Config:  ini.Config,
 		Path:    mpathInfo.Path,
 		FS:      mpathInfo.FileSystem,
 		Flag:    cluster.OnDiskUtil | cluster.OnFSUsed}

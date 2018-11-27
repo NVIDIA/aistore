@@ -217,19 +217,6 @@ func parsebool(s string) (value bool, err error) {
 	return
 }
 
-func parsePort(p string) (int, error) {
-	port, err := strconv.Atoi(p)
-	if err != nil {
-		return 0, err
-	}
-
-	if port <= 0 || port >= (1<<16) {
-		return 0, fmt.Errorf("port number (%d) should be between 1 and 65535", port)
-	}
-
-	return port, nil
-}
-
 func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
 	fileIn, err := os.Open(fromFQN)
 	if err != nil {

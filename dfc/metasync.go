@@ -109,7 +109,7 @@ type (
 )
 
 type metasyncer struct {
-	cmn.NamedConfigured
+	cmn.Named
 	p            *proxyrunner          // parent
 	revsmap      map[string]revsdaemon // sync-ed versions (cluster-wide, by DaemonID)
 	last         map[string]revs       // last/current sync-ed
@@ -140,8 +140,9 @@ func newmetasyncer(p *proxyrunner) (y *metasyncer) {
 
 func (y *metasyncer) Run() error {
 	glog.Infof("Starting %s", y.Getname())
-	config := y.Getconf()
+
 	for {
+		config := cmn.GCO.Get()
 		select {
 		case revsReq, ok := <-y.workCh:
 			if ok {
@@ -235,7 +236,7 @@ func (y *metasyncer) doSync(pairs []revspair) (cnt int) {
 		refused        cluster.NodeMap
 		payload        = make(cmn.SimpleKVs)
 		smap           = y.p.smapowner.get()
-		config         = y.Getconf()
+		config         = cmn.GCO.Get()
 	)
 	newCnt := y.countNewMembers(smap)
 	// step 1: validation & enforcement (CoW, non-decremental versioning, duplication)
@@ -371,7 +372,6 @@ func (y *metasyncer) syncDone(sid string, pairs []revspair) {
 }
 
 func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.NodeMap, pairs []revspair) {
-	config := y.Getconf()
 	bcastArgs := bcastCallArgs{
 		req: reqArgs{
 			method: http.MethodPut,
@@ -379,7 +379,7 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.
 			body:   body,
 		},
 		network: cmn.NetworkIntraControl,
-		timeout: config.Timeout.CplaneOperation,
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		nodes:   []cluster.NodeMap{refused},
 	}
 	res := y.p.broadcast(bcastArgs)
@@ -439,7 +439,6 @@ func (y *metasyncer) pending(needMap bool) (count int, pending cluster.NodeMap) 
 
 // gets invoked when retryTimer fires; returns updated number of still pending
 func (y *metasyncer) handlePending() (cnt int) {
-	config := y.Getconf()
 	count, pending := y.pending(true)
 	if count == 0 {
 		glog.Infof("no pending revs - all good")
@@ -469,7 +468,7 @@ func (y *metasyncer) handlePending() (cnt int) {
 			body:   body,
 		},
 		network: cmn.NetworkIntraControl,
-		timeout: config.Timeout.CplaneOperation,
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		nodes:   []cluster.NodeMap{pending},
 	}
 	res := y.p.broadcast(bcastArgs)

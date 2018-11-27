@@ -133,14 +133,9 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 		fs.Mountpaths.Add(mpath)
 	}
 
-	maxMapSize = atimeCacheFlushThreshold * 2
-	statsPeriod = time.Second
-
+	updateTestConfig(time.Second)
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	iostatr.Setconf(config)
-
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
+	atimer := NewRunner(fs.Mountpaths, iostatr)
 
 	go atimer.Run()
 	go iostatr.Run()

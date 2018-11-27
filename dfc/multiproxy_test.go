@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/cluster"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/json-iterator/go"
 )
 
@@ -34,7 +35,9 @@ func newDiscoverServerPrimary() *proxyrunner {
 	p.si = newSnode("primary", httpProto, &net.TCPAddr{}, &net.TCPAddr{}, &net.TCPAddr{})
 	p.smapowner = &smapowner{}
 	p.httpclientLongTimeout = &http.Client{}
-	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	config := cmn.GCO.BeginUpdate()
+	config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	cmn.GCO.CommitUpdate(config)
 	p.keepalive = newProxyKeepaliveRunner(&p)
 	return &p
 }

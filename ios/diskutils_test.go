@@ -31,9 +31,8 @@ func TestGetFSDiskUtil(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.Add(tempRoot)
 
-	config := testConfig(time.Second)
+	updateTestConfig(time.Second)
 	riostat := NewIostatRunner(fs.Mountpaths)
-	riostat.Setconf(config)
 
 	go riostat.Run()
 
@@ -140,9 +139,8 @@ func TestGetMaxUtil(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths.Add(tempRoot)
 
-	config := testConfig(time.Second)
+	updateTestConfig(time.Second)
 	riostat := NewIostatRunner(fs.Mountpaths)
-	riostat.Setconf(config)
 
 	riostat.Disk = make(map[string]cmn.SimpleKVs, 2)
 	disks := make(cmn.StringSet)
@@ -173,9 +171,8 @@ func TestGetFSDiskUtilizationInvalid(t *testing.T) {
 	tempRoot := "/tmp"
 	fs.Mountpaths.Add(tempRoot)
 
-	config := testConfig(time.Second)
+	updateTestConfig(time.Second)
 	riostat := NewIostatRunner(fs.Mountpaths)
-	riostat.Setconf(config)
 
 	_, ok := riostat.diskUtilFromFQN("test")
 	if ok {
@@ -376,8 +373,8 @@ func TestLsblk(t *testing.T) {
 	}
 }
 
-func testConfig(d time.Duration) *cmn.Config {
-	config := cmn.Config{}
+func updateTestConfig(d time.Duration) {
+	config := cmn.GCO.BeginUpdate()
 	config.Periodic.StatsTime = d
-	return &config
+	cmn.GCO.CommitUpdate(config)
 }

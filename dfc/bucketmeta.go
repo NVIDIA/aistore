@@ -104,7 +104,7 @@ func (m *bucketMD) propsAndChecksum(bucket string) (p cmn.BucketProps, checksum 
 func (m *bucketMD) lruEnabled(bucket string) bool {
 	ok, p := m.get(bucket, m.IsLocal(bucket))
 	if !ok {
-		return ctx.config.LRU.LRUEnabled
+		return cmn.GCO.Get().LRU.LRUEnabled
 	}
 	return p.LRUEnabled
 }

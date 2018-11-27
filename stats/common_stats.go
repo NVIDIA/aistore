@@ -78,10 +78,11 @@ type (
 	}
 	statsrunner struct {
 		sync.RWMutex
-		cmn.NamedConfigured
+		cmn.Named
 		stopCh    chan struct{}
 		workCh    chan NamedVal64
 		starttime time.Time
+		ticker    *time.Ticker
 	}
 	// Stats are tracked via a map of stats names (key) to statInstances (values).
 	// There are two main types of stats: counter and latency declared
@@ -146,23 +147,30 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	r.workCh = make(chan NamedVal64, 256)
 	r.starttime = time.Now()
 
+	// subscribe for config changes
+	cmn.GCO.Subscribe(r)
+
 	glog.Infof("Starting %s", r.Getname())
-	config := r.Getconf()
-	ticker := time.NewTicker(config.Periodic.StatsTime)
+	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime)
 	for {
 		select {
 		case nv, ok := <-r.workCh:
 			if ok {
 				logger.doAdd(nv)
 			}
-		case <-ticker.C:
+		case <-r.ticker.C:
 			runlru := logger.log()
 			logger.housekeep(runlru)
 		case <-r.stopCh:
-			ticker.Stop()
+			r.ticker.Stop()
 			return nil
 		}
 	}
+}
+
+func (r *statsrunner) ConfigUpdate(config *cmn.Config) {
+	r.ticker.Stop()
+	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 }
 
 func (r *statsrunner) Stop(err error) {

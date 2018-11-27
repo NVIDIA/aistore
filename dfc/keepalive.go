@@ -46,6 +46,8 @@ type keepaliver interface {
 	heardFrom(sid string, reset bool)
 	doKeepalive() (stopped bool)
 	isTimeToPing(sid string) bool
+
+	cmn.ConfigListener
 }
 
 type targetKeepaliveRunner struct {
@@ -99,25 +101,35 @@ type KeepaliveTracker interface {
 }
 
 func newTargetKeepaliveRunner(t *targetrunner) *targetKeepaliveRunner {
+	config := cmn.GCO.Get()
+
 	tkr := &targetKeepaliveRunner{t: t}
 	tkr.keepalive.k = tkr
-	tkr.kt = newKeepaliveTracker(&ctx.config.KeepaliveTracker.Target, &t.statsdC)
+	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target, &t.statsdC)
 	tkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	tkr.controlCh = make(chan controlSignal, 1)
-	tkr.interval = ctx.config.KeepaliveTracker.Target.Interval
-	tkr.maxKeepaliveTime = float64(ctx.config.Timeout.MaxKeepalive.Nanoseconds())
+	tkr.interval = config.KeepaliveTracker.Target.Interval
+	tkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 	return tkr
 }
 
 func newProxyKeepaliveRunner(p *proxyrunner) *proxyKeepaliveRunner {
+	config := cmn.GCO.Get()
+
 	pkr := &proxyKeepaliveRunner{p: p}
 	pkr.keepalive.k = pkr
-	pkr.kt = newKeepaliveTracker(&ctx.config.KeepaliveTracker.Proxy, &p.statsdC)
+	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy, &p.statsdC)
 	pkr.tt = &timeoutTracker{timeoutStatsMap: make(map[string]*timeoutStats)}
 	pkr.controlCh = make(chan controlSignal, 1)
-	pkr.interval = ctx.config.KeepaliveTracker.Proxy.Interval
-	pkr.maxKeepaliveTime = float64(ctx.config.Timeout.MaxKeepalive.Nanoseconds())
+	pkr.interval = config.KeepaliveTracker.Proxy.Interval
+	pkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 	return pkr
+}
+
+func (tkr *targetKeepaliveRunner) ConfigUpdate(config *cmn.Config) {
+	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target, &tkr.t.statsdC)
+	tkr.interval = config.KeepaliveTracker.Target.Interval
+	tkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 }
 
 func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
@@ -131,6 +143,12 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 		}
 	}
 	return
+}
+
+func (pkr *proxyKeepaliveRunner) ConfigUpdate(config *cmn.Config) {
+	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy, &pkr.p.statsdC)
+	pkr.interval = config.KeepaliveTracker.Proxy.Interval
+	pkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
 }
 
 func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {
@@ -296,7 +314,7 @@ func (pkr *proxyKeepaliveRunner) retry(si *cluster.Snode, args callArgs) (ok, st
 	var (
 		i       int
 		timeout = time.Duration(pkr.timeoutStatsForDaemon(si.DaemonID).timeout)
-		ticker  = time.NewTicker(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor)
+		ticker  = time.NewTicker(cmn.GCO.Get().Timeout.CplaneOperation * keepaliveRetryFactor)
 	)
 	defer ticker.Stop()
 	for {
@@ -351,7 +369,7 @@ func (k *keepalive) Run() error {
 				ticker.Stop()
 				return nil
 			case someError:
-				if time.Since(lastCheck) >= ctx.config.Timeout.CplaneOperation*keepaliveRetryFactor {
+				if time.Since(lastCheck) >= cmn.GCO.Get().Timeout.CplaneOperation*keepaliveRetryFactor {
 					lastCheck = time.Now()
 					glog.Infof("keepalive triggered by err: %v", sig.err)
 					if stopped := k.k.doKeepalive(); stopped {
@@ -378,7 +396,7 @@ func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID
 	glog.Infof("daemon -> primary proxy keepalive failed, err: %v, status: %d", err, s)
 
 	var i int
-	ticker := time.NewTicker(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor)
+	ticker := time.NewTicker(cmn.GCO.Get().Timeout.CplaneOperation * keepaliveRetryFactor)
 	defer ticker.Stop()
 	for {
 		select {
@@ -468,10 +486,6 @@ func (k *keepalive) Stop(err error) {
 //
 // trackers
 //
-const (
-	heartbeatType = "heartbeat"
-	averageType   = "average"
-)
 
 var (
 	_ KeepaliveTracker = &HeartBeatTracker{}
@@ -487,17 +501,12 @@ type HeartBeatTracker struct {
 	statsdC  *statsd.Client
 }
 
-// ValidKeepaliveType returns true if the keepalive type is supported.
-func ValidKeepaliveType(t string) bool {
-	return t == heartbeatType || t == averageType
-}
-
 // NewKeepaliveTracker returns a keepalive tracker based on the parameters given.
-func newKeepaliveTracker(c *cmn.KeepaliveTrackerConf, statsdC *statsd.Client) KeepaliveTracker {
+func newKeepaliveTracker(c cmn.KeepaliveTrackerConf, statsdC *statsd.Client) KeepaliveTracker {
 	switch c.Name {
-	case heartbeatType:
+	case cmn.KeepaliveHeartbeatType:
 		return newHeartBeatTracker(c.Interval, statsdC)
-	case averageType:
+	case cmn.KeepaliveAverageType:
 		return newAverageTracker(c.Factor, statsdC)
 	}
 	return nil

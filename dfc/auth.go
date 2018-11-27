@@ -86,7 +86,7 @@ func decryptToken(tokenStr string) (*authRec, error) {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 
-		return []byte(ctx.config.Auth.Secret), nil
+		return []byte(cmn.GCO.Get().Auth.Secret), nil
 	})
 	if err != nil {
 		return nil, err

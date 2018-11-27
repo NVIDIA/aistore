@@ -224,6 +224,7 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 		timeout: timeout,
 	}
 
+	config := cmn.GCO.Get()
 	for {
 		res := t.call(callArgs)
 		if res.err == nil {
@@ -237,13 +238,13 @@ func (t *targetrunner) pingTarget(si *cluster.Snode, timeout time.Duration, dead
 			glog.Infof("%s is offline, err: %v", si.PublicNet.DirectURL, res.err)
 		}
 		callArgs.timeout = time.Duration(float64(callArgs.timeout)*1.5 + 0.5)
-		if callArgs.timeout > ctx.config.Timeout.MaxKeepalive {
-			callArgs.timeout = ctx.config.Timeout.MaxKeepalive
+		if callArgs.timeout > config.Timeout.MaxKeepalive {
+			callArgs.timeout = config.Timeout.MaxKeepalive
 		}
 		if time.Since(pollstarted) > deadline {
 			break
 		}
-		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+		time.Sleep(config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
 	}
 
 	return ok
@@ -265,11 +266,12 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		timeout: defaultTimeout,
 	}
 
+	config := cmn.GCO.Get()
 	for {
 		res := t.call(args)
 		// retry once
 		if res.err == context.DeadlineExceeded {
-			args.timeout = ctx.config.Timeout.CplaneOperation * keepaliveTimeoutFactor * 2
+			args.timeout = config.Timeout.CplaneOperation * keepaliveTimeoutFactor * 2
 			res = t.call(args)
 		}
 
@@ -289,7 +291,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 			break
 		}
 
-		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+		time.Sleep(config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
 	}
 
 	// Phase 2: Wait to ensure any rebalancing on neighbor has kicked in.
@@ -325,7 +327,7 @@ func (t *targetrunner) waitForRebalanceFinish(si *cluster.Snode, rebalanceVersio
 		}
 
 		glog.Infof("waiting for rebalance: %v", si.PublicNet.DirectURL)
-		time.Sleep(ctx.config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
+		time.Sleep(config.Timeout.CplaneOperation * keepaliveRetryFactor * 2)
 	}
 }
 
@@ -341,6 +343,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	wg.Add(neighborCnt)
 	cancelCh := make(chan string, neighborCnt)
 
+	config := cmn.GCO.Get()
 	for _, si := range newsmap.Tmap {
 		if si.DaemonID == t.si.DaemonID {
 			continue
@@ -349,8 +352,8 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		go func(si *cluster.Snode) {
 			ok := t.pingTarget(
 				si,
-				ctx.config.Timeout.CplaneOperation*keepaliveTimeoutFactor,
-				ctx.config.Rebalance.DestRetryTime,
+				config.Timeout.CplaneOperation*keepaliveTimeoutFactor,
+				config.Rebalance.DestRetryTime,
 			)
 			if !ok {
 				cancelCh <- si.PublicNet.DirectURL

@@ -204,8 +204,7 @@ func (r *Trunner) log() (runlru bool) {
 		lines = append(lines, string(b))
 	}
 	// capacity
-	config := r.Getconf()
-	if time.Since(r.timeUpdatedCapacity) >= config.LRU.CapacityUpdTime {
+	if time.Since(r.timeUpdatedCapacity) >= cmn.GCO.Get().LRU.CapacityUpdTime {
 		runlru = r.UpdateCapacity()
 		r.timeUpdatedCapacity = time.Now()
 		for mpath, fsCapacity := range r.Capacity {
@@ -254,7 +253,7 @@ func (r *Trunner) log() (runlru bool) {
 func (r *Trunner) housekeep(runlru bool) {
 	var (
 		t      = r.TargetRunner
-		config = r.Getconf()
+		config = cmn.GCO.Get()
 	)
 	if runlru && config.LRU.LRUEnabled {
 		go t.RunLRU()
@@ -273,7 +272,7 @@ func (r *Trunner) housekeep(runlru bool) {
 }
 
 func (r *Trunner) removeLogs(maxtotal uint64) {
-	config := r.Getconf()
+	config := cmn.GCO.Get()
 	logfinfos, err := ioutil.ReadDir(config.Log.Dir)
 	if err != nil {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
@@ -316,9 +315,8 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 		glog.Infof("GC logs: started")
 	}
 	sort.Slice(filteredInfos, fiLess)
-	config := r.Getconf()
 	for _, logfi := range filteredInfos[:len(filteredInfos)-1] { // except last = current
-		logfqn := config.Log.Dir + "/" + logfi.Name()
+		logfqn := cmn.GCO.Get().Log.Dir + "/" + logfi.Name()
 		if err := os.Remove(logfqn); err == nil {
 			tot -= logfi.Size()
 			glog.Infof("GC logs: removed %s", logfqn)
@@ -337,7 +335,6 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 func (r *Trunner) UpdateCapacity() (runlru bool) {
 	availableMountpaths, _ := fs.Mountpaths.Get()
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
-	config := r.Getconf()
 	for mpath := range availableMountpaths {
 		statfs := &syscall.Statfs_t{}
 		if err := syscall.Statfs(mpath, statfs); err != nil {
@@ -346,7 +343,7 @@ func (r *Trunner) UpdateCapacity() (runlru bool) {
 		}
 		fsCap := newFSCapacity(statfs)
 		capacities[mpath] = fsCap
-		if fsCap.Usedpct >= config.LRU.HighWM {
+		if fsCap.Usedpct >= cmn.GCO.Get().LRU.HighWM {
 			runlru = true
 		}
 	}

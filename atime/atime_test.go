@@ -26,16 +26,15 @@ func init() {
 	mpath := "/tmp"
 	fs.Mountpaths.Add(mpath)
 
+	updateTestConfig(statsPeriod)
 	riostat = ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	riostat.Setconf(config)
 }
 
 func TestAtimerunnerStop(t *testing.T) {
 	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -59,7 +58,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -92,13 +91,12 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	fs.Mountpaths = fs.NewMountedFS()
 	defer func() { fs.Mountpaths = q }()
 
+	updateTestConfig(statsPeriod)
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	iostatr.Setconf(config)
 
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
+	atimer := NewRunner(fs.Mountpaths, iostatr)
 
 	go atimer.Run()
 	time.Sleep(50 * time.Millisecond)
@@ -113,7 +111,7 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 }
 
 func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
 	atimer.ReqAddMountpath("/tmp")
 
@@ -139,7 +137,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	mpath := "/tmp"
 	fileName := "/tmp/local/bck1/fqn1"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -181,7 +179,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 	fileName1 := "/tmp/cloud/bck1/fqn1"
 	fileName2 := "/tmp/local/bck2/fqn2"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -216,7 +214,7 @@ func TestAtimerunnerFlush(t *testing.T) {
 	fileName2 := "/tmp/local/bck2/fqn2"
 	fileName3 := "/tmp/local/bck2/fqn3"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 	go atimer.Run()
 	atimer.ReqAddMountpath(mpath)
 	time.Sleep(50 * time.Millisecond)
@@ -247,7 +245,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	fileName1 := "/tmp/local/bck1/fqn1"
 	fileName2 := "/tmp/cloud/bck2/fqn2"
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	atimer := NewRunner(fs.Mountpaths, riostat)
 
 	go riostat.Run()
 	go atimer.Run()
@@ -272,7 +270,6 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 
 func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 	mpath := "/tmp"
-	maxMapSize = 1
 	statsPeriod = time.Second
 
 	q := riostat.Disk
@@ -284,7 +281,11 @@ func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
 		},
 	}
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, riostat)
+	config := cmn.GCO.BeginUpdate()
+	config.LRU.AtimeCacheMax = 1
+	cmn.GCO.CommitUpdate(config)
+
+	atimer := NewRunner(fs.Mountpaths, riostat)
 
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
@@ -316,11 +317,10 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	maxMapSize = uint64(itemCount)
 	statsPeriod = time.Second
 
+	updateTestConfig(statsPeriod)
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	iostatr.Setconf(config)
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
+	atimer := NewRunner(fs.Mountpaths, iostatr)
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
 	atimer.ReqAddMountpath(mpath)
@@ -358,11 +358,10 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 	maxMapSize = uint64(itemCount*(200-atimeHWM)/100) + 10
 	statsPeriod = time.Second
 
+	updateTestConfig(statsPeriod)
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	iostatr.Setconf(config)
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
+	atimer := NewRunner(fs.Mountpaths, iostatr)
 
 	go iostatr.Run()
 	go atimer.Run()
@@ -401,11 +400,10 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	maxMapSize = uint64(itemCount*(200-atimeLWM)/100) + 10
 	statsPeriod = time.Second
 
+	updateTestConfig(statsPeriod)
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	iostatr.Setconf(config)
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
+	atimer := NewRunner(fs.Mountpaths, iostatr)
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
 	atimer.ReqAddMountpath(mpath)
@@ -443,11 +441,10 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	maxMapSize = uint64(itemCount * 1000)
 	statsPeriod = time.Second
 
+	updateTestConfig(statsPeriod)
 	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-	config := testConfig(statsPeriod)
-	iostatr.Setconf(config)
 
-	atimer := NewRunner(fs.Mountpaths, &maxMapSize, iostatr)
+	atimer := NewRunner(fs.Mountpaths, iostatr)
 	go atimer.Run()
 	defer func() { atimer.Stop(nil) }()
 	atimer.ReqAddMountpath(mpath)
@@ -489,8 +486,9 @@ func cleanMountpaths() {
 	}
 }
 
-func testConfig(d time.Duration) *cmn.Config {
-	config := cmn.Config{}
+func updateTestConfig(d time.Duration) {
+	config := cmn.GCO.BeginUpdate()
 	config.Periodic.StatsTime = d
-	return &config
+	config.LRU.AtimeCacheMax = maxMapSize
+	cmn.GCO.CommitUpdate(config)
 }

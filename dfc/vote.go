@@ -297,7 +297,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xele *xactElection) {
 	// First, ping current proxy with a short timeout: (Primary? State)
 	primaryURL := curPrimary.PublicNet.DirectURL
-	proxyup, err := p.pingWithTimeout(curPrimary, ctx.config.Timeout.ProxyPing)
+	proxyup, err := p.pingWithTimeout(curPrimary, cmn.GCO.Get().Timeout.ProxyPing)
 	if proxyup {
 		// Move back to Idle state
 		glog.Infof("current primary %s is up: moving back to idle", primaryURL)
@@ -386,7 +386,7 @@ func (p *proxyrunner) requestVotes(vr *VoteRecord) chan voteResult {
 		http.MethodGet,
 		jsbytes,
 		smap,
-		ctx.config.Timeout.CplaneOperation,
+		cmn.GCO.Get().Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
 		cluster.AllNodes,
 	)
@@ -430,7 +430,7 @@ func (p *proxyrunner) confirmElectionVictory(vr *VoteRecord) map[string]bool {
 		http.MethodPut,
 		jsbytes,
 		smap,
-		ctx.config.Timeout.CplaneOperation,
+		cmn.GCO.Get().Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
 		cluster.AllNodes,
 	)
@@ -534,7 +534,7 @@ func (h *httprunner) sendElectionRequest(vr *VoteInitiation, nextPrimaryProxy *c
 	if res.err != nil {
 		if cmn.IsErrConnectionRefused(res.err) {
 			for i := 0; i < 2; i++ {
-				time.Sleep(ctx.config.Timeout.CplaneOperation)
+				time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
 				res = h.call(args)
 				if res.err == nil {
 					break

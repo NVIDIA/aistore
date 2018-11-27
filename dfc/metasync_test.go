@@ -82,10 +82,13 @@ func newPrimary() *proxyrunner {
 	smap.ProxySI = p.si
 	p.smapowner.put(smap)
 
+	config := cmn.GCO.BeginUpdate()
+	config.Periodic.RetrySyncTime = time.Millisecond * 100
+	config.KeepaliveTracker.Proxy.Name = "heartbeat"
+	config.KeepaliveTracker.Proxy.IntervalStr = "as"
+	cmn.GCO.CommitUpdate(config)
+
 	p.httpclientLongTimeout = &http.Client{}
-	ctx.config.Periodic.RetrySyncTime = time.Millisecond * 100
-	ctx.config.KeepaliveTracker.Proxy.Name = "heartbeat"
-	ctx.config.KeepaliveTracker.Proxy.IntervalStr = "as"
 	p.keepalive = newProxyKeepaliveRunner(&p)
 
 	p.bmdowner = &bmdowner{}
@@ -589,7 +592,7 @@ func TestMetaSyncData(t *testing.T) {
 	bucketmd = bucketmd.clone()
 	bprops := cmn.BucketProps{
 		CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-		LRUConf:   ctx.config.LRU,
+		LRUConf:   cmn.GCO.Get().LRU,
 	}
 	bucketmd.add("bucket3", true, bprops)
 	b, err = bucketmd.marshal()
@@ -790,6 +793,5 @@ func TestMetaSyncReceive(t *testing.T) {
 
 func testSyncer(p *proxyrunner) (syncer *metasyncer) {
 	syncer = newmetasyncer(p)
-	syncer.Setconf(&ctx.config)
 	return
 }

@@ -21,13 +21,7 @@ type Test struct {
 	method func(*testing.T)
 }
 
-type ctxT struct {
-	config cmn.Config
-}
-
 var riostat *ios.IostatRunner
-
-var ctx = &ctxT{}
 
 var aTests = []Test{
 	{"testHighDiskUtilization", testHighDiskUtilization},
@@ -43,29 +37,29 @@ var aTests = []Test{
 	{"testChangedDiskUtilBeforeUtilCheck", testChangedDiskUtilBeforeUtilCheck},
 }
 
-func init() {
-	ctx.config.LRU.LowWM = 75
-	ctx.config.LRU.HighWM = 90
-	ctx.config.Xaction.DiskUtilLowWM = 60
-	ctx.config.Xaction.DiskUtilHighWM = 80
-	ctx.config.Periodic.StatsTime = time.Second
+func beforeEach() {
+	config := cmn.GCO.BeginUpdate()
+	config.LRU.LowWM = 75
+	config.LRU.HighWM = 90
+	config.Xaction.DiskUtilLowWM = 60
+	config.Xaction.DiskUtilHighWM = 80
+	config.Periodic.StatsTime = time.Second
+	cmn.GCO.CommitUpdate(config)
 }
 
 func Test_Throttle(t *testing.T) {
-	var dcopy = *ctx
-	cmn.CopyStruct(&dcopy, ctx)
-	defer func() { cmn.CopyStruct(ctx, &dcopy) }()
-	ctx.config.LRU.LowWM = 0
-	ctx.config.LRU.HighWM = 90
-	ctx.config.Xaction.DiskUtilLowWM = 10
-	ctx.config.Xaction.DiskUtilHighWM = 40
-	ctx.config.Periodic.StatsTime = time.Second
+	config := cmn.GCO.BeginUpdate()
+	config.LRU.LowWM = 0
+	config.LRU.HighWM = 90
+	config.Xaction.DiskUtilLowWM = 10
+	config.Xaction.DiskUtilHighWM = 40
+	config.Periodic.StatsTime = time.Second
+	cmn.GCO.CommitUpdate(config)
 
 	fs.Mountpaths = fs.NewMountedFS()
 	fs.Mountpaths.Add("/")
 
 	riostat = ios.NewIostatRunner(fs.Mountpaths)
-	riostat.Setconf(&ctx.config)
 
 	go riostat.Run()
 	time.Sleep(time.Second)
@@ -77,29 +71,32 @@ func Test_Throttle(t *testing.T) {
 
 	}
 
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM-10)
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilLowWM+10)
-	testHighFSCapacityUsed(t, ctx.config.Xaction.DiskUtilHighWM+10)
+	testHighFSCapacityUsed(t, config.Xaction.DiskUtilLowWM-10)
+	testHighFSCapacityUsed(t, config.Xaction.DiskUtilLowWM+10)
+	testHighFSCapacityUsed(t, config.Xaction.DiskUtilHighWM+10)
 
 	for _, test := range aTests {
+		beforeEach()
 		t.Run(test.name, test.method)
 	}
 }
 
 func testHighFSCapacityUsed(t *testing.T, diskUtil int64) {
+	config := cmn.GCO.BeginUpdate()
 	curCapacity, _ := ios.GetFSUsedPercentage("/")
-	oldLRUHWM := ctx.config.LRU.HighWM
-	ctx.config.LRU.HighWM = int64(curCapacity - 1)
+	config.LRU.HighWM = int64(curCapacity - 1)
+	cmn.GCO.CommitUpdate(config)
+
 	thrctx := newThrottleContext()
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
-	ctx.config.LRU.HighWM = oldLRUHWM
 }
 
 func testHighDiskUtilization(t *testing.T) {
-	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
+	config := cmn.GCO.Get()
+	diskUtil := config.Xaction.DiskUtilHighWM + 10
 	thrctx := newThrottleContext()
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
@@ -109,7 +106,8 @@ func testHighDiskUtilization(t *testing.T) {
 }
 
 func testLowDiskUtilization(t *testing.T) {
-	diskUtil := ctx.config.Xaction.DiskUtilLowWM - 10
+	config := cmn.GCO.Get()
+	diskUtil := config.Xaction.DiskUtilLowWM - 10
 	thrctx := newThrottleContext()
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
@@ -118,7 +116,8 @@ func testLowDiskUtilization(t *testing.T) {
 }
 
 func testHighDiskUtilizationShortDuration(t *testing.T) {
-	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 5
+	config := cmn.GCO.Get()
+	diskUtil := config.Xaction.DiskUtilHighWM + 5
 	thrctx := newThrottleContext()
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != initThrottleSleep {
@@ -137,8 +136,9 @@ func testHighDiskUtilizationShortDuration(t *testing.T) {
 }
 
 func testHighDiskUtilizationLongDuration(t *testing.T) {
+	config := cmn.GCO.Get()
 	thrctx := newThrottleContext()
-	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 5
+	diskUtil := config.Xaction.DiskUtilHighWM + 5
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != initThrottleSleep {
 		t.Errorf(fmstr, initThrottleSleep, sleepDuration)
@@ -163,21 +163,22 @@ func testHighDiskUtilizationLongDuration(t *testing.T) {
 }
 
 func testIncreasingDiskUtilization(t *testing.T) {
+	config := cmn.GCO.Get()
 	thrctx := newThrottleContext()
-	diskUtil := ctx.config.Xaction.DiskUtilLowWM - 10
+	diskUtil := config.Xaction.DiskUtilLowWM - 10
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
-	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 10
+	diskUtil = config.Xaction.DiskUtilLowWM + 10
 	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
 		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
 	expectedDuration := sleepDuration * 2
-	diskUtil = ctx.config.Xaction.DiskUtilHighWM + 10
+	diskUtil = config.Xaction.DiskUtilHighWM + 10
 	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != expectedDuration {
 		t.Errorf(fmstr, expectedDuration, sleepDuration)
@@ -185,31 +186,33 @@ func testIncreasingDiskUtilization(t *testing.T) {
 }
 
 func testDecreasingDiskUtilization(t *testing.T) {
+	config := cmn.GCO.Get()
 	thrctx := newThrottleContext()
-	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
+	diskUtil := config.Xaction.DiskUtilHighWM + 10
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration != expectedDuration {
 		t.Errorf(fmstr, expectedDuration, sleepDuration)
 	}
 
-	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 10
+	diskUtil = config.Xaction.DiskUtilLowWM + 10
 	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= 1*time.Millisecond || sleepDuration >= 2*time.Millisecond {
 		t.Errorf("Sleep duration [%v] expected between 1ms and 2ms", sleepDuration)
 	}
 
-	diskUtil = ctx.config.Xaction.DiskUtilLowWM - 10
+	diskUtil = config.Xaction.DiskUtilLowWM - 10
 	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf("Throttling is not required when disk utilization [%d] is lower than LowWM [%d].",
-			diskUtil, ctx.config.Xaction.DiskUtilLowWM)
+			diskUtil, config.Xaction.DiskUtilLowWM)
 	}
 }
 
 func testMediumDiskUtilization(t *testing.T) {
+	config := cmn.GCO.Get()
 	thrctx := newThrottleContext()
-	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 5
+	diskUtil := config.Xaction.DiskUtilLowWM + 5
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
@@ -233,8 +236,9 @@ func testMediumDiskUtilization(t *testing.T) {
 }
 
 func testConstantDiskUtilization(t *testing.T) {
+	config := cmn.GCO.Get()
 	thrctx := newThrottleContext()
-	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 10
+	diskUtil := config.Xaction.DiskUtilLowWM + 10
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
@@ -250,8 +254,9 @@ func testConstantDiskUtilization(t *testing.T) {
 }
 
 func testMultipleLRUContexts(t *testing.T) {
+	config := cmn.GCO.Get()
 	thrctx := newThrottleContext()
-	diskUtil := ctx.config.Xaction.DiskUtilLowWM + 10
+	diskUtil := config.Xaction.DiskUtilLowWM + 10
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	expectedDuration := 1 * time.Millisecond
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
@@ -261,13 +266,13 @@ func testMultipleLRUContexts(t *testing.T) {
 	expectedDuration = sleepDuration
 
 	thrctx2 := newThrottleContext()
-	diskUtil = ctx.config.Xaction.DiskUtilLowWM - 10
+	diskUtil = config.Xaction.DiskUtilLowWM - 10
 	sleepDuration = getSleepDuration(diskUtil, thrctx2)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
-	diskUtil = ctx.config.Xaction.DiskUtilLowWM + 11
+	diskUtil = config.Xaction.DiskUtilLowWM + 11
 	sleepDuration = getSleepDuration(diskUtil, thrctx)
 	if sleepDuration <= expectedDuration || sleepDuration >= expectedDuration*2 {
 		t.Errorf(fmstr, expectedDuration, sleepDuration)
@@ -275,29 +280,35 @@ func testMultipleLRUContexts(t *testing.T) {
 }
 
 func testChangedFSUsedPercentageBeforeCapCheck(t *testing.T) {
+	config := cmn.GCO.BeginUpdate()
 	thrctx := newThrottleContext()
-	oldLRUHWM := ctx.config.LRU.HighWM
 	curCapacity, _ := ios.GetFSUsedPercentage("/")
-	diskUtil := ctx.config.Xaction.DiskUtilHighWM + 10
-	ctx.config.LRU.HighWM = int64(curCapacity - 2)
+	config.LRU.HighWM = int64(curCapacity - 2)
+	cmn.GCO.CommitUpdate(config)
+
+	diskUtil := config.Xaction.DiskUtilHighWM + 10
 	sleepDuration := getSleepDuration(diskUtil, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
 
-	ctx.config.LRU.HighWM = int64(curCapacity + 10)
+	config = cmn.GCO.BeginUpdate()
+	config.LRU.HighWM = int64(curCapacity + 10)
+	cmn.GCO.CommitUpdate(config)
+
 	thrctx.recompute()
 	sleepDuration = thrctx.sleep
 	if sleepDuration != initThrottleSleep {
 		t.Errorf(fmstr, initThrottleSleep, sleepDuration)
 	}
-	ctx.config.LRU.HighWM = oldLRUHWM
 }
 
 func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 	thrctx := newThrottleContext()
-	oldStatsTime := ctx.config.Periodic.StatsTime
-	ctx.config.Periodic.StatsTime = 10 * time.Minute
+	config := cmn.GCO.BeginUpdate()
+	config.Periodic.StatsTime = 10 * time.Minute
+	cmn.GCO.CommitUpdate(config)
+
 	sleepDuration := getSleepDuration(0, thrctx)
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
@@ -312,7 +323,6 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
-	ctx.config.Periodic.StatsTime = oldStatsTime
 }
 
 func getSleepDuration(diskUtil int64, thrctx *Throttle) time.Duration {
@@ -331,7 +341,6 @@ func newThrottleContext() *Throttle {
 	fileSystem, _ := fs.Fqn2fsAtStartup("/")
 	return &Throttle{
 		Riostat: riostat,
-		Config:  &ctx.config,
 		Path:    "/",
 		FS:      fileSystem,
 		Flag:    OnDiskUtil | OnFSUsed}

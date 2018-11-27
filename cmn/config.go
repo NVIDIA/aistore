@@ -1,13 +1,21 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
 
 // Package cmn provides common low-level types and utilities for all dfcpub projects
 package cmn
 
 import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
+
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 )
 
 // as in: mountpath/<content-type>/<CloudBs|LocalBs>/<bucket-name>/...
@@ -15,6 +23,116 @@ const (
 	CloudBs = "cloud"
 	LocalBs = "local"
 )
+
+// $CONFDIR/*
+const (
+	SmapBackupFile       = "smap.json"
+	BucketmdBackupFile   = "bucket-metadata" // base name of the config file; not to confuse with config.Localbuckets mpath
+	MountpathBackupFile  = "mpaths"          // base name to persist fs.Mountpaths
+	RebalanceMarker      = ".rebalancing"
+	LocalRebalanceMarker = ".localrebalancing"
+)
+
+const (
+	RevProxyCloud  = "cloud"
+	RevProxyTarget = "target"
+
+	KeepaliveHeartbeatType = "heartbeat"
+	KeepaliveAverageType   = "average"
+)
+
+//
+// CONFIG PROVIDER
+//
+var (
+	_ ConfigOwner = &globalConfigOwner{}
+)
+
+type (
+	// ConfigOwner is interface for interacting with config. For updating we
+	// introduce two functions: BeginUpdate and CommitUpdate. These two should
+	// protect config from being updated simultaneously (update should work
+	// as transaction).
+	//
+	// Subscribe method should be used by services which require to be notified
+	// about any config changes.
+	ConfigOwner interface {
+		Get() *Config
+		BeginUpdate() *Config
+		CommitUpdate(config *Config)
+		Subscribe(cl ConfigListener)
+	}
+
+	ConfigListener interface {
+		ConfigUpdate(config *Config)
+	}
+)
+
+// globalConfigOwner implements ConfigOwner interface. The implementation is
+// protecting config only from concurrent updates but does not use CoW or other
+// techniques which involves cloning and updating config. This might change when
+// we will have use case for that - then Get and Put would need to be changed
+// accordingly.
+type globalConfigOwner struct {
+	mtx       sync.Mutex // mutex for protecting updates of config
+	c         unsafe.Pointer
+	lmtx      sync.Mutex // mutex for protecting listeners
+	listeners []ConfigListener
+}
+
+var (
+	// GCO stands for global config owner which is responsible for updating
+	// and notifying listeners about any changes in the config. Config is loaded
+	// at startup and then can be accessed/updated by other services.
+	GCO = &globalConfigOwner{}
+)
+
+func init() {
+	config := &Config{}
+	atomic.StorePointer(&GCO.c, unsafe.Pointer(config))
+}
+
+func (gco *globalConfigOwner) Get() *Config {
+	return (*Config)(atomic.LoadPointer(&gco.c))
+}
+
+// When updating we need to make sure that the update is transaction and no
+// other update can happen when other transaction is in progress. Therefore,
+// we introduce locking mechanism which targets this problem.
+//
+// NOTE: BeginUpdate should be followed by CommitUpdate.
+func (gco *globalConfigOwner) BeginUpdate() *Config {
+	gco.mtx.Lock()
+	config := &Config{}
+	CopyStruct(config, gco.Get())
+	return config
+}
+
+// CommitUpdate ends transaction of updating config and notifies listeners
+// about changes in config.
+//
+// NOTE: CommitUpdate should be preceded by BeginUpdate.
+func (gco *globalConfigOwner) CommitUpdate(config *Config) {
+	atomic.StorePointer(&GCO.c, unsafe.Pointer(config))
+	gco.mtx.Unlock()
+	gco.notifyListeners()
+}
+
+func (gco *globalConfigOwner) notifyListeners() {
+	gco.lmtx.Lock()
+	config := gco.Get()
+	for _, listener := range gco.listeners {
+		listener.ConfigUpdate(config)
+	}
+	gco.lmtx.Unlock()
+}
+
+// Subscribe allows listeners to sign up for notifications about config updates.
+func (gco *globalConfigOwner) Subscribe(cl ConfigListener) {
+	gco.lmtx.Lock()
+	gco.listeners = append(gco.listeners, cl)
+	gco.lmtx.Unlock()
+}
 
 //
 // CONFIGURATION
@@ -216,4 +334,282 @@ type KeepaliveTrackerConf struct {
 type KeepaliveConf struct {
 	Proxy  KeepaliveTrackerConf `json:"proxy"`  // how proxy tracks target keepalives
 	Target KeepaliveTrackerConf `json:"target"` // how target tracks primary proxies keepalives
+}
+
+//==============================
+//
+// config functions
+//
+//==============================
+func LoadConfig(configFile string, statsTime time.Duration, proxyURL string, logLevel string) error {
+	config := GCO.BeginUpdate()
+	defer GCO.CommitUpdate(config)
+
+	err := LocalLoad(configFile, &config)
+	if err != nil {
+		glog.Errorf("Failed to load config %q, err: %v", configFile, err)
+		os.Exit(1)
+	}
+
+	if err = flag.Lookup("log_dir").Value.Set(config.Log.Dir); err != nil {
+		glog.Errorf("Failed to flag-set glog dir %q, err: %v", config.Log.Dir, err)
+	}
+	if err = CreateDir(config.Log.Dir); err != nil {
+		glog.Errorf("Failed to create log dir %q, err: %v", config.Log.Dir, err)
+		return err
+	}
+	if err = validateConfig(config); err != nil {
+		return err
+	}
+
+	// glog rotate
+	glog.MaxSize = config.Log.MaxSize
+	if glog.MaxSize > GiB {
+		glog.Errorf("Log.MaxSize %d exceeded 1GB, setting the default 1MB", glog.MaxSize)
+		glog.MaxSize = MiB
+	}
+
+	// Set helpers
+	config.Net.HTTP.Proto = "http" // not validating: read-only, and can take only two values
+	if config.Net.HTTP.UseHTTPS {
+		config.Net.HTTP.Proto = "https"
+	}
+
+	differentIPs := config.Net.IPv4 != config.Net.IPv4IntraControl
+	differentPorts := config.Net.L4.Port != config.Net.L4.PortIntraControl
+	config.Net.UseIntraControl = false
+	if config.Net.IPv4IntraControl != "" && config.Net.L4.PortIntraControl != 0 && (differentIPs || differentPorts) {
+		config.Net.UseIntraControl = true
+	}
+
+	differentIPs = config.Net.IPv4 != config.Net.IPv4IntraData
+	differentPorts = config.Net.L4.Port != config.Net.L4.PortIntraData
+	config.Net.UseIntraData = false
+	if config.Net.IPv4IntraData != "" && config.Net.L4.PortIntraData != 0 && (differentIPs || differentPorts) {
+		config.Net.UseIntraData = true
+	}
+
+	// CLI override
+	if statsTime != 0 {
+		config.Periodic.StatsTime = statsTime
+	}
+	if proxyURL != "" {
+		config.Proxy.PrimaryURL = proxyURL
+	}
+	if logLevel != "" {
+		if err = SetLogLevel(config, logLevel); err != nil {
+			glog.Errorf("Failed to set log level = %s, err: %v", logLevel, err)
+		}
+	} else {
+		if err = SetLogLevel(config, config.Log.Level); err != nil {
+			glog.Errorf("Failed to set log level = %s, err: %v", config.Log.Level, err)
+		}
+	}
+	glog.Infof("Logdir: %q Proto: %s Port: %d Verbosity: %s",
+		config.Log.Dir, config.Net.L4.Proto, config.Net.L4.Port, config.Log.Level)
+	glog.Infof("Config: %q StatsTime: %v", configFile, config.Periodic.StatsTime)
+	return err
+}
+
+func ValidateVersion(version string) error {
+	versions := []string{VersionAll, VersionCloud, VersionLocal, VersionNone}
+	versionValid := false
+	for _, v := range versions {
+		if v == version {
+			versionValid = true
+			break
+		}
+	}
+	if !versionValid {
+		return fmt.Errorf("Invalid version: %s - expecting one of %s", version, strings.Join(versions, ", "))
+	}
+	return nil
+}
+
+func validateConfig(config *Config) (err error) {
+	// durations
+	if config.Periodic.StatsTime, err = time.ParseDuration(config.Periodic.StatsTimeStr); err != nil {
+		return fmt.Errorf("Bad stats-time format %s, err: %v", config.Periodic.StatsTimeStr, err)
+	}
+	if int(config.Periodic.StatsTime/time.Second) <= 0 {
+		return fmt.Errorf("stats-time refresh period is too low (should be higher than 1 second")
+	}
+	if config.Periodic.RetrySyncTime, err = time.ParseDuration(config.Periodic.RetrySyncTimeStr); err != nil {
+		return fmt.Errorf("Bad retry_sync_time format %s, err: %v", config.Periodic.RetrySyncTimeStr, err)
+	}
+	if config.Timeout.Default, err = time.ParseDuration(config.Timeout.DefaultStr); err != nil {
+		return fmt.Errorf("Bad Timeout default format %s, err: %v", config.Timeout.DefaultStr, err)
+	}
+	if config.Timeout.DefaultLong, err = time.ParseDuration(config.Timeout.DefaultLongStr); err != nil {
+		return fmt.Errorf("Bad Timeout default_long format %s, err %v", config.Timeout.DefaultLongStr, err)
+	}
+	if config.LRU.DontEvictTime, err = time.ParseDuration(config.LRU.DontEvictTimeStr); err != nil {
+		return fmt.Errorf("Bad dont_evict_time format %s, err: %v", config.LRU.DontEvictTimeStr, err)
+	}
+	if config.LRU.CapacityUpdTime, err = time.ParseDuration(config.LRU.CapacityUpdTimeStr); err != nil {
+		return fmt.Errorf("Bad capacity_upd_time format %s, err: %v", config.LRU.CapacityUpdTimeStr, err)
+	}
+	if config.Rebalance.DestRetryTime, err = time.ParseDuration(config.Rebalance.DestRetryTimeStr); err != nil {
+		return fmt.Errorf("Bad dest_retry_time format %s, err: %v", config.Rebalance.DestRetryTimeStr, err)
+	}
+
+	hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
+	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
+		return fmt.Errorf("Invalid LRU configuration %+v", config.LRU)
+	}
+
+	diskUtilHWM, diskUtilLWM := config.Xaction.DiskUtilHighWM, config.Xaction.DiskUtilLowWM
+	if diskUtilHWM <= 0 || diskUtilLWM <= 0 || diskUtilHWM <= diskUtilLWM || diskUtilLWM > 100 || diskUtilHWM > 100 {
+		return fmt.Errorf("Invalid Xaction configuration %+v", config.Xaction)
+	}
+
+	if config.Cksum.Checksum != ChecksumXXHash && config.Cksum.Checksum != ChecksumNone {
+		return fmt.Errorf("Invalid checksum: %s - expecting %s or %s", config.Cksum.Checksum, ChecksumXXHash, ChecksumNone)
+	}
+	if err := ValidateVersion(config.Ver.Versioning); err != nil {
+		return err
+	}
+	if config.Timeout.MaxKeepalive, err = time.ParseDuration(config.Timeout.MaxKeepaliveStr); err != nil {
+		return fmt.Errorf("Bad Timeout max_keepalive format %s, err %v", config.Timeout.MaxKeepaliveStr, err)
+	}
+	if config.Timeout.ProxyPing, err = time.ParseDuration(config.Timeout.ProxyPingStr); err != nil {
+		return fmt.Errorf("Bad Timeout proxy_ping format %s, err %v", config.Timeout.ProxyPingStr, err)
+	}
+	if config.Timeout.CplaneOperation, err = time.ParseDuration(config.Timeout.CplaneOperationStr); err != nil {
+		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", config.Timeout.CplaneOperationStr, err)
+	}
+	if config.Timeout.SendFile, err = time.ParseDuration(config.Timeout.SendFileStr); err != nil {
+		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", config.Timeout.SendFileStr, err)
+	}
+	if config.Timeout.Startup, err = time.ParseDuration(config.Timeout.StartupStr); err != nil {
+		return fmt.Errorf("Bad Proxy startup_time format %s, err %v", config.Timeout.StartupStr, err)
+	}
+
+	config.KeepaliveTracker.Proxy.Interval, err = time.ParseDuration(config.KeepaliveTracker.Proxy.IntervalStr)
+	if err != nil {
+		return fmt.Errorf("bad proxy keep alive interval %s", config.KeepaliveTracker.Proxy.IntervalStr)
+	}
+
+	config.KeepaliveTracker.Target.Interval, err = time.ParseDuration(config.KeepaliveTracker.Target.IntervalStr)
+	if err != nil {
+		return fmt.Errorf("bad target keep alive interval %s", config.KeepaliveTracker.Target.IntervalStr)
+	}
+
+	if !validKeepaliveType(config.KeepaliveTracker.Proxy.Name) {
+		return fmt.Errorf("bad proxy keepalive tracker type %s", config.KeepaliveTracker.Proxy.Name)
+	}
+
+	if !validKeepaliveType(config.KeepaliveTracker.Target.Name) {
+		return fmt.Errorf("bad target keepalive tracker type %s", config.KeepaliveTracker.Target.Name)
+	}
+
+	// NETWORK
+
+	// Parse ports
+	if config.Net.L4.Port, err = ParsePort(config.Net.L4.PortStr); err != nil {
+		return fmt.Errorf("Bad public port specified: %v", err)
+	}
+
+	config.Net.L4.PortIntraControl = 0
+	if config.Net.L4.PortIntraControlStr != "" {
+		if config.Net.L4.PortIntraControl, err = ParsePort(config.Net.L4.PortIntraControlStr); err != nil {
+			return fmt.Errorf("Bad internal port specified: %v", err)
+		}
+	}
+	config.Net.L4.PortIntraData = 0
+	if config.Net.L4.PortIntraDataStr != "" {
+		if config.Net.L4.PortIntraData, err = ParsePort(config.Net.L4.PortIntraDataStr); err != nil {
+			return fmt.Errorf("Bad replication port specified: %v", err)
+		}
+	}
+
+	config.Net.IPv4 = strings.Replace(config.Net.IPv4, " ", "", -1)
+	config.Net.IPv4IntraControl = strings.Replace(config.Net.IPv4IntraControl, " ", "", -1)
+	config.Net.IPv4IntraData = strings.Replace(config.Net.IPv4IntraData, " ", "", -1)
+
+	if overlap, addr := ipv4ListsOverlap(config.Net.IPv4, config.Net.IPv4IntraControl); overlap {
+		return fmt.Errorf(
+			"Public and internal addresses overlap: %s (public: %s; internal: %s)",
+			addr, config.Net.IPv4, config.Net.IPv4IntraControl,
+		)
+	}
+	if overlap, addr := ipv4ListsOverlap(config.Net.IPv4, config.Net.IPv4IntraData); overlap {
+		return fmt.Errorf(
+			"Public and replication addresses overlap: %s (public: %s; replication: %s)",
+			addr, config.Net.IPv4, config.Net.IPv4IntraData,
+		)
+	}
+	if overlap, addr := ipv4ListsOverlap(config.Net.IPv4IntraControl, config.Net.IPv4IntraData); overlap {
+		return fmt.Errorf(
+			"Internal and replication addresses overlap: %s (internal: %s; replication: %s)",
+			addr, config.Net.IPv4IntraControl, config.Net.IPv4IntraData,
+		)
+	}
+
+	if config.Net.HTTP.RevProxy != "" {
+		if config.Net.HTTP.RevProxy != RevProxyCloud && config.Net.HTTP.RevProxy != RevProxyTarget {
+			return fmt.Errorf("Invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
+				config.Net.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
+		}
+	}
+	return nil
+}
+
+func SetLogLevel(config *Config, loglevel string) (err error) {
+	v := flag.Lookup("v").Value
+	if v == nil {
+		return fmt.Errorf("nil -v Value")
+	}
+	err = v.Set(loglevel)
+	if err == nil {
+		config.Log.Level = loglevel
+	}
+	return
+}
+
+// setGLogVModule sets glog's vmodule flag
+// sets 'v' as is, no verificaton is done here
+// syntax for v: target=5,proxy=1, p*=3, etc
+func SetGLogVModule(v string) error {
+	f := flag.Lookup("vmodule")
+	if f == nil {
+		return nil
+	}
+
+	err := f.Value.Set(v)
+	if err == nil {
+		glog.Info("log level vmodule changed to ", v)
+	}
+
+	return err
+}
+
+// TestingEnv returns true if DFC is running in dev environment, and
+// moreover, all the cluster is running on a single machine
+func TestingEnv() bool {
+	return GCO.Get().TestFSP.Count > 0
+}
+
+// ipv4ListsOverlap checks if two comma-separated ipv4 address lists
+// contain at least one common ipv4 address
+func ipv4ListsOverlap(alist, blist string) (overlap bool, addr string) {
+	if alist == "" || blist == "" {
+		return
+	}
+	alistAddrs := strings.Split(alist, ",")
+	for _, a := range alistAddrs {
+		a = strings.TrimSpace(a)
+		if a == "" {
+			continue
+		}
+		if strings.Contains(blist, a) {
+			return true, a
+		}
+	}
+	return
+}
+
+// validKeepaliveType returns true if the keepalive type is supported.
+func validKeepaliveType(t string) bool {
+	return t == KeepaliveHeartbeatType || t == KeepaliveAverageType
 }

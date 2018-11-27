@@ -35,7 +35,7 @@ type (
 		Disable(path string, why string) (disabled, exists bool)
 	}
 	FSHC struct {
-		cmn.NamedConfigured
+		cmn.Named
 		stopCh        chan struct{}
 		fileListCh    chan string
 		reqCh         chan fs.ChangeReq
@@ -115,7 +115,7 @@ func (f *FSHC) Stop(err error) {
 }
 
 func (f *FSHC) OnErr(fqn string) {
-	if !f.Getconf().FSHC.Enabled {
+	if !cmn.GCO.Get().FSHC.Enabled {
 		return
 	}
 
@@ -218,7 +218,7 @@ func (f *FSHC) addmp(mpath string) {
 
 func (f *FSHC) isTestPassed(mpath string, readErrors,
 	writeErrors int, available bool) (passed bool, whyFailed string) {
-	config := &f.Getconf().FSHC
+	config := &cmn.GCO.Get().FSHC
 	glog.Infof("Tested mountpath %s(%v), read: %d of %d, write(size=%d): %d of %d",
 		mpath, available,
 		readErrors, config.ErrorLimit, fshcFileSize,
@@ -236,7 +236,7 @@ func (f *FSHC) isTestPassed(mpath string, readErrors,
 }
 
 func (f *FSHC) runMpathTest(mpath, filepath string) {
-	config := &f.Getconf().FSHC
+	config := &cmn.GCO.Get().FSHC
 	readErrs, writeErrs, exists := f.testMountpath(filepath, mpath, config.TestFileCount, fshcFileSize)
 
 	if passed, why := f.isTestPassed(mpath, readErrs, writeErrs, exists); !passed {

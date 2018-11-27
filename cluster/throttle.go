@@ -37,7 +37,6 @@ type (
 		prevUtilPct   float32
 		prevFSUsedPct uint64
 		// init-time
-		Config  *cmn.Config
 		Riostat *ios.IostatRunner
 		Path    string
 		FS      string
@@ -57,8 +56,9 @@ func (u *Throttle) Sleep() {
 // recompute sleep time
 func (u *Throttle) recompute() {
 	var (
-		ok  bool
-		now = time.Now() // FIXME: this may cost if the caller's coming here every ms or so..
+		ok     bool
+		now    = time.Now() // FIXME: this may cost if the caller's coming here every ms or so..
+		config = cmn.GCO.Get()
 	)
 	if (u.Flag & OnFSUsed) != 0 {
 		usedFSPercentage := u.prevFSUsedPct
@@ -72,7 +72,7 @@ func (u *Throttle) recompute() {
 			}
 			u.prevFSUsedPct = usedFSPercentage
 		}
-		if usedFSPercentage >= uint64(u.Config.LRU.HighWM) {
+		if usedFSPercentage >= uint64(config.LRU.HighWM) {
 			u.sleep = 0
 			return
 		}
@@ -82,27 +82,27 @@ func (u *Throttle) recompute() {
 
 		if now.After(u.nextUtilCheck) {
 			curUtilPct, ok = u.Riostat.MaxUtilFS(u.FS)
-			u.nextUtilCheck = now.Add(u.Config.Periodic.StatsTime)
+			u.nextUtilCheck = now.Add(config.Periodic.StatsTime)
 			if !ok {
 				curUtilPct = u.prevUtilPct
 				glog.Errorf("Unable to retrieve disk utilization for FS %s", u.FS)
 			}
 		}
 
-		if curUtilPct > float32(u.Config.Xaction.DiskUtilHighWM) {
+		if curUtilPct > float32(config.Xaction.DiskUtilHighWM) {
 			if u.sleep < initThrottleSleep {
 				u.sleep = initThrottleSleep
 			} else {
 				u.sleep *= 2
 			}
-		} else if curUtilPct < float32(u.Config.Xaction.DiskUtilLowWM) {
+		} else if curUtilPct < float32(config.Xaction.DiskUtilLowWM) {
 			u.sleep = 0
 		} else {
 			if u.sleep < initThrottleSleep {
 				u.sleep = initThrottleSleep
 			}
-			x := float32(u.Config.Xaction.DiskUtilHighWM - u.Config.Xaction.DiskUtilLowWM)
-			multiplier := (curUtilPct - float32(u.Config.Xaction.DiskUtilLowWM)) / x
+			x := float32(config.Xaction.DiskUtilHighWM - config.Xaction.DiskUtilLowWM)
+			multiplier := (curUtilPct - float32(config.Xaction.DiskUtilLowWM)) / x
 			u.sleep = u.sleep + time.Duration(multiplier*float32(u.sleep))
 		}
 		if u.sleep > maxThrottleSleep {

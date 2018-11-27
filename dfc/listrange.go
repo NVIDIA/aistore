@@ -188,7 +188,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 		vchanged, coldget bool
 		props             *objectProps
 	)
-	versioncfg := &ctx.config.Ver
+	versioncfg := &cmn.GCO.Get().Ver
 	islocal := t.bmdowner.get().IsLocal(bucket)
 	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
 	if errstr != "" {

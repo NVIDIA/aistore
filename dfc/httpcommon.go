@@ -189,9 +189,10 @@ type httprunner struct {
 }
 
 func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
-	if ctx.config.Net.HTTP.UseHTTPS {
+	config := cmn.GCO.Get()
+	if config.Net.HTTP.UseHTTPS {
 		server.s = &http.Server{Addr: addr, Handler: server.mux, ErrorLog: logger}
-		if err := server.s.ListenAndServeTLS(ctx.config.Net.HTTP.Certificate, ctx.config.Net.HTTP.Key); err != nil {
+		if err := server.s.ListenAndServeTLS(config.Net.HTTP.Certificate, config.Net.HTTP.Key); err != nil {
 			if err != http.ErrServerClosed {
 				glog.Errorf("Terminated server with err: %v", err)
 				return err
@@ -213,7 +214,7 @@ func (server *netServer) listenAndServe(addr string, logger *log.Logger) error {
 }
 
 func (server *netServer) shutdown() {
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.Default)
+	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.Default)
 	if err := server.s.Shutdown(contextwith); err != nil {
 		glog.Infof("Stopped server, err: %v", err)
 	}
@@ -242,10 +243,6 @@ func (h *httprunner) registerIntraDataNetHandler(path string, handler func(http.
 }
 
 func (h *httprunner) init(s stats.Tracker, isproxy bool) {
-	// cli proxyurl overrides config proxy settings - if set, the proxy won't register as the primary
-	if clivars.proxyurl != "" {
-		ctx.config.Proxy.PrimaryURL = clivars.proxyurl
-	}
 	h.statsif = s
 	// http client
 	perhost := targetMaxIdleConnsPer
@@ -253,25 +250,26 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 		perhost = proxyMaxIdleConnsPer
 	}
 
+	config := cmn.GCO.Get()
 	h.httpclient = &http.Client{
 		Transport: h.createTransport(perhost, 0),
-		Timeout:   ctx.config.Timeout.Default, // defaultTimeout
+		Timeout:   config.Timeout.Default, // defaultTimeout
 	}
 	h.httpclientLongTimeout = &http.Client{
 		Transport: h.createTransport(perhost, 0),
-		Timeout:   ctx.config.Timeout.DefaultLong, // longTimeout
+		Timeout:   config.Timeout.DefaultLong, // longTimeout
 	}
 	h.publicServer = &netServer{
 		mux: http.NewServeMux(),
 	}
 	h.intraControlServer = h.publicServer // by default intra control net is the same as public
-	if ctx.config.Net.UseIntraControl {
+	if config.Net.UseIntraControl {
 		h.intraControlServer = &netServer{
 			mux: http.NewServeMux(),
 		}
 	}
 	h.intraDataServer = h.publicServer // by default intra data net is the same as public
-	if ctx.config.Net.UseIntraData {
+	if config.Net.UseIntraData {
 		h.intraDataServer = &netServer{
 			mux: http.NewServeMux(),
 		}
@@ -285,61 +283,62 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 
 // initSI initializes this cluster.Snode
 func (h *httprunner) initSI() {
+	config := cmn.GCO.Get()
 	allowLoopback, _ := strconv.ParseBool(os.Getenv("ALLOW_LOOPBACK"))
 	addrList, err := getLocalIPv4List(allowLoopback)
 	if err != nil {
 		glog.Fatalf("FATAL: %v", err)
 	}
 
-	ipAddr, err := getipv4addr(addrList, ctx.config.Net.IPv4)
+	ipAddr, err := getipv4addr(addrList, config.Net.IPv4)
 	if err != nil {
 		glog.Fatalf("Failed to get public network address: %v", err)
 	}
-	glog.Infof("Configured PUBLIC NETWORK address: [%s:%d] (out of: %s)\n", ipAddr, ctx.config.Net.L4.Port, ctx.config.Net.IPv4)
+	glog.Infof("Configured PUBLIC NETWORK address: [%s:%d] (out of: %s)\n", ipAddr, config.Net.L4.Port, config.Net.IPv4)
 
 	ipAddrIntraControl := net.IP{}
-	if ctx.config.Net.UseIntraControl {
-		ipAddrIntraControl, err = getipv4addr(addrList, ctx.config.Net.IPv4IntraControl)
+	if config.Net.UseIntraControl {
+		ipAddrIntraControl, err = getipv4addr(addrList, config.Net.IPv4IntraControl)
 		if err != nil {
 			glog.Fatalf("Failed to get intra control network address: %v", err)
 		}
 		glog.Infof("Configured INTRA CONTROL NETWORK address: [%s:%d] (out of: %s)\n",
-			ipAddrIntraControl, ctx.config.Net.L4.PortIntraControl, ctx.config.Net.IPv4IntraControl)
+			ipAddrIntraControl, config.Net.L4.PortIntraControl, config.Net.IPv4IntraControl)
 	}
 
 	ipAddrIntraData := net.IP{}
-	if ctx.config.Net.UseIntraData {
-		ipAddrIntraData, err = getipv4addr(addrList, ctx.config.Net.IPv4IntraData)
+	if config.Net.UseIntraData {
+		ipAddrIntraData, err = getipv4addr(addrList, config.Net.IPv4IntraData)
 		if err != nil {
 			glog.Fatalf("Failed to get intra data network address: %v", err)
 		}
 		glog.Infof("Configured INTRA DATA NETWORK address: [%s:%d] (out of: %s)\n",
-			ipAddrIntraData, ctx.config.Net.L4.PortIntraData, ctx.config.Net.IPv4IntraData)
+			ipAddrIntraData, config.Net.L4.PortIntraData, config.Net.IPv4IntraData)
 	}
 
 	publicAddr := &net.TCPAddr{
 		IP:   ipAddr,
-		Port: ctx.config.Net.L4.Port,
+		Port: config.Net.L4.Port,
 	}
 	intraControlAddr := &net.TCPAddr{
 		IP:   ipAddrIntraControl,
-		Port: ctx.config.Net.L4.PortIntraControl,
+		Port: config.Net.L4.PortIntraControl,
 	}
 	intraDataAddr := &net.TCPAddr{
 		IP:   ipAddrIntraData,
-		Port: ctx.config.Net.L4.PortIntraData,
+		Port: config.Net.L4.PortIntraData,
 	}
 
 	daemonID := os.Getenv("DFCDAEMONID")
 	if daemonID == "" {
 		cs := xxhash.ChecksumString32S(publicAddr.String(), cluster.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
-		if testingFSPpaths() {
-			daemonID += ":" + ctx.config.Net.L4.PortStr
+		if cmn.TestingEnv() {
+			daemonID += ":" + config.Net.L4.PortStr
 		}
 	}
 
-	h.si = newSnode(daemonID, ctx.config.Net.HTTP.Proto, publicAddr, intraControlAddr, intraDataAddr)
+	h.si = newSnode(daemonID, config.Net.HTTP.Proto, publicAddr, intraControlAddr, intraDataAddr)
 }
 
 func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
@@ -359,7 +358,7 @@ func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
 		MaxIdleConnsPerHost: perhost,
 		MaxIdleConns:        0, // Zero means no limit
 	}
-	if ctx.config.Net.HTTP.UseHTTPS {
+	if cmn.GCO.Get().Net.HTTP.UseHTTPS {
 		glog.Warningln("HTTPS for inter-cluster communications is not yet supported and should be avoided")
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
@@ -367,26 +366,27 @@ func (h *httprunner) createTransport(perhost, numDaemons int) *http.Transport {
 }
 
 func (h *httprunner) run() error {
+	config := cmn.GCO.Get()
 	// a wrapper to glog http.Server errors - otherwise
 	// os.Stderr would be used, as per golang.org/pkg/net/http/#Server
 	h.glogger = log.New(&glogwriter{}, "net/http err: ", 0)
 
-	if ctx.config.Net.UseIntraControl || ctx.config.Net.UseIntraData {
+	if config.Net.UseIntraControl || config.Net.UseIntraData {
 		var errCh chan error
-		if ctx.config.Net.UseIntraControl && ctx.config.Net.UseIntraData {
+		if config.Net.UseIntraControl && config.Net.UseIntraData {
 			errCh = make(chan error, 3)
 		} else {
 			errCh = make(chan error, 2)
 		}
 
-		if ctx.config.Net.UseIntraControl {
+		if config.Net.UseIntraControl {
 			go func() {
 				addr := h.si.IntraControlNet.NodeIPAddr + ":" + h.si.IntraControlNet.DaemonPort
 				errCh <- h.intraControlServer.listenAndServe(addr, h.glogger)
 			}()
 		}
 
-		if ctx.config.Net.UseIntraData {
+		if config.Net.UseIntraData {
 			go func() {
 				addr := h.si.IntraDataNet.NodeIPAddr + ":" + h.si.IntraDataNet.DaemonPort
 				errCh <- h.intraDataServer.listenAndServe(addr, h.glogger)
@@ -408,6 +408,7 @@ func (h *httprunner) run() error {
 
 // stop gracefully
 func (h *httprunner) stop(err error) {
+	config := cmn.GCO.Get()
 	glog.Infof("Stopping %s, err: %v", h.Getname(), err)
 
 	h.statsdC.Close()
@@ -422,7 +423,7 @@ func (h *httprunner) stop(err error) {
 		wg.Done()
 	}()
 
-	if ctx.config.Net.UseIntraControl {
+	if config.Net.UseIntraControl {
 		wg.Add(1)
 		go func() {
 			h.intraControlServer.shutdown()
@@ -430,7 +431,7 @@ func (h *httprunner) stop(err error) {
 		}()
 	}
 
-	if ctx.config.Net.UseIntraData {
+	if config.Net.UseIntraData {
 		wg.Add(1)
 		go func() {
 			h.intraDataServer.shutdown()
@@ -702,7 +703,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	)
 	switch getWhat {
 	case cmn.GetWhatConfig:
-		jsbytes, err = jsoniter.Marshal(ctx.config)
+		jsbytes, err = jsoniter.Marshal(cmn.GCO.Get())
 		cmn.Assert(err == nil, err)
 	case cmn.GetWhatSmap:
 		jsbytes, err = jsoniter.Marshal(h.smapowner.get())
@@ -728,7 +729,10 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *httprunner) setconfig(name, value string) (errstr string) {
-	lm, hm := ctx.config.LRU.LowWM, ctx.config.LRU.HighWM
+	config := cmn.GCO.BeginUpdate()
+	defer cmn.GCO.CommitUpdate(config)
+
+	lm, hm := config.LRU.LowWM, config.LRU.HighWM
 	checkwm := false
 	atoi := func(value string) (int64, error) {
 		v, err := strconv.Atoi(value)
@@ -736,142 +740,142 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 	}
 	switch name {
 	case "vmodule":
-		if err := setGLogVModule(value); err != nil {
+		if err := cmn.SetGLogVModule(value); err != nil {
 			errstr = fmt.Sprintf("Failed to set vmodule = %s, err: %v", value, err)
 		}
 	case "loglevel":
-		if err := setloglevel(value); err != nil {
+		if err := cmn.SetLogLevel(config, value); err != nil {
 			errstr = fmt.Sprintf("Failed to set log level = %s, err: %v", value, err)
 		}
 	case "stats_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse stats_time, err: %v", err)
 		} else {
-			ctx.config.Periodic.StatsTime, ctx.config.Periodic.StatsTimeStr = v, value
+			config.Periodic.StatsTime, config.Periodic.StatsTimeStr = v, value
 		}
 	case "dont_evict_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse dont_evict_time, err: %v", err)
 		} else {
-			ctx.config.LRU.DontEvictTime, ctx.config.LRU.DontEvictTimeStr = v, value
+			config.LRU.DontEvictTime, config.LRU.DontEvictTimeStr = v, value
 		}
 	case "disk_util_low_wm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert disk_util_low_wm, err: %v", err)
 		} else {
-			ctx.config.Xaction.DiskUtilLowWM = v
+			config.Xaction.DiskUtilLowWM = v
 		}
 	case "disk_util_high_wm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert disk_util_high_wm, err: %v", err)
 		} else {
-			ctx.config.Xaction.DiskUtilHighWM = v
+			config.Xaction.DiskUtilHighWM = v
 		}
 	case "capacity_upd_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse capacity_upd_time, err: %v", err)
 		} else {
-			ctx.config.LRU.CapacityUpdTime, ctx.config.LRU.CapacityUpdTimeStr = v, value
+			config.LRU.CapacityUpdTime, config.LRU.CapacityUpdTimeStr = v, value
 		}
 	case "dest_retry_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse dest_retry_time, err: %v", err)
 		} else {
-			ctx.config.Rebalance.DestRetryTime, ctx.config.Rebalance.DestRetryTimeStr = v, value
+			config.Rebalance.DestRetryTime, config.Rebalance.DestRetryTimeStr = v, value
 		}
 	case "send_file_time":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse send_file_time, err: %v", err)
 		} else {
-			ctx.config.Timeout.SendFile, ctx.config.Timeout.SendFileStr = v, value
+			config.Timeout.SendFile, config.Timeout.SendFileStr = v, value
 		}
 	case "default_timeout":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse default_timeout, err: %v", err)
 		} else {
-			ctx.config.Timeout.Default, ctx.config.Timeout.DefaultStr = v, value
+			config.Timeout.Default, config.Timeout.DefaultStr = v, value
 		}
 	case "default_long_timeout":
 		if v, err := time.ParseDuration(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse default_long_timeout, err: %v", err)
 		} else {
-			ctx.config.Timeout.DefaultLong, ctx.config.Timeout.DefaultLongStr = v, value
+			config.Timeout.DefaultLong, config.Timeout.DefaultLongStr = v, value
 		}
 	case "lowwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert lowwm, err: %v", err)
 		} else {
-			ctx.config.LRU.LowWM, checkwm = v, true
+			config.LRU.LowWM, checkwm = v, true
 		}
 	case "highwm":
 		if v, err := atoi(value); err != nil {
 			errstr = fmt.Sprintf("Failed to convert highwm, err: %v", err)
 		} else {
-			ctx.config.LRU.HighWM, checkwm = v, true
+			config.LRU.HighWM, checkwm = v, true
 		}
 	case "lru_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse lru_enabled, err: %v", err)
 		} else {
-			ctx.config.LRU.LRUEnabled = v
+			config.LRU.LRUEnabled = v
 		}
 	case "rebalancing_enabled":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse rebalancing_enabled, err: %v", err)
 		} else {
-			ctx.config.Rebalance.Enabled = v
+			config.Rebalance.Enabled = v
 		}
 	case "replicate_on_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse replicate_on_cold_get, err: %v", err)
 		} else {
-			ctx.config.Replication.ReplicateOnColdGet = v
+			config.Replication.ReplicateOnColdGet = v
 		}
 	case "replicate_on_put":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse replicate_on_put, err: %v", err)
 		} else {
-			ctx.config.Replication.ReplicateOnPut = v
+			config.Replication.ReplicateOnPut = v
 		}
 	case "replicate_on_lru_eviction":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse replicate_on_lru_eviction, err: %v", err)
 		} else {
-			ctx.config.Replication.ReplicateOnLRUEviction = v
+			config.Replication.ReplicateOnLRUEviction = v
 		}
 	case "validate_checksum_cold_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_checksum_cold_get, err: %v", err)
 		} else {
-			ctx.config.Cksum.ValidateColdGet = v
+			config.Cksum.ValidateColdGet = v
 		}
 	case "validate_checksum_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_checksum_warm_get, err: %v", err)
 		} else {
-			ctx.config.Cksum.ValidateWarmGet = v
+			config.Cksum.ValidateWarmGet = v
 		}
 	case "enable_read_range_checksum":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse enable_read_range_checksum, err: %v", err)
 		} else {
-			ctx.config.Cksum.EnableReadRangeChecksum = v
+			config.Cksum.EnableReadRangeChecksum = v
 		}
 	case "validate_version_warm_get":
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse validate_version_warm_get, err: %v", err)
 		} else {
-			ctx.config.Ver.ValidateWarmGet = v
+			config.Ver.ValidateWarmGet = v
 		}
 	case "checksum":
 		if value == cmn.ChecksumXXHash || value == cmn.ChecksumNone {
-			ctx.config.Cksum.Checksum = value
+			config.Cksum.Checksum = value
 		} else {
 			return fmt.Sprintf("Invalid %s type %s - expecting %s or %s", name, value, cmn.ChecksumXXHash, cmn.ChecksumNone)
 		}
 	case "versioning":
-		if err := validateVersion(value); err == nil {
-			ctx.config.Ver.Versioning = value
+		if err := cmn.ValidateVersion(value); err == nil {
+			config.Ver.Versioning = value
 		} else {
 			return err.Error()
 		}
@@ -879,16 +883,16 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		if v, err := strconv.ParseBool(value); err != nil {
 			errstr = fmt.Sprintf("Failed to parse fschecker_enabled, err: %v", err)
 		} else {
-			ctx.config.FSHC.Enabled = v
+			config.FSHC.Enabled = v
 		}
 	default:
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)
 	}
 	if checkwm {
-		hwm, lwm := ctx.config.LRU.HighWM, ctx.config.LRU.LowWM
+		hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-			ctx.config.LRU.LowWM, ctx.config.LRU.HighWM = lm, hm
-			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", ctx.config.LRU)
+			config.LRU.LowWM, config.LRU.HighWM = lm, hm
+			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", config.LRU)
 		}
 	}
 	return
@@ -1047,8 +1051,8 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 //   (see setup/config.sh)
 //
 // - if that one fails, the new node goes ahead and tries the alternatives:
-// 	- ctx.config.Proxy.DiscoveryURL ("discovery_url")
-// 	- ctx.config.Proxy.OriginalURL ("original_url")
+// 	- config.Proxy.DiscoveryURL ("discovery_url")
+// 	- config.Proxy.OriginalURL ("original_url")
 // - but only if those are defined and different from the previously tried.
 //
 // ================================== Background =========================================
@@ -1058,18 +1062,19 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	if res.err == nil {
 		return
 	}
-	if ctx.config.Proxy.DiscoveryURL != "" && ctx.config.Proxy.DiscoveryURL != url {
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, ctx.config.Proxy.DiscoveryURL)
-		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, defaultTimeout, isproxy, query, false)
+	config := cmn.GCO.Get()
+	if config.Proxy.DiscoveryURL != "" && config.Proxy.DiscoveryURL != url {
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.DiscoveryURL)
+		resAlt := h.registerToURL(config.Proxy.DiscoveryURL, psi, defaultTimeout, isproxy, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
 		}
 	}
-	if ctx.config.Proxy.OriginalURL != "" && ctx.config.Proxy.OriginalURL != url &&
-		ctx.config.Proxy.OriginalURL != ctx.config.Proxy.DiscoveryURL {
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, ctx.config.Proxy.OriginalURL)
-		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, defaultTimeout, isproxy, query, false)
+	if config.Proxy.OriginalURL != "" && config.Proxy.OriginalURL != url &&
+		config.Proxy.OriginalURL != config.Proxy.DiscoveryURL {
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, config.Proxy.OriginalURL)
+		resAlt := h.registerToURL(config.Proxy.OriginalURL, psi, defaultTimeout, isproxy, query, false)
 		if resAlt.err == nil {
 			res = resAlt
 			return
@@ -1122,16 +1127,17 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 // smap lock is acquired to avoid race between this function and other smap access (for example,
 // receiving smap during metasync)
 func (h *httprunner) getPrimaryURLAndSI() (url string, proxysi *cluster.Snode) {
+	config := cmn.GCO.Get()
 	smap := h.smapowner.get()
 	if smap == nil || smap.ProxySI == nil {
-		url, proxysi = ctx.config.Proxy.PrimaryURL, nil
+		url, proxysi = config.Proxy.PrimaryURL, nil
 		return
 	}
 	if smap.ProxySI.DaemonID != "" {
 		url, proxysi = smap.ProxySI.PublicNet.DirectURL, smap.ProxySI
 		return
 	}
-	url, proxysi = ctx.config.Proxy.PrimaryURL, smap.ProxySI
+	url, proxysi = config.Proxy.PrimaryURL, smap.ProxySI
 	return
 }
 

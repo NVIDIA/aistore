@@ -82,10 +82,11 @@ type proxyrunner struct {
 
 // start proxy runner
 func (p *proxyrunner) Run() error {
+	config := cmn.GCO.Get()
 	p.httprunner.init(getproxystatsrunner(), true)
 	p.httprunner.keepalive = getproxykeepalive()
 
-	bucketmdfull := filepath.Join(ctx.config.Confdir, bucketmdbase)
+	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
 	bucketmd := newBucketMD()
 	if cmn.LocalLoad(bucketmdfull, bucketmd) != nil {
 		// create empty
@@ -108,7 +109,7 @@ func (p *proxyrunner) Run() error {
 		version:       1,
 	}
 
-	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
+	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		p.rproxy.cloud = &httputil.ReverseProxy{
 			Director:  func(r *http.Request) {},
 			Transport: p.createTransport(0, 0), // default idle connections per host, unlimited idle total
@@ -120,7 +121,7 @@ func (p *proxyrunner) Run() error {
 	//
 
 	// Public network
-	if ctx.config.Auth.Enabled {
+	if config.Auth.Enabled {
 		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Buckets)+"/", wrapHandler(p.bucketHandler, p.checkHTTPAuth))
 		p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", wrapHandler(p.objectHandler, p.checkHTTPAuth))
 	} else {
@@ -132,7 +133,7 @@ func (p *proxyrunner) Run() error {
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Cluster), p.clusterHandler)
 	p.registerPublicNetHandler(cmn.URLPath(cmn.Version, cmn.Tokens), p.tokenHandler)
 
-	if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
+	if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 		p.registerPublicNetHandler("/", p.reverseProxyHandler)
 	} else {
 		p.registerPublicNetHandler("/", cmn.InvalidHandler)
@@ -142,8 +143,8 @@ func (p *proxyrunner) Run() error {
 	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), p.metasyncHandler)
 	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), p.healthHandler)
 	p.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), p.voteHandler)
-	if ctx.config.Net.UseIntraControl {
-		if ctx.config.Net.HTTP.RevProxy == RevProxyCloud {
+	if config.Net.UseIntraControl {
+		if config.Net.HTTP.RevProxy == cmn.RevProxyCloud {
 			p.registerIntraControlNetHandler("/", p.reverseProxyHandler)
 		} else {
 			p.registerIntraControlNetHandler("/", cmn.InvalidHandler)
@@ -151,7 +152,7 @@ func (p *proxyrunner) Run() error {
 	}
 
 	// Intra data network
-	if ctx.config.Net.UseIntraData {
+	if config.Net.UseIntraData {
 		p.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", p.objectHandler)
 		p.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
@@ -163,8 +164,8 @@ func (p *proxyrunner) Run() error {
 	if p.si.PublicNet.DirectURL != p.si.IntraDataNet.DirectURL {
 		glog.Infof("%s: [intra data net] listening on: %s", p.si, p.si.IntraDataNet.DirectURL)
 	}
-	if ctx.config.Net.HTTP.RevProxy != "" {
-		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", ctx.config.Net.HTTP.RevProxy)
+	if config.Net.HTTP.RevProxy != "" {
+		glog.Warningf("Warning: serving GET /object as a reverse-proxy ('%s')", config.Net.HTTP.RevProxy)
 	}
 	p.starttime = time.Now()
 
@@ -184,7 +185,7 @@ func (p *proxyrunner) register(keepalive bool, timeout time.Duration) (status in
 		return
 	}
 	if !keepalive {
-		if ctx.config.Proxy.NonElectable {
+		if cmn.GCO.Get().Proxy.NonElectable {
 			query := url.Values{}
 			query.Add(cmn.URLParamNonElectable, "true")
 			res = p.join(true, query)
@@ -329,7 +330,8 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if ctx.config.Net.HTTP.RevProxy == RevProxyTarget {
+	config := cmn.GCO.Get()
+	if config.Net.HTTP.RevProxy == cmn.RevProxyTarget {
 		if glog.V(4) {
 			glog.Infof("reverse-proxy: %s %s/%s <= %s", r.Method, bucket, objname, si)
 		}
@@ -341,7 +343,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			glog.Infof("%s %s/%s => %s", r.Method, bucket, objname, si)
 		}
 		redirecturl := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-		if ctx.config.Readahead.Enabled && ctx.config.Readahead.ByProxy {
+		if config.Readahead.Enabled && config.Readahead.ByProxy {
 			go func(url string) {
 				url += "&" + cmn.URLParamReadahead + "=true"
 				args := callArgs{
@@ -351,7 +353,7 @@ func (p *proxyrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 						header: r.Header,
 						base:   url,
 					},
-					timeout: ctx.config.Timeout.ProxyPing,
+					timeout: config.Timeout.ProxyPing,
 				}
 				res := p.call(args)
 				if res.err != nil {
@@ -568,7 +570,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		clone := p.bmdowner.get().clone()
 		bprops := cmn.BucketProps{
 			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:   ctx.config.LRU,
+			LRUConf:   cmn.GCO.Get().LRU,
 		}
 		if !clone.add(lbucket, true, bprops) {
 			p.bmdowner.Unlock()
@@ -727,7 +729,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		cmn.Assert(!isLocal)
 		oldProps = cmn.BucketProps{
 			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:   ctx.config.LRU,
+			LRUConf:   cmn.GCO.Get().LRU,
 		}
 		clone.add(bucket, false, oldProps)
 	}
@@ -743,7 +745,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActResetProps:
 		oldProps = cmn.BucketProps{
 			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:   ctx.config.LRU,
+			LRUConf:   cmn.GCO.Get().LRU,
 		}
 	}
 
@@ -856,7 +858,7 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 		http.MethodPost,
 		jsbytes,
 		smap4bcast,
-		ctx.config.Timeout.Default,
+		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
@@ -1305,7 +1307,7 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 }
 
 func (p *proxyrunner) savebmdconf(bucketmd *bucketMD) (errstr string) {
-	bucketmdfull := filepath.Join(ctx.config.Confdir, bucketmdbase)
+	bucketmdfull := filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
 	if err := cmn.LocalSave(bucketmdfull, bucketmd); err != nil {
 		errstr = fmt.Sprintf("Failed to store bucket-metadata at %s, err: %v", bucketmdfull, err)
 	}
@@ -1515,7 +1517,7 @@ func (p *proxyrunner) checkHTTPAuth(h http.HandlerFunc) http.HandlerFunc {
 			err  error
 		)
 
-		if ctx.config.Auth.Enabled {
+		if cmn.GCO.Get().Auth.Enabled {
 			if auth, err = p.validateToken(r); err != nil {
 				glog.Error(err)
 				p.invalmsghdlr(w, r, "Not authorized", http.StatusUnauthorized)
@@ -1877,7 +1879,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		method,
 		nil, // body
 		smap,
-		ctx.config.Timeout.CplaneOperation,
+		cmn.GCO.Get().Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
 		cluster.AllNodes,
 	)
@@ -1908,7 +1910,7 @@ func (p *proxyrunner) httpclusetprimaryproxy(w http.ResponseWriter, r *http.Requ
 		method,
 		nil, // body
 		p.smapowner.get(),
-		ctx.config.Timeout.CplaneOperation,
+		cmn.GCO.Get().Timeout.CplaneOperation,
 		cmn.NetworkIntraControl,
 		cluster.AllNodes,
 	)
@@ -2039,7 +2041,7 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.R
 		r.Method,
 		nil, // message
 		p.smapowner.get(),
-		ctx.config.Timeout.Default,
+		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
@@ -2175,7 +2177,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 					method: http.MethodPost,
 					path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
 				},
-				timeout: ctx.config.Timeout.ProxyPing,
+				timeout: cmn.GCO.Get().Timeout.ProxyPing,
 			}
 			res := p.call(args)
 			if res.err != nil {
@@ -2341,7 +2343,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 				method: http.MethodDelete,
 				path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
 			},
-			timeout: ctx.config.Timeout.ProxyPing,
+			timeout: cmn.GCO.Get().Timeout.ProxyPing,
 		}
 		res := p.call(args)
 		if res.err != nil {
@@ -2589,7 +2591,7 @@ func (p *proxyrunner) notifyTargetsRechecksum(bucket string) {
 		http.MethodPost,
 		jsbytes,
 		p.smapowner.get(),
-		ctx.config.Timeout.Default,
+		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
@@ -2612,7 +2614,7 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 			query:  query,
 		},
-		timeout: ctx.config.Timeout.CplaneOperation,
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}
 	res := p.call(args)
 	if res.err != nil || res.outjson == nil || len(res.outjson) == 0 {
@@ -2645,7 +2647,7 @@ func (p *proxyrunner) copyBucketProps(oldProps, newProps *cmn.BucketProps, bucke
 	if newProps.WritePolicy != "" {
 		oldProps.WritePolicy = newProps.WritePolicy
 	}
-	if rechecksumRequired(ctx.config.Cksum.Checksum, oldProps.Checksum, newProps.Checksum) {
+	if rechecksumRequired(cmn.GCO.Get().Cksum.Checksum, oldProps.Checksum, newProps.Checksum) {
 		go p.notifyTargetsRechecksum(bucket)
 	}
 	if newProps.Checksum != "" {

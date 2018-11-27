@@ -179,12 +179,12 @@ func (q *xactInProgress) renewRebalance(curversion int64, t *targetrunner, runne
 
 // persistent mark indicating rebalancing in progress
 func (q *xactInProgress) rebalanceInProgress() (pmarker string) {
-	return filepath.Join(ctx.config.Confdir, rebinpname)
+	return filepath.Join(cmn.GCO.Get().Confdir, cmn.RebalanceMarker)
 }
 
 // persistent mark indicating rebalancing in progress
 func (q *xactInProgress) localRebalanceInProgress() (pmarker string) {
-	return filepath.Join(ctx.config.Confdir, reblocinpname)
+	return filepath.Join(cmn.GCO.Get().Confdir, cmn.LocalRebalanceMarker)
 }
 
 func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {

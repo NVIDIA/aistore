@@ -33,14 +33,15 @@ func (p *proxyrunner) bootstrap() {
 	var (
 		found, smap    *smapX
 		guessAmPrimary bool
-		getSmapURL     = ctx.config.Proxy.PrimaryURL
-		tout           = ctx.config.Timeout.CplaneOperation
+		config         = cmn.GCO.Get()
+		getSmapURL     = config.Proxy.PrimaryURL
+		tout           = config.Timeout.CplaneOperation
 		q              = url.Values{}
 	)
 	// step 1: load a local copy of the cluster map and
 	//         try to use it for discovery of the current one
 	smap = newSmap()
-	if err := cmn.LocalLoad(filepath.Join(ctx.config.Confdir, smapname), smap); err == nil {
+	if err := cmn.LocalLoad(filepath.Join(config.Confdir, cmn.SmapBackupFile), smap); err == nil {
 		if smap.CountTargets() > 0 || smap.CountProxies() > 1 {
 			glog.Infof("Fast discovery based on %s", smap.pp())
 			q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
@@ -140,7 +141,7 @@ func (p *proxyrunner) secondaryStartup(getSmapURL string) {
 			if res.err != nil {
 				if cmn.IsErrConnectionRefused(res.err) || res.status == http.StatusRequestTimeout {
 					glog.Errorf("Proxy %s: retrying getting Smap from primary %s", p.si, getSmapURL)
-					time.Sleep(ctx.config.Timeout.CplaneOperation)
+					time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
 					continue
 				}
 			}
@@ -254,7 +255,7 @@ func (p *proxyrunner) primaryStartup(guessSmap *smapX, ntargets int) {
 
 func (p *proxyrunner) startup(ntargets int) {
 	started := time.Now()
-	for time.Since(started) < ctx.config.Timeout.Startup {
+	for time.Since(started) < cmn.GCO.Get().Timeout.Startup {
 		smap := p.smapowner.get()
 		if !smap.isPrimary(p.si) {
 			break
@@ -277,7 +278,7 @@ func (p *proxyrunner) startup(ntargets int) {
 func (p *proxyrunner) discoverMeta(haveRegistratons bool) {
 	var (
 		now      = time.Now()
-		deadline = now.Add(ctx.config.Timeout.Startup)
+		deadline = now.Add(cmn.GCO.Get().Timeout.Startup)
 	)
 	maxVerSmap, bucketmd := p.meta(deadline)
 	if bucketmd != nil {
@@ -327,7 +328,8 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 		maxVersionSmap *smapX
 		bcastSmap      = p.smapowner.get().clone()
 		q              = url.Values{}
-		tout           = ctx.config.Timeout.CplaneOperation
+		config         = cmn.GCO.Get()
+		tout           = config.Timeout.CplaneOperation
 		keeptrying     = true
 	)
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmapVote)
@@ -372,11 +374,11 @@ func (p *proxyrunner) meta(deadline time.Time) (*smapX, *bucketMD) {
 				glog.Warningf("Warning: '%s' is starting up as primary(?) during reelection%s", p.si, s)
 				maxVersionSmap, maxVerBucketMD = nil, nil // zero-out as unusable
 				keeptrying = true
-				time.Sleep(ctx.config.Timeout.CplaneOperation)
+				time.Sleep(config.Timeout.CplaneOperation)
 				break
 			}
 		}
-		time.Sleep(ctx.config.Timeout.CplaneOperation)
+		time.Sleep(config.Timeout.CplaneOperation)
 	}
 	return maxVersionSmap, maxVerBucketMD
 }
@@ -385,7 +387,7 @@ func (p *proxyrunner) registerWithRetry() error {
 	if status, err := p.register(false, defaultTimeout); err != nil {
 		if cmn.IsErrConnectionRefused(err) || status == http.StatusRequestTimeout {
 			glog.Errorf("%s: retrying...", p.si)
-			time.Sleep(ctx.config.Timeout.CplaneOperation)
+			time.Sleep(cmn.GCO.Get().Timeout.CplaneOperation)
 			if _, err = p.register(false, defaultTimeout); err != nil {
 				glog.Errorf("%s failed the 2nd attempt to register, err: %v", p.si, err)
 				return err

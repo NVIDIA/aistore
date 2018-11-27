@@ -870,7 +870,7 @@ func TestLRU(t *testing.T) {
 		tutils.Logf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
 			k, v.Core.Tracker["lru.evict.n"].Value-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
 		//
-		// testingFSPpaths() - cannot reliably verify space utilization by tmpfs
+		// TestingEnv() - cannot reliably verify space utilization by tmpfs
 		//
 		if testFsPaths["count"].(float64) > 0 {
 			continue

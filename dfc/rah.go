@@ -20,7 +20,7 @@ import (
 // TODO	1) readahead IFF utilization < (50%(or configured) || average across mountpaths)
 //	2) stats: average readahed per get.n, num readahead race losses
 //	3) readahead via user REST, with additional URLParam objectmem
-//	4) ctx.config.Readahead.TotalMem as long as < sigar.FreeMem
+//	4) config.Readahead.TotalMem as long as < sigar.FreeMem
 //	5) proxy AIMD, target to decide
 //	6) rangeOff/len
 //	7) utilize memsys
@@ -125,7 +125,7 @@ func newRahJogger(mpath string) (rj *rahjogger) {
 	rj.getCh = make(chan *rahfcache, rahChanSize)
 	rj.stopCh = make(chan struct{}, 4)
 
-	rj.slab = gmem2.SelectSlab2(ctx.config.Readahead.ObjectMem)
+	rj.slab = gmem2.SelectSlab2(cmn.GCO.Get().Readahead.ObjectMem)
 	rj.buf = rj.slab.Alloc()
 	return
 }
@@ -271,6 +271,7 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		size, fsize int64
 		stat        os.FileInfo
 		reader      io.Reader
+		config      = cmn.GCO.Get()
 	)
 
 	// 1. cleanup
@@ -299,13 +300,13 @@ func (rahfcache *rahfcache) readahead(buf []byte) {
 		return
 	}
 	if rahfcache.rangeLen == 0 {
-		fsize = cmn.MinI64(ctx.config.Readahead.ObjectMem, stat.Size())
+		fsize = cmn.MinI64(config.Readahead.ObjectMem, stat.Size())
 		reader = file
 	} else {
-		fsize = cmn.MinI64(ctx.config.Readahead.ObjectMem, rahfcache.rangeLen)
+		fsize = cmn.MinI64(config.Readahead.ObjectMem, rahfcache.rangeLen)
 		reader = io.NewSectionReader(file, rahfcache.rangeOff, rahfcache.rangeLen)
 	}
-	if !ctx.config.Readahead.Discard {
+	if !config.Readahead.Discard {
 		rahfcache.sgl = gmem2.NewSGL(fsize)
 	}
 	// 3. read

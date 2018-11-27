@@ -8,6 +8,7 @@ package ios
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -28,7 +29,7 @@ const (
 
 type IostatRunner struct {
 	sync.RWMutex
-	cmn.NamedConfigured
+	cmn.Named
 	// public
 	Disk    map[string]cmn.SimpleKVs
 	CPUidle string
@@ -36,6 +37,7 @@ type IostatRunner struct {
 	mountpaths  *fs.MountedFS
 	stopCh      chan struct{}
 	metricnames []string
+	reader      *bufio.Reader
 	process     *os.Process // running iostat process. Required so it can be killed later
 	fsdisks     map[string]cmn.StringSet
 }
@@ -49,26 +51,38 @@ func NewIostatRunner(mountpaths *fs.MountedFS) *IostatRunner {
 	}
 }
 
-// as an fsprunner
-var _ fs.PathRunner = &IostatRunner{}
+var (
+	_ fs.PathRunner      = &IostatRunner{} // as an fsprunner
+	_ cmn.ConfigListener = &IostatRunner{}
+)
 
 func (r *IostatRunner) ReqEnableMountpath(mpath string)  { r.updateFSDisks() }
 func (r *IostatRunner) ReqDisableMountpath(mpath string) { r.updateFSDisks() }
 func (r *IostatRunner) ReqAddMountpath(mpath string)     { r.updateFSDisks() }
 func (r *IostatRunner) ReqRemoveMountpath(mpath string)  { r.updateFSDisks() }
 
+func (r *IostatRunner) ConfigUpdate(config *cmn.Config) {
+	if err := r.runIostat(config.Periodic.StatsTime); err != nil {
+		r.Stop(err)
+	}
+}
+
 //
 // API
 //
 
-// iostat -cdxtm 10
-func (r *IostatRunner) Run() error {
-	r.updateFSDisks()
-	period := r.Getconf().Periodic.StatsTime
+func (r *IostatRunner) runIostat(period time.Duration) error {
+	if r.process != nil {
+		// kill previous process if running, it can happen when config was updated
+		if err := r.process.Kill(); err != nil {
+			return err
+		}
+	}
+
 	refreshPeriod := int(period / time.Second)
 	cmd := exec.Command("iostat", "-cdxtm", strconv.Itoa(refreshPeriod))
 	stdout, err := cmd.StdoutPipe()
-	reader := bufio.NewReader(stdout)
+	r.reader = bufio.NewReader(stdout)
 	if err != nil {
 		return err
 	}
@@ -78,12 +92,24 @@ func (r *IostatRunner) Run() error {
 
 	// Assigning started process
 	r.process = cmd.Process
+	return nil
+}
+
+// iostat -cdxtm 10
+func (r *IostatRunner) Run() error {
+	r.updateFSDisks()
+
+	// subscribe for config changes
+	cmn.GCO.Subscribe(r)
 
 	glog.Infof("Starting %s", r.Getname())
+	if err := r.runIostat(cmn.GCO.Get().Periodic.StatsTime); err != nil {
+		return err
+	}
 
 	for {
-		b, err := reader.ReadBytes('\n')
-		if err != nil {
+		b, err := r.reader.ReadBytes('\n')
+		if err != nil && err != io.EOF {
 			return err
 		}
 

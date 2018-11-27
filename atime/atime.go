@@ -94,7 +94,6 @@ type (
 		mpathReqCh   chan fs.ChangeReq
 		mpathRunners map[string]*mpathAtimeRunner // mpath -> mpathAtimeRunner
 		mountpaths   *fs.MountedFS
-		maxMapSize   *uint64
 		riostat      *ios.IostatRunner
 	}
 	// The Response object is used to return the access time of
@@ -114,15 +113,14 @@ type (
 	// to this mpath are handled by mpathAtimeRunner. This includes requests for getting,
 	// setting and flushing atimes.
 	mpathAtimeRunner struct {
-		mpath      string
-		fs         string
-		stopCh     chan struct{}        // Control channel for stopping
-		atimemap   map[string]time.Time // maps fqn:atime key-value pairs
-		getCh      chan *atimeRequest   // Requests for file access times
-		setCh      chan *atimeRequest   // Requests to set access times
-		flushCh    chan int             // Request to flush the file system
-		maxMapSize *uint64
-		riostat    *ios.IostatRunner
+		mpath    string
+		fs       string
+		stopCh   chan struct{}        // Control channel for stopping
+		atimemap map[string]time.Time // maps fqn:atime key-value pairs
+		getCh    chan *atimeRequest   // Requests for file access times
+		setCh    chan *atimeRequest   // Requests to set access times
+		flushCh  chan int             // Request to flush the file system
+		riostat  *ios.IostatRunner
 	}
 
 	// Each request to atime.Runner via its API is encapsulated in an
@@ -152,14 +150,13 @@ func (r *Runner) ReqDisableMountpath(mpath string) {}
 
 //================================ atime.Runner ==========================================
 
-func NewRunner(mountpaths *fs.MountedFS, maxMapSize *uint64, riostat *ios.IostatRunner) (r *Runner) {
+func NewRunner(mountpaths *fs.MountedFS, riostat *ios.IostatRunner) (r *Runner) {
 	return &Runner{
 		stopCh:       make(chan struct{}, 4),
 		mpathReqCh:   make(chan fs.ChangeReq, 1),
 		mpathRunners: make(map[string]*mpathAtimeRunner, mpathRunnersMapSize),
 		mountpaths:   mountpaths,
 		requestCh:    make(chan *atimeRequest),
-		maxMapSize:   maxMapSize,
 		riostat:      riostat,
 	}
 }
@@ -297,7 +294,7 @@ func (r *Runner) addMpathAtimeRunner(mpath string) {
 		return
 	}
 
-	r.mpathRunners[mpath] = r.newMpathAtimeRunner(mpath, mpathInfo.FileSystem, r.maxMapSize, r.riostat)
+	r.mpathRunners[mpath] = r.newMpathAtimeRunner(mpath, mpathInfo.FileSystem, r.riostat)
 	go r.mpathRunners[mpath].run()
 }
 
@@ -313,17 +310,16 @@ func (r *Runner) removeMpathAtimeRunner(mpath string) {
 
 //================================= mpathAtimeRunner ===========================================
 
-func (r *Runner) newMpathAtimeRunner(mpath, fs string, maxMapSize *uint64, riostat *ios.IostatRunner) *mpathAtimeRunner {
+func (r *Runner) newMpathAtimeRunner(mpath, fs string, riostat *ios.IostatRunner) *mpathAtimeRunner {
 	return &mpathAtimeRunner{
-		mpath:      mpath,
-		fs:         fs,
-		stopCh:     make(chan struct{}, 1),
-		atimemap:   make(map[string]time.Time),
-		getCh:      make(chan *atimeRequest),
-		setCh:      make(chan *atimeRequest, setChSize),
-		flushCh:    make(chan int),
-		maxMapSize: maxMapSize,
-		riostat:    riostat,
+		mpath:    mpath,
+		fs:       fs,
+		stopCh:   make(chan struct{}, 1),
+		atimemap: make(map[string]time.Time),
+		getCh:    make(chan *atimeRequest),
+		setCh:    make(chan *atimeRequest, setChSize),
+		flushCh:  make(chan int),
+		riostat:  riostat,
 	}
 }
 
@@ -357,7 +353,7 @@ func (m *mpathAtimeRunner) getNumberItemsToFlush() (n int) {
 	if atimeMapSize <= atimeCacheFlushThreshold {
 		return
 	}
-	max := *m.maxMapSize
+	max := cmn.GCO.Get().LRU.AtimeCacheMax
 	filling := cmn.MinU64(100, uint64(atimeMapSize)*100/max)
 
 	maxDiskUtil := float32(-1)

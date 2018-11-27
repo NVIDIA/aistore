@@ -107,6 +107,8 @@ type (
 //
 
 func (t *targetrunner) Run() error {
+	config := cmn.GCO.Get()
+
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
 	t.httprunner.keepalive = gettargetkeepalive()
@@ -161,12 +163,12 @@ func (t *targetrunner) Run() error {
 	t.detectMpathChanges()
 
 	// cloud provider
-	if ctx.config.CloudProvider == cmn.ProviderAmazon {
+	if config.CloudProvider == cmn.ProviderAmazon {
 		// TODO: sessions
 		t.cloudif = &awsimpl{t}
 
 	} else {
-		cmn.Assert(ctx.config.CloudProvider == cmn.ProviderGoogle)
+		cmn.Assert(config.CloudProvider == cmn.ProviderGoogle)
 		t.cloudif = &gcpimpl{t}
 	}
 
@@ -196,13 +198,13 @@ func (t *targetrunner) Run() error {
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Metasync), t.metasyncHandler)
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Health), t.healthHandler)
 	t.registerIntraControlNetHandler(cmn.URLPath(cmn.Version, cmn.Vote), t.voteHandler)
-	if ctx.config.Net.UseIntraControl {
+	if config.Net.UseIntraControl {
 		transport.SetMux(cmn.NetworkIntraControl, t.intraControlServer.mux) // to register transport handlers at runtime
 		t.registerIntraControlNetHandler("/", cmn.InvalidHandler)
 	}
 
 	// Intra data network
-	if ctx.config.Net.UseIntraData {
+	if config.Net.UseIntraData {
 		transport.SetMux(cmn.NetworkIntraData, t.intraDataServer.mux) // to register transport handlers at runtime
 		t.registerIntraDataNetHandler(cmn.URLPath(cmn.Version, cmn.Objects)+"/", t.objectHandler)
 		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
@@ -323,7 +325,6 @@ func (t *targetrunner) RunLRU() {
 		return
 	}
 	ini := lru.InitLRU{
-		Config:      &ctx.config,
 		Riostat:     getiostatrunner(),
 		Ratime:      getatimerunner(),
 		Xlru:        xlru,
@@ -497,8 +498,9 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	// 2. coldget, maybe
 	//
 	var (
-		cksumcfg   = &ctx.config.Cksum
-		versioncfg = &ctx.config.Ver
+		config     = cmn.GCO.Get()
+		cksumcfg   = &config.Cksum
+		versioncfg = &config.Ver
 		ct         = t.contextWithAuth(r)
 	)
 	// Lock(ro)
@@ -1123,7 +1125,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 
 	props, _, defined := bucketmd.propsAndChecksum(bucket)
 	// include checksumming settings in the response
-	cksumcfg = &ctx.config.Cksum
+	cksumcfg = &cmn.GCO.Get().Cksum
 	if defined {
 		cksumcfg = &props.CksumConf
 	}
@@ -1466,7 +1468,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		return
 	}
 	// Do
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.SendFile)
+	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.SendFile)
 	defer cancel()
 	newrequest := newr.WithContext(contextwith)
 
@@ -1524,11 +1526,12 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 
 func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefetch bool) (props *objectProps, errstr string, errcode int) {
 	var (
+		config      = cmn.GCO.Get()
 		bucketmd    = t.bmdowner.get()
 		islocal     = bucketmd.IsLocal(bucket)
 		uname       = cluster.Uname(bucket, objname)
-		versioncfg  = &ctx.config.Ver
-		cksumcfg    = &ctx.config.Cksum
+		versioncfg  = &config.Ver
+		cksumcfg    = &config.Cksum
 		errv        string
 		nextTierURL string
 		vchanged    bool
@@ -1674,7 +1677,7 @@ func (t *targetrunner) lookupRemotely(bucket, objname string) *cluster.Snode {
 		http.MethodHead,
 		nil,
 		t.smapowner.get(),
-		ctx.config.Timeout.MaxKeepalive,
+		cmn.GCO.Get().Timeout.MaxKeepalive,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
@@ -2095,7 +2098,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		return errstr, http.StatusBadRequest
 	}
 	putfqn := fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfilePut)
-	cksumcfg := &ctx.config.Cksum
+	cksumcfg := &cmn.GCO.Get().Cksum
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
@@ -2581,7 +2584,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	url += fmt.Sprintf("?%s=%s&%s=%s", cmn.URLParamFromID, fromid, cmn.URLParamToID, toid)
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.IsLocal(bucket)
-	cksumcfg := &ctx.config.Cksum
+	cksumcfg := &cmn.GCO.Get().Cksum
 	if bucketProps, _, defined := bucketmd.propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
@@ -2653,7 +2656,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	}
 
 	// Do
-	contextwith, cancel := context.WithTimeout(context.Background(), ctx.config.Timeout.SendFile)
+	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.SendFile)
 	defer cancel()
 	newrequest := request.WithContext(contextwith)
 
@@ -2747,7 +2750,7 @@ func (t *targetrunner) bmdVersionFixup() {
 			path:   cmn.URLPath(cmn.Version, cmn.Daemon),
 			query:  q,
 		},
-		timeout: ctx.config.Timeout.CplaneOperation,
+		timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 	}
 	res := t.call(args)
 	if res.err != nil {
@@ -3051,7 +3054,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		file                 *os.File
 		filewriter           io.Writer
 		ohtype, ohval, nhval string
-		cksumcfg             = &ctx.config.Cksum
+		cksumcfg             = &cmn.GCO.Get().Cksum
 	)
 
 	if dryRun.disk && dryRun.network {
@@ -3201,14 +3204,15 @@ func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
 
 // create local directories to test multiple fspaths
 func (t *targetrunner) testCachepathMounts() {
+	config := cmn.GCO.Get()
 	var instpath string
-	if ctx.config.TestFSP.Instance > 0 {
-		instpath = filepath.Join(ctx.config.TestFSP.Root, strconv.Itoa(ctx.config.TestFSP.Instance))
+	if config.TestFSP.Instance > 0 {
+		instpath = filepath.Join(config.TestFSP.Root, strconv.Itoa(config.TestFSP.Instance))
 	} else {
 		// container, VM, etc.
-		instpath = ctx.config.TestFSP.Root
+		instpath = config.TestFSP.Root
 	}
-	for i := 0; i < ctx.config.TestFSP.Count; i++ {
+	for i := 0; i < config.TestFSP.Count; i++ {
 		mpath := filepath.Join(instpath, strconv.Itoa(i+1))
 		if err := cmn.CreateDir(mpath); err != nil {
 			glog.Errorf("FATAL: cannot create test cache dir %q, err: %v", mpath, err)
@@ -3222,7 +3226,7 @@ func (t *targetrunner) testCachepathMounts() {
 
 func (t *targetrunner) detectMpathChanges() {
 	// mpath config dir
-	mpathconfigfqn := filepath.Join(ctx.config.Confdir, mpname)
+	mpathconfigfqn := filepath.Join(cmn.GCO.Get().Confdir, cmn.MountpathBackupFile)
 
 	type mfs struct {
 		Available cmn.StringSet `json:"available"`
@@ -3282,7 +3286,7 @@ func (t *targetrunner) detectMpathChanges() {
 //    versioning is unsupported even if versioning is 'all' or 'cloud'.
 func (t *targetrunner) versioningConfigured(bucket string) bool {
 	islocal := t.bmdowner.get().IsLocal(bucket)
-	versioning := ctx.config.Ver.Versioning
+	versioning := cmn.GCO.Get().Ver.Versioning
 	if islocal {
 		return versioning == cmn.VersionAll || versioning == cmn.VersionLocal
 	}
@@ -3354,7 +3358,7 @@ func (t *targetrunner) fshc(err error, filepath string) {
 		t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
 	}
 
-	if ctx.config.FSHC.Enabled {
+	if cmn.GCO.Get().FSHC.Enabled {
 		getfshealthchecker().OnErr(filepath)
 	}
 }
@@ -3391,8 +3395,9 @@ func (t *targetrunner) userFromRequest(r *http.Request) (*authRec, error) {
 // Extracted user information is put to context that is passed to all consumers
 func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
 	ct := context.Background()
+	config := cmn.GCO.Get()
 
-	if ctx.config.Auth.CredDir == "" || !ctx.config.Auth.Enabled {
+	if config.Auth.CredDir == "" || !config.Auth.Enabled {
 		return ct
 	}
 
@@ -3404,7 +3409,7 @@ func (t *targetrunner) contextWithAuth(r *http.Request) context.Context {
 
 	if user != nil {
 		ct = context.WithValue(ct, ctxUserID, user.userID)
-		ct = context.WithValue(ct, ctxCredsDir, ctx.config.Auth.CredDir)
+		ct = context.WithValue(ct, ctxCredsDir, config.Auth.CredDir)
 		ct = context.WithValue(ct, ctxUserCreds, user.creds)
 	}
 
@@ -3570,7 +3575,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 		go t.runRebalance(newsmap, newtargetid)
 		return
 	}
-	if !ctx.config.Rebalance.Enabled {
+	if !cmn.GCO.Get().Rebalance.Enabled {
 		glog.Infoln("auto-rebalancing disabled")
 		return
 	}
