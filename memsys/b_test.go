@@ -19,6 +19,7 @@ import (
 func Test_sglhash(t *testing.T) {
 	mem := &memsys.Mem2{Period: time.Second * 20, MinFree: cmn.GiB, Name: "amem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
+	defer mem.Stop(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

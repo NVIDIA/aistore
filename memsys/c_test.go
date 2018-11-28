@@ -32,6 +32,7 @@ const (
 func TestSGLStressN(t *testing.T) {
 	mem := &memsys.Mem2{MinPctFree: 50, Name: "cmem", Debug: verbose}
 	err := mem.Init(true /* ignore errors */)
+	defer mem.Stop(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

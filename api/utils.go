@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/NVIDIA/dfcpub/memsys"
 )
@@ -22,9 +21,7 @@ var (
 )
 
 func init() {
-	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "APIMem2"}
-	_ = Mem2.Init(false /* ignore init-time errors */)
-	go Mem2.Run()
+	Mem2 = memsys.Init()
 }
 
 func doHTTPRequest(httpClient *http.Client, method, url string, b []byte) ([]byte, error) {

@@ -28,7 +28,6 @@ import (
 
 var (
 	server *httptest.Server
-	mem2   *memsys.Mem2
 )
 
 func TestPutFile(t *testing.T) {

@@ -49,6 +49,16 @@ In addition, there are several environment variables that can be used
 ```
 These names must be self-explanatory.
 
+## Termination
+
+If the memory manager is no longer needed, terminating the Mem2 instance is recommended.
+This will free up all the slabs allocated to the memory manager instance.
+Halt a running or initialized Mem2 instance is done by:
+```go
+    mem2.Stop(nil)
+```
+Note that `nil` is used to denote that the Mem2 instance termination was done intentionally as part of cleanup.
+
 ## Operation
 
 Once constructed and initialized, memory-manager-and-slab-allocator
@@ -88,3 +98,13 @@ go test -v -logtostderr=true -run=Test_Sleep -duration=100s
 ```
 DFC_MEM_DEBUG=1 go test -v -logtostderr=true -duration=2m
 ```
+
+## Global Memory Manager
+
+In the interest of reusing a single memory manager instance across multiple packages outside the dfc core package, the memsys package declares a `gMem2` variable that can be accessed through the matching exported Getter.
+The notable runtime parameters that are used for the global memory manager are MinFreePct and Period which are set to 50% and 2 minutes, respectively.
+Note that more specialized use cases which warrant custom memory managers with finely tuned parameters are free to create their own separate `Mem2` instances.
+
+Usage:
+
+To access the global memory manager, a single call to `memsys.Init()` is all that is required. Separate `Init()` nor `Run()` calls should not be made on the returned Mem2 instance.

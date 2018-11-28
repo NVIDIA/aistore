@@ -17,13 +17,6 @@ const (
 	fsCheckerTmpDir = "/tmp/fshc"
 )
 
-var gmem2 *memsys.Mem2
-
-func testMemInit(name string) {
-	gmem2 = &memsys.Mem2{Name: name}
-	_ = gmem2.Init(false /* ignore init-time errors */)
-}
-
 func testCheckerMountPaths() *fs.MountedFS {
 	cmn.CreateDir(fsCheckerTmpDir)
 	cmn.CreateDir(fsCheckerTmpDir + "/1")
@@ -71,9 +64,10 @@ func testCheckerCleanup() {
 }
 
 func TestFSCheckerMain(t *testing.T) {
-	testMemInit("fshctest")
+	mem2 := memsys.Init()
+	defer mem2.Stop(nil)
 	updateTestConfig()
-	fshc := NewFSHC(testCheckerMountPaths(), gmem2, fs.CSM)
+	fshc := NewFSHC(testCheckerMountPaths(), mem2, fs.CSM)
 	if fshc == nil {
 		t.Error("Failed to create fshc")
 	}

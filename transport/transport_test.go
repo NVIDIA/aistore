@@ -69,10 +69,7 @@ func init() {
 		fmt.Printf("Invalid duration '%s'\n", d)
 		os.Exit(1)
 	}
-
-	Mem2 = &memsys.Mem2{Period: time.Minute * 2, Name: "TransportMem2"}
-	Mem2.Init(false)
-	go Mem2.Run()
+	Mem2 = memsys.Init()
 }
 
 func Example_Headers() {
