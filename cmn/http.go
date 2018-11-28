@@ -126,6 +126,14 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 }
 
 func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
+	getErrorLine := func() string {
+		if _, file, line, ok := runtime.Caller(2); ok {
+			f := filepath.Base(file)
+			return fmt.Sprintf("(%s, #%d)", f, line)
+		}
+		return ""
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		s := fmt.Sprintf("Failed to read %s request, err: %v", r.Method, err)
@@ -135,10 +143,8 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 				s = fmt.Sprintf("Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
 			}
 		}
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
+		s += getErrorLine()
+
 		InvalidHandlerDetailed(w, r, s)
 		return err
 	}
@@ -146,10 +152,8 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, out interface{}) error {
 	err = jsoniter.Unmarshal(b, out)
 	if err != nil {
 		s := fmt.Sprintf("Failed to json-unmarshal %s request, err: %v [%v]", r.Method, err, string(b))
-		if _, file, line, ok := runtime.Caller(1); ok {
-			f := filepath.Base(file)
-			s += fmt.Sprintf("(%s, #%d)", f, line)
-		}
+		s += getErrorLine()
+
 		InvalidHandlerDetailed(w, r, s)
 		return err
 	}
