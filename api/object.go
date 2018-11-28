@@ -88,10 +88,6 @@ func EvictObject(httpClient *http.Client, proxyURL, bucket, object string) error
 //
 // Writes the response body to a writer if one is specified in the optional GetObjectInput.Writer.
 // Otherwise, it discards the response body read.
-//
-// If a memory manager/slab allocator is specified, a reusable buffer allocated from the slab will be used
-// for copying over the contents from the io.Reader to the io.Writer values.
-// Otherwise, a temporary buffer is allocated in io.CopyBuffer.
 func GetObject(httpClient *http.Client, proxyURL, bucket, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w         = ioutil.Discard
@@ -222,12 +218,12 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 //
 // Creates a cmn.ActionMsg with the new name of the object
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
-func RenameObject(httpClient *http.Client, proxyURL, bucket, oldObj, newObj string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newObj})
+func RenameObject(httpClient *http.Client, proxyURL, bucket, oldName, newName string) error {
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldObj)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldName)
 	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
 	return err
 }

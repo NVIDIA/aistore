@@ -64,7 +64,7 @@ func RegisterTarget(httpClient *http.Client, proxyURL string, targetInfo *cluste
 
 // UnregisterTarget API operation for DFC
 //
-// Unregisters an existing target to the clustermap.
+// Unregisters an existing target from the clustermap.
 func UnregisterTarget(httpClient *http.Client, proxyURL, unregisterSID string) error {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
 	_, err := DoHTTPRequest(httpClient, http.MethodDelete, url, nil)

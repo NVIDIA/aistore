@@ -166,13 +166,13 @@ func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error 
 
 // RenameLocalBucket API operation for DFC
 //
-// RenameLocalBucket changes the name of a bucket from oldBucketName to newBucketName
-func RenameLocalBucket(httpClient *http.Client, proxyURL, oldBucketName, newBucketName string) error {
-	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBucketName})
+// RenameLocalBucket changes the name of a bucket from oldName to newName
+func RenameLocalBucket(httpClient *http.Client, proxyURL, oldName, newName string) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, oldBucketName)
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, oldName)
 	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, b)
 	return err
 }
