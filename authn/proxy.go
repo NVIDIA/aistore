@@ -43,7 +43,11 @@ func newProxy(configPath, defaultURL string) *proxy {
 	err := cmn.LocalLoad(configPath, p)
 	if err != nil {
 		// first run: read the current Smap and save to local file
-		smap, err := api.GetClusterMap(HTTPClient, defaultURL)
+		baseParams := &api.BaseParams{
+			Client: HTTPClient,
+			URL:    defaultURL,
+		}
+		smap, err := api.GetClusterMap(baseParams)
 		if err != nil {
 			glog.Errorf("Failed to get cluster map: %v", err)
 			return &proxy{configPath: configPath, URL: defaultURL}
@@ -75,7 +79,11 @@ func (p *proxy) saveSmap() {
 //   config and saves new valid Smap
 // Returns error if the node failed to respond
 func (p *proxy) comparePrimaryURL(url string) error {
-	smap, err := api.GetClusterMap(HTTPClient, url)
+	baseParams := &api.BaseParams{
+		Client: HTTPClient,
+		URL:    url,
+	}
+	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return err
 	}

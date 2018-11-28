@@ -33,8 +33,10 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var newMpaths *cmn.MountpathList
+
+	baseParams := tutils.BaseAPIParams(target)
 	for detectLimit.After(time.Now()) {
-		newMpaths, err = api.GetMountpaths(tutils.HTTPClient, target)
+		newMpaths, err = api.GetMountpaths(baseParams)
 		if err != nil {
 			t.Errorf("Failed to read target mountpaths: %v\n", err)
 			break
@@ -76,14 +78,16 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
-	api.EnableMountpath(tutils.HTTPClient, target, mpath)
+	baseParams := tutils.BaseAPIParams(target)
+
+	api.EnableMountpath(baseParams, mpath)
 	tutils.Logf("Recheck mountpaths\n")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var mpaths *cmn.MountpathList
 	// Wait for fsckeeper detects that the mountpath is accessible now
 	for detectLimit.After(time.Now()) {
-		mpaths, err = api.GetMountpaths(tutils.HTTPClient, target)
+		mpaths, err = api.GetMountpaths(baseParams)
 		if err != nil {
 			t.Errorf("Failed to read target mountpaths: %v\n", err)
 			break
@@ -143,7 +147,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 				ldir := filepath.Join(LocalSrcDir, fshcDir)
 				tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, filesize, fileList, errCh, objsPutCh, sgl)
 			case "GET":
-				api.GetObject(tutils.HTTPClient, proxyURL, bucket, path.Join(fshcDir, fname))
+				api.GetObject(tutils.DefaultBaseAPIParams(t), bucket, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -160,11 +164,12 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 func TestFSCheckerDetection(t *testing.T) {
 	const filesize = 64 * 1024
 	var (
-		sgl      *memsys.SGL
-		seed     = baseseed + 300
-		numObjs  = 100
-		proxyURL = getPrimaryURL(t, proxyURLRO)
-		bucket   = TestLocalBucketName
+		sgl        *memsys.SGL
+		seed       = baseseed + 300
+		numObjs    = 100
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		bucket     = TestLocalBucketName
+		baseParams *api.BaseParams
 	)
 
 	if testing.Short() {
@@ -184,7 +189,8 @@ func TestFSCheckerDetection(t *testing.T) {
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
 		tutils.Logf("Target: %s\n", target)
-		lst, err := api.GetMountpaths(tutils.HTTPClient, tinfo.PublicNet.DirectURL)
+		baseParams = tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
+		lst, err := api.GetMountpaths(baseParams)
 		tutils.CheckFatal(err, t)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
@@ -256,8 +262,9 @@ func TestFSCheckerDetection(t *testing.T) {
 	// reading non-existing objects should not disable mountpath
 	{
 		tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
+		baseParams = tutils.BaseAPIParams(proxyURL)
 		for n := 1; n < 10; n++ {
-			if _, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, path.Join(fshcDir, strconv.FormatInt(int64(n), 10))); err == nil {
+			if _, err := api.GetObject(baseParams, bucket, path.Join(fshcDir, strconv.FormatInt(int64(n), 10))); err == nil {
 				t.Error("Should not be able to GET non-existing objects")
 			}
 		}
@@ -302,8 +309,8 @@ func TestFSCheckerDetection(t *testing.T) {
 			t.Errorf("Failed to create file: %v", err)
 		}
 		f.Close()
-		for _, objName := range objList {
-			api.GetObject(tutils.HTTPClient, proxyURL, bucket, objName)
+		for _, n := range objList {
+			_, err = api.GetObject(baseParams, bucket, n)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")
@@ -332,7 +339,8 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	origOff := 0
 	for target, tinfo := range smap.Tmap {
 		tutils.Logf("Target: %s\n", target)
-		lst, err := api.GetMountpaths(tutils.HTTPClient, tinfo.PublicNet.DirectURL)
+		baseParams := tutils.BaseAPIParams(tinfo.PublicNet.DirectURL)
+		lst, err := api.GetMountpaths(baseParams)
 		tutils.CheckFatal(err, t)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
@@ -359,12 +367,13 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	// create a local bucket to write to
 	tutils.Logf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
-	err := api.EnableMountpath(tutils.HTTPClient, failedTarget, failedMpath)
+	baseParams := tutils.BaseAPIParams(failedTarget)
+	err := api.EnableMountpath(baseParams, failedMpath)
 	if err != nil {
 		t.Errorf("Enabling available mountpath should return success, got: %v", err)
 	}
 
-	err = api.EnableMountpath(tutils.HTTPClient, failedTarget, failedMpath+"some_text")
+	err = api.EnableMountpath(baseParams, failedMpath+"some_text")
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Enabling non-existing mountpath should return not-found error, got: %v", err)
 	}
@@ -384,8 +393,8 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		tgtURL = tinfo.PublicNet.DirectURL
 		break
 	}
-
-	oldMpaths, err := api.GetMountpaths(tutils.HTTPClient, tgtURL)
+	baseParams := tutils.BaseAPIParams(tgtURL)
+	oldMpaths, err := api.GetMountpaths(baseParams)
 	tutils.CheckFatal(err, t)
 	if len(oldMpaths.Available) == 0 {
 		t.Fatalf("Target %s does not have availalble mountpaths", tgtURL)
@@ -393,7 +402,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	tutils.Logf("Removing all mountpaths from target: %s\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
-		err = api.DisableMountpath(tutils.HTTPClient, tgtURL, mpath)
+		err = api.DisableMountpath(baseParams, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
@@ -402,7 +411,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	tutils.Logf("Restoring target %s mountpaths\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
-		err = api.EnableMountpath(tutils.HTTPClient, tgtURL, mpath)
+		err = api.EnableMountpath(baseParams, mpath)
 		tutils.CheckFatal(err, t)
 	}
 

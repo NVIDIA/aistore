@@ -28,7 +28,8 @@ import (
 )
 
 var (
-	server *httptest.Server
+	server     *httptest.Server
+	baseParams *api.BaseParams
 )
 
 func TestPutFile(t *testing.T) {
@@ -55,7 +56,7 @@ func putFile(size int64, withHash bool) error {
 	if err != nil {
 		return err
 	}
-	err = api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
+	err = api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
 	r.Close()
 	os.Remove(path.Join(dir, fn))
 	return err
@@ -67,7 +68,7 @@ func putInMem(size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-	return api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
+	return api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
 }
 
 func putRand(size int64, withHash bool) error {
@@ -76,7 +77,7 @@ func putRand(size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-	return api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
+	return api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
 }
 
 func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
@@ -86,7 +87,7 @@ func putSG(sgl *memsys.SGL, size int64, withHash bool) error {
 		return err
 	}
 	defer r.Close()
-	return api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
+	return api.PutObject(baseParams, "bucket", "key", r.XXHash(), r)
 }
 
 func BenchmarkPutFileWithHash1M(b *testing.B) {
@@ -258,6 +259,7 @@ func TestMain(m *testing.M) {
 		}
 	}))
 	defer server.Close()
+	baseParams = tutils.BaseAPIParams(server.URL)
 
 	os.Exit(m.Run())
 }

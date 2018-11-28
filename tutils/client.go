@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
@@ -31,6 +32,10 @@ import (
 	"github.com/NVIDIA/dfcpub/dsort"
 	"github.com/NVIDIA/dfcpub/memsys"
 	jsoniter "github.com/json-iterator/go"
+)
+
+const (
+	ProxyURL = "http://localhost:8080" // assuming local proxy is listening on 8080
 )
 
 type (
@@ -277,7 +282,8 @@ func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan 
 	if !silent {
 		fmt.Printf("DEL: %s\n", object)
 	}
-	err := api.DeleteObject(HTTPClient, proxyURL, bucket, object)
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.DeleteObject(baseParams, bucket, object)
 	emitError(nil, err, errCh)
 	return err
 }
@@ -292,12 +298,14 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 	if err != nil {
 		return fmt.Errorf("Failed to marhsal cmn.ActionMsg, err: %v", err)
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 
-	optParams := api.ParamsOptional{Header: http.Header{
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = method
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	optParams := api.OptionalParams{Header: http.Header{
 		"Content-Type": []string{"application/json"},
 	}}
-	_, err = api.DoHTTPRequest(HTTPClient, method, url, b, optParams)
+	_, err = api.DoHTTPRequest(baseParams, path, b, optParams)
 	return err
 }
 
@@ -365,7 +373,8 @@ func IsCached(proxyURL, bucket, objname string) (bool, error) {
 // PutAsync sends a PUT request to the given URL
 func PutAsync(wg *sync.WaitGroup, proxyURL, bucket, object string, reader Reader, errCh chan error) {
 	defer wg.Done()
-	err := api.PutObject(HTTPClient, proxyURL, bucket, object, reader.XXHash(), reader)
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.PutObject(baseParams, bucket, object, reader.XXHash(), reader)
 	if err != nil {
 		if errCh == nil {
 			fmt.Println("Error channel is not given, do not know how to report error", err)
@@ -382,9 +391,10 @@ func PutAsync(wg *sync.WaitGroup, proxyURL, bucket, object string, reader Reader
 // corresponding value is the error that caused replication to fail.
 func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]string) map[string]error {
 	objectsWithErrors := make(map[string]error)
+	baseParams := BaseAPIParams(proxyURL)
 	for bucket, objectList := range bucketToObjects {
 		for _, object := range objectList {
-			if err := api.ReplicateObject(HTTPClient, proxyURL, bucket, object); err != nil {
+			if err := api.ReplicateObject(baseParams, bucket, object); err != nil {
 				objectsWithErrors[filepath.Join(bucket, object)] = err
 			}
 		}
@@ -395,7 +405,8 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &cmn.GetMsg{GetPrefix: prefix}
-	data, err := api.ListBucket(HTTPClient, proxyURL, bucket, msg, objectCountLimit)
+	baseParams := BaseAPIParams(proxyURL)
+	data, err := api.ListBucket(baseParams, bucket, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -436,8 +447,9 @@ func GetConfig(server string) (HTTPLatencies, error) {
 }
 
 // GetPrimaryProxy returns the primary proxy's url of a cluster
-func GetPrimaryProxy(url string) (string, error) {
-	smap, err := api.GetClusterMap(HTTPClient, url)
+func GetPrimaryProxy(proxyURL string) (string, error) {
+	baseParams := BaseAPIParams(proxyURL)
+	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return "", err
 	}
@@ -448,7 +460,8 @@ func GetPrimaryProxy(url string) (string, error) {
 // DoesLocalBucketExist queries a proxy or target to get a list of all local buckets, returns true if
 // the bucket exists.
 func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
-	buckets, err := api.GetBucketNames(HTTPClient, serverURL, true)
+	baseParams := BaseAPIParams(serverURL)
+	buckets, err := api.GetBucketNames(baseParams, true)
 	if err != nil {
 		return false, err
 	}
@@ -472,7 +485,8 @@ func GetWhatRawQuery(getWhat string, getProps string) string {
 }
 
 func UnregisterTarget(proxyURL, sid string) error {
-	smap, err := api.GetClusterMap(HTTPClient, proxyURL)
+	baseParams := BaseAPIParams(proxyURL)
+	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
 		return fmt.Errorf("api.GetClusterMap failed, err: %v", err)
 	}
@@ -482,7 +496,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	if ok {
 		idsToIgnore = []string{target.DaemonID}
 	}
-	if err = api.UnregisterTarget(HTTPClient, proxyURL, sid); err != nil {
+	if err = api.UnregisterTarget(baseParams, sid); err != nil {
 		return err
 	}
 
@@ -496,7 +510,8 @@ func UnregisterTarget(proxyURL, sid string) error {
 
 func RegisterTarget(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap) error {
 	_, ok := smap.Tmap[targetNode.DaemonID]
-	if err := api.RegisterTarget(HTTPClient, proxyURL, targetNode); err != nil {
+	baseParams := BaseAPIParams(proxyURL)
+	if err := api.RegisterTarget(baseParams, targetNode); err != nil {
 		return err
 	}
 
@@ -539,8 +554,8 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 		if !exists {
 			break
 		}
-
-		daemonSmap, err := api.GetClusterMap(HTTPClient, url)
+		baseParams := BaseAPIParams(url)
+		daemonSmap, err := api.GetClusterMap(baseParams)
 		if err != nil && !cmn.IsErrConnectionRefused(err) {
 			return err
 		}
@@ -641,7 +656,8 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 		// We could PUT while creating files, but that makes it
 		// begin all the puts immediately (because creating random files is fast
 		// compared to the listbucket call that getRandomFiles does)
-		err = api.PutObject(HTTPClient, proxyURL, bucket, fullObjName, reader.XXHash(), reader)
+		baseParams := BaseAPIParams(proxyURL)
+		err = api.PutObject(baseParams, bucket, fullObjName, reader.XXHash(), reader)
 		if err != nil {
 			if errCh == nil {
 				Logf("Error performing PUT of object with random data, provided error channel is nil\n")
@@ -716,8 +732,10 @@ func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {
 		return "", err
 	}
 
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start)
-	body, err := api.DoHTTPRequest(HTTPClient, http.MethodPost, url, msg)
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start)
+	body, err := api.DoHTTPRequest(baseParams, path, msg)
 	if err != nil {
 		return "", err
 	}
@@ -726,8 +744,10 @@ func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {
 }
 
 func AbortDSort(proxyURL, managerUUID string) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
-	_, err := api.DoHTTPRequest(HTTPClient, http.MethodDelete, url, nil)
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+	_, err := api.DoHTTPRequest(baseParams, path, nil)
 	return err
 }
 
@@ -758,8 +778,10 @@ func WaitForDSortToFinish(proxyURL, managerUUID string) (bool, error) {
 }
 
 func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, error) {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
-	body, err := api.DoHTTPRequest(HTTPClient, http.MethodGet, url, nil)
+	baseParams := BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Metrics, managerUUID)
+	body, err := api.DoHTTPRequest(baseParams, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -767,4 +789,17 @@ func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, erro
 	var metrics map[string]*dsort.Metrics
 	err = jsoniter.Unmarshal(body, &metrics)
 	return metrics, err
+}
+
+func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
+	primaryURL, err := GetPrimaryProxy(ProxyURL)
+	CheckFatal(err, t)
+	return BaseAPIParams(primaryURL)
+}
+
+func BaseAPIParams(url string) *api.BaseParams {
+	return &api.BaseParams{
+		Client: HTTPClient,
+		URL:    url,
+	}
 }

@@ -34,7 +34,8 @@ func doPut(wo *workOrder) {
 		wo.err = err
 		return
 	}
-	wo.err = api.PutObject(tutils.HTTPClient, wo.proxyURL, wo.bucket, wo.objName, r.XXHash(), r)
+	baseParams := tutils.BaseAPIParams(wo.proxyURL)
+	wo.err = api.PutObject(baseParams, wo.bucket, wo.objName, r.XXHash(), r)
 }
 
 func doGet(wo *workOrder) {

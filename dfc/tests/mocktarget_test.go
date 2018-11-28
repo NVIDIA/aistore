@@ -79,8 +79,10 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Sma
 		}
 		break
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
-	_, err = api.DoHTTPRequest(tutils.HTTPClient, http.MethodPost, url, jsonDaemonInfo)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Cluster)
+	_, err = api.DoHTTPRequest(baseParams, path, jsonDaemonInfo)
 	return err
 }
 

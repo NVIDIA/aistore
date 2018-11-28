@@ -20,9 +20,15 @@ var (
 	Mem2 *memsys.Mem2
 )
 
-// ParamsOptional is used in constructing client-side API requests to the DFC backend.
-// Stores Query and Header for providing arguments that are not used commonly in API requests
-type ParamsOptional struct {
+type BaseParams struct {
+	Client *http.Client
+	URL    string
+	Method string
+}
+
+// OptionalParams is used in constructing client-side API requests to the DFC backend.
+// Stores Query and Headers for providing arguments that are not used commonly in API requests
+type OptionalParams struct {
 	Query  url.Values
 	Header http.Header
 }
@@ -32,8 +38,8 @@ func init() {
 }
 
 // DoHTTPRequest sends one HTTP request and returns only the body of the response
-func DoHTTPRequest(httpClient *http.Client, method, url string, b []byte, optParams ...ParamsOptional) ([]byte, error) {
-	resp, err := doHTTPRequestGetResp(httpClient, method, url, b, optParams...)
+func DoHTTPRequest(baseParams *BaseParams, path string, b []byte, optParams ...OptionalParams) ([]byte, error) {
+	resp, err := doHTTPRequestGetResp(baseParams, path, b, optParams...)
 	if err != nil {
 		return nil, err
 	}
@@ -42,14 +48,15 @@ func DoHTTPRequest(httpClient *http.Client, method, url string, b []byte, optPar
 }
 
 // doHTTPRequestGetResp sends one HTTP request and returns the whole response
-func doHTTPRequestGetResp(httpClient *http.Client, method, reqURL string, b []byte, optParams ...ParamsOptional) (*http.Response, error) {
+func doHTTPRequestGetResp(baseParams *BaseParams, path string, b []byte, optParams ...OptionalParams) (*http.Response, error) {
 	var (
 		reqBody io.Reader
 	)
 	if b != nil {
 		reqBody = bytes.NewBuffer(b)
 	}
-	req, err := http.NewRequest(method, reqURL, reqBody)
+	url := baseParams.URL + path
+	req, err := http.NewRequest(baseParams.Method, url, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request, err: %v", err)
 	}
@@ -57,9 +64,9 @@ func doHTTPRequestGetResp(httpClient *http.Client, method, reqURL string, b []by
 		setRequestOptParams(req, optParams[0])
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := baseParams.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to %s, err: %v", method, err)
+		return nil, fmt.Errorf("Failed to %s, err: %v", baseParams.Method, err)
 	}
 	if resp.StatusCode >= http.StatusBadRequest {
 		b, err := ioutil.ReadAll(resp.Body)
@@ -73,7 +80,7 @@ func doHTTPRequestGetResp(httpClient *http.Client, method, reqURL string, b []by
 
 // Given an existing HTTP Request and optional API parameters, setRequestOptParams
 // sets the optional fields of the request if provided
-func setRequestOptParams(req *http.Request, optParams ParamsOptional) {
+func setRequestOptParams(req *http.Request, optParams OptionalParams) {
 	if len(optParams.Query) != 0 {
 		req.URL.RawQuery = optParams.Query.Encode()
 	}

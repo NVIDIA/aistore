@@ -37,8 +37,9 @@ func propsUpdateObjects(t *testing.T, proxyURL, bucket string, oldVersions map[s
 		t.Errorf("Failed to create reader: %v", err)
 		t.Fail()
 	}
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	for fname := range oldVersions {
-		err = api.PutObject(tutils.HTTPClient, proxyURL, bucket, fname, r.XXHash(), r)
+		err = api.PutObject(baseParams, bucket, fname, r.XXHash(), r)
 		if err != nil {
 			t.Errorf("Failed to put new data to object %s/%s, err: %v", bucket, fname, err)
 		}
@@ -83,8 +84,9 @@ func propsReadObjects(t *testing.T, proxyURL, bucket string, objList map[string]
 	versChanged, bytesChanged := propsStats(t, proxyURL)
 	tutils.Logf("Version mismatch stats before test. Objects: %d, bytes fetched: %d\n", versChanged, bytesChanged)
 
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	for object := range objList {
-		_, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, object)
+		_, err := api.GetObject(baseParams, bucket, object)
 		if err != nil {
 			t.Errorf("Failed to read %s/%s, err: %v", bucket, object, err)
 			continue
@@ -433,7 +435,7 @@ func propsMainTest(t *testing.T, versioning string) {
 		}
 	}()
 
-	props, err := api.HeadBucket(tutils.HTTPClient, proxyURL, clibucket)
+	props, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), clibucket)
 	if err != nil {
 		t.Fatalf("Could not execute HeadBucket Request: %v", err)
 	}

@@ -134,11 +134,16 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		defer wg.Done()
 	}
 
-	getsGroup := &sync.WaitGroup{}
-	var msg = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var (
+		src        = rand.NewSource(time.Now().UnixNano())
+		random     = rand.New(src)
+		getsGroup  = &sync.WaitGroup{}
+		msg        = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
+		baseParams = tutils.BaseAPIParams(proxyURL)
+	)
+
 	for i := 0; i < numGets; i++ {
-		items, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, 0)
+		items, err := api.ListBucket(baseParams, bucket, msg, 0)
 		if err != nil {
 			errCh <- err
 			t.Error(err)
@@ -168,7 +173,8 @@ func getRandomFiles(proxyURL string, numGets int, bucket, prefix string, t *test
 		keyname := files[random.Intn(len(files))]
 		getsGroup.Add(1)
 		go func() {
-			_, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, keyname)
+			baseParams := tutils.BaseAPIParams(proxyURL)
+			_, err := api.GetObject(baseParams, bucket, keyname)
 			if err != nil {
 				errCh <- err
 			}

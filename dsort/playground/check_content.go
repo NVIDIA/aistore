@@ -33,10 +33,11 @@ func main() {
 		b := bytes.NewBuffer(nil)
 		w := bufio.NewWriter(b)
 		s := fmt.Sprintf("%s%d%s", prefix, i, ext)
+		baseParams := tutils.BaseAPIParams(proxyURL)
 		options := api.GetObjectInput{
 			Writer: w,
 		}
-		if _, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, s, options); err != nil {
+		if _, err := api.GetObject(baseParams, bucket, s, options); err != nil {
 			fmt.Printf("shard (%s) wasn't be able to be read, err: %v", s, err)
 		}
 

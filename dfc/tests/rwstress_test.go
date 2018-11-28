@@ -134,8 +134,9 @@ func rwCanRunAsync(currAsyncOps int64, maxAsycOps int) bool {
 
 func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
 	var (
-		totalOps int
-		prc      int
+		totalOps   int
+		prc        int
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 	errCh := make(chan error, 10)
 	fileCount := len(fileNames)
@@ -172,7 +173,7 @@ func rwPutLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 						atomic.AddInt64(&putCounter, -1)
 					}()
 				} else {
-					err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, keyname, r.XXHash(), r)
+					err = api.PutObject(baseParams, clibucket, keyname, r.XXHash(), r)
 					if err != nil {
 						errCh <- err
 					}
@@ -256,10 +257,13 @@ func rwDelLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 }
 
 func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.WaitGroup, doneCh chan int) {
-	done := false
-	var currIdx, totalOps int
-	errCh := make(chan error, 10)
-	var wg = &sync.WaitGroup{}
+	var (
+		done              = false
+		currIdx, totalOps int
+		errCh             = make(chan error, 10)
+		wg                = &sync.WaitGroup{}
+		baseParams        = tutils.BaseAPIParams(proxyURL)
+	)
 
 	if taskGrp != nil {
 		defer taskGrp.Done()
@@ -274,7 +278,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 				wg.Add(1)
 				localIdx := idx
 				go func() {
-					_, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, keyname)
+					_, err := api.GetObject(baseParams, clibucket, keyname)
 					if err != nil {
 						errCh <- err
 					}
@@ -283,7 +287,7 @@ func rwGetLoop(t *testing.T, proxyURL string, fileNames []string, taskGrp *sync.
 					wg.Done()
 				}()
 			} else {
-				_, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, keyname)
+				_, err := api.GetObject(baseParams, clibucket, keyname)
 				if err != nil {
 					errCh <- err
 				}

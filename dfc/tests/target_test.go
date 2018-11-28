@@ -20,8 +20,8 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	)
 	var (
 		sid          string
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		objDummyData = []byte("testing is so much fun")
+		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		smap         = getClusterMap(t, proxyURL)
 	)
 
@@ -30,18 +30,18 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	}
 
 	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
+	baseParams := tutils.BaseAPIParams(url)
 	reader := tutils.NewBytesReader(objDummyData)
-	if err := api.PutObject(tutils.HTTPClient, url, bucket, objName, reader.XXHash(), reader); err == nil {
+	if err := api.PutObject(baseParams, bucket, objName, reader.XXHash(), reader); err == nil {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }
 
 func TestDeleteInvalidDaemonID(t *testing.T) {
 	var (
-		sid      = "abcde:abcde"
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		sid = "abcde:abcde"
 	)
-	if err := api.UnregisterTarget(tutils.HTTPClient, proxyURL, sid); err == nil {
+	if err := api.UnregisterTarget(tutils.DefaultBaseAPIParams(t), sid); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
 }

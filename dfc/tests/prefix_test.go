@@ -110,7 +110,8 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 	tutils.Logf("Looking up for files than names start with %s\n", prefix)
 	var msg = &cmn.GetMsg{GetPrefix: prefix}
 	numFiles := 0
-	objList, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	objList, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("List files with prefix failed, err = %v", err)
 		return
@@ -132,12 +133,13 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 func prefixLookupDefault(t *testing.T, proxyURL string) {
 	tutils.Logf("Looking up for files in alphabetic order\n")
 
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	for i := 0; i < len(letters); i++ {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &cmn.GetMsg{GetPrefix: lookFor}
-		objList, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+		objList, err := api.ListBucket(baseParams, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -174,12 +176,12 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 		{"dir1", "dir1", 2},
 		{"dir1/", "dir1/", 2},
 	}
-
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &cmn.GetMsg{GetPrefix: p}
-		objList, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+		objList, err := api.ListBucket(baseParams, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return

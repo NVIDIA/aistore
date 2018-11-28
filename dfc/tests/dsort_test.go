@@ -115,13 +115,14 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	}
 
 	inversions := 0
+	baseParams := tutils.BaseAPIParams(df.m.proxyURL)
 	for i := 0; i < df.outputShardCnt; i++ {
 		shardName := fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
 		var buffer bytes.Buffer
 		getOptions := api.GetObjectInput{
 			Writer: &buffer,
 		}
-		_, err := api.GetObject(tutils.HTTPClient, df.m.proxyURL, df.m.bucket, shardName, getOptions)
+		_, err := api.GetObject(baseParams, df.m.bucket, shardName, getOptions)
 		if err != nil && df.extension == ".zip" && i > df.outputShardCnt/2 {
 			// We estimated too much output shards to be produced - zip compression
 			// was so good that we could fit more files inside the shard.

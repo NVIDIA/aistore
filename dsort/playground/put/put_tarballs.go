@@ -58,26 +58,31 @@ func init() {
 }
 
 func main() {
+	baseParams := &api.BaseParams{
+		Client: client,
+		URL:    proxyURL,
+	}
 	exists, err := tutils.DoesLocalBucketExist(proxyURL, bucket)
 	if err != nil {
 		glog.Fatal("failed to check if local bucket exists")
 	}
 
 	if exists && cleanup {
-		err := api.DestroyLocalBucket(client, proxyURL, bucket)
+		err := api.DestroyLocalBucket(baseParams, bucket)
 		if err != nil {
 			glog.Fatal("failed to remove local bucket")
 		}
 	}
 
 	if !exists || cleanup {
-		if err = api.CreateLocalBucket(client, proxyURL, bucket); err != nil {
+		if err = api.CreateLocalBucket(baseParams, bucket); err != nil {
 			glog.Fatal("failed to create local bucket")
 		}
 	}
 
 	wg := &sync.WaitGroup{}
 	sema := make(chan struct{}, concurrencyLimit)
+	baseParams = tutils.BaseAPIParams(proxyURL)
 	if inMem {
 		numFilesDigits := len(strconv.Itoa(fileInTarballCnt))
 		mem := &memsys.Mem2{}
@@ -101,7 +106,7 @@ func main() {
 				if err != nil {
 					glog.Error(err)
 				}
-				if err := api.PutObject(tutils.HTTPClient, proxyURL, bucket, name, reader.XXHash(), reader); err != nil {
+				if err := api.PutObject(baseParams, bucket, name, reader.XXHash(), reader); err != nil {
 					glog.Error(err)
 				}
 				fmt.Printf("PUT: %s/%s\n", bucket, name)
@@ -130,7 +135,7 @@ func main() {
 			wg.Add(1)
 			go func() {
 				sema <- struct{}{}
-				if err := api.PutObject(tutils.HTTPClient, proxyURL, bucket, filepath.Base(path), reader.XXHash(), reader); err != nil {
+				if err := api.PutObject(baseParams, bucket, filepath.Base(path), reader.XXHash(), reader); err != nil {
 					glog.Error(err)
 				}
 				<-sema

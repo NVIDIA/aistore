@@ -18,8 +18,7 @@ import (
 //
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
 // Validation of the properties passed in is performed by DFC Proxy.
-func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props cmn.BucketProps) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps) error {
 	if props.Checksum == "" {
 		props.Checksum = cmn.ChecksumInherit
 	}
@@ -28,22 +27,23 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props cmn.
 	if err != nil {
 		return err
 	}
-
-	_, err = DoHTTPRequest(httpClient, http.MethodPut, url, b)
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
 
 // ResetBucketProps API operation for DFC
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
-func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+func ResetBucketProps(baseParams *BaseParams, bucket string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
 	if err != nil {
 		return err
 	}
-
-	_, err = DoHTTPRequest(httpClient, http.MethodPut, url, b)
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
 
@@ -52,8 +52,8 @@ func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
 // corresponding counterparts in the BucketProps struct
-func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketProps, error) {
-	r, err := httpClient.Head(proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket))
+func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error) {
+	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket))
 	if err != nil {
 		return nil, err
 	}
@@ -118,11 +118,12 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketPr
 //
 // If localOnly is false, returns two lists, one for local buckets and one for cloud buckets.
 // Otherwise, i.e. localOnly is true, still returns two lists, but the one for cloud buckets is empty
-func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*cmn.BucketNames, error) {
+func GetBucketNames(baseParams *BaseParams, localOnly bool) (*cmn.BucketNames, error) {
 	var bucketNames cmn.BucketNames
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, "*") +
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, "*") +
 		fmt.Sprintf("?%s=%t", cmn.URLParamLocal, localOnly)
-	b, err := DoHTTPRequest(httpClient, http.MethodGet, url, nil)
+	b, err := DoHTTPRequest(baseParams, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 			return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
 		}
 	} else {
-		return nil, fmt.Errorf("Empty response instead of empty bucket list from %s", proxyURL)
+		return nil, fmt.Errorf("Empty response instead of empty bucket list from %s", baseParams.URL)
 	}
 	return &bucketNames, nil
 }
@@ -140,40 +141,42 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 // CreateLocalBucket API operation for DFC
 //
 // CreateLocalBucket sends a HTTP request to a proxy to create a local bucket with the given name
-func CreateLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
+func CreateLocalBucket(baseParams *BaseParams, bucket string) error {
 	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }
 
 // DestroyLocalBucket API operation for DFC
 //
 // DestroyLocalBucket sends a HTTP request to a proxy to remove a local bucket with the given name
-func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
+func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
 	if err != nil {
 		return err
 	}
-
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	_, err = DoHTTPRequest(httpClient, http.MethodDelete, url, b)
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
 
 // RenameLocalBucket API operation for DFC
 //
-// RenameLocalBucket changes the name of a bucket from oldName to newName
-func RenameLocalBucket(httpClient *http.Client, proxyURL, oldName, newName string) error {
+// RenameLocalBucket changes the name of a bucket from oldName to newBucketName
+func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
 	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newName})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, oldName)
-	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, b)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, oldName)
+	_, err = DoHTTPRequest(baseParams, path, b)
 	return err
 }
 
@@ -181,8 +184,9 @@ func RenameLocalBucket(httpClient *http.Client, proxyURL, oldName, newName strin
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(httpClient *http.Client, proxyURL, bucket string, msg *cmn.GetMsg, numObjects int) (*cmn.BucketList, error) {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjects int) (*cmn.BucketList, error) {
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
 	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
 
 	// An optimization to read as few objects from bucket as possible.
@@ -204,10 +208,10 @@ func ListBucket(httpClient *http.Client, proxyURL, bucket string, msg *cmn.GetMs
 			return nil, err
 		}
 
-		optParams := ParamsOptional{Header: http.Header{
+		optParams := OptionalParams{Header: http.Header{
 			"Content-Type": []string{"application/json"},
 		}}
-		respBody, err := DoHTTPRequest(httpClient, http.MethodPost, url, b, optParams)
+		respBody, err := DoHTTPRequest(baseParams, path, b, optParams)
 		if err != nil {
 			return nil, err
 		}

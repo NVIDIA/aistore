@@ -208,7 +208,8 @@ func main() {
 		}
 
 		if !exists {
-			err := api.CreateLocalBucket(tutils.HTTPClient, runParams.proxyURL, runParams.bucket)
+			baseParams := tutils.BaseAPIParams(runParams.proxyURL)
+			err := api.CreateLocalBucket(baseParams, runParams.bucket)
 			if err != nil {
 				fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
 				return
@@ -760,7 +761,8 @@ func cleanUp() {
 	wg.Wait()
 
 	if runParams.isLocal {
-		api.DestroyLocalBucket(tutils.HTTPClient, runParams.proxyURL, runParams.bucket)
+		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
+		api.DestroyLocalBucket(baseParams, runParams.bucket)
 	}
 
 	fmt.Println(prettyTimeStamp() + " Clean up done")

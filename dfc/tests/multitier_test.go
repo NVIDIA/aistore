@@ -25,10 +25,11 @@ func TestGetObjectInNextTier(t *testing.T) {
 		cloudData           = []byte("Here's looking at you, kid.")
 		localBucketListener net.Listener
 		cloudBucketListener net.Listener
+		proxyURL            = getPrimaryURL(t, proxyURLRO)
+		baseParams          = tutils.BaseAPIParams(proxyURL)
 		err                 error
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
@@ -85,24 +86,24 @@ func TestGetObjectInNextTier(t *testing.T) {
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
+	err = api.SetBucketProps(baseParams, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
 	bucketProps = testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(baseParams, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, err := api.GetObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, object)
+	n, err := api.GetObject(baseParams, TestLocalBucketName, object)
 	tutils.CheckFatal(err, t)
 	if int(n) != len(localData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(localData), int(n))
 	}
 
-	n, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	n, err = api.GetObject(baseParams, clibucket, object)
 	tutils.CheckFatal(err, t)
 	if int(n) != len(cloudData) {
 		t.Errorf("Expected object size: %d bytes, actual: %d bytes", len(cloudData), int(n))
@@ -114,10 +115,10 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 		object   = t.Name()
 		data     = []byte("this is the object you want!")
 		listener net.Listener
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 		err      error
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("%q requires a cloud bucket", t.Name()))
 	}
@@ -148,21 +149,21 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	nextTierMock.Start()
 	defer nextTierMock.Close()
 
-	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(data))
+	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, "", tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = api.EvictObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	err = api.EvictObject(tutils.DefaultBaseAPIParams(t), clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	n, err := api.GetObject(tutils.DefaultBaseAPIParams(t), clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != len(data) {
@@ -176,10 +177,10 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 		data     = []byte("this is some other object - not the one you want!")
 		filesize = 1024
 		listener net.Listener
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 		err      error
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
@@ -213,21 +214,21 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 
 	reader, err := tutils.NewRandReader(int64(filesize), false)
 	tutils.CheckFatal(err, t)
-	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, reader.XXHash(), reader)
+	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, reader.XXHash(), reader)
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = api.EvictObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	err = api.EvictObject(tutils.DefaultBaseAPIParams(t), clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	n, err := api.GetObject(tutils.DefaultBaseAPIParams(t), clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != filesize {
@@ -244,6 +245,8 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 		nextTierMockForCloudBucketReached int
 		localBucketListener               net.Listener
 		cloudBucketListener               net.Listener
+		proxyURL                          = getPrimaryURL(t, proxyURLRO)
+		baseParams                        = tutils.BaseAPIParams(proxyURL)
 		err                               error
 	)
 	// TODO: enable and review when the time is right
@@ -251,7 +254,6 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires next-version tiering", t.Name()))
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
 	tutils.Logf("proxyurl: %q \n", proxyURL)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
@@ -316,7 +318,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForLocalBucket.URL
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, *bucketProps)
+	err = api.SetBucketProps(baseParams, TestLocalBucketName, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, TestLocalBucketName, t)
 
@@ -324,11 +326,11 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMockForCloudBucket.URL
 	bucketProps.WritePolicy = cmn.RWPolicyNextTier
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(baseParams, clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, object, "", tutils.NewBytesReader(localData))
+	api.PutObject(baseParams, TestLocalBucketName, object, "", tutils.NewBytesReader(localData))
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForLocalBucketReached != 1 {
@@ -336,7 +338,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			nextTierMockForLocalBucketReached)
 	}
 
-	api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(cloudData))
+	api.PutObject(baseParams, clibucket, object, "", tutils.NewBytesReader(cloudData))
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForCloudBucketReached != 1 {
@@ -350,10 +352,10 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 		object   = t.Name()
 		data     = []byte("this object will go to the cloud!")
 		listener net.Listener
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 		err      error
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
@@ -381,18 +383,18 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.ReadPolicy = cmn.RWPolicyCloud
 	bucketProps.WritePolicy = cmn.RWPolicyNextTier
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(data))
+	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, "", tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = api.EvictObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	err = api.EvictObject(tutils.DefaultBaseAPIParams(t), clibucket, object)
 	tutils.CheckFatal(err, t)
 
-	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)
+	n, err := api.GetObject(tutils.DefaultBaseAPIParams(t), clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	if int(n) != len(data) {
@@ -405,10 +407,10 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 		object   = t.Name()
 		data     = []byte("this object will go to the cloud!")
 		listener net.Listener
+		proxyURL = getPrimaryURL(t, proxyURLRO)
 		err      error
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip(fmt.Sprintf("test %q requires a cloud bucket", t.Name()))
 	}
@@ -435,18 +437,19 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = nextTierMock.URL
 	bucketProps.WritePolicy = cmn.RWPolicyCloud
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, *bucketProps)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), clibucket, *bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(data))
+	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, object, "", tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 
 	deleteCloudObject(proxyURL, clibucket, object, t)
 }
 
 func resetBucketProps(proxyURL, bucket string, t *testing.T) {
-	if err := api.ResetBucketProps(tutils.HTTPClient, proxyURL, bucket); err != nil {
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	if err := api.ResetBucketProps(baseParams, bucket); err != nil {
 		t.Errorf("bucket: %s props not reset, err: %v", clibucket, err)
 	}
 }

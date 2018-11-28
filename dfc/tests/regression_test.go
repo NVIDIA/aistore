@@ -103,7 +103,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	close(errCh)
 
 	msg := &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: cmn.GetTargetURL}
-	bl, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, num)
+	bl, err := api.ListBucket(tutils.DefaultBaseAPIParams(t), bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -117,7 +117,8 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		if _, ok := targets[e.TargetURL]; !ok {
 			targets[e.TargetURL] = struct{}{}
 		}
-		l, err := api.GetObject(tutils.HTTPClient, e.TargetURL, bucket, e.Name)
+		baseParams := tutils.BaseAPIParams(e.TargetURL)
+		l, err := api.GetObject(baseParams, bucket, e.Name)
 		tutils.CheckFatal(err, t)
 		if uint64(l) != filesize {
 			t.Errorf("Expected filesize: %d, actual filesize: %d\n", filesize, l)
@@ -130,7 +131,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.GetProps = ""
-	bl, err = api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, num)
+	bl, err = api.ListBucket(tutils.DefaultBaseAPIParams(t), bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -150,16 +151,15 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		fileSize      = 1024
 	)
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
-	random := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-	prefix := tutils.FastRandomFilename(random, 32)
-
 	var (
 		fileNameCh = make(chan string, numberOfFiles)
 		errCh      = make(chan error, numberOfFiles)
 		sgl        *memsys.SGL
 		bucketName = clibucket
 		targets    = make(map[string]struct{})
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		random     = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+		prefix     = tutils.FastRandomFilename(random, 32)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -190,7 +190,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}()
 
 	listBucketMsg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: cmn.GetTargetURL}
-	bucketList, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucketName, listBucketMsg, 0)
+	bucketList, err := api.ListBucket(tutils.DefaultBaseAPIParams(t), bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -205,7 +205,8 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		if _, ok := targets[object.TargetURL]; !ok {
 			targets[object.TargetURL] = struct{}{}
 		}
-		objectSize, err := api.GetObject(tutils.HTTPClient, object.TargetURL, bucketName, object.Name)
+		baseParams := tutils.BaseAPIParams(object.TargetURL)
+		objectSize, err := api.GetObject(baseParams, bucketName, object.Name)
 		tutils.CheckFatal(err, t)
 		if uint64(objectSize) != fileSize {
 			t.Errorf("Expected fileSize: %d, actual fileSize: %d\n", fileSize, objectSize)
@@ -220,7 +221,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	listBucketMsg.GetProps = ""
-	bucketList, err = api.ListBucket(tutils.HTTPClient, proxyURL, bucketName, listBucketMsg, 0)
+	bucketList, err = api.ListBucket(tutils.DefaultBaseAPIParams(t), bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -284,7 +285,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	tutils.Logf("Corrupting file data[%s]: %s\n", fName, fqn)
 	err := ioutil.WriteFile(fqn, []byte("this file has been corrupted"), 0644)
 	tutils.CheckFatal(err, t)
-	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, path.Join(SmokeStr, fName))
+	_, err = api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bucket, path.Join(SmokeStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a a GET for an object with corrupted contents")
 	}
@@ -296,7 +297,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	if errstr := fs.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
-	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, path.Join(SmokeStr, fName))
+	_, err = api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), bucket, path.Join(SmokeStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected non-nil error on a GET for an object with corrupted xattr")
 	}
@@ -315,14 +316,17 @@ func TestRenameLocalBuckets(t *testing.T) {
 	if testing.Short() {
 		t.Skip(skipping)
 	}
-	proxyURL := getPrimaryURL(t, proxyURLRO)
-	bucket := TestLocalBucketName
-	renamedBucket := bucket + "_renamed"
+	var (
+		proxyURL      = getPrimaryURL(t, proxyURLRO)
+		bucket        = TestLocalBucketName
+		renamedBucket = bucket + "_renamed"
+	)
+
 	createFreshLocalBucket(t, proxyURL, bucket)
 	destroyLocalBucket(t, proxyURL, renamedBucket)
 	defer destroyLocalBucket(t, proxyURL, renamedBucket)
 
-	b, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, true)
+	b, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), true)
 	tutils.CheckFatal(err, t)
 
 	doBucketRegressionTest(t, proxyURL, regressionTestData{
@@ -483,7 +487,7 @@ func TestRenameObjects(t *testing.T) {
 		oldObj := path.Join(RenameStr, fname)
 		newObj := oldObj + ".renamed" // objname fqn
 		bnewnames = append(bnewnames, newObj)
-		if err := api.RenameObject(tutils.HTTPClient, proxyURL, RenameLocalBucketName, oldObj, newObj); err != nil {
+		if err := api.RenameObject(tutils.DefaultBaseAPIParams(t), RenameLocalBucketName, oldObj, newObj); err != nil {
 			t.Fatalf("Failed to rename object from %s => %s, err: %v", oldObj, newObj, err)
 		}
 		tutils.Logln(fmt.Sprintf("Rename %s => %s successful", oldObj, newObj))
@@ -492,7 +496,7 @@ func TestRenameObjects(t *testing.T) {
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
 	for _, newObj := range bnewnames {
-		_, err := api.GetObject(tutils.HTTPClient, proxyURL, RenameLocalBucketName, newObj)
+		_, err := api.GetObject(tutils.DefaultBaseAPIParams(t), RenameLocalBucketName, newObj)
 		if err != nil {
 			errCh <- err
 		}
@@ -961,7 +965,7 @@ func TestDeleteList(t *testing.T) {
 
 	// 3. Check to see that all the files have been deleted
 	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+	bktlst, err := api.ListBucket(tutils.DefaultBaseAPIParams(t), clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1070,6 +1074,7 @@ func TestDeleteRange(t *testing.T) {
 		wg             = &sync.WaitGroup{}
 		errCh          = make(chan error, numfiles)
 		proxyURL       = getPrimaryURL(t, proxyURLRO)
+		baseParams     = tutils.DefaultBaseAPIParams(t)
 	)
 
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
@@ -1096,7 +1101,7 @@ func TestDeleteRange(t *testing.T) {
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+	bktlst, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
@@ -1122,7 +1127,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+	bktlst, err = api.ListBucket(baseParams, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1149,6 +1154,7 @@ func TestStressDeleteRange(t *testing.T) {
 		partial_rnge = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary
 		rnge         = fmt.Sprintf("0:%d", numFiles)
 		readersList  [numReaders]tutils.Reader
+		baseParams   = tutils.DefaultBaseAPIParams(t)
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -1166,7 +1172,7 @@ func TestStressDeleteRange(t *testing.T) {
 		go func(i int, reader tutils.Reader) {
 			for j := 0; j < numFiles/numReaders; j++ {
 				objname := fmt.Sprintf("%s%d", prefix, i*numFiles/numReaders+j)
-				err = api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objname, reader.XXHash(), reader)
+				err = api.PutObject(baseParams, TestLocalBucketName, objname, reader.XXHash(), reader)
 				if err != nil {
 					errCh <- err
 				}
@@ -1189,7 +1195,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName, msg, 0)
+	bktlst, err := api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bktlst.Entries), expectedRemaining)
@@ -1218,7 +1224,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 5. Check to see that all files have been deleted
 	msg = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err = api.ListBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName, msg, 0)
+	bktlst, err = api.ListBucket(baseParams, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1228,10 +1234,11 @@ func TestStressDeleteRange(t *testing.T) {
 }
 
 func doRenameRegressionTest(t *testing.T, proxyURL string, rtd regressionTestData, numPuts int, filesPutCh chan string) {
-	err := api.RenameLocalBucket(tutils.HTTPClient, proxyURL, rtd.bucket, rtd.renamedBucket)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	err := api.RenameLocalBucket(baseParams, rtd.bucket, rtd.renamedBucket)
 	tutils.CheckFatal(err, t)
 
-	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, true)
+	buckets, err := api.GetBucketNames(baseParams, true)
 	tutils.CheckFatal(err, t)
 
 	if len(buckets.Local) != rtd.numLocalBuckets {
@@ -1451,25 +1458,29 @@ func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 }
 
 func getClusterMap(t *testing.T, URL string) cluster.Smap {
-	smap, err := api.GetClusterMap(tutils.HTTPClient, URL)
+	baseParams := tutils.BaseAPIParams(URL)
+	smap, err := api.GetClusterMap(baseParams)
 	tutils.CheckFatal(err, t)
 	return smap
 }
 
 func getDaemonConfig(t *testing.T, URL string) (config *cmn.Config) {
 	var err error
-	config, err = api.GetDaemonConfig(tutils.HTTPClient, URL)
+	baseParams := tutils.BaseAPIParams(URL)
+	config, err = api.GetDaemonConfig(baseParams)
 	tutils.CheckFatal(err, t)
 	return
 }
 
 func setDaemonConfig(t *testing.T, daemonURL, key string, value interface{}) {
-	err := api.SetDaemonConfig(tutils.HTTPClient, daemonURL, key, value)
+	baseParams := tutils.BaseAPIParams(daemonURL)
+	err := api.SetDaemonConfig(baseParams, key, value)
 	tutils.CheckFatal(err, t)
 }
 
 func setClusterConfig(t *testing.T, proxyURL, key string, value interface{}) {
-	err := api.SetClusterConfig(tutils.HTTPClient, proxyURL, key, value)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	err := api.SetClusterConfig(baseParams, key, value)
 	tutils.CheckFatal(err, t)
 }
 

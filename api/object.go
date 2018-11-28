@@ -5,7 +5,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/NVIDIA/dfcpub/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // GetObjectInput is used to hold optional parameters for GetObject and GetObjectWithValidation
@@ -33,8 +33,8 @@ type ReplicateObjectInput struct {
 // HeadObject API operation for DFC
 //
 // Returns the size and version of the object specified by bucket/object
-func HeadObject(httpClient *http.Client, proxyURL, bucket, object string) (*cmn.ObjectProps, error) {
-	r, err := httpClient.Head(proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object))
+func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps, error) {
+	r, err := baseParams.Client.Head(baseParams.URL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object))
 	if err != nil {
 		return nil, err
 	}
@@ -63,22 +63,24 @@ func HeadObject(httpClient *http.Client, proxyURL, bucket, object string) (*cmn.
 // DeleteObject API operation for DFC
 //
 // Deletes an object specified by bucket/object
-func DeleteObject(httpClient *http.Client, proxyURL, bucket, object string) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err := DoHTTPRequest(httpClient, http.MethodDelete, url, nil)
+func DeleteObject(baseParams *BaseParams, bucket, object string) error {
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	_, err := DoHTTPRequest(baseParams, path, nil)
 	return err
 }
 
 // EvictObject API operation for DFC
 //
 // Evicts an object specified by bucket/object
-func EvictObject(httpClient *http.Client, proxyURL, bucket, object string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActEvict, Name: cmn.URLPath(bucket, object)})
+func EvictObject(baseParams *BaseParams, bucket, object string) error {
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEvict, Name: cmn.URLPath(bucket, object)})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err = DoHTTPRequest(httpClient, http.MethodDelete, url, msg)
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }
 
@@ -88,11 +90,12 @@ func EvictObject(httpClient *http.Client, proxyURL, bucket, object string) error
 //
 // Writes the response body to a writer if one is specified in the optional GetObjectInput.Writer.
 // Otherwise, it discards the response body read.
-func GetObject(httpClient *http.Client, proxyURL, bucket, object string, options ...GetObjectInput) (n int64, err error) {
+//
+func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
 		w         = ioutil.Discard
 		q         url.Values
-		optParams ParamsOptional
+		optParams OptionalParams
 	)
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
@@ -100,8 +103,9 @@ func GetObject(httpClient *http.Client, proxyURL, bucket, object string, options
 			optParams.Query = q
 		}
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, optParams)
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
 	if err != nil {
 		return 0, err
 	}
@@ -127,13 +131,13 @@ func GetObject(httpClient *http.Client, proxyURL, bucket, object string, options
 // is allocated when reading from the response body to compute the object checksum.
 //
 // Returns InvalidCksumError when the expected and actual checksum values are different.
-func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object string, options ...GetObjectInput) (int64, error) {
+func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (int64, error) {
 	var (
 		n         int64
 		hash      string
 		w         = ioutil.Discard
 		q         url.Values
-		optParams ParamsOptional
+		optParams OptionalParams
 	)
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
@@ -141,8 +145,9 @@ func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object s
 			optParams.Query = q
 		}
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, optParams)
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	resp, err := doHTTPRequestGetResp(baseParams, path, nil, optParams)
 	if err != nil {
 		return 0, err
 	}
@@ -173,14 +178,15 @@ func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object s
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
-func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, reader cmn.ReadOpenCloser, replicateOpts ...ReplicateObjectInput) error {
+func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.ReadOpenCloser, replicateOpts ...ReplicateObjectInput) error {
 	handle, err := reader.Open()
 	if err != nil {
 		return fmt.Errorf("Failed to open reader, err: %v", err)
 	}
 	defer handle.Close()
 
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	url := baseParams.URL + path
 	req, err := http.NewRequest(http.MethodPut, url, handle)
 	if err != nil {
 		return fmt.Errorf("Failed to create new HTTP request, err: %v", err)
@@ -198,7 +204,7 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 	if len(replicateOpts) > 0 {
 		req.Header.Set(cmn.HeaderDFCReplicationSrc, replicateOpts[0].SourceURL)
 	}
-	resp, err := httpClient.Do(req)
+	resp, err := baseParams.Client.Do(req)
 	if err != nil {
 		return fmt.Errorf("Failed to %s, err: %v", http.MethodPut, err)
 	}
@@ -218,25 +224,27 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 //
 // Creates a cmn.ActionMsg with the new name of the object
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
-func RenameObject(httpClient *http.Client, proxyURL, bucket, oldName, newName string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
+func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error {
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newName})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldName)
-	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldName)
+	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }
 
 // ReplicateObject API operation for DFC
 //
 // ReplicateObject replicates given object in bucket using targetrunner's replicate endpoint.
-func ReplicateObject(httpClient *http.Client, proxyURL, bucket, object string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
+func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }

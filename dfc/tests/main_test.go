@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -158,7 +159,8 @@ func Test_matchdelete(t *testing.T) {
 
 	// list the bucket
 	var msg = &cmn.GetMsg{GetPageSize: int(pagesize)}
-	reslist, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	reslist, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -274,6 +276,7 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	totalFiles := numfiles
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	for idx, test := range tests {
 		msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
 		tutils.Logf("%d. %s\n    Prefix: [%s], range: [%s], regexp: [%s]\n", idx+1, test.name, test.prefix, test.rangeStr, test.regexStr)
@@ -284,7 +287,7 @@ func Test_putdeleteRange(t *testing.T) {
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+		bktlst, err := api.ListBucket(baseParams, clibucket, msg, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -297,7 +300,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tutils.Logf("Cleaning up remained objects...\n")
 	msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
-	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
+	bktlst, err := api.ListBucket(baseParams, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -455,10 +458,9 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.GetMsg, bucket string, 
 
 func Test_bucketnames(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLRO)
-		err      error
+		err error
 	)
-	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, false)
+	buckets, err := api.GetBucketNames(tutils.DefaultBaseAPIParams(t), false)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -558,7 +560,8 @@ cleanup:
 
 func TestHeadLocalBucket(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -568,10 +571,10 @@ func TestHeadLocalBucket(t *testing.T) {
 	bucketProps.ValidateWarmGet = true
 	bucketProps.LRUEnabled = true
 
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
+	err := api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
-	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName)
+	p, err := api.HeadBucket(baseParams, TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	validateBucketProps(t, bucketProps, *p)
@@ -579,11 +582,12 @@ func TestHeadLocalBucket(t *testing.T) {
 
 func TestHeadCloudBucket(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
-		t.Skip("TestHeadCloudBucket requires a cloud bucket")
+		t.Skip(fmt.Sprintf("%s requires a cloud bucket", t.Name()))
 	}
 	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = cmn.ProviderAmazon
@@ -591,11 +595,11 @@ func TestHeadCloudBucket(t *testing.T) {
 	bucketProps.ValidateColdGet = true
 	bucketProps.LRUEnabled = true
 
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, clibucket, bucketProps)
+	err := api.SetBucketProps(baseParams, clibucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, clibucket)
+	p, err := api.HeadBucket(baseParams, clibucket)
 	tutils.CheckFatal(err, t)
 
 	versionModes := []string{cmn.VersionAll, cmn.VersionCloud, cmn.VersionLocal, cmn.VersionNone}
@@ -608,23 +612,25 @@ func TestHeadCloudBucket(t *testing.T) {
 }
 
 func TestHeadObject(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLRO)
+		objName  = "headobject_test_obj"
+		objSize  = 1024
+	)
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	objName := "headobject_test_obj"
-	objSize := 1024
 	r, rrErr := tutils.NewRandReader(int64(objSize), false)
 	if rrErr != nil {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", rrErr)
 	}
 	defer r.Close()
-	if err := api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objName, r.XXHash(), r); err != nil {
+	if err := api.PutObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, objName, r.XXHash(), r); err != nil {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
 
 	propsExp := &cmn.ObjectProps{Size: objSize, Version: "1"}
-	props, err := api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objName)
+	props, err := api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, objName)
 	if err != nil {
 		t.Errorf("api.HeadObject failed, err = %v", err)
 	}
@@ -633,26 +639,29 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
 	}
 
-	_, err = api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, "this_object_should_not_exist")
+	_, err = api.HeadObject(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, "this_object_should_not_exist")
 	if err == nil {
 		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}
 }
 
 func TestHeadObjectCheckCached(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	var (
+		proxyURL = getPrimaryURL(t, proxyURLRO)
+		fileName = "headobject_check_cached_test_file"
+		fileSize = 1024
+	)
+
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
 		defer destroyLocalBucket(t, proxyURL, clibucket)
 	}
-	fileName := "headobject_check_cached_test_file"
-	fileSize := 1024
 	r, err := tutils.NewRandReader(int64(fileSize), false)
 	if err != nil {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", err)
 	}
 	defer r.Close()
 
-	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, fileName, r.XXHash(), r)
+	err = api.PutObject(tutils.DefaultBaseAPIParams(t), clibucket, fileName, r.XXHash(), r)
 	tutils.CheckFatal(err, t)
 
 	b, err := tutils.IsCached(proxyURL, clibucket, fileName)
@@ -829,7 +838,8 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 
 func testListBucket(t *testing.T, proxyURL, bucket string, msg *cmn.GetMsg, limit int) *cmn.BucketList {
 	tutils.Logf("LIST bucket %s (%s)\n", bucket, proxyURL)
-	reslist, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, limit)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	reslist, err := api.ListBucket(baseParams, bucket, msg, limit)
 	if err != nil {
 		t.Errorf("List bucket %s failed, err = %v", bucket, err)
 		return nil
@@ -879,7 +889,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	// Fetch the file from cloud bucket.
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err := api.GetObjectWithValidation(tutils.DefaultBaseAPIParams(t), clibucket, path.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
 	}
@@ -941,7 +951,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), clibucket, path.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
 	}
@@ -967,7 +977,8 @@ cleanup:
 
 func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName string, fqn string, oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	_, err := api.GetObjectWithValidation(baseParams, clibucket, path.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
@@ -1068,7 +1079,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucketName, filepath.Join(ChecksumWarmValidateStr, fileName))
+	_, err = api.GetObject(tutils.DefaultBaseAPIParams(t), bucketName, path.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
@@ -1083,14 +1094,15 @@ cleanup:
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, t *testing.T) {
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, filepath.Join(ChecksumWarmValidateStr, fName))
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	_, err := api.GetObjectWithValidation(baseParams, bucket, path.Join(ChecksumWarmValidateStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
 	} else if !strings.Contains(err.Error(), "500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
-	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, filepath.Join(ChecksumWarmValidateStr, fName))
+	_, err = api.GetObjectWithValidation(baseParams, bucket, path.Join(ChecksumWarmValidateStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
 	} else if !strings.Contains(err.Error(), "404") {
@@ -1201,8 +1213,9 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 	q.Add(cmn.URLParamLength, strconv.FormatInt(length, 10))
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	options := api.GetObjectInput{Writer: w, Query: q}
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, filepath.Join(RangeGetStr, fileName), options)
+	_, err := api.GetObjectWithValidation(baseParams, bucketName, path.Join(RangeGetStr, fileName), options)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bucketName, fileName, err)
@@ -1260,8 +1273,9 @@ func verifyInvalidParams(t *testing.T, proxyURL, bucketName string, fileName str
 	q := url.Values{}
 	q.Add(cmn.URLParamOffset, offset)
 	q.Add(cmn.URLParamLength, length)
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	options := api.GetObjectInput{Query: q}
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, filepath.Join(RangeGetStr, fileName), options)
+	_, err := api.GetObjectWithValidation(baseParams, bucketName, path.Join(RangeGetStr, fileName), options)
 	if err == nil {
 		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
 	}
@@ -1401,15 +1415,16 @@ func deletefromfilelist(proxyURL, bucket string, errCh chan error, fileslist []s
 
 func getfromfilelist(t *testing.T, proxyURL, bucket string, errCh chan error, fileslist []string, validate bool) {
 	getsGroup := &sync.WaitGroup{}
+	baseParams := tutils.BaseAPIParams(proxyURL)
 	for i := 0; i < len(fileslist); i++ {
 		if fileslist[i] != "" {
 			getsGroup.Add(1)
 			go func(i int) {
 				var err error
 				if validate {
-					_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, fileslist[i])
+					_, err = api.GetObjectWithValidation(baseParams, bucket, fileslist[i])
 				} else {
-					_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, fileslist[i])
+					_, err = api.GetObject(baseParams, bucket, fileslist[i])
 				}
 				if err != nil {
 					errCh <- err
@@ -1429,7 +1444,8 @@ func evictobjects(t *testing.T, proxyURL string, fileslist []string) {
 }
 
 func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (created bool) {
-	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, false)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	buckets, err := api.GetBucketNames(baseParams, false)
 	if err != nil {
 		t.Fatalf("Failed to read bucket list: %v", err)
 	}
@@ -1438,7 +1454,7 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 		return false
 	}
 
-	err = api.CreateLocalBucket(tutils.HTTPClient, proxyURL, bucket)
+	err = api.CreateLocalBucket(baseParams, bucket)
 	if err != nil {
 		t.Fatalf("Failed to create local bucket %s: %v", bucket, err)
 	}
@@ -1447,7 +1463,8 @@ func createLocalBucketIfNotExists(t *testing.T, proxyURL, bucket string) (create
 }
 
 func isCloudBucket(t *testing.T, proxyURL, bucket string) bool {
-	buckets, err := api.GetBucketNames(tutils.HTTPClient, proxyURL, false)
+	baseParams := tutils.BaseAPIParams(proxyURL)
+	buckets, err := api.GetBucketNames(baseParams, false)
 	if err != nil {
 		t.Fatalf("Failed to read bucket names: %v", err)
 	}

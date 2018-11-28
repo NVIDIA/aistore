@@ -19,7 +19,7 @@ import (
 // GetClusterMap API operation for DFC
 //
 // GetClusterMap retrives a DFC's server map
-func GetClusterMap(httpClient *http.Client, proxyURL string) (cluster.Smap, error) {
+func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
 	var (
 		q    = url.Values{}
 		body []byte
@@ -27,9 +27,9 @@ func GetClusterMap(httpClient *http.Client, proxyURL string) (cluster.Smap, erro
 	)
 	q.Add(cmn.URLParamWhat, cmn.GetWhatSmap)
 	query := q.Encode()
-	requestURL := fmt.Sprintf("%s?%s", proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), query)
+	requestURL := fmt.Sprintf("%s?%s", baseParams.URL+cmn.URLPath(cmn.Version, cmn.Daemon), query)
 
-	resp, err := httpClient.Get(requestURL)
+	resp, err := baseParams.Client.Get(requestURL)
 	if err != nil {
 		return cluster.Smap{}, err
 	}
@@ -52,31 +52,34 @@ func GetClusterMap(httpClient *http.Client, proxyURL string) (cluster.Smap, erro
 // RegisterTarget API operation for DFC
 //
 // Registers an existing target to the clustermap.
-func RegisterTarget(httpClient *http.Client, proxyURL string, targetInfo *cluster.Snode) error {
+func RegisterTarget(baseParams *BaseParams, targetInfo *cluster.Snode) error {
 	targetJSON, err := jsoniter.Marshal(*targetInfo)
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Register)
-	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, targetJSON)
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Register)
+	_, err = DoHTTPRequest(baseParams, path, targetJSON)
 	return err
 }
 
 // UnregisterTarget API operation for DFC
 //
-// Unregisters an existing target from the clustermap.
-func UnregisterTarget(httpClient *http.Client, proxyURL, unregisterSID string) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
-	_, err := DoHTTPRequest(httpClient, http.MethodDelete, url, nil)
+// Unregisters an existing target to the clustermap.
+func UnregisterTarget(baseParams *BaseParams, unregisterSID string) error {
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
+	_, err := DoHTTPRequest(baseParams, path, nil)
 	return err
 }
 
 // SetPrimaryProxy API operation for DFC
 //
 // Given a daemonID, it sets that corresponding proxy as the primary proxy of the cluster
-func SetPrimaryProxy(httpClient *http.Client, proxyURL, newPrimaryID string) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, newPrimaryID)
-	_, err := DoHTTPRequest(httpClient, http.MethodPut, url, nil)
+func SetPrimaryProxy(baseParams *BaseParams, newPrimaryID string) error {
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, newPrimaryID)
+	_, err := DoHTTPRequest(baseParams, path, nil)
 	return err
 }
 
@@ -85,12 +88,13 @@ func SetPrimaryProxy(httpClient *http.Client, proxyURL, newPrimaryID string) err
 // Given a key and a value for a specific configuration parameter
 // this operation sets the cluster-wide configuration accordingly.
 // Setting cluster-wide configuration requires sending the request to a proxy
-func SetClusterConfig(httpClient *http.Client, proxyURL, key string, value interface{}) error {
+func SetClusterConfig(baseParams *BaseParams, key string, value interface{}) error {
 	valstr, err := convertToString(value)
 	if err != nil {
 		return err
 	}
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
+	baseParams.Method = http.MethodPut
+	path := cmn.URLPath(cmn.Version, cmn.Cluster)
 	configMsg := cmn.ActionMsg{
 		Action: cmn.ActSetConfig,
 		Name:   key,
@@ -100,6 +104,6 @@ func SetClusterConfig(httpClient *http.Client, proxyURL, key string, value inter
 	if err != nil {
 		return err
 	}
-	_, err = DoHTTPRequest(httpClient, http.MethodPut, url, msg)
+	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }

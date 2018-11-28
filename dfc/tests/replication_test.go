@@ -195,7 +195,7 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = proxyURLNext
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, bucket, bucketProps)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, bucket, t)
 
@@ -276,7 +276,7 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 	bucketProps := defaultBucketProps()
 	bucketProps.CloudProvider = cmn.ProviderDFC
 	bucketProps.NextTierURL = proxyURLNext
-	err = api.SetBucketProps(tutils.HTTPClient, proxyURL, bucket, bucketProps)
+	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, bucket, t)
 
@@ -387,6 +387,7 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 
 func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader tutils.Reader) error {
 	url := dstProxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	baseParams := tutils.BaseAPIParams(url)
 	replicateParams := api.ReplicateObjectInput{SourceURL: srcURL}
-	return api.PutObject(tutils.HTTPClient, url, bucket, object, xxhash, reader, replicateParams)
+	return api.PutObject(baseParams, bucket, object, xxhash, reader, replicateParams)
 }

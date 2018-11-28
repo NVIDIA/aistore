@@ -26,11 +26,6 @@ var (
 		TLSHandshakeTimeout: 600 * time.Second,
 		MaxIdleConnsPerHost: 100, // arbitrary number, to avoid connect: cannot assign requested address
 	}
-	BaseHTTPClient = &http.Client{}
-	HTTPClient     = &http.Client{
-		Timeout:   600 * time.Second,
-		Transport: transport,
-	}
 	tr = &traceableTransport{
 		transport: transport,
 		tsBegin:   time.Now(),
@@ -41,8 +36,13 @@ var (
 		WroteRequest:         tr.WroteRequest,
 		GotFirstResponseByte: tr.GotFirstResponseByte,
 	}
-	tracedClient = &http.Client{Transport: tr}
-	Mem2         *memsys.Mem2
+	tracedClient   = &http.Client{Transport: tr}
+	BaseHTTPClient = &http.Client{}
+	HTTPClient     = &http.Client{
+		Timeout:   600 * time.Second,
+		Transport: transport,
+	}
+	Mem2 *memsys.Mem2
 )
 
 func init() {

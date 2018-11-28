@@ -22,19 +22,21 @@ type proxyServer struct {
 
 // createBucket creates a new bucket
 func (p *proxyServer) createBucket(bucket string) error {
-	return api.CreateLocalBucket(tutils.HTTPClient, p.url, bucket)
+	baseParams := tutils.BaseAPIParams(p.url)
+	return api.CreateLocalBucket(baseParams, bucket)
 }
 
 func (p *proxyServer) deleteBucket(bucket string) error {
-	return api.DestroyLocalBucket(tutils.HTTPClient, p.url, bucket)
+	baseParams := tutils.BaseAPIParams(p.url)
+	return api.DestroyLocalBucket(baseParams, bucket)
 }
 
 func (p *proxyServer) doesBucketExist(bucket string) bool {
 	// note: webdav works with local bucket only (at least for now)
 	// _, err := api.HeadBucket(p.url, bucket)
 	// return err == nil
-
-	bns, err := api.GetBucketNames(tutils.HTTPClient, p.url, true /* local */)
+	baseParams := tutils.BaseAPIParams(p.url)
+	bns, err := api.GetBucketNames(baseParams, true /* local */)
 	if err != nil {
 		return false
 	}
@@ -53,8 +55,8 @@ func (p *proxyServer) listBuckets(local bool) ([]string, error) {
 	if !local {
 		return nil, nil
 	}
-
-	bns, err := api.GetBucketNames(tutils.HTTPClient, p.url, local)
+	baseParams := tutils.BaseAPIParams(p.url)
+	bns, err := api.GetBucketNames(baseParams, local)
 	if err != nil {
 		return nil, err
 	}
@@ -92,13 +94,15 @@ func (p *proxyServer) putObject(localPath string, bucket string, prefix string) 
 	if err != nil {
 		return err
 	}
-	return api.PutObject(tutils.HTTPClient, p.url, bucket, prefix, r.XXHash(), r)
+	baseParams := tutils.BaseAPIParams(p.url)
+	return api.PutObject(baseParams, bucket, prefix, r.XXHash(), r)
 }
 
 // getObject asks proxy to return an object and saves it into the io.Writer (for example, a local file).
 func (p *proxyServer) getObject(bucket string, prefix string, w io.Writer) error {
+	baseParams := tutils.BaseAPIParams(p.url)
 	options := api.GetObjectInput{Writer: w}
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, p.url, bucket, prefix, options)
+	_, err := api.GetObjectWithValidation(baseParams, bucket, prefix, options)
 	return err
 }
 
@@ -112,8 +116,8 @@ func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int
 		GetPrefix: prefix,
 		GetProps:  "size, ctime",
 	}
-
-	bl, err := api.ListBucket(tutils.HTTPClient, p.url, bucket, msg, limit)
+	baseParams := tutils.BaseAPIParams(p.url)
+	bl, err := api.ListBucket(baseParams, bucket, msg, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -41,18 +41,18 @@ func TestResetBucketProps(t *testing.T) {
 	globalProps.CksumConf = globalConfig.Cksum
 	globalProps.LRUConf = testBucketProps(t).LRUConf
 
-	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
+	err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
-	p, err := api.HeadBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName)
+	p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	// check that bucket props do get set
 	validateBucketProps(t, bucketProps, *p)
-	err = api.ResetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName)
+	err = api.ResetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
-	p, err = api.HeadBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName)
+	p, err = api.HeadBucket(tutils.DefaultBaseAPIParams(t), TestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	// check that bucket props are reset
@@ -99,7 +99,7 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 
 	for _, url := range invalidDaemonURLs {
 		bucketProps.NextTierURL = url
-		if err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps); err == nil {
+		if err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps); err == nil {
 			t.Fatalf("Setting the bucket's nextTierURL to daemon %q should fail, it is in the current cluster.", url)
 		}
 	}
