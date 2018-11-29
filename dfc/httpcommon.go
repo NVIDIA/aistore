@@ -465,7 +465,7 @@ func (h *httprunner) call(args callArgs) callResult {
 
 	cmn.Assert(args.si != nil || args.req.base != "") // either we have si or base
 	if args.req.base == "" && args.si != nil {
-		args.req.base = args.si.PublicNet.DirectURL
+		args.req.base = args.si.IntraControlNet.DirectURL // by default use intra-cluster control network
 	}
 
 	url := args.req.url()
@@ -941,7 +941,7 @@ func (h *httprunner) extractSmap(payload cmn.SimpleKVs) (newsmap *smapX, msg *cm
 	}
 	if newsmap.version() < myver {
 		if h.si != nil && localsmap.GetTarget(h.si.DaemonID) == nil {
-			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap v%d to v%d", h.si.DaemonID, myver, newsmap.version())
+			errstr = fmt.Sprintf("%s: Attempt to downgrade Smap v%d to v%d", h.si, myver, newsmap.version())
 			newsmap = nil
 			return
 		}
@@ -1059,7 +1059,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 		return
 	}
 	if ctx.config.Proxy.DiscoveryURL != "" && ctx.config.Proxy.DiscoveryURL != url {
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.DiscoveryURL)
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, ctx.config.Proxy.DiscoveryURL)
 		resAlt := h.registerToURL(ctx.config.Proxy.DiscoveryURL, psi, defaultTimeout, isproxy, query, false)
 		if resAlt.err == nil {
 			res = resAlt
@@ -1068,7 +1068,7 @@ func (h *httprunner) join(isproxy bool, query url.Values) (res callResult) {
 	}
 	if ctx.config.Proxy.OriginalURL != "" && ctx.config.Proxy.OriginalURL != url &&
 		ctx.config.Proxy.OriginalURL != ctx.config.Proxy.DiscoveryURL {
-		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si.DaemonID, url, res.err, ctx.config.Proxy.OriginalURL)
+		glog.Errorf("%s: (register => %s: %v - retrying => %s...)", h.si, url, res.err, ctx.config.Proxy.OriginalURL)
 		resAlt := h.registerToURL(ctx.config.Proxy.OriginalURL, psi, defaultTimeout, isproxy, query, false)
 		if resAlt.err == nil {
 			res = resAlt
@@ -1108,9 +1108,9 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 			return
 		}
 		if cmn.IsErrConnectionRefused(res.err) {
-			glog.Errorf("%s: (register => %s: connection refused)", h.si.DaemonID, path)
+			glog.Errorf("%s: (register => %s: connection refused)", h.si, path)
 		} else {
-			glog.Errorf("%s: (register => %s: %v)", h.si.DaemonID, path, res.err)
+			glog.Errorf("%s: (register => %s: %v)", h.si, path, res.err)
 		}
 		break
 	}

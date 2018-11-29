@@ -322,7 +322,7 @@ OUTER:
 			y.syncDone(r.si.DaemonID, pairsToSend)
 			continue
 		}
-		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
+		glog.Warningf("Failed to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		if cmn.IsErrConnectionRefused(r.err) {
 			if refused == nil {
 				refused = make(cluster.NodeMap)
@@ -388,9 +388,9 @@ func (y *metasyncer) handleRefused(urlPath string, body []byte, refused cluster.
 		if r.err == nil {
 			delete(refused, r.si.DaemonID)
 			y.syncDone(r.si.DaemonID, pairs)
-			glog.Infof("handle-refused: sync-ed %s", r.si.DaemonID)
+			glog.Infof("handle-refused: sync-ed %s", r.si)
 		} else {
-			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
+			glog.Warningf("handle-refused: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		}
 	}
 }
@@ -476,10 +476,10 @@ func (y *metasyncer) handlePending() (cnt int) {
 	for r := range res {
 		if r.err == nil {
 			y.syncDone(r.si.DaemonID, pairs)
-			glog.Infof("handle-pending: sync-ed %s", r.si.DaemonID)
+			glog.Infof("handle-pending: sync-ed %s", r.si)
 		} else {
 			cnt++
-			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)", r.si.DaemonID, r.err, r.status)
+			glog.Warningf("handle-pending: failing to sync %s, err: %v (%d)", r.si, r.err, r.status)
 		}
 	}
 	return
@@ -499,7 +499,7 @@ func (y *metasyncer) checkPrimary() bool {
 	if smap.ProxySI != nil {
 		lead = smap.ProxySI.DaemonID
 	}
-	glog.Errorf("%s self is not %s (primary=%s, Smap v%d) - failing the 'sync' request", y.p.si.DaemonID, reason, lead, smap.version())
+	glog.Errorf("%s self is not %s (primary=%s, Smap v%d) - failing the 'sync' request", y.p.si, reason, lead, smap.version())
 	return false
 }
 

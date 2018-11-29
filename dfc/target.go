@@ -125,7 +125,7 @@ func (t *targetrunner) Run() error {
 		var status int
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
+				glog.Errorf("Target %s: retrying registration...", t.si)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -133,8 +133,8 @@ func (t *targetrunner) Run() error {
 		break
 	}
 	if ereg != nil {
-		glog.Errorf("Target %s failed to register, err: %v", t.si.DaemonID, ereg)
-		glog.Errorf("Target %s is terminating", t.si.DaemonID)
+		glog.Errorf("Target %s failed to register, err: %v", t.si, ereg)
+		glog.Errorf("Target %s is terminating", t.si)
 		return ereg
 	}
 
@@ -208,7 +208,7 @@ func (t *targetrunner) Run() error {
 		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
 
-	glog.Infof("Target %s is ready", t.si.DaemonID)
+	glog.Infof("Target %s is ready", t.si)
 	glog.Flush()
 	pid := int64(os.Getpid())
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
@@ -1453,7 +1453,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("getFromNeighbor: found %s/%s at %s", bucket, objname, neighsi.DaemonID)
+		glog.Infof("getFromNeighbor: found %s/%s at %s", bucket, objname, neighsi)
 	}
 
 	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamLocal, islocal)
@@ -1517,7 +1517,7 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("getFromNeighbor: got %s/%s from %s, size %d, cksum %+v", bucket, objname, neighsi.DaemonID, size, nhobj)
+		glog.Infof("getFromNeighbor: got %s/%s from %s, size %d, cksum %+v", bucket, objname, neighsi, size, nhobj)
 	}
 	return
 }
@@ -2347,7 +2347,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("Rebalance %s/%s from %s (self) to %s", bucket, objname, from, to)
 		}
 		if err != nil && os.IsNotExist(err) {
-			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, cmn.DoesNotExist, t.si.DaemonID)
+			errstr = fmt.Sprintf("File copy: %s %s at the source %s", fqn, cmn.DoesNotExist, t.si)
 			return
 		}
 		si := t.smapowner.get().GetTarget(to)
@@ -2371,7 +2371,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		_, err := os.Stat(fqn)
 		if err != nil && os.IsExist(err) {
-			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si.DaemonID)
+			glog.Infof("File copy: %s already exists at the destination %s", fqn, t.si)
 			return // not an error, nothing to do
 		}
 		putfqn = fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRebalance)
@@ -2552,7 +2552,7 @@ func (t *targetrunner) renameobject(contentType, bucketFrom, objnameFrom, bucket
 		return
 	}
 	// move/migrate
-	glog.Infof("Migrating %s/%s at %s => %s/%s at %s", bucketFrom, objnameFrom, t.si.DaemonID, bucketTo, objnameTo, si.DaemonID)
+	glog.Infof("Migrating %s/%s at %s => %s/%s at %s", bucketFrom, objnameFrom, t.si, bucketTo, objnameTo, si)
 
 	errstr = t.sendfile(http.MethodPut, bucketFrom, objnameFrom, si, finfo.Size(), bucketTo, objnameTo)
 	return
@@ -2631,7 +2631,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 		}
 		slab.Free(buf)
 		if _, err = file.Seek(0, 0); err != nil {
-			return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si.DaemonID, err)
+			return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si, err)
 		}
 	}
 	//
@@ -2711,7 +2711,7 @@ func (t *targetrunner) checkIsLocal(bucket string, bucketmd *bucketMD, q url.Val
 	if islocal == proxylocal {
 		return
 	}
-	errstr = fmt.Sprintf("islocalbucket(%s) mismatch: %t (proxy) != %t (target %s)", bucket, proxylocal, islocal, t.si.DaemonID)
+	errstr = fmt.Sprintf("%s: bucket %s is-local mismatch: (proxy) %t != %t (self)", t.si, bucket, proxylocal, islocal)
 	errcode = http.StatusInternalServerError
 	if s := q.Get(cmn.URLParamBMDVersion); s != "" {
 		if v, err := strconv.ParseInt(s, 0, 64); err != nil {
@@ -2807,7 +2807,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 			if errstr := t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
 				t.invalmsghdlr(w, r, fmt.Sprintf("Failed to sync Smap: %s", errstr))
 			}
-			glog.Infof("%s: %s v%d done", t.si.DaemonID, cmn.SyncSmap, newsmap.version())
+			glog.Infof("%s: %s v%d done", t.si, cmn.SyncSmap, newsmap.version())
 			return
 		case cmn.Mountpaths:
 			t.handleMountpathReq(w, r)
@@ -3003,13 +3003,13 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := t.register(false, defaultTimeout); err != nil {
-		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si.DaemonID, status, err)
+		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}
 
 	if glog.V(3) {
-		glog.Infof("Registered self %s", t.si.DaemonID)
+		glog.Infof("Registered self %s", t.si)
 	}
 }
 
@@ -3263,7 +3263,7 @@ func (t *targetrunner) detectMpathChanges() {
 			newfs.Available.String(), newfs.Disabled.String(),
 		)
 
-		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si.DaemonID, mpathconfigfqn)
+		glog.Errorf("%s: detected change in the mountpath configuration at %s", t.si, mpathconfigfqn)
 		glog.Errorln("OLD: ====================")
 		glog.Errorln(oldfsPprint)
 		glog.Errorln("NEW: ====================")
@@ -3554,13 +3554,13 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 	for id, si := range newsmap.Tmap { // log
 		if id == t.si.DaemonID {
 			existentialQ = true
-			glog.Infof("target: %s <= self", si.DaemonID)
+			glog.Infof("target: %s <= self", si)
 		} else {
-			glog.Infof("target: %s", si.DaemonID)
+			glog.Infof("target: %s", si)
 		}
 	}
 	if !existentialQ {
-		errstr = fmt.Sprintf("Not finding self %s in the new %s", t.si.DaemonID, newsmap.pp())
+		errstr = fmt.Sprintf("Not finding self %s in the new %s", t.si, newsmap.pp())
 		return
 	}
 	if errstr = t.smapowner.synchronize(newsmap, false /*saveSmap*/, true /* lesserIsErr */); errstr != "" {
@@ -3708,7 +3708,7 @@ func (t *targetrunner) disable() error {
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, eunreg = t.unregister(); eunreg != nil {
 			if cmn.IsErrConnectionRefused(eunreg) || status == http.StatusRequestTimeout {
-				glog.Errorf("Target %s: retrying unregistration...", t.si.DaemonID)
+				glog.Errorf("Target %s: retrying unregistration...", t.si)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -3747,7 +3747,7 @@ func (t *targetrunner) enable() error {
 	for i := 0; i < maxRetrySeconds; i++ {
 		if status, ereg = t.register(false, defaultTimeout); ereg != nil {
 			if cmn.IsErrConnectionRefused(ereg) || status == http.StatusRequestTimeout {
-				glog.Errorf("Target %s: retrying registration...", t.si.DaemonID)
+				glog.Errorf("Target %s: retrying registration...", t.si)
 				time.Sleep(time.Second)
 				continue
 			}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/OneOfOne/xxhash"
 )
@@ -33,9 +34,9 @@ type NetInfo struct {
 //==================================================================
 type Snode struct {
 	DaemonID        string  `json:"daemon_id"`
-	PublicNet       NetInfo `json:"public_net"`
-	IntraControlNet NetInfo `json:"intra_control_net"`
-	IntraDataNet    NetInfo `json:"intra_data_net"`
+	PublicNet       NetInfo `json:"public_net"`        // cmn.NetworkPublic
+	IntraControlNet NetInfo `json:"intra_control_net"` // cmn.NetworkIntraControl
+	IntraDataNet    NetInfo `json:"intra_data_net"`    // cmn.NetworkIntraData
 	idDigest        uint64
 }
 
@@ -44,6 +45,15 @@ func (d *Snode) Digest() uint64 {
 		d.idDigest = xxhash.ChecksumString64S(d.DaemonID, MLCG32)
 	}
 	return d.idDigest
+}
+
+const snodefmt = "[\n\tDaemonID: %s,\n\tPublicNet: %s,\n\tIntraControl: %s,\n\tIntraData: %s,\n\tidDigest: %d]"
+
+func (d *Snode) String() string {
+	if glog.V(4) {
+		return fmt.Sprintf(snodefmt, d.DaemonID, d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
+	}
+	return d.DaemonID
 }
 
 func (d *Snode) URL(network string) string {
@@ -58,11 +68,6 @@ func (d *Snode) URL(network string) string {
 		cmn.Assert(false, "unknown network '"+network+"'")
 		return ""
 	}
-}
-
-func (d *Snode) String() string {
-	f := "[\n\tDaemonID: %s,\n\tPublicNet: %s,\n\tIntraControlNet: %s,\n\tIntraDataNet: %s,\n\tidDigest: %d]"
-	return fmt.Sprintf(f, d.DaemonID, d.PublicNet.DirectURL, d.IntraControlNet.DirectURL, d.IntraDataNet.DirectURL, d.idDigest)
 }
 
 func (a *Snode) Equals(b *Snode) bool {
@@ -170,8 +175,8 @@ func nodeMapDelta(old, new []NodeMap) (added, removed NodeMap) {
 //==================================================================
 type (
 	Slistener interface {
-		Tag() string
 		SmapChanged()
+		String() string
 	}
 	SmapListeners interface {
 		Reg(sl Slistener)

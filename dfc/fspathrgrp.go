@@ -43,7 +43,7 @@ func (g *fsprungroup) enableMountpath(mpath string) (enabled, exists bool) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 1 {
 		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si.DaemonID, err)
+			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si, err)
 		}
 	}
 	return
@@ -67,9 +67,9 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled, exists bool) {
 		return
 	}
 
-	glog.Warningf("The last available mountpath has been disabled: unregistering %s (self)", g.t.si.DaemonID)
+	glog.Warningf("The last available mountpath has been disabled: unregistering %s (self)", g.t.si)
 	if err := g.t.disable(); err != nil {
-		glog.Errorf("Failed to unregister %s (self), err: %v", g.t.si.DaemonID, err)
+		glog.Errorf("Failed to unregister %s (self), err: %v", g.t.si, err)
 	}
 	return
 }
@@ -99,7 +99,7 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	} else {
 		glog.Infof("Added the first mountpath %s", mpath)
 		if err := g.t.enable(); err != nil {
-			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si.DaemonID, err)
+			glog.Errorf("Failed to re-register %s (self), err: %v", g.t.si, err)
 		}
 	}
 	return
@@ -122,7 +122,7 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 	} else {
 		glog.Infof("Removed the last mountpath %s", mpath)
 		if err := g.t.disable(); err != nil {
-			glog.Errorf("Failed to unregister %s (self), err: %v", g.t.si.DaemonID, err)
+			glog.Errorf("Failed to unregister %s (self), err: %v", g.t.si, err)
 		}
 	}
 	return

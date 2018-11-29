@@ -300,10 +300,10 @@ func (a *smaplisteners) Reg(sl cluster.Slistener) {
 	l := len(a.vec)
 	for k := 0; k < l; k++ {
 		if a.vec[k] == sl {
-			cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s(%+v) is already registered", sl.Tag(), sl))
+			cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
 		}
-		if a.vec[k].Tag() == sl.Tag() {
-			glog.Errorf("Warning: duplicate smap-listener tag %s(%+v)", sl.Tag(), a.vec[k])
+		if a.vec[k].String() == sl.String() {
+			glog.Warningf("duplicate smap-listener %s", sl)
 		}
 	}
 	a.vec = append(a.vec, sl)
@@ -325,7 +325,7 @@ func (a *smaplisteners) Unreg(sl cluster.Slistener) {
 		}
 	}
 	a.Unlock()
-	cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s(%+v) is not registered", sl.Tag(), sl))
+	cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
 }
 
 func (a *smaplisteners) notify() {

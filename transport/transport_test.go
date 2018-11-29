@@ -184,8 +184,8 @@ func Test_OneStream(t *testing.T) {
 
 func Test_CancelStream(t *testing.T) {
 	mux := http.NewServeMux()
-
-	transport.SetMux("nc", mux)
+	network := "nc"
+	transport.SetMux(network, mux)
 
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
@@ -201,8 +201,8 @@ func Test_CancelStream(t *testing.T) {
 		}
 		slab.Free(buf)
 	}
-
-	path, err := transport.Register("nc", "cancel-rx-88", recvFunc)
+	trname := "cancel-rx-88"
+	path, err := transport.Register(network, trname, recvFunc)
 	tutils.CheckFatal(err, t)
 
 	httpclient := &http.Client{Transport: &http.Transport{}}
@@ -221,7 +221,7 @@ func Test_CancelStream(t *testing.T) {
 		num++
 		size += hdr.Dsize
 		if size-prevsize >= cmn.GiB {
-			tutils.Logf("[%2d]: %d GiB\n", 88, size/cmn.GiB)
+			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
 			if num > 10 && random.Int63()%3 == 0 {
 				cancel()
@@ -230,7 +230,12 @@ func Test_CancelStream(t *testing.T) {
 			}
 		}
 	}
-	stream.Fin() // no-op: can be skipped as well
+	time.Sleep(time.Second)
+	termReason, termErr := stream.TermInfo()
+	stats := stream.GetStats()
+	fmt.Printf("send$ %s: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
+		stream, stats.Offset, stats.Num, num, stats.IdlePct, termReason, termErr)
+	stream.Fin() // vs. stream being term-ed
 }
 
 func Test_MultiStream(t *testing.T) {
@@ -411,8 +416,9 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	stream.Fin()
 	stats := stream.GetStats()
 	if netstats == nil {
-		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), idle=%.2f%%\n",
-			trname, sessid, stats.Offset, stats.Num, num, stats.IdlePct)
+		termReason, termErr := stream.TermInfo()
+		fmt.Printf("send$ %s[%d]: offset=%d, num=%d(%d), idle=%.2f%%, term(%s, %v)\n",
+			trname, sessid, stats.Offset, stats.Num, num, stats.IdlePct, termReason, termErr)
 	} else {
 		lock.Lock()
 		eps := make(transport.EndpointStats)
@@ -484,10 +490,11 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 //===========================================================================
 
 type randReader struct {
-	buf  []byte
-	hdr  transport.Header
-	slab *memsys.Slab2
-	off  int64
+	buf    []byte
+	hdr    transport.Header
+	slab   *memsys.Slab2
+	off    int64
+	random *rand.Rand
 }
 
 func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) *randReader {
@@ -496,7 +503,7 @@ func newRandReader(random *rand.Rand, hdr transport.Header, slab *memsys.Slab2) 
 	if err != nil {
 		panic("Failed read rand: " + err.Error())
 	}
-	return &randReader{buf: buf, hdr: hdr, slab: slab}
+	return &randReader{buf: buf, hdr: hdr, slab: slab, random: random}
 }
 
 func makeRandReader() (transport.Header, *randReader) {
@@ -521,6 +528,13 @@ func (r *randReader) Read(p []byte) (n int, err error) {
 		n += nr
 		r.off += int64(nr)
 	}
+}
+
+func (r *randReader) Open() (io.ReadCloser, error) {
+	buf := r.slab.Alloc()
+	copy(buf, r.buf)
+	r2 := randReader{buf: buf, hdr: r.hdr, slab: r.slab}
+	return &r2, nil
 }
 
 func (r *randReader) Close() error {

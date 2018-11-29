@@ -188,7 +188,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			siz := atomic.AddInt64(&stats.Size, objReader.hdr.Dsize)
 			off := atomic.AddInt64(&stats.Offset, objReader.hdr.Dsize)
 			if bool(glog.V(4)) || debug {
-				glog.Infof("%s[%d]: offset=%d, size=%d, num=%d", trname, sessid, off, siz, num)
+				glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d", trname, sessid, off, siz, objReader.hdr.Dsize, num)
 			}
 			continue
 		}
