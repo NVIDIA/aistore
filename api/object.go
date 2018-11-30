@@ -6,6 +6,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -186,4 +187,18 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 		return fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
 	}
 	return nil
+}
+
+// RenameObject API operation for DFC
+//
+// Creates a cmn.ActionMsg with the new name of the object
+// and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
+func RenameObject(httpClient *http.Client, proxyURL, bucket, oldObj, newObj string) error {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldObj)
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newObj})
+	if err != nil {
+		return err
+	}
+	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
+	return err
 }

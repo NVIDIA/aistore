@@ -230,7 +230,7 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	// CAS implemented to enforce only one invocation of gMem2.Init()
 	// for possible concurrent calls to memsys.Init() in multi-threaded context
 	if !atomic.CompareAndSwapInt64(&r.usageLvl, 0, Mem2Initialized) {
-		logMsg(fmt.Sprintf("Mem2 instance with name %s already %s", r.Name, usageLvls[r.usageLvl]))
+		logMsg(fmt.Sprintf("%s is already %s", r.Name, usageLvls[r.usageLvl]))
 		return
 	}
 	if r.Name != "" {
@@ -368,7 +368,7 @@ func (r *Mem2) Run() error {
 	// if the usageLvl of GMem2 is Mem2Initialized, swaps its usageLvl to Mem2Running atomically
 	// CAS implemented to enforce only one invocation of GMem2.Run()
 	if !atomic.CompareAndSwapInt64(&r.usageLvl, Mem2Initialized, Mem2Running) {
-		return fmt.Errorf("Mem2 instance (name: %s) needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl])
+		return fmt.Errorf("%s needs to be at initialized level, is currently %s", r.Name, usageLvls[r.usageLvl])
 	}
 	r.time.t = time.NewTimer(r.time.d)
 	mem := sigar.Mem{}
@@ -411,7 +411,7 @@ func (r *Mem2) Stop(err error) {
 		r.stopCh <- struct{}{}
 		close(r.stopCh)
 	} else {
-		glog.Warningf("Mem2 instance (name: %s) already stopped", r.Name)
+		glog.Warningf("%s already stopped", r.Name)
 	}
 }
 
@@ -691,7 +691,7 @@ func (r *Mem2) doStats() {
 
 func (r *Mem2) assertReadyForUse() {
 	if r.Debug {
-		errstr := fmt.Sprintf("Mem2 instance (name: %s) is not initialized nor running", r.Name)
+		errstr := fmt.Sprintf("%s is not initialized nor running", r.Name)
 		cmn.Assert(r.usageLvl == Mem2Initialized || r.usageLvl == Mem2Running, errstr)
 	}
 }

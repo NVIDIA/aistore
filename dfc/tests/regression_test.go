@@ -56,7 +56,6 @@ const (
 )
 
 var (
-	RenameMsg        = cmn.ActionMsg{Action: cmn.ActRename}
 	HighWaterMark    = uint32(80)
 	LowWaterMark     = uint32(60)
 	UpdTime          = time.Second * 20
@@ -432,15 +431,14 @@ func TestRenameObjects(t *testing.T) {
 		t.Skip(skipping)
 	}
 	var (
-		injson     []byte
-		err        error
-		numPuts    = 10
-		filesPutCh = make(chan string, numPuts)
-		errCh      = make(chan error, numPuts)
-		basenames  = make([]string, 0, numPuts) // basenames
-		bnewnames  = make([]string, 0, numPuts) // new basenames
-		sgl        *memsys.SGL
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		err       error
+		numPuts   = 10
+		objsPutCh = make(chan string, numPuts)
+		errCh     = make(chan error, numPuts)
+		basenames = make([]string, 0, numPuts) // basenames
+		bnewnames = make([]string, 0, numPuts) // new basenames
+		sgl       *memsys.SGL
+		proxyURL  = getPrimaryURL(t, proxyURLRO)
 	)
 
 	createFreshLocalBucket(t, proxyURL, RenameLocalBucketName)
@@ -448,9 +446,9 @@ func TestRenameObjects(t *testing.T) {
 	defer func() {
 		// cleanup
 		wg := &sync.WaitGroup{}
-		for _, fname := range bnewnames {
+		for _, newObj := range bnewnames {
 			wg.Add(1)
-			go tutils.Del(proxyURL, RenameLocalBucketName, RenameStr+"/"+fname, wg, errCh, !testing.Verbose())
+			go tutils.Del(proxyURL, RenameLocalBucketName, newObj, wg, errCh, !testing.Verbose())
 		}
 
 		if usingFile {
@@ -479,35 +477,29 @@ func TestRenameObjects(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandObjs(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, errCh, filesPutCh, RenameDir,
+	putRandObjs(proxyURL, baseseed+1, 0, numPuts, RenameLocalBucketName, errCh, objsPutCh, RenameDir,
 		RenameStr, !testing.Verbose(), sgl)
 	selectErr(errCh, "put", t, false)
-	close(filesPutCh)
-	for fname := range filesPutCh {
+	close(objsPutCh)
+	for fname := range objsPutCh {
 		basenames = append(basenames, fname)
 	}
 
 	// rename
 	for _, fname := range basenames {
-		RenameMsg.Name = RenameStr + "/" + fname + ".renamed" // objname
-		bnewnames = append(bnewnames, fname+".renamed")       // base name
-		injson, err = jsoniter.Marshal(RenameMsg)
-		if err != nil {
-			t.Fatalf("Failed to marshal RenameMsg: %v", err)
+		oldObj := RenameStr + "/" + fname
+		newObj := oldObj + ".renamed" // objname fqn
+		bnewnames = append(bnewnames, newObj)
+		if err := api.RenameObject(tutils.HTTPClient, proxyURL, RenameLocalBucketName, oldObj, newObj); err != nil {
+			t.Fatalf("Failed to rename object from %s => %s, err: %v", oldObj, newObj, err)
 		}
-
-		url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, RenameLocalBucketName, RenameStr, fname)
-		if err := tutils.HTTPRequest(http.MethodPost, url, tutils.NewBytesReader(injson)); err != nil {
-			t.Fatalf("Failed to send request, err = %v", err)
-		}
-
-		tutils.Logln(fmt.Sprintf("Rename %s/%s => %s", RenameStr, fname, RenameMsg.Name))
+		tutils.Logln(fmt.Sprintf("Rename %s => %s successful", oldObj, newObj))
 	}
 
 	// get renamed objects
 	waitProgressBar("Rename/move: ", time.Second*5)
-	for _, fname := range bnewnames {
-		_, err := api.GetObject(tutils.HTTPClient, proxyURL, RenameLocalBucketName, RenameStr+"/"+fname)
+	for _, newObj := range bnewnames {
+		_, err := api.GetObject(tutils.HTTPClient, proxyURL, RenameLocalBucketName, newObj)
 		if err != nil {
 			errCh <- err
 		}
