@@ -1,18 +1,41 @@
 ## Overview
 
 Package transport provides streaming object-based transport over HTTP for massive intra-DFC and DFC-to-DFC data transfers. This transport layer
-can be utilized for cluster-wide rebalancing, replication of any kind, distributed merge-sort operations, and more.
+can be utilized for cluster-wide rebalancing, replication (of any kind), distributed merge-sort operation, and more.
 
-First, basic definitions:
+A **stream** (or, more exactly, a `transport.Stream`) asynchronously transfers **objects** between two HTTP endpoints.
+The objects, in turn, are defined by their **headers** (`transport.Header`) and their **readers** ([io.ReadCloser](https://golang.org/pkg/io/#ReadCloser)).
+
+A stream preserves ordering: the objects posted for sending will get *completed* in the same exact order
+(for more on *completions*, see below), and certainly transferred to the receiver in the same exact order as well.
 
 | Term | Description | Example |
 |--- | --- | ---|
-| Stream | A point-to-point flow over one or multiple HTTP PUT requests (and as many TCP connections) | `transport.NewStream(client, "http://example.com", nil)` - creates a stream between the local client and the `example.com` host |
-| Object | Any sequence of bytes (or, more precisely, any [io.ReadCloser](https://golang.org/pkg/io/#ReadCloser)) that is accompanied by a transport header | `transport.Header{"abc", "X", nil, 1024*1024}` - specifies a 1MB object that will be named `abc/X` at the destination |
+| Stream | A point-to-point flow over HTTP where a single HTTP request (and, therefore, a single TCP session) is used to transfer multiple objects | `transport.NewStream(client, "http://example.com", nil)` - creates a stream between the local client and the `example.com` host |
+| Object | Any [io.ReadCloser](https://golang.org/pkg/io/#ReadCloser) that is accompanied by a transport header that specifies, in part, the object's size and the object's (bucket, name) at the destination | `transport.Header{"abc", "X", nil, 1024*1024}` - specifies a 1MB object that will be named `abc/X` at the destination |
 | Object Header | A `transport.Header` structure that, in addition to bucket name, object name, and object size, carries an arbitrary (*opaque*) sequence of bytes that, for instance, may be a JSON message or anything else. | `transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, 13}` - describes a 13-byte object that, in the example, has some application-specific and non-nil *opaque* field in the header |
 | Receive callback | A function that has the following signature: `Receive func(http.ResponseWriter, transport.Header, io.Reader)`. Receive callback must be *registered* prior to the very first object being transferred over the stream - see next. | Notice the last parameter in the receive callback: `io.Reader`. Behind this (reading) interface, there's a special type reader supporting, in part, object boundaries. In other words, each callback invocation corresponds to one ransferred and received object. Note as well the object header that is also delivered to the receiving endpoint via the same callback. |
 | Registering receive callback | An API to establish the one-to-one correspondence between the stream sender and the stream receiver | For instance, to register the same receive callback `foo` with two different HTTP endpoints named "ep1" and "ep2", we could call `transport.Register("n1", "ep1", foo)` and `transport.Register("n1", "ep2", foo)`, where `n1` is an http request multiplexer ("muxer") that corresponds to one of the documented networking options - see [README, section Networking](README.md). The transport will then be calling `foo()` to separately deliver the "ep1" stream to the "ep1" endpoint and "ep2" - to, respectively, "ep2". Needless to say that a per-endpoint callback is also supported and permitted. To allow registering endpoints to different http request multiplexers, one can change network parameter `transport.Register("different-network", "ep1", foo)` |
 | Object-has-been-sent callback (not to be confused with the Receive callback above) | A function or a method of the following signature: `SendCallback func(Header, io.ReadCloser, error)`, where `transport.Header` and `io.ReadCloser` represent the object that has been transmitted and error is the send error or nil | This callback can optionally be defined on a) per-stream basis (via NewStream constructor) and/or b) for a given object that is being sent (for instance, to support some sort of batch semantics). Note that object callback *overrides* the per-stream one: when (object callback) is defined i.e., non-nil, the stream callback is ignored and skipped.<br/><br/>**BEWARE:**<br/>Latency of this callback adds to the latency of the entire stream operation on the send side. It is critically important, therefore, that user implementations do not take extra locks, do not execute system calls and, generally, return as soon as possible. |
+| Header-only objects | Header-only (data-less) objects are supported - when there's no data to send (that is, when the `transport.Header.Dsize` field is set to zero), the reader (`io.ReadCloser`) is not required and the corresponding argument in the the `Send()` API can be set to nil | Header-only objects can be used to implement L6 control plane over streams, where the header's `Opaque` field gets utilized to transfer the entire (control message's) payload |
+| Stream bundle | A higher-level (cluster level) API to aggregate multiple streams and broadcast objects replicas to all or some of the established nodes of the cluster while aggregating completions and preserving FIFO ordering | *Stream bundle* is provided by the `cluster` package; a [README](../cluster/README.md) is available there as well |
+
+## Closing and completions
+
+In streams, the sending pipeline is implemented as a pair (SQ, SCQ) where the former is a send queue
+realized as a channel, and the latter is a send completion queue (and a different Go channel).
+Together, SQ and SCQ form a FIFO as far as ordering of transmitted objects.
+
+Once an object is put on the wire, the corresponding completion gets queued and eventually gets
+processed by the completion handler. The handling **always entails closing of the object reader**.
+
+To reiterate: object reader is always closed by the code that handles `send completions`.
+In the case when the callback (`SendCallback`) is provided (i.e., non-nil), the closing is done 
+right after invoking the callback.
+
+Note as well that for every transmission of every object there's always a *completion*.
+This holds true in all cases including network errors that may cause sudden and instant termination
+of the underlying stream(s).
 
 ## Example with comments
 
@@ -120,21 +143,21 @@ Stats struct {
 
 On the receive side, the `EndpointStats` map contains all the `transport.Stats` structures indexed by (unique) stream IDs for the currently active streams.
 
-For usage examples and details, please see [tests](transport_test.go) in the local directory.
+For usage examples and details, please see tests in the package directory.
 
 ## Testing
 
-* To run all tests while redirecting errors to standard error:
+* To run all tests while redirecting log to STDERR:
 ```
 go test -v -logtostderr=true
 ```
 
-* To run a given test (with a name matching "Multi") and enabled debugging:
+* To run a test with a name matching "Multi", verbose logging and enabled assertions:
 ```
 DFC_STREAM_DEBUG=1 go test -v -run=Multi
 ```
 
-For more examples, please see [tests](transport_test.go) in this directory.
+For more examples, please see tests in the package directory.
 
 
 ## Environment
@@ -143,3 +166,10 @@ For more examples, please see [tests](transport_test.go) in this directory.
 |--- | --- |
 | DFC_STREAM_DEBUG | Enable inline assertions and verbose tracing |
 | DFC_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
+
+## See also
+
+* [Stream Bundle](../cluster/README.md)
+
+
+

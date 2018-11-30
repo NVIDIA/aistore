@@ -229,7 +229,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 // corresponding argument in Send() can be set to nil.
 //
 // NOTE: object reader is always closed by the code that handles send completions.
-// In the case when SendCallback is provided (i.e., non-nil), the closing is done after
+// In the case when SendCallback is provided (i.e., non-nil), the closing is done
 // right after calling this callback - see objDone below for details.
 //
 // NOTE: Optional reference counting is also done by (and in) the objDone, so that the
