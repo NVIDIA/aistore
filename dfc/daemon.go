@@ -208,7 +208,6 @@ func dfcinit() {
 		ps := &stats.Prunner{}
 		ps.Init()
 		ctx.rg.add(ps, xproxystats)
-
 		_ = p.initStatsD("dfcproxy")
 		ps.Core.StatsdC = &p.statsdC
 
@@ -221,7 +220,6 @@ func dfcinit() {
 		ts := &stats.Trunner{TargetRunner: t} // iostat below
 		ts.Init()
 		ctx.rg.add(ts, xstorstats)
-
 		_ = t.initStatsD("dfctarget")
 		ts.Core.StatsdC = &t.statsdC
 

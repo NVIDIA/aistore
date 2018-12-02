@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
+// Package stats provides methods and functionality to register, track, log,
+// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 package stats
 
 import (
@@ -11,7 +13,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/stats/statsd"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 //==============================
@@ -23,8 +25,9 @@ import (
 const logsTotalSizeCheckTime = time.Hour * 3
 
 const (
-	statsKindCounter = "counter"
-	statsKindLatency = "latency"
+	KindCounter = "counter"
+	KindLatency = "latency"
+	KindSpecial = "special"
 )
 
 // Stats common to ProxyCoreStats and targetCoreStats
@@ -37,10 +40,9 @@ const (
 	ListCount           = "lst.n"
 	GetLatency          = "get.μs"
 	ListLatency         = "lst.μs"
-	KeepAliveMinLatency = "kalive.μs.min"
-	KeepAliveMaxLatency = "kalive.μs.max"
+	KeepAliveMinLatency = "kalive.min.μs"
+	KeepAliveMaxLatency = "kalive.max.μs"
 	KeepAliveLatency    = "kalive.μs"
-	Uptime              = "uptime.μs"
 	ErrCount            = "err.n"
 	ErrGetCount         = "err.get.n"
 	ErrDeleteCount      = "err.delete.n"
@@ -49,13 +51,30 @@ const (
 	ErrHeadCount        = "err.head.n"
 	ErrListCount        = "err.list.n"
 	ErrRangeCount       = "err.range.n"
+	//
+	Uptime = "up.μs.time"
 )
 
-//==============================
 //
-// types
+// public types
 //
-//==============================
+
+type (
+	Tracker interface {
+		Add(name string, val int64)
+		AddErrorHTTP(method string, val int64)
+		AddMany(namedVal64 ...NamedVal64)
+		Register(name string, kind string)
+	}
+	NamedVal64 struct {
+		Name string
+		Val  int64
+	}
+)
+
+//
+// private types
+//
 
 type (
 	metric = statsd.Metric // type alias
@@ -66,16 +85,7 @@ type (
 		housekeep(bool)
 		doAdd(nv NamedVal64)
 	}
-	// implemented by the *CoreStats types
-	Tracker interface {
-		Add(name string, val int64)
-		AddErrorHTTP(method string, val int64)
-		AddMany(namedVal64 ...NamedVal64)
-	}
-	NamedVal64 struct {
-		Name string
-		Val  int64
-	}
+	// implements Tracker, inherited by Prunner ans Trunner
 	statsrunner struct {
 		sync.RWMutex
 		cmn.Named
@@ -84,59 +94,64 @@ type (
 		starttime time.Time
 		ticker    *time.Ticker
 	}
-	// Stats are tracked via a map of stats names (key) to statInstances (values).
+	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
-	// using the the kind field. Only latency stats have associatedVals to them
-	// that are used in calculating latency measurements.
-	statsInstance struct {
-		Value         int64 `json:"value"`
-		kind          string
-		associatedVal int64
+	// using the the kind field. Only latency stats have numSamples used to compute latency.
+	statsValue struct {
+		Value      int64 `json:"v"`
+		kind       string
+		numSamples int64
+		isCommon   bool // optional, common to the proxy and target
 	}
-	statsTracker map[string]*statsInstance
+	statsTracker map[string]*statsValue
 )
 
-func (stats statsTracker) register(key string, kind string) {
-	cmn.Assert(kind == statsKindCounter || kind == statsKindLatency, "Invalid stats kind "+kind)
-	stats[key] = &statsInstance{0, kind, 0}
+//
+// statsValue
+//
+
+func (stat *statsValue) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(stat.Value) }
+func (stat *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &stat.Value) }
+
+//
+// statsTracker
+//
+
+func (tracker statsTracker) register(key string, kind string, isCommon ...bool) {
+	cmn.Assert(kind == KindCounter || kind == KindLatency || kind == KindSpecial, "Invalid stats kind '"+kind+"'")
+	tracker[key] = &statsValue{kind: kind}
+	if len(isCommon) > 0 {
+		tracker[key].isCommon = isCommon[0]
+	}
 }
 
-// These stats are common to ProxyCoreStats and targetCoreStats
-func (stats statsTracker) registerCommonStats() {
-	cmn.Assert(stats != nil, "Error attempting to register stats into nil map")
-
-	stats.register(GetCount, statsKindCounter)
-	stats.register(PutCount, statsKindCounter)
-	stats.register(PostCount, statsKindCounter)
-	stats.register(DeleteCount, statsKindCounter)
-	stats.register(RenameCount, statsKindCounter)
-	stats.register(ListCount, statsKindCounter)
-	stats.register(GetLatency, statsKindCounter)
-	stats.register(ListLatency, statsKindLatency)
-	stats.register(KeepAliveMinLatency, statsKindLatency)
-	stats.register(KeepAliveMaxLatency, statsKindLatency)
-	stats.register(KeepAliveLatency, statsKindLatency)
-	stats.register(Uptime, statsKindLatency)
-	stats.register(ErrCount, statsKindCounter)
-	stats.register(ErrGetCount, statsKindCounter)
-	stats.register(ErrDeleteCount, statsKindCounter)
-	stats.register(ErrPostCount, statsKindCounter)
-	stats.register(ErrPutCount, statsKindCounter)
-	stats.register(ErrHeadCount, statsKindCounter)
-	stats.register(ErrListCount, statsKindCounter)
-	stats.register(ErrRangeCount, statsKindCounter)
-}
-
-func (stat *statsInstance) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(stat.Value)
-}
-
-func (stat *statsInstance) UnmarshalJSON(b []byte) error {
-	return jsoniter.Unmarshal(b, &stat.Value)
+// stats that are common to proxy and target
+func (tracker statsTracker) registerCommonStats() {
+	tracker.register(GetCount, KindCounter, true)
+	tracker.register(PutCount, KindCounter, true)
+	tracker.register(PostCount, KindCounter, true)
+	tracker.register(DeleteCount, KindCounter, true)
+	tracker.register(RenameCount, KindCounter, true)
+	tracker.register(ListCount, KindCounter, true)
+	tracker.register(GetLatency, KindCounter, true)
+	tracker.register(ListLatency, KindLatency, true)
+	tracker.register(KeepAliveMinLatency, KindLatency, true)
+	tracker.register(KeepAliveMaxLatency, KindLatency, true)
+	tracker.register(KeepAliveLatency, KindLatency, true)
+	tracker.register(ErrCount, KindCounter, true)
+	tracker.register(ErrGetCount, KindCounter, true)
+	tracker.register(ErrDeleteCount, KindCounter, true)
+	tracker.register(ErrPostCount, KindCounter, true)
+	tracker.register(ErrPutCount, KindCounter, true)
+	tracker.register(ErrHeadCount, KindCounter, true)
+	tracker.register(ErrListCount, KindCounter, true)
+	tracker.register(ErrRangeCount, KindCounter, true)
+	//
+	tracker.register(Uptime, KindSpecial, true)
 }
 
 //
-// common statsunner
+// statsunner
 //
 
 // implements Tracker interface
@@ -180,18 +195,13 @@ func (r *statsrunner) Stop(err error) {
 }
 
 // statslogger interface impl
-func (r *statsrunner) log() (runlru bool)  { return false }
-func (r *statsrunner) housekeep(bool)      {}
-func (r *statsrunner) doAdd(nv NamedVal64) {}
-
+func (r *statsrunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
+func (r *statsrunner) housekeep(bool)                    {}
+func (r *statsrunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
 func (r *statsrunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv
 	}
-}
-
-func (r *statsrunner) Add(name string, val int64) {
-	r.workCh <- NamedVal64{name, val}
 }
 
 func (r *statsrunner) AddErrorHTTP(method string, val int64) {

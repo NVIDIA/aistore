@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
+// Package stats provides methods and functionality to register, track, log,
+// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 package stats
 
 import (
@@ -20,6 +22,10 @@ import (
 	"github.com/NVIDIA/dfcpub/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
+
+//
+// NOTE Naming Convention: "*.n" - counter, "*.μs" - latency, "*.size" - size (in bytes)
+//
 
 const (
 	PutLatency       = "put.μs"
@@ -47,15 +53,10 @@ const (
 	ReplPutLatency   = "replication.put.µs"
 )
 
+//
+// public type
+//
 type (
-	fscapacity struct {
-		Used    uint64 `json:"used"`    // bytes
-		Avail   uint64 `json:"avail"`   // ditto
-		Usedpct int64  `json:"usedpct"` // reduntant ok
-	}
-	targetCoreStats struct {
-		ProxyCoreStats
-	}
 	Trunner struct {
 		statsrunner
 		TargetRunner cluster.Target         `json:"-"`
@@ -73,107 +74,62 @@ type (
 )
 
 //
+// private types
+//
+type (
+	fscapacity struct {
+		Used    uint64 `json:"used"`    // bytes
+		Avail   uint64 `json:"avail"`   // ditto
+		Usedpct int64  `json:"usedpct"` // reduntant ok
+	}
+	targetCoreStats struct {
+		ProxyCoreStats
+	}
+)
+
+//
 // targetCoreStats
 //
 
-func (t *targetCoreStats) initStatsTracker() {
-	t.ProxyCoreStats.initStatsTracker()
-
-	t.Tracker.register(PutLatency, statsKindLatency)
-	t.Tracker.register(GetColdCount, statsKindCounter)
-	t.Tracker.register(GetColdSize, statsKindCounter)
-	t.Tracker.register(LruEvictSize, statsKindCounter)
-	t.Tracker.register(LruEvictCount, statsKindCounter)
-	t.Tracker.register(TxCount, statsKindCounter)
-	t.Tracker.register(TxSize, statsKindCounter)
-	t.Tracker.register(RxCount, statsKindCounter)
-	t.Tracker.register(RxSize, statsKindCounter)
-	t.Tracker.register(PrefetchCount, statsKindCounter)
-	t.Tracker.register(PrefetchSize, statsKindCounter)
-	t.Tracker.register(VerChangeCount, statsKindCounter)
-	t.Tracker.register(VerChangeSize, statsKindCounter)
-	t.Tracker.register(ErrCksumCount, statsKindCounter)
-	t.Tracker.register(ErrCksumSize, statsKindCounter)
-	t.Tracker.register(GetRedirLatency, statsKindLatency)
-	t.Tracker.register(PutRedirLatency, statsKindLatency)
-	t.Tracker.register(RebalGlobalCount, statsKindCounter)
-	t.Tracker.register(RebalLocalCount, statsKindCounter)
-	t.Tracker.register(RebalGlobalSize, statsKindCounter)
-	t.Tracker.register(RebalLocalSize, statsKindCounter)
-	t.Tracker.register(ReplPutCount, statsKindCounter)
-	t.Tracker.register(ReplPutLatency, statsKindLatency)
-}
-
+// NOTE naming conventions (see above)
 func (t *targetCoreStats) doAdd(name string, val int64) {
-	if _, ok := t.Tracker[name]; !ok {
-		cmn.Assert(false, "Invalid stats name "+name)
-	}
-
-	switch name {
-	// common
-	case GetCount, PutCount, PostCount, DeleteCount, RenameCount, ListCount,
-		GetLatency, PutLatency, ListLatency,
-		KeepAliveLatency, KeepAliveMinLatency, KeepAliveMaxLatency,
-		ErrCount, ErrGetCount, ErrDeleteCount, ErrPostCount,
-		ErrPutCount, ErrHeadCount, ErrListCount, ErrRangeCount:
+	v, ok := t.Tracker[name]
+	cmn.Assert(ok, "Invalid stats name '"+name+"'")
+	if v.isCommon {
 		t.ProxyCoreStats.doAdd(name, val)
 		return
+	}
 	// target only
-	case GetColdSize:
-		t.StatsdC.Send("get.cold",
+	if v.kind == KindLatency {
+		t.ProxyCoreStats.doAdd(name, val)
+		return
+	}
+	if strings.HasSuffix(name, ".size") {
+		nroot := strings.TrimSuffix(name, ".size")
+		t.StatsdC.Send(nroot,
 			metric{statsd.Counter, "count", 1},
-			metric{statsd.Counter, "get.cold.size", val})
-	case VerChangeSize:
-		t.StatsdC.Send("get.cold",
-			metric{statsd.Counter, "vchanged", 1},
-			metric{statsd.Counter, "vchange.size", val})
-	case LruEvictSize, TxSize, RxSize, ErrCksumSize: // byte stats
-		t.StatsdC.Send(name, metric{statsd.Counter, "bytes", val})
-	case LruEvictCount, TxCount, RxCount: // files stats
-		t.StatsdC.Send(name, metric{statsd.Counter, "files", val})
-	case ErrCksumCount: // counter stats
-		t.StatsdC.Send(name, metric{statsd.Counter, "count", val})
-	case GetRedirLatency, PutRedirLatency: // latency stats
-		t.Tracker[name].associatedVal++
-		t.StatsdC.Send(name,
-			metric{statsd.Counter, "count", 1},
-			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
-		val = int64(time.Duration(val) / time.Microsecond)
+			metric{statsd.Counter, "bytes", val})
 	}
 	t.Tracker[name].Value += val
 	t.logged = false
 }
 
-func (t *targetCoreStats) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(t.Tracker)
-}
-
-func (t *targetCoreStats) UnmarshalJSON(b []byte) error {
-	return jsoniter.Unmarshal(b, &t.Tracker)
-}
+func (t *targetCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(t.Tracker) }
+func (t *targetCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &t.Tracker) }
 
 //
 // Trunner
 //
 
-func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
-	pct := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
-	return &fscapacity{
-		Used:    (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize),
-		Avail:   statfs.Bavail * uint64(statfs.Bsize),
-		Usedpct: int64(pct),
-	}
-}
-
-func (r *Trunner) Run() error {
-	return r.runcommon(r)
-}
+func (r *Trunner) Register(name string, kind string) { r.Core.Tracker.register(name, kind) }
+func (r *Trunner) Run() error                        { return r.runcommon(r) }
 
 func (r *Trunner) Init() {
+	r.Core = &targetCoreStats{}
+	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
+
 	r.Disk = make(map[string]cmn.SimpleKVs, 8)
 	r.UpdateCapacity()
-	r.Core = &targetCoreStats{}
-	r.Core.initStatsTracker()
 }
 
 func (r *Trunner) log() (runlru bool) {
@@ -185,8 +141,8 @@ func (r *Trunner) log() (runlru bool) {
 	lines := make([]string, 0, 16)
 	// core stats
 	for _, v := range r.Core.Tracker {
-		if v.kind == statsKindLatency && v.associatedVal > 0 {
-			v.Value /= v.associatedVal
+		if v.kind == KindLatency && v.numSamples > 0 {
+			v.Value /= v.numSamples
 		}
 	}
 	r.Core.Tracker[Uptime].Value = int64(time.Since(r.starttime) / time.Microsecond)
@@ -195,9 +151,9 @@ func (r *Trunner) log() (runlru bool) {
 
 	// reset all the latency stats only
 	for _, v := range r.Core.Tracker {
-		if v.kind == statsKindLatency {
+		if v.kind == KindLatency {
 			v.Value = 0
-			v.associatedVal = 0
+			v.numSamples = 0
 		}
 	}
 	if err == nil {
@@ -389,4 +345,17 @@ func (r *Trunner) GetRebalanceStats(allXactionDetails []XactionDetails) []byte {
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
 	cmn.Assert(err == nil, err)
 	return jsonBytes
+}
+
+//
+// misc
+//
+
+func newFSCapacity(statfs *syscall.Statfs_t) *fscapacity {
+	pct := (statfs.Blocks - statfs.Bavail) * 100 / statfs.Blocks
+	return &fscapacity{
+		Used:    (statfs.Blocks - statfs.Bavail) * uint64(statfs.Bsize),
+		Avail:   statfs.Bavail * uint64(statfs.Bsize),
+		Usedpct: int64(pct),
+	}
 }

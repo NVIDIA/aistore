@@ -111,6 +111,7 @@ func (t *targetrunner) Run() error {
 
 	var ereg error
 	t.httprunner.init(getstorstatsrunner(), false)
+	t.registerStats()
 	t.httprunner.keepalive = gettargetkeepalive()
 
 	dryinit()
@@ -228,6 +229,33 @@ func (t *targetrunner) Run() error {
 	}
 
 	return t.httprunner.run()
+}
+
+// target-only stats
+func (t *targetrunner) registerStats() {
+	t.statsif.Register(stats.PutLatency, stats.KindLatency)
+	t.statsif.Register(stats.GetColdCount, stats.KindCounter)
+	t.statsif.Register(stats.GetColdSize, stats.KindCounter)
+	t.statsif.Register(stats.LruEvictSize, stats.KindCounter)
+	t.statsif.Register(stats.LruEvictCount, stats.KindCounter)
+	t.statsif.Register(stats.TxCount, stats.KindCounter)
+	t.statsif.Register(stats.TxSize, stats.KindCounter)
+	t.statsif.Register(stats.RxCount, stats.KindCounter)
+	t.statsif.Register(stats.RxSize, stats.KindCounter)
+	t.statsif.Register(stats.PrefetchCount, stats.KindCounter)
+	t.statsif.Register(stats.PrefetchSize, stats.KindCounter)
+	t.statsif.Register(stats.VerChangeCount, stats.KindCounter)
+	t.statsif.Register(stats.VerChangeSize, stats.KindCounter)
+	t.statsif.Register(stats.ErrCksumCount, stats.KindCounter)
+	t.statsif.Register(stats.ErrCksumSize, stats.KindCounter)
+	t.statsif.Register(stats.GetRedirLatency, stats.KindLatency)
+	t.statsif.Register(stats.PutRedirLatency, stats.KindLatency)
+	t.statsif.Register(stats.RebalGlobalCount, stats.KindCounter)
+	t.statsif.Register(stats.RebalLocalCount, stats.KindCounter)
+	t.statsif.Register(stats.RebalGlobalSize, stats.KindCounter)
+	t.statsif.Register(stats.RebalLocalSize, stats.KindCounter)
+	t.statsif.Register(stats.ReplPutCount, stats.KindCounter)
+	t.statsif.Register(stats.ReplPutLatency, stats.KindLatency)
 }
 
 // stop gracefully

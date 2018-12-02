@@ -1,9 +1,12 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
+// Package stats provides methods and functionality to register, track, log,
+// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 package stats
 
 import (
+	"strings"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -12,11 +15,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+//
+// NOTE Naming Convention: "*.n" - counter, "*.μs" - latency, "*.size" - size (in bytes)
+//
+
 type (
 	ProxyCoreStats struct {
 		Tracker statsTracker
-		// omitempty
-		StatsdC *statsd.Client
+		StatsdC *statsd.Client `json:"-"`
 		logged  bool
 	}
 	Prunner struct {
@@ -33,28 +39,47 @@ type (
 	}
 )
 
-func (p *ProxyCoreStats) initStatsTracker() {
-	p.Tracker = statsTracker(map[string]*statsInstance{})
-	p.Tracker.registerCommonStats()
+//
+// ProxyCoreStats
+// all stats that proxy currently has are common and hardcoded at startup
+//
+func (s *ProxyCoreStats) init(size int) {
+	s.Tracker = make(statsTracker, size)
+	s.Tracker.registerCommonStats()
 }
 
-func (p *ProxyCoreStats) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(p.Tracker)
-}
+func (p *ProxyCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(p.Tracker) }
+func (p *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &p.Tracker) }
 
-func (p *ProxyCoreStats) UnmarshalJSON(b []byte) error {
-	return jsoniter.Unmarshal(b, &p.Tracker)
+// NOTE naming convention: ".n" for the count and ".μs" for microseconds
+func (s *ProxyCoreStats) doAdd(name string, val int64) {
+	v, ok := s.Tracker[name]
+	cmn.Assert(ok, "Invalid stats name '"+name+"'")
+	if v.kind == KindLatency {
+		s.Tracker[name].numSamples++
+		nroot := strings.TrimSuffix(name, ".μs")
+		s.StatsdC.Send(nroot,
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		val = int64(time.Duration(val) / time.Microsecond)
+	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
+		nameLatency := strings.TrimSuffix(name, "n") + "μs"
+		if _, ok = s.Tracker[nameLatency]; !ok {
+			s.StatsdC.Send(name, metric{statsd.Counter, name, val})
+		}
+	}
+	s.Tracker[name].Value += val
+	s.logged = false
 }
 
 //
 // Prunner
 //
-func (r *Prunner) Run() error {
-	return r.runcommon(r)
-}
+func (r *Prunner) Run() error { return r.runcommon(r) }
+
 func (r *Prunner) Init() {
 	r.Core = &ProxyCoreStats{}
-	r.Core.initStatsTracker()
+	r.Core.init(24)
 }
 
 // statslogger interface impl
@@ -65,17 +90,17 @@ func (r *Prunner) log() (runlru bool) {
 		return
 	}
 	for _, v := range r.Core.Tracker {
-		if v.kind == statsKindLatency && v.associatedVal > 0 {
-			v.Value /= v.associatedVal
+		if v.kind == KindLatency && v.numSamples > 0 {
+			v.Value /= v.numSamples
 		}
 	}
 	b, err := jsoniter.Marshal(r.Core)
 
 	// reset all the latency stats only
 	for _, v := range r.Core.Tracker {
-		if v.kind == statsKindLatency {
+		if v.kind == KindLatency {
 			v.Value = 0
-			v.associatedVal = 0
+			v.numSamples = 0
 		}
 	}
 	r.Unlock()
@@ -92,23 +117,4 @@ func (r *Prunner) doAdd(nv NamedVal64) {
 	s := r.Core
 	s.doAdd(nv.Name, nv.Val)
 	r.Unlock()
-}
-
-func (s *ProxyCoreStats) doAdd(name string, val int64) {
-	if v, ok := s.Tracker[name]; !ok {
-		cmn.Assert(false, "Invalid stats name "+name)
-	} else if v.kind == statsKindLatency {
-		s.Tracker[name].associatedVal++
-		s.StatsdC.Send(name,
-			metric{statsd.Counter, "count", 1},
-			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
-		val = int64(time.Duration(val) / time.Microsecond)
-	} else {
-		switch name {
-		case PostCount, DeleteCount, RenameCount:
-			s.StatsdC.Send(name, metric{statsd.Counter, "count", val})
-		}
-	}
-	s.Tracker[name].Value += val
-	s.logged = false
 }
