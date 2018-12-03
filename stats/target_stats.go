@@ -58,7 +58,7 @@ const (
 //
 type (
 	Trunner struct {
-		statsrunner
+		statsRunner
 		TargetRunner cluster.Target         `json:"-"`
 		Riostat      *ios.IostatRunner      `json:"-"`
 		Core         *targetCoreStats       `json:"core"`
@@ -91,29 +91,6 @@ type (
 // targetCoreStats
 //
 
-// NOTE naming conventions (see above)
-func (t *targetCoreStats) doAdd(name string, val int64) {
-	v, ok := t.Tracker[name]
-	cmn.Assert(ok, "Invalid stats name '"+name+"'")
-	if v.isCommon {
-		t.ProxyCoreStats.doAdd(name, val)
-		return
-	}
-	// target only
-	if v.kind == KindLatency {
-		t.ProxyCoreStats.doAdd(name, val)
-		return
-	}
-	if strings.HasSuffix(name, ".size") {
-		nroot := strings.TrimSuffix(name, ".size")
-		t.StatsdC.Send(nroot,
-			metric{statsd.Counter, "count", 1},
-			metric{statsd.Counter, "bytes", val})
-	}
-	t.Tracker[name].Value += val
-	t.logged = false
-}
-
 func (t *targetCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(t.Tracker) }
 func (t *targetCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &t.Tracker) }
 
@@ -133,33 +110,20 @@ func (r *Trunner) Init() {
 }
 
 func (r *Trunner) log() (runlru bool) {
-	r.Lock()
-	if r.Core.logged {
-		r.Unlock()
-		return
-	}
-	lines := make([]string, 0, 16)
-	// core stats
-	for _, v := range r.Core.Tracker {
-		if v.kind == KindLatency && v.numSamples > 0 {
-			v.Value /= v.numSamples
-		}
-	}
+	var (
+		tracker = make(copyTracker, 48)
+		lines   = make([]string, 0, 16)
+	)
+	// copy stats values while skipping zeros; reset latency stats
 	r.Core.Tracker[Uptime].Value = int64(time.Since(r.starttime) / time.Microsecond)
+	r.Core.copyZeroReset(tracker)
 
-	b, err := jsoniter.Marshal(r.Core)
-
-	// reset all the latency stats only
-	for _, v := range r.Core.Tracker {
-		if v.kind == KindLatency {
-			v.Value = 0
-			v.numSamples = 0
-		}
-	}
+	b, err := jsoniter.Marshal(tracker)
 	if err == nil {
 		lines = append(lines, string(b))
 	}
-	// capacity
+
+	// 2. capacity
 	if time.Since(r.timeUpdatedCapacity) >= cmn.GCO.Get().LRU.CapacityUpdTime {
 		runlru = r.UpdateCapacity()
 		r.timeUpdatedCapacity = time.Now()
@@ -171,7 +135,7 @@ func (r *Trunner) log() (runlru bool) {
 		}
 	}
 
-	// disk
+	// 3. iostat metrics
 	r.Riostat.RLock()
 	r.CPUidle = r.Riostat.CPUidle
 	for dev, iometrics := range r.Riostat.Disk {
@@ -196,10 +160,7 @@ func (r *Trunner) log() (runlru bool) {
 
 	lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
 
-	r.Core.logged = true
-	r.Unlock()
-
-	// log
+	// 4. log
 	for _, ln := range lines {
 		glog.Infoln(ln)
 	}
@@ -308,11 +269,33 @@ func (r *Trunner) UpdateCapacity() (runlru bool) {
 	return
 }
 
+// NOTE the naming conventions (above)
 func (r *Trunner) doAdd(nv NamedVal64) {
-	r.Lock()
-	s := r.Core
-	s.doAdd(nv.Name, nv.Val)
-	r.Unlock()
+	var (
+		s    = r.Core
+		name = nv.Name
+		val  = nv.Val
+	)
+	v, ok := s.Tracker[name]
+	cmn.Assert(ok, "Invalid stats name '"+name+"'")
+	if v.isCommon {
+		s.ProxyCoreStats.doAdd(name, val)
+		return
+	}
+	// target only
+	if v.kind == KindLatency {
+		s.ProxyCoreStats.doAdd(name, val)
+		return
+	}
+	if strings.HasSuffix(name, ".size") {
+		nroot := strings.TrimSuffix(name, ".size")
+		s.StatsdC.Send(nroot,
+			metric{statsd.Counter, "count", 1},
+			metric{statsd.Counter, "bytes", val})
+	}
+	v.Lock()
+	v.Value += val
+	v.Unlock()
 }
 
 //
@@ -320,20 +303,24 @@ func (r *Trunner) doAdd(nv NamedVal64) {
 //
 
 func (r *Trunner) GetPrefetchStats(allXactionDetails []XactionDetails) []byte {
-	r.RLock()
+	v := r.Core.Tracker[PrefetchCount]
+	v.RLock()
 	prefetchXactionStats := PrefetchTargetStats{
 		Xactions:           allXactionDetails,
 		NumBytesPrefetched: r.Core.Tracker[PrefetchCount].Value,
 		NumFilesPrefetched: r.Core.Tracker[PrefetchSize].Value,
 	}
-	r.RUnlock()
+	v.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(prefetchXactionStats)
 	cmn.Assert(err == nil, err)
 	return jsonBytes
 }
 
 func (r *Trunner) GetRebalanceStats(allXactionDetails []XactionDetails) []byte {
-	r.RLock()
+	vr := r.Core.Tracker[RxCount]
+	vt := r.Core.Tracker[TxCount]
+	vr.RLock()
+	vt.RLock()
 	rebalanceXactionStats := RebalanceTargetStats{
 		Xactions:     allXactionDetails,
 		NumRecvBytes: r.Core.Tracker[RxSize].Value,
@@ -341,7 +328,8 @@ func (r *Trunner) GetRebalanceStats(allXactionDetails []XactionDetails) []byte {
 		NumSentBytes: r.Core.Tracker[TxSize].Value,
 		NumSentFiles: r.Core.Tracker[TxCount].Value,
 	}
-	r.RUnlock()
+	vt.RUnlock()
+	vr.RUnlock()
 	jsonBytes, err := jsoniter.Marshal(rebalanceXactionStats)
 	cmn.Assert(err == nil, err)
 	return jsonBytes

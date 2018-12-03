@@ -530,13 +530,14 @@ func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request)
 // GET /v1/health
 func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	rr := getproxystatsrunner()
-	rr.Lock()
-	rr.Core.Tracker[stats.Uptime].Value = int64(time.Since(p.starttime) / time.Microsecond)
+	v := rr.Core.Tracker[stats.Uptime]
+	v.Lock()
+	v.Value = int64(time.Since(p.starttime) / time.Microsecond)
 	if p.startedup(0) == 0 {
 		rr.Core.Tracker[stats.Uptime].Value = 0
 	}
+	v.Unlock()
 	jsbytes, err := jsoniter.Marshal(rr.Core)
-	rr.Unlock()
 
 	cmn.Assert(err == nil, err)
 	p.writeJSON(w, r, jsbytes, "proxycorestats")
@@ -1555,9 +1556,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getproxystatsrunner()
-		rst.RLock()
 		jsbytes, err := jsoniter.Marshal(rst)
-		rst.RUnlock()
 		cmn.Assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatSmap:
@@ -2073,10 +2072,8 @@ func (p *proxyrunner) invokeHttpGetClusterStats(w http.ResponseWriter, r *http.R
 	out := &stats.ClusterStatsRaw{}
 	out.Target = targetStats
 	rr := getproxystatsrunner()
-	rr.RLock()
 	out.Proxy = rr.Core
 	jsbytes, err := jsoniter.Marshal(out)
-	rr.RUnlock()
 	cmn.Assert(err == nil, err)
 	ok = p.writeJSON(w, r, jsbytes, "HttpGetClusterStats")
 	return ok

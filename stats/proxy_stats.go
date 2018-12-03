@@ -23,10 +23,9 @@ type (
 	ProxyCoreStats struct {
 		Tracker statsTracker
 		StatsdC *statsd.Client `json:"-"`
-		logged  bool
 	}
 	Prunner struct {
-		statsrunner
+		statsRunner
 		Core *ProxyCoreStats `json:"core"`
 	}
 	ClusterStats struct {
@@ -51,7 +50,9 @@ func (s *ProxyCoreStats) init(size int) {
 func (p *ProxyCoreStats) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(p.Tracker) }
 func (p *ProxyCoreStats) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &p.Tracker) }
 
+//
 // NOTE naming convention: ".n" for the count and ".μs" for microseconds
+//
 func (s *ProxyCoreStats) doAdd(name string, val int64) {
 	v, ok := s.Tracker[name]
 	cmn.Assert(ok, "Invalid stats name '"+name+"'")
@@ -68,8 +69,31 @@ func (s *ProxyCoreStats) doAdd(name string, val int64) {
 			s.StatsdC.Send(name, metric{statsd.Counter, name, val})
 		}
 	}
-	s.Tracker[name].Value += val
-	s.logged = false
+	v.Lock()
+	v.Value += val
+	v.Unlock()
+}
+
+func (s *ProxyCoreStats) copyZeroReset(tracker copyTracker) {
+	for name, v := range s.Tracker {
+		if v.kind == KindLatency {
+			v.Lock()
+			if v.numSamples > 0 {
+				tracker[name] = &copyValue{Value: v.Value / v.numSamples} // may be zero in the end
+			}
+			v.Value = 0
+			v.numSamples = 0
+			v.Unlock()
+		} else if v.kind == KindCounter {
+			v.RLock()
+			if v.Value != 0 {
+				tracker[name] = &copyValue{Value: v.Value}
+			}
+			v.RUnlock()
+		} else {
+			tracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+		}
+	}
 }
 
 //
@@ -84,37 +108,19 @@ func (r *Prunner) Init() {
 
 // statslogger interface impl
 func (r *Prunner) log() (runlru bool) {
-	r.Lock()
-	if r.Core.logged {
-		r.Unlock()
-		return
-	}
-	for _, v := range r.Core.Tracker {
-		if v.kind == KindLatency && v.numSamples > 0 {
-			v.Value /= v.numSamples
-		}
-	}
-	b, err := jsoniter.Marshal(r.Core)
+	tracker := make(copyTracker, 24)
 
-	// reset all the latency stats only
-	for _, v := range r.Core.Tracker {
-		if v.kind == KindLatency {
-			v.Value = 0
-			v.numSamples = 0
-		}
-	}
-	r.Unlock()
+	// copy stats values while skipping zeros; reset latency stats
+	r.Core.copyZeroReset(tracker)
 
+	b, err := jsoniter.Marshal(tracker)
 	if err == nil {
 		glog.Infoln(string(b))
-		r.Core.logged = true
 	}
 	return
 }
 
 func (r *Prunner) doAdd(nv NamedVal64) {
-	r.Lock()
 	s := r.Core
 	s.doAdd(nv.Name, nv.Val)
-	r.Unlock()
 }

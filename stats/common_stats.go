@@ -86,8 +86,7 @@ type (
 		doAdd(nv NamedVal64)
 	}
 	// implements Tracker, inherited by Prunner ans Trunner
-	statsrunner struct {
-		sync.RWMutex
+	statsRunner struct {
 		cmn.Named
 		stopCh    chan struct{}
 		workCh    chan NamedVal64
@@ -98,20 +97,37 @@ type (
 	// There are two main types of stats: counter and latency declared
 	// using the the kind field. Only latency stats have numSamples used to compute latency.
 	statsValue struct {
+		sync.RWMutex
 		Value      int64 `json:"v"`
 		kind       string
 		numSamples int64
 		isCommon   bool // optional, common to the proxy and target
 	}
+	copyValue struct {
+		Value int64 `json:"v"`
+	}
 	statsTracker map[string]*statsValue
+	copyTracker  map[string]*copyValue
 )
 
 //
 // statsValue
 //
 
-func (stat *statsValue) MarshalJSON() ([]byte, error) { return jsoniter.Marshal(stat.Value) }
-func (stat *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &stat.Value) }
+func (v *statsValue) MarshalJSON() (b []byte, err error) {
+	v.RLock()
+	b, err = jsoniter.Marshal(v.Value)
+	v.RUnlock()
+	return
+}
+func (v *statsValue) UnmarshalJSON(b []byte) error { return jsoniter.Unmarshal(b, &v.Value) }
+
+//
+// copyValue
+//
+
+func (v *copyValue) MarshalJSON() (b []byte, err error) { return jsoniter.Marshal(v.Value) }
+func (v *copyValue) UnmarshalJSON(b []byte) error       { return jsoniter.Unmarshal(b, &v.Value) }
 
 //
 // statsTracker
@@ -155,9 +171,9 @@ func (tracker statsTracker) registerCommonStats() {
 //
 
 // implements Tracker interface
-var _ Tracker = &statsrunner{}
+var _ Tracker = &statsRunner{}
 
-func (r *statsrunner) runcommon(logger statslogger) error {
+func (r *statsRunner) runcommon(logger statslogger) error {
 	r.stopCh = make(chan struct{}, 4)
 	r.workCh = make(chan NamedVal64, 256)
 	r.starttime = time.Now()
@@ -183,28 +199,28 @@ func (r *statsrunner) runcommon(logger statslogger) error {
 	}
 }
 
-func (r *statsrunner) ConfigUpdate(config *cmn.Config) {
+func (r *statsRunner) ConfigUpdate(config *cmn.Config) {
 	r.ticker.Stop()
 	r.ticker = time.NewTicker(config.Periodic.StatsTime)
 }
 
-func (r *statsrunner) Stop(err error) {
+func (r *statsRunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
 }
 
 // statslogger interface impl
-func (r *statsrunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
-func (r *statsrunner) housekeep(bool)                    {}
-func (r *statsrunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
-func (r *statsrunner) AddMany(nvs ...NamedVal64) {
+func (r *statsRunner) Register(name string, kind string) { cmn.Assert(false) } // NOTE: currently, proxy's stats == common and hardcoded
+func (r *statsRunner) housekeep(bool)                    {}
+func (r *statsRunner) Add(name string, val int64)        { r.workCh <- NamedVal64{name, val} }
+func (r *statsRunner) AddMany(nvs ...NamedVal64) {
 	for _, nv := range nvs {
 		r.workCh <- nv
 	}
 }
 
-func (r *statsrunner) AddErrorHTTP(method string, val int64) {
+func (r *statsRunner) AddErrorHTTP(method string, val int64) {
 	switch method {
 	case http.MethodGet:
 		r.workCh <- NamedVal64{ErrGetCount, val}

@@ -37,7 +37,7 @@ Note as well that for every transmission of every object there's always a *compl
 This holds true in all cases including network errors that may cause sudden and instant termination
 of the underlying stream(s).
 
-## Example with comments
+## Example with extended comments
 
 ```go
 path := transport.Register("n1", "ep1", testReceive) // register receive callback with HTTP endpoint "ep1" to "n1" network
@@ -48,6 +48,11 @@ url := "http://example.com/" +  path // combine the hostname with the result of 
 // ("burst" is the number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure)
 ctx, cancel := context.WithCancel(context.Background())
 stream := transport.NewStream(client, url, &transport.Extra{Burst: 10, Ctx: ctx})
+
+// NOTE: constructing a transport stream does not necessarily entail establishing TCP connection.
+// Actual connection establishment is delayed until the very first object gets posted for sending.
+// The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity
+// (`Extra.IdleTimeout`), only to be re-established when (and if) the traffic picks up again.
 
 for  {
 	hdr := transport.Header{...} 	// next object header

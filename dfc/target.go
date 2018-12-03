@@ -2112,7 +2112,6 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 		hdhobj, nhobj              cksumvalue
 		xxHashVal                  string
 		htype, hval, nhtype, nhval string
-		sgl                        *memsys.SGL
 		started                    time.Time
 	)
 	started = time.Now()
@@ -2157,7 +2156,7 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 			}
 		}
 	}
-	if sgl, nhobj, _, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
+	if _, nhobj, _, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
 		return
 	}
 	if nhobj != nil {
@@ -2171,21 +2170,16 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	}
 	// commit
 	props := &objectProps{nhobj: nhobj}
-	if sgl == nil {
-		if !dryRun.disk && !dryRun.network {
-			errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
-		}
-		if errstr == "" {
-			delta := time.Since(started)
-			t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
-			if glog.V(4) {
-				glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
-			}
-		}
-		return
+	if !dryRun.disk && !dryRun.network {
+		errstr, errcode = t.putCommit(t.contextWithAuth(r), bucket, objname, putfqn, fqn, props, false /*rebalance*/)
 	}
-	// FIXME: use xaction
-	go t.sglToCloudAsync(t.contextWithAuth(r), sgl, bucket, objname, putfqn, fqn, props)
+	if errstr == "" {
+		delta := time.Since(started)
+		t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
+		if glog.V(4) {
+			glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
+		}
+	}
 	return
 }
 
@@ -2213,50 +2207,6 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 		glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 	}
 	return ""
-}
-
-func (t *targetrunner) sglToCloudAsync(ct context.Context, sgl *memsys.SGL, bucket, objname, putfqn, fqn string, objprops *objectProps) {
-	slab := sgl.Slab()
-	buf := slab.Alloc()
-	defer func() {
-		sgl.Free()
-		slab.Free(buf)
-	}()
-	// sgl => fqn sequence
-	file, err := cmn.CreateFile(putfqn)
-	if err != nil {
-		t.fshc(err, putfqn)
-		glog.Errorln("sglToCloudAsync: create", putfqn, err)
-		return
-	}
-	reader := memsys.NewReader(sgl)
-	written, err := io.CopyBuffer(file, reader, buf)
-	if err != nil {
-		t.fshc(err, putfqn)
-		glog.Errorln("sglToCloudAsync: CopyBuffer", err)
-		if err1 := file.Close(); err1 != nil {
-			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
-		}
-		if err2 := os.Remove(putfqn); err2 != nil {
-			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err2)
-		}
-		return
-	}
-	cmn.Assert(written == sgl.Size())
-	err = file.Close()
-	if err != nil {
-		glog.Errorln("sglToCloudAsync: Close", err)
-		if err1 := os.Remove(putfqn); err1 != nil {
-			glog.Errorf("Nested error %v => (remove %s => err: %v)", err, putfqn, err1)
-		}
-		return
-	}
-	errstr, _ := t.putCommit(ct, bucket, objname, putfqn, fqn, objprops, false /*rebalance*/)
-	if errstr != "" {
-		glog.Errorln("sglToCloudAsync: commit", errstr)
-		return
-	}
-	glog.Infof("sglToCloudAsync: %s/%s", bucket, objname)
 }
 
 func (t *targetrunner) putCommit(ct context.Context, bucket, objname, putfqn, fqn string,
@@ -2930,9 +2880,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
-		rst.RLock()
 		jsbytes, err := jsoniter.Marshal(rst)
-		rst.RUnlock()
 		cmn.Assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatXaction:
@@ -3072,7 +3020,7 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 //
 //==============================================================================================
 func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalue,
-	reader io.Reader) (sgl *memsys.SGL, nhobj cksumvalue, written int64, errstr string) {
+	reader io.Reader) (sgl *memsys.SGL /* NIY */, nhobj cksumvalue, written int64, errstr string) {
 	var (
 		err                  error
 		file                 *os.File
