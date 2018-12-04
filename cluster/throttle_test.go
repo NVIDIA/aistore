@@ -65,11 +65,12 @@ func Test_Throttle(t *testing.T) {
 	time.Sleep(time.Second)
 	defer func() { riostat.Stop(nil) }()
 
+	riostat.Lock()
 	for disk := range riostat.Disk {
 		riostat.Disk[disk] = make(cmn.SimpleKVs, 0)
 		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
-
 	}
+	riostat.Unlock()
 
 	testHighFSCapacityUsed(t, config.Xaction.DiskUtilLowWM-10)
 	testHighFSCapacityUsed(t, config.Xaction.DiskUtilLowWM+10)
@@ -313,11 +314,11 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 	if sleepDuration != 0 {
 		t.Errorf(fmstr, 0, sleepDuration)
 	}
-
-	for disk := range riostat.Disk {
-		riostat.Disk[disk]["%util"] = "99"
+	thrctx.Riostat.Lock()
+	for disk := range thrctx.Riostat.Disk {
+		thrctx.Riostat.Disk[disk]["%util"] = "99"
 	}
-
+	thrctx.Riostat.Unlock()
 	thrctx.recompute()
 	sleepDuration = thrctx.sleep
 	if sleepDuration != 0 {
@@ -326,10 +327,11 @@ func testChangedDiskUtilBeforeUtilCheck(t *testing.T) {
 }
 
 func getSleepDuration(diskUtil int64, thrctx *Throttle) time.Duration {
-	for disk := range riostat.Disk {
-		riostat.Disk[disk]["%util"] = strconv.Itoa(int(diskUtil))
+	thrctx.Riostat.Lock()
+	for disk := range thrctx.Riostat.Disk {
+		thrctx.Riostat.Disk[disk]["%util"] = strconv.Itoa(int(diskUtil))
 	}
-
+	thrctx.Riostat.Unlock()
 	thrctx.nextCapCheck = time.Time{}
 	thrctx.nextUtilCheck = time.Time{}
 

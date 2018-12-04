@@ -17,7 +17,6 @@ import (
 
 func GetMountpaths(httpClient *http.Client, targetURL string) (*cmn.MountpathList, error) {
 	q := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}}
-	q.Encode()
 	url := targetURL + cmn.URLPath(cmn.Version, cmn.Daemon)
 	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, q)
 	if err != nil {
