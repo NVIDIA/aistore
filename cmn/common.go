@@ -136,9 +136,31 @@ func CopyStruct(dst interface{}, src interface{}) {
 // files, IO, hash
 //
 
+var (
+	_ ReadOpenCloser = &FileHandle{}
+)
+
 type ReadOpenCloser interface {
 	io.ReadCloser
 	Open() (io.ReadCloser, error)
+}
+
+type FileHandle struct {
+	*os.File
+	fqn string
+}
+
+func NewFileHandle(fqn string) (*FileHandle, error) {
+	file, err := os.Open(fqn)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FileHandle{file, fqn}, nil
+}
+
+func (f *FileHandle) Open() (io.ReadCloser, error) {
+	return os.Open(f.fqn)
 }
 
 const DefaultBufSize = 32 * KiB
