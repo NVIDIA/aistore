@@ -186,17 +186,13 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 }
 
 func (r *mpathReplicator) send(req *replRequest) error {
-	var (
-		errstr string
-		err    error
-	)
+	var errstr string
 
-	_, bucket, object, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
+	parsedFQN, _, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
 	if err != nil {
-		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)
-		return errors.New(errstr)
+		return err
 	}
-
+	bucket, object := parsedFQN.Bucket, parsedFQN.Objname
 	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 
 	uname := cluster.Uname(bucket, object)
@@ -316,7 +312,8 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		accessTime    time.Time
 	)
 	httpr := req.httpReq
-	_, bucket, object, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
+	parsedFQN, _, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
+	bucket, object := parsedFQN.Bucket, parsedFQN.Objname
 	if err != nil {
 		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)
 		return errors.New(errstr)

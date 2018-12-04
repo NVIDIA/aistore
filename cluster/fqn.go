@@ -10,30 +10,38 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
-// fqn => (contentType, bucket, objname, err)
-func ResolveFQN(fqn string, bowner Bowner) (contentType, bucket, objname string, err error) {
-	var (
-		islocal   bool
-		parsedFQN fs.FQNparsed
-	)
+// error types
+type (
+	ErrFqnMisplaced struct {
+		errstr string
+	}
+)
+
+func (e *ErrFqnMisplaced) Error() string { return e.errstr }
+
+//
+// resolve and validate fqn
+//
+func ResolveFQN(fqn string, bowner Bowner) (parsedFQN fs.FQNparsed, newfqn string, err error) {
+	var errstr string
 	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
 	if err != nil {
 		return
 	}
-	contentType, bucket, objname, islocal = parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
-	resfqn, errstr := FQN(contentType, bucket, objname, islocal)
+	newfqn, errstr = FQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal)
 	if errstr != "" {
 		err = errors.New(errstr)
 		return
 	}
-	errstr = fmt.Sprintf("Cannot convert %s => %s/%s", fqn, bucket, objname)
-	if resfqn != fqn {
-		err = fmt.Errorf("%s - %q misplaced", errstr, resfqn)
+	if newfqn != fqn {
+		errstr = fmt.Sprintf("%s (%s/%s) appears to be misplaced: newfqn %s", fqn, parsedFQN.Bucket, parsedFQN.Objname, newfqn)
+		err = &ErrFqnMisplaced{errstr}
 		return
 	}
 	bmd := bowner.Get()
-	if bmd.IsLocal(bucket) != islocal {
-		err = fmt.Errorf("%s - islocal mismatch(%t, %t)", errstr, bmd.IsLocal(bucket), islocal)
+	if bmd.IsLocal(parsedFQN.Bucket) != parsedFQN.IsLocal {
+		err = fmt.Errorf("%s (%s/%s) - islocal mismatch(%t, %t)", fqn,
+			parsedFQN.Bucket, parsedFQN.Objname, bmd.IsLocal(parsedFQN.Bucket), parsedFQN.IsLocal)
 	}
 	return
 }

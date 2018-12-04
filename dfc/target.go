@@ -1443,7 +1443,8 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if !fs.CSM.PermToProcess(fqn) {
 		return nil
 	}
-	contentType, bucket, objname, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
+	parsedFQN, _, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
+	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
 	if err == nil {
 		if bucket != renctx.bucketFrom {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
@@ -2083,12 +2084,15 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		return ci.processDir(fqn)
 	}
 	objStatus := cmn.ObjStatusOK
+
+	// FIXME: compare the logic vs local/global rebalance
 	if ci.needStatus {
-		_, bucket, objname, err := cluster.ResolveFQN(fqn, ci.t.bmdowner)
+		parsedFQN, _, err := cluster.ResolveFQN(fqn, ci.t.bmdowner)
 		if err != nil {
 			glog.Warning(err)
 			objStatus = cmn.ObjStatusMoved
 		}
+		bucket, objname := parsedFQN.Bucket, parsedFQN.Objname
 		si, errstr := hrwTarget(bucket, objname, ci.t.smapowner.get())
 		if errstr != "" || ci.t.si.DaemonID != si.DaemonID {
 			glog.Warningf("Rebalanced object: %s/%s: %s", bucket, objname, errstr)
@@ -3032,9 +3036,9 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 	if dryRun.disk && dryRun.network {
 		return
 	}
-	// try to override cksum config with bucket-level config
-	if _, bucket, _, err := cluster.ResolveFQN(fqn, t.bmdowner); err == nil {
-		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
+	// FIXME: check this logic
+	if parsedFQN, _, err := cluster.ResolveFQN(fqn, t.bmdowner); err == nil {
+		if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(parsedFQN.Bucket); defined {
 			cksumcfg = &bucketProps.CksumConf
 		}
 	}
@@ -3156,22 +3160,6 @@ func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (red
 	}
 	redelta = started.UnixNano() - pts
 	return
-}
-
-// changedMountpath checks if the mountpath for provided fqn has changed. This
-// situation can happen when new mountpath is added or mountpath is moved from
-// disabled to enabled.
-func (t *targetrunner) changedMountpath(fqn string) (bool, string, error) {
-	parsedFQN, err := fs.Mountpaths.FQN2Info(fqn)
-	if err != nil {
-		return false, "", err
-	}
-	contentType, bucket, objName, isLocal := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal
-	newFQN, errstr := cluster.FQN(contentType, bucket, objName, isLocal)
-	if errstr != "" {
-		return false, "", errors.New(errstr)
-	}
-	return fqn != newFQN, newFQN, nil
 }
 
 // create local directories to test multiple fspaths

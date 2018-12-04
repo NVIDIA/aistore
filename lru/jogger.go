@@ -117,7 +117,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	// cleanup after rebalance
-	_, _, _, err = cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
+	_, _, err = cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
 	if err != nil {
 		glog.Infof("%s: is misplaced, err: %v", fqn, err)
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
@@ -152,7 +152,7 @@ func (lctx *lructx) evict() error {
 	)
 	for _, fi := range lctx.oldwork {
 		if lctx.ini.Targetif.IsRebalancing() {
-			_, _, _, err := cluster.ResolveFQN(fi.fqn, lctx.ini.Bmdowner)
+			_, _, err := cluster.ResolveFQN(fi.fqn, lctx.ini.Bmdowner)
 			// keep a copy of a rebalanced file while rebalance is running
 			if movable := lctx.ctxResolver.PermToMove(fi.fqn); movable && err != nil {
 				continue
@@ -182,7 +182,8 @@ func (lctx *lructx) evict() error {
 
 // evictFQN evicts a given file
 func (lctx *lructx) evictFQN(fqn string) error {
-	_, bucket, objname, err := cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
+	parsedFQN, _, err := cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
+	bucket, objname := parsedFQN.Bucket, parsedFQN.Objname
 	if err != nil {
 		glog.Errorf("Evicting %q with error: %v", fqn, err)
 		if e := os.Remove(fqn); e != nil {
