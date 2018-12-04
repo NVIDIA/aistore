@@ -667,7 +667,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		}
 	}
 
-	mpList, err := tutils.TargetMountpaths(targetURL)
+	mpList, err := api.GetMountpaths(tutils.HTTPClient, targetURL)
 	tutils.CheckFatal(err, t)
 
 	if len(mpList.Available) < 2 {
@@ -676,7 +676,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
-	err = tutils.DisableTargetMountpath(targetURL, mpath)
+	err = api.DisableMountpath(tutils.HTTPClient, targetURL, mpath)
 
 	// Unregister a target
 	tutils.Logf("Trying to unregister target: %s\n", killTargetURL)
@@ -712,7 +712,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// enable mountpath
-	err = tutils.EnableTargetMountpath(targetURL, mpath)
+	err = api.EnableMountpath(tutils.HTTPClient, targetURL, mpath)
 	tutils.CheckFatal(err, t)
 
 	// wait until GETs are done while 2 rebalance are running
@@ -730,7 +730,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 
 	resultsBeforeAfter(&md, num, maxErrPct)
 
-	mpListAfter, err := tutils.TargetMountpaths(targetURL)
+	mpListAfter, err := api.GetMountpaths(tutils.HTTPClient, targetURL)
 	tutils.CheckFatal(err, t)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
@@ -788,7 +788,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 		break
 	}
 
-	mpList, err := tutils.TargetMountpaths(targetURL)
+	mpList, err := api.GetMountpaths(tutils.HTTPClient, targetURL)
 	tutils.CheckFatal(err, t)
 
 	if len(mpList.Available) < 2 {
@@ -803,7 +803,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 
 	// Disable mountpaths temporarily
 	for _, mp := range mpaths {
-		err = tutils.DisableTargetMountpath(targetURL, mp)
+		err = api.DisableMountpath(tutils.HTTPClient, targetURL, mp)
 		tutils.CheckFatal(err, t)
 	}
 
@@ -824,14 +824,14 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	for _, mp := range mpaths {
 		// sleep for a while before enabling another mountpath
 		time.Sleep(50 * time.Millisecond)
-		err = tutils.EnableTargetMountpath(targetURL, mp)
+		err = api.EnableMountpath(tutils.HTTPClient, targetURL, mp)
 		tutils.CheckFatal(err, t)
 	}
 
 	md.wg.Wait()
 	resultsBeforeAfter(&md, num, maxErrPct)
 
-	mpListAfter, err := tutils.TargetMountpaths(targetURL)
+	mpListAfter, err := api.GetMountpaths(tutils.HTTPClient, targetURL)
 	tutils.CheckFatal(err, t)
 	if len(mpList.Available) != len(mpListAfter.Available) {
 		t.Fatalf("Some mountpaths failed to enable: the number before %d, after %d",
@@ -1198,16 +1198,16 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	targets := extractTargetsInfo(m.smap)
 
 	// Remove all mountpaths for one target
-	oldMountpaths, err := tutils.TargetMountpaths(targets[0].directURL)
+	oldMountpaths, err := api.GetMountpaths(tutils.HTTPClient, targets[0].directURL)
 	tutils.CheckFatal(err, t)
 
 	for _, mpath := range oldMountpaths.Available {
-		err = tutils.RemoveTargetMountpath(targets[0].directURL, mpath)
+		err = api.RemoveMountpath(tutils.HTTPClient, targets[0].directURL, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually removed
-	mountpaths, err := tutils.TargetMountpaths(targets[0].directURL)
+	mountpaths, err := api.GetMountpaths(tutils.HTTPClient, targets[0].directURL)
 	tutils.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != 0 {
@@ -1220,12 +1220,12 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
-		err = tutils.AddTargetMountpath(targets[0].directURL, mpath)
+		err = api.AddMountpath(tutils.HTTPClient, targets[0].directURL, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually added
-	mountpaths, err = tutils.TargetMountpaths(targets[0].directURL)
+	mountpaths, err = api.GetMountpaths(tutils.HTTPClient, targets[0].directURL)
 	tutils.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {
@@ -1307,7 +1307,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}
 
 	// Add new mountpath to target
-	err = tutils.AddTargetMountpath(targets[0].directURL, newMountpath)
+	err = api.AddMountpath(tutils.HTTPClient, targets[0].directURL, newMountpath)
 	tutils.CheckFatal(err, t)
 
 	waitForRebalanceToComplete(t, m.proxyURL)
@@ -1318,7 +1318,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	m.wg.Wait()
 
 	// Remove new mountpath from target
-	err = tutils.RemoveTargetMountpath(targets[0].directURL, newMountpath)
+	err = api.RemoveMountpath(tutils.HTTPClient, targets[0].directURL, newMountpath)
 	tutils.CheckFatal(err, t)
 
 	resultsBeforeAfter(&m, num, maxErrPct)
@@ -1389,7 +1389,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err = tutils.DockerCreateMpathDir(0, newMountpath)
 		tutils.CheckFatal(err, t)
 		for _, target := range targets {
-			err = tutils.AddTargetMountpath(target.directURL, newMountpath)
+			err = api.AddMountpath(tutils.HTTPClient, target.directURL, newMountpath)
 			tutils.CheckFatal(err, t)
 		}
 	} else {
@@ -1397,7 +1397,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 			cmn.CreateDir(mountpath)
-			err = tutils.AddTargetMountpath(target.directURL, mountpath)
+			err = api.AddMountpath(tutils.HTTPClient, target.directURL, mountpath)
 			tutils.CheckFatal(err, t)
 		}
 	}
@@ -1414,7 +1414,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err = tutils.DockerRemoveMpathDir(0, newMountpath)
 		tutils.CheckFatal(err, t)
 		for _, target := range targets {
-			if err = tutils.RemoveTargetMountpath(target.directURL, newMountpath); err != nil {
+			if err = api.RemoveMountpath(tutils.HTTPClient, target.directURL, newMountpath); err != nil {
 				t.Error(err.Error())
 			}
 		}
@@ -1422,7 +1422,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		for idx, target := range targets {
 			mountpath := filepath.Join(newMountpath, fmt.Sprintf("%d", idx))
 			os.RemoveAll(mountpath)
-			if err = tutils.RemoveTargetMountpath(target.directURL, mountpath); err != nil {
+			if err = api.RemoveMountpath(tutils.HTTPClient, target.directURL, mountpath); err != nil {
 				t.Error(err.Error())
 			}
 		}
@@ -1473,16 +1473,16 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	targets := extractTargetsInfo(m.smap)
 
 	// Remove all mountpaths for one target
-	oldMountpaths, err := tutils.TargetMountpaths(targets[0].directURL)
+	oldMountpaths, err := api.GetMountpaths(tutils.HTTPClient, targets[0].directURL)
 	tutils.CheckFatal(err, t)
 
 	for _, mpath := range oldMountpaths.Available {
-		err = tutils.DisableTargetMountpath(targets[0].directURL, mpath)
+		err = api.DisableMountpath(tutils.HTTPClient, targets[0].directURL, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually disabled
-	mountpaths, err := tutils.TargetMountpaths(targets[0].directURL)
+	mountpaths, err := api.GetMountpaths(tutils.HTTPClient, targets[0].directURL)
 	tutils.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != 0 {
@@ -1499,12 +1499,12 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
-		err = tutils.EnableTargetMountpath(targets[0].directURL, mpath)
+		err = api.EnableMountpath(tutils.HTTPClient, targets[0].directURL, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
 	// Check if mountpaths were actually enabled
-	mountpaths, err = tutils.TargetMountpaths(targets[0].directURL)
+	mountpaths, err = api.GetMountpaths(tutils.HTTPClient, targets[0].directURL)
 	tutils.CheckFatal(err, t)
 
 	if len(mountpaths.Available) != len(oldMountpaths.Available) {

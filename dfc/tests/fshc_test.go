@@ -32,7 +32,7 @@ func waitForMountpathChanges(t *testing.T, target string, availLen, disabledLen 
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var newMpaths *cmn.MountpathList
 	for detectLimit.After(time.Now()) {
-		newMpaths, err = tutils.TargetMountpaths(target)
+		newMpaths, err = api.GetMountpaths(tutils.HTTPClient, target)
 		if err != nil {
 			t.Errorf("Failed to read target mountpaths: %v\n", err)
 			break
@@ -74,14 +74,14 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 
 	// ask fschecker to check all mountpath - it should make disabled
 	// mountpath back to available list
-	tutils.EnableTargetMountpath(target, mpath)
+	api.EnableMountpath(tutils.HTTPClient, target, mpath)
 	tutils.Logf("Recheck mountpaths\n")
 	detectStart := time.Now()
 	detectLimit := time.Now().Add(fshcDetectTimeMax)
 	var mpaths *cmn.MountpathList
 	// Wait for fsckeeper detects that the mountpath is accessible now
 	for detectLimit.After(time.Now()) {
-		mpaths, err = tutils.TargetMountpaths(target)
+		mpaths, err = api.GetMountpaths(tutils.HTTPClient, target)
 		if err != nil {
 			t.Errorf("Failed to read target mountpaths: %v\n", err)
 			break
@@ -192,7 +192,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
 		tutils.Logf("Target: %s\n", target)
-		lst, err := tutils.TargetMountpaths(tinfo.PublicNet.DirectURL)
+		lst, err := api.GetMountpaths(tutils.HTTPClient, tinfo.PublicNet.DirectURL)
 		tutils.CheckFatal(err, t)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
@@ -340,7 +340,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	origOff := 0
 	for target, tinfo := range smap.Tmap {
 		tutils.Logf("Target: %s\n", target)
-		lst, err := tutils.TargetMountpaths(tinfo.PublicNet.DirectURL)
+		lst, err := api.GetMountpaths(tutils.HTTPClient, tinfo.PublicNet.DirectURL)
 		tutils.CheckFatal(err, t)
 		tutils.Logf("    Mountpaths: %v\n", lst)
 
@@ -367,12 +367,12 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	// create a local bucket to write to
 	tutils.Logf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
-	err = tutils.EnableTargetMountpath(failedTarget, failedMpath)
+	err = api.EnableMountpath(tutils.HTTPClient, failedTarget, failedMpath)
 	if err != nil {
 		t.Errorf("Enabling available mountpath should return success, got: %v", err)
 	}
 
-	err = tutils.EnableTargetMountpath(failedTarget, failedMpath+"some_text")
+	err = api.EnableMountpath(tutils.HTTPClient, failedTarget, failedMpath+"some_text")
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Enabling non-existing mountpath should return not-found error, got: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 		break
 	}
 
-	oldMpaths, err := tutils.TargetMountpaths(tgtURL)
+	oldMpaths, err := api.GetMountpaths(tutils.HTTPClient, tgtURL)
 	tutils.CheckFatal(err, t)
 	if len(oldMpaths.Available) == 0 {
 		t.Fatalf("Target %s does not have availalble mountpaths", tgtURL)
@@ -403,7 +403,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	tutils.Logf("Removing all mountpaths from target: %s\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
-		err = tutils.DisableTargetMountpath(tgtURL, mpath)
+		err = api.DisableMountpath(tutils.HTTPClient, tgtURL, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
@@ -412,7 +412,7 @@ func TestFSCheckerTargetDisable(t *testing.T) {
 
 	tutils.Logf("Restoring target %s mountpaths\n", tgtURL)
 	for _, mpath := range oldMpaths.Available {
-		err = tutils.EnableTargetMountpath(tgtURL, mpath)
+		err = api.EnableMountpath(tutils.HTTPClient, tgtURL, mpath)
 		tutils.CheckFatal(err, t)
 	}
 
