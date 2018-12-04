@@ -16,12 +16,13 @@ import (
 
 func TestPutObjectNoDaemonID(t *testing.T) {
 	const (
-		bucket = TestLocalBucketName
-		object = "someObject"
+		bucket  = TestLocalBucketName
+		objName = "someObject"
 	)
 	var (
-		sid      string
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		sid          string
+		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		objDummyData = []byte("testing is so much fun")
 	)
 
 	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
@@ -31,8 +32,9 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		break
 	}
 
-	url := smap.Tmap[sid].PublicNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	if err := tutils.HTTPRequest(http.MethodPut, url, nil); err == nil {
+	url := smap.Tmap[sid].URL(cmn.NetworkPublic)
+	reader := tutils.NewBytesReader(objDummyData)
+	if err := api.PutObject(tutils.HTTPClient, url, bucket, objName, reader.XXHash(), reader); err == nil {
 		t.Errorf("Error is nil, expected Bad Request error on a PUT to target with no daemon ID query string")
 	}
 }

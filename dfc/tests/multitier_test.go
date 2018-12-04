@@ -148,9 +148,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	nextTierMock.Start()
 	defer nextTierMock.Close()
 
-	u := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
-	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
-
+	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
@@ -326,8 +324,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	u := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object)
-	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(localData))
+	api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, object, "", tutils.NewBytesReader(localData))
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForLocalBucketReached != 1 {
@@ -335,8 +332,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 			nextTierMockForLocalBucketReached)
 	}
 
-	u = proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
-	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(cloudData))
+	api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(cloudData))
 	tutils.CheckFatal(err, t)
 
 	if nextTierMockForCloudBucketReached != 1 {
@@ -385,8 +381,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	u := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
-	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
+	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
@@ -440,8 +435,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer resetBucketProps(proxyURL, clibucket, t)
 
-	u := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
-	err = tutils.HTTPRequest(http.MethodPut, u, tutils.NewBytesReader(data))
+	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, object, "", tutils.NewBytesReader(data))
 	tutils.CheckFatal(err, t)
 
 	deleteCloudObject(proxyURL, clibucket, object, t)
