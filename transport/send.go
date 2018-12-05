@@ -350,8 +350,13 @@ func (s *Stream) sendLoop(ctx context.Context, dryrun bool) {
 
 	// handle termination that is caused by anything other than Fin()
 	if *s.term.reason != endOfStream {
-		glog.Errorf("%s: terminating (%s, %v)", s, *s.term.reason, s.term.err) // FIXME: glog.V4.Info
-
+		if *s.term.reason == reasonStopped {
+			if bool(glog.V(4)) || debug {
+				glog.Infof("%s: stopped", s)
+			}
+		} else {
+			glog.Errorf("%s: terminating (%s, %v)", s, *s.term.reason, s.term.err)
+		}
 		// first, wait for the SCQ/cmplCh to empty
 		s.wg.Wait()
 

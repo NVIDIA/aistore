@@ -25,9 +25,13 @@ NewStreamBundle(
 )
 ```
 
-**NOTE**
+## A note on connection establishment and termination
 
-For each of the invidual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until the very first object gets posted for sending. The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity, only to be re-established when (and if) the traffic picks up again.
+>> For each of the invidual transport streams in a bundle, constructing a stream (`transport.Stream`) does not necessarily entail establishing TCP connection. Actual connection establishment is delayed until arrival (via `Send` or `SendV`) of the very first object.
+
+>> The underlying HTTP/TCP session will also terminate after a (configurable) period of inactivity, only to be re-established when (and if) the traffic picks up again.
+
+## API
 
 The two main API methods are `Send` and `SendV`:
 
@@ -35,7 +39,7 @@ The two main API methods are `Send` and `SendV`:
 * otherwise, use `SendV()` with the destinations specified as a comma-separated list, or
 * use `Send()` with a list of nodes on the receive side.
 
-Other provided APIs include terminating all contained streams - gracefully, via `Fin`, or instanteneously, via `Stop`, and more.
+Other provided APIs include terminating all contained streams - gracefully or instanteneously via `Close`, and more.
 
 Finally, there are two important facts to remember:
 

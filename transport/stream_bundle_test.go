@@ -100,7 +100,7 @@ func Test_Bundle(t *testing.T) {
 			prevsize = size
 		}
 	}
-	sb.Fin()
+	sb.Close(true /* gracefully */)
 	stats := sb.GetStats()
 
 	for id, tstat := range stats {

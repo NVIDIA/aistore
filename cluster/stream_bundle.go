@@ -23,6 +23,10 @@ const (
 	Proxies
 	AllNodes
 )
+const (
+	closeFin = iota
+	closeStop
+)
 
 type (
 	StreamBundle struct {
@@ -94,6 +98,18 @@ func NewStreamBundle(sowner Sowner, lsnode *Snode, cl *http.Client, network, trn
 
 	listeners.Reg(sb)
 	return
+}
+
+// Close closes all contained streams and unregisters the bundle from Smap listeners;
+// graceful=true blocks until all pending objects get completed (for "completion", see transport/README.md)
+func (sb *StreamBundle) Close(gracefully bool) {
+	if gracefully {
+		sb.apply(closeFin)
+	} else {
+		sb.apply(closeStop)
+	}
+	listeners := sb.sowner.Listeners()
+	listeners.Unreg(sb)
 }
 
 //
@@ -180,10 +196,7 @@ func (sb *StreamBundle) SmapChanged() {
 	go sb.resync()
 }
 
-func (sb *StreamBundle) Fin()  { sb.apply("fin") }
-func (sb *StreamBundle) Stop() { sb.apply("stop") }
-
-func (sb *StreamBundle) apply(action string) {
+func (sb *StreamBundle) apply(action int) {
 	streams := sb.get()
 	for _, robin := range streams {
 		for _, s := range robin.stsdest {
@@ -191,9 +204,9 @@ func (sb *StreamBundle) apply(action string) {
 				continue
 			}
 			switch action {
-			case "fin":
+			case closeFin:
 				s.Fin()
-			case "stop":
+			case closeStop:
 				s.Stop()
 			default:
 				cmn.Assert(false)
