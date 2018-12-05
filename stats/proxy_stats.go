@@ -128,7 +128,7 @@ func (r *Prunner) Init() {
 	r.Core.init(24)
 }
 
-func (r *Prunner) GetWhatStats() (b []byte, err error) {
+func (r *Prunner) GetWhatStats() ([]byte, error) {
 	tracker := make(copyTracker, 24)
 	r.Core.copyCumulative(tracker)
 	return jsoniter.Marshal(tracker)

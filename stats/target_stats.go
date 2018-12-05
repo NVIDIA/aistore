@@ -117,7 +117,7 @@ func (r *Trunner) Init() {
 	r.UpdateCapacity()
 }
 
-func (r *Trunner) GetWhatStats() (b []byte, err error) {
+func (r *Trunner) GetWhatStats() ([]byte, error) {
 	tracker := make(copyTracker, 48)
 	r.Core.copyCumulative(tracker)
 

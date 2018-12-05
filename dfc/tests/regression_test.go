@@ -552,7 +552,7 @@ func TestRebalance(t *testing.T) {
 	filesRecvOrig := make(map[string]int64)
 	bytesRecvOrig := make(map[string]int64)
 	stats := getClusterStats(t, proxyURL)
-	for k, v := range stats.Target {
+	for k, v := range stats.Target { // FIXME: stats names => API package
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
 			v.Core.Tracker["tx.size"].Value, v.Core.Tracker["tx.n"].Value,
 			v.Core.Tracker["rx.size"].Value, v.Core.Tracker["rx.n"].Value
@@ -623,7 +623,7 @@ func TestRebalance(t *testing.T) {
 	//
 	stats = getClusterStats(t, proxyURL)
 	var bsent, fsent, brecv, frecv int64
-	for k, v := range stats.Target {
+	for k, v := range stats.Target { // FIXME: stats names => API package
 		bsent += v.Core.Tracker["tx.size"].Value - bytesSentOrig[k]
 		fsent += v.Core.Tracker["tx.n"].Value - filesSentOrig[k]
 		brecv += v.Core.Tracker["rx.size"].Value - bytesRecvOrig[k]
