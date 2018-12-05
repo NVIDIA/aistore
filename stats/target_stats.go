@@ -28,7 +28,7 @@ import (
 //
 
 const (
-	PutLatency       = "put.μs"
+	// KindCounter - QPS and byte counts (always incremented, never reset)
 	GetColdCount     = "get.cold.n"
 	GetColdSize      = "get.cold.size"
 	LruEvictSize     = "lru.evict.size"
@@ -43,14 +43,16 @@ const (
 	VerChangeSize    = "vchange.size"
 	ErrCksumCount    = "err.cksum.n"
 	ErrCksumSize     = "err.cksum.size"
-	GetRedirLatency  = "get.redir.μs"
-	PutRedirLatency  = "put.redir.μs"
 	RebalGlobalCount = "reb.global.n"
 	RebalLocalCount  = "reb.local.n"
 	RebalGlobalSize  = "reb.global.size"
 	RebalLocalSize   = "reb.local.size"
 	ReplPutCount     = "replication.put.n"
-	ReplPutLatency   = "replication.put.µs"
+	// KindLatency
+	PutLatency      = "put.μs"
+	GetRedirLatency = "get.redir.μs"
+	PutRedirLatency = "put.redir.μs"
+	ReplPutLatency  = "replication.put.µs"
 )
 
 //
@@ -70,6 +72,12 @@ type (
 		timeUpdatedCapacity time.Time
 		timeCheckedLogSizes time.Time
 		fsmap               map[syscall.Fsid]string
+	}
+	copyRunner struct {
+		Tracker  copyTracker              `json:"core"`
+		Capacity map[string]*fscapacity   `json:"capacity"`
+		CPUidle  string                   `json:"cpuidle"`
+		Disk     map[string]cmn.SimpleKVs `json:"disk"`
 	}
 )
 
@@ -107,6 +115,14 @@ func (r *Trunner) Init() {
 
 	r.Disk = make(map[string]cmn.SimpleKVs, 8)
 	r.UpdateCapacity()
+}
+
+func (r *Trunner) GetWhatStats() (b []byte, err error) {
+	tracker := make(copyTracker, 48)
+	r.Core.copyCumulative(tracker)
+
+	crunner := &copyRunner{Tracker: tracker, Capacity: r.Capacity, Disk: r.Disk}
+	return jsoniter.Marshal(crunner)
 }
 
 func (r *Trunner) log() (runlru bool) {

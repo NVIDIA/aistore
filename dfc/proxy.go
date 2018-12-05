@@ -1556,7 +1556,7 @@ func (p *proxyrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		p.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getproxystatsrunner()
-		jsbytes, err := jsoniter.Marshal(rst)
+		jsbytes, err := rst.GetWhatStats()
 		cmn.Assert(err == nil, err)
 		p.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatSmap:

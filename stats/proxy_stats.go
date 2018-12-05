@@ -57,21 +57,27 @@ func (s *ProxyCoreStats) doAdd(name string, val int64) {
 	v, ok := s.Tracker[name]
 	cmn.Assert(ok, "Invalid stats name '"+name+"'")
 	if v.kind == KindLatency {
-		s.Tracker[name].numSamples++
-		nroot := strings.TrimSuffix(name, ".μs")
-		s.StatsdC.Send(nroot,
-			metric{statsd.Counter, "count", 1},
-			metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		if strings.HasSuffix(name, ".µs") {
+			nroot := strings.TrimSuffix(name, ".μs")
+			s.StatsdC.Send(nroot,
+				metric{statsd.Counter, "count", 1},
+				metric{statsd.Timer, "latency", float64(time.Duration(val) / time.Millisecond)})
+		}
+		v.Lock()
+		v.numSamples++
 		val = int64(time.Duration(val) / time.Microsecond)
+		v.cumulative += val
+		v.Value += val
+		v.Unlock()
 	} else if v.kind == KindCounter && strings.HasSuffix(name, ".n") {
 		nameLatency := strings.TrimSuffix(name, "n") + "μs"
 		if _, ok = s.Tracker[nameLatency]; !ok {
 			s.StatsdC.Send(name, metric{statsd.Counter, name, val})
 		}
+		v.Lock()
+		v.Value += val
+		v.Unlock()
 	}
-	v.Lock()
-	v.Value += val
-	v.Unlock()
 }
 
 func (s *ProxyCoreStats) copyZeroReset(tracker copyTracker) {
@@ -96,6 +102,22 @@ func (s *ProxyCoreStats) copyZeroReset(tracker copyTracker) {
 	}
 }
 
+func (s *ProxyCoreStats) copyCumulative(tracker copyTracker) {
+	for name, v := range s.Tracker {
+		v.RLock()
+		if v.kind == KindLatency {
+			tracker[name] = &copyValue{Value: v.cumulative}
+		} else if v.kind == KindCounter {
+			if v.Value != 0 {
+				tracker[name] = &copyValue{Value: v.Value}
+			}
+		} else {
+			tracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+		}
+		v.RUnlock()
+	}
+}
+
 //
 // Prunner
 //
@@ -104,6 +126,12 @@ func (r *Prunner) Run() error { return r.runcommon(r) }
 func (r *Prunner) Init() {
 	r.Core = &ProxyCoreStats{}
 	r.Core.init(24)
+}
+
+func (r *Prunner) GetWhatStats() (b []byte, err error) {
+	tracker := make(copyTracker, 24)
+	r.Core.copyCumulative(tracker)
+	return jsoniter.Marshal(tracker)
 }
 
 // statslogger interface impl

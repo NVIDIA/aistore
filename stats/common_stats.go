@@ -32,26 +32,28 @@ const (
 
 // Stats common to ProxyCoreStats and targetCoreStats
 const (
-	GetCount            = "get.n"
-	PutCount            = "put.n"
-	PostCount           = "pst.n"
-	DeleteCount         = "del.n"
-	RenameCount         = "ren.n"
-	ListCount           = "lst.n"
+	// KindCounter
+	GetCount       = "get.n"
+	PutCount       = "put.n"
+	PostCount      = "pst.n"
+	DeleteCount    = "del.n"
+	RenameCount    = "ren.n"
+	ListCount      = "lst.n"
+	ErrCount       = "err.n"
+	ErrGetCount    = "err.get.n"
+	ErrDeleteCount = "err.delete.n"
+	ErrPostCount   = "err.post.n"
+	ErrPutCount    = "err.put.n"
+	ErrHeadCount   = "err.head.n"
+	ErrListCount   = "err.list.n"
+	ErrRangeCount  = "err.range.n"
+	// KindLatency
 	GetLatency          = "get.μs"
 	ListLatency         = "lst.μs"
-	KeepAliveMinLatency = "kalive.min.μs"
-	KeepAliveMaxLatency = "kalive.max.μs"
+	KeepAliveMinLatency = "kalive.μs.min"
+	KeepAliveMaxLatency = "kalive.μs.max"
 	KeepAliveLatency    = "kalive.μs"
-	ErrCount            = "err.n"
-	ErrGetCount         = "err.get.n"
-	ErrDeleteCount      = "err.delete.n"
-	ErrPostCount        = "err.post.n"
-	ErrPutCount         = "err.put.n"
-	ErrHeadCount        = "err.head.n"
-	ErrListCount        = "err.list.n"
-	ErrRangeCount       = "err.range.n"
-	//
+	// KindSpecial
 	Uptime = "up.μs.time"
 )
 
@@ -101,6 +103,7 @@ type (
 		Value      int64 `json:"v"`
 		kind       string
 		numSamples int64
+		cumulative int64
 		isCommon   bool // optional, common to the proxy and target
 	}
 	copyValue struct {

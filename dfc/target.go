@@ -2884,7 +2884,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		t.httprunner.httpdaeget(w, r)
 	case cmn.GetWhatStats:
 		rst := getstorstatsrunner()
-		jsbytes, err := jsoniter.Marshal(rst)
+		jsbytes, err := rst.GetWhatStats()
 		cmn.Assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatXaction:
