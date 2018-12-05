@@ -893,8 +893,7 @@ func TestPrefetchList(t *testing.T) {
 	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(t, v.PublicNet.DirectURL)
-		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["pre.n"].(json.Number).Int64()
+		npf, err := getPrefetchCnt(stats)
 		if err != nil {
 			t.Fatalf("Could not decode target stats: pre.n")
 		}
@@ -923,8 +922,7 @@ func TestPrefetchList(t *testing.T) {
 	// 5. Ensure that all the prefetches occurred.
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(t, v.PublicNet.DirectURL)
-		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["pre.n"].(json.Number).Int64()
+		npf, err := getPrefetchCnt(stats)
 		if err != nil {
 			t.Fatalf("Could not decode target stats: pre.n")
 		}
@@ -933,6 +931,16 @@ func TestPrefetchList(t *testing.T) {
 	if netprefetches != n {
 		t.Errorf("Did not prefetch all files: Missing %d of %d\n", (n - netprefetches), n)
 	}
+}
+
+// FIXME: stop type-casting and use stats constants, here and elsewhere
+func getPrefetchCnt(stats map[string]interface{}) (npf int64, err error) {
+	corestats := stats["core"].(map[string]interface{})
+	if _, ok := corestats["pre.n"]; !ok {
+		return
+	}
+	npf, err = corestats["pre.n"].(json.Number).Int64()
+	return
 }
 
 func TestDeleteList(t *testing.T) {
@@ -1001,8 +1009,7 @@ func TestPrefetchRange(t *testing.T) {
 	smap := getClusterMap(t, proxyURL)
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(t, v.PublicNet.DirectURL)
-		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["pre.n"].(json.Number).Int64()
+		npf, err := getPrefetchCnt(stats)
 		if err != nil {
 			t.Fatalf("Could not decode target stats: pre.n")
 		}
@@ -1057,8 +1064,7 @@ func TestPrefetchRange(t *testing.T) {
 	// 5. Ensure that all the prefetches occurred
 	for _, v := range smap.Tmap {
 		stats := getDaemonStats(t, v.PublicNet.DirectURL)
-		corestats := stats["core"].(map[string]interface{})
-		npf, err := corestats["pre.n"].(json.Number).Int64()
+		npf, err := getPrefetchCnt(stats)
 		if err != nil {
 			t.Fatalf("Could not decode target stats: pre.n")
 		}
