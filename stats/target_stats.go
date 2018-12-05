@@ -47,12 +47,12 @@ const (
 	RebalLocalCount  = "reb.local.n"
 	RebalGlobalSize  = "reb.global.size"
 	RebalLocalSize   = "reb.local.size"
-	ReplPutCount     = "replication.put.n"
+	ReplPutCount     = "repl.n"
 	// KindLatency
 	PutLatency      = "put.μs"
 	GetRedirLatency = "get.redir.μs"
 	PutRedirLatency = "put.redir.μs"
-	ReplPutLatency  = "replication.put.µs"
+	ReplPutLatency  = "repl.µs"
 )
 
 //

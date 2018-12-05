@@ -274,10 +274,10 @@ func (pkr *proxyKeepaliveRunner) statsMinMaxLat(latencyCh chan time.Duration) {
 		}
 	}
 	if min != time.Duration(time.Hour) {
-		pkr.p.statsif.Add(stats.KeepAliveMinLatency, int64(min/time.Microsecond))
+		pkr.p.statsif.Add(stats.KeepAliveMinLatency, int64(min))
 	}
 	if max != 0 {
-		pkr.p.statsif.Add(stats.KeepAliveMaxLatency, int64(max/time.Microsecond))
+		pkr.p.statsif.Add(stats.KeepAliveMaxLatency, int64(max))
 	}
 }
 
@@ -300,7 +300,7 @@ func (pkr *proxyKeepaliveRunner) ping(to *cluster.Snode) (ok, stopped bool, delt
 	res := pkr.p.call(args)
 	delta = time.Since(t)
 	pkr.updateTimeoutForDaemon(to.DaemonID, delta)
-	pkr.p.statsif.Add(stats.KeepAliveLatency, int64(delta/time.Microsecond))
+	pkr.p.statsif.Add(stats.KeepAliveLatency, int64(delta))
 
 	if res.err == nil {
 		return true, false, delta
@@ -388,7 +388,7 @@ func (k *keepalive) register(r registerer, statsif stats.Tracker, primaryProxyID
 	now := time.Now()
 	s, err := r.register(true, timeout)
 	delta := time.Since(now)
-	statsif.Add(stats.KeepAliveLatency, int64(delta/time.Microsecond))
+	statsif.Add(stats.KeepAliveLatency, int64(delta))
 	timeout = k.updateTimeoutForDaemon(primaryProxyID, delta)
 	if err == nil {
 		return

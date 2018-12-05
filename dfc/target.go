@@ -2206,7 +2206,7 @@ func (t *targetrunner) doReplicationPut(w http.ResponseWriter, r *http.Request,
 	}
 
 	delta := time.Since(started)
-	t.statsif.AddMany(stats.NamedVal64{stats.ReplPutCount, 1}, stats.NamedVal64{stats.ReplPutLatency, int64(delta / time.Microsecond)})
+	t.statsif.AddMany(stats.NamedVal64{stats.ReplPutCount, 1}, stats.NamedVal64{stats.ReplPutLatency, int64(delta)})
 	if glog.V(4) {
 		glog.Infof("Replication PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 	}
