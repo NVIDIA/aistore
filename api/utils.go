@@ -24,8 +24,8 @@ func init() {
 	Mem2 = memsys.Init()
 }
 
-func doHTTPRequest(httpClient *http.Client, method, url string, b []byte) ([]byte, error) {
-	resp, err := doHTTPRequestGetResp(httpClient, method, url, b)
+func doHTTPRequest(httpClient *http.Client, method, url string, b []byte, query ...url.Values) ([]byte, error) {
+	resp, err := doHTTPRequestGetResp(httpClient, method, url, b, query...)
 	if err != nil {
 		return nil, err
 	}

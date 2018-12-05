@@ -782,10 +782,9 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 	if directURL == "" {
 		directURL = smap.ProxySI.PublicNet.DirectURL
 	}
-	url := directURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, toID)
 	// http://host:8081/v1/cluster/proxy/15205:8080
-	tutils.Logf("Setting primary from %s to %s: %s\n", smap.ProxySI.DaemonID, toID, url)
-	err := tutils.HTTPRequest(http.MethodPut, url, nil)
+	tutils.Logf("Setting primary from %s to %s\n", smap.ProxySI.DaemonID, toID)
+	err := api.SetPrimaryProxy(tutils.HTTPClient, directURL, toID)
 
 	smap, err = waitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
@@ -1098,7 +1097,7 @@ func primarySetToOriginal(t *testing.T) {
 	}
 	tutils.Logf("Found original primary ID: %s\n", origID)
 	if currID == origID {
-		tutils.Logf("Original %s == the current primary: nothing to do", origID)
+		tutils.Logf("Original %s == the current primary: nothing to do\n", origID)
 		return
 	}
 

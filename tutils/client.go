@@ -619,9 +619,7 @@ func UnregisterTarget(proxyURL, sid string) error {
 	if ok {
 		idsToIgnore = []string{target.DaemonID}
 	}
-
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, sid)
-	if err = HTTPRequest(http.MethodDelete, url, nil); err != nil {
+	if err = api.UnregisterTarget(HTTPClient, proxyURL, sid); err != nil {
 		return err
 	}
 
@@ -630,14 +628,12 @@ func UnregisterTarget(proxyURL, sid string) error {
 	if ok {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, idsToIgnore)
 	}
-
 	return nil
 }
 
-func RegisterTarget(sid, targetDirectURL string, smap cluster.Smap) error {
-	_, ok := smap.Tmap[sid]
-	url := targetDirectURL + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register)
-	if err := HTTPRequest(http.MethodPost, url, nil); err != nil {
+func RegisterTarget(proxyURL string, targetNode *cluster.Snode, smap cluster.Smap) error {
+	_, ok := smap.Tmap[targetNode.DaemonID]
+	if err := api.RegisterTarget(HTTPClient, proxyURL, targetNode); err != nil {
 		return err
 	}
 
@@ -646,7 +642,6 @@ func RegisterTarget(sid, targetDirectURL string, smap cluster.Smap) error {
 	if !ok {
 		return WaitMapVersionSync(time.Now().Add(registerTimeout), smap, smap.Version, []string{})
 	}
-
 	return nil
 }
 

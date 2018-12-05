@@ -538,14 +538,13 @@ func TestRebalance(t *testing.T) {
 	}
 	const filesize = 1024 * 128
 	var (
-		sid             string
-		targetDirectURL string
-		numPuts         = 40
-		filesPutCh      = make(chan string, numPuts)
-		errCh           = make(chan error, 100)
-		wg              = &sync.WaitGroup{}
-		sgl             *memsys.SGL
-		proxyURL        = getPrimaryURL(t, proxyURLRO)
+		randomTarget *cluster.Snode
+		numPuts      = 40
+		filesPutCh   = make(chan string, numPuts)
+		errCh        = make(chan error, 100)
+		wg           = &sync.WaitGroup{}
+		sgl          *memsys.SGL
+		proxyURL     = getPrimaryURL(t, proxyURLRO)
 	)
 	filesSentOrig := make(map[string]int64)
 	bytesSentOrig := make(map[string]int64)
@@ -578,14 +577,11 @@ func TestRebalance(t *testing.T) {
 	if l < 2 {
 		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", l)
 	}
-	for sid = range smap.Tmap {
-		break
-	}
-	targetDirectURL = smap.Tmap[sid].PublicNet.DirectURL
+	randomTarget = extractTargetNodes(smap)[0]
 
-	err := tutils.UnregisterTarget(proxyURL, sid)
+	err := tutils.UnregisterTarget(proxyURL, randomTarget.DaemonID)
 	tutils.CheckFatal(err, t)
-	tutils.Logf("Unregistered %s: cluster size = %d (targets)\n", sid, l-1)
+	tutils.Logf("Unregistered %s: cluster size = %d (targets)\n", randomTarget.DaemonID, l-1)
 	//
 	// step 3. put random files => (cluster - 1)
 	//
@@ -600,7 +596,7 @@ func TestRebalance(t *testing.T) {
 	//
 	// step 4. register back
 	//
-	err = tutils.RegisterTarget(sid, targetDirectURL, smap)
+	err = tutils.RegisterTarget(proxyURL, randomTarget, smap)
 	tutils.CheckFatal(err, t)
 	for i := 0; i < 25; i++ {
 		time.Sleep(time.Second)
@@ -610,10 +606,10 @@ func TestRebalance(t *testing.T) {
 		}
 	}
 	if len(smap.Tmap) != l {
-		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", sid, l)
+		t.Errorf("Re-registration timed out: target %s, original num targets %d\n", randomTarget.DaemonID, l)
 		return
 	}
-	tutils.Logf("Re-registered %s: the cluster is now back to %d targets\n", sid, l)
+	tutils.Logf("Re-registered %s: the cluster is now back to %d targets\n", randomTarget.DaemonID, l)
 	//
 	// step 5. wait for rebalance to run its course
 	//

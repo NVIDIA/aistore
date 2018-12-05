@@ -6,7 +6,6 @@
 package dfc_test
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/NVIDIA/dfcpub/api"
@@ -44,9 +43,7 @@ func TestDeleteInvalidDaemonID(t *testing.T) {
 		sid      = "abcde:abcde"
 		proxyURL = getPrimaryURL(t, proxyURLRO)
 	)
-
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, sid)
-	if err := tutils.HTTPRequest(http.MethodDelete, url, nil); err == nil {
+	if err := api.UnregisterTarget(tutils.HTTPClient, proxyURL, sid); err == nil {
 		t.Errorf("Error is nil, expected NotFound error on a delete of a non-existing target")
 	}
 }

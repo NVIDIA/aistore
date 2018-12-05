@@ -14,6 +14,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/json-iterator/go"
 )
 
 // GetClusterMap retrives a DFC's server map
@@ -45,4 +46,29 @@ func GetClusterMap(httpClient *http.Client, proxyURL string) (cluster.Smap, erro
 		return cluster.Smap{}, fmt.Errorf("Failed to unmarshal Smap, err: %v", err)
 	}
 	return smap, nil
+}
+
+// RegisterTarget API operation for DFC
+//
+// Registers an existing target to the clustermap.
+func RegisterTarget(httpClient *http.Client, proxyURL string, targetInfo *cluster.Snode) error {
+	targetJSON, err := jsoniter.Marshal(*targetInfo)
+	if err != nil {
+		return err
+	}
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Register)
+	_, err = doHTTPRequest(httpClient, http.MethodPost, url, targetJSON)
+	return err
+}
+
+func UnregisterTarget(httpClient *http.Client, proxyURL, unregisterSID string) error {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
+	_, err := doHTTPRequest(httpClient, http.MethodDelete, url, nil)
+	return err
+}
+
+func SetPrimaryProxy(httpClient *http.Client, proxyURL, newPrimaryID string) error {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, newPrimaryID)
+	_, err := doHTTPRequest(httpClient, http.MethodPut, url, nil)
+	return err
 }

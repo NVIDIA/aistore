@@ -51,7 +51,8 @@ func runMockTarget(t *testing.T, proxyURL string, mocktgt targetMocker, stopch c
 	}
 
 	<-stopch
-	unregisterMockTarget(proxyURL, mocktgt)
+	err = tutils.UnregisterTarget(proxyURL, mockDaemonID)
+	tutils.CheckFatal(err, t)
 	s.Shutdown(context.Background())
 }
 
@@ -75,17 +76,10 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Sma
 		if err != nil {
 			return err
 		}
-
 		break
 	}
-
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
 	return tutils.HTTPRequest(http.MethodPost, url, tutils.NewBytesReader(jsonDaemonInfo))
-}
-
-func unregisterMockTarget(proxyURL string, mocktgt targetMocker) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, "MOCK")
-	return tutils.HTTPRequest(http.MethodDelete, url, nil)
 }
 
 type voteRetryMockTarget struct {

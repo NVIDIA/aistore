@@ -7,8 +7,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -18,18 +16,13 @@ import (
 func GetMountpaths(httpClient *http.Client, targetURL string) (*cmn.MountpathList, error) {
 	q := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatMountpaths}}
 	url := targetURL + cmn.URLPath(cmn.Version, cmn.Daemon)
-	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, q)
+	b, err := doHTTPRequest(httpClient, http.MethodGet, url, nil, q)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read response, err: %v", err)
-	}
-	mp := &cmn.MountpathList{}
-	err = json.Unmarshal(b, mp)
-	return mp, err
+	mpl := &cmn.MountpathList{}
+	err = json.Unmarshal(b, mpl)
+	return mpl, err
 }
 
 func AddMountpath(httpClient *http.Client, targetURL, mountPath string) error {

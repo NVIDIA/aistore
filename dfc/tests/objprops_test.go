@@ -219,18 +219,10 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 		t.Skipf("Only %d targets found, need at least 2", l)
 	}
 
-	var (
-		removedSid             string
-		removedTargetDirectURL string
-	)
-	for sid, daemon := range smap.Tmap {
-		removedSid = sid
-		removedTargetDirectURL = daemon.PublicNet.DirectURL
-		break
-	}
+	removeTarget := extractTargetNodes(smap)[0]
 
-	tutils.Logf("Removing a target: %s\n", removedSid)
-	err := tutils.UnregisterTarget(proxyURL, removedSid)
+	tutils.Logf("Removing a target: %s\n", removeTarget.DaemonID)
+	err := tutils.UnregisterTarget(proxyURL, removeTarget.DaemonID)
 	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
@@ -241,13 +233,13 @@ func propsRebalance(t *testing.T, proxyURL, bucket string, objects map[string]st
 	)
 	tutils.CheckFatal(err, t)
 
-	tutils.Logf("Target %s [%s] is removed\n", removedSid, removedTargetDirectURL)
+	tutils.Logf("Target %s [%s] is removed\n", removeTarget.DaemonID, removeTarget.URL(cmn.NetworkPublic))
 
 	// rewrite objects and compare versions - they should change
 	newobjs := propsUpdateObjects(t, proxyURL, bucket, objects, msg, versionEnabled, isLocalBucket)
 
 	tutils.Logf("Reregistering target...\n")
-	err = tutils.RegisterTarget(removedSid, removedTargetDirectURL, smap)
+	err = tutils.RegisterTarget(proxyURL, removeTarget, smap)
 	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(
 		proxyURL,
