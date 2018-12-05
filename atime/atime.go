@@ -279,6 +279,42 @@ func (r *Runner) Atime(fqn string, customRespCh ...chan *Response) (responseCh c
 	return responseCh
 }
 
+// convenience method to obtain atime from the (atime) cache or the file itself,
+// and format accordingly
+func (r *Runner) FormatAtime(fqn string, respCh chan *Response, format string, useCache bool) (atimestr string, err error) {
+	var (
+		atime     time.Time
+		atimeResp *Response
+		finfo     os.FileInfo
+		ok        bool
+	)
+	if useCache {
+		if respCh != nil {
+			atimeResp = <-r.Atime(fqn, respCh)
+		} else {
+			atimeResp = <-r.Atime(fqn)
+		}
+		atime, ok = atimeResp.AccessTime, atimeResp.Ok
+	}
+	if !ok {
+		finfo, err = os.Stat(fqn)
+		if err == nil {
+			atime, mtime, _ := ios.GetAmTimes(finfo)
+			if mtime.After(atime) {
+				atime = mtime
+			}
+		}
+	}
+	if err == nil {
+		if format != "" {
+			atimestr = atime.Format(format)
+		} else {
+			atimestr = atime.Format(cmn.RFC822)
+		}
+	}
+	return
+}
+
 //
 // private methods
 //

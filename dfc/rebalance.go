@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
@@ -38,6 +39,7 @@ type (
 		xreb        *xactRebalance
 		wg          *sync.WaitGroup
 		newsmap     *smapX
+		atimeRespCh chan *atime.Response
 		objectMoved int64
 		byteMoved   int64
 		aborted     bool
@@ -58,6 +60,7 @@ type (
 //
 
 func (rcl *globalRebJogger) jog() {
+	rcl.atimeRespCh = make(chan *atime.Response, 1)
 	if err := filepath.Walk(rcl.mpathplus, rcl.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -118,7 +121,7 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	if glog.V(4) {
 		glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si, si)
 	}
-	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", ""); errstr != "" {
+	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", "", rcl.atimeRespCh); errstr != "" {
 		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
 	} else {
 		// LRU cleans up the object later

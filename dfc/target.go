@@ -34,7 +34,6 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc/util/readers"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/lru"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
@@ -2010,7 +2009,7 @@ func (ci *allfinfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus string) error {
+func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus string, lruEnabled bool) error {
 	relname := fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
@@ -2029,16 +2028,7 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		Status:   objStatus,
 	}
 	if ci.needAtime {
-		atimeResponse := <-getatimerunner().Atime(fqn, ci.atimeRespCh)
-		atime, ok := atimeResponse.AccessTime, atimeResponse.Ok
-		if !ok {
-			atime, _, _ = ios.GetAmTimes(osfi)
-		}
-		if ci.msg.GetTimeFormat == "" {
-			fileInfo.Atime = atime.Format(cmn.RFC822)
-		} else {
-			fileInfo.Atime = atime.Format(ci.msg.GetTimeFormat)
-		}
+		fileInfo.Atime, _ = getatimerunner().FormatAtime(fqn, ci.atimeRespCh, ci.msg.GetTimeFormat, lruEnabled)
 	}
 	if ci.needCtime {
 		t := osfi.ModTime()
@@ -2083,24 +2073,30 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.IsDir() {
 		return ci.processDir(fqn)
 	}
-	objStatus := cmn.ObjStatusOK
-
+	var (
+		bucket, objname string
+		lruEnabled      bool
+		objStatus       = cmn.ObjStatusOK
+	)
 	// FIXME: compare the logic vs local/global rebalance
-	if ci.needStatus {
+	if ci.needStatus || ci.needAtime {
 		parsedFQN, _, err := cluster.ResolveFQN(fqn, ci.t.bmdowner)
 		if err != nil {
 			glog.Warning(err)
 			objStatus = cmn.ObjStatusMoved
 		}
-		bucket, objname := parsedFQN.Bucket, parsedFQN.Objname
+		bucket, objname = parsedFQN.Bucket, parsedFQN.Objname
 		si, errstr := hrwTarget(bucket, objname, ci.t.smapowner.get())
 		if errstr != "" || ci.t.si.DaemonID != si.DaemonID {
 			glog.Warningf("Rebalanced object: %s/%s: %s", bucket, objname, errstr)
 			objStatus = cmn.ObjStatusMoved
 		}
+		if ci.needAtime {
+			lruEnabled = ci.t.bmdowner.get().lruEnabled(bucket)
+		}
 	}
 
-	return ci.processRegularFile(fqn, osfi, objStatus)
+	return ci.processRegularFile(fqn, osfi, objStatus, lruEnabled)
 }
 
 // After putting a new version it updates xattr attributes for the object
@@ -2337,7 +2333,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			return
 		}
 		size = finfo.Size()
-		if errstr = t.sendfile(r.Method, bucket, objname, si, size, "", ""); errstr != "" {
+		if errstr = t.sendfile(r.Method, bucket, objname, si, size, "", "", nil); errstr != "" {
 			return
 		}
 		if glog.V(4) {
@@ -2535,14 +2531,15 @@ func (t *targetrunner) renameobject(contentType, bucketFrom, objnameFrom, bucket
 	// move/migrate
 	glog.Infof("Migrating %s/%s at %s => %s/%s at %s", bucketFrom, objnameFrom, t.si, bucketTo, objnameTo, si)
 
-	errstr = t.sendfile(http.MethodPut, bucketFrom, objnameFrom, si, finfo.Size(), bucketTo, objnameTo)
+	errstr = t.sendfile(http.MethodPut, bucketFrom, objnameFrom, si, finfo.Size(), bucketTo, objnameTo, nil)
 	return
 }
 
 // Rebalancing supports versioning. If an object in DFC cache has version in
 // xattrs then the sender adds to HTTP header object version. A receiver side
 // reads version from headers and set xattrs if the version is not empty
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.Snode, size int64, newbucket, newobjname string) string {
+func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.Snode, size int64,
+	newbucket, newobjname string, atimeRespCh chan *atime.Response) string {
 	var (
 		xxHashVal string
 		errstr    string
@@ -2557,9 +2554,7 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	if newbucket == "" {
 		newbucket = bucket
 	}
-	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	url := destsi.PublicNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Objects, newbucket, newobjname)
-	url += fmt.Sprintf("?%s=%s&%s=%s", cmn.URLParamFromID, fromid, cmn.URLParamToID, toid)
+
 	bucketmd := t.bmdowner.get()
 	islocal := bucketmd.IsLocal(bucket)
 	cksumcfg := &cmn.GCO.Get().Cksum
@@ -2571,29 +2566,10 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 		return errstr
 	}
 
-	var accessTime time.Time
-	var ok bool
-	if bucketmd.lruEnabled(bucket) {
-		atimeResponse := <-getatimerunner().Atime(fqn)
-		accessTime, ok = atimeResponse.AccessTime, atimeResponse.Ok
-	}
+	// FIXME: query atime before the Open, and TODO make sure Open has no atime "side-effect", here and elsewhere
+	accessTimeStr, _ := getatimerunner().FormatAtime(fqn, atimeRespCh, "", bucketmd.lruEnabled(bucket))
 
-	// must read a file access before any operation: the next Open changes atime
-	accessTimeStr := ""
-	if ok {
-		accessTimeStr = accessTime.Format(cmn.RFC822)
-	} else {
-		fileInfo, err := os.Stat(fqn)
-		if err == nil {
-			atime, mtime, _ := ios.GetAmTimes(fileInfo)
-			if mtime.After(atime) {
-				atime = mtime
-			}
-			accessTimeStr = atime.Format(cmn.RFC822)
-		}
-	}
-
-	file, err := os.Open(fqn)
+	file, err := os.Open(fqn) // FIXME: make sure Open has no atime "side-effect", here and elsewhere
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
@@ -2618,6 +2594,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	//
 	// http request
 	//
+	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
+	url := destsi.IntraDataNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Objects, newbucket, newobjname)
+	url += fmt.Sprintf("?%s=%s&%s=%s", cmn.URLParamFromID, fromid, cmn.URLParamToID, toid)
 	request, err := http.NewRequest(method, url, file)
 	if err != nil {
 		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)

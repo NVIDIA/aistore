@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
 )
 
@@ -60,42 +60,96 @@ const (
 	mpathReplicationRequestBufferSize = 1024
 )
 
-type replRequest struct {
-	action          string
-	remoteDirectURL string
-	fqn             string
-	deleteObject    bool          // used only on send side
-	httpReq         *http.Request // used only on receive side
-	resultCh        chan error
+type (
+	replRequest struct {
+		action          string
+		remoteDirectURL string
+		fqn             string
+		deleteObject    bool          // used only on send side
+		httpReq         *http.Request // used only on receive side
+		resultCh        chan error
+	}
+	mpathReplicator struct {
+		t           *targetrunner
+		directURL   string
+		mpath       string
+		replReqCh   chan *replRequest
+		once        *sync.Once
+		stopCh      chan struct{}
+		atimeRespCh chan *atime.Response
+	}
+	replicationRunner struct {
+		cmn.Named
+		t                *targetrunner // FIXME: package out
+		replReqCh        chan *replRequest
+		mpathReqCh       chan fs.ChangeReq
+		mountpaths       *fs.MountedFS
+		mpathReplicators map[string]*mpathReplicator // mpath -> replicator
+		stopCh           chan struct{}
+	}
+)
+
+//
+// replicationRunner
+//
+
+func newReplicationRunner(t *targetrunner, mountpaths *fs.MountedFS) *replicationRunner {
+	return &replicationRunner{
+		t:                t,
+		replReqCh:        make(chan *replRequest, replicationRequestBufferSize),
+		mpathReqCh:       make(chan fs.ChangeReq), // FIXME: unbuffered
+		mountpaths:       mountpaths,
+		mpathReplicators: make(map[string]*mpathReplicator),
+		stopCh:           make(chan struct{}),
+	}
 }
 
-type mpathReplicator struct {
-	t         *targetrunner
-	directURL string
-	mpath     string
-	replReqCh chan *replRequest
-	once      *sync.Once
-	stopCh    chan struct{}
+func (rr *replicationRunner) init() {
+	availablePaths, disabledPaths := rr.mountpaths.Get()
+	for mpath := range availablePaths {
+		rr.addMpath(mpath)
+	}
+	for mpath := range disabledPaths {
+		rr.addMpath(mpath)
+	}
 }
 
-type replicationRunner struct {
-	cmn.Named
-	t                *targetrunner // FIXME: package out
-	replReqCh        chan *replRequest
-	mpathReqCh       chan fs.ChangeReq
-	mountpaths       *fs.MountedFS
-	mpathReplicators map[string]*mpathReplicator // mpath -> replicator
-	stopCh           chan struct{}
+func (rr *replicationRunner) Run() error {
+	glog.Infof("Starting %s", rr.Getname())
+	rr.init()
+
+	for {
+		select {
+		case req := <-rr.replReqCh:
+			rr.dispatchRequest(req)
+		case mpathRequest := <-rr.mpathReqCh:
+			switch mpathRequest.Action {
+			case fs.Add:
+				rr.addMpath(mpathRequest.Path)
+			case fs.Remove:
+				rr.removeMpath(mpathRequest.Path)
+			}
+		case <-rr.stopCh:
+			return nil
+		}
+	}
+}
+
+func (rr *replicationRunner) Stop(err error) {
+	rr.stopCh <- struct{}{}
+	glog.Warningf("Replication runner stopped with error: %v", err)
+	close(rr.stopCh)
 }
 
 func (rr *replicationRunner) newMpathReplicator(mpath string) *mpathReplicator {
 	return &mpathReplicator{
-		t:         rr.t,
-		directURL: rr.t.si.IntraDataNet.DirectURL,
-		mpath:     mpath,
-		replReqCh: make(chan *replRequest, mpathReplicationRequestBufferSize),
-		once:      &sync.Once{},
-		stopCh:    make(chan struct{}, 1),
+		t:           rr.t,
+		directURL:   rr.t.si.IntraDataNet.DirectURL,
+		mpath:       mpath,
+		replReqCh:   make(chan *replRequest, mpathReplicationRequestBufferSize),
+		once:        &sync.Once{},
+		stopCh:      make(chan struct{}, 1),
+		atimeRespCh: make(chan *atime.Response, 1),
 	}
 }
 
@@ -127,18 +181,86 @@ func (rr *replicationRunner) newReceiveReplRequest(srcDirectURL, fqn string, htt
 	return req
 }
 
-func newReplicationRunner(t *targetrunner, mountpaths *fs.MountedFS) *replicationRunner {
-	return &replicationRunner{
-		t:                t,
-		replReqCh:        make(chan *replRequest, replicationRequestBufferSize),
-		mpathReqCh:       make(chan fs.ChangeReq), // FIXME: unbuffered
-		mountpaths:       mountpaths,
-		mpathReplicators: make(map[string]*mpathReplicator),
-		stopCh:           make(chan struct{}),
+func (rr *replicationRunner) dispatchRequest(req *replRequest) {
+	mpathInfo, _ := rr.mountpaths.Path2MpathInfo(req.fqn)
+	if mpathInfo == nil {
+		errmsg := fmt.Sprintf("Failed to get mountpath for file %q", req.fqn)
+		glog.Error(errmsg)
+		if req.resultCh != nil {
+			req.resultCh <- errors.New(errmsg)
+		}
+		return
 	}
+	mpath := mpathInfo.Path
+
+	r, ok := rr.mpathReplicators[mpath]
+	cmn.Assert(ok, "Invalid mountpath given in replication request")
+
+	go r.once.Do(r.jog) // FIXME: (only run replicator if there is at least one replication request)
+	r.replReqCh <- req
 }
 
-func (r *mpathReplicator) Run() {
+func (rr *replicationRunner) reqSendReplica(dstDirectURL, fqn string, deleteObject bool, policy string) error {
+
+	switch policy {
+	case replicationPolicyAsync:
+		rr.replReqCh <- rr.newSendReplRequest(dstDirectURL, fqn, deleteObject, false)
+
+	case replicationPolicySync:
+		req := rr.newSendReplRequest(dstDirectURL, fqn, deleteObject, true)
+		rr.replReqCh <- req
+		return <-req.resultCh // block until replication finishes
+
+	case replicationPolicyNone:
+		return nil // do nothing
+
+	default:
+		errstr := fmt.Sprintf("Invalid replication policy: %q. Expected: %q|%q|%q",
+			policy, replicationPolicySync, replicationPolicyAsync, replicationPolicyNone)
+		return errors.New(errstr)
+	}
+
+	return nil
+}
+
+func (rr *replicationRunner) reqReceiveReplica(srcDirectURL, fqn string, r *http.Request) error {
+	req := rr.newReceiveReplRequest(srcDirectURL, fqn, r, true)
+	rr.replReqCh <- req
+	return <-req.resultCh // block until replication finishes
+}
+
+/*
+ * fs.PathRunner methods
+ */
+
+var _ fs.PathRunner = &replicationRunner{}
+
+func (rr *replicationRunner) ReqAddMountpath(mpath string)     { rr.mpathReqCh <- fs.MountpathAdd(mpath) }
+func (rr *replicationRunner) ReqRemoveMountpath(mpath string)  { rr.mpathReqCh <- fs.MountpathRem(mpath) }
+func (rr *replicationRunner) ReqEnableMountpath(mpath string)  {}
+func (rr *replicationRunner) ReqDisableMountpath(mpath string) {}
+
+func (rr *replicationRunner) addMpath(mpath string) {
+	replicator, ok := rr.mpathReplicators[mpath]
+	if ok && replicator != nil {
+		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
+		return
+	}
+	rr.mpathReplicators[mpath] = rr.newMpathReplicator(mpath)
+}
+
+func (rr *replicationRunner) removeMpath(mpath string) {
+	replicator, ok := rr.mpathReplicators[mpath]
+	cmn.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
+	replicator.Stop()
+	delete(rr.mpathReplicators, mpath)
+}
+
+//
+// mpathReplicator
+//
+
+func (r *mpathReplicator) jog() {
 	glog.Infof("Started replicator for mountpath: %s", r.mpath)
 	for {
 		select {
@@ -174,8 +296,7 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 		case replicationActReceive:
 			src, dst = req.remoteDirectURL, r.directURL
 		}
-		glog.Errorf("Error occurred during object replication: "+
-			"action: %s %s, source: %s, destination: %s, err: %v",
+		glog.Errorf("Error occurred during object replication: "+"action: %s %s, source: %s, destination: %s, err: %v",
 			req.action, req.fqn, src, dst, err)
 	}
 
@@ -236,23 +357,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	httpReq.GetBody = func() (io.ReadCloser, error) {
 		return os.Open(req.fqn)
 	}
-	var accessTime time.Time
-	okAccessTime := r.t.bucketLRUEnabled(bucket)
-	if okAccessTime {
-		// obtain the object's access time
-		atimeResponse := <-getatimerunner().Atime(req.fqn)
-		accessTime, okAccessTime = atimeResponse.AccessTime, atimeResponse.Ok
-	}
 
-	// Read from storage if it doesn't exist
-	if !okAccessTime {
-		if fileInfo, err := os.Stat(req.fqn); err == nil {
-			accessTime, _, _ = ios.GetAmTimes(fileInfo)
-			okAccessTime = true
-		} else {
-			glog.Errorf("Failed to get %q access time upon replication", req.fqn)
-		}
-	}
+	atimestr, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, "", r.t.bucketLRUEnabled(bucket))
 
 	// obtain the version of the file
 	if version, errstr := Getxattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
@@ -266,8 +372,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 	httpReq.Header.Add(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
 	httpReq.Header.Add(cmn.HeaderDFCChecksumVal, xxHashVal)
-	if okAccessTime {
-		httpReq.Header.Add(cmn.HeaderDFCObjAtime, string(accessTime.Format(cmn.RFC822)))
+	if atimestr != "" {
+		httpReq.Header.Add(cmn.HeaderDFCObjAtime, atimestr)
 	}
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
@@ -394,116 +500,4 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 	return nil
-}
-
-func (rr *replicationRunner) init() {
-	availablePaths, disabledPaths := rr.mountpaths.Get()
-	for mpath := range availablePaths {
-		rr.addMpath(mpath)
-	}
-	for mpath := range disabledPaths {
-		rr.addMpath(mpath)
-	}
-}
-
-func (rr *replicationRunner) Run() error {
-	glog.Infof("Starting %s", rr.Getname())
-	rr.init()
-
-	for {
-		select {
-		case req := <-rr.replReqCh:
-			rr.dispatchRequest(req)
-		case mpathRequest := <-rr.mpathReqCh:
-			switch mpathRequest.Action {
-			case fs.Add:
-				rr.addMpath(mpathRequest.Path)
-			case fs.Remove:
-				rr.removeMpath(mpathRequest.Path)
-			}
-		case <-rr.stopCh:
-			return nil
-		}
-	}
-}
-
-func (rr *replicationRunner) Stop(err error) {
-	rr.stopCh <- struct{}{}
-	glog.Warningf("Replication runner stopped with error: %v", err)
-	close(rr.stopCh)
-}
-
-func (rr *replicationRunner) dispatchRequest(req *replRequest) {
-	mpathInfo, _ := rr.mountpaths.Path2MpathInfo(req.fqn)
-	if mpathInfo == nil {
-		errmsg := fmt.Sprintf("Failed to get mountpath for file %q", req.fqn)
-		glog.Error(errmsg)
-		if req.resultCh != nil {
-			req.resultCh <- errors.New(errmsg)
-		}
-		return
-	}
-	mpath := mpathInfo.Path
-
-	r, ok := rr.mpathReplicators[mpath]
-	cmn.Assert(ok, "Invalid mountpath given in replication request")
-
-	go r.once.Do(r.Run) // only run replicator if there is at least one replication request
-	r.replReqCh <- req
-}
-
-func (rr *replicationRunner) reqSendReplica(dstDirectURL, fqn string, deleteObject bool, policy string) error {
-
-	switch policy {
-	case replicationPolicyAsync:
-		rr.replReqCh <- rr.newSendReplRequest(dstDirectURL, fqn, deleteObject, false)
-
-	case replicationPolicySync:
-		req := rr.newSendReplRequest(dstDirectURL, fqn, deleteObject, true)
-		rr.replReqCh <- req
-		return <-req.resultCh // block until replication finishes
-
-	case replicationPolicyNone:
-		return nil // do nothing
-
-	default:
-		errstr := fmt.Sprintf("Invalid replication policy: %q. Expected: %q|%q|%q",
-			policy, replicationPolicySync, replicationPolicyAsync, replicationPolicyNone)
-		return errors.New(errstr)
-	}
-
-	return nil
-}
-
-func (rr *replicationRunner) reqReceiveReplica(srcDirectURL, fqn string, r *http.Request) error {
-	req := rr.newReceiveReplRequest(srcDirectURL, fqn, r, true)
-	rr.replReqCh <- req
-	return <-req.resultCh // block until replication finishes
-}
-
-/*
- * fs.PathRunner methods
- */
-
-var _ fs.PathRunner = &replicationRunner{}
-
-func (rr *replicationRunner) ReqAddMountpath(mpath string)     { rr.mpathReqCh <- fs.MountpathAdd(mpath) }
-func (rr *replicationRunner) ReqRemoveMountpath(mpath string)  { rr.mpathReqCh <- fs.MountpathRem(mpath) }
-func (rr *replicationRunner) ReqEnableMountpath(mpath string)  {}
-func (rr *replicationRunner) ReqDisableMountpath(mpath string) {}
-
-func (rr *replicationRunner) addMpath(mpath string) {
-	replicator, ok := rr.mpathReplicators[mpath]
-	if ok && replicator != nil {
-		glog.Warningf("Attempted to add already existing mountpath: %s", mpath)
-		return
-	}
-	rr.mpathReplicators[mpath] = rr.newMpathReplicator(mpath)
-}
-
-func (rr *replicationRunner) removeMpath(mpath string) {
-	replicator, ok := rr.mpathReplicators[mpath]
-	cmn.Assert(ok, "Mountpath unregister handler for replication called with invalid mountpath")
-	replicator.Stop()
-	delete(rr.mpathReplicators, mpath)
 }
