@@ -554,8 +554,8 @@ func TestRebalance(t *testing.T) {
 	stats := getClusterStats(t, proxyURL)
 	for k, v := range stats.Target { // FIXME: stats names => API package
 		bytesSentOrig[k], filesSentOrig[k], bytesRecvOrig[k], filesRecvOrig[k] =
-			v.Core.Tracker["tx.size"].Value, v.Core.Tracker["tx.n"].Value,
-			v.Core.Tracker["rx.size"].Value, v.Core.Tracker["rx.n"].Value
+			getNamedTargetStats(v, "tx.size"), getNamedTargetStats(v, "tx.n"),
+			getNamedTargetStats(v, "rx.size"), getNamedTargetStats(v, "rx.n")
 	}
 
 	//
@@ -624,10 +624,10 @@ func TestRebalance(t *testing.T) {
 	stats = getClusterStats(t, proxyURL)
 	var bsent, fsent, brecv, frecv int64
 	for k, v := range stats.Target { // FIXME: stats names => API package
-		bsent += v.Core.Tracker["tx.size"].Value - bytesSentOrig[k]
-		fsent += v.Core.Tracker["tx.n"].Value - filesSentOrig[k]
-		brecv += v.Core.Tracker["rx.size"].Value - bytesRecvOrig[k]
-		frecv += v.Core.Tracker["rx.n"].Value - filesRecvOrig[k]
+		bsent += getNamedTargetStats(v, "tx.size") - bytesSentOrig[k]
+		fsent += getNamedTargetStats(v, "tx.n") - filesSentOrig[k]
+		brecv += getNamedTargetStats(v, "rx.size") - bytesRecvOrig[k]
+		frecv += getNamedTargetStats(v, "rx.n") - filesRecvOrig[k]
 	}
 
 	//
@@ -793,7 +793,7 @@ func TestLRU(t *testing.T) {
 	//
 	stats := getClusterStats(t, proxyURL)
 	for k, v := range stats.Target {
-		bytesEvictedOrig[k], filesEvictedOrig[k] = v.Core.Tracker["lru.evict.size"].Value, v.Core.Tracker["lru.evict.n"].Value
+		bytesEvictedOrig[k], filesEvictedOrig[k] = getNamedTargetStats(v, "lru.evict.size"), getNamedTargetStats(v, "lru.evict.n")
 		for _, c := range v.Capacity {
 			usedpct = cmn.Min(usedpct, int(c.Usedpct))
 		}
@@ -858,9 +858,9 @@ func TestLRU(t *testing.T) {
 	stats = getClusterStats(t, proxyURL)
 	testFsPaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
-		bytes := v.Core.Tracker["lru.evict.size"].Value - bytesEvictedOrig[k]
+		bytes := getNamedTargetStats(v, "lru.evict.size") - bytesEvictedOrig[k]
 		tutils.Logf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
-			k, v.Core.Tracker["lru.evict.n"].Value-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
+			k, getNamedTargetStats(v, "lru.evict.n")-filesEvictedOrig[k], float64(bytes)/1000/1000, bytes)
 		//
 		// TestingEnv() - cannot reliably verify space utilization by tmpfs
 		//
@@ -1431,6 +1431,14 @@ func getClusterStats(t *testing.T, proxyURL string) (stats stats.ClusterStats) {
 	}
 
 	return
+}
+
+func getNamedTargetStats(trunner *stats.Trunner, name string) int64 {
+	if v, ok := trunner.Core.Tracker[name]; !ok {
+		return 0
+	} else {
+		return v.Value
+	}
 }
 
 func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {

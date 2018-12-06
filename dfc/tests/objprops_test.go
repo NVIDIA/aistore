@@ -21,12 +21,10 @@ func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged i
 	bytesChanged = 0
 
 	for _, v := range stats.Target {
-		if _, ok := v.Core.Tracker["vchange.n"]; ok { // FIXME: stats names => API package
-			objChanged += v.Core.Tracker["vchange.n"].Value
-			bytesChanged += v.Core.Tracker["vchange.size"].Value
-		}
+		// FIXME: stats names => API package, here and elsewhere
+		objChanged += getNamedTargetStats(v, "vchange.n")
+		bytesChanged += getNamedTargetStats(v, "vchange.size")
 	}
-
 	return
 }
 
