@@ -341,7 +341,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 //
 //=======================
 func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int) {
-	var v cksumvalue
+	var v cksumValue
 	sess := createSession(ct)
 	svc := s3.New(sess)
 	obj, err := svc.GetObject(&s3.GetObjectInput{
@@ -356,7 +356,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 	// may not have dfc metadata
 	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
 		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
-			v = newcksumvalue(*htype, *hval)
+			v = newCksumValue(*htype, *hval)
 		}
 	}
 	md5, _ := strconv.Unquote(*obj.ETag)
@@ -382,7 +382,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumValue) (version string, errstr string, errcode int) {
 	var (
 		err          error
 		htype, hval  string

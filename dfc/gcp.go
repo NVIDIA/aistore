@@ -334,7 +334,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 //
 //=======================
 func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
-	var v cksumvalue
+	var v cksumValue
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
@@ -346,7 +346,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	v = newcksumvalue(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
+	v = newCksumValue(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
@@ -366,7 +366,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumvalue) (version string, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumValue) (version string, errstr string, errcode int) {
 	var (
 		htype, hval string
 		md          cmn.SimpleKVs

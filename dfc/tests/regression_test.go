@@ -298,7 +298,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	fName = <-filenameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Corrupting file xattr[%s]: %s\n", fName, fqn)
-	if errstr := dfc.Setxattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
+	if errstr := dfc.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
 	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, SmokeStr+"/"+fName)

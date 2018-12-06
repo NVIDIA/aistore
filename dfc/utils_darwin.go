@@ -12,8 +12,8 @@ import (
 	"unsafe"
 )
 
-// Getxattr returns specific attribute for specified fqn.
-func Getxattr(fqn string, attrname string) ([]byte, string) {
+// GetXattr returns specific attribute for specified fqn.
+func GetXattr(fqn string, attrname string) ([]byte, string) {
 	buf := make([]byte, maxAttrSize)
 	// Read into buffer of that size.
 	readstr, _, err := syscall.Syscall6(syscall.SYS_GETXATTR,
@@ -33,8 +33,8 @@ func Getxattr(fqn string, attrname string) ([]byte, string) {
 	return nil, ""
 }
 
-// Setxattr sets specific named attribute for specific fqn.
-func Setxattr(fqn string, attrname string, data []byte) (errstr string) {
+// SetXattr sets specific named attribute for specific fqn.
+func SetXattr(fqn string, attrname string, data []byte) (errstr string) {
 	datalen := len(data)
 	cmn.Assert(datalen < maxAttrSize)
 	_, _, err := syscall.Syscall6(syscall.SYS_SETXATTR,
@@ -50,8 +50,8 @@ func Setxattr(fqn string, attrname string, data []byte) (errstr string) {
 	return
 }
 
-// Deletexattr deletes specific named attribute for specific fqn.
-func Deletexattr(fqn string, attrname string) (errstr string) {
+// DeleteXattr deletes specific named attribute for specific fqn.
+func DeleteXattr(fqn string, attrname string) (errstr string) {
 	_, _, err := syscall.Syscall(syscall.SYS_REMOVEXATTR,
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(fqn))),
 		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),

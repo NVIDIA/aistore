@@ -52,7 +52,7 @@ type (
 		version string
 		atime   time.Time
 		size    int64
-		nhobj   cksumvalue
+		nhobj   cksumValue
 	}
 
 	// callResult contains http response
@@ -112,7 +112,7 @@ type cloudif interface {
 	headobject(ctx context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int)
 	//
 	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
-	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumvalue) (version string, errstr string, errcode int)
+	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumValue) (version string, errstr string, errcode int)
 	deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int)
 }
 

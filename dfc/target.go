@@ -49,6 +49,12 @@ const (
 	maxBytesInMem    = 256 * cmn.KiB
 )
 
+// checksum action
+const (
+	missingStore = 1 << iota
+	presentRecomp
+)
+
 type (
 	allfinfos struct {
 		t            *targetrunner
@@ -462,7 +468,7 @@ func (t *targetrunner) httpbckget(w http.ResponseWriter, r *http.Request) {
 // check whether the object exists locally. Version is checked as well if configured.
 func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	var (
-		nhobj                         cksumvalue
+		nhobj                         cksumValue
 		bucket, objname, fqn          string
 		uname, errstr, version        string
 		size, rangeOff, rangeLen      int64
@@ -601,20 +607,23 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != cmn.ChecksumNone {
-		validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
+		storedCksum, computedCksum, errstr := t.scrubChecksum(fqn, cksumcfg.Checksum, size, presentRecomp|missingStore)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 			t.rtnamemap.Unlock(uname, false)
 			return
 		}
-		if !validChecksum {
+		if storedCksum != computedCksum {
+			errstr = fmt.Sprintf("%s/%s: bad checksum [%s...] != [%s...]", bucket, objname, storedCksum[:8], computedCksum[:8])
 			if islocal {
 				if err := os.Remove(fqn); err != nil {
-					glog.Warningf("Bad checksum, failed to remove %s/%s, err: %v", bucket, objname, err)
+					glog.Warningf("%s - failed to remove, err: %v", errstr, err)
 				}
-				t.invalmsghdlr(w, r, fmt.Sprintf("Bad checksum %s/%s", bucket, objname), http.StatusInternalServerError)
+				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				t.rtnamemap.Unlock(uname, false)
 				return
+			} else {
+				glog.Errorln(errstr)
 			}
 			coldget = true
 		}
@@ -662,9 +671,9 @@ existslocally:
 
 	cksumRange := cksumcfg.Checksum != cmn.ChecksumNone && rangeLen > 0 && cksumcfg.EnableReadRangeChecksum
 	if !coldget && !cksumRange && cksumcfg.Checksum != cmn.ChecksumNone {
-		xxHashBinary, errstr := Getxattr(fqn, cmn.XattrXXHashVal)
-		if errstr == "" && xxHashBinary != nil {
-			nhobj = newcksumvalue(cksumcfg.Checksum, string(xxHashBinary))
+		cksum, errstr := getXattrCksum(fqn, cksumcfg.Checksum)
+		if errstr == "" && cksum != "" {
+			nhobj = newCksumValue(cksumcfg.Checksum, cksum)
 		}
 	}
 	if nhobj != nil && !cksumRange {
@@ -1449,7 +1458,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
-	if errstr := renctx.t.renameobject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
+	if errstr := renctx.t.renameObject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil
@@ -1502,12 +1511,12 @@ func (t *targetrunner) getFromNeighbor(bucket, objname string, r *http.Request, 
 		return
 	}
 	var (
-		nhobj   cksumvalue
+		nhobj   cksumValue
 		errstr  string
 		size    int64
 		hval    = response.Header.Get(cmn.HeaderDFCChecksumVal)
 		htype   = response.Header.Get(cmn.HeaderDFCChecksumType)
-		hdhobj  = newcksumvalue(htype, hval)
+		hdhobj  = newCksumValue(htype, hval)
 		version = response.Header.Get(cmn.HeaderDFCObjVersion)
 	)
 	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
@@ -1593,11 +1602,10 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 				coldget = vchanged
 			}
 		}
-
 		if !coldget && cksumcfg.ValidateWarmGet && cksumcfg.Checksum != cmn.ChecksumNone {
-			validChecksum, errstr := t.validateObjectChecksum(fqn, cksumcfg.Checksum, size)
+			storedCksum, computedCksum, errstr := t.scrubChecksum(fqn, cksumcfg.Checksum, size, presentRecomp)
 			if errstr == "" {
-				coldget = !validChecksum
+				coldget = (storedCksum == "" || storedCksum != computedCksum)
 			} else {
 				glog.Warningf("Failed while validating checksum. Error: [%s]", errstr)
 			}
@@ -1605,9 +1613,8 @@ func (t *targetrunner) coldget(ct context.Context, bucket, objname string, prefe
 	}
 	if !coldget && eexists == "" {
 		props = &objectProps{version: version, size: size}
-		xxHashBinary, _ := Getxattr(fqn, cmn.XattrXXHashVal)
-		if xxHashBinary != nil {
-			props.nhobj = newcksumvalue(cksumcfg.Checksum, string(xxHashBinary))
+		if cksum, errstr := getXattrCksum(fqn, cksumcfg.Checksum); errstr == "" && cksum != "" {
+			props.nhobj = newCksumValue(cksumcfg.Checksum, cksum)
 		}
 		glog.Infof("cold GET race: %s/%s, size=%d, version=%s - nothing to do", bucket, objname, size, version)
 		goto ret
@@ -1688,7 +1695,7 @@ func (t *targetrunner) lookupLocally(bucket, objname, fqn string) (coldget bool,
 		return
 	}
 	size = finfo.Size()
-	if bytes, errs := Getxattr(fqn, cmn.XattrObjVersion); errs == "" {
+	if bytes, errs := GetXattr(fqn, cmn.XattrObjVersion); errs == "" {
 		version = string(bytes)
 	}
 	return
@@ -2042,13 +2049,13 @@ func (ci *allfinfos) processRegularFile(fqn string, osfi os.FileInfo, objStatus 
 		}
 	}
 	if ci.needChkSum {
-		xxHashBinary, errstr := Getxattr(fqn, cmn.XattrXXHashVal)
-		if errstr == "" {
+		xxHashBinary, errstr := GetXattr(fqn, cmn.XattrXXHashVal)
+		if errstr == "" && xxHashBinary != nil {
 			fileInfo.Checksum = hex.EncodeToString(xxHashBinary)
 		}
 	}
 	if ci.needVersion {
-		version, errstr := Getxattr(fqn, cmn.XattrObjVersion)
+		version, errstr := GetXattr(fqn, cmn.XattrObjVersion)
 		if errstr == "" {
 			fileInfo.Version = string(version)
 		}
@@ -2107,10 +2114,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 // In both case a new checksum is saved to xattrs
 func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, objname string) (errstr string, errcode int) {
 	var (
-		file                       *os.File
-		err                        error
-		hdhobj, nhobj              cksumvalue
-		xxHashVal                  string
+		hdhobj, nhobj              cksumValue
 		htype, hval, nhtype, nhval string
 		started                    time.Time
 	)
@@ -2125,35 +2129,18 @@ func (t *targetrunner) doput(w http.ResponseWriter, r *http.Request, bucket, obj
 	if bucketProps, _, defined := t.bmdowner.get().propsAndChecksum(bucket); defined {
 		cksumcfg = &bucketProps.CksumConf
 	}
-	hdhobj = newcksumvalue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
+	hdhobj = newCksumValue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
 
 	if hdhobj != nil {
 		htype, hval = hdhobj.get()
 	}
 	// optimize out if the checksums do match
 	if hdhobj != nil && cksumcfg.Checksum != cmn.ChecksumNone && !dryRun.disk && !dryRun.network {
-		file, err = os.Open(fqn)
-		// exists - compute checksum and compare with the caller's
-		if err == nil {
-			buf, slab := gmem2.AllocFromSlab2(0)
-			if htype == cmn.ChecksumXXHash {
-				xxHashVal, errstr = cmn.ComputeXXHash(file, buf)
-			} else {
-				errstr = fmt.Sprintf("Unsupported checksum type %s", htype)
-			}
-			// not a critical error
-			if errstr != "" {
-				glog.Warningf("Warning: Bad checksum: %s: %v", fqn, errstr)
-			}
-			slab.Free(buf)
-			// not a critical error
-			if err = file.Close(); err != nil {
-				glog.Warningf("Unexpected failure to close %s once xxhash-ed, err: %v", fqn, err)
-			}
-			if errstr == "" && xxHashVal == hval {
-				glog.Infof("Existing %s/%s is valid: PUT is a no-op", bucket, objname)
-				return
-			}
+		var storedCksum string
+		storedCksum, _, errstr = t.scrubChecksum(fqn, htype, 0 /*size*/, missingStore)
+		if errstr == "" && storedCksum == hval {
+			glog.Infof("Existing %s/%s is valid: PUT is a no-op", bucket, objname)
+			return
 		}
 	}
 	if _, nhobj, _, errstr = t.receive(putfqn, objname, "", hdhobj, r.Body); errstr != "" {
@@ -2353,7 +2340,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 		}
 		putfqn = fs.CSM.GenContentFQN(fqn, fs.WorkfileType, fs.WorkfileRebalance)
 		var (
-			hdhobj = newcksumvalue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
+			hdhobj = newCksumValue(r.Header.Get(cmn.HeaderDFCChecksumType), r.Header.Get(cmn.HeaderDFCChecksumVal))
 			props  = &objectProps{version: r.Header.Get(cmn.HeaderDFCObjVersion)}
 		)
 		if timeStr := r.Header.Get(cmn.HeaderDFCObjAtime); timeStr != "" {
@@ -2445,7 +2432,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg cm
 	uname := cluster.Uname(bucket, objname)
 	t.rtnamemap.Lock(uname, true)
 
-	if errstr = t.renameobject(fs.ObjectType, bucket, objname, bucket, newobjname); errstr != "" {
+	if errstr = t.renameObject(fs.ObjectType, bucket, objname, bucket, newobjname); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
 	t.rtnamemap.Unlock(uname, true)
@@ -2492,7 +2479,7 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn
 	}
 }
 
-func (t *targetrunner) renameobject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
+func (t *targetrunner) renameObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
 	var (
 		si     *cluster.Snode
 		newfqn string
@@ -2541,9 +2528,8 @@ func (t *targetrunner) renameobject(contentType, bucketFrom, objnameFrom, bucket
 func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.Snode, size int64,
 	newbucket, newobjname string, atimeRespCh chan *atime.Response) string {
 	var (
-		xxHashVal string
-		errstr    string
-		version   []byte
+		errstr, storedCksum string
+		version             []byte
 	)
 	if size == 0 {
 		glog.Warningf("Unexpected: %s/%s size is zero", bucket, objname)
@@ -2566,31 +2552,26 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 		return errstr
 	}
 
-	// FIXME: query atime before the Open, and TODO make sure Open has no atime "side-effect", here and elsewhere
 	accessTimeStr, _ := getatimerunner().FormatAtime(fqn, atimeRespCh, "", bucketmd.lruEnabled(bucket))
 
+	if version, errstr = GetXattr(fqn, cmn.XattrObjVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, cmn.XattrObjVersion, errstr)
+	}
+
+	if cksumcfg.Checksum != cmn.ChecksumNone {
+		storedCksum, _, errstr = t.scrubChecksum(fqn, cksumcfg.Checksum, size, missingStore)
+		if errstr != "" {
+			return errstr
+		}
+	}
+
+	// TODO make sure this Open will have no atime "side-effect", here and elsewhere
 	file, err := os.Open(fqn) // FIXME: make sure Open has no atime "side-effect", here and elsewhere
 	if err != nil {
 		return fmt.Sprintf("Failed to open %q, err: %v", fqn, err)
 	}
 	defer file.Close()
 
-	if version, errstr = Getxattr(fqn, cmn.XattrObjVersion); errstr != "" {
-		glog.Errorf("Failed to read %q xattr %s, err %s", fqn, cmn.XattrObjVersion, errstr)
-	}
-
-	if cksumcfg.Checksum != cmn.ChecksumNone {
-		cmn.Assert(cksumcfg.Checksum == cmn.ChecksumXXHash, "invalid checksum type: '"+cksumcfg.Checksum+"'")
-		buf, slab := gmem2.AllocFromSlab2(size)
-		if xxHashVal, errstr = cmn.ComputeXXHash(file, buf); errstr != "" {
-			slab.Free(buf)
-			return errstr
-		}
-		slab.Free(buf)
-		if _, err = file.Seek(0, 0); err != nil {
-			return fmt.Sprintf("Unexpected fseek failure when sending %q from %s, err: %v", fqn, t.si, err)
-		}
-	}
 	//
 	// http request
 	//
@@ -2601,9 +2582,9 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	if err != nil {
 		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)
 	}
-	if xxHashVal != "" {
+	if storedCksum != "" {
 		request.Header.Set(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
-		request.Header.Set(cmn.HeaderDFCChecksumVal, xxHashVal)
+		request.Header.Set(cmn.HeaderDFCChecksumVal, storedCksum)
 	}
 	if len(version) != 0 {
 		request.Header.Set(cmn.HeaderDFCObjVersion, string(version))
@@ -3002,8 +2983,8 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 // xxhash is always preferred over md5
 //
 //==============================================================================================
-func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalue,
-	reader io.Reader) (sgl *memsys.SGL /* NIY */, nhobj cksumvalue, written int64, errstr string) {
+func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumValue,
+	reader io.Reader) (sgl *memsys.SGL /* NIY */, nhobj cksumValue, written int64, errstr string) {
 	var (
 		err                  error
 		file                 *os.File
@@ -3077,7 +3058,7 @@ func (t *targetrunner) receive(fqn string, objname, omd5 string, ohobj cksumvalu
 		hashInBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(hashInBytes, hashIn64)
 		nhval = hex.EncodeToString(hashInBytes)
-		nhobj = newcksumvalue(cmn.ChecksumXXHash, nhval)
+		nhobj = newCksumValue(cmn.ChecksumXXHash, nhval)
 		if ohobj != nil {
 			ohtype, ohval = ohobj.get()
 			cmn.Assert(ohtype == cmn.ChecksumXXHash)
@@ -3237,12 +3218,12 @@ func (t *targetrunner) finalizeobj(fqn, bucket string, objprops *objectProps) (e
 	if objprops.nhobj != nil {
 		htype, hval := objprops.nhobj.get()
 		cmn.Assert(htype == cmn.ChecksumXXHash)
-		if errstr = Setxattr(fqn, cmn.XattrXXHashVal, []byte(hval)); errstr != "" {
+		if errstr = SetXattr(fqn, cmn.XattrXXHashVal, []byte(hval)); errstr != "" {
 			return errstr
 		}
 	}
 	if objprops.version != "" {
-		errstr = Setxattr(fqn, cmn.XattrObjVersion, []byte(objprops.version))
+		errstr = SetXattr(fqn, cmn.XattrObjVersion, []byte(objprops.version))
 	}
 
 	if !objprops.atime.IsZero() && t.bucketLRUEnabled(bucket) {
@@ -3271,7 +3252,7 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 		return
 	}
 
-	if vbytes, errstr = Getxattr(fqn, cmn.XattrObjVersion); errstr != "" {
+	if vbytes, errstr = GetXattr(fqn, cmn.XattrObjVersion); errstr != "" {
 		return
 	}
 	if currValue, err := strconv.Atoi(string(vbytes)); err != nil {
@@ -3285,8 +3266,7 @@ func (t *targetrunner) increaseObjectVersion(fqn string) (newVersion string, err
 
 // fshc wakes up FSHC and makes it to run filesystem check immediately if err != nil
 func (t *targetrunner) fshc(err error, filepath string) {
-	glog.Errorf("FSHC called with error: %#v, file: %s", err, filepath)
-
+	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)
 	if !cmn.IsIOError(err) {
 		return
 	}
@@ -3598,40 +3578,48 @@ func (t *targetrunner) httpTokenDelete(w http.ResponseWriter, r *http.Request) {
 	t.authn.updateRevokedList(tokenList)
 }
 
-func (t *targetrunner) validateObjectChecksum(fqn string, checksumAlgo string, slabSize int64) (validChecksum bool, errstr string) {
-	if checksumAlgo != cmn.ChecksumXXHash {
-		errstr := fmt.Sprintf("Unsupported checksum algorithm: [%s]", checksumAlgo)
-		return false, errstr
+// Returns stored checksum (if present) and computed checksum (if requested)
+// MAY compute and store a missing (xxhash) checksum
+//
+// Checksums: brief theory of operations ========================================
+//
+// * objects are stored in the cluster with their content checksums and in accordance with their bucket configurations.
+// * xxhash is the system-default checksum.
+// * user can override the system default on a bucket level, by setting checksum=none.
+// * bucket (re)configuration can be done at any time.
+// * an object with a bad checksum cannot be retrieved (via GET) and cannot be replicated or migrated.
+// * GET and PUT operations support an option to validate checksums.
+// * validation is done against a checksum stored with an object (GET), or a checksum provided by a user (PUT).
+// * replications and migrations are always protected by checksums.
+// * when two objects in the cluster have identical checksums, they are considered to be full replicas of each other.
+// ==============================================================================
+func (t *targetrunner) scrubChecksum(fqn, algo string, size int64, action int) (storedCksum, computedCksum, errstr string) {
+	if algo != cmn.ChecksumXXHash {
+		glog.Warningf("Unsupported checksum algorithm '%s'", algo)
+		return
 	}
-
-	xxHashBinary, errstr := Getxattr(fqn, cmn.XattrXXHashVal)
-	if errstr != "" {
-		errstr = fmt.Sprintf("Unable to read checksum of object [%s], err: %s", fqn, errstr)
-		return false, errstr
-	}
-
-	if xxHashBinary == nil {
-		glog.Warningf("%s has no checksum - cannot validate", fqn)
-		return true, ""
-	}
-
-	file, err := os.Open(fqn)
+	_, err := os.Stat(fqn)
 	if err != nil {
-		errstr := fmt.Sprintf("Failed to read object %s, err: %v", fqn, err)
-		return false, errstr
+		errstr = err.Error()
+		return
 	}
-
-	buf, slab := gmem2.AllocFromSlab2(slabSize)
-	xxHashVal, errstr := cmn.ComputeXXHash(file, buf)
-	file.Close()
-	slab.Free(buf)
-
-	if errstr != "" {
-		errstr := fmt.Sprintf("Unable to compute xxHash, err: %s", errstr)
-		return false, errstr
+	if storedCksum, errstr = getXattrCksum(fqn, algo); errstr != "" {
+		t.fshc(errors.New(errstr), fqn)
+		return
 	}
-
-	return string(xxHashBinary) == xxHashVal, ""
+	if (storedCksum == "" && action&missingStore != 0) || (storedCksum != "" && action&presentRecomp != 0) {
+		if computedCksum, errstr = recomputeXXHash(fqn, size); errstr != "" {
+			return
+		}
+	}
+	if storedCksum == "" && action&missingStore != 0 {
+		if errstr = SetXattr(fqn, cmn.XattrXXHashVal, []byte(computedCksum)); errstr != "" {
+			t.fshc(errors.New(errstr), fqn)
+			return
+		}
+		storedCksum = computedCksum
+	}
+	return
 }
 
 // unregisters the target and marks it as disabled by an internal event

@@ -160,7 +160,7 @@ func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, 
 // typed checksum value
 //
 //===========================================================================
-type cksumvalue interface {
+type cksumValue interface {
 	get() (string, string)
 }
 
@@ -174,7 +174,7 @@ type cksumvalmd5 struct {
 	val string
 }
 
-func newcksumvalue(kind string, val string) cksumvalue {
+func newCksumValue(kind string, val string) cksumValue {
 	if kind == "" {
 		return nil
 	}
@@ -249,4 +249,35 @@ func validateXactionQueryable(kind string) (errstr string) {
 		return
 	}
 	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, cmn.XactionRebalance, cmn.XactionPrefetch)
+}
+
+// helper: get checksum; only xxhash is currently supported/expected
+func getXattrCksum(fqn string, algo string) (cksum, errstr string) {
+	var b []byte
+	cmn.Assert(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
+	b, errstr = GetXattr(fqn, cmn.XattrXXHashVal)
+	if errstr != "" {
+		errstr = fmt.Sprintf("Unable to get checksum xattr for %s, err: %s", fqn, errstr)
+		return
+	}
+	if b == nil {
+		glog.Warningf("%s has no stored checksum", fqn)
+		return
+	}
+	cksum = string(b)
+	return
+}
+
+// helper: a wrapper on top of cmn.ComputeXXHash
+func recomputeXXHash(fqn string, size int64) (cksum, errstr string) {
+	file, err := os.Open(fqn)
+	if err != nil {
+		errstr = fmt.Sprintf("Failed to open %s, err: %v", fqn, err)
+		return
+	}
+	buf, slab := gmem2.AllocFromSlab2(size)
+	cksum, errstr = cmn.ComputeXXHash(file, buf)
+	file.Close()
+	slab.Free(buf)
+	return
 }

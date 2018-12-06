@@ -307,7 +307,7 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 }
 
 func (r *mpathReplicator) send(req *replRequest) error {
-	var errstr string
+	var storedCksum, errstr string
 
 	parsedFQN, _, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
 	if err != nil {
@@ -320,34 +320,16 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	r.t.rtnamemap.Lock(uname, req.deleteObject)
 	defer r.t.rtnamemap.Unlock(uname, req.deleteObject)
 
-	file, err := os.Open(req.fqn)
-	if err != nil {
-		if os.IsPermission(err) {
-			errstr = fmt.Sprintf("Permission denied: access forbidden to %s", req.fqn)
-		} else {
-			errstr = fmt.Sprintf("Failed to open local file %s, error: %v", req.fqn, err)
-		}
-		r.t.fshc(err, req.fqn)
+	storedCksum, _, errstr = r.t.scrubChecksum(req.fqn, cmn.ChecksumXXHash, 0 /*size*/, missingStore)
+	if errstr != "" {
 		return errors.New(errstr)
 	}
-	defer file.Close()
 
-	xxHashBinary, errstr := Getxattr(req.fqn, cmn.XattrXXHashVal)
-	xxHashVal := ""
-	if errstr != "" {
-		buf, slab := gmem2.AllocFromSlab2(0)
-		xxHashVal, errstr = cmn.ComputeXXHash(file, buf)
-		slab.Free(buf)
-		if errstr != "" {
-			errstr = fmt.Sprintf("Failed to compute checksum on %s, error: %s", req.fqn, errstr)
-			return errors.New(errstr)
-		}
-		if _, err = file.Seek(0, os.SEEK_SET); err != nil {
-			return fmt.Errorf("Unexpected fseek failure when replicating (sending) %q, err: %v", req.fqn, err)
-		}
-	} else {
-		xxHashVal = string(xxHashBinary)
+	file, err := os.Open(req.fqn)
+	if err != nil {
+		return err
 	}
+	defer file.Close()
 
 	httpReq, err := http.NewRequest(http.MethodPut, url, file)
 	if err != nil {
@@ -361,7 +343,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	atimestr, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, "", r.t.bucketLRUEnabled(bucket))
 
 	// obtain the version of the file
-	if version, errstr := Getxattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
+	if version, errstr := GetXattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
 		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, cmn.XattrObjVersion, errstr)
 	} else if len(version) != 0 {
 		httpReq.Header.Add(cmn.HeaderDFCObjVersion, string(version))
@@ -371,7 +353,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	httpReq.Header.Add(cmn.HeaderDFCReplicationSrc, r.directURL)
 
 	httpReq.Header.Add(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
-	httpReq.Header.Add(cmn.HeaderDFCChecksumVal, xxHashVal)
+	httpReq.Header.Add(cmn.HeaderDFCChecksumVal, storedCksum)
 	if atimestr != "" {
 		httpReq.Header.Add(cmn.HeaderDFCObjAtime, atimestr)
 	}
@@ -411,11 +393,11 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
-		nhobj         cksumvalue
-		nhtype, nhval string
-		sgl           *memsys.SGL
-		errstr        string
-		accessTime    time.Time
+		nhobj                              cksumValue
+		nhtype, nhval                      string
+		sgl                                *memsys.SGL
+		storedCksum, computedCksum, errstr string
+		accessTime                         time.Time
 	)
 	httpr := req.httpReq
 	parsedFQN, _, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
@@ -429,7 +411,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 
-	hdhobj := newcksumvalue(httpr.Header.Get(cmn.HeaderDFCChecksumType), httpr.Header.Get(cmn.HeaderDFCChecksumVal))
+	hdhobj := newCksumValue(httpr.Header.Get(cmn.HeaderDFCChecksumType), httpr.Header.Get(cmn.HeaderDFCChecksumVal))
 	if hdhobj == nil {
 		errstr = fmt.Sprintf("Failed to extract checksum from replication PUT request for %s/%s", bucket, object)
 		return errors.New(errstr)
@@ -447,24 +429,10 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 		return errors.New(errstr)
 	}
 
-	// Avoid replication by checking if cheksums from header and existing file match
-	// Attempt to access the checksum Xattr if it already exists
-	if xxHashBinary, errstr := Getxattr(req.fqn, cmn.XattrXXHashVal); errstr != "" && xxHashBinary != nil && string(xxHashBinary) == hdhval {
+	storedCksum, computedCksum, errstr = r.t.scrubChecksum(req.fqn, cmn.ChecksumXXHash, 0 /*size*/, missingStore)
+	if errstr == "" && computedCksum == hdhval && computedCksum == storedCksum {
 		glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
 		return nil
-	}
-	// Compute the checksum when the Xattr does not exit
-	if file, err := os.Open(req.fqn); err == nil {
-		buf, slab := gmem2.AllocFromSlab2(0)
-		xxHashVal, errstr := cmn.ComputeXXHash(file, buf)
-		slab.Free(buf)
-		if err = file.Close(); err != nil {
-			glog.Warningf("Unexpected failure to close %s once xxhash has been computed, error: %v", req.fqn, err)
-		}
-		if errstr == "" && xxHashVal == hdhval {
-			glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
-			return nil
-		}
 	}
 
 	// TODO
