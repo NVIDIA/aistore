@@ -22,7 +22,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -512,11 +512,9 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 		if n == 0 {
 			break
 		}
-
-		url := v.PublicNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.SyncSmap)
+		url := v.URL(cmn.NetworkPublic) + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.SyncSmap)
 		err := tutils.HTTPRequest(http.MethodPut, url, tutils.NewBytesReader(jsonMap))
 		tutils.CheckFatal(err, t)
-
 		n--
 	}
 

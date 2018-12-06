@@ -152,7 +152,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = tutils.Evict(proxyURL, clibucket, object)
+	err = api.EvictObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	bucketProps := testBucketProps(t)
@@ -217,7 +217,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = tutils.Evict(proxyURL, clibucket, object)
+	err = api.EvictObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	bucketProps := testBucketProps(t)
@@ -385,7 +385,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	defer deleteCloudObject(proxyURL, clibucket, object, t)
 
-	err = tutils.Evict(proxyURL, clibucket, object)
+	err = api.EvictObject(tutils.HTTPClient, proxyURL, clibucket, object)
 	tutils.CheckFatal(err, t)
 
 	n, err := api.GetObject(tutils.HTTPClient, proxyURL, clibucket, object)

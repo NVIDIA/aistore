@@ -358,22 +358,6 @@ func ListBucket(proxyURL, bucket string, msg *cmn.GetMsg, objectCountLimit int) 
 	return reslist, nil
 }
 
-func Evict(proxyURL, bucket string, fname string) error {
-	var (
-		injson []byte
-		err    error
-	)
-	EvictMsg := cmn.ActionMsg{Action: cmn.ActEvict}
-	EvictMsg.Name = bucket + "/" + fname
-	injson, err = json.Marshal(EvictMsg)
-	if err != nil {
-		return fmt.Errorf("Failed to marshal EvictMsg, err: %v", err)
-	}
-
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, fname)
-	return HTTPRequest(http.MethodDelete, url, NewBytesReader(injson))
-}
-
 func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}) error {
 	var (
 		injson []byte
@@ -466,18 +450,6 @@ func PutAsync(wg *sync.WaitGroup, proxyURL, bucket, object string, reader Reader
 	}
 }
 
-// ReplicateObject replicates given objectName in bucketName using
-// targetrunner's replicate endpoint.
-func ReplicateObject(proxyURL, bucketName, objectName string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
-	if err != nil {
-		return err
-	}
-
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucketName, objectName)
-	return HTTPRequest(http.MethodPost, url, NewBytesReader(msg))
-}
-
 // ReplicateMultipleObjects replicates all the objects in the map bucketToObjects.
 // bucketsToObjects is a key value pairing where the keys are bucket names and the
 // corresponding value is a slice of objects.
@@ -487,7 +459,7 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 	objectsWithErrors := make(map[string]error)
 	for bucket, objectList := range bucketToObjects {
 		for _, object := range objectList {
-			if err := ReplicateObject(proxyURL, bucket, object); err != nil {
+			if err := api.ReplicateObject(HTTPClient, proxyURL, bucket, object); err != nil {
 				objectsWithErrors[filepath.Join(bucket, object)] = err
 			}
 		}

@@ -64,6 +64,19 @@ func DeleteObject(httpClient *http.Client, proxyURL, bucket, object string) erro
 	return err
 }
 
+// EvictObject API operation for DFC
+//
+// Evicts an object specified by bucket/object
+func EvictObject(httpClient *http.Client, proxyURL, bucket, object string) error {
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActEvict, Name: cmn.URLPath(bucket, object)})
+	if err != nil {
+		return err
+	}
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, msg)
+	return err
+}
+
 // GetObject API operation for DFC
 //
 // Returns the length of the object. Does not validate checksum of the object in the response.
@@ -152,16 +165,16 @@ func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object s
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
 func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, reader cmn.ReadOpenCloser) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	handle, err := reader.Open()
 	if err != nil {
 		return fmt.Errorf("Failed to open reader, err: %v", err)
 	}
 	defer handle.Close()
 
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	req, err := http.NewRequest(http.MethodPut, url, handle)
 	if err != nil {
-		return fmt.Errorf("Failed to create new http request, err: %v", err)
+		return fmt.Errorf("Failed to create new HTTP request, err: %v", err)
 	}
 
 	// The HTTP package doesn't automatically set this for files, so it has to be done manually
@@ -175,7 +188,7 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Failed to PUT, err: %v", err)
+		return fmt.Errorf("Failed to %s, err: %v", http.MethodPut, err)
 	}
 	defer resp.Body.Close()
 
@@ -194,11 +207,24 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 // Creates a cmn.ActionMsg with the new name of the object
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
 func RenameObject(httpClient *http.Client, proxyURL, bucket, oldObj, newObj string) error {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldObj)
 	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRename, Name: newObj})
 	if err != nil {
 		return err
 	}
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldObj)
+	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
+	return err
+}
+
+// ReplicateObject API operation for DFC
+//
+// ReplicateObject replicates given object in bucket using targetrunner's replicate endpoint.
+func ReplicateObject(httpClient *http.Client, proxyURL, bucket, object string) error {
+	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActReplicate})
+	if err != nil {
+		return err
+	}
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
 	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
 	return err
 }
