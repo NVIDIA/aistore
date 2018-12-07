@@ -372,8 +372,9 @@ func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg inter
 	headers := map[string]string{
 		"Content-Type": "application/json",
 	}
-
-	return HTTPRequest(method, url, NewBytesReader(injson), headers)
+	optParams := api.ParamsOptional{Headers: headers}
+	_, err = api.DoHTTPRequest(HTTPClient, method, url, injson, optParams)
+	return err
 }
 
 func PrefetchList(proxyURL, bucket string, fileslist []string, wait bool, deadline time.Duration) error {
@@ -518,68 +519,6 @@ func GetPrimaryProxy(url string) (string, error) {
 	}
 
 	return smap.ProxySI.PublicNet.DirectURL, nil
-}
-
-// HTTPRequest sends one HTTP request and checks result
-func HTTPRequest(method string, url string, msg Reader, headers ...map[string]string) error {
-	_, err := HTTPRequestWithResp(method, url, msg, headers...)
-	return err
-}
-
-// HTTPRequestWithResp sends one HTTP request, checks result and returns body of
-// response.
-func HTTPRequestWithResp(method string, url string, msg Reader, headers ...map[string]string) ([]byte, error) {
-	var (
-		req *http.Request
-		err error
-	)
-	if msg == nil {
-		req, err = http.NewRequest(method, url, msg)
-	} else {
-		handle, err := msg.Open()
-		if err != nil {
-			return nil, fmt.Errorf("Failed to open msg, err: %v", err)
-		}
-		defer handle.Close()
-
-		req, err = http.NewRequest(method, url, handle)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create request, err: %v", err)
-	}
-
-	if msg != nil {
-		req.GetBody = func() (io.ReadCloser, error) {
-			return msg.Open()
-		}
-	}
-
-	if len(headers) != 0 {
-		for key, value := range headers[0] {
-			req.Header.Set(key, value)
-		}
-	}
-	resp, err := HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to %s, err: %v", method, err)
-	}
-
-	defer func() {
-		if resp != nil {
-			resp.Body.Close()
-		}
-	}()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to read response, err: %v", err)
-		}
-
-		return nil, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
-	}
-	return ioutil.ReadAll(resp.Body)
 }
 
 // DoesLocalBucketExist queries a proxy or target to get a list of all local buckets, returns true if

@@ -16,6 +16,8 @@ import (
 	"github.com/json-iterator/go"
 )
 
+// GetClusterMap API operation for DFC
+//
 // GetClusterMap retrives a DFC's server map
 func GetClusterMap(httpClient *http.Client, proxyURL string) (cluster.Smap, error) {
 	var (
@@ -56,18 +58,24 @@ func RegisterTarget(httpClient *http.Client, proxyURL string, targetInfo *cluste
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Register)
-	_, err = doHTTPRequest(httpClient, http.MethodPost, url, targetJSON)
+	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, targetJSON)
 	return err
 }
 
+// UnregisterTarget API operation for DFC
+//
+// Unregisters an existing target to the clustermap.
 func UnregisterTarget(httpClient *http.Client, proxyURL, unregisterSID string) error {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Daemon, unregisterSID)
-	_, err := doHTTPRequest(httpClient, http.MethodDelete, url, nil)
+	_, err := DoHTTPRequest(httpClient, http.MethodDelete, url, nil)
 	return err
 }
 
+// SetPrimaryProxy API operation for DFC
+//
+// Given a daemonID, it sets that corresponding proxy as the primary proxy of the cluster
 func SetPrimaryProxy(httpClient *http.Client, proxyURL, newPrimaryID string) error {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster, cmn.Proxy, newPrimaryID)
-	_, err := doHTTPRequest(httpClient, http.MethodPut, url, nil)
+	_, err := DoHTTPRequest(httpClient, http.MethodPut, url, nil)
 	return err
 }

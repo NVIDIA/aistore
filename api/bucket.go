@@ -29,7 +29,7 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props cmn.
 		return err
 	}
 
-	_, err = doHTTPRequest(httpClient, http.MethodPut, url, b)
+	_, err = DoHTTPRequest(httpClient, http.MethodPut, url, b)
 	return err
 }
 
@@ -43,7 +43,7 @@ func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
 		return err
 	}
 
-	_, err = doHTTPRequest(httpClient, http.MethodPut, url, b)
+	_, err = DoHTTPRequest(httpClient, http.MethodPut, url, b)
 	return err
 }
 
@@ -122,7 +122,7 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 	var bucketNames cmn.BucketNames
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, "*") +
 		fmt.Sprintf("?%s=%t", cmn.URLParamLocal, localOnly)
-	b, err := doHTTPRequest(httpClient, http.MethodGet, url, nil)
+	b, err := DoHTTPRequest(httpClient, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func CreateLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
+	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
 	return err
 }
 
@@ -160,7 +160,7 @@ func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error 
 	}
 
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, b)
+	_, err = DoHTTPRequest(httpClient, http.MethodDelete, url, b)
 	return err
 }
 
@@ -173,6 +173,6 @@ func RenameLocalBucket(httpClient *http.Client, proxyURL, oldBucketName, newBuck
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, oldBucketName)
-	_, err = doHTTPRequest(httpClient, http.MethodPost, url, b)
+	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, b)
 	return err
 }

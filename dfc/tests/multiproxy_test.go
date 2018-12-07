@@ -513,7 +513,7 @@ func targetMapVersionMismatch(getNum func(int) int, t *testing.T, proxyURL strin
 			break
 		}
 		url := v.URL(cmn.NetworkPublic) + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.SyncSmap)
-		err := tutils.HTTPRequest(http.MethodPut, url, tutils.NewBytesReader(jsonMap))
+		_, err = api.DoHTTPRequest(tutils.HTTPClient, http.MethodPut, url, jsonMap)
 		tutils.CheckFatal(err, t)
 		n--
 	}
@@ -1275,7 +1275,7 @@ func networkFailurePrimary(t *testing.T) {
 	purl := oldPrimaryURL + cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Proxy, newPrimaryID) +
 		fmt.Sprintf("?%s=true&%s=%s", cmn.URLParamForce, cmn.URLParamPrimaryCandidate, url.QueryEscape(newPrimaryURL))
 
-	err = tutils.HTTPRequest(http.MethodPut, purl, nil)
+	_, err = api.DoHTTPRequest(tutils.HTTPClient, http.MethodPut, purl, nil)
 	tutils.CheckFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(

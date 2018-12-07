@@ -24,6 +24,12 @@ type GetObjectInput struct {
 	Query url.Values
 }
 
+// ReplicateObjectInput is used to hold optional parameters for PutObject when it is used for replication
+type ReplicateObjectInput struct {
+	// Used to set the request header to determine whether PUT object request is for replication in DFC
+	SourceURL string
+}
+
 // HeadObject API operation for DFC
 //
 // Returns the size and version of the object specified by bucket/object
@@ -59,7 +65,7 @@ func HeadObject(httpClient *http.Client, proxyURL, bucket, object string) (*cmn.
 // Deletes an object specified by bucket/object
 func DeleteObject(httpClient *http.Client, proxyURL, bucket, object string) error {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err := doHTTPRequest(httpClient, http.MethodDelete, url, nil)
+	_, err := DoHTTPRequest(httpClient, http.MethodDelete, url, nil)
 	return err
 }
 
@@ -72,7 +78,7 @@ func EvictObject(httpClient *http.Client, proxyURL, bucket, object string) error
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err = doHTTPRequest(httpClient, http.MethodDelete, url, msg)
+	_, err = DoHTTPRequest(httpClient, http.MethodDelete, url, msg)
 	return err
 }
 
@@ -88,14 +94,18 @@ func EvictObject(httpClient *http.Client, proxyURL, bucket, object string) error
 // Otherwise, a temporary buffer is allocated in io.CopyBuffer.
 func GetObject(httpClient *http.Client, proxyURL, bucket, object string, options ...GetObjectInput) (n int64, err error) {
 	var (
-		w = ioutil.Discard
-		q url.Values
+		w         = ioutil.Discard
+		q         url.Values
+		optParams ParamsOptional
 	)
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
+		if len(q) != 0 {
+			optParams.Query = q
+		}
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, q)
+	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, optParams)
 	if err != nil {
 		return 0, err
 	}
@@ -123,16 +133,20 @@ func GetObject(httpClient *http.Client, proxyURL, bucket, object string, options
 // Returns InvalidCksumError when the expected and actual checksum values are different.
 func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object string, options ...GetObjectInput) (int64, error) {
 	var (
-		n    int64
-		hash string
-		w    = ioutil.Discard
-		q    url.Values
+		n         int64
+		hash      string
+		w         = ioutil.Discard
+		q         url.Values
+		optParams ParamsOptional
 	)
 	if len(options) != 0 {
 		w, q = getObjectOptParams(options[0])
+		if len(q) != 0 {
+			optParams.Query = q
+		}
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, q)
+	resp, err := doHTTPRequestGetResp(httpClient, http.MethodGet, url, nil, optParams)
 	if err != nil {
 		return 0, err
 	}
@@ -163,7 +177,7 @@ func GetObjectWithValidation(httpClient *http.Client, proxyURL, bucket, object s
 // The object name is specified by the 'object' argument.
 // If the object hash passed in is not empty, the value is set
 // in the request header with the default checksum type "xxhash"
-func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, reader cmn.ReadOpenCloser) error {
+func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, reader cmn.ReadOpenCloser, replicateOpts ...ReplicateObjectInput) error {
 	handle, err := reader.Open()
 	if err != nil {
 		return fmt.Errorf("Failed to open reader, err: %v", err)
@@ -184,6 +198,9 @@ func PutObject(httpClient *http.Client, proxyURL, bucket, object, hash string, r
 	if hash != "" {
 		req.Header.Set(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
 		req.Header.Set(cmn.HeaderDFCChecksumVal, hash)
+	}
+	if len(replicateOpts) > 0 {
+		req.Header.Set(cmn.HeaderDFCReplicationSrc, replicateOpts[0].SourceURL)
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -211,7 +228,7 @@ func RenameObject(httpClient *http.Client, proxyURL, bucket, oldObj, newObj stri
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, oldObj)
-	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
+	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
 	return err
 }
 
@@ -224,6 +241,6 @@ func ReplicateObject(httpClient *http.Client, proxyURL, bucket, object string) e
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	_, err = doHTTPRequest(httpClient, http.MethodPost, url, msg)
+	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, msg)
 	return err
 }

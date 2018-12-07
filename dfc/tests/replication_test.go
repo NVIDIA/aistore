@@ -9,7 +9,6 @@ package dfc_test
 import (
 	"io"
 	"math/rand"
-	"net/http"
 	"path/filepath"
 	"testing"
 
@@ -89,22 +88,16 @@ func testReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	url := proxyURLData + cmn.URLPath(cmn.Version, cmn.Objects, TestLocalBucketName, object)
-	headers := map[string]string{
-		cmn.HeaderDFCReplicationSrc: dummySrcURL,
-	}
 	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLData)
-	err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
+	err = httpReplicationPut(t, dummySrcURL, proxyURLData, TestLocalBucketName, object, "", reader)
 
 	if err == nil {
 		t.Error("Replication PUT to local bucket without checksum didn't fail")
 	}
 
 	if isCloud {
-		url = proxyURLData + cmn.URLPath(cmn.Version, cmn.Objects, clibucket, object)
 		tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", clibucket, object, proxyURLData)
-		err = tutils.HTTPRequest(http.MethodPut, url, reader, headers)
-
+		err = httpReplicationPut(t, dummySrcURL, proxyURLData, clibucket, object, "", reader)
 		if err == nil {
 			t.Error("Replication PUT to local bucket without checksum didn't fail")
 		}
@@ -396,10 +389,6 @@ func getXXHashChecksum(t *testing.T, reader io.Reader) string {
 
 func httpReplicationPut(t *testing.T, srcURL, dstProxyURL, bucket, object, xxhash string, reader tutils.Reader) error {
 	url := dstProxyURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	headers := map[string]string{
-		cmn.HeaderDFCReplicationSrc: srcURL,
-		cmn.HeaderDFCChecksumType:   cmn.ChecksumXXHash,
-		cmn.HeaderDFCChecksumVal:    xxhash,
-	}
-	return tutils.HTTPRequest(http.MethodPut, url, reader, headers)
+	replicateParams := api.ReplicateObjectInput{SourceURL: srcURL}
+	return api.PutObject(tutils.HTTPClient, url, bucket, object, xxhash, reader, replicateParams)
 }

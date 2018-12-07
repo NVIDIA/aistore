@@ -433,7 +433,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 		msg.Action = path.Join(msg.Action, bucket)
 		p.metasyncer.sync(true, clone, &msg)
 	case cmn.ActDelete, cmn.ActEvict:
-		p.actionlistrange(w, r, &msg)
+		p.doListRange(w, r, &msg, http.MethodDelete)
 	default:
 		p.invalmsghdlr(w, r, fmt.Sprintf("Unsupported Action: %s", msg.Action))
 	}
@@ -617,7 +617,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.metasyncer.sync(false, p.bmdowner.get(), &msg)
 	case cmn.ActPrefetch:
-		p.actionlistrange(w, r, &msg)
+		p.doListRange(w, r, &msg, http.MethodPost)
 	case cmn.ActListObjects:
 		p.listBucketAndCollectStats(w, r, lbucket, msg, started)
 	default:
@@ -1346,10 +1346,9 @@ func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn
 	p.invalmsghdlr(w, r, "not supported yet") // see also: daemon.go, config.sh, and tests/replication
 }
 
-func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg) {
+func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg, method string) {
 	var (
-		err    error
-		method string
+		err error
 	)
 
 	apitems, err := p.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
@@ -1373,17 +1372,6 @@ func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, ac
 	// Send json message to all
 	jsonbytes, err := jsoniter.Marshal(actionMsg)
 	cmn.Assert(err == nil, err)
-
-	switch actionMsg.Action {
-	case cmn.ActEvict, cmn.ActDelete:
-		method = http.MethodDelete
-	case cmn.ActPrefetch:
-		method = http.MethodPost
-	default:
-		s := fmt.Sprintf("Action unavailable for List/Range Operations: %s", actionMsg.Action)
-		p.invalmsghdlr(w, r, s)
-		return
-	}
 
 	var (
 		q       = url.Values{}

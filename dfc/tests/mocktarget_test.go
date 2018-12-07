@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc"
@@ -79,7 +80,8 @@ func registerMockTarget(proxyURL string, mocktgt targetMocker, smap *cluster.Sma
 		break
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
-	return tutils.HTTPRequest(http.MethodPost, url, tutils.NewBytesReader(jsonDaemonInfo))
+	_, err = api.DoHTTPRequest(tutils.HTTPClient, http.MethodPost, url, jsonDaemonInfo)
+	return err
 }
 
 type voteRetryMockTarget struct {
