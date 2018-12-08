@@ -30,7 +30,7 @@ import (
 // API types
 //
 type (
-	Receive func(w http.ResponseWriter, hdr Header, object io.Reader)
+	Receive func(w http.ResponseWriter, hdr Header, object io.Reader, err error)
 )
 
 // internal types
@@ -183,7 +183,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if objReader != nil {
-			h.callback(w, objReader.hdr, objReader)
+			h.callback(w, objReader.hdr, objReader, nil)
 			num := atomic.AddInt64(&stats.Num, 1)
 			siz := atomic.AddInt64(&stats.Size, objReader.hdr.Dsize)
 			off := atomic.AddInt64(&stats.Offset, objReader.hdr.Dsize)
@@ -208,6 +208,7 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 				h.oldSessions.Store(sessid, time.Now())
 			}
 			if err != io.EOF {
+				h.callback(w, Header{}, nil, err)
 				cmn.InvalidHandlerDetailed(w, r, err.Error())
 			}
 			return

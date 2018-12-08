@@ -80,10 +80,11 @@ adds a transport endpoint named "myapp" to the "public" network (that must alrea
 The last argument, user-defined callback, must have the following typedef:
 
 ```go
-Receive func(w http.ResponseWriter, hdr Header, object io.Reader)
+Receive func(w http.ResponseWriter, hdr Header, object io.Reader, err error)
 ```
 
 The callback is being invoked on a per received object basis (note that a single stream may transfer multiple, potentially unlimited, number of objects).
+Callback is always invoked in case of an error.
 
 Back to the registration. On the HTTP receiving side, the call to `Register` translates as:
 

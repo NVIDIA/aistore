@@ -21,7 +21,8 @@ import (
 
 var buf1 []byte
 
-func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	cmn.Assert(err == nil)
 	written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
 	cmn.Assert(written == hdr.Dsize)
 }
@@ -117,7 +118,8 @@ func Test_CompletionCount(t *testing.T) {
 		mux                                = http.NewServeMux()
 	)
 
-	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+		cmn.Assert(err == nil)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
 		cmn.Assert(written == hdr.Dsize)
 		atomic.AddInt64(&numReceived, 1)

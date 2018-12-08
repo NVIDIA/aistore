@@ -120,7 +120,8 @@ func sendText(stream *transport.Stream, txt1, txt2 string) {
 }
 
 func Example_Mux() {
-	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+		cmn.Assert(err == nil)
 		object, err := ioutil.ReadAll(objReader)
 		if err != nil && err != io.EOF {
 			panic(err)
@@ -187,7 +188,10 @@ func Test_CancelStream(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+		if err != nil {
+			return // stream probably canceled nothing to do
+		}
 		slab := Mem2.SelectSlab2(cmn.GiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
@@ -431,7 +435,8 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 
 func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 	totalReceived := new(int64)
-	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+	return totalReceived, func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+		cmn.Assert(err == nil)
 		slab := Mem2.SelectSlab2(32 * cmn.KiB)
 		buf := slab.Alloc()
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)

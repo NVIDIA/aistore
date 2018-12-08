@@ -58,7 +58,8 @@ func Test_Bundle(t *testing.T) {
 	slab := Mem2.SelectSlab2(32 * cmn.KiB)
 	buf := slab.Alloc()
 	defer slab.Free(buf)
-	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader) {
+	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+		cmn.Assert(err == nil)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		cmn.Assert(written == hdr.Dsize)
 	}
