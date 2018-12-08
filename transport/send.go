@@ -423,10 +423,7 @@ func (s *Stream) isNextReq(ctx context.Context) (next bool) {
 			*s.term.reason = reasonStopped
 			return
 		case <-s.postCh:
-			if v := atomic.LoadInt64(&s.lifecycle); v != expired {
-				if debug {
-					cmn.Assert(v == posted)
-				}
+			if v := atomic.LoadInt64(&s.lifecycle); v == posted {
 				next = true // initiate new HTTP/TCP session
 				return
 			}
