@@ -275,8 +275,8 @@ func TestFSCheckerDetection(t *testing.T) {
 
 	// try PUT and GET with disabled FSChecker
 	tutils.Logf("*** Testing with disabled FSHC***\n")
-	setConfig("fschecker_enabled", fmt.Sprint("false"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-	defer setConfig("fschecker_enabled", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "fschecker_enabled", "false")
+	defer setClusterConfig(t, proxyURL, "fschecker_enabled", "true")
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
 	fileList := []string{}
 	for n := 0; n < 5; n++ {

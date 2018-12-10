@@ -687,15 +687,15 @@ func TestGetClusterStats(t *testing.T) {
 
 func TestConfig(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	oconfig := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	oconfig := getDaemonConfig(t, proxyURL)
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 
 	for k, v := range configRegression {
-		setConfig(k, v, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, k, v)
 	}
 
-	nconfig := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	nconfig := getDaemonConfig(t, proxyURL)
 	nlruconfig := nconfig["lru_config"].(map[string]interface{})
 	nperiodic := nconfig["periodic"].(map[string]interface{})
 
@@ -704,21 +704,19 @@ func TestConfig(t *testing.T) {
 			nperiodic["stats_time"], configRegression["stats_time"])
 	} else {
 		o := operiodic["stats_time"].(string)
-		setConfig("stats_time", o, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "stats_time", o)
 	}
 	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
 			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
 	} else {
-		o := olruconfig["dont_evict_time"].(string)
-		setConfig("dont_evict_time", o, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "dont_evict_time", olruconfig["dont_evict_time"])
 	}
 	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
 			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
 	} else {
-		o := olruconfig["capacity_upd_time"].(string)
-		setConfig("capacity_upd_time", o, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "capacity_upd_time", olruconfig["capacity_upd_time"])
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
@@ -726,8 +724,7 @@ func TestConfig(t *testing.T) {
 		t.Errorf("HighWatermark was not set properly: %.0f, should be: %d",
 			nlruconfig["highwm"], hw)
 	} else {
-		o := olruconfig["highwm"].(float64)
-		setConfig("highwm", strconv.Itoa(int(o)), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "highwm", olruconfig["highwm"])
 	}
 	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
@@ -735,8 +732,7 @@ func TestConfig(t *testing.T) {
 		t.Errorf("LowWatermark was not set properly: %.0f, should be: %d",
 			nlruconfig["lowwm"], lw)
 	} else {
-		o := olruconfig["lowwm"].(float64)
-		setConfig("lowwm", strconv.Itoa(int(o)), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "lowwm", olruconfig["lowwm"])
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)
@@ -744,8 +740,7 @@ func TestConfig(t *testing.T) {
 		t.Errorf("LRUEnabled was not set properly: %v, should be %v",
 			nlruconfig["lru_enabled"], pt)
 	} else {
-		o := olruconfig["lru_enabled"].(bool)
-		setConfig("lru_enabled", strconv.FormatBool(o), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "lru_enabled", olruconfig["lru_enabled"])
 	}
 }
 
@@ -776,7 +771,7 @@ func TestLRU(t *testing.T) {
 	bytesEvictedOrig := make(map[string]int64)
 	filesEvictedOrig := make(map[string]int64)
 	for k, di := range smap.Tmap {
-		cfg := getConfig(di.PublicNet.DirectURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+		cfg := getDaemonConfig(t, di.URL(cmn.NetworkPublic))
 		lrucfg := cfg["lru_config"].(map[string]interface{})
 		lwms[k] = lrucfg["lowwm"]
 		hwms[k] = lrucfg["highwm"]
@@ -804,7 +799,7 @@ func TestLRU(t *testing.T) {
 		t.Skip("skipping - cannot test LRU.")
 		return
 	}
-	oconfig := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	oconfig := getDaemonConfig(t, proxyURL)
 	if t.Failed() {
 		return
 	}
@@ -814,13 +809,13 @@ func TestLRU(t *testing.T) {
 	olruconfig := oconfig["lru_config"].(map[string]interface{})
 	operiodic := oconfig["periodic"].(map[string]interface{})
 	defer func() {
-		setConfig("dont_evict_time", olruconfig["dont_evict_time"].(string), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-		setConfig("capacity_upd_time", olruconfig["capacity_upd_time"].(string), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-		setConfig("highwm", fmt.Sprint(olruconfig["highwm"]), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-		setConfig("lowwm", fmt.Sprint(olruconfig["lowwm"]), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "dont_evict_time", olruconfig["dont_evict_time"])
+		setClusterConfig(t, proxyURL, "capacity_upd_time", olruconfig["capacity_upd_time"])
+		setClusterConfig(t, proxyURL, "highwm", olruconfig["highwm"])
+		setClusterConfig(t, proxyURL, "lowwm", olruconfig["lowwm"])
 		for k, di := range smap.Tmap {
-			setConfig("highwm", fmt.Sprint(hwms[k]), di.PublicNet.DirectURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
-			setConfig("lowwm", fmt.Sprint(lwms[k]), di.PublicNet.DirectURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+			setDaemonConfig(t, di.URL(cmn.NetworkPublic), "highwm", fmt.Sprint(hwms[k]))
+			setDaemonConfig(t, di.URL(cmn.NetworkPublic), "lowwm", fmt.Sprint(lwms[k]))
 		}
 	}()
 	//
@@ -832,16 +827,16 @@ func TestLRU(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
-	setConfig("dont_evict_time", dontevicttimestr, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-	setConfig("capacity_upd_time", capacityupdtimestr, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "dont_evict_time", dontevicttimestr)
+	setClusterConfig(t, proxyURL, "capacity_upd_time", capacityupdtimestr)
 	if t.Failed() {
 		return
 	}
-	setConfig("lowwm", fmt.Sprint(lowwm), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "lowwm", lowwm)
 	if t.Failed() {
 		return
 	}
-	setConfig("highwm", fmt.Sprint(highwm), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "highwm", highwm)
 	if t.Failed() {
 		return
 	}
@@ -1472,57 +1467,21 @@ func getClusterMap(t *testing.T, URL string) cluster.Smap {
 	return smap
 }
 
-func getConfig(URL string, t *testing.T) (dfcfg map[string]interface{}) {
-	q := tutils.GetWhatRawQuery(cmn.GetWhatConfig, "")
-	url := fmt.Sprintf("%s?%s", URL, q)
-	resp, err := tutils.BaseHTTPClient.Get(url)
-	if err != nil {
-		t.Fatalf("Failed to perform get, err = %v", err)
-	}
-	defer resp.Body.Close()
-
-	var b []byte
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Errorf("Failed to read response body, err = %v", err)
-		return
-	}
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		t.Errorf("HTTP request get configuration failed, status = %d, %s",
-			resp.StatusCode, string(b))
-		return
-	}
-
-	err = jsoniter.Unmarshal(b, &dfcfg)
-	if err != nil {
-		t.Errorf("Failed to unmarshal config: %v", err)
-	}
-
+func getDaemonConfig(t *testing.T, URL string) (dfcfg map[string]interface{}) {
+	var err error
+	dfcfg, err = api.GetDaemonConfig(tutils.HTTPClient, URL)
+	tutils.CheckFatal(err, t)
 	return
 }
 
-func setConfig(name, value, URL string, t *testing.T) {
-	SetConfigMsg := cmn.ActionMsg{Action: cmn.ActSetConfig,
-		Name:  name,
-		Value: value,
-	}
+func setDaemonConfig(t *testing.T, daemonURL, key string, value interface{}) {
+	err := api.SetDaemonConfig(tutils.HTTPClient, daemonURL, key, value)
+	tutils.CheckFatal(err, t)
+}
 
-	injson, err := jsoniter.Marshal(SetConfigMsg)
-	if err != nil {
-		t.Errorf("Failed to marshal SetConfig Message: %v", err)
-		return
-	}
-	req, err := http.NewRequest(http.MethodPut, URL, bytes.NewBuffer(injson))
-	if err != nil {
-		t.Errorf("Failed to create request: %v", err)
-		return
-	}
-	r, err := tutils.BaseHTTPClient.Do(req)
-	if err != nil {
-		t.Fatalf("Failed to perform request, err = %v", err)
-	}
-	defer r.Body.Close()
+func setClusterConfig(t *testing.T, proxyURL, key string, value interface{}) {
+	err := api.SetClusterConfig(tutils.HTTPClient, proxyURL, key, value)
+	tutils.CheckFatal(err, t)
 }
 
 func selectErr(errCh chan error, verb string, t *testing.T, errisfatal bool) {

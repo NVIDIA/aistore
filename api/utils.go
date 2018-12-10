@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/NVIDIA/dfcpub/memsys"
 )
@@ -88,6 +89,23 @@ func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values) {
 	}
 	if len(options.Query) != 0 {
 		q = options.Query
+	}
+	return
+}
+
+func convertToString(value interface{}) (valstr string, err error) {
+	if v, ok := value.(string); ok {
+		valstr = v
+	} else if v, ok := value.(bool); ok {
+		valstr = strconv.FormatBool(v)
+	} else if v, ok := value.(int); ok {
+		valstr = strconv.Itoa(v)
+	} else if v, ok := value.(int64); ok {
+		valstr = strconv.FormatInt(v, 64)
+	} else if v, ok := value.(float64); ok {
+		valstr = strconv.FormatFloat(v, 'f', -1, 64)
+	} else {
+		err = fmt.Errorf("Failed to assert type on config param: %v (type %T)", value, value)
 	}
 	return
 }

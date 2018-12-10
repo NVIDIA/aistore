@@ -14,7 +14,7 @@ import (
 
 func testBucketProps(t *testing.T) *cmn.BucketProps {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	globalConfig := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	globalConfig := getDaemonConfig(t, proxyURL)
 	lruConfig := globalConfig["lru_config"].(map[string]interface{})
 
 	LRUConf := cmn.LRUConf{
@@ -35,7 +35,7 @@ func TestResetBucketProps(t *testing.T) {
 	var (
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		globalProps  cmn.BucketProps
-		globalConfig = getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+		globalConfig = getDaemonConfig(t, proxyURL)
 		cksumConfig  = globalConfig["cksum_config"].(map[string]interface{})
 	)
 

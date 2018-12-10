@@ -504,7 +504,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
 
-	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	config := getDaemonConfig(t, proxyURL)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 
@@ -522,7 +522,7 @@ func Test_coldgetmd5(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	// Disable Cold Get Validation
 	if bcoldget {
-		setConfig("validate_checksum_cold_get", strconv.FormatBool(false), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "validate_checksum_cold_get", false)
 	}
 	start := time.Now()
 	getfromfilelist(t, proxyURL, bucket, errCh, fileslist, false)
@@ -535,7 +535,7 @@ func Test_coldgetmd5(t *testing.T) {
 	selectErr(errCh, "get", t, false)
 	evictobjects(t, proxyURL, fileslist)
 	// Enable Cold Get Validation
-	setConfig("validate_checksum_cold_get", strconv.FormatBool(true), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", true)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -546,7 +546,7 @@ func Test_coldgetmd5(t *testing.T) {
 	tutils.Logf("GET %d MB with MD5 validation:    %v\n", totalsize, duration)
 	selectErr(errCh, "get", t, false)
 cleanup:
-	setConfig("validate_checksum_cold_get", strconv.FormatBool(bcoldget), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", bcoldget)
 	for _, fn := range fileslist {
 		if usingFile {
 			_ = os.Remove(LocalSrcDir + "/" + fn)
@@ -899,14 +899,12 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		return nil
 	}
 
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Daemon)
-	config := getConfig(url, t)
+	config := getDaemonConfig(t, proxyURL)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
 	oldChecksum := checksumConfig["checksum"].(string)
 	if !oldWarmGet {
-		url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
-		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), url, t)
+		setClusterConfig(t, proxyURL, "validate_checksum_warm_get", true)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -943,7 +941,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
 	filepath.Walk(rootDir, fsWalkFunc)
-	setConfig("checksum", cmn.ChecksumNone, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumNone)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -959,8 +957,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
-	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "checksum", oldChecksum)
+	setClusterConfig(t, proxyURL, "validate_checksum_warm_get", oldWarmGet)
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
 		if usingFile {
@@ -1030,7 +1028,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	config := getDaemonConfig(t, proxyURL)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
 	oldChecksum := checksumConfig["checksum"].(string)
@@ -1047,7 +1045,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	}
 
 	if !oldWarmGet {
-		setConfig("validate_checksum_warm_get", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "validate_checksum_warm_get", true)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1074,7 +1072,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	// Test for none checksum algo
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
-	setConfig("checksum", cmn.ChecksumNone, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumNone)
 	if t.Failed() {
 		goto cleanup
 	}
@@ -1091,8 +1089,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 cleanup:
 	// Restore old config
 	destroyLocalBucket(t, proxyURL, bucketName)
-	setConfig("checksum", fmt.Sprint(oldChecksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-	setConfig("validate_checksum_warm_get", fmt.Sprint(oldWarmGet), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "checksum", oldChecksum)
+	setClusterConfig(t, proxyURL, "validate_checksum_warm_get", oldWarmGet)
 	close(errCh)
 	close(fileNameCh)
 }
@@ -1136,7 +1134,7 @@ func TestRangeRead(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
-	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	config := getDaemonConfig(t, proxyURL)
 	checksumConfig := config["cksum_config"].(map[string]interface{})
 	oldEnableReadRangeChecksum := checksumConfig["enable_read_range_checksum"].(bool)
 
@@ -1144,7 +1142,7 @@ func TestRangeRead(t *testing.T) {
 	tutils.Logln("Testing valid cases.")
 	// Validate entire object checksum is being returned
 	if oldEnableReadRangeChecksum {
-		setConfig("enable_read_range_checksum", fmt.Sprint(false), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "enable_read_range_checksum", false)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1153,7 +1151,7 @@ func TestRangeRead(t *testing.T) {
 
 	// Validate only range checksum is being returned
 	if !oldEnableReadRangeChecksum {
-		setConfig("enable_read_range_checksum", fmt.Sprint(true), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "enable_read_range_checksum", true)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1179,7 +1177,7 @@ cleanup:
 	go tutils.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
-	setConfig("enable_read_range_checksum", fmt.Sprint(oldEnableReadRangeChecksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "enable_read_range_checksum", oldEnableReadRangeChecksum)
 	close(errCh)
 	close(fileNameCh)
 
@@ -1310,8 +1308,7 @@ func Test_checksum(t *testing.T) {
 	}
 
 	// Get Current Config
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Daemon)
-	config := getConfig(url, t)
+	config := getDaemonConfig(t, proxyURL)
 	cksumconfig := config["cksum_config"].(map[string]interface{})
 	ocoldget := cksumconfig["validate_checksum_cold_get"].(bool)
 	ochksum := cksumconfig["checksum"].(string)
@@ -1333,14 +1330,14 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	// Disable checkum
 	if ochksum != cmn.ChecksumNone {
-		setConfig("checksum", cmn.ChecksumNone, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumNone)
 	}
 	if t.Failed() {
 		goto cleanup
 	}
 	// Disable Cold Get Validation
 	if ocoldget {
-		setConfig("validate_checksum_cold_get", fmt.Sprint("false"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "validate_checksum_cold_get", false)
 	}
 	if t.Failed() {
 		goto cleanup
@@ -1357,18 +1354,18 @@ func Test_checksum(t *testing.T) {
 	evictobjects(t, proxyURL, fileslist)
 	switch clichecksum {
 	case "all":
-		setConfig("checksum", cmn.ChecksumXXHash, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumXXHash)
+		setClusterConfig(t, proxyURL, "validate_checksum_cold_get", true)
 		if t.Failed() {
 			goto cleanup
 		}
 	case cmn.ChecksumXXHash:
-		setConfig("checksum", cmn.ChecksumXXHash, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumXXHash)
 		if t.Failed() {
 			goto cleanup
 		}
 	case ColdMD5str:
-		setConfig("validate_checksum_cold_get", fmt.Sprint("true"), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "validate_checksum_cold_get", true)
 		if t.Failed() {
 			goto cleanup
 		}
@@ -1391,8 +1388,8 @@ cleanup:
 	selectErr(errCh, "delete", t, false)
 	close(errCh)
 	// restore old config
-	setConfig("checksum", fmt.Sprint(ochksum), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
-	setConfig("validate_checksum_cold_get", fmt.Sprint(ocoldget), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+	setClusterConfig(t, proxyURL, "checksum", ochksum)
+	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", ocoldget)
 
 	if created {
 		destroyLocalBucket(t, proxyURL, bucket)

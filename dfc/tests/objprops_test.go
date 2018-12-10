@@ -5,7 +5,6 @@
 package dfc_test
 
 import (
-	"fmt"
 	"sync"
 	"testing"
 
@@ -409,25 +408,25 @@ func propsMainTest(t *testing.T, versioning string) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	chkVersion := true
 
-	config := getConfig(proxyURL+cmn.URLPath(cmn.Version, cmn.Daemon), t)
+	config := getDaemonConfig(t, proxyURL)
 	versionCfg := config["version_config"].(map[string]interface{})
 	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
 	oldVersioning := versionCfg["versioning"].(string)
 	if oldChkVersion != chkVersion {
-		setConfig("validate_version_warm_get", fmt.Sprintf("%v", chkVersion), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "validate_version_warm_get", chkVersion)
 	}
 	if oldVersioning != versioning {
-		setConfig("versioning", versioning, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+		setClusterConfig(t, proxyURL, "versioning", versioning)
 	}
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
 
 	defer func() {
 		// restore configuration
 		if oldChkVersion != chkVersion {
-			setConfig("validate_version_warm_get", fmt.Sprintf("%v", oldChkVersion), proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+			setClusterConfig(t, proxyURL, "validate_version_warm_get", oldChkVersion)
 		}
 		if oldVersioning != versioning {
-			setConfig("versioning", oldVersioning, proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), t)
+			setClusterConfig(t, proxyURL, "versioning", oldVersioning)
 		}
 		if created {
 			destroyLocalBucket(t, proxyURL, clibucket)

@@ -79,3 +79,27 @@ func SetPrimaryProxy(httpClient *http.Client, proxyURL, newPrimaryID string) err
 	_, err := DoHTTPRequest(httpClient, http.MethodPut, url, nil)
 	return err
 }
+
+// SetClusterConfig API operation for DFC
+//
+// Given a key and a value for a specific configuration parameter
+// this operation sets the cluster-wide configuration accordingly.
+// Setting cluster-wide configuration requires sending the request to a proxy
+func SetClusterConfig(httpClient *http.Client, proxyURL, key string, value interface{}) error {
+	valstr, err := convertToString(value)
+	if err != nil {
+		return err
+	}
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Cluster)
+	configMsg := cmn.ActionMsg{
+		Action: cmn.ActSetConfig,
+		Name:   key,
+		Value:  valstr,
+	}
+	msg, err := jsoniter.Marshal(configMsg)
+	if err != nil {
+		return err
+	}
+	_, err = DoHTTPRequest(httpClient, http.MethodPut, url, msg)
+	return err
+}
