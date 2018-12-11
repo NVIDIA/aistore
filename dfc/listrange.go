@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -15,9 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
@@ -184,27 +181,24 @@ func (xact *xactEvictDelete) tostring() string {
 
 func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket string) {
 	var (
-		errstr, version   string
+		errstr            string
 		vchanged, coldget bool
-		props             *objectProps
+		xmd               = &objectXprops{t: t, bucket: bucket, objname: objname}
+		versioncfg        = &cmn.GCO.Get().Ver
 	)
-	versioncfg := &cmn.GCO.Get().Ver
-	islocal := t.bmdowner.get().IsLocal(bucket)
-	fqn, errstr := cluster.FQN(fs.ObjectType, bucket, objname, islocal)
-	if errstr != "" {
+	if errstr = xmd.fill(xmdFstat | xmdVersion | xmdCksum); errstr != "" {
 		glog.Error(errstr)
 		return
 	}
-	//
-	// NOTE: lockless
-	//
-	coldget, _, version, errstr = t.lookupLocally(bucket, objname, fqn)
-	if (errstr != "" && !coldget) || (errstr != "" && coldget && islocal) {
-		glog.Errorln(errstr)
+	if xmd.bislocal { // must not come here
+		if xmd.doesnotexist {
+			glog.Errorf("prefetch: local %s/%s (%s) %s", bucket, objname, xmd.fqn, cmn.DoesNotExist)
+		}
 		return
 	}
-	if !coldget && !islocal && versioncfg.ValidateWarmGet && version != "" && t.versioningConfigured(bucket) {
-		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, version); errstr != "" {
+	coldget = xmd.doesnotexist
+	if xmd.exists() && versioncfg.ValidateWarmGet && xmd.version != "" && versioningConfigured(false) {
+		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, xmd.version); errstr != "" {
 			return
 		}
 		coldget = vchanged
@@ -212,19 +206,19 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	if !coldget {
 		return
 	}
-	if props, errstr, _ = t.coldget(ct, bucket, objname, true); errstr != "" {
+	if errstr, _ = t.getCold(ct, xmd, true); errstr != "" {
 		if errstr != "skip" {
 			glog.Errorln(errstr)
 		}
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("PREFETCH: %s/%s", bucket, objname)
+		glog.Infof("prefetch: %s/%s", bucket, objname)
 	}
 	t.statsif.Add(stats.PrefetchCount, 1)
-	t.statsif.Add(stats.PrefetchSize, props.size)
+	t.statsif.Add(stats.PrefetchSize, xmd.size)
 	if vchanged {
-		t.statsif.Add(stats.VerChangeSize, props.size)
+		t.statsif.Add(stats.VerChangeSize, xmd.size)
 		t.statsif.Add(stats.VerChangeCount, 1)
 	}
 }

@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -14,41 +13,36 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 )
 
-func (t *targetrunner) objectInNextTier(nextTierURL, bucket, object string) (in bool, errstr string, errcode int) {
-	url := nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object) + fmt.Sprintf("?%s=true", cmn.URLParamCheckCached)
+func (t *targetrunner) objectInNextTier(nextTierURL, bucket, objname string) (in bool, errstr string, errcode int) {
+	url := nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname)
+	url += fmt.Sprintf("?%s=true", cmn.URLParamCheckCached)
 
 	resp, err := t.httprunner.httpclientLongTimeout.Head(url)
 	if err != nil {
 		errstr = err.Error()
 		return
 	}
-
 	if resp.StatusCode >= http.StatusBadRequest {
 		if resp.StatusCode == http.StatusNotFound {
 			resp.Body.Close()
 			return
 		}
 		errcode = resp.StatusCode
-		b, err := ioutil.ReadAll(resp.Body)
+		_, err := ioutil.ReadAll(resp.Body)
+		errstr = fmt.Sprintf("Failed to get %s/%s from %s tier, status %d", bucket, objname, nextTierURL, resp.StatusCode)
 		if err != nil {
-			errstr = fmt.Sprintf("failed to read response body, err: %s", err)
-		} else {
-			errstr = fmt.Sprintf(
-				"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, next tier URL: %s",
-				resp.StatusCode, string(b), bucket, object, nextTierURL)
+			errstr += fmt.Sprintf(" (Failed to read response, err: %v)", err)
 		}
-
 		resp.Body.Close()
 		return
 	}
-
 	in = true
 	resp.Body.Close()
 	return
 }
 
-func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, object, fqn string) (p *objectProps, errstr string, errcode int) {
-	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn string) (props *objectXprops, errstr string, errcode int) {
+	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname)
 
 	resp, err := t.httprunner.httpclientLongTimeout.Get(url)
 	if err != nil {
@@ -66,14 +60,18 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, object, fqn string
 		}
 		errstr = fmt.Sprintf(
 			"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, next tier URL: %s",
-			resp.StatusCode, string(b), bucket, object, nextTierURL,
+			resp.StatusCode, string(b), bucket, objname, nextTierURL,
 		)
 		resp.Body.Close()
 		return
 	}
 
-	p = &objectProps{}
-	_, p.nhobj, p.size, errstr = t.receive(fqn, object, "", nil, resp.Body)
+	props = &objectXprops{t: t, bucket: bucket, objname: objname}
+	if errstr = props.fill(0); errstr != "" {
+		resp.Body.Close()
+		return
+	}
+	_, props.nhobj, props.size, errstr = t.receive(fqn, props, "", resp.Body)
 	resp.Body.Close()
 	return
 }

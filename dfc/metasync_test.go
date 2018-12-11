@@ -137,25 +137,25 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
-	bucketmd.add("bucket1", true, cmn.BucketProps{
+	bucketmd.add("bucket1", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://foo.com",
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, cmn.BucketProps{
+	bucketmd.add("bucket2", true, &cmn.BucketProps{
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket3", false, cmn.BucketProps{
+	bucketmd.add("bucket3", false, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket4", false, cmn.BucketProps{
+	bucketmd.add("bucket4", false, &cmn.BucketProps{
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
@@ -560,13 +560,13 @@ func TestMetaSyncData(t *testing.T) {
 	match(t, expRetry, ch, 1)
 
 	// sync bucketmd, fail target and retry
-	bucketmd.add("bucket1", true, cmn.BucketProps{
+	bucketmd.add("bucket1", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
-	bucketmd.add("bucket2", true, cmn.BucketProps{
+	bucketmd.add("bucket2", true, &cmn.BucketProps{
 		CloudProvider: cmn.ProviderDFC,
 		NextTierURL:   "http://localhost:8082",
 		CksumConf: cmn.CksumConf{
@@ -590,7 +590,7 @@ func TestMetaSyncData(t *testing.T) {
 	// sync bucketmd, fail proxy, sync new bucketmd, expect proxy to receive the new bucketmd
 	// after rejecting a few sync requests
 	bucketmd = bucketmd.clone()
-	bprops := cmn.BucketProps{
+	bprops := &cmn.BucketProps{
 		CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 		LRUConf:   cmn.GCO.Get().LRU,
 	}

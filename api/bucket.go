@@ -1,8 +1,7 @@
+// Package api provides RESTful API to DFC object storage
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
 package api
 
 import (
@@ -110,8 +109,8 @@ func HeadBucket(httpClient *http.Client, proxyURL, bucket string) (*cmn.BucketPr
 		NextTierURL:   r.Header.Get(cmn.HeaderNextTierURL),
 		ReadPolicy:    r.Header.Get(cmn.HeaderReadPolicy),
 		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
-		CksumConf:   cksumconf,
-		LRUConf:     lruprops,
+		CksumConf:     cksumconf,
+		LRUConf:       lruprops,
 	}, nil
 }
 

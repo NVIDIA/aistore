@@ -1,3 +1,4 @@
+// Package cluster provides common interfaces and local access to cluster-level metadata
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -34,7 +35,7 @@ func ResolveFQN(fqn string, bowner Bowner) (parsedFQN fs.FQNparsed, newfqn strin
 		return
 	}
 	if newfqn != fqn {
-		errstr = fmt.Sprintf("%s (%s/%s) appears to be misplaced: newfqn %s", fqn, parsedFQN.Bucket, parsedFQN.Objname, newfqn)
+		errstr = fmt.Sprintf("%s (%s/%s) appears to be locally misplaced: newfqn %s", fqn, parsedFQN.Bucket, parsedFQN.Objname, newfqn)
 		err = &ErrFqnMisplaced{errstr}
 		return
 	}

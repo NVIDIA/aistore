@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -569,7 +568,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 			LRUConf:   cmn.GCO.Get().LRU,
 		}
-		if !clone.add(lbucket, true, bprops) {
+		if !clone.add(lbucket, true, &bprops) {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
 			return
@@ -595,13 +594,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		clone := p.bmdowner.get().clone()
-		ok, props := clone.get(bucketFrom, true)
+		props, ok := clone.get(bucketFrom, true)
 		if !ok {
 			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucketFrom)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		ok, _ = clone.get(bucketTo, true)
+		_, ok = clone.get(bucketTo, true)
 		if ok {
 			s := fmt.Sprintf("Local bucket %s already exists", bucketTo)
 			p.invalmsghdlr(w, r, s)
@@ -721,10 +720,10 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	clone := p.bmdowner.get().clone()
 	isLocal := clone.IsLocal(bucket)
 
-	exists, oldProps := clone.get(bucket, isLocal)
+	oldProps, exists := clone.get(bucket, isLocal)
 	if !exists {
 		cmn.Assert(!isLocal)
-		oldProps = cmn.BucketProps{
+		oldProps = &cmn.BucketProps{
 			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 			LRUConf:   cmn.GCO.Get().LRU,
 		}
@@ -738,9 +737,9 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		p.copyBucketProps(&oldProps, props, bucket)
+		p.copyBucketProps(oldProps, props, bucket)
 	case cmn.ActResetProps:
-		oldProps = cmn.BucketProps{
+		oldProps = &cmn.BucketProps{
 			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 			LRUConf:   cmn.GCO.Get().LRU,
 		}
@@ -841,7 +840,7 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 	rproxy.ServeHTTP(w, r)
 }
 
-func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props cmn.BucketProps,
+func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
 	msg *cmn.ActionMsg) bool {
 	smap4bcast := p.smapowner.get()
 
@@ -1345,29 +1344,6 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 
 func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
 	p.invalmsghdlr(w, r, "not supported yet") // see also: daemon.go, config.sh, and tests/replication
-	return
-
-	started := time.Now()
-	apitems, err := p.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
-	if err != nil {
-		return
-	}
-	bucket, object := apitems[0], apitems[1]
-	smap := p.smapowner.get()
-	si, errstr := hrwTarget(bucket, object, smap)
-	if errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return
-	}
-	if glog.V(3) {
-		glog.Infof("REPLICATE %s %s/%s", r.Method, bucket, object)
-	}
-
-	// NOTE:
-	//       code 307 is the only way to http-redirect with the
-	//       original JSON payload (GetMsg - see pkg/api/constant.go)
-	redirectURL := p.redirectURL(r, si.PublicNet.DirectURL, started, bucket)
-	http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 }
 
 func (p *proxyrunner) actionlistrange(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg) {
@@ -1979,17 +1955,17 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	switch getWhat {
 	case cmn.GetWhatStats:
-		ok := p.invokeHttpGetClusterStats(w, r)
+		ok := p.invokeHTTPGetClusterStats(w, r)
 		if !ok {
 			return
 		}
 	case cmn.GetWhatXaction:
-		ok := p.invokeHttpGetXaction(w, r)
+		ok := p.invokeHTTPGetXaction(w, r)
 		if !ok {
 			return
 		}
 	case cmn.GetWhatMountpaths:
-		if ok := p.invokeHttpGetClusterMountpaths(w, r); !ok {
+		if ok := p.invokeHTTPGetClusterMountpaths(w, r); !ok {
 			return
 		}
 	default:
@@ -1998,7 +1974,7 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Request) bool {
+func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Request) bool {
 	kind := r.URL.Query().Get(cmn.URLParamProps)
 	if errstr := validateXactionQueryable(kind); errstr != "" {
 		p.invalmsghdlr(w, r, errstr)
@@ -2006,7 +1982,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 	}
 	outputXactionStats := &stats.XactionStats{}
 	outputXactionStats.Kind = kind
-	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
+	targetStats, ok := p.invokeHTTPGetMsgOnTargets(w, r)
 	if !ok {
 		e := fmt.Sprintf(
 			"Unable to invoke cmn.GetMsg on targets. Query: [%s]",
@@ -2029,7 +2005,7 @@ func (p *proxyrunner) invokeHttpGetXaction(w http.ResponseWriter, r *http.Reques
 	return ok
 }
 
-func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
+func (p *proxyrunner) invokeHTTPGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Daemon),
 		r.URL.Query(),
@@ -2058,8 +2034,8 @@ func (p *proxyrunner) invokeHttpGetMsgOnTargets(w http.ResponseWriter, r *http.R
 }
 
 // FIXME: read-lock
-func (p *proxyrunner) invokeHttpGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
-	targetStats, ok := p.invokeHttpGetMsgOnTargets(w, r)
+func (p *proxyrunner) invokeHTTPGetClusterStats(w http.ResponseWriter, r *http.Request) bool {
+	targetStats, ok := p.invokeHTTPGetMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
 			"Unable to invoke cmn.GetMsg on targets. Query: [%s]",
@@ -2079,8 +2055,8 @@ func (p *proxyrunner) invokeHttpGetClusterStats(w http.ResponseWriter, r *http.R
 	return ok
 }
 
-func (p *proxyrunner) invokeHttpGetClusterMountpaths(w http.ResponseWriter, r *http.Request) bool {
-	targetMountpaths, ok := p.invokeHttpGetMsgOnTargets(w, r)
+func (p *proxyrunner) invokeHTTPGetClusterMountpaths(w http.ResponseWriter, r *http.Request) bool {
+	targetMountpaths, ok := p.invokeHTTPGetMsgOnTargets(w, r)
 	if !ok {
 		errstr := fmt.Sprintf(
 			"Unable to invoke cmn.GetMsg on targets. Query: [%s]", r.URL.RawQuery)

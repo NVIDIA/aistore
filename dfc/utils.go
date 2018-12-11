@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -155,44 +154,6 @@ func getipv4addr(addrList []*localIPv4Info, configuredIPv4s string) (ip net.IP, 
 	return ip, nil
 }
 
-//===========================================================================
-//
-// typed checksum value
-//
-//===========================================================================
-type cksumValue interface {
-	get() (string, string)
-}
-
-type cksumvalxxhash struct {
-	tag string
-	val string
-}
-
-type cksumvalmd5 struct {
-	tag string
-	val string
-}
-
-func newCksumValue(kind string, val string) cksumValue {
-	if kind == "" {
-		return nil
-	}
-	if val == "" {
-		glog.Infof("Warning: checksum %s: empty value", kind)
-		return nil
-	}
-	if kind == cmn.ChecksumXXHash {
-		return &cksumvalxxhash{kind, val}
-	}
-	cmn.Assert(kind == cmn.ChecksumMD5)
-	return &cksumvalmd5{kind, val}
-}
-
-func (v *cksumvalxxhash) get() (string, string) { return v.tag, v.val }
-
-func (v *cksumvalmd5) get() (string, string) { return v.tag, v.val }
-
 // FIXME: usage
 // mentioned in the https://github.com/golang/go/issues/11745#issuecomment-123555313 thread
 // there must be a better way to handle this..
@@ -280,4 +241,17 @@ func recomputeXXHash(fqn string, size int64) (cksum, errstr string) {
 	file.Close()
 	slab.Free(buf)
 	return
+}
+
+// versioningConfigured returns true if versioning for a given bucket is enabled
+// NOTE:
+//    AWS bucket versioning can be disabled on the cloud. In this case we do not
+//    save/read/update version using xattrs. And the function returns that the
+//    versioning is unsupported even if versioning is 'all' or 'cloud'.
+func versioningConfigured(islocal bool) bool {
+	versioning := cmn.GCO.Get().Ver.Versioning
+	if islocal {
+		return versioning == cmn.VersionAll || versioning == cmn.VersionLocal
+	}
+	return versioning == cmn.VersionAll || versioning == cmn.VersionCloud
 }

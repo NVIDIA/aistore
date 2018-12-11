@@ -1,7 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -13,7 +13,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
@@ -112,7 +111,8 @@ func (rcksctx *recksumctx) walk(fqn string, osfi os.FileInfo, err error) error {
 		break
 	}
 
-	// TODO: future scrubber to |presentRecomp, and scrub
-	rcksctx.t.scrubChecksum(fqn, cmn.ChecksumXXHash, 0 /*size*/, missingStore)
+	// TODO: future scrubber to |xmdCksumPresentRecomp, and scrub
+	xmd := &objectXprops{fqn: fqn, size: osfi.Size()}
+	_ = xmd.fill(xmdCksum | xmdCksumMissingRecomp)
 	return nil
 }

@@ -1,9 +1,7 @@
+// Package cmn provides common low-level types and utilities for all dfcpub projects
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package cmn provides common low-level types and utilities for all dfcpub projects
 package cmn
 
 import (
@@ -102,7 +100,7 @@ func InvalidHandlerWithMsg(w http.ResponseWriter, r *http.Request, msg string, e
 // InvalidHandlerDetailed writes detailed error (includes line and file) to response writer.
 func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, errCode ...int) {
 	status := http.StatusBadRequest
-	if len(errCode) > 0 {
+	if len(errCode) > 0 && errCode[0] >= http.StatusBadRequest {
 		status = errCode[0]
 	}
 	errMsg := ErrHTTP(r, msg, status)

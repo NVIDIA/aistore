@@ -823,7 +823,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}
 
 7. object replications and migrations are always checksum-protected. If an object does not have checksum (see #3 above), the latter gets computed on the fly and stored with the object, so that subsequent replications/migrations could reuse it.
 
-8. when two objects in the cluster have identical checksums, they are considered to be full replicas of each other - the fact that allows optimizing PUT,replication, and object migration in a variety of use cases.
+8. when two objects in the cluster have identical (bucket, object) names and checksums, they are considered to be full replicas of each other - the fact that allows optimizing PUT,replication, and object migration in a variety of use cases.
 
 ## Command-line Load Generator
 

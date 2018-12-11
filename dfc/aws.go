@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -340,7 +339,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) (props *objectXprops, errstr string, errcode int) {
 	var v cksumValue
 	sess := createSession(ct)
 	svc := s3.New(sess)
@@ -356,7 +355,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 	// may not have dfc metadata
 	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
 		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
-			v = newCksumValue(*htype, *hval)
+			v = newCksum(*htype, *hval)
 		}
 	}
 	md5, _ := strconv.Unquote(*obj.ETag)
@@ -367,11 +366,11 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 		}
 		md5 = ""
 	}
-	props = &objectProps{}
+	props = &objectXprops{t: awsimpl.t, bucket: bucket, objname: objname, nhobj: v}
 	if obj.VersionId != nil {
 		props.version = *obj.VersionId
 	}
-	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, objname, md5, v, obj.Body); errstr != "" {
+	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, props, md5, obj.Body); errstr != "" {
 		obj.Body.Close()
 		return
 	}

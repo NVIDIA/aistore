@@ -1,13 +1,8 @@
+// Package transport provides streaming object-based transport over http for intra-cluster continuous
+// intra-cluster communications (see README for details and usage example).
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-//
-// Package transport provides streaming object-based transport over http for
-// massive intra-DFC or DFC-to-DFC data transfers.
-//
-// See README for details and usage examples.
-//
 package transport
 
 import (

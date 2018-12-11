@@ -1,8 +1,8 @@
+// Package ios is a collection of interfaces to the local storage subsystem;
+// the package includes OS-dependent implementations for those interfaces.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-// Package ios is a collection of interfaces to the local storage subsystem;
-// the package includes OS-dependent implementations for those interfaces.
 package ios
 
 import (
@@ -91,7 +91,7 @@ func TestGetDiskFromFileSystem(t *testing.T) {
 }
 
 func TestMultipleMountPathsOnSameDisk(t *testing.T) {
-	rawJson := jsoniter.RawMessage(
+	rawJSON := jsoniter.RawMessage(
 		`{
         "blockdevices": [{
                 "name": "xvda",
@@ -112,7 +112,7 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
             }
         ]
 		}`)
-	bytes, err := jsoniter.Marshal(&rawJson)
+	bytes, err := jsoniter.Marshal(&rawJSON)
 	if err != nil {
 		t.Errorf("Unable to marshal input json. Error: [%v]", err)
 	}

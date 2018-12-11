@@ -1,3 +1,5 @@
+// Package stats provides methods and functionality to register, track, log,
+// and StatsD-notify statistics that, for the most part, include "counter" and "latency" kinds.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

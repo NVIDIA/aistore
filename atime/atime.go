@@ -1,7 +1,7 @@
+// Package atime tracks object access times in the system while providing a number of performance enhancements.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-// Package atime tracks object access times in the system while providing a number of performance enhancements.
 package atime
 
 import (
@@ -281,9 +281,8 @@ func (r *Runner) Atime(fqn string, customRespCh ...chan *Response) (responseCh c
 
 // convenience method to obtain atime from the (atime) cache or the file itself,
 // and format accordingly
-func (r *Runner) FormatAtime(fqn string, respCh chan *Response, format string, useCache bool) (atimestr string, err error) {
+func (r *Runner) FormatAtime(fqn string, respCh chan *Response, useCache bool, format ...string) (atimestr string, atime time.Time, err error) {
 	var (
-		atime     time.Time
 		atimeResp *Response
 		finfo     os.FileInfo
 		ok        bool
@@ -306,8 +305,8 @@ func (r *Runner) FormatAtime(fqn string, respCh chan *Response, format string, u
 		}
 	}
 	if err == nil {
-		if format != "" {
-			atimestr = atime.Format(format)
+		if len(format) > 0 {
+			atimestr = atime.Format(format[0])
 		} else {
 			atimestr = atime.Format(cmn.RFC822)
 		}

@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -99,7 +98,7 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	// resolve and validate
+	// resolve and validate; FIXME: use xmd and objectXprops
 	parsedFQN, _, err := cluster.ResolveFQN(fqn, rcl.t.bmdowner)
 	if err != nil {
 		// scenario: mountpath(s) have changed + race vs local rebalance + might still be globally misplaced

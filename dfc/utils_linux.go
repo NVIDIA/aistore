@@ -1,7 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -11,7 +11,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 )
 
-// Get xattr by name
+// GetXattr gets xattr by name
 func GetXattr(fqn, attrname string) ([]byte, string) {
 	data := make([]byte, maxAttrSize)
 	read, err := syscall.Getxattr(fqn, attrname, data)
@@ -25,7 +25,7 @@ func GetXattr(fqn, attrname string) ([]byte, string) {
 	return nil, ""
 }
 
-// Set xattr name = xattr value
+// SetXattr sets xattr name = value
 func SetXattr(fqn, attrname string, data []byte) (errstr string) {
 	cmn.Assert(len(data) < maxAttrSize)
 	err := syscall.Setxattr(fqn, attrname, data, 0)
@@ -35,7 +35,7 @@ func SetXattr(fqn, attrname string, data []byte) (errstr string) {
 	return
 }
 
-// Delete specific named attribute for specific fqn.
+// DeleteXattr deletes specific named attribute for specific fqn.
 func DeleteXattr(fqn string, attrname string) (errstr string) {
 	err := syscall.Removexattr(fqn, attrname)
 	if err != nil {

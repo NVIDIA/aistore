@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -511,7 +510,7 @@ func (y *metasyncer) lversion(tag string) int64 {
 
 func (y *metasyncer) countNewMembers(smap *smapX) (count int) {
 	for _, serverMap := range []cluster.NodeMap{smap.Tmap, smap.Pmap} {
-		for id, _ := range serverMap {
+		for id := range serverMap {
 			if _, ok := y.revsmap[id]; !ok {
 				count++
 			}

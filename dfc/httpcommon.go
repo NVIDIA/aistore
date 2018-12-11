@@ -1,8 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -47,13 +46,7 @@ const ( //  h.call(timeout)
 )
 
 type (
-	metric      = statsd.Metric // type alias
-	objectProps struct {
-		version string
-		atime   time.Time
-		size    int64
-		nhobj   cksumValue
-	}
+	metric = statsd.Metric // type alias
 
 	// callResult contains http response
 	callResult struct {
@@ -111,7 +104,7 @@ type cloudif interface {
 	//
 	headobject(ctx context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int)
 	//
-	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectProps, errstr string, errcode int)
+	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectXprops, errstr string, errcode int)
 	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumValue) (version string, errstr string, errcode int)
 	deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int)
 }

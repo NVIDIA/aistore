@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-// TODO: FIXME: must become a separate package; must initialize with cluster.Bowner, etc. interfaces
 package dfc
 
 import (
@@ -17,11 +15,11 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/atime"
-	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/memsys"
 )
+
+// TODO: FIXME: must become a separate package; must initialize with cluster.Bowner, etc. interfaces
 
 // ================================================= Summary ===============================================
 //
@@ -307,21 +305,20 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 }
 
 func (r *mpathReplicator) send(req *replRequest) error {
-	var storedCksum, errstr string
+	var errstr string
 
-	parsedFQN, _, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
-	if err != nil {
-		return err
+	xmd := &objectXprops{t: r.t, fqn: req.fqn}
+	if errstr = xmd.fill(xmdFstat); errstr != "" {
+		return errors.New(errstr)
 	}
-	bucket, object := parsedFQN.Bucket, parsedFQN.Objname
-	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	if xmd.doesnotexist {
+		return fmt.Errorf("%s/%s %s", xmd.bucket, xmd.objname, cmn.DoesNotExist)
+	}
+	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, xmd.bucket, xmd.objname)
+	r.t.rtnamemap.Lock(xmd.uname, req.deleteObject)
+	defer r.t.rtnamemap.Unlock(xmd.uname, req.deleteObject)
 
-	uname := cluster.Uname(bucket, object)
-	r.t.rtnamemap.Lock(uname, req.deleteObject)
-	defer r.t.rtnamemap.Unlock(uname, req.deleteObject)
-
-	storedCksum, _, errstr = r.t.scrubChecksum(req.fqn, cmn.ChecksumXXHash, 0 /*size*/, missingStore)
-	if errstr != "" {
+	if errstr = xmd.fill(xmdCksum | xmdCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
 
@@ -340,7 +337,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return os.Open(req.fqn)
 	}
 
-	atimestr, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, "", r.t.bucketLRUEnabled(bucket))
+	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, xmd.lruEnabled())
 
 	// obtain the version of the file
 	if version, errstr := GetXattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
@@ -351,9 +348,11 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 	// specify source direct URL in request header
 	httpReq.Header.Add(cmn.HeaderDFCReplicationSrc, r.directURL)
-
-	httpReq.Header.Add(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
-	httpReq.Header.Add(cmn.HeaderDFCChecksumVal, storedCksum)
+	if xmd.nhobj != nil {
+		htype, hval := xmd.nhobj.get()
+		httpReq.Header.Add(cmn.HeaderDFCChecksumType, htype)
+		httpReq.Header.Add(cmn.HeaderDFCChecksumVal, hval)
+	}
 	if atimestr != "" {
 		httpReq.Header.Add(cmn.HeaderDFCObjAtime, atimestr)
 	}
@@ -375,7 +374,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 			errstr = fmt.Sprintf(
 				"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, "+
 					"destination URL: %s",
-				resp.StatusCode, string(b), bucket, object, req.remoteDirectURL,
+				resp.StatusCode, string(b), xmd.bucket, xmd.objname, req.remoteDirectURL,
 			)
 		}
 		return errors.New(errstr)
@@ -391,80 +390,22 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	return nil
 }
 
+// FIXME: use atime
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
-		nhobj                              cksumValue
-		nhtype, nhval                      string
-		sgl                                *memsys.SGL
-		storedCksum, computedCksum, errstr string
-		accessTime                         time.Time
+		httpr = req.httpReq
+		xmd   = &objectXprops{t: r.t, fqn: req.fqn}
 	)
-	httpr := req.httpReq
-	parsedFQN, _, err := cluster.ResolveFQN(req.fqn, r.t.bmdowner)
-	bucket, object := parsedFQN.Bucket, parsedFQN.Objname
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to extract bucket and object name from %s, error: %v", req.fqn, err)
+	if errstr := xmd.fill(0); errstr != "" {
 		return errors.New(errstr)
 	}
-	putfqn := fs.CSM.GenContentFQN(req.fqn, fs.WorkfileType, fs.WorkfileReplication)
-	if errstr != "" {
-		return errors.New(errstr)
-	}
-
-	hdhobj := newCksumValue(httpr.Header.Get(cmn.HeaderDFCChecksumType), httpr.Header.Get(cmn.HeaderDFCChecksumVal))
-	if hdhobj == nil {
-		errstr = fmt.Sprintf("Failed to extract checksum from replication PUT request for %s/%s", bucket, object)
-		return errors.New(errstr)
-	}
-
-	if accessTimeStr := httpr.Header.Get(cmn.HeaderDFCObjAtime); accessTimeStr != "" {
-		if parsedTime, err := time.Parse(time.RFC822, accessTimeStr); err == nil {
-			accessTime = parsedTime
+	if timeStr := httpr.Header.Get(cmn.HeaderDFCObjAtime); timeStr != "" {
+		xmd.atimestr = timeStr
+		if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
+			xmd.atime = tm // FIXME: not used
 		}
 	}
-
-	hdhtype, hdhval := hdhobj.get()
-	if hdhtype != cmn.ChecksumXXHash {
-		errstr = fmt.Sprintf("Unsupported checksum type: %q", hdhtype)
-		return errors.New(errstr)
-	}
-
-	storedCksum, computedCksum, errstr = r.t.scrubChecksum(req.fqn, cmn.ChecksumXXHash, 0 /*size*/, missingStore)
-	if errstr == "" && computedCksum == hdhval && computedCksum == storedCksum {
-		glog.Infof("Existing %s/%s is valid: replication PUT is a no-op", bucket, object)
-		return nil
-	}
-
-	// TODO
-	// Method targetrunner.receive validates checksum based on cluster-level or bucket-level
-	// checksum configuration. Replication service needs its own checksum configuration.
-	sgl, nhobj, _, errstr = r.t.receive(putfqn, object, "", hdhobj, httpr.Body)
-	httpr.Body.Close()
-	if errstr != "" {
-		return errors.New(errstr)
-	}
-
-	if nhobj != nil {
-		nhtype, nhval = nhobj.get()
-		cmn.Assert(hdhtype == nhtype)
-	}
-	if hdhval != "" && nhval != "" && hdhval != nhval {
-		errstr = fmt.Sprintf("Bad checksum: %s/%s %s %s... != %s...", bucket, object, nhtype, hdhval[:8], nhval[:8])
-		return errors.New(errstr)
-	} else if hdhval == "" || nhval == "" {
-		glog.Warningf("Failed to compare checksums during replication PUT for %s/%s", bucket, object)
-	}
-
-	if sgl != nil {
-		return nil
-	}
-
-	props := &objectProps{nhobj: nhobj, version: httpr.Header.Get(cmn.HeaderDFCObjVersion)}
-	if !accessTime.IsZero() {
-		props.atime = accessTime
-	}
-	errstr, _ = r.t.putCommit(r.t.contextWithAuth(httpr), bucket, object, putfqn, req.fqn, props, false /* rebalance */)
-	if errstr != "" {
+	if errstr, _ := r.t.doput(httpr, xmd.bucket, xmd.objname); errstr != "" {
 		return errors.New(errstr)
 	}
 	return nil

@@ -1,7 +1,7 @@
+// Package cmn provides common API constants and types, and low-level utilities for all dfcpub projects
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-// Package cmn provides common API constants and types, and low-level utilities for all dfcpub projects
 package cmn
 
 import "time"

@@ -1,8 +1,8 @@
+// Package lru provides atime-based least recently used cache replacement policy for stored objects
+// and serves as a generic garbage-collection mechanism for orhaned workfiles.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-// Package lru provides atime-based least recently used cache replacement policy for stored objects
-// and serves as a generic garbage-collection mechanism for orhaned workfiles.
 package lru
 
 import (

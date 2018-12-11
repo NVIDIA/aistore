@@ -1,7 +1,7 @@
+// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.  *
  */
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
 package dfc
 
 import (
@@ -333,7 +333,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, objname string) (props *objectProps, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, objname string) (props *objectXprops, errstr string, errcode int) {
 	var v cksumValue
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -346,7 +346,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	v = newCksumValue(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
+	v = newCksum(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
@@ -354,8 +354,8 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	props = &objectProps{version: fmt.Sprintf("%d", attrs.Generation)}
-	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, objname, md5, v, rc); errstr != "" {
+	props = &objectXprops{t: gcpimpl.t, bucket: bucket, objname: objname, nhobj: v, version: fmt.Sprintf("%d", attrs.Generation)}
+	if _, props.nhobj, props.size, errstr = gcpimpl.t.receive(fqn, props, md5, rc); errstr != "" {
 		rc.Close()
 		return
 	}
