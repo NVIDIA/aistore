@@ -98,18 +98,15 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	// resolve and validate; FIXME: use xmd and objectXprops
-	parsedFQN, _, err := cluster.ResolveFQN(fqn, rcl.t.bmdowner)
-	if err != nil {
-		// scenario: mountpath(s) have changed + race vs local rebalance + might still be globally misplaced
-		if _, ok := err.(*cluster.ErrFqnMisplaced); !ok {
-			glog.Warningf("%v - skipping...", err)
-			return nil
+	xmd := &objectXprops{t: rcl.t, fqn: fqn}
+	if errstr := xmd.fill(0); errstr != "" {
+		if glog.V(4) {
+			glog.Infof("%s, err %s - skipping...", xmd, errstr)
 		}
+		return nil
 	}
 	// rebalance, maybe
-	bucket, objname := parsedFQN.Bucket, parsedFQN.Objname
-	si, errstr := hrwTarget(bucket, objname, rcl.newsmap)
+	si, errstr := hrwTarget(xmd.bucket, xmd.objname, rcl.newsmap)
 	if errstr != "" {
 		return fmt.Errorf(errstr)
 	}
@@ -118,10 +115,10 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	}
 	// do rebalance
 	if glog.V(4) {
-		glog.Infof("%s/%s %s => %s", bucket, objname, rcl.t.si, si)
+		glog.Infof("%s %s => %s", xmd, rcl.t.si, si)
 	}
-	if errstr = rcl.t.sendfile(http.MethodPut, bucket, objname, si, osfi.Size(), "", "", rcl.atimeRespCh); errstr != "" {
-		glog.Infof("Failed to rebalance %s/%s: %s", bucket, objname, errstr)
+	if errstr = rcl.t.sendfile(http.MethodPut, xmd.bucket, xmd.objname, si, osfi.Size(), "", "", rcl.atimeRespCh); errstr != "" {
+		glog.Infof("Failed to rebalance %s: %s", xmd, errstr)
 	} else {
 		// LRU cleans up the object later
 		rcl.objectMoved++
@@ -173,33 +170,32 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	// resolve and validate
-	_, newfqn, err := cluster.ResolveFQN(fqn, rb.t.bmdowner)
-	if err == nil {
+	xmd := &objectXprops{t: rb.t, fqn: fqn}
+	if errstr := xmd.fill(0); errstr != "" {
+		if glog.V(4) {
+			glog.Infof("%s, err %v - skipping...", xmd, err)
+		}
 		return nil
 	}
-	// look for this specific error
-	if _, ok := err.(*cluster.ErrFqnMisplaced); !ok {
-		glog.Warningf("%v - skipping...", err)
+	if !xmd.misplaced {
 		return nil
 	}
-	// FIXME: check vs. global rebalance ...
 	if glog.V(4) {
-		glog.Infof("%s => %s", fqn, newfqn)
+		glog.Infof("%s => %s", xmd, xmd.newfqn)
 	}
-	dir := filepath.Dir(newfqn)
+	dir := filepath.Dir(xmd.newfqn)
 	if err := cmn.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
 		rb.xreb.abort()
-		rb.t.fshc(err, newfqn)
+		rb.t.fshc(err, xmd.newfqn)
 		return nil
 	}
 
 	// Copy the object instead of moving, LRU takes care of obsolete copies
 	if glog.V(4) {
-		glog.Infof("Copying %s -> %s", fqn, newfqn)
+		glog.Infof("Copying %s => %s", fqn, xmd.newfqn)
 	}
-	if errFQN, err := copyFile(fqn, newfqn); err != nil {
+	if errFQN, err := copyFile(fqn, xmd.newfqn); err != nil {
 		glog.Error(err.Error())
 		rb.t.fshc(err, errFQN)
 		rb.xreb.abort()

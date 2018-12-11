@@ -192,7 +192,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	}
 	if xmd.bislocal { // must not come here
 		if xmd.doesnotexist {
-			glog.Errorf("prefetch: local %s/%s (%s) %s", bucket, objname, xmd.fqn, cmn.DoesNotExist)
+			glog.Errorf("prefetch: %s", xmd)
 		}
 		return
 	}
@@ -213,7 +213,7 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("prefetch: %s/%s", bucket, objname)
+		glog.Infof("prefetch: %s", xmd)
 	}
 	t.statsif.Add(stats.PrefetchCount, 1)
 	t.statsif.Add(stats.PrefetchSize, xmd.size)

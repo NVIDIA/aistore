@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/atime"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -40,6 +41,7 @@ type (
 		fqn             string
 		bucket, objname string
 		uname           string
+		newfqn          string
 		// this object's props
 		version  string
 		atime    time.Time
@@ -74,6 +76,43 @@ func (xmd *objectXprops) restoredReceived(props *objectXprops) {
 
 func (xmd *objectXprops) exists() bool     { return !xmd.doesnotexist }
 func (xmd *objectXprops) lruEnabled() bool { return xmd.bucketmd.lruEnabled(xmd.bucket) }
+func (xmd *objectXprops) String() string {
+	var (
+		a string
+		s = fmt.Sprintf("%s/%s", xmd.bucket, xmd.objname)
+	)
+	if glog.V(4) {
+		s += fmt.Sprintf("(%s)", xmd.fqn)
+		if xmd.size != 0 {
+			s += " size=" + cmn.B2S(xmd.size, 1)
+		}
+		if xmd.version != "" {
+			s += " ver=" + xmd.version
+		}
+		if xmd.nhobj != nil {
+			s += " " + xmd.nhobj.String()
+		}
+	}
+	if xmd.doesnotexist {
+		a = cmn.DoesNotExist
+	}
+	if xmd.misplaced {
+		if a != "" {
+			a += ", "
+		}
+		a += "locally misplaced"
+	}
+	if xmd.badchecksum {
+		if a != "" {
+			a += ", "
+		}
+		a += "bad checksum"
+	}
+	if a != "" {
+		s += " [" + a + "]"
+	}
+	return s
+}
 
 // main method
 func (xmd *objectXprops) fill(action int) (errstr string) {
@@ -93,7 +132,7 @@ func (xmd *objectXprops) fill(action int) (errstr string) {
 			case os.IsNotExist(err):
 				xmd.doesnotexist = true
 			default:
-				errstr = fmt.Sprintf("Failed to fstat %s(%s/%s), err: %v", xmd.fqn, xmd.bucket, xmd.objname, err)
+				errstr = fmt.Sprintf("Failed to fstat %s, err: %v", xmd, err)
 				xmd.t.fshc(err, xmd.fqn)
 			}
 			return
@@ -121,9 +160,9 @@ func (xmd *objectXprops) fill(action int) (errstr string) {
 
 func (xmd *objectXprops) badChecksum(hksum cksumValue) (errstr string) {
 	if xmd.nhobj != nil {
-		errstr = fmt.Sprintf("BAD CHECKSUM: %s/%s (%s != %s)", xmd.bucket, xmd.objname, hksum, xmd.nhobj)
+		errstr = fmt.Sprintf("BAD CHECKSUM: %s (%s != %s)", xmd, hksum, xmd.nhobj)
 	} else {
-		errstr = fmt.Sprintf("BAD CHECKSUM: %s/%s (nil vs. %s)", xmd.bucket, xmd.objname, hksum)
+		errstr = fmt.Sprintf("BAD CHECKSUM: %s (%s != nil)", xmd, hksum)
 	}
 	return
 }
@@ -182,16 +221,19 @@ func (xmd *objectXprops) _init() (errstr string) {
 	// resolve fqn
 	if xmd.bucket == "" || xmd.objname == "" {
 		cmn.Assert(xmd.fqn != "")
-		parsedFQN, _, err := cluster.ResolveFQN(xmd.fqn, xmd.t.bmdowner)
+		parsedFQN, newfqn, err := cluster.ResolveFQN(xmd.fqn, xmd.t.bmdowner)
 		if err != nil {
 			if _, ok := err.(*cluster.ErrFqnMisplaced); ok {
 				xmd.misplaced = true
+				xmd.newfqn = newfqn
 			} else {
 				errstr = err.Error()
-				return
 			}
 		}
 		xmd.bucket, xmd.objname = parsedFQN.Bucket, parsedFQN.Objname
+		if xmd.bucket == "" || xmd.objname == "" {
+			return
+		}
 	}
 	xmd.uname = cluster.Uname(xmd.bucket, xmd.objname)
 	// bucketmd, bislocal, bprops
