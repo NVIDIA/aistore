@@ -497,6 +497,9 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 func (s *Stream) sendHdr(b []byte) (n int, err error) {
 	n = copy(b, s.header[s.sendoff.off:])
 	s.sendoff.off += int64(n)
+	if (bool(glog.V(4)) || debug) && (s.sendoff.off < int64(len(s.header))) {
+		glog.Errorf("%s: Split-Header Warning: n(copied) %d < %d hlen", s, s.sendoff.off, len(s.header))
+	}
 	if s.sendoff.off >= int64(len(s.header)) {
 		if debug {
 			cmn.Assert(s.sendoff.off == int64(len(s.header)))

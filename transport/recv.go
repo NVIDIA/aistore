@@ -180,12 +180,18 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 		if objReader != nil {
 			h.callback(w, objReader.hdr, objReader, nil)
 			num := atomic.AddInt64(&stats.Num, 1)
-			siz := atomic.AddInt64(&stats.Size, objReader.hdr.Dsize)
-			off := atomic.AddInt64(&stats.Offset, objReader.hdr.Dsize)
-			if bool(glog.V(4)) || debug {
-				glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d", trname, sessid, off, siz, objReader.hdr.Dsize, num)
+			if objReader.hdr.Dsize != objReader.off {
+				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d",
+					trname, sessid, objReader.off, objReader.hdr.Dsize, num)
+				glog.Errorln(err)
+			} else {
+				siz := atomic.AddInt64(&stats.Size, objReader.hdr.Dsize)
+				off := atomic.AddInt64(&stats.Offset, objReader.hdr.Dsize)
+				if bool(glog.V(4)) || debug {
+					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d", trname, sessid, off, siz, objReader.hdr.Dsize, num)
+				}
+				continue
 			}
-			continue
 		}
 		if err != nil {
 			if sessid != 0 {
