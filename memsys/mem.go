@@ -220,6 +220,25 @@ func (r *Mem2) NewSGLWithHash(immediateSize int64, hash hash.Hash64) *SGL {
 	return sgl
 }
 
+func (r *Mem2) MaxAllocRingLen() (slabBufSize int64, ringLen int) {
+	for _, s := range r.rings {
+		if lget := len(s.get); lget > ringLen { // NOTE: not locking - don't care whether the value is racy
+			ringLen = lget
+			slabBufSize = s.bufsize
+		}
+	}
+	return
+}
+func (r *Mem2) MaxFreeRingLen() (slabBufSize int64, ringLen int) {
+	for _, s := range r.rings {
+		if lput := len(s.put); lput > ringLen {
+			ringLen = lput
+			slabBufSize = s.bufsize
+		}
+	}
+	return
+}
+
 //
 // on error behavior is defined by the ignorerr argument
 // true:  print error message and proceed regardless

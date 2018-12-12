@@ -80,11 +80,14 @@ func Test_Sleep(t *testing.T) {
 		wg.Add(1)
 		go memstress(mem, i, ttl, siz, tot, wg)
 	}
+	c := make(chan struct{}, 1)
+	go printMaxRingLen(mem, c)
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
 		mem.Free(memsys.FreeSpec{IdleDuration: 1, MinSize: cmn.MiB})
 	}
 	wg.Wait()
+	close(c)
 	mem.Stop(nil)
 }
 
@@ -105,12 +108,29 @@ func Test_NoSleep(t *testing.T) {
 		wg.Add(1)
 		go memstress(mem, i, time.Millisecond, siz, tot, wg)
 	}
+	c := make(chan struct{}, 1)
+	go printMaxRingLen(mem, c)
 	for i := 0; i < 7; i++ {
 		time.Sleep(duration / 8)
 		mem.Free(memsys.FreeSpec{Totally: true, ToOS: true, MinSize: cmn.MiB * 10})
 	}
 	wg.Wait()
+	close(c)
 	mem.Stop(nil)
+}
+
+func printMaxRingLen(mem *memsys.Mem2, c chan struct{}) {
+	for i := 0; i < 100; i++ {
+		select {
+		case <-c:
+			return
+		case <-time.After(5 * time.Second):
+			bufsize, len := mem.MaxAllocRingLen()
+			tutils.Logf("max alloc ring (%s, len=%d)\n", cmn.B2S(bufsize, 0), len)
+			bufsize, len = mem.MaxFreeRingLen()
+			tutils.Logf("max free  ring (%s, len=%d)\n", cmn.B2S(bufsize, 0), len)
+		}
+	}
 }
 
 func memstress(mem *memsys.Mem2, id int, ttl time.Duration, siz, tot int64, wg *sync.WaitGroup) {
