@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"strconv"
 	"sync"
 	"testing"
@@ -469,7 +470,7 @@ func genStaticHeader() (hdr transport.Header) {
 func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	x := random.Int63()
 	hdr.Bucket = strconv.FormatInt(x, 10)
-	hdr.Objname = hdr.Bucket + "/" + strconv.FormatInt(cmn.MaxInt64-x, 10)
+	hdr.Objname = path.Join(hdr.Bucket, strconv.FormatInt(cmn.MaxInt64-x, 10))
 	pos := x % int64(len(text))
 	hdr.Opaque = []byte(text[int(pos):])
 	y := x & 3

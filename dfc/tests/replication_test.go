@@ -9,6 +9,7 @@ package dfc_test
 import (
 	"io"
 	"math/rand"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -179,7 +180,7 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 	// 2. Send N Put Requests to first cluster, where N is equal to numObj
 	tutils.Logf("Uploading %d objects to (local bucket: %s) for replication...\n", numObj, bucket)
 	errChPut := make(chan error, numObj)
-	putRandObjs(proxyURL, seedValue, uint64(objSize), numObj, bucket, errChPut, objNameCh, ReplicationDir, ReplicationStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ReplicationDir, readerType, ReplicationStr, uint64(objSize), numObj, errChPut, objNameCh, sgl)
 	selectErr(errChPut, "put", t, true)
 	close(objNameCh) // to exit for-range
 	objList := make([]string, 0, numObj)
@@ -255,7 +256,7 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 	// 1. Send N Put Requests to first cluster, where N is equal to numObj
 	tutils.Logf("Uploading %d objects to (cloud bucket: %s) for replication...\n", numObj, bucket)
 	errChPut := make(chan error, numObj)
-	putRandObjs(proxyURL, seedValue, uint64(objSize), numObj, bucket, errChPut, objNameCh, ReplicationDir, ReplicationStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ReplicationDir, readerType, ReplicationStr, uint64(objSize), numObj, errChPut, objNameCh, sgl)
 	selectErr(errChPut, "put", t, true)
 	close(objNameCh) // to exit for-range
 	objList := make([]string, 0, numObj)
@@ -346,7 +347,7 @@ func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 	}
 
 	for idx, fname := range objList {
-		object := SmokeStr + "/" + fname
+		object := path.Join(SmokeStr, fname)
 		if sgl != nil {
 			sgl.Reset()
 			r, err = tutils.NewSGReader(sgl, int64(size), true)
@@ -370,10 +371,7 @@ func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 }
 
 func getPrimaryIntraDataURL(t *testing.T, proxyURL string) string {
-	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	if err != nil {
-		t.Fatalf("Failed to get primary proxy intra data net URL, error: %v", err)
-	}
+	smap := getClusterMap(t, proxyURL)
 	return smap.ProxySI.IntraDataNet.DirectURL
 }
 

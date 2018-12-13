@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"syscall"
@@ -249,7 +250,7 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 	}
 	sort.Slice(filteredInfos, fiLess)
 	for _, logfi := range filteredInfos[:len(filteredInfos)-1] { // except last = current
-		logfqn := cmn.GCO.Get().Log.Dir + "/" + logfi.Name()
+		logfqn := path.Join(cmn.GCO.Get().Log.Dir, logfi.Name())
 		if err := os.Remove(logfqn); err == nil {
 			tot -= logfi.Size()
 			glog.Infof("GC logs: removed %s", logfqn)

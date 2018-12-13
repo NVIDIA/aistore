@@ -5,9 +5,11 @@
 package dfc_test
 
 import (
-	"fmt"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -106,17 +108,14 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
 	chstop chan struct{}, sgl *memsys.SGL, bucket string) {
 	const filesize = 64 * 1024
-	var (
-		seed     = baseseed + 300
-		ldir     = LocalSrcDir + "/" + fshcDir
-		proxyURL = getPrimaryURL(t, proxyURLRO)
-	)
+	var proxyURL = getPrimaryURL(t, proxyURLRO)
+
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
 
 	for stopTime.After(time.Now()) {
 		errCh := make(chan error, len(filelist))
-		filesPutCh := make(chan string, len(filelist))
+		objsPutCh := make(chan string, len(filelist))
 
 		for _, fname := range filelist {
 			select {
@@ -141,14 +140,10 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 			switch op {
 			case "PUT":
 				fileList := []string{fname}
-				putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, errCh, filesPutCh, ldir, fshcDir, true, sgl)
-				select {
-				case <-errCh:
-					// do nothing
-				default:
-				}
+				ldir := filepath.Join(LocalSrcDir, fshcDir)
+				tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, filesize, fileList, errCh, objsPutCh, sgl)
 			case "GET":
-				api.GetObject(tutils.HTTPClient, proxyURL, bucket, fshcDir+"/"+fname)
+				api.GetObject(tutils.HTTPClient, proxyURL, bucket, path.Join(fshcDir, fname))
 				time.Sleep(time.Millisecond * 10)
 			default:
 				t.Errorf("Invalid operation: %s", op)
@@ -156,7 +151,7 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 		}
 
 		close(errCh)
-		close(filesPutCh)
+		close(objsPutCh)
 	}
 
 	wg.Done()
@@ -165,7 +160,6 @@ func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []
 func TestFSCheckerDetection(t *testing.T) {
 	const filesize = 64 * 1024
 	var (
-		err      error
 		sgl      *memsys.SGL
 		seed     = baseseed + 300
 		numObjs  = 100
@@ -184,9 +178,7 @@ func TestFSCheckerDetection(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, bucket)
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
-	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	tutils.CheckFatal(err, t)
-
+	smap := getClusterMap(t, proxyURL)
 	mpList := make(map[string]string, 0)
 	allMps := make(map[string]*cmn.MountpathList, 0)
 	origAvail := 0
@@ -265,7 +257,9 @@ func TestFSCheckerDetection(t *testing.T) {
 	{
 		tutils.Logf("Reading non-existing objects: read is expected to fail but mountpath must be available\n")
 		for n := 1; n < 10; n++ {
-			_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, fmt.Sprintf("%s/%d", fshcDir, n))
+			if _, err := api.GetObject(tutils.HTTPClient, proxyURL, bucket, path.Join(fshcDir, strconv.FormatInt(int64(n), 10))); err == nil {
+				t.Error("Should not be able to GET non-existing objects")
+			}
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting non-existing objects should not disable mountpath")
@@ -278,11 +272,11 @@ func TestFSCheckerDetection(t *testing.T) {
 	setClusterConfig(t, proxyURL, "fschecker_enabled", "false")
 	defer setClusterConfig(t, proxyURL, "fschecker_enabled", "true")
 	// generate a short list of file to run the test (to avoid flooding the log with false errors)
-	fileList := []string{}
+	objList := []string{}
 	for n := 0; n < 5; n++ {
-		fileList = append(fileList, fileNames[n])
+		objList = append(objList, fileNames[n])
 	}
-	ldir := LocalSrcDir + "/" + fshcDir
+	ldir := filepath.Join(LocalSrcDir, fshcDir)
 	{
 		os.RemoveAll(failedMpath)
 
@@ -291,9 +285,9 @@ func TestFSCheckerDetection(t *testing.T) {
 			t.Errorf("Failed to create file: %v", err)
 		}
 		f.Close()
-		filesPutCh := make(chan string, len(fileList))
-		putRandObjsFromList(proxyURL, seed, filesize, fileList, bucket, nil, filesPutCh, ldir, fshcDir, true, sgl)
-		close(filesPutCh)
+		objsPutCh := make(chan string, len(objList))
+		tutils.PutObjsFromList(proxyURL, bucket, ldir, readerType, fshcDir, filesize, objList, nil, objsPutCh, sgl)
+		close(objsPutCh)
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("PUT objects to a broken mountpath should not disable the mountpath when FSHC is disabled")
 		}
@@ -308,7 +302,7 @@ func TestFSCheckerDetection(t *testing.T) {
 			t.Errorf("Failed to create file: %v", err)
 		}
 		f.Close()
-		for _, n := range fileList {
+		for _, n := range objList {
 			_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, n)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
@@ -331,9 +325,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		bucket = TestLocalBucketName
 	}
 
-	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	tutils.CheckFatal(err, t)
-
+	smap := getClusterMap(t, proxyURL)
 	mpList := make(map[string]string, 0)
 	allMps := make(map[string]*cmn.MountpathList, 0)
 	origAvail := 0
@@ -367,7 +359,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	// create a local bucket to write to
 	tutils.Logf("mountpath %s of %s is going offline\n", failedMpath, failedTarget)
 
-	err = api.EnableMountpath(tutils.HTTPClient, failedTarget, failedMpath)
+	err := api.EnableMountpath(tutils.HTTPClient, failedTarget, failedMpath)
 	if err != nil {
 		t.Errorf("Enabling available mountpath should return success, got: %v", err)
 	}
@@ -380,9 +372,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 
 func TestFSCheckerTargetDisable(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
-	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	tutils.CheckFatal(err, t)
-
+	smap := getClusterMap(t, proxyURL)
 	proxyCnt := len(smap.Pmap)
 	targetCnt := len(smap.Tmap)
 	if targetCnt < 2 {

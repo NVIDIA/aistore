@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -117,7 +118,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	// Step 3.
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
 	start := time.Now()
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -217,7 +218,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// Step 3.
 	_, newPrimaryURL, err := chooseNextProxy(&m.smap)
 	// use a new proxyURL because primaryCrashElectRestart has a side-effect:
-	// it changes the primary proxy. Without the change putRandObjs is
+	// it changes the primary proxy. Without the change tutils.PutRandObjs is
 	// failing while the current primary is restarting and rejoining
 	m.proxyURL = newPrimaryURL
 	tutils.CheckFatal(err, t)
@@ -231,7 +232,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	// PUT phase is timed to ensure it doesn't finish before primaryCrashElectRestart() begins
 	time.Sleep(5 * time.Second)
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -371,7 +372,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	go func() {
 		// Put some files
 		tutils.Logf("PUT %d files into bucket %s...\n", num, m.bucket)
-		putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+		tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 		selectErr(errCh, "put", t, false)
 		close(filenameCh)
 		close(errCh)
@@ -463,7 +464,7 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 
 	// Put some files
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -576,7 +577,7 @@ func TestPutDuringRebalance(t *testing.T) {
 	}()
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -685,7 +686,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	tutils.CheckFatal(err, md.t)
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, md.bucket)
-	putRandObjs(md.proxyURL, seed, filesize, num, md.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(md.proxyURL, md.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -801,7 +802,7 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	}
 
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, md.bucket)
-	putRandObjs(md.proxyURL, seed, filesize, num, md.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(md.proxyURL, md.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -899,7 +900,7 @@ func TestGetDuringRebalance(t *testing.T) {
 
 	// Start putting files into bucket
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, md.bucket)
-	putRandObjs(md.proxyURL, seed, filesize, num, md.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(md.proxyURL, md.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1062,7 +1063,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 
 	// Put some files
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1226,7 +1227,7 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	// Put and read random files
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1291,7 +1292,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}()
 
 	// Put random files
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1370,7 +1371,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	}()
 
 	// Put random files
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1509,7 +1510,7 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	// Put and read random files
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1559,7 +1560,7 @@ func doGetsInParallel(m *metadata) {
 				repFile.repetitions -= 1
 				m.repFilenameCh <- repFile
 			}
-			_, err := api.GetObject(tutils.HTTPClient, m.proxyURL, m.bucket, SmokeStr+"/"+repFile.filename)
+			_, err := api.GetObject(tutils.HTTPClient, m.proxyURL, m.bucket, path.Join(SmokeStr, repFile.filename))
 			if err != nil {
 				r := atomic.LoadUint64(&(m.reregistered))
 				if r == 1 {
@@ -1629,10 +1630,8 @@ func doReregisterTarget(target *cluster.Snode, m *metadata) {
 }
 
 func saveClusterState(m *metadata) {
-	var err error
 	m.proxyURL = getPrimaryURL(m.t, proxyURLRO)
-	m.smap, err = api.GetClusterMap(tutils.HTTPClient, m.proxyURL)
-	tutils.CheckFatal(err, m.t)
+	m.smap = getClusterMap(m.t, m.proxyURL)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)
 	tutils.Logf("Number of targets %d, number of proxies %d\n", m.originalTargetCount, m.originalProxyCount)
@@ -1741,7 +1740,7 @@ func TestForwardCP(t *testing.T) {
 
 	// Step 3.
 	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
@@ -1834,7 +1833,7 @@ func TestAtimeRebalance(t *testing.T) {
 	tutils.CheckFatal(err, t)
 
 	// Put random files
-	putRandObjs(m.proxyURL, seed, filesize, num, m.bucket, errCh, filenameCh, SmokeDir, SmokeStr, true, sgl)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)

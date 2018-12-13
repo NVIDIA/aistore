@@ -14,10 +14,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,6 +29,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dsort"
+	"github.com/NVIDIA/dfcpub/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -584,6 +587,127 @@ func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
 	}
 
 	return response, nil
+}
+
+func determineReaderType(sgl *memsys.SGL, readerPath, readerType, objName string, size uint64) (reader Reader, err error) {
+	if sgl != nil {
+		sgl.Reset()
+		reader, err = NewSGReader(sgl, int64(size), true /* with Hash */)
+	} else {
+		if readerType == ReaderTypeFile && readerPath == "" {
+			err = fmt.Errorf("Path to reader cannot be empty when reader type is %s", ReaderTypeFile)
+			return
+		}
+		// need to ensure that readerPath exists before trying to create a file there
+		if err = cmn.CreateDir(readerPath); err != nil {
+			return
+		}
+		reader, err = NewReader(ParamReader{
+			Type: readerType,
+			SGL:  nil,
+			Path: readerPath,
+			Name: objName,
+			Size: int64(size),
+		})
+	}
+	return
+}
+
+func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, sgl *memsys.SGL, errCh chan error, objCh, objsPutCh chan string) {
+	var (
+		size   = objSize
+		reader Reader
+		err    error
+	)
+	for {
+		objName := <-objCh
+		if objName == "" {
+			return
+		}
+		if size == 0 {
+			random := rand.New(rand.NewSource(time.Now().UnixNano()))
+			size = uint64(random.Intn(1024)+1) * 1024
+		}
+		reader, err = determineReaderType(sgl, readerPath, readerType, objName, size)
+		if err != nil {
+			Logf("Failed to generate random file %s, err: %v\n", path.Join(readerPath, objName), err)
+			if errCh != nil {
+				errCh <- err
+			}
+			return
+		}
+
+		fullObjName := path.Join(objPath, objName)
+		// We could PUT while creating files, but that makes it
+		// begin all the puts immediately (because creating random files is fast
+		// compared to the listbucket call that getRandomFiles does)
+		err = api.PutObject(HTTPClient, proxyURL, bucket, fullObjName, reader.XXHash(), reader)
+		if err != nil {
+			if errCh == nil {
+				Logf("Error performing PUT of object with random data, provided error channel is nil\n")
+			} else {
+				errCh <- err
+			}
+		}
+		objsPutCh <- objName
+	}
+}
+
+func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, objList []string,
+	errCh chan error, objsPutCh chan string, sgl *memsys.SGL) {
+	var (
+		wg         = &sync.WaitGroup{}
+		objCh      = make(chan string, len(objList))
+		numworkers = 10
+	)
+	// if len(objList) < numworkers, only need as many workers as there are objects to be PUT
+	numworkers = cmn.Min(numworkers, len(objList))
+	sgls := make([]*memsys.SGL, numworkers, numworkers)
+
+	// need an SGL for each worker with its size being that of the original SGL
+	if sgl != nil {
+		slabSize := sgl.Slab().Size()
+		for i := 0; i < numworkers; i++ {
+			sgls[i] = Mem2.NewSGL(slabSize)
+		}
+		defer func() {
+			for _, sgl := range sgls {
+				sgl.Free()
+			}
+		}()
+	}
+
+	for i := 0; i < numworkers; i++ {
+		wg.Add(1)
+		var sgli *memsys.SGL
+		if sgl != nil {
+			sgli = sgls[i]
+		}
+		go func(sgli *memsys.SGL) {
+			putObjs(proxyURL, bucket, readerPath, readerType, objPath, objSize, sgli, errCh, objCh, objsPutCh)
+			wg.Done()
+		}(sgli)
+	}
+
+	for _, objName := range objList {
+		objCh <- objName
+	}
+	close(objCh)
+
+	wg.Wait()
+}
+
+func PutRandObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize uint64, numPuts int,
+	errCh chan error, objsPutCh chan string, sgl *memsys.SGL) {
+
+	var fnlen = 10
+	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	objList := make([]string, 0, numPuts)
+	for i := 0; i < numPuts; i++ {
+		fname := FastRandomFilename(random, fnlen)
+		objList = append(objList, fname)
+	}
+	PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath, objSize, objList, errCh, objsPutCh, sgl)
 }
 
 func StartDSort(proxyURL string, rs dsort.RequestSpec) (string, error) {

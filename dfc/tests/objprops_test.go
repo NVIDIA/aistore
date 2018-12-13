@@ -5,6 +5,7 @@
 package dfc_test
 
 import (
+	"path"
 	"sync"
 	"testing"
 
@@ -330,14 +331,13 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 	// Create a few objects
 	tutils.Logf("Creating %d objects...\n", numPuts)
 	ldir := LocalSrcDir + "/" + versionDir
-	putRandObjs(proxyURL, baseseed+110, filesize, int(numPuts), bucket, errCh, filesPutCh,
-		ldir, versionDir, true, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, versionDir, filesize, int(numPuts), errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh)
 	close(errCh)
 	for fname := range filesPutCh {
 		if fname != "" {
-			fileslist[versionDir+"/"+fname] = ""
+			fileslist[path.Join(versionDir, fname)] = ""
 		}
 	}
 

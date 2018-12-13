@@ -7,6 +7,7 @@ package tutils_test
 import (
 	"io"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
@@ -284,13 +285,13 @@ func TestSGReader(t *testing.T) {
 }
 
 func BenchmarkFileReaderCreateWithHash1M(b *testing.B) {
-	path := "/tmp"
+	filepath := "/tmp"
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewFileReader(path, fn, cmn.MiB, true /* withHash */)
+		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, true /* withHash */)
 		r.Close()
-		os.Remove(path + "/" + fn)
+		os.Remove(path.Join(filepath, fn))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -332,13 +333,13 @@ func BenchmarkSGReaderCreateWithHash1M(b *testing.B) {
 }
 
 func BenchmarkFileReaderCreateNoHash1M(b *testing.B) {
-	path := "/tmp"
+	filepath := "/tmp"
 	fn := "reader-test"
 
 	for i := 0; i < b.N; i++ {
-		r, err := tutils.NewFileReader(path, fn, cmn.MiB, false /* withHash */)
+		r, err := tutils.NewFileReader(filepath, fn, cmn.MiB, false /* withHash */)
 		r.Close()
-		os.Remove(path + "/" + fn)
+		os.Remove(path.Join(filepath, fn))
 		if err != nil {
 			b.Fatal(err)
 		}

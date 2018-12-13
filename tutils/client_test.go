@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -56,7 +57,7 @@ func putFile(size int64, withHash bool) error {
 	}
 	err = api.PutObject(tutils.HTTPClient, server.URL, "bucket", "key", r.XXHash(), r)
 	r.Close()
-	os.Remove(dir + "/" + fn)
+	os.Remove(path.Join(dir, fn))
 	return err
 }
 

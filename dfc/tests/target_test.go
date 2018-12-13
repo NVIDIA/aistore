@@ -22,10 +22,8 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 		sid          string
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		objDummyData = []byte("testing is so much fun")
+		smap         = getClusterMap(t, proxyURL)
 	)
-
-	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	tutils.CheckFatal(err, t)
 
 	for sid = range smap.Tmap {
 		break

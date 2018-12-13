@@ -64,7 +64,7 @@ func Test_download(t *testing.T) {
 		close(filesCreated)
 		var err error
 		for file := range filesCreated {
-			e := os.Remove(LocalDestDir + "/" + file)
+			e := os.Remove(filepath.Join(LocalDestDir, file))
 			if e != nil {
 				err = e
 			}
@@ -204,7 +204,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	const (
 		commonPrefix = "tst" // object full name: <bucket>/<commonPrefix>/<generated_name:a-####|b-####>
-		filesize     = 16 * 1024
+		objSize      = 16 * 1024
 	)
 	var sgl *memsys.SGL
 	proxyURL := getPrimaryURL(t, proxyURLRO)
@@ -217,23 +217,22 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	errCh := make(chan error, numfiles*5)
-	filesPutCh := make(chan string, numfiles)
+	objsPutCh := make(chan string, numfiles)
 
 	if usingSG {
-		sgl = tutils.Mem2.NewSGL(filesize)
+		sgl = tutils.Mem2.NewSGL(objSize)
 		defer sgl.Free()
 	}
-	filenameList := make([]string, 0, numfiles)
+	objList := make([]string, 0, numfiles)
 	for i := 0; i < numfiles/2; i++ {
 		fname := fmt.Sprintf("a-%04d", i)
-		filenameList = append(filenameList, fname)
+		objList = append(objList, fname)
 		fname = fmt.Sprintf("b-%04d", i)
-		filenameList = append(filenameList, fname)
+		objList = append(objList, fname)
 	}
-	putRandObjsFromList(proxyURL, baseseed, filesize, filenameList, clibucket, errCh, filesPutCh, DeleteDir,
-		commonPrefix, true, sgl)
+	tutils.PutObjsFromList(proxyURL, clibucket, DeleteDir, readerType, commonPrefix, objSize, objList, errCh, objsPutCh, sgl)
 	selectErr(errCh, "put", t, true /* fatal - if PUT does not work then it makes no sense to continue */)
-	close(filesPutCh)
+	close(objsPutCh)
 	type testParams struct {
 		// title to print out while testing
 		name string
@@ -319,8 +318,8 @@ func Test_putdeleteRange(t *testing.T) {
 	}
 
 	if usingFile {
-		for name := range filesPutCh {
-			os.Remove(DeleteDir + "/" + name)
+		for name := range objsPutCh {
+			os.Remove(filepath.Join(DeleteDir, name))
 		}
 	}
 	num := 0
@@ -361,8 +360,7 @@ func Test_putdelete(t *testing.T) {
 		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, baseseed, filesize, numfiles, clibucket, errCh, filesPutCh,
-		DeleteDir, DeleteStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, clibucket, DeleteDir, readerType, DeleteStr, filesize, numfiles, errCh, filesPutCh, sgl)
 	close(filesPutCh)
 	selectErr(errCh, "put", t, true)
 
@@ -384,10 +382,10 @@ func Test_putdelete(t *testing.T) {
 	num := 0
 	for name := range filesPutCh {
 		if usingFile {
-			os.Remove(DeleteDir + "/" + name)
+			os.Remove(filepath.Join(DeleteDir, name))
 		}
 
-		keynameChans[num%numworkers] <- DeleteStr + "/" + name
+		keynameChans[num%numworkers] <- filepath.Join(DeleteStr, name)
 		num++
 	}
 
@@ -408,7 +406,7 @@ func listObjects(t *testing.T, proxyURL string, msg *cmn.GetMsg, bucket string, 
 		reslist *cmn.BucketList
 	)
 	tutils.Logf("LIST %s [prefix %s]\n", bucket, msg.GetPrefix)
-	fname := LocalDestDir + "/" + bucket
+	fname := filepath.Join(LocalDestDir, bucket)
 	if copy {
 		// Write list to a local filename = bucket
 		if err = cmn.CreateDir(LocalDestDir); err != nil {
@@ -499,7 +497,7 @@ func Test_coldgetmd5(t *testing.T) {
 		t.Skip("Test_coldgetmd5 requires a cloud bucket")
 	}
 
-	ldir := LocalSrcDir + "/" + ColdValidStr
+	ldir := filepath.Join(LocalSrcDir, ColdValidStr)
 	if err := cmn.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
@@ -511,12 +509,11 @@ func Test_coldgetmd5(t *testing.T) {
 		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, baseseed, filesize, numPuts, bucket, errCh, filesPutCh, ldir,
-		ColdValidStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, ColdValidStr, filesize, numPuts, errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
-		fileslist = append(fileslist, ColdValidStr+"/"+fname)
+		fileslist = append(fileslist, filepath.Join(ColdValidStr, fname))
 	}
 	evictobjects(t, proxyURL, fileslist)
 	// Disable Cold Get Validation
@@ -548,7 +545,7 @@ cleanup:
 	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", bcoldget)
 	for _, fn := range fileslist {
 		if usingFile {
-			_ = os.Remove(LocalSrcDir + "/" + fn)
+			_ = os.Remove(filepath.Join(LocalSrcDir, fn))
 		}
 
 		wg.Add(1)
@@ -728,7 +725,7 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 	hdhashtype := resp.Header.Get(cmn.HeaderDFCChecksumType)
 
 	// Create a local copy
-	fname := LocalDestDir + "/" + keyname
+	fname := filepath.Join(LocalDestDir, keyname)
 	file, err := cmn.CreateFile(fname)
 	if err != nil {
 		t.Errorf("Worker %2d: Failed to create file, err: %v", id, err)
@@ -853,7 +850,6 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	const fileSize = 1024
 	var (
 		numFiles    = 3
-		seed        = baseseed + 111
 		errCh       = make(chan error, numFiles*5)
 		fileNameCh  = make(chan string, numfiles)
 		sgl         *memsys.SGL
@@ -880,19 +876,19 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	tutils.Logf("Creating %d objects\n", numFiles)
-	putRandObjs(proxyURL, seed, fileSize, numFiles, clibucket, errCh, fileNameCh, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, clibucket, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
 	selectErr(errCh, "put", t, false)
 
 	fileName = <-fileNameCh
-	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
+	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	// Fetch the file from cloud bucket.
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Failed while fetching the file from the cloud bucket. Error: [%v]", err)
 	}
 
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, clibucket+"/"+ChecksumWarmValidateStr) {
+		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(clibucket, ChecksumWarmValidateStr)) {
 			fqn = path
 		}
 		return nil
@@ -922,7 +918,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	// Test when the xxHash of the file is changed
 	fileName = <-fileNameCh
-	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
+	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	filepath.Walk(rootDir, fsWalkFunc)
 	oldFileInfo, err = os.Stat(fqn)
 	if err != nil {
@@ -937,7 +933,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 
 	// Test for no checksum algo
 	fileName = <-fileNameCh
-	filesList = append(filesList, ChecksumWarmValidateStr+"/"+fileName)
+	filesList = append(filesList, filepath.Join(ChecksumWarmValidateStr, fileName))
 	filepath.Walk(rootDir, fsWalkFunc)
 	setClusterConfig(t, proxyURL, "checksum", cmn.ChecksumNone)
 	if t.Failed() {
@@ -948,7 +944,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName)
+	_, err = api.GetObject(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("A GET on an object when checksum algo is none should pass. Error: %v", err)
 	}
@@ -960,7 +956,7 @@ cleanup:
 	wg := &sync.WaitGroup{}
 	for _, fn := range filesList {
 		if usingFile {
-			_ = os.Remove(LocalSrcDir + "/" + fn)
+			_ = os.Remove(filepath.Join(LocalSrcDir, fn))
 		}
 
 		wg.Add(1)
@@ -976,7 +972,7 @@ func validateGETUponFileChangeForChecksumValidation(
 	t *testing.T, proxyURL, fileName string, newFileInfo os.FileInfo, fqn string,
 	oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, ChecksumWarmValidateStr+"/"+fileName)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
@@ -1003,7 +999,6 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, 100)
 		sgl        *memsys.SGL
-		seed       = int64(111)
 		bucketName = TestLocalBucketName
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 		fqn        string
@@ -1022,7 +1017,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errCh, fileNameCh, ChecksumWarmValidateDir, ChecksumWarmValidateStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, bucketName, ChecksumWarmValidateDir, readerType, ChecksumWarmValidateStr, fileSize, numFiles, errCh, fileNameCh, sgl)
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
@@ -1035,7 +1030,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		if info.IsDir() && info.Name() == "cloud" {
 			return filepath.SkipDir
 		}
-		if filepath.Base(path) == fileName && strings.Contains(path, bucketName+"/"+ChecksumWarmValidateStr) {
+		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(bucketName, ChecksumWarmValidateStr)) {
 			fqn = path
 		}
 		return nil
@@ -1078,7 +1073,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucketName, ChecksumWarmValidateStr+"/"+fileName)
+	_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucketName, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Error("A GET on an object when checksum algo is none should pass")
 	}
@@ -1093,14 +1088,14 @@ cleanup:
 }
 
 func executeTwoGETsForChecksumValidation(proxyURL, bucket string, fName string, t *testing.T) {
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, filepath.Join(ChecksumWarmValidateStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected internal server error on a GET for an object")
 	} else if !strings.Contains(err.Error(), "500") {
 		t.Errorf("Expected internal server error on a GET for a corrupted object, got [%s]", err.Error())
 	}
 	// Execute another GET to make sure that the object is deleted
-	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, ChecksumWarmValidateStr+"/"+fName)
+	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, filepath.Join(ChecksumWarmValidateStr, fName))
 	if err == nil {
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
 	} else if !strings.Contains(err.Error(), "404") {
@@ -1115,7 +1110,6 @@ func TestRangeRead(t *testing.T) {
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, numFiles)
 		sgl        *memsys.SGL
-		seed       = int64(131)
 		proxyURL   = getPrimaryURL(t, proxyURLRO)
 		bucketName = clibucket
 		fileName   string
@@ -1127,7 +1121,7 @@ func TestRangeRead(t *testing.T) {
 	}
 
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
-	putRandObjs(proxyURL, seed, fileSize, numFiles, bucketName, errCh, fileNameCh, RangeGetDir, RangeGetStr, false, sgl)
+	tutils.PutRandObjs(proxyURL, bucketName, RangeGetDir, readerType, RangeGetStr, fileSize, numFiles, errCh, fileNameCh, sgl)
 	selectErr(errCh, "put", t, false)
 
 	// Get Current Config
@@ -1166,11 +1160,11 @@ cleanup:
 	wg := &sync.WaitGroup{}
 
 	if usingFile {
-		_ = os.Remove(LocalSrcDir + "/" + fileName)
+		_ = os.Remove(filepath.Join(LocalSrcDir, fileName))
 	}
 
 	wg.Add(1)
-	go tutils.Del(proxyURL, clibucket, RangeGetStr+"/"+fileName, wg, errCh, !testing.Verbose())
+	go tutils.Del(proxyURL, clibucket, filepath.Join(RangeGetStr, fileName), wg, errCh, !testing.Verbose())
 	wg.Wait()
 	selectErr(errCh, "delete", t, false)
 	setClusterConfig(t, proxyURL, "enable_read_range_checksum", oldEnableReadRangeChecksum)
@@ -1200,7 +1194,7 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 	checkDir string) {
 	var fqn string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
-		if filepath.Base(path) == fileName && strings.Contains(path, bucketName+"/"+checkDir) {
+		if filepath.Base(path) == fileName && strings.Contains(path, filepath.Join(bucketName, checkDir)) {
 			fqn = path
 		}
 		return nil
@@ -1213,7 +1207,7 @@ func verifyValidRanges(t *testing.T, proxyURL, bucketName string, fileName strin
 	var b bytes.Buffer
 	w := bufio.NewWriter(&b)
 	options := api.GetObjectInput{Writer: w, Query: q}
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, RangeGetStr+"/"+fileName, options)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, filepath.Join(RangeGetStr, fileName), options)
 	if err != nil {
 		if !checkEntireObjCksum {
 			t.Errorf("Failed to get object %s/%s! Error: %v", bucketName, fileName, err)
@@ -1272,7 +1266,7 @@ func verifyInvalidParams(t *testing.T, proxyURL, bucketName string, fileName str
 	q.Add(cmn.URLParamOffset, offset)
 	q.Add(cmn.URLParamLength, length)
 	options := api.GetObjectInput{Query: q}
-	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, RangeGetStr+"/"+fileName, options)
+	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucketName, filepath.Join(RangeGetStr, fileName), options)
 	if err == nil {
 		t.Errorf("Must fail for invalid offset %s and length %s combination.", offset, length)
 	}
@@ -1298,7 +1292,7 @@ func Test_checksum(t *testing.T) {
 	)
 
 	created := createLocalBucketIfNotExists(t, proxyURL, bucket)
-	ldir := LocalSrcDir + "/" + ChksumValidStr
+	ldir := filepath.Join(LocalSrcDir, ChksumValidStr)
 	if err := cmn.CreateDir(ldir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", ldir, err)
 	}
@@ -1312,13 +1306,12 @@ func Test_checksum(t *testing.T) {
 		sgl = tutils.Mem2.NewSGL(filesize)
 		defer sgl.Free()
 	}
-	putRandObjs(proxyURL, 0, filesize, int(numPuts), bucket, errCh, filesPutCh, ldir,
-		ChksumValidStr, true, sgl)
+	tutils.PutRandObjs(proxyURL, bucket, ldir, readerType, ChksumValidStr, filesize, int(numPuts), errCh, filesPutCh, sgl)
 	selectErr(errCh, "put", t, false)
 	close(filesPutCh) // to exit for-range
 	for fname := range filesPutCh {
 		if fname != "" {
-			fileslist = append(fileslist, ChksumValidStr+"/"+fname)
+			fileslist = append(fileslist, filepath.Join(ChksumValidStr, fname))
 		}
 	}
 	// Delete it from cache.
@@ -1400,7 +1393,7 @@ func deletefromfilelist(proxyURL, bucket string, errCh chan error, fileslist []s
 	// Delete local file and objects from bucket
 	for _, fn := range fileslist {
 		if usingFile {
-			err := os.Remove(LocalSrcDir + "/" + fn)
+			err := os.Remove(filepath.Join(LocalSrcDir, fn))
 			if err != nil {
 				errCh <- err
 			}

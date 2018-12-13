@@ -69,8 +69,7 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
 	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
-	smap, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	tutils.CheckFatal(err, t)
+	smap := getClusterMap(t, proxyURL)
 
 	if len(smap.Tmap) < 1 || len(smap.Pmap) < 1 {
 		t.Fatal("This test requires there to be at least one target and one proxy in the current cluster")
@@ -100,7 +99,7 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 
 	for _, url := range invalidDaemonURLs {
 		bucketProps.NextTierURL = url
-		if err = api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps); err == nil {
+		if err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps); err == nil {
 			t.Fatalf("Setting the bucket's nextTierURL to daemon %q should fail, it is in the current cluster.", url)
 		}
 	}

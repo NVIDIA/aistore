@@ -143,10 +143,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	smap := getClusterMap(t, proxyURL)
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
 	tutils.CheckFatal(err, t)
-
-	if err = checkPmapVersions(proxyURL); err != nil {
-		t.Errorf("Cluster is inconsistent state: %v", err)
-	}
+	checkPmapVersions(t, proxyURL)
 
 	oldPrimaryURL := smap.ProxySI.PublicNet.DirectURL
 	oldPrimaryID := smap.ProxySI.DaemonID
@@ -177,9 +174,7 @@ func primaryCrashElectRestart(t *testing.T) {
 	if _, ok := smap.Pmap[oldPrimaryID]; !ok {
 		t.Fatalf("Previous primary proxy did not rejoin the cluster")
 	}
-	if err = checkPmapVersions(newPrimaryURL); err != nil {
-		t.Error(err)
-	}
+	checkPmapVersions(t, newPrimaryURL)
 }
 
 // primaryAndTargetCrash kills the primary p[roxy and one random target, verifies the next in
@@ -791,9 +786,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 	if smap.ProxySI.DaemonID != toID {
 		t.Fatalf("Expected primary=%s, got %s", toID, smap.ProxySI.DaemonID)
 	}
-	if err = checkPmapVersions(proxyURL); err != nil {
-		t.Fatal(err)
-	}
+	checkPmapVersions(t, proxyURL)
 }
 
 func chooseNextProxy(smap *cluster.Smap) (proxyid, proxyURL string, err error) {
@@ -923,27 +916,19 @@ func getProcess(port string) (string, string, []string, error) {
 
 // Read Pmap from all proxies and checks versions. If any proxy's smap version
 // differs from primary's one then an error returned
-func checkPmapVersions(proxyURL string) error {
-	smapPrimary, err := api.GetClusterMap(tutils.HTTPClient, proxyURL)
-	if err != nil {
-		return err
-	}
-
+func checkPmapVersions(t *testing.T, proxyURL string) {
+	smapPrimary := getClusterMap(t, proxyURL)
 	for proxyID, proxyInfo := range smapPrimary.Pmap {
 		if proxyURL == proxyInfo.PublicNet.DirectURL {
 			continue
 		}
-		smap, err := api.GetClusterMap(tutils.HTTPClient, proxyInfo.PublicNet.DirectURL)
-		if err != nil {
-			return err
-		}
+		smap := getClusterMap(t, proxyInfo.PublicNet.DirectURL)
 		if smap.Version != smapPrimary.Version {
-			return fmt.Errorf("Proxy %s has version %d, but primary proxy has version %d of Pmap",
+			err := fmt.Errorf("Proxy %s has version %d, but primary proxy has version %d of Pmap",
 				proxyID, smap.Version, smapPrimary.Version)
+			t.Error(err)
 		}
 	}
-
-	return nil
 }
 
 // waitForPrimaryProxy reads the current primary proxy(which is proxyurl)'s smap until its
@@ -1262,9 +1247,7 @@ func networkFailurePrimary(t *testing.T) {
 	// connections and starts talking to neighbors
 	waitProgressBar("Wait for old primary is connected to network", 5*time.Second)
 
-	oldSmap, err := api.GetClusterMap(tutils.HTTPClient, oldPrimaryURL)
-	tutils.CheckFatal(err, t)
-
+	oldSmap := getClusterMap(t, oldPrimaryURL)
 	// the original primary still thinks that it is the primary, so its smap
 	// should not change after the network is back
 	if oldSmap.ProxySI.DaemonID != oldPrimaryID {

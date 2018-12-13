@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -266,9 +267,9 @@ func (r *fileReader) Description() string {
 }
 
 // NewFileReader creates/opens the file, populates it with random data, closes it and returns a new fileReader
-func NewFileReader(path, name string, size int64, withHash bool) (Reader, error) {
+func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, error) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-	fn := path + "/" + name
+	fn := path.Join(filepath, name)
 
 	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE, 0666) //wr-wr-wr-
 	if err != nil {
