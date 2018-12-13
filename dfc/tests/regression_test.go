@@ -688,59 +688,59 @@ func TestGetClusterStats(t *testing.T) {
 func TestConfig(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	oconfig := getDaemonConfig(t, proxyURL)
-	olruconfig := oconfig["lru_config"].(map[string]interface{})
-	operiodic := oconfig["periodic"].(map[string]interface{})
+	olruconfig := oconfig.LRU
+	operiodic := oconfig.Periodic
 
 	for k, v := range configRegression {
 		setClusterConfig(t, proxyURL, k, v)
 	}
 
 	nconfig := getDaemonConfig(t, proxyURL)
-	nlruconfig := nconfig["lru_config"].(map[string]interface{})
-	nperiodic := nconfig["periodic"].(map[string]interface{})
+	nlruconfig := nconfig.LRU
+	nperiodic := nconfig.Periodic
 
-	if nperiodic["stats_time"] != configRegression["stats_time"] {
+	if nperiodic.StatsTimeStr != configRegression["stats_time"] {
 		t.Errorf("StatsTime was not set properly: %v, should be: %v",
-			nperiodic["stats_time"], configRegression["stats_time"])
+			nperiodic.StatsTimeStr, configRegression["stats_time"])
 	} else {
-		o := operiodic["stats_time"].(string)
+		o := operiodic.StatsTimeStr
 		setClusterConfig(t, proxyURL, "stats_time", o)
 	}
-	if nlruconfig["dont_evict_time"] != configRegression["dont_evict_time"] {
+	if nlruconfig.DontEvictTimeStr != configRegression["dont_evict_time"] {
 		t.Errorf("DontEvictTime was not set properly: %v, should be: %v",
-			nlruconfig["dont_evict_time"], configRegression["dont_evict_time"])
+			nlruconfig.DontEvictTimeStr, configRegression["dont_evict_time"])
 	} else {
-		setClusterConfig(t, proxyURL, "dont_evict_time", olruconfig["dont_evict_time"])
+		setClusterConfig(t, proxyURL, "dont_evict_time", olruconfig.DontEvictTimeStr)
 	}
-	if nlruconfig["capacity_upd_time"] != configRegression["capacity_upd_time"] {
+	if nlruconfig.CapacityUpdTimeStr != configRegression["capacity_upd_time"] {
 		t.Errorf("CapacityUpdTime was not set properly: %v, should be: %v",
-			nlruconfig["capacity_upd_time"], configRegression["capacity_upd_time"])
+			nlruconfig.CapacityUpdTimeStr, configRegression["capacity_upd_time"])
 	} else {
-		setClusterConfig(t, proxyURL, "capacity_upd_time", olruconfig["capacity_upd_time"])
+		setClusterConfig(t, proxyURL, "capacity_upd_time", olruconfig.CapacityUpdTimeStr)
 	}
 	if hw, err := strconv.Atoi(configRegression["highwm"]); err != nil {
 		t.Fatalf("Error parsing HighWM: %v", err)
-	} else if nlruconfig["highwm"] != float64(hw) {
-		t.Errorf("HighWatermark was not set properly: %.0f, should be: %d",
-			nlruconfig["highwm"], hw)
+	} else if nlruconfig.HighWM != int64(hw) {
+		t.Errorf("HighWatermark was not set properly: %d, should be: %d",
+			nlruconfig.HighWM, hw)
 	} else {
-		setClusterConfig(t, proxyURL, "highwm", olruconfig["highwm"])
+		setClusterConfig(t, proxyURL, "highwm", olruconfig.HighWM)
 	}
 	if lw, err := strconv.Atoi(configRegression["lowwm"]); err != nil {
 		t.Fatalf("Error parsing LowWM: %v", err)
-	} else if nlruconfig["lowwm"] != float64(lw) {
-		t.Errorf("LowWatermark was not set properly: %.0f, should be: %d",
-			nlruconfig["lowwm"], lw)
+	} else if nlruconfig.LowWM != int64(lw) {
+		t.Errorf("LowWatermark was not set properly: %d, should be: %d",
+			nlruconfig.LowWM, lw)
 	} else {
-		setClusterConfig(t, proxyURL, "lowwm", olruconfig["lowwm"])
+		setClusterConfig(t, proxyURL, "lowwm", olruconfig.LowWM)
 	}
 	if pt, err := strconv.ParseBool(configRegression["lru_enabled"]); err != nil {
 		t.Fatalf("Error parsing LRUEnabled: %v", err)
-	} else if nlruconfig["lru_enabled"] != pt {
+	} else if nlruconfig.LRUEnabled != pt {
 		t.Errorf("LRUEnabled was not set properly: %v, should be %v",
-			nlruconfig["lru_enabled"], pt)
+			nlruconfig.LRUEnabled, pt)
 	} else {
-		setClusterConfig(t, proxyURL, "lru_enabled", olruconfig["lru_enabled"])
+		setClusterConfig(t, proxyURL, "lru_enabled", olruconfig.LRUEnabled)
 	}
 }
 
@@ -772,9 +772,8 @@ func TestLRU(t *testing.T) {
 	filesEvictedOrig := make(map[string]int64)
 	for k, di := range smap.Tmap {
 		cfg := getDaemonConfig(t, di.URL(cmn.NetworkPublic))
-		lrucfg := cfg["lru_config"].(map[string]interface{})
-		lwms[k] = lrucfg["lowwm"]
-		hwms[k] = lrucfg["highwm"]
+		lwms[k] = cfg.LRU.LowWM
+		hwms[k] = cfg.LRU.HighWM
 	}
 	// add a few more
 	getRandomFiles(proxyURL, 0, 3, clibucket, "", t, nil, errCh)
@@ -806,16 +805,16 @@ func TestLRU(t *testing.T) {
 	//
 	// all targets: set new watermarks; restore upon exit
 	//
-	olruconfig := oconfig["lru_config"].(map[string]interface{})
-	operiodic := oconfig["periodic"].(map[string]interface{})
+	olruconfig := oconfig.LRU
+	operiodic := oconfig.Periodic
 	defer func() {
-		setClusterConfig(t, proxyURL, "dont_evict_time", olruconfig["dont_evict_time"])
-		setClusterConfig(t, proxyURL, "capacity_upd_time", olruconfig["capacity_upd_time"])
-		setClusterConfig(t, proxyURL, "highwm", olruconfig["highwm"])
-		setClusterConfig(t, proxyURL, "lowwm", olruconfig["lowwm"])
+		setClusterConfig(t, proxyURL, "dont_evict_time", olruconfig.DontEvictTimeStr)
+		setClusterConfig(t, proxyURL, "capacity_upd_time", olruconfig.CapacityUpdTimeStr)
+		setClusterConfig(t, proxyURL, "highwm", olruconfig.HighWM)
+		setClusterConfig(t, proxyURL, "lowwm", olruconfig.LowWM)
 		for k, di := range smap.Tmap {
-			setDaemonConfig(t, di.URL(cmn.NetworkPublic), "highwm", fmt.Sprint(hwms[k]))
-			setDaemonConfig(t, di.URL(cmn.NetworkPublic), "lowwm", fmt.Sprint(lwms[k]))
+			setDaemonConfig(t, di.URL(cmn.NetworkPublic), "highwm", hwms[k])
+			setDaemonConfig(t, di.URL(cmn.NetworkPublic), "lowwm", lwms[k])
 		}
 	}()
 	//
@@ -823,7 +822,7 @@ func TestLRU(t *testing.T) {
 	//
 	dontevicttimestr := "30s"
 	capacityupdtimestr := "5s"
-	sleeptime, err := time.ParseDuration(operiodic["stats_time"].(string)) // to make sure the stats get updated
+	sleeptime, err := time.ParseDuration(operiodic.StatsTimeStr) // to make sure the stats get updated
 	if err != nil {
 		t.Fatalf("Failed to parse stats_time: %v", err)
 	}
@@ -847,7 +846,6 @@ func TestLRU(t *testing.T) {
 	// results
 	//
 	stats = getClusterStats(t, proxyURL)
-	testFsPaths := oconfig["test_fspaths"].(map[string]interface{})
 	for k, v := range stats.Target {
 		bytes := getNamedTargetStats(v, "lru.evict.size") - bytesEvictedOrig[k]
 		tutils.Logf("Target %s: evicted %d files - %.2f MB (%dB) total\n",
@@ -855,7 +853,7 @@ func TestLRU(t *testing.T) {
 		//
 		// TestingEnv() - cannot reliably verify space utilization by tmpfs
 		//
-		if testFsPaths["count"].(float64) > 0 {
+		if oconfig.TestFSP.Count > 0 {
 			continue
 		}
 		for mpath, c := range v.Capacity {
@@ -1467,9 +1465,9 @@ func getClusterMap(t *testing.T, URL string) cluster.Smap {
 	return smap
 }
 
-func getDaemonConfig(t *testing.T, URL string) (dfcfg map[string]interface{}) {
+func getDaemonConfig(t *testing.T, URL string) (config *cmn.Config) {
 	var err error
-	dfcfg, err = api.GetDaemonConfig(tutils.HTTPClient, URL)
+	config, err = api.GetDaemonConfig(tutils.HTTPClient, URL)
 	tutils.CheckFatal(err, t)
 	return
 }

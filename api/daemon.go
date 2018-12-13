@@ -77,7 +77,7 @@ func DisableMountpath(httpClient *http.Client, targetURL, mountPath string) erro
 // GetConfig API operation for DFC
 //
 // Returns the configuration of a specific daemon in a cluster
-func GetDaemonConfig(httpClient *http.Client, daemonURL string) (dfcfg map[string]interface{}, err error) {
+func GetDaemonConfig(httpClient *http.Client, daemonURL string) (config *cmn.Config, err error) {
 	reqURL := daemonURL + cmn.URLPath(cmn.Version, cmn.Daemon)
 	query := url.Values{cmn.URLParamWhat: []string{cmn.GetWhatConfig}}
 	optParams := ParamsOptional{Query: query}
@@ -90,7 +90,7 @@ func GetDaemonConfig(httpClient *http.Client, daemonURL string) (dfcfg map[strin
 	if err != nil {
 		return nil, err
 	}
-	err = jsoniter.Unmarshal(b, &dfcfg)
+	err = jsoniter.Unmarshal(b, &config)
 	if err != nil {
 		return nil, err
 	}

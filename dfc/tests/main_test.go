@@ -505,8 +505,7 @@ func Test_coldgetmd5(t *testing.T) {
 	}
 
 	config := getDaemonConfig(t, proxyURL)
-	cksumconfig := config["cksum_config"].(map[string]interface{})
-	bcoldget := cksumconfig["validate_checksum_cold_get"].(bool)
+	bcoldget := config.Cksum.ValidateColdGet
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -900,9 +899,8 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	}
 
 	config := getDaemonConfig(t, proxyURL)
-	checksumConfig := config["cksum_config"].(map[string]interface{})
-	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
-	oldChecksum := checksumConfig["checksum"].(string)
+	oldWarmGet := config.Cksum.ValidateWarmGet
+	oldChecksum := config.Cksum.Checksum
 	if !oldWarmGet {
 		setClusterConfig(t, proxyURL, "validate_checksum_warm_get", true)
 		if t.Failed() {
@@ -1029,9 +1027,8 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 
 	// Get Current Config
 	config := getDaemonConfig(t, proxyURL)
-	checksumConfig := config["cksum_config"].(map[string]interface{})
-	oldWarmGet := checksumConfig["validate_checksum_warm_get"].(bool)
-	oldChecksum := checksumConfig["checksum"].(string)
+	oldWarmGet := config.Cksum.ValidateWarmGet
+	oldChecksum := config.Cksum.Checksum
 
 	var fileName string
 	fsWalkFunc := func(path string, info os.FileInfo, err error) error {
@@ -1135,8 +1132,7 @@ func TestRangeRead(t *testing.T) {
 
 	// Get Current Config
 	config := getDaemonConfig(t, proxyURL)
-	checksumConfig := config["cksum_config"].(map[string]interface{})
-	oldEnableReadRangeChecksum := checksumConfig["enable_read_range_checksum"].(bool)
+	oldEnableReadRangeChecksum := config.Cksum.EnableReadRangeChecksum
 
 	fileName = <-fileNameCh
 	tutils.Logln("Testing valid cases.")
@@ -1309,9 +1305,8 @@ func Test_checksum(t *testing.T) {
 
 	// Get Current Config
 	config := getDaemonConfig(t, proxyURL)
-	cksumconfig := config["cksum_config"].(map[string]interface{})
-	ocoldget := cksumconfig["validate_checksum_cold_get"].(bool)
-	ochksum := cksumconfig["checksum"].(string)
+	ocoldget := config.Cksum.ValidateColdGet
+	ochksum := config.Cksum.Checksum
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)

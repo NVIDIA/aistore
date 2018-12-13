@@ -409,9 +409,9 @@ func propsMainTest(t *testing.T, versioning string) {
 	chkVersion := true
 
 	config := getDaemonConfig(t, proxyURL)
-	versionCfg := config["version_config"].(map[string]interface{})
-	oldChkVersion := versionCfg["validate_version_warm_get"].(bool)
-	oldVersioning := versionCfg["versioning"].(string)
+	oldChkVersion := config.Ver.ValidateWarmGet
+	oldVersioning := config.Ver.Versioning
+
 	if oldChkVersion != chkVersion {
 		setClusterConfig(t, proxyURL, "validate_version_warm_get", chkVersion)
 	}

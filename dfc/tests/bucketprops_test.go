@@ -15,19 +15,10 @@ import (
 func testBucketProps(t *testing.T) *cmn.BucketProps {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	globalConfig := getDaemonConfig(t, proxyURL)
-	lruConfig := globalConfig["lru_config"].(map[string]interface{})
 
-	LRUConf := cmn.LRUConf{
-		LowWM:              int64(lruConfig["lowwm"].(float64)),
-		HighWM:             int64(lruConfig["highwm"].(float64)),
-		AtimeCacheMax:      uint64(lruConfig["atime_cache_max"].(float64)),
-		DontEvictTimeStr:   lruConfig["dont_evict_time"].(string),
-		CapacityUpdTimeStr: lruConfig["capacity_upd_time"].(string),
-		LRUEnabled:         lruConfig["lru_enabled"].(bool),
-	}
 	return &cmn.BucketProps{
 		CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-		LRUConf:   LRUConf,
+		LRUConf:   globalConfig.LRU,
 	}
 }
 
@@ -36,7 +27,6 @@ func TestResetBucketProps(t *testing.T) {
 		proxyURL     = getPrimaryURL(t, proxyURLRO)
 		globalProps  cmn.BucketProps
 		globalConfig = getDaemonConfig(t, proxyURL)
-		cksumConfig  = globalConfig["cksum_config"].(map[string]interface{})
 	)
 
 	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -48,10 +38,7 @@ func TestResetBucketProps(t *testing.T) {
 	bucketProps.EnableReadRangeChecksum = true
 
 	globalProps.CloudProvider = cmn.ProviderDFC
-	globalProps.Checksum = cksumConfig["checksum"].(string)
-	globalProps.ValidateColdGet = cksumConfig["validate_checksum_cold_get"].(bool)
-	globalProps.ValidateWarmGet = cksumConfig["validate_checksum_warm_get"].(bool)
-	globalProps.EnableReadRangeChecksum = cksumConfig["enable_read_range_checksum"].(bool)
+	globalProps.CksumConf = globalConfig.Cksum
 	globalProps.LRUConf = testBucketProps(t).LRUConf
 
 	err := api.SetBucketProps(tutils.HTTPClient, proxyURL, TestLocalBucketName, bucketProps)
