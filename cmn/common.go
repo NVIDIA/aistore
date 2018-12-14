@@ -22,7 +22,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -167,34 +167,26 @@ func (f *FileHandle) Open() (io.ReadCloser, error) {
 
 const DefaultBufSize = 32 * KiB
 
-func CreateDir(dirname string) error {
-	stat, err := os.Stat(dirname)
-	if err == nil && stat.IsDir() {
-		return nil
-	}
-	err = os.MkdirAll(dirname, 0755)
-	return err
+// CreateDir creates directory if does not exists. Does not return error when
+// directory already exists.
+func CreateDir(dir string) error {
+	return os.MkdirAll(dir, 0755)
 }
 
-func CreateFile(fname string) (file *os.File, err error) {
-	dirname := filepath.Dir(fname)
-	if err = CreateDir(dirname); err != nil {
-		return
+// CreateFile creates file and ensures that the directories for the file will be
+// created if they do not yet exist.
+func CreateFile(fname string) (*os.File, error) {
+	if err := CreateDir(filepath.Dir(fname)); err != nil {
+		return nil, err
 	}
-	file, err = os.Create(fname)
-	return
+	return os.Create(fname)
 }
 
-// Renames file ensuring that the directory of dst exists (creates when it doesn't exist).
+// MvFile renames file ensuring that the directory of dst exists. Creates
+// destination directory when it does not exist.
 func MvFile(src, dst string) error {
-	dir, _ := filepath.Split(dst)
-	if _, err := os.Stat(dir); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-		if err := CreateDir(dir); err != nil {
-			return err
-		}
+	if err := CreateDir(filepath.Dir(dst)); err != nil {
+		return err
 	}
 	return os.Rename(src, dst)
 }
