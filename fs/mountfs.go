@@ -4,6 +4,7 @@
 package fs
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,6 +55,10 @@ type (
 		Fsid       syscall.Fsid
 		FileSystem string
 		PathDigest uint64
+
+		// atomic, only increasing counter to prevent name conflicts
+		// see: FastRemoveDir method
+		removeDirCounter uint64
 	}
 
 	// MountedFS holds all mountpaths for the target.
@@ -96,6 +101,37 @@ func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
 	}
+}
+
+// FastRemoveDir removes directory in steps:
+// 1. Synchronously gets temporary directory name
+// 2. Synchronously renames old folder to temporary directory
+// 3. Asynchronously deletes temporary directory
+func (mi *MountpathInfo) FastRemoveDir(dir string) error {
+	// dir will be renamed to non-existing bucket in WorkfileType. Then we will
+	// try to remove it asynchronously. In case of power cycle we expect that
+	// LRU will take care of removing the rest of the bucket.
+	counter := atomic.AddUint64(&mi.removeDirCounter, 1)
+	nonExistingBucket := fmt.Sprintf("removing-%d", counter)
+	tmpDir, errStr := CSM.FQN(mi.Path, WorkfileType, true, nonExistingBucket, "")
+	if errStr != "" {
+		return errors.New(errStr)
+	}
+	if err := os.Rename(dir, tmpDir); err != nil {
+		return err
+	}
+
+	// Schedule removing temporary directory which is our old `dir`
+	go func() {
+		// TODO: in the future, the actual operation must be delegated to LRU
+		// that'd take of care of it while pacing itself with regards to the
+		// current disk utilization and space availability.
+		if err := os.RemoveAll(tmpDir); err != nil {
+			glog.Errorf("RemoveAll for %q failed with %v", tmpDir, err)
+		}
+	}()
+
+	return nil
 }
 
 // NewMountedFS returns initialized instance of MountedFS struct.

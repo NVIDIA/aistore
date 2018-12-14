@@ -40,7 +40,7 @@ import (
 	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -1410,15 +1410,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 			return
 		}
 	}
-	for contentType := range fs.CSM.RegisteredContentTypes {
-		for _, mpathInfo := range availablePaths {
-			fromDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketFrom)
-			glog.Warningf("RemoveAll %q for content-type %s, bucket %s", fromDir, contentType, bucketFrom)
-			if err := os.RemoveAll(fromDir); err != nil {
-				glog.Errorf("Failed to remove dir %s", fromDir)
-			}
-		}
-	}
+	removeBuckets("rename", bucketFrom)
 	return
 }
 
@@ -3160,36 +3152,24 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
-	availablePaths, _ := fs.Mountpaths.Get()
-	// Remove buckets which don't exist in newbucketmd
+	// Delete buckets which don't exist in (new)bucketmd
+	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
-			glog.Infof("Destroy local bucket %s", bucket)
-			for contentType := range fs.CSM.RegisteredContentTypes {
-				for _, mpathInfo := range availablePaths {
-					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
-					glog.Warningf("RemoveAll %q for content-type %s, bucket %s", localbucketfqn, contentType, bucket)
-					if err := os.RemoveAll(localbucketfqn); err != nil {
-						glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
-					}
-				}
-			}
+			bucketsToDelete = append(bucketsToDelete, bucket)
 		}
 	}
+	removeBuckets("receive-bucketmd", bucketsToDelete...)
 
 	// Create buckets which don't exist in (old)bucketmd
+	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
 	for bucket := range newbucketmd.LBmap {
 		if _, ok := bucketmd.LBmap[bucket]; !ok {
-			for contentType := range fs.CSM.RegisteredContentTypes {
-				for _, mpathInfo := range availablePaths {
-					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
-					if err := cmn.CreateDir(localbucketfqn); err != nil {
-						glog.Errorf("Failed to create local bucket dir %q, err: %v", localbucketfqn, err)
-					}
-				}
-			}
+			bucketsToCreate = append(bucketsToCreate, bucket)
 		}
 	}
+	createBuckets("receive-bucketmd", bucketsToCreate...)
+
 	return
 }
 
@@ -3412,4 +3392,52 @@ func (t *targetrunner) getFromOtherLocalFS(bucket, object string, islocal bool) 
 	}
 
 	return "", 0
+}
+
+func removeBuckets(op string, buckets ...string) {
+	availablePaths, _ := fs.Mountpaths.Get()
+	contentTypes := fs.CSM.RegisteredContentTypes
+
+	wg := &sync.WaitGroup{}
+	for _, mpathInfo := range availablePaths {
+		wg.Add(1)
+		go func(mi *fs.MountpathInfo) {
+			for _, bucket := range buckets {
+				for contentType := range contentTypes {
+					localBucketFQN := filepath.Join(fs.Mountpaths.MakePathLocal(mi.Path, contentType), bucket)
+					glog.Warningf("%s: FastRemoveDir %q for content-type %q, bucket %q", op, localBucketFQN, contentType, bucket)
+					if err := mi.FastRemoveDir(localBucketFQN); err != nil {
+						// TODO: in case of error, we need to abort and rollback whole operation
+						glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localBucketFQN, err)
+					}
+				}
+			}
+			wg.Done()
+		}(mpathInfo)
+	}
+	wg.Wait()
+}
+
+func createBuckets(op string, buckets ...string) {
+	availablePaths, _ := fs.Mountpaths.Get()
+	contentTypes := fs.CSM.RegisteredContentTypes
+
+	wg := &sync.WaitGroup{}
+	for _, mpathInfo := range availablePaths {
+		wg.Add(1)
+		go func(mi *fs.MountpathInfo) {
+			for _, bucket := range buckets {
+				for contentType := range contentTypes {
+					localBucketFQN := filepath.Join(fs.Mountpaths.MakePathLocal(mi.Path, contentType), bucket)
+					glog.Warningf("%s: CreateDir %q for content-type %q, bucket %q", op, localBucketFQN, contentType, bucket)
+					if err := cmn.CreateDir(localBucketFQN); err != nil {
+						// TODO: in case of error, we need to abort and rollback whole operation
+						glog.Errorf("Failed to create local bucket dir %q, err: %v", localBucketFQN, err)
+					}
+				}
+			}
+			wg.Done()
+		}(mpathInfo)
+	}
+	wg.Wait()
 }
