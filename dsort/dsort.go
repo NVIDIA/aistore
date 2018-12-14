@@ -7,6 +7,7 @@
 package dsort
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"github.com/OneOfOne/xxhash"
 	sigar "github.com/cloudfoundry/gosigar"
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -117,8 +119,6 @@ func (m *Manager) start() (err error) {
 func (m *Manager) extractLocalShards() (err error) {
 	var (
 		mem                 = sigar.Mem{}
-		wg                  = &sync.WaitGroup{}
-		errCh               = make(chan error, m.rs.InputFormat.RangeCount)
 		smap                = m.ctx.smap.Get()
 		maxMemoryToUse      = uint64(0)
 		totalExtractedCount = uint64(0)
@@ -177,130 +177,216 @@ func (m *Manager) extractLocalShards() (err error) {
 	metrics.ToSeenCnt = m.rs.InputFormat.RangeCount
 	metrics.Unlock()
 
-	// Error listener
-	var encounteredErr int32
-	go func() {
-		var ok bool
-		select {
-		case err, ok = <-errCh:
-			if ok {
-				atomic.StoreInt32(&encounteredErr, 1)
-			}
-		}
-	}()
-
+	group, ctx := errgroup.WithContext(context.Background())
+ExtractAllShards:
 	for i := m.rs.InputFormat.Start; i <= m.rs.InputFormat.End; i += m.rs.InputFormat.Step {
-		if atomic.LoadInt32(&encounteredErr) != 0 || m.aborted() {
-			// Wait for all goroutines to finish, even there was an error.
-			wg.Wait()
-			ticker.Stop()
-			close(errCh)
-			return err
+		select {
+		case <-m.listenAborted():
+			group.Wait()
+			return newAbortError(m.ManagerUUID)
+		case <-ctx.Done():
+			break ExtractAllShards // context was canceled, therefore we have an error
+		default:
+			break
 		}
 
-		wg.Add(1)
 		m.acquireExtractGoroutineSema()
-		go func(i int) {
-			metrics.Lock()
-			metrics.SeenCnt++
-			metrics.Unlock()
+		extractShard := func(i int) func() error {
+			return func() error {
+				metrics.Lock()
+				metrics.SeenCnt++
+				metrics.Unlock()
 
-			defer func() {
-				m.releaseExtractGoroutineSema()
-				wg.Done()
-			}()
+				defer m.releaseExtractGoroutineSema()
 
-			shardName := m.rs.InputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.InputFormat.DigitCount, i) + m.rs.InputFormat.Suffix + m.rs.Extension
-			si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, smap)
-			if errStr != "" {
-				errCh <- errors.New(errStr)
-				return
-			}
-			if si.DaemonID != m.ctx.node.DaemonID {
-				return
-			}
-			fqn, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, m.rs.IsLocalBucket)
-			if errStr != "" {
-				errCh <- errors.New(errStr)
-				return
-			}
+				shardName := m.rs.InputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.InputFormat.DigitCount, i) + m.rs.InputFormat.Suffix + m.rs.Extension
+				si, errStr := cluster.HrwTarget(m.rs.Bucket, shardName, smap)
+				if errStr != "" {
+					return errors.New(errStr)
+				}
+				if si.DaemonID != m.ctx.node.DaemonID {
+					return nil
+				}
+				fqn, errStr := cluster.FQN(fs.ObjectType, m.rs.Bucket, shardName, m.rs.IsLocalBucket)
+				if errStr != "" {
+					return errors.New(errStr)
+				}
 
-			m.acquireExtractSema()
-			if m.aborted() {
-				errCh <- fmt.Errorf("dsort %s was aborted", m.ManagerUUID)
+				m.acquireExtractSema()
+				if m.aborted() {
+					m.releaseExtractSema()
+					return newAbortError(m.ManagerUUID)
+				}
+
+				f, err := os.Open(fqn)
+				if err != nil {
+					m.releaseExtractSema()
+					return fmt.Errorf("unable to open local file, err: %v", err)
+				}
+				var compressedSize int64
+				fi, err := f.Stat()
+				if err != nil {
+					f.Close()
+					m.releaseExtractSema()
+					return err
+				}
+
+				if m.extractCreator.UsingCompression() {
+					compressedSize = fi.Size()
+				}
+
+				expectedUncompressedSize := uint64(float64(fi.Size()) / m.avgCompressionRatio())
+				reservedMemoryTmp := atomic.AddUint64(&reservedMemory, expectedUncompressedSize)
+
+				// expected total memory after all objects will be extracted is equal
+				// to: previously reserved memory + uncompressed size of shard + current memory used
+				expectedTotalMemoryUsed := reservedMemoryTmp + atomic.LoadUint64(&memoryUsed)
+
+				// Switch to extracting to disk if we hit this target's memory usage threshold.
+				var toDisk bool
+				if expectedTotalMemoryUsed >= maxMemoryToUse {
+					toDisk = true
+				}
+
+				reader := io.NewSectionReader(f, 0, fi.Size())
+				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(reader, m.records, toDisk, m.getContentPathsFunc(fqn))
 				m.releaseExtractSema()
-				return
-			}
 
-			f, err := os.Open(fqn)
-			if err != nil {
-				errCh <- fmt.Errorf("unable to open local file, err: %v", err)
-				m.releaseExtractSema()
-				return
-			}
-			var compressedSize int64
-			fi, err := f.Stat()
-			if err != nil {
-				errCh <- err
+				unreserveMemoryCh <- expectedUncompressedSize // schedule unreserving memory on next memory update
+				if err != nil {
+					f.Close()
+					return fmt.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
+				}
 				f.Close()
-				m.releaseExtractSema()
-				return
+				m.addToTotalInputShardsSeen(1)
+				if m.extractCreator.UsingCompression() {
+					m.addCompressionSizes(compressedSize, extractedSize)
+				}
+
+				metrics.Lock()
+				metrics.ExtractedRecordCnt += extractedCount
+				metrics.ExtractedCnt++
+				metrics.ExtractedSize += extractedSize
+				if toDisk {
+					metrics.ExtractedToDiskCnt++
+					metrics.ExtractedToDiskSize += extractedSize
+				}
+				metrics.Unlock()
+
+				atomic.AddUint64(&totalExtractedCount, uint64(extractedCount))
+				return nil
 			}
-
-			if m.extractCreator.UsingCompression() {
-				compressedSize = fi.Size()
-			}
-
-			expectedUncompressedSize := uint64(float64(fi.Size()) / m.avgCompressionRatio())
-			reservedMemoryTmp := atomic.AddUint64(&reservedMemory, expectedUncompressedSize)
-
-			// expected total memory after all objects will be extracted is equal
-			// to: previously reserved memory + uncompressed size of shard + current memory used
-			expectedTotalMemoryUsed := reservedMemoryTmp + atomic.LoadUint64(&memoryUsed)
-
-			// Switch to extracting to disk if we hit this target's memory usage threshold.
-			var toDisk bool
-			if expectedTotalMemoryUsed >= maxMemoryToUse {
-				toDisk = true
-			}
-
-			reader := io.NewSectionReader(f, 0, fi.Size())
-			extractedSize, extractedCount, err := m.extractCreator.ExtractShard(reader, m.records, toDisk, m.getContentPathsFunc(fqn))
-			m.releaseExtractSema()
-
-			unreserveMemoryCh <- expectedUncompressedSize // schedule unreserving memory on next memory update
-			if err != nil {
-				errCh <- fmt.Errorf("error in ExtractShard, file: %s, err: %v", f.Name(), err)
-				f.Close()
-				return
-			}
-			f.Close()
-			m.addToTotalInputShardsSeen(1)
-			if m.extractCreator.UsingCompression() {
-				m.addCompressionSizes(compressedSize, extractedSize)
-			}
-
-			metrics.Lock()
-			metrics.ExtractedRecordCnt += extractedCount
-			metrics.ExtractedCnt++
-			metrics.ExtractedSize += extractedSize
-			if toDisk {
-				metrics.ExtractedToDiskCnt++
-				metrics.ExtractedToDiskSize += extractedSize
-			}
-			metrics.Unlock()
-
-			atomic.AddUint64(&totalExtractedCount, uint64(extractedCount))
 		}(i)
+
+		group.Go(extractShard)
 	}
-	wg.Wait()
-	ticker.Stop()
-	close(errCh)
-	for err := range errCh {
+	if err := group.Wait(); err != nil {
 		return err
 	}
 
 	m.incrementRef(int64(totalExtractedCount))
+	return nil
+}
+
+func (m *Manager) createShard(s *shard) (err error) {
+	loadContent := m.loadContent()
+	metrics := m.Metrics.Creation
+
+	var (
+		shardFile *os.File
+	)
+
+	fqn, errStr := cluster.FQN(fs.ObjectType, s.Bucket, s.Name, s.IsLocal)
+	if errStr != "" {
+		return errors.New(errStr)
+	}
+	workFQN := fs.CSM.GenContentFQN(fqn, dSortWorkfileType, "")
+
+	// Check if aborted
+	select {
+	case <-m.listenAborted():
+		return newAbortError(m.ManagerUUID)
+	default:
+		break
+	}
+
+	m.acquireCreateSema()
+	shardFile, err = cmn.CreateFile(workFQN)
+	if err != nil {
+		return fmt.Errorf("failed to create new shard file, err: %v", err)
+	}
+
+	_, err = m.extractCreator.CreateShard(s, shardFile, loadContent)
+	shardFile.Close()
+	if err != nil {
+		m.releaseCreateSema()
+		return err
+	}
+
+	if err := cmn.MvFile(workFQN, fqn); err != nil {
+		m.releaseCreateSema()
+		return err
+	}
+	m.releaseCreateSema()
+
+	metrics.Lock()
+	metrics.CreatedCnt++
+	metrics.Unlock()
+
+	si, errStr := cluster.HrwTarget(s.Bucket, s.Name, m.ctx.smap.Get())
+	if errStr != "" {
+		return errors.New(errStr)
+	}
+
+	// If the newly created shard belongs on a different target
+	// according to HRW, send it there. Since it doesn't really matter
+	// if we have an extra copy of the object local to this target, we
+	// optimize for performance by not removing the object now.
+	if si.DaemonID != m.ctx.node.DaemonID {
+		file, err := cmn.NewFileHandle(fqn)
+		if err != nil {
+			return err
+		}
+
+		stat, err := file.Stat()
+		if err != nil {
+			return err
+		}
+
+		if stat.Size() <= 0 {
+			return nil
+		}
+
+		hdr := transport.Header{
+			Bucket:  s.Bucket,
+			Objname: s.Name,
+			Dsize:   stat.Size(),
+			Opaque:  strconv.AppendBool([]byte{}, s.IsLocal),
+		}
+
+		// Make send synchronous
+		streamWg := &sync.WaitGroup{}
+		errCh := make(chan error, 1)
+		streamWg.Add(1)
+		m.acquireCreateSema() // need to acquire sema because we will be reading file
+		err = m.streams.shards[si.DaemonID].Get().Send(hdr, file, func(_ transport.Header, _ io.ReadCloser, err error) {
+			errCh <- err
+			streamWg.Done()
+		})
+		m.releaseCreateSema()
+		if err != nil {
+			return err
+		}
+		streamWg.Wait()
+		if err = <-errCh; err != nil {
+			return err
+		}
+
+		metrics.Lock()
+		metrics.MovedShardCnt++
+		metrics.Unlock()
+	}
+
 	return nil
 }
 
@@ -313,7 +399,7 @@ func (m *Manager) createShardsLocally() (err error) {
 	case <-m.startShardCreation:
 		break
 	case <-m.listenAborted():
-		return fmt.Errorf("dsort %s process was aborted", m.ManagerUUID)
+		return newAbortError(m.ManagerUUID)
 	}
 
 	metrics := m.Metrics.Creation
@@ -323,148 +409,31 @@ func (m *Manager) createShardsLocally() (err error) {
 	metrics.ToCreate = len(m.shards)
 	metrics.Unlock()
 
-	loadContent := m.loadContent()
-	errCh := make(chan error, len(m.shards))
-	wg := &sync.WaitGroup{}
+	group, ctx := errgroup.WithContext(context.Background())
 
-	// Error listener
-	var encounteredErr int32
-	go func() {
-		var ok bool
-		select {
-		case err, ok = <-errCh:
-			if ok {
-				atomic.StoreInt32(&encounteredErr, 1)
-			}
-		}
-	}()
-
+CreateAllShards:
 	for _, s := range m.shards {
-		if atomic.LoadInt32(&encounteredErr) != 0 || m.aborted() {
-			// Wait for all goroutines to finish, even there was an error.
-			wg.Wait()
-			close(errCh)
-			return err
+		select {
+		case <-m.listenAborted():
+			group.Wait()
+			return newAbortError(m.ManagerUUID)
+		case <-ctx.Done():
+			break CreateAllShards // context was canceled, therefore we have an error
+		default:
+			break
 		}
 
-		wg.Add(1)
 		m.acquireCreateGoroutineSema()
-		go func(s *shard) {
-			var (
-				shardFile *os.File
-			)
-
-			defer func() {
+		group.Go(func(s *shard) func() error {
+			return func() error {
+				err := m.createShard(s)
 				m.releaseCreateGoroutineSema()
-				wg.Done()
-			}()
-
-			fqn, errStr := cluster.FQN(fs.ObjectType, s.Bucket, s.Name, s.IsLocal)
-			if errStr != "" {
-				errCh <- errors.New(errStr)
-				return
+				return err
 			}
-			workFQN := fs.CSM.GenContentFQN(fqn, dSortWorkfileType, "")
-
-			// Check if aborted
-			select {
-			case <-m.listenAborted():
-				errCh <- fmt.Errorf("dsort %s was aborted", m.ManagerUUID)
-				return
-			default:
-				break
-			}
-
-			m.acquireCreateSema()
-			if shardFile, err = cmn.CreateFile(workFQN); err != nil {
-				errCh <- fmt.Errorf("failed to create new shard file, err: %v", err)
-				return
-			}
-
-			_, err := m.extractCreator.CreateShard(s, shardFile, loadContent)
-			shardFile.Close()
-			if err != nil {
-				m.releaseCreateSema()
-				errCh <- err
-				return
-			}
-
-			if err := cmn.MvFile(workFQN, fqn); err != nil {
-				m.releaseCreateSema()
-				errCh <- err
-				return
-			}
-			m.releaseCreateSema()
-
-			metrics.Lock()
-			metrics.CreatedCnt++
-			metrics.Unlock()
-
-			si, errStr := cluster.HrwTarget(s.Bucket, s.Name, m.ctx.smap.Get())
-			if errStr != "" {
-				errCh <- errors.New(errStr)
-				return
-			}
-
-			// If the newly created shard belongs on a different target
-			// according to HRW, send it there. Since it doesn't really matter
-			// if we have an extra copy of the object local to this target, we
-			// optimize for performance by not removing the object now.
-			if si.DaemonID != m.ctx.node.DaemonID {
-				file, err := cmn.NewFileHandle(fqn)
-				if err != nil {
-					errCh <- err
-					return
-				}
-
-				stat, err := file.Stat()
-				if err != nil {
-					errCh <- err
-					return
-				}
-
-				if stat.Size() <= 0 {
-					return
-				}
-
-				hdr := transport.Header{
-					Bucket:  s.Bucket,
-					Objname: s.Name,
-					Dsize:   stat.Size(),
-					Opaque:  strconv.AppendBool([]byte{}, s.IsLocal),
-				}
-
-				// Make send synchronous
-				streamWg := &sync.WaitGroup{}
-				streamWg.Add(1)
-				m.acquireCreateSema() // need to acquire sema because we will be reading file
-				err = m.streams.shards[si.DaemonID].Get().Send(hdr, file, func(_ transport.Header, _ io.ReadCloser, err error) {
-					if err != nil {
-						errCh <- err
-					}
-					streamWg.Done()
-				})
-				m.releaseCreateSema()
-				if err != nil {
-					errCh <- err
-					return
-				}
-				streamWg.Wait()
-
-				metrics.Lock()
-				metrics.MovedShardCnt++
-				metrics.Unlock()
-			}
-		}(s)
-	}
-	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		return err
+		}(s))
 	}
 
-	return nil
+	return group.Wait()
 }
 
 // participateInRecordDistribution coordinates the distributed merging and
@@ -551,7 +520,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 			case <-m.listenReceived():
 				break
 			case <-m.listenAborted():
-				err = fmt.Errorf("dsort %s was aborted", m.ManagerUUID)
+				err = newAbortError(m.ManagerUUID)
 				return
 			}
 		}

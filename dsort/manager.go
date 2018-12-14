@@ -47,7 +47,7 @@ var (
 )
 
 var (
-	ctx context
+	ctx dsortContext
 
 	mem      *memsys.Mem2
 	once     sync.Once
@@ -65,7 +65,7 @@ var (
 	}
 )
 
-type context struct {
+type dsortContext struct {
 	smap cluster.Sowner
 	node *cluster.Snode
 }
@@ -93,7 +93,7 @@ type Manager struct {
 	ManagerUUID string   `json:"manager_uuid"`
 	Metrics     *Metrics `json:"metrics"`
 
-	ctx context
+	ctx dsortContext
 
 	records  *records
 	enqueued struct {
@@ -384,6 +384,7 @@ func (m *Manager) cleanup() {
 
 // abort stops currently running sort job and frees associated resources.
 func (m *Manager) abort() {
+	glog.Infof("manager %s has been aborted", m.ManagerUUID)
 	m.lock()
 	m.setAbortedTo(true)
 	m.unlock()
@@ -644,14 +645,13 @@ func (m *Manager) pullStreamWriter(objName string) *streamWriter {
 	return writer
 }
 
-func (m *Manager) streamCallback(hdr transport.Header, rc io.ReadCloser, err error) {
+func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, err error) {
 	if sgl, ok := rc.(*memsys.SGL); ok {
 		sgl.Free()
 	}
 	m.decrementRef(1)
 	if err != nil {
 		glog.Error(err)
-		m.abort()
 	}
 }
 
@@ -694,13 +694,13 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				return
 			}
 			respHdr.Dsize = fi.Size()
-			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, f, m.streamCallback); err != nil {
+			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, f, m.responseCallback); err != nil {
 				glog.Error(err)
 			}
 		} else {
 			sgl := v.(*memsys.SGL)
 			respHdr.Dsize = sgl.Size()
-			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.streamCallback); err != nil {
+			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
 				glog.Error(err)
 			}
 			m.extractCreator.RecordContents().Delete(hdr.Objname)
@@ -712,7 +712,6 @@ func (m *Manager) makeRecvResponseFunc() transport.Receive {
 	return func(w http.ResponseWriter, hdr transport.Header, object io.Reader, err error) {
 		if err != nil {
 			glog.Error(err)
-			m.abort()
 			return
 		}
 
@@ -890,7 +889,7 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 	case <-m.listenAborted():
 		cancel()
 		<-doneCh
-		return n, fmt.Errorf("dsort %s was aborted", m.ManagerUUID)
+		return n, newAbortError(m.ManagerUUID)
 	case <-doneCh:
 		break
 	}
