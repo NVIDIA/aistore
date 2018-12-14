@@ -246,6 +246,10 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 		cloudBucketListener               net.Listener
 		err                               error
 	)
+	// TODO: enable and review when the time is right
+	if true {
+		t.Skip(fmt.Sprintf("test %q requires next-version tiering", t.Name()))
+	}
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	tutils.Logf("proxyurl: %q \n", proxyURL)

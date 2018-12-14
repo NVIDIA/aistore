@@ -1395,6 +1395,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p *cmn.BucketProps,
 	for contentType := range fs.CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
 			fromDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketFrom)
+			glog.Warningf("RemoveAll %q for content-type %s, bucket %s", fromDir, contentType, bucketFrom)
 			if err := os.RemoveAll(fromDir); err != nil {
 				glog.Errorf("Failed to remove dir %s", fromDir)
 			}
@@ -1491,7 +1492,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, xmd *objectXprops) (prop
 		htype   = response.Header.Get(cmn.HeaderDFCChecksumType)
 		hksum   = newCksum(htype, hval)
 		version = response.Header.Get(cmn.HeaderDFCObjVersion)
-		getfqn  = fs.CSM.GenContentFQN(xmd.fqn, fs.WorkfileType, fs.WorkfileRemote)
+		getfqn  = fs.CSM.GenContentParsedFQN(xmd.parsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	)
 	props = &objectXprops{}
 	*props = *xmd
@@ -1504,7 +1505,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, xmd *objectXprops) (prop
 	response.Body.Close()
 	// commit
 	if err = cmn.MvFile(getfqn, props.fqn); err != nil {
-		glog.Errorf("Failed to rename %s => %s, err: %v", getfqn, props.fqn, err)
+		glog.Errorln(err)
 		return
 	}
 	if errstr = props.persist(); errstr != "" {
@@ -1563,7 +1564,7 @@ func (t *targetrunner) getCold(ct context.Context, xmd *objectXprops, prefetch b
 			}
 		}
 	}
-	getfqn := fs.CSM.GenContentFQN(xmd.fqn, fs.WorkfileType, fs.WorkfileColdget)
+	getfqn := fs.CSM.GenContentParsedFQN(xmd.parsedFQN, fs.WorkfileType, fs.WorkfileColdget)
 	if !coldget {
 		_ = xmd.fill(xmdCksum)
 		glog.Infof("cold-GET race: %s(%s, ver=%s) - nothing to do", xmd, cmn.B2S(xmd.size, 1), xmd.version)
@@ -1571,13 +1572,14 @@ func (t *targetrunner) getCold(ct context.Context, xmd *objectXprops, prefetch b
 		goto ret
 	}
 	//
-	// next tier if ...
+	// next tier if
 	//
 	if xmd.bprops != nil && xmd.bprops.NextTierURL != "" && xmd.bprops.ReadPolicy == cmn.RWPolicyNextTier {
 		var inNextTier bool
 		if inNextTier, errstr, errcode = t.objectInNextTier(xmd.bprops.NextTierURL, xmd.bucket, xmd.objname); errstr == "" {
 			if inNextTier {
-				if props, errstr, errcode = t.getObjectNextTier(xmd.bprops.NextTierURL, xmd.bucket, xmd.objname, getfqn); errstr == "" {
+				if props, errstr, errcode =
+					t.getObjectNextTier(xmd.bprops.NextTierURL, xmd.bucket, xmd.objname, getfqn); errstr == "" {
 					coldget = false
 				}
 			}
@@ -2040,7 +2042,7 @@ func (t *targetrunner) doput(r *http.Request, bucket, objname string) (errstr st
 	if errstr = xmd.fill(xmdFstat); errstr != "" {
 		return
 	}
-	putfqn := fs.CSM.GenContentFQN(xmd.fqn, fs.WorkfileType, fs.WorkfilePut)
+	putfqn := fs.CSM.GenContentParsedFQN(xmd.parsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
 	// optimize out if the checksums do match
 	if xmd.exists() {
@@ -2095,81 +2097,47 @@ func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replic
 }
 
 func (t *targetrunner) putCommit(ct context.Context, xmd *objectXprops, putfqn string, rebalance bool) (errstr string, errcode int) {
-	var (
-		err     error
-		renamed bool
-	)
-	renamed, errstr, errcode, err = t.doPutCommit(ct, xmd, putfqn, rebalance)
-	if errstr != "" && !os.IsNotExist(err) && !renamed {
-		t.fshc(err, putfqn)
-		if err = os.Remove(putfqn); err != nil {
-			glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
+	var renamed bool
+	renamed, errstr, errcode = t.doPutCommit(ct, xmd, putfqn, rebalance)
+	if errstr != "" && !renamed {
+		if _, err := os.Stat(putfqn); err == nil || !os.IsNotExist(err) {
+			t.fshc(err, putfqn)
+			if err = os.Remove(putfqn); err != nil {
+				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
+			}
 		}
 	}
 	return
 }
 
 func (t *targetrunner) doPutCommit(ct context.Context, xmd *objectXprops, putfqn string,
-	rebalance bool) (renamed bool, errstr string, errcode int, err error) {
-	var file *os.File
-	reopenFile := func() (io.ReadCloser, error) {
-		return os.Open(putfqn)
-	}
-
+	rebalance bool) (renamed bool, errstr string, errcode int) {
 	if !xmd.bislocal && !rebalance {
-		if file, err = os.Open(putfqn); err != nil {
-			errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
+		if file, err := os.Open(putfqn); err != nil {
+			errstr = fmt.Sprintf("Failed to open %s err: %v", putfqn, err)
 			return
-		}
-		if xmd.bprops != nil && xmd.bprops.NextTierURL != "" && xmd.bprops.WritePolicy == cmn.RWPolicyNextTier {
-			if errstr, errcode = t.putObjectNextTier(xmd.bprops.NextTierURL, xmd.bucket, xmd.objname, file, reopenFile); errstr != "" {
-				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
-					xmd.bucket, xmd.objname, errstr, errcode)
-				file, err = os.Open(putfqn)
-				if err != nil {
-					errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
-				} else {
-					xmd.version, errstr, errcode = getcloudif().putobj(ct, file,
-						xmd.bucket, xmd.objname, xmd.nhobj)
-				}
-			}
 		} else {
 			xmd.version, errstr, errcode = getcloudif().putobj(ct, file, xmd.bucket, xmd.objname, xmd.nhobj)
+			file.Close()
 		}
-	} else if xmd.bislocal {
-		if versioningConfigured(xmd.bislocal) {
-			if xmd.version, errstr = xmd.incObjectVersion(); errstr != "" {
-				return
-			}
-		}
-		if xmd.bprops != nil && xmd.bprops.NextTierURL != "" {
-			if file, err = os.Open(putfqn); err != nil {
-				errstr = fmt.Sprintf("Failed to reopen %s err: %v", putfqn, err)
-			} else if errstr, errcode = t.putObjectNextTier(xmd.bprops.NextTierURL, xmd.bucket, xmd.objname, file, reopenFile); errstr != "" {
-				glog.Errorf("Error putting bucket/object: %s/%s to next tier, err: %s, HTTP status code: %d",
-					xmd.bucket, xmd.objname, errstr, errcode)
-			}
-		}
-	}
-	if file != nil {
-		file.Close()
-	}
-	if errstr != "" {
-		return
 	}
 	// when all set and done:
 	t.rtnamemap.Lock(xmd.uname, true)
 
-	if err = cmn.MvFile(putfqn, xmd.fqn); err != nil {
+	if xmd.bislocal && versioningConfigured(true) {
+		if xmd.version, errstr = xmd.incObjectVersion(); errstr != "" {
+			t.rtnamemap.Unlock(xmd.uname, true)
+			return
+		}
+	}
+	if err := cmn.MvFile(putfqn, xmd.fqn); err != nil {
 		t.rtnamemap.Unlock(xmd.uname, true)
-		errstr = fmt.Sprintf("Failed to rename %s => %s(%s), err: %v", putfqn, xmd, xmd.fqn, err)
+		errstr = fmt.Sprintf("work => %s: %v", xmd, err)
 		return
 	}
 	renamed = true
 	if errstr = xmd.persist(); errstr != "" {
-		t.rtnamemap.Unlock(xmd.uname, true)
 		glog.Errorf("Failed to persist %s: %s", xmd, errstr)
-		return
 	}
 	t.rtnamemap.Unlock(xmd.uname, true)
 	return
@@ -2230,7 +2198,7 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 			glog.Infof("%s already exists at the destination %s", xmd, t.si)
 			return // not an error, nothing to do
 		}
-		putfqn = fs.CSM.GenContentFQN(xmd.fqn, fs.WorkfileType, fs.WorkfileRebalance)
+		putfqn = fs.CSM.GenContentParsedFQN(xmd.parsedFQN, fs.WorkfileType, fs.WorkfileRebalance)
 
 		var (
 			size  int64
@@ -2349,7 +2317,7 @@ func (t *targetrunner) renameObject(contentType, bucketFrom, objnameFrom, bucket
 			return
 		}
 		if err := cmn.MvFile(fqn, newfqn); err != nil {
-			errstr = fmt.Sprintf("Failed to rename %s => %s, err: %v", fqn, newfqn, err)
+			errstr = fmt.Sprintf("Rename object %s/%s: %v", bucketFrom, objnameFrom, err)
 		} else {
 			t.statsif.Add(stats.RenameCount, 1)
 			if glog.V(3) {
@@ -3183,6 +3151,7 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 			for contentType := range fs.CSM.RegisteredContentTypes {
 				for _, mpathInfo := range availablePaths {
 					localbucketfqn := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
+					glog.Warningf("RemoveAll %q for content-type %s, bucket %s", localbucketfqn, contentType, bucket)
 					if err := os.RemoveAll(localbucketfqn); err != nil {
 						glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localbucketfqn, err)
 					}

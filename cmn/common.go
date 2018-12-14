@@ -188,15 +188,12 @@ func MvFile(src, dst string) error {
 	dir, _ := filepath.Split(dst)
 	if _, err := os.Stat(dir); err != nil {
 		if !os.IsNotExist(err) {
-			return err // error when doing os.Stat
+			return err
 		}
-
-		// Create directory because it does not exist
 		if err := CreateDir(dir); err != nil {
 			return err
 		}
 	}
-
 	return os.Rename(src, dst)
 }
 

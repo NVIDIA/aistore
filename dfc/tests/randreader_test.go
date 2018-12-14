@@ -17,7 +17,7 @@ import (
 
 func TestRandomReaderPutStress(t *testing.T) {
 	var (
-		bs         = time.Now().UnixNano()
+		bseed      = time.Now().UnixNano()
 		numworkers = 1000
 		numobjects = 10 // NOTE: increase this number if need be ...
 		bucket     = "RRTestBucket"
@@ -29,11 +29,11 @@ func TestRandomReaderPutStress(t *testing.T) {
 		reader, err := tutils.NewRandReader(fileSize, true)
 		tutils.CheckFatal(err, t)
 		wg.Add(1)
-		go func(workerId int) {
-			putRR(t, workerId, proxyURL, bs, reader, bucket, numobjects)
+		go func(workerId int, seed int64) {
+			putRR(t, workerId, proxyURL, seed, reader, bucket, numobjects)
 			wg.Done()
-		}(i)
-		bs++
+		}(i, bseed)
+		bseed += 7
 	}
 	wg.Wait()
 	destroyLocalBucket(t, proxyURL, bucket)

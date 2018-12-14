@@ -93,6 +93,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	atime, mtime, stat := ios.GetAmTimes(osfi)
 	if isOld {
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
+		glog.Infof("%s is old", fqn)
 		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		return nil
 	}
@@ -159,11 +160,11 @@ func (lctx *lructx) evict() error {
 			}
 		}
 		if err := os.Remove(fi.fqn); err != nil {
-			glog.Warningf("LRU: failed to GC %q", fi.fqn)
+			glog.Warningf("LRU: failed to remove %q", fi.fqn)
 			continue
 		}
 		lctx.totsize -= fi.size
-		glog.Infof("LRU: GC-ed %q", fi.fqn)
+		glog.Infof("Removed old %q", fi.fqn)
 	}
 	for h.Len() > 0 && lctx.totsize > 0 {
 		fi := heap.Pop(h).(*fileInfo)
@@ -189,7 +190,7 @@ func (lctx *lructx) evictFQN(fqn string) error {
 		if e := os.Remove(fqn); e != nil {
 			return fmt.Errorf("nested error: %v and %v", err, e)
 		}
-		glog.Infof("LRU: removed %q", fqn)
+		glog.Infof("Removed %q", fqn)
 		return nil
 	}
 	uname := cluster.Uname(bucket, objname)
@@ -199,7 +200,7 @@ func (lctx *lructx) evictFQN(fqn string) error {
 	if err := os.Remove(fqn); err != nil {
 		return err
 	}
-	glog.Infof("LRU: evicted %s/%s", bucket, objname)
+	glog.Infof("Evicted object %s/%s (%s)", bucket, objname, fqn)
 	return nil
 }
 

@@ -42,6 +42,7 @@ type (
 		bucket, objname string
 		uname           string
 		newfqn          string
+		parsedFQN       fs.FQNparsed // redundant in-part; tradeoff to speed-up workfile name gen, etc.
 		// this object's props
 		version  string
 		atime    time.Time
@@ -189,19 +190,12 @@ func (xmd *objectXprops) persist() (errstr string) {
 // the version is set to "1"
 func (xmd *objectXprops) incObjectVersion() (newVersion string, errstr string) {
 	const initialVersion = "1"
-	var (
-		err    error
-		vbytes []byte
-	)
-	_, err = os.Stat(xmd.fqn)
-	if err != nil && os.IsNotExist(err) {
+	if xmd.doesnotexist {
 		newVersion = initialVersion
 		return
 	}
-	if err != nil {
-		errstr = fmt.Sprintf("Unexpected failure to read stats of file %s, err: %v", xmd.fqn, err)
-		return
-	}
+
+	var vbytes []byte
 	if vbytes, errstr = GetXattr(xmd.fqn, cmn.XattrObjVersion); errstr != "" {
 		return
 	}
@@ -221,16 +215,10 @@ func (xmd *objectXprops) _init() (errstr string) {
 	// resolve fqn
 	if xmd.bucket == "" || xmd.objname == "" {
 		cmn.Assert(xmd.fqn != "")
-		parsedFQN, newfqn, err := cluster.ResolveFQN(xmd.fqn, xmd.t.bmdowner)
-		if err != nil {
-			if _, ok := err.(*cluster.ErrFqnMisplaced); ok {
-				xmd.misplaced = true
-				xmd.newfqn = newfqn
-			} else {
-				errstr = err.Error()
-			}
+		if errstr = xmd._resolveFQN(); errstr != "" {
+			return
 		}
-		xmd.bucket, xmd.objname = parsedFQN.Bucket, parsedFQN.Objname
+		xmd.bucket, xmd.objname = xmd.parsedFQN.Bucket, xmd.parsedFQN.Objname
 		if xmd.bucket == "" || xmd.objname == "" {
 			return
 		}
@@ -247,6 +235,26 @@ func (xmd *objectXprops) _init() (errstr string) {
 	}
 	if xmd.fqn == "" {
 		xmd.fqn, errstr = cluster.FQN(fs.ObjectType, xmd.bucket, xmd.objname, xmd.bislocal)
+	}
+	if xmd.parsedFQN.Bucket == "" || xmd.parsedFQN.Objname == "" {
+		errstr = xmd._resolveFQN()
+	}
+	return
+}
+
+func (xmd *objectXprops) _resolveFQN() (errstr string) {
+	var (
+		err    error
+		newfqn string
+	)
+	xmd.parsedFQN, newfqn, err = cluster.ResolveFQN(xmd.fqn, xmd.t.bmdowner)
+	if err != nil {
+		if _, ok := err.(*cluster.ErrFqnMisplaced); ok {
+			xmd.misplaced = true
+			xmd.newfqn = newfqn
+		} else {
+			errstr = err.Error()
+		}
 	}
 	return
 }

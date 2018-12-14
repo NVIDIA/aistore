@@ -216,13 +216,11 @@ func validateXactionQueryable(kind string) (errstr string) {
 func getXattrCksum(fqn string, algo string) (cksum, errstr string) {
 	var b []byte
 	cmn.Assert(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
-	b, errstr = GetXattr(fqn, cmn.XattrXXHashVal)
-	if errstr != "" {
-		errstr = fmt.Sprintf("Unable to get checksum xattr for %s, err: %s", fqn, errstr)
+	if b, errstr = GetXattr(fqn, cmn.XattrXXHashVal); errstr != "" {
 		return
 	}
 	if b == nil {
-		glog.Warningf("%s has no stored checksum", fqn)
+		glog.Warningf("%s is not checksummed", fqn)
 		return
 	}
 	cksum = string(b)

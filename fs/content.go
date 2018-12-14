@@ -68,9 +68,8 @@ type (
 var (
 	pid  int64 = 0xDEADBEEF   // pid of the current process
 	spid       = "0xDEADBEEF" // string version of the pid
-	CSM        = &ContentSpecMgr{
-		RegisteredContentTypes: make(map[string]ContentResolver, 8),
-	}
+
+	CSM = &ContentSpecMgr{RegisteredContentTypes: make(map[string]ContentResolver, 8)}
 )
 
 func init() {
@@ -106,23 +105,29 @@ func (f *ContentSpecMgr) RegisterFileType(contentType string, spec ContentResolv
 	return nil
 }
 
-// GenContentFQN returns new fqn generated from given fqn. Generated fqn will
-// contain additional info which will then speed up the parsing process -
-// parsing is on the data path so we care about performance very much
+// GenContentFQN returns a new fqn generated from given fqn. Generated fqn will
+// contain additional info which will then speed up subsequent parsing
 func (f *ContentSpecMgr) GenContentFQN(fqn, contentType, prefix string) string {
 	parsedFQN, err := Mountpaths.FQN2Info(fqn)
 	if err != nil {
 		cmn.Assert(false, err)
 		return ""
 	}
+	return f.GenContentParsedFQN(parsedFQN, contentType, prefix)
+}
 
+func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN FQNparsed, contentType, prefix string) string {
 	spec, ok := f.RegisteredContentTypes[contentType]
 	if !ok {
-		cmn.Assert(false, fmt.Sprintf("file type %s was not registered", contentType))
+		cmn.Assert(false, fmt.Sprintf("Invalid content type '%s'", contentType))
 	}
-
-	generatedFQN, errStr := f.FQN(parsedFQN.MpathInfo.OrigPath, contentType, parsedFQN.IsLocal, parsedFQN.Bucket, spec.GenUniqueFQN(parsedFQN.Objname, prefix))
-	cmn.Assert(errStr == "", fqn)
+	generatedFQN, errStr := f.FQN(
+		parsedFQN.MpathInfo.OrigPath,
+		contentType,
+		parsedFQN.IsLocal,
+		parsedFQN.Bucket,
+		spec.GenUniqueFQN(parsedFQN.Objname, prefix))
+	cmn.Assert(errStr == "")
 	return generatedFQN
 }
 
