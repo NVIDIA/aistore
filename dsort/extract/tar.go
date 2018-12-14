@@ -1,19 +1,12 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
-package dsort
+package extract
 
 import (
 	"archive/tar"
-	"bytes"
 	"compress/gzip"
-	"hash"
 	"io"
-	"path/filepath"
-	"sync"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -41,11 +34,7 @@ type tarFileHeader struct {
 }
 
 type tarExtractCreator struct {
-	daemonID       string
-	gzipped        bool
-	h              hash.Hash
-	recordContents *sync.Map
-	key            keyFunc
+	gzipped bool
 }
 
 // tarRecordDataReader is used for writing metadata as well as data to the buffer.
@@ -127,12 +116,11 @@ func (rd *tarRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (t *tarExtractCreator) ExtractShard(r *io.SectionReader, records *records, toDisk bool, paths contentPathFunc) (extractedSize int64, extractedCount int, err error) {
+func (t *tarExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
-		size                 int64
-		tr                   *tar.Reader
-		header               *tar.Header
-		recordPath, fullPath string
+		size   int64
+		tr     *tar.Reader
+		header *tar.Header
 	)
 	if t.gzipped {
 		gzr, err := gzip.NewReader(r)
@@ -171,56 +159,35 @@ func (t *tarExtractCreator) ExtractShard(r *io.SectionReader, records *records, 
 			return extractedSize, extractedCount, err
 		}
 
-		extension := "" // by default extension is empty - directories does not have extensions...
 		if header.Typeflag == tar.TypeDir {
 			// We can safely ignore this case because we do `MkdirAll` anyway
 			// when we create files. And since dirs can appear after all the files
 			// we must have this `MkdirAll` before files.
 			continue
 		} else if header.Typeflag == tar.TypeReg {
-			extension = filepath.Ext(header.Name)
-			recordPath, fullPath = paths(header.Name, extension)
-			if toDisk {
-				newF, err := cmn.CreateFile(fullPath)
-				if err != nil {
-					return extractedSize, extractedCount, err
-				}
-				if err := copyMetadataAndData(newF, tr, bmeta, buf); err != nil {
-					newF.Close()
-					return extractedSize, extractedCount, err
-				}
-				newF.Close()
-			} else {
-				sgl := mem.NewSGL(int64(len(bmeta)) + header.Size)
-				if err := copyMetadataAndData(sgl, tr, bmeta, nil); err != nil {
-					return extractedSize, extractedCount, err
-				}
-				t.recordContents.Store(fullPath, sgl)
+			data := cmn.NewSizedReader(tr, header.Size)
+			if size, err = extractor.ExtractRecordWithBuffer(fqn, header.Name, data, bmeta, toDisk, buf); err != nil {
+				return extractedSize, extractedCount, err
 			}
-			size = header.Size
 		} else {
 			glog.Warningf("Unrecognized header typeflag in tar: %s", string(header.Typeflag))
 			continue
 		}
 
-		records.insert(&record{
-			Key:         t.key(header.Name, t.h),
-			DaemonID:    t.daemonID,
-			ContentPath: recordPath,
-			Objects: []*recordObj{&recordObj{
-				MetadataSize: int64(len(bmeta)),
-				Size:         size,
-				Extension:    extension,
-			}},
-		})
 		extractedSize += size
 		extractedCount++
 	}
 }
 
+func NewTarExtractCreator(gzipped bool) *tarExtractCreator {
+	return &tarExtractCreator{
+		gzipped: gzipped,
+	}
+}
+
 // CreateShard creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (t *tarExtractCreator) CreateShard(s *shard, tarball io.Writer, loadContent loadContentFunc) (written int64, err error) {
+func (t *tarExtractCreator) CreateShard(s *Shard, tarball io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var (
 		gzw *gzip.Writer
 		tw  *tar.Writer
@@ -236,7 +203,7 @@ func (t *tarExtractCreator) CreateShard(s *shard, tarball io.Writer, loadContent
 	defer tw.Close()
 
 	rdReader := newTarRecordDataReader()
-	for _, rec := range s.Records.all() {
+	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {
 			rdReader.reinit(tw, obj.Size, obj.MetadataSize)
 			if n, err = loadContent(rdReader, rec, obj); err != nil {
@@ -254,22 +221,6 @@ func (t *tarExtractCreator) UsingCompression() bool {
 	return t.gzipped
 }
 
-func (t *tarExtractCreator) RecordContents() *sync.Map {
-	return t.recordContents
-}
-
 func (t *tarExtractCreator) MetadataSize() int64 {
 	return 512 // size of tar header with padding
-}
-
-func copyMetadataAndData(dst io.Writer, src io.Reader, metadata []byte, buf []byte) error {
-	// Save metadata to dst
-	if _, err := io.CopyBuffer(dst, bytes.NewReader(metadata), buf); err != nil {
-		return err
-	}
-	// Save data to dst
-	if _, err := io.CopyBuffer(dst, src, buf); err != nil {
-		return err
-	}
-	return nil
 }

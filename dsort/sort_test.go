@@ -7,14 +7,17 @@
 package dsort
 
 import (
+	"fmt"
+
+	"github.com/NVIDIA/dfcpub/dsort/extract"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-func createRecords(keys ...string) *records {
-	records := newRecords(len(keys))
+func createRecords(keys ...interface{}) *extract.Records {
+	records := extract.NewRecords(len(keys))
 	for _, key := range keys {
-		records.insert(&record{Key: key, ContentPath: key})
+		records.Insert(&extract.Record{Key: key, ContentPath: fmt.Sprintf("%v", key)})
 	}
 	return records
 }
@@ -23,42 +26,56 @@ var _ = Describe("SortRecords", func() {
 	It("should sort records alphanumerically ascending", func() {
 		expected := createRecords("abc", "def")
 		fm := createRecords("abc", "def")
-		fm.Sort(&SortAlgorithm{Decreasing: false})
+		sortRecords(fm, &SortAlgorithm{Decreasing: false, FormatType: extract.FormatTypeString})
 		Expect(fm).To(Equal(expected))
 	})
 
 	It("should sort records alphanumerically ascending when already sorted", func() {
 		expected := createRecords("abc", "def")
 		fm := createRecords("def", "abc")
-		fm.Sort(&SortAlgorithm{Decreasing: false})
+		sortRecords(fm, &SortAlgorithm{Decreasing: false, FormatType: extract.FormatTypeString})
 		Expect(fm).To(Equal(expected))
 	})
 
 	It("should sort records alphanumerically descending", func() {
 		expected := createRecords("def", "abc")
 		fm := createRecords("abc", "def")
-		fm.Sort(&SortAlgorithm{Decreasing: true})
+		sortRecords(fm, &SortAlgorithm{Decreasing: true, FormatType: extract.FormatTypeString})
 		Expect(fm).To(Equal(expected))
 	})
 
 	It("should sort records alphanumerically descending when already sorted", func() {
 		expected := createRecords("def", "abc")
 		fm := createRecords("def", "abc")
-		fm.Sort(&SortAlgorithm{Decreasing: true})
+		sortRecords(fm, &SortAlgorithm{Decreasing: true, FormatType: extract.FormatTypeString})
+		Expect(fm).To(Equal(expected))
+	})
+
+	It("should sort records alphanumerically ascending when keys are ints", func() {
+		expected := createRecords(int64(10), int64(20))
+		fm := createRecords(int64(20), int64(10))
+		sortRecords(fm, &SortAlgorithm{Decreasing: false, FormatType: extract.FormatTypeInt})
+		Expect(fm).To(Equal(expected))
+	})
+
+	It("should sort records alphanumerically ascending when keys are floats", func() {
+		expected := createRecords(float64(10.20), float64(20.10))
+		fm := createRecords(float64(20.10), float64(10.20))
+		sortRecords(fm, &SortAlgorithm{Decreasing: false, FormatType: extract.FormatTypeFloat})
 		Expect(fm).To(Equal(expected))
 	})
 
 	It("should not sort records when none algorithm specified", func() {
 		expected := createRecords("def", "abc")
 		fm := createRecords("def", "abc")
-		fm.Sort(&SortAlgorithm{Kind: SortKindNone})
+		sortRecords(fm, &SortAlgorithm{Kind: SortKindNone, FormatType: extract.FormatTypeString})
 		Expect(fm).To(Equal(expected))
 	})
 
 	It("should shuffle records reprudacibally when same seed specified", func() {
 		expected := createRecords("def", "abc")
 		fm := createRecords("abc", "def")
-		fm.Sort(&SortAlgorithm{Kind: SortKindShuffle, Seed: "1010102"})
+		sortRecords(fm, &SortAlgorithm{Kind: SortKindShuffle, Seed: "1010102", FormatType: extract.FormatTypeString})
 		Expect(fm).To(Equal(expected))
 	})
 })

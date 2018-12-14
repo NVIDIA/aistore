@@ -1,48 +1,43 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
-package dsort
+package extract
 
 import (
 	"archive/zip"
-	"hash"
 	"io"
-	"path/filepath"
-	"sync"
 
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 
-type zipExtractCreator struct {
-	daemonID       string
-	h              hash.Hash
-	recordContents *sync.Map
-	key            keyFunc
-}
+var (
+	_ ExtractCreator = &zipExtractCreator{}
+)
 
-type zipFileHeader struct {
-	Name    string `json:"name"`
-	Comment string `json:"comment"`
-}
+type (
+	zipExtractCreator struct{}
 
-// zipRecordDataReader is used for writing metadata as well as data to the buffer.
-type zipRecordDataReader struct {
-	slab *memsys.Slab2
+	zipFileHeader struct {
+		Name    string `json:"name"`
+		Comment string `json:"comment"`
+	}
 
-	metadataSize int64
-	size         int64
-	written      int64
-	metadataBuf  []byte
-	header       zipFileHeader
-	zipWriter    *zip.Writer
+	// zipRecordDataReader is used for writing metadata as well as data to the buffer.
+	zipRecordDataReader struct {
+		slab *memsys.Slab2
 
-	writer io.Writer
-}
+		metadataSize int64
+		size         int64
+		written      int64
+		metadataBuf  []byte
+		header       zipFileHeader
+		zipWriter    *zip.Writer
+
+		writer io.Writer
+	}
+)
 
 func newZipRecordDataReader() *zipRecordDataReader {
 	rd := &zipRecordDataReader{}
@@ -106,11 +101,10 @@ func (rd *zipRecordDataReader) Write(p []byte) (int, error) {
 }
 
 // ExtractShard reads the tarball f and extracts its metadata.
-func (z *zipExtractCreator) ExtractShard(r *io.SectionReader, records *records, toDisk bool, paths contentPathFunc) (extractedSize int64, extractedCount int, err error) {
+func (z *zipExtractCreator) ExtractShard(fqn string, r *io.SectionReader, extractor RecordExtractor, toDisk bool) (extractedSize int64, extractedCount int, err error) {
 	var (
-		zr                   *zip.Reader
-		size                 int64
-		recordPath, fullPath string
+		zr   *zip.Reader
+		size int64
 	)
 
 	if zr, err = zip.NewReader(r, r.Size()); err != nil {
@@ -131,7 +125,6 @@ func (z *zipExtractCreator) ExtractShard(r *io.SectionReader, records *records, 
 			return extractedSize, extractedCount, err
 		}
 
-		extension := ""
 		if f.FileInfo().IsDir() {
 			// We can safely ignore this case because we do `MkdirAll` anyway
 			// when we create files. And since dirs can appear after all the files
@@ -143,38 +136,14 @@ func (z *zipExtractCreator) ExtractShard(r *io.SectionReader, records *records, 
 				return extractedSize, extractedCount, err
 			}
 
-			extension = filepath.Ext(header.Name)
-			recordPath, fullPath = paths(header.Name, extension)
-			if toDisk {
-				newF, err := cmn.CreateFile(fullPath)
-				if err != nil {
-					return extractedSize, extractedCount, err
-				}
-				if err := copyMetadataAndData(newF, file, bmeta, buf); err != nil {
-					newF.Close()
-					return extractedSize, extractedCount, err
-				}
-				newF.Close()
-			} else {
-				sgl := mem.NewSGL(int64(len(bmeta)) + int64(header.UncompressedSize64))
-				if err := copyMetadataAndData(sgl, file, bmeta, nil); err != nil {
-					return extractedSize, extractedCount, err
-				}
-				z.recordContents.Store(fullPath, sgl)
+			data := cmn.NewSizedReader(file, int64(header.UncompressedSize64))
+			if size, err = extractor.ExtractRecordWithBuffer(fqn, header.Name, data, bmeta, toDisk, buf); err != nil {
+				file.Close()
+				return extractedSize, extractedCount, err
 			}
-			size = int64(header.UncompressedSize64)
+			file.Close()
 		}
 
-		records.insert(&record{
-			Key:         z.key(header.Name, z.h),
-			DaemonID:    z.daemonID,
-			ContentPath: recordPath,
-			Objects: []*recordObj{&recordObj{
-				MetadataSize: int64(len(bmeta)),
-				Size:         size,
-				Extension:    extension,
-			}},
-		})
 		extractedSize += size
 		extractedCount++
 	}
@@ -182,15 +151,19 @@ func (z *zipExtractCreator) ExtractShard(r *io.SectionReader, records *records, 
 	return extractedSize, extractedCount, nil
 }
 
+func NewZipExtractCreator() *zipExtractCreator {
+	return &zipExtractCreator{}
+}
+
 // CreateShard creates a new shard locally based on the Shard.
 // Note that the order of closing must be trw, gzw, then finally tarball.
-func (z *zipExtractCreator) CreateShard(s *shard, w io.Writer, loadContent loadContentFunc) (written int64, err error) {
+func (z *zipExtractCreator) CreateShard(s *Shard, w io.Writer, loadContent LoadContentFunc) (written int64, err error) {
 	var n int64
 	zw := zip.NewWriter(w)
 	defer zw.Close()
 
 	rdReader := newZipRecordDataReader()
-	for _, rec := range s.Records.all() {
+	for _, rec := range s.Records.All() {
 		for _, obj := range rec.Objects {
 			rdReader.reinit(zw, obj.Size, obj.MetadataSize)
 			if n, err = loadContent(rdReader, rec, obj); err != nil {
@@ -206,10 +179,6 @@ func (z *zipExtractCreator) CreateShard(s *shard, w io.Writer, loadContent loadC
 
 func (z *zipExtractCreator) UsingCompression() bool {
 	return true
-}
-
-func (z *zipExtractCreator) RecordContents() *sync.Map {
-	return z.recordContents
 }
 
 func (z *zipExtractCreator) MetadataSize() int64 {

@@ -34,21 +34,27 @@ class SortSpecAlgorithm(object):
     openapi_types = {
         'kind': 'str',
         'decreasing': 'bool',
-        'seed': 'str'
+        'seed': 'str',
+        'extension': 'str',
+        'format_type': 'str'
     }
 
     attribute_map = {
         'kind': 'kind',
         'decreasing': 'decreasing',
-        'seed': 'seed'
+        'seed': 'seed',
+        'extension': 'extension',
+        'format_type': 'format_type'
     }
 
-    def __init__(self, kind=None, decreasing=False, seed=None):  # noqa: E501
+    def __init__(self, kind=None, decreasing=False, seed=None, extension=None, format_type='string'):  # noqa: E501
         """SortSpecAlgorithm - a model defined in OpenAPI"""  # noqa: E501
 
         self._kind = None
         self._decreasing = None
         self._seed = None
+        self._extension = None
+        self._format_type = None
         self.discriminator = None
 
         if kind is not None:
@@ -57,6 +63,10 @@ class SortSpecAlgorithm(object):
             self.decreasing = decreasing
         if seed is not None:
             self.seed = seed
+        if extension is not None:
+            self.extension = extension
+        if format_type is not None:
+            self.format_type = format_type
 
     @property
     def kind(self):
@@ -76,7 +86,7 @@ class SortSpecAlgorithm(object):
         :param kind: The kind of this SortSpecAlgorithm.  # noqa: E501
         :type: str
         """
-        allowed_values = ["alphanumeric", "shuffle", "none"]  # noqa: E501
+        allowed_values = ["alphanumeric", "content", "shuffle", "none"]  # noqa: E501
         if kind not in allowed_values:
             raise ValueError(
                 "Invalid value for `kind` ({0}), must be one of {1}"  # noqa: E501
@@ -126,6 +136,58 @@ class SortSpecAlgorithm(object):
         """
 
         self._seed = seed
+
+    @property
+    def extension(self):
+        """Gets the extension of this SortSpecAlgorithm.  # noqa: E501
+
+        Content of the file with provided extension will be used as sorting key  # noqa: E501
+
+        :return: The extension of this SortSpecAlgorithm.  # noqa: E501
+        :rtype: str
+        """
+        return self._extension
+
+    @extension.setter
+    def extension(self, extension):
+        """Sets the extension of this SortSpecAlgorithm.
+
+        Content of the file with provided extension will be used as sorting key  # noqa: E501
+
+        :param extension: The extension of this SortSpecAlgorithm.  # noqa: E501
+        :type: str
+        """
+
+        self._extension = extension
+
+    @property
+    def format_type(self):
+        """Gets the format_type of this SortSpecAlgorithm.  # noqa: E501
+
+        Format type describes how the content of the file should be interpreted  # noqa: E501
+
+        :return: The format_type of this SortSpecAlgorithm.  # noqa: E501
+        :rtype: str
+        """
+        return self._format_type
+
+    @format_type.setter
+    def format_type(self, format_type):
+        """Sets the format_type of this SortSpecAlgorithm.
+
+        Format type describes how the content of the file should be interpreted  # noqa: E501
+
+        :param format_type: The format_type of this SortSpecAlgorithm.  # noqa: E501
+        :type: str
+        """
+        allowed_values = ["int", "float", "string"]  # noqa: E501
+        if format_type not in allowed_values:
+            raise ValueError(
+                "Invalid value for `format_type` ({0}), must be one of {1}"  # noqa: E501
+                .format(format_type, allowed_values)
+            )
+
+        self._format_type = format_type
 
     def to_dict(self):
         """Returns the model properties as a dict"""

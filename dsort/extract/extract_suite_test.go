@@ -1,8 +1,7 @@
-// Package dsort provides APIs for distributed archive file shuffling.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dsort
+package extract
 
 import (
 	"testing"
@@ -13,5 +12,5 @@ import (
 
 func TestDSort(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "DSort Suite")
+	RunSpecs(t, "DSort Extract Suite")
 }

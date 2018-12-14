@@ -26,6 +26,8 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort/extract"
+	"github.com/NVIDIA/dfcpub/dsort/filetype"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/OneOfOne/xxhash"
@@ -88,7 +90,7 @@ func (m *Manager) start() (err error) {
 	}()
 
 	// Run phase 3. only if you are final target (and actually have any sorted records)
-	if curTargetIsFinal && m.records.len() > 0 {
+	if curTargetIsFinal && m.recManager.Records.Len() > 0 {
 		shardSize := m.rs.OutputShardSize
 		if m.extractCreator.UsingCompression() {
 			// By making the assumption that the input content is reasonably uniform across all shards,
@@ -247,7 +249,7 @@ ExtractAllShards:
 				}
 
 				reader := io.NewSectionReader(f, 0, fi.Size())
-				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(reader, m.records, toDisk, m.getContentPathsFunc(fqn))
+				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(fqn, reader, m.recManager, toDisk)
 				m.releaseExtractSema()
 
 				unreserveMemoryCh <- expectedUncompressedSize // schedule unreserving memory on next memory update
@@ -282,11 +284,21 @@ ExtractAllShards:
 		return err
 	}
 
+	// FIXME: maybe there is a way to check this faster or earlier?
+	//
+	// Checking if all records have keys (keys are not nil). Algorithms other
+	// than content kind should have keys, it is a bug if they don't.
+	if m.rs.Algorithm.Kind == SortKindContent {
+		if err := m.recManager.Records.EnsureKeys(); err != nil {
+			return err
+		}
+	}
+
 	m.incrementRef(int64(totalExtractedCount))
 	return nil
 }
 
-func (m *Manager) createShard(s *shard) (err error) {
+func (m *Manager) createShard(s *extract.Shard) (err error) {
 	loadContent := m.loadContent()
 	metrics := m.Metrics.Creation
 
@@ -298,7 +310,7 @@ func (m *Manager) createShard(s *shard) (err error) {
 	if errStr != "" {
 		return errors.New(errStr)
 	}
-	workFQN := fs.CSM.GenContentFQN(fqn, dSortWorkfileType, "")
+	workFQN := fs.CSM.GenContentFQN(fqn, filetype.DSortWorkfileType, "")
 
 	// Check if aborted
 	select {
@@ -403,13 +415,13 @@ func (m *Manager) createShardsLocally() (err error) {
 	metrics.begin()
 	defer metrics.finish()
 	metrics.Lock()
-	metrics.ToCreate = len(m.shards)
+	metrics.ToCreate = len(m.shardManager.Shards)
 	metrics.Unlock()
 
 	group, ctx := errgroup.WithContext(context.Background())
 
 CreateAllShards:
-	for _, s := range m.shards {
+	for _, s := range m.shardManager.Shards {
 		select {
 		case <-m.listenAborted():
 			group.Wait()
@@ -420,7 +432,7 @@ CreateAllShards:
 		}
 
 		m.acquireCreateGoroutineSema()
-		group.Go(func(s *shard) func() error {
+		group.Go(func(s *extract.Shard) func() error {
 			return func() error {
 				err := m.createShard(s)
 				m.releaseCreateGoroutineSema()
@@ -479,9 +491,9 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 
 		if i%2 == 0 {
-			body, e := js.Marshal(m.records)
+			body, e := js.Marshal(m.recManager.Records)
 			if e != nil {
-				err = fmt.Errorf("failed to marshal into JSON, Records: %+v err: %v", m.records, e)
+				err = fmt.Errorf("failed to marshal into JSON, err: %v", e)
 				return
 			}
 			sendTo := targetOrder[i+1]
@@ -497,7 +509,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 				return
 			}
 
-			m.records.drain() // we do not need it anymore
+			m.recManager.Records.Drain() // we do not need it anymore
 
 			metrics.Lock()
 			metrics.SentCnt++
@@ -533,10 +545,10 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 		targetOrder = t
 
-		m.mergeEnqueuedRecords()
+		m.recManager.MergeEnqueuedRecords()
 	}
 
-	m.records.Sort(m.rs.Algorithm)
+	sortRecords(m.recManager.Records, m.rs.Algorithm)
 	return true, nil
 }
 
@@ -557,7 +569,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 //      sent to it already).
 func (m *Manager) distributeShardRecords(maxSize int64) error {
 	var (
-		n               = m.records.len()
+		n               = m.recManager.Records.Len()
 		shardNum        = m.rs.OutputFormat.Start
 		shardCount      = m.rs.OutputFormat.RangeCount
 		start           int
@@ -567,7 +579,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		wg              = &sync.WaitGroup{}
 		smap            = m.ctx.smap.Get()
 		errCh           = make(chan error, smap.CountTargets())
-		shardsToTarget  = make(map[string][]*shard, smap.CountTargets())
+		shardsToTarget  = make(map[string][]*extract.Shard, smap.CountTargets())
 		numLocalRecords = make(map[string]int, smap.CountTargets())
 	)
 
@@ -581,14 +593,14 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		numLocalRecords[d.URL(cmn.NetworkIntraData)] = 0
 		shardsToTarget[d.URL(cmn.NetworkIntraData)] = nil
 	}
-	for i, r := range m.records.all() {
+	for i, r := range m.recManager.Records.All() {
 		numLocalRecords[r.DaemonID]++
-		curShardSize += r.totalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
+		curShardSize += r.TotalSize() + m.extractCreator.MetadataSize()*int64(len(r.Objects))
 		if curShardSize < maxSize && i < n-1 {
 			continue
 		}
 
-		shard := &shard{
+		shard := &extract.Shard{
 			Name:    m.rs.OutputFormat.Prefix + fmt.Sprintf("%0*d", m.rs.OutputFormat.DigitCount, shardNum) + m.rs.OutputFormat.Suffix + ext,
 			Bucket:  m.rs.Bucket,
 			IsLocal: m.rs.IsLocalBucket,
@@ -609,7 +621,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 			baseURL = si.URL(cmn.NetworkIntraData)
 		}
 		shard.Size = curShardSize
-		shard.Records = m.records.slice(start, i+1)
+		shard.Records = m.recManager.Records.Slice(start, i+1)
 		shardsToTarget[baseURL] = append(shardsToTarget[baseURL], shard)
 
 		start = i + 1
@@ -620,7 +632,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 		}
 	}
 
-	m.records.drain()
+	m.recManager.Records.Drain()
 
 	if shardNum > m.rs.OutputFormat.End {
 		createdCount := shardNum / m.rs.OutputFormat.Step
@@ -630,7 +642,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 
 	for u, s := range shardsToTarget {
 		wg.Add(1)
-		go func(u string, s []*shard) {
+		go func(u string, s []*extract.Shard) {
 			defer wg.Done()
 			body, err := js.Marshal(s)
 			if err != nil {
@@ -662,7 +674,7 @@ func (m *Manager) distributeShardRecords(maxSize int64) error {
 // creation request. The target chosen is determined based on:
 //  1) Locality of shard source files, and in a tie situation,
 //  2) Number of shard creation requests previously sent to the target.
-func nodeForShardRequest(shardsToTarget map[string][]*shard, numLocalRecords map[string]int) string {
+func nodeForShardRequest(shardsToTarget map[string][]*extract.Shard, numLocalRecords map[string]int) string {
 	var max int
 	var id string
 	var numSentToCur int

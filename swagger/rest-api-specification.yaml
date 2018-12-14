@@ -781,13 +781,22 @@ components:
           properties:
             kind:
               type: string
-              enum: [alphanumeric, shuffle, none]
+              enum: [alphanumeric, content, shuffle, none]
             decreasing:
               type: boolean
               default: false
             seed:
               type: string
               default: ""
+            extension:
+              type: string
+              default: ""
+              description: Content of the file with provided extension will be used as sorting key
+            format_type:
+              type: string
+              enum: [int, float, string]
+              default: string
+              description: Format type describes how the content of the file should be interpreted
         max_mem_usage:
           type: string
           example: "10%"

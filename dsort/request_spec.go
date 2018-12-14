@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort/extract"
 )
 
 const (
@@ -55,7 +56,10 @@ var (
 	errInvalidMaxMemPercent = errors.New("max memory usage percent must be 0 (defaults to 80%) or in the range [1, 99]")
 	errInvalidMaxMemNumber  = errors.New("max memory usage value must be non-negative")
 
-	errInvalidAlgorithm = errors.New("invalid algorithm specified")
+	errInvalidAlgorithm          = errors.New("invalid algorithm specified")
+	errInvalidAlgorithmKind      = fmt.Errorf("invalid algorithm kind, should be one of: %+v", supportedAlgorithms)
+	errInvalidSeed               = errors.New("invalid seed provided, should be int")
+	errInvalidAlgorithmExtension = errors.New("invalid extension provided, should be in format: .ext")
 )
 
 var (
@@ -135,9 +139,17 @@ type ParsedRequestSpec struct {
 }
 
 type SortAlgorithm struct {
-	Kind       string `json:"kind"`
-	Decreasing bool   `json:"decreasing"`
-	Seed       string `json:"seed"` // seed provided to random generator
+	Kind string `json:"kind"`
+
+	// Kind: alphanumeric, content
+	Decreasing bool `json:"decreasing"`
+
+	// Kind: shuffle
+	Seed string `json:"seed"` // seed provided to random generator
+
+	// Kind: content
+	Extension  string `json:"extension"`
+	FormatType string `json:"format_type"`
 }
 
 // Parse returns a non-nil error if a RequestSpec is invalid. When RequestSpec
@@ -175,10 +187,11 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 		parsedRS.OutputFormat = parsedOutput
 	}
 
-	if !validateAlgorithm(rs.Algorithm) {
+	if parsedAlgorithm, err := parseAlgorithm(rs.Algorithm); err != nil {
 		return nil, errInvalidAlgorithm
+	} else {
+		parsedRS.Algorithm = parsedAlgorithm
 	}
-	parsedRS.Algorithm = &rs.Algorithm
 
 	if rs.MaxMemUsage == "" {
 		rs.MaxMemUsage = "80%" // default value
@@ -373,16 +386,33 @@ func parseMemUsage(memUsage string) (*parsedMemUsage, error) {
 	return parsedMU, nil
 }
 
-func validateAlgorithm(algo SortAlgorithm) bool {
+func parseAlgorithm(algo SortAlgorithm) (parsedAlgo *SortAlgorithm, err error) {
 	if !cmn.StringInSlice(algo.Kind, supportedAlgorithms) {
-		return false
+		return nil, errInvalidAlgorithmKind
 	}
 
 	if algo.Seed != "" {
 		if value, err := strconv.ParseInt(algo.Seed, 10, 64); value < 0 || err != nil {
-			return false
+			return nil, errInvalidSeed
 		}
 	}
 
-	return true
+	if algo.Kind == SortKindContent {
+		algo.Extension = strings.TrimSpace(algo.Extension)
+		if algo.Extension == "" {
+			return nil, errInvalidAlgorithmExtension
+		}
+
+		if algo.Extension[0] != '.' { // extension should begin with dot: .cls
+			return nil, errInvalidAlgorithmExtension
+		}
+
+		if err := extract.ValidateAlgorithmFormatType(algo.FormatType); err != nil {
+			return nil, err
+		}
+	} else {
+		algo.FormatType = extract.FormatTypeString
+	}
+
+	return &algo, nil
 }

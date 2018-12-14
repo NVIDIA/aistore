@@ -7,8 +7,6 @@
 package dsort
 
 import (
-	"crypto/md5"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +16,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,11 +23,12 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort/extract"
+	"github.com/NVIDIA/dfcpub/dsort/filetype"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/transport"
 	sigar "github.com/cloudfoundry/gosigar"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -42,26 +40,23 @@ const (
 )
 
 var (
-	_ json.Marshaler   = &records{}
-	_ json.Unmarshaler = &records{}
-)
-
-var (
 	ctx dsortContext
 
 	mem      *memsys.Mem2
 	once     sync.Once
 	initOnce = func() {
-		fs.CSM.RegisterFileType(dSortFileType, &dsortFile{})
-		fs.CSM.RegisterFileType(dSortWorkfileType, &dsortFile{})
+		fs.CSM.RegisterFileType(filetype.DSortFileType, &filetype.DSortFile{})
+		fs.CSM.RegisterFileType(filetype.DSortWorkfileType, &filetype.DSortFile{})
 
 		mem = &memsys.Mem2{
-			Name: "DSortMem2",
+			Name:   "DSort.Mem2",
+			Period: time.Minute * 10,
 		}
 		if err := mem.Init(false); err != nil {
 			glog.Error(err)
 			return
 		}
+		go mem.Run()
 	}
 )
 
@@ -93,15 +88,12 @@ type Manager struct {
 	ManagerUUID string   `json:"manager_uuid"`
 	Metrics     *Metrics `json:"metrics"`
 
+	mu  sync.Mutex
 	ctx dsortContext
 
-	records  *records
-	enqueued struct {
-		mu      sync.Mutex
-		records []*records // records received from other targets which are waiting to be merged
-	}
-	extractCreator     extractCreator
-	shards             []*shard
+	recManager         *extract.RecordManager
+	shardManager       *extract.ShardManager
+	extractCreator     extract.ExtractCreator
 	startShardCreation chan struct{}
 	rs                 *ParsedRequestSpec
 
@@ -116,11 +108,10 @@ type Manager struct {
 		count int32 // Number of FileMeta slices received, defining what step in the sort a target is in.
 		ch    chan int32
 	}
-	refCount        int64 // Reference counter used to determine if we can do cleanup
-	maxMemUsage     *parsedMemUsage
-	state           progressState
-	extractionPaths sync.Map // Keys correspond to all paths to record contents on disk.
-	extractSema     struct {
+	refCount    int64 // Reference counter used to determine if we can do cleanup
+	maxMemUsage *parsedMemUsage
+	state       progressState
+	extractSema struct {
 		funcCalls   chan struct{} // Counting semaphore to limit concurrent calls to ExtractShard
 		gorountines chan struct{} // Counting semaphore to limit number of goroutines created in extract shard phase
 	}
@@ -128,78 +119,22 @@ type Manager struct {
 		funcCalls   chan struct{} // Counting semaphore to limit concurrent calls to CreateShard
 		gorountines chan struct{} // Counting semaphore to limit number of goroutines created in create shard phase
 	}
-	mu sync.Mutex
-
 	streams struct {
 		request  map[string]*StreamPool
 		response map[string]*StreamPool
 		shards   map[string]*StreamPool // streams for pushing streams to other targets if the fqn is non-local
 	}
 	streamWriters struct {
-		writers map[string]*streamWriter
 		mu      sync.Mutex
+		writers map[string]*streamWriter
 	}
 
 	callTimeout time.Duration // Maximal time we will wait for other node to respond
 }
 
-// loadRemoteContentFunc is type for the function which loads content from the
-// remote target.
-type loadContentFunc func(w io.Writer, rec *record, obj *recordObj) (int64, error)
-
 // contentPathFunc is type for the function which for given key and ext generates
 // a contentPath aka recordPath and fullPath.
 type contentPathFunc func(string, string) (string, string)
-
-// extractCreator is interface which describes set of functions which each
-// shard creator should implement.
-type extractCreator interface {
-	ExtractShard(r *io.SectionReader, records *records, toDisk bool, path contentPathFunc) (int64, int, error)
-	CreateShard(s *shard, w io.Writer, loadContent loadContentFunc) (int64, error)
-	UsingCompression() bool
-	RecordContents() *sync.Map
-	MetadataSize() int64
-}
-
-// shard represents the metadata required to construct a single shard (aka an archive file).
-type shard struct {
-	Name   string `json:"n"`
-	Bucket string `json:"b"`
-	// isLocal describes if given bucket is local or not.
-	IsLocal bool `json:"l"`
-	// size is total size of shard to be created.
-	Size int64 `json:"s"`
-	// records contains all metadata to construct the shard.
-	Records *records `json:"r"`
-}
-
-// recordObj describes single object of record. Objects inside single record
-// differs by extension.
-type recordObj struct {
-	MetadataSize int64  `json:"ms"`
-	Size         int64  `json:"s"`
-	Extension    string `json:"e"`
-}
-
-// record represents the metadata corresponding to a single file from an archive file.
-type record struct {
-	Key      string `json:"k"` // Used to determine the sorting order.
-	DaemonID string `json:"n"` // ID of the target which maintains the contents for this record.
-	// Location on disk where the contents are stored. Doubles as the key for extractCreator's RecordContents.
-	// To get full path for given object you need to use `FullContentPath` method.
-	ContentPath string `json:"p"`
-	// All objects associated with given record. Record can be composed of
-	// multiple objects which have the same name but different extension.
-	Objects []*recordObj `json:"o"`
-}
-
-// records abstract array of records. It safe to be used concurrently.
-type records struct {
-	mu               sync.Mutex
-	arr              []*record
-	m                map[string]*record
-	totalObjectCount int // total number of objects in all recrods
-}
 
 func RegisterNode(smap cluster.Sowner, snode *cluster.Snode) {
 	ctx.smap = smap
@@ -214,18 +149,14 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	// time some manager will be initialized.
 	once.Do(initOnce)
 
-	// Set extract creator depending on extension provided by the user
-	m.setExtractCreator(rs, ctx.node.DaemonID)
-
 	m.ctx = ctx
 	targetCount := m.ctx.smap.Get().CountTargets()
-
-	m.Metrics = newMetrics()
-	m.records = newRecords(1024)
-	m.enqueued.records = make([]*records, 0, targetCount)
-	m.shards = make([]*shard, 1000)
-	m.startShardCreation = make(chan struct{}, 1)
 	m.rs = rs
+	m.Metrics = newMetrics()
+	m.startShardCreation = make(chan struct{}, 1)
+
+	// Set extract creator depending on extension provided by the user
+	m.setExtractCreator()
 
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	m.client = &http.Client{
@@ -342,8 +273,14 @@ func (m *Manager) initStreams() error {
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
 	glog.Infof("dsort %s has started a cleanup", m.ManagerUUID)
+	now := time.Now()
+
 	m.lock()
-	defer m.unlock()
+	defer func() {
+		m.unlock()
+		glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
+	}()
+
 	if m.inProgress() {
 		m.setAbortedTo(true)
 		// Don't wait locked on finishing
@@ -352,7 +289,6 @@ func (m *Manager) cleanup() {
 		m.lock()
 	}
 
-	now := time.Now()
 	for _, streamPoolArr := range []map[string]*StreamPool{m.streams.request, m.streams.response, m.streams.shards} {
 		for _, streamPool := range streamPoolArr {
 			streamPool.Stop()
@@ -363,23 +299,11 @@ func (m *Manager) cleanup() {
 	m.streams.shards = nil
 	m.streamWriters.writers = nil
 
-	m.records.drain()
-	m.shards = nil
+	m.recManager.Cleanup()
+	m.shardManager.Cleanup()
 	m.extractCreator = nil
+	extract.FreeMemory()
 	m.client = nil
-	m.extractionPaths.Range(func(k, v interface{}) bool {
-		if err := os.RemoveAll(k.(string)); err != nil {
-			glog.Errorf("%s: could not remove extraction path (%v) from previous run, err: %v", m.ManagerUUID, k, err)
-		}
-		m.extractionPaths.Delete(k)
-		return true
-	})
-	// Free memsys leftovers
-	mem.Free(memsys.FreeSpec{
-		Totally: true,
-		ToOS:    true,
-	})
-	glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
 }
 
 // abort stops currently running sort job and frees associated resources.
@@ -397,33 +321,34 @@ func (m *Manager) abort() {
 }
 
 // setExtractCreator sets what type of file extraction and creation is used based on the RequestSpec.
-func (m *Manager) setExtractCreator(rs *ParsedRequestSpec, daemonID string) {
-	var key keyFunc
-	if rs.Algorithm.Kind == SortKindMD5 {
-		key = keyMD5
-	} else {
-		key = keyIdentity
+func (m *Manager) setExtractCreator() (err error) {
+	var keyExtractor extract.KeyExtractor
+	switch m.rs.Algorithm.Kind {
+	case SortKindContent:
+		keyExtractor, err = extract.NewContentKeyExtractor(m.rs.Algorithm.FormatType, m.rs.Algorithm.Extension)
+	case SortKindMD5:
+		keyExtractor, err = extract.NewMD5KeyExtractor()
+	default:
+		keyExtractor, err = extract.NewNameKeyExtractor()
 	}
 
-	switch rs.Extension {
-	case extTar, extTarTgz, extTgz:
-		m.extractCreator = &tarExtractCreator{
-			recordContents: &sync.Map{},
-			daemonID:       daemonID,
-			gzipped:        rs.Extension != extTar,
-			h:              md5.New(),
-			key:            key,
-		}
-	case extZip:
-		m.extractCreator = &zipExtractCreator{
-			recordContents: &sync.Map{},
-			daemonID:       daemonID,
-			h:              md5.New(),
-			key:            key,
-		}
-	default:
-		cmn.Assert(false, fmt.Sprintf("unknown extension %s", rs.Extension))
+	if err != nil {
+		return err
 	}
+
+	m.recManager = extract.NewRecordManager(m.ctx.node.DaemonID, m.rs.Extension, keyExtractor)
+	m.shardManager = extract.NewShardManager()
+
+	switch m.rs.Extension {
+	case extTar, extTarTgz, extTgz:
+		m.extractCreator = extract.NewTarExtractCreator(m.rs.Extension != extTar)
+	case extZip:
+		m.extractCreator = extract.NewZipExtractCreator()
+	default:
+		cmn.Assert(false, fmt.Sprintf("unknown extension %s", m.rs.Extension))
+	}
+
+	return nil
 }
 
 // incrementReceived increments number of received records batches. Also puts
@@ -567,10 +492,6 @@ func (m *Manager) maxMemoryUsage() (uint64, error) {
 	}
 }
 
-func (m *Manager) addExtractionPath(path string) {
-	m.extractionPaths.Store(path, struct{}{})
-}
-
 func (m *Manager) acquireExtractSema() {
 	m.extractSema.funcCalls <- struct{}{}
 }
@@ -601,28 +522,6 @@ func (m *Manager) acquireCreateGoroutineSema() {
 
 func (m *Manager) releaseCreateGoroutineSema() {
 	<-m.createSema.gorountines
-}
-
-func (m *Manager) enqueueRecords(records *records) {
-	m.enqueued.mu.Lock()
-	m.enqueued.records = append(m.enqueued.records, records)
-	m.enqueued.mu.Unlock()
-}
-
-func (m *Manager) mergeEnqueuedRecords() {
-	for {
-		m.enqueued.mu.Lock()
-		lastIdx := len(m.enqueued.records) - 1
-		if lastIdx < 0 {
-			m.enqueued.mu.Unlock()
-			break
-		}
-		records := m.enqueued.records[lastIdx]
-		m.enqueued.records = m.enqueued.records[:lastIdx]
-		m.enqueued.mu.Unlock()
-
-		m.records.merge(records)
-	}
 }
 
 func (m *Manager) newStreamWriter(pathToContents string, w io.Writer) *streamWriter {
@@ -680,7 +579,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			return
 		}
 
-		v, ok := m.extractCreator.RecordContents().Load(hdr.Objname)
+		v, ok := m.recManager.RecordContents().Load(hdr.Objname)
 		if !ok {
 			f, err := cmn.NewFileHandle(hdr.Objname)
 			if err != nil {
@@ -703,7 +602,7 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
 				glog.Error(err)
 			}
-			m.extractCreator.RecordContents().Delete(hdr.Objname)
+			m.recManager.RecordContents().Delete(hdr.Objname)
 		}
 	}
 }
@@ -773,8 +672,8 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 }
 
 // loadLocalContent returns function to load content from local storage (either disk or memory).
-func (m *Manager) loadContent() loadContentFunc {
-	return func(w io.Writer, rec *record, obj *recordObj) (int64, error) {
+func (m *Manager) loadContent() extract.LoadContentFunc {
+	return func(w io.Writer, rec *extract.Record, obj *extract.RecordObj) (int64, error) {
 		loadLocal := func(w io.Writer, pathToContent string) (written int64, err error) {
 			buf, slab := mem.AllocFromSlab2(cmn.MiB)
 			defer func() {
@@ -783,7 +682,7 @@ func (m *Manager) loadContent() loadContentFunc {
 			}()
 
 			var n int64
-			v, ok := m.extractCreator.RecordContents().Load(pathToContent)
+			v, ok := m.recManager.RecordContents().Load(pathToContent)
 			if !ok {
 				f, err := os.Open(pathToContent)
 				if err != nil {
@@ -801,7 +700,7 @@ func (m *Manager) loadContent() loadContentFunc {
 					return written, err
 				}
 				sgl.Free()
-				m.extractCreator.RecordContents().Delete(pathToContent)
+				m.recManager.RecordContents().Delete(pathToContent)
 			}
 
 			written += n
@@ -830,11 +729,11 @@ func (m *Manager) loadContent() loadContentFunc {
 		}
 
 		if rec.DaemonID != m.ctx.node.DaemonID { // File source contents are located on a different target.
-			return loadRemote(w, rec.DaemonID, rec.fullContentPath(obj))
+			return loadRemote(w, rec.DaemonID, rec.FullContentPath(obj))
 		}
 
 		// Load from local source: file or sgl
-		return loadLocal(w, rec.fullContentPath(obj))
+		return loadLocal(w, rec.FullContentPath(obj))
 	}
 }
 
@@ -893,106 +792,4 @@ func (m *Manager) doWithAbort(method, u string, body []byte, w io.Writer) (int64
 
 	close(errCh)
 	return n, <-errCh
-}
-
-// Merges two records into single one. It is required for records to have the
-// same ContentPath. Since records should only differ on objects this is the
-// thing that is actually merged.
-func (r *record) mergeObjects(other *record) {
-	cmn.Assert(r.ContentPath == other.ContentPath)
-	r.Objects = append(r.Objects, other.Objects...)
-}
-
-// fullContentPath makes path to particular object.
-func (r *record) fullContentPath(obj *recordObj) string {
-	return makeFullContentPath(r.ContentPath, obj.Extension)
-}
-
-func (r *record) totalSize() int64 {
-	size := int64(0)
-	for _, obj := range r.Objects {
-		size += obj.Size
-	}
-	return size
-}
-
-func makeFullContentPath(contentPath, extension string) string {
-	return contentPath + extension
-}
-
-// getContentPathsFunc for given fqn generate contentPathFunc which then return
-// recordPath and fullPath for given key.
-func (m *Manager) getContentPathsFunc(fqn string) contentPathFunc {
-	return func(key string, ext string) (string, string) {
-		fqnWithoutExt := strings.TrimSuffix(fqn, m.rs.Extension)
-		keyWithoutExt := strings.TrimSuffix(key, ext)
-		recordPath := fs.CSM.GenContentFQN(fqnWithoutExt+"-"+keyWithoutExt, dSortFileType, "")
-		fullPath := recordPath + ext
-		m.addExtractionPath(fullPath)
-		return recordPath, fullPath
-	}
-}
-
-// newRecords creates new instance of Records struct and allocates n places for
-// the actual Record's
-func newRecords(n int) *records {
-	return &records{
-		arr: make([]*record, 0, n),
-		m:   make(map[string]*record, n),
-	}
-}
-
-func (r *records) drain() {
-	r.mu.Lock()
-	r.arr = nil
-	r.m = nil
-	r.mu.Unlock()
-}
-
-func (r *records) insert(records ...*record) {
-	r.mu.Lock()
-	for _, record := range records {
-		// Checking if record is already registered. If that is the case we need
-		// to merge extensions (files with same names but different extensions
-		// should be in single record). Otherwise just add new record.
-		if existingRecord, ok := r.m[record.ContentPath]; ok {
-			existingRecord.mergeObjects(record)
-		} else {
-			r.arr = append(r.arr, record)
-			r.m[record.ContentPath] = record
-		}
-
-		r.totalObjectCount += len(record.Objects)
-	}
-	r.mu.Unlock()
-}
-
-func (r *records) merge(records *records) {
-	r.insert(records.arr...)
-}
-
-func (r *records) all() []*record {
-	return r.arr
-}
-
-func (r *records) slice(start, end int) *records {
-	return &records{
-		arr: r.arr[start:end],
-	}
-}
-
-func (r *records) len() int {
-	return len(r.arr)
-}
-
-func (r *records) objectCount() int {
-	return r.totalObjectCount
-}
-
-func (r *records) MarshalJSON() ([]byte, error) {
-	return jsoniter.Marshal(r.arr)
-}
-
-func (r *records) UnmarshalJSON(b []byte) error {
-	return jsoniter.Unmarshal(b, &r.arr)
 }

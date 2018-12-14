@@ -15,16 +15,31 @@ import (
 	"io"
 	mrand "math/rand"
 	"os"
+	"path/filepath"
+	"strconv"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/dsort/extract"
 )
 
-func addFileToTar(tw *tar.Writer, path string, fileSize int) error {
-	var file bytes.Buffer
-	b := make([]byte, fileSize)
-	if _, err := rand.Read(b); err != nil {
-		return err
+type (
+	FileContent struct {
+		Name    string
+		Ext     string
+		Content []byte
 	}
-	if _, err := file.Write(b); err != nil {
+)
+
+func addFileToTar(tw *tar.Writer, path string, fileSize int, buf []byte) error {
+	var file bytes.Buffer
+	if buf == nil {
+		buf = make([]byte, fileSize)
+		if _, err := rand.Read(buf); err != nil {
+			return err
+		}
+	}
+
+	if _, err := file.Write(buf); err != nil {
 		return err
 	}
 
@@ -99,7 +114,46 @@ func CreateTarWithRandomFiles(tarName string, gzipped bool, fileCnt int, fileSiz
 
 	for i := 0; i < fileCnt; i++ {
 		fileName := fmt.Sprintf("%d.txt", mrand.Int()) // generate random names
-		if err := addFileToTar(tw, fileName, fileSize); err != nil {
+		if err := addFileToTar(tw, fileName, fileSize, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func CreateTarWithCustomFiles(tarName string, fileCnt, fileSize int, customFileType string, customFileExt string) error {
+	// set up the output file
+	extension := ".tar"
+	name := tarName + extension
+	tarball, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+	defer tarball.Close()
+	tw := tar.NewWriter(tarball)
+	defer tw.Close()
+
+	for i := 0; i < fileCnt; i++ {
+		fileName := fmt.Sprintf("%d", mrand.Int()) // generate random names
+		if err := addFileToTar(tw, fileName+".txt", fileSize, nil); err != nil {
+			return err
+		}
+
+		var buf []byte
+		// random content
+		switch customFileType {
+		case extract.FormatTypeInt:
+			buf = []byte(strconv.Itoa(mrand.Int()))
+		case extract.FormatTypeString:
+			buf = []byte(fmt.Sprintf("%d-%d", mrand.Int(), mrand.Int()))
+		case extract.FormatTypeFloat:
+			buf = []byte(fmt.Sprintf("%d.%d", mrand.Int(), mrand.Int()))
+		default:
+			return fmt.Errorf("invalid custom file type: %q", customFileType)
+		}
+
+		if err := addFileToTar(tw, fileName+customFileExt, len(buf), buf); err != nil {
 			return err
 		}
 	}
@@ -178,6 +232,36 @@ func GetFileInfosFromTarBuffer(buffer bytes.Buffer, gzipped bool) ([]os.FileInfo
 		}
 
 		files = append(files, newDummyFile(hdr.Name, hdr.Size))
+	}
+
+	return files, nil
+}
+
+// GetFilesFromTarBuffer returns all file infos contained in buffer which
+// assumably is tar or gzipped tar.
+func GetFilesFromTarBuffer(buffer bytes.Buffer, extension string) ([]FileContent, error) {
+	tr := tar.NewReader(&buffer)
+
+	files := []FileContent{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break // End of archive
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		var buf bytes.Buffer
+		fExt := filepath.Ext(hdr.Name)
+		if extension == fExt {
+			if _, err := io.CopyN(&buf, tr, hdr.Size); err != nil {
+				return nil, err
+			}
+		}
+
+		files = append(files, FileContent{Name: hdr.Name, Ext: fExt, Content: buf.Bytes()})
 	}
 
 	return files, nil

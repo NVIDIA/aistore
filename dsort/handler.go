@@ -19,6 +19,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort/extract"
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -326,7 +327,7 @@ func shardsHandler(managers *ManagerGroup) http.HandlerFunc {
 		}
 
 		decoder := js.NewDecoder(r.Body)
-		if err := decoder.Decode(&dsortManager.shards); err != nil {
+		if err := decoder.Decode(&dsortManager.shardManager.Shards); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -385,7 +386,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 			return
 		}
 
-		records := newRecords(int(d))
+		records := extract.NewRecords(int(d))
 		decoder := js.NewDecoder(r.Body)
 		if err := decoder.Decode(records); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("could not unmarshal request body, err: %v", err), http.StatusInternalServerError)
@@ -394,7 +395,7 @@ func recordsHandler(managers *ManagerGroup) http.HandlerFunc {
 
 		dsortManager.addCompressionSizes(compressed, uncompressed)
 		dsortManager.addToTotalInputShardsSeen(d)
-		dsortManager.enqueueRecords(records)
+		dsortManager.recManager.EnqueueRecords(records)
 		dsortManager.incrementReceived()
 		glog.V(4).Infof("total times received records from another target: %d", dsortManager.received.count)
 	}

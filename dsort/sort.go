@@ -1,18 +1,16 @@
+// Package dsort provides APIs for distributed archive file shuffling.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
-	"fmt"
-	"hash"
 	"math/rand"
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/dsort/extract"
 )
 
 const (
@@ -20,38 +18,34 @@ const (
 	SortKindNone    = "none" // none, used for resharding
 	SortKindMD5     = "md5"
 	SortKindShuffle = "shuffle" // shuffle randomly, can be used with seed to get reproducible results
+	SortKindContent = "content" // sort by content of given file
 )
 
 var (
-	supportedAlgorithms = []string{sortKindEmpty, SortKindMD5, SortKindShuffle, SortKindNone}
+	supportedAlgorithms = []string{sortKindEmpty, SortKindMD5, SortKindShuffle, SortKindContent, SortKindNone}
 )
 
 type (
 	alphaByKey struct {
-		*records
+		*extract.Records
 		decreasing bool
+		formatType string
 	}
-	keyFunc func(string, hash.Hash) string
 )
 
 var (
-	_ = keyFunc(keyIdentity)
-	_ = keyFunc(keyMD5)
-
 	_ sort.Interface = alphaByKey{}
 )
 
-func (s alphaByKey) Len() int      { return len(s.arr) }
-func (s alphaByKey) Swap(i, j int) { s.arr[i], s.arr[j] = s.arr[j], s.arr[i] }
 func (s alphaByKey) Less(i, j int) bool {
 	if s.decreasing {
-		return s.arr[i].Key > s.arr[j].Key
+		return s.Records.Less(j, i, s.formatType)
 	}
-	return s.arr[i].Key < s.arr[j].Key
+	return s.Records.Less(i, j, s.formatType)
 }
 
-// Sort sorts records by each Record.Key in the order determined by sort algorithm.
-func (r *records) Sort(algo *SortAlgorithm) {
+// sortRecords sorts records by each Record.Key in the order determined by sort algorithm.
+func sortRecords(r *extract.Records, algo *SortAlgorithm) {
 	if algo.Kind == SortKindNone {
 		return
 	} else if algo.Kind == SortKindShuffle {
@@ -63,21 +57,11 @@ func (r *records) Sort(algo *SortAlgorithm) {
 		}
 
 		rand.Seed(seed)
-		for i := range r.arr { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+		for i := 0; i < r.Len(); i++ { // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
 			j := rand.Intn(i + 1)
-			r.arr[i], r.arr[j] = r.arr[j], r.arr[i]
+			r.Swap(i, j)
 		}
 	} else {
-		sort.Sort(alphaByKey{r, algo.Decreasing})
+		sort.Sort(alphaByKey{r, algo.Decreasing, algo.FormatType})
 	}
-}
-
-func keyIdentity(base string, h hash.Hash) string {
-	return base
-}
-
-func keyMD5(base string, h hash.Hash) string {
-	s := fmt.Sprintf("%x", h.Sum([]byte(base)))
-	h.Reset()
-	return s
 }

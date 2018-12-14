@@ -1,9 +1,7 @@
+// Package dsort provides APIs for distributed archive file shuffling.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
@@ -18,6 +16,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/dsort/extract"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/transport"
 	. "github.com/onsi/ginkgo"
@@ -34,8 +33,8 @@ const (
 
 var (
 	// Used as a compile-time check for correct interface implementation.
-	_ extractCreator        = &extractCreatorMock{}
-	_ cluster.SmapListeners = &testSmapListeners{}
+	_ extract.ExtractCreator = &extractCreatorMock{}
+	_ cluster.SmapListeners  = &testSmapListeners{}
 )
 
 //
@@ -105,19 +104,18 @@ func (tm *testSmap) Listeners() cluster.SmapListeners {
 //
 type extractCreatorMock struct {
 	useCompression bool
-	createShard    func(s *shard, w io.Writer, loadContent loadContentFunc) // func to hijack CreateShard function
+	createShard    func(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) // func to hijack CreateShard function
 }
 
-func (ec *extractCreatorMock) ExtractShard(f *io.SectionReader, records *records, toDisk bool, paths contentPathFunc) (int64, int, error) {
+func (ec *extractCreatorMock) ExtractShard(fqn string, f *io.SectionReader, extractor extract.RecordExtractor, toDisk bool) (int64, int, error) {
 	return 0, 0, nil
 }
-func (ec *extractCreatorMock) CreateShard(s *shard, w io.Writer, loadContent loadContentFunc) (int64, error) {
+func (ec *extractCreatorMock) CreateShard(s *extract.Shard, w io.Writer, loadContent extract.LoadContentFunc) (int64, error) {
 	ec.createShard(s, w, loadContent)
 	return 0, nil
 }
-func (ec *extractCreatorMock) UsingCompression() bool    { return ec.useCompression }
-func (ec *extractCreatorMock) RecordContents() *sync.Map { return nil }
-func (ec *extractCreatorMock) MetadataSize() int64       { return 0 }
+func (ec *extractCreatorMock) UsingCompression() bool { return ec.useCompression }
+func (ec *extractCreatorMock) MetadataSize() int64    { return 0 }
 
 type targetMock struct {
 	daemonID  string
@@ -139,7 +137,9 @@ func newTargetMock(daemonID string, smap *testSmap) *targetMock {
 	// Initialize dsort manager
 	rs := &ParsedRequestSpec{
 		Extension: extTar,
-		Algorithm: &SortAlgorithm{},
+		Algorithm: &SortAlgorithm{
+			FormatType: extract.FormatTypeString,
+		},
 	}
 
 	dsortManagers := NewManagerGroup()
@@ -344,10 +344,10 @@ var _ = Describe("Distributed Sort", func() {
 					tctx.teardown()
 				})
 
-				createRecords := func(keys ...string) *records {
-					records := newRecords(len(keys))
+				createRecords := func(keys ...string) *extract.Records {
+					records := extract.NewRecords(len(keys))
 					for _, key := range keys {
-						records.insert(&record{
+						records.Insert(&extract.Record{
 							Key:         key,
 							ContentPath: key,
 						})
@@ -356,7 +356,7 @@ var _ = Describe("Distributed Sort", func() {
 				}
 
 				It("should report that final target has all the sorted records", func() {
-					srecordsCh := make(chan *records, 1)
+					srecordsCh := make(chan *extract.Records, 1)
 					for _, target := range tctx.targets {
 						manager, exists := target.managers.Get(globalManagerUUID)
 						Expect(exists).To(BeTrue())
@@ -371,7 +371,7 @@ var _ = Describe("Distributed Sort", func() {
 							// For each target add sorted record
 							manager, exists := target.managers.Get(globalManagerUUID)
 							Expect(exists).To(BeTrue())
-							manager.records = createRecords(target.daemonID)
+							manager.recManager.Records = createRecords(target.daemonID)
 
 							targetOrder := randomTargetOrder(1, tctx.smap.Tmap)
 							isFinal, err := manager.participateInRecordDistribution(targetOrder)
@@ -381,7 +381,7 @@ var _ = Describe("Distributed Sort", func() {
 							}
 
 							if isFinal {
-								srecordsCh <- manager.records
+								srecordsCh <- manager.recManager.Records
 							}
 						}(target)
 					}
@@ -395,7 +395,7 @@ var _ = Describe("Distributed Sort", func() {
 					// Get SortedRecrods
 					close(srecordsCh)
 					srecords := <-srecordsCh
-					Expect(srecords.len()).To(Equal(len(tctx.targets)))
+					Expect(srecords.Len()).To(Equal(len(tctx.targets)))
 
 					// Created expected slice of records
 					keys := make([]string, len(tctx.targets))
@@ -404,20 +404,22 @@ var _ = Describe("Distributed Sort", func() {
 					}
 
 					expectedRecords := createRecords(keys...)
-					Expect(srecords.all()).Should(ConsistOf(expectedRecords.all()))
+					Expect(srecords.All()).Should(ConsistOf(expectedRecords.All()))
 				})
 
 				It("should report that final target has all the records sorted in decreasing order", func() {
-					srecordsCh := make(chan *records, 1)
+					srecordsCh := make(chan *extract.Records, 1)
 					for _, target := range tctx.targets {
 						manager, exists := target.managers.Get(globalManagerUUID)
 						Expect(exists).To(BeTrue())
 
 						rs := &ParsedRequestSpec{
-							Algorithm: &SortAlgorithm{},
+							Algorithm: &SortAlgorithm{
+								Decreasing: true,
+								FormatType: extract.FormatTypeString,
+							},
+							Extension: extTar,
 						}
-						rs.Algorithm.Decreasing = true
-						rs.Extension = extTar
 						ctx.node = ctx.smap.Get().Tmap[target.daemonID]
 						err := manager.init(rs)
 						if err != nil {
@@ -426,7 +428,7 @@ var _ = Describe("Distributed Sort", func() {
 						}
 
 						// For each target add sorted record
-						manager.records = createRecords(target.daemonID)
+						manager.recManager.Records = createRecords(target.daemonID)
 					}
 
 					for _, target := range tctx.targets {
@@ -446,7 +448,7 @@ var _ = Describe("Distributed Sort", func() {
 							if isFinal {
 								manager, exists := target.managers.Get(globalManagerUUID)
 								Expect(exists).To(BeTrue())
-								srecordsCh <- manager.records
+								srecordsCh <- manager.recManager.Records
 							}
 						}(target)
 					}
@@ -460,7 +462,7 @@ var _ = Describe("Distributed Sort", func() {
 					// Get SortedRecrods
 					close(srecordsCh)
 					srecords := <-srecordsCh
-					Expect(srecords.len()).To(Equal(len(tctx.targets)))
+					Expect(srecords.Len()).To(Equal(len(tctx.targets)))
 
 					// Created expected slice of records
 					keys := make([]string, len(tctx.targets))
@@ -469,7 +471,7 @@ var _ = Describe("Distributed Sort", func() {
 					}
 
 					expectedRecords := createRecords(keys...)
-					Expect(srecords.all()).Should(ConsistOf(expectedRecords.all()))
+					Expect(srecords.All()).Should(ConsistOf(expectedRecords.All()))
 				})
 			})
 		})
@@ -480,7 +482,7 @@ var _ = Describe("Distributed Sort", func() {
 				rs   *ParsedRequestSpec
 
 				mtx    sync.Mutex
-				shards []*shard
+				shards []*extract.Shard
 			)
 
 			BeforeEach(func() {
@@ -500,7 +502,9 @@ var _ = Describe("Distributed Sort", func() {
 						Step:   1,
 						End:    10000000,
 					},
-					Algorithm:        &SortAlgorithm{},
+					Algorithm: &SortAlgorithm{
+						FormatType: extract.FormatTypeString,
+					},
 					ExtractConcLimit: 10,
 					CreateConcLimit:  10,
 				}
@@ -521,7 +525,7 @@ var _ = Describe("Distributed Sort", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 					manager.extractCreator = &extractCreatorMock{
 						useCompression: false,
-						createShard: func(s *shard, _ io.Writer, _ loadContentFunc) {
+						createShard: func(s *extract.Shard, _ io.Writer, _ extract.LoadContentFunc) {
 							mtx.Lock()
 							shards = append(shards, s)
 							mtx.Unlock()
@@ -556,7 +560,7 @@ var _ = Describe("Distributed Sort", func() {
 				finalTarget := tctx.targets[0]
 				manager, exists := finalTarget.managers.Get(globalManagerUUID)
 				Expect(exists).To(BeTrue())
-				manager.records = newRecords(args.recordCnt)
+				manager.recManager.Records = extract.NewRecords(args.recordCnt)
 				keys := make([]string, args.recordCnt)
 				for i := 0; i < args.recordCnt; i++ {
 					key := fmt.Sprintf("%s%d%s%s", rs.OutputFormat.Prefix, i, rs.OutputFormat.Suffix, rs.Extension)
@@ -567,10 +571,10 @@ var _ = Describe("Distributed Sort", func() {
 					err = f.Close()
 					Expect(err).ShouldNot(HaveOccurred())
 
-					manager.records.insert(&record{
+					manager.recManager.Records.Insert(&extract.Record{
 						Key:         key,
 						ContentPath: key,
-						Objects: []*recordObj{&recordObj{
+						Objects: []*extract.RecordObj{&extract.RecordObj{
 							Size:      args.recordSize,
 							Extension: rs.Extension,
 						}},
@@ -612,7 +616,7 @@ var _ = Describe("Distributed Sort", func() {
 					Expect(shard.Name).To(HaveSuffix("%s%s", rs.OutputFormat.Suffix, rs.Extension))
 
 					// Ensure that all shards records have good key (there is duplicates)
-					for _, shardRecord := range shard.Records.all() {
+					for _, shardRecord := range shard.Records.All() {
 						exists := false
 						for _, key := range keys {
 							if shardRecord.Key == key {
