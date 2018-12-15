@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
-	"github.com/NVIDIA/dfcpub/tutils"
 )
 
 var (
@@ -72,7 +71,7 @@ func touchFakeFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int) {
 		r.Touch(fqn1 + numStr)
 		r.Touch(fqn2 + numStr)
 	}
-	tutils.Logf("%v to touch %d files in %s\n", time.Since(start), numFiles, mpath)
+	Logf("%v to touch %d files in %s\n", time.Since(start), numFiles, mpath)
 }
 
 func touchRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
@@ -84,7 +83,7 @@ func touchRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duratio
 		r.Touch(fqn2 + numStr)
 		numTouches += 2
 	}
-	tutils.Logf("Mpath: %q. Touched %d files.\n", mpath, numTouches)
+	Logf("Mpath: %q. Touched %d files.\n", mpath, numTouches)
 }
 
 func atimeRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duration time.Duration) {
@@ -107,7 +106,7 @@ func atimeRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duratio
 		}
 		numAccesses++
 	}
-	tutils.Logf("Mpath: %q. Successfully accessed %d files. Total access attempts %d\n", mpath, numOk, numAccesses)
+	Logf("Mpath: %q. Successfully accessed %d files. Total access attempts %d\n", mpath, numOk, numAccesses)
 }
 
 func cleanDirectories(dir string) {
@@ -159,7 +158,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 
 	wg.Wait()
 
-	tutils.Logf("%v to touch %d files.\n", time.Since(start), numFilesTotal)
+	Logf("%v to touch %d files.\n", time.Since(start), numFilesTotal)
 
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
@@ -184,4 +183,10 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	wg.Wait()
 	cleanDirectories(tmpDir)
 	atimer.Stop(fmt.Errorf("Test Complete"))
+}
+
+func Logf(msg string, args ...interface{}) {
+	if testing.Verbose() {
+		fmt.Fprintf(os.Stdout, msg, args...)
+	}
 }

@@ -596,13 +596,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		clone := p.bmdowner.get().clone()
-		props, ok := clone.get(bucketFrom, true)
+		props, ok := clone.Get(bucketFrom, true)
 		if !ok {
 			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucketFrom)
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		_, ok = clone.get(bucketTo, true)
+		_, ok = clone.Get(bucketTo, true)
 		if ok {
 			s := fmt.Sprintf("Local bucket %s already exists", bucketTo)
 			p.invalmsghdlr(w, r, s)
@@ -722,7 +722,7 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	clone := p.bmdowner.get().clone()
 	isLocal := clone.IsLocal(bucket)
 
-	oldProps, exists := clone.get(bucket, isLocal)
+	oldProps, exists := clone.Get(bucket, isLocal)
 	if !exists {
 		cmn.Assert(!isLocal)
 		oldProps = &cmn.BucketProps{

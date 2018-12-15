@@ -98,15 +98,15 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	xmd := &objectXprops{t: rcl.t, fqn: fqn}
-	if errstr := xmd.fill(0); errstr != "" {
+	lom := &cluster.LOM{T: rcl.t, Fqn: fqn}
+	if errstr := lom.Fill(0); errstr != "" {
 		if glog.V(4) {
-			glog.Infof("%s, err %s - skipping...", xmd, errstr)
+			glog.Infof("%s, err %s - skipping...", lom, errstr)
 		}
 		return nil
 	}
 	// rebalance, maybe
-	si, errstr := hrwTarget(xmd.bucket, xmd.objname, rcl.newsmap)
+	si, errstr := hrwTarget(lom.Bucket, lom.Objname, rcl.newsmap)
 	if errstr != "" {
 		return fmt.Errorf(errstr)
 	}
@@ -115,10 +115,10 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	}
 	// do rebalance
 	if glog.V(4) {
-		glog.Infof("%s %s => %s", xmd, rcl.t.si, si)
+		glog.Infof("%s %s => %s", lom, rcl.t.si, si)
 	}
-	if errstr = rcl.t.sendfile(http.MethodPut, xmd.bucket, xmd.objname, si, osfi.Size(), "", "", rcl.atimeRespCh); errstr != "" {
-		glog.Infof("Failed to rebalance %s: %s", xmd, errstr)
+	if errstr = rcl.t.sendfile(http.MethodPut, lom.Bucket, lom.Objname, si, osfi.Size(), "", "", rcl.atimeRespCh); errstr != "" {
+		glog.Infof("Failed to rebalance %s: %s", lom, errstr)
 	} else {
 		// LRU cleans up the object later
 		rcl.objectMoved++
@@ -170,32 +170,32 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if fileInfo.IsDir() {
 		return nil
 	}
-	xmd := &objectXprops{t: rb.t, fqn: fqn}
-	if errstr := xmd.fill(0); errstr != "" {
+	lom := &cluster.LOM{T: rb.t, Fqn: fqn}
+	if errstr := lom.Fill(0); errstr != "" {
 		if glog.V(4) {
-			glog.Infof("%s, err %v - skipping...", xmd, err)
+			glog.Infof("%s, err %v - skipping...", lom, err)
 		}
 		return nil
 	}
-	if !xmd.misplaced {
+	if !lom.Misplaced {
 		return nil
 	}
 	if glog.V(4) {
-		glog.Infof("%s => %s", xmd, xmd.newfqn)
+		glog.Infof("%s => %s", lom, lom.Newfqn)
 	}
-	dir := filepath.Dir(xmd.newfqn)
+	dir := filepath.Dir(lom.Newfqn)
 	if err := cmn.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
 		rb.xreb.abort()
-		rb.t.fshc(err, xmd.newfqn)
+		rb.t.fshc(err, lom.Newfqn)
 		return nil
 	}
 
 	// Copy the object instead of moving, LRU takes care of obsolete copies
 	if glog.V(4) {
-		glog.Infof("Copying %s => %s", fqn, xmd.newfqn)
+		glog.Infof("Copying %s => %s", fqn, lom.Newfqn)
 	}
-	if errFQN, err := copyFile(fqn, xmd.newfqn); err != nil {
+	if errFQN, err := copyFile(fqn, lom.Newfqn); err != nil {
 		glog.Error(err.Error())
 		rb.t.fshc(err, errFQN)
 		rb.xreb.abort()

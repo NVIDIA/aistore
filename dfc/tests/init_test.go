@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -105,22 +104,12 @@ func init() {
 
 	usingSG = readerType == tutils.ReaderTypeSG
 	usingFile = readerType == tutils.ReaderTypeFile
-	checkMemory()
 
 	if tutils.DockerRunning() && proxyURLRO == ProxyURL {
 		proxyURLRO = "http://172.50.0.2:8080"
 	}
 	if tutils.DockerRunning() && proxyNextTierURLRO == ProxyURLNext {
 		proxyNextTierURLRO = "http://172.53.0.2:8080"
-	}
-}
-
-func checkMemory() {
-	if readerType == tutils.ReaderTypeSG || readerType == tutils.ReaderTypeInMem {
-		megabytes, _ := dfc.TotalMemory()
-		if megabytes < PhysMemSizeWarn {
-			fmt.Fprintf(os.Stderr, "Warning: host memory size = %dMB may be insufficient, consider use other reader type\n", megabytes)
-		}
 	}
 }
 

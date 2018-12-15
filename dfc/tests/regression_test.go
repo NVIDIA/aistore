@@ -27,6 +27,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dfc"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -298,7 +299,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 	fName = <-filenameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Corrupting file xattr[%s]: %s\n", fName, fqn)
-	if errstr := dfc.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
+	if errstr := fs.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde")); errstr != "" {
 		t.Error(errstr)
 	}
 	_, err = api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, bucket, SmokeStr+"/"+fName)

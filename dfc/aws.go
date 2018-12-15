@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -339,8 +340,8 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) (props *objectXprops, errstr string, errcode int) {
-	var v cksumValue
+func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) (props *cluster.LOM, errstr string, errcode int) {
+	var v cmn.CksumValue
 	sess := createSession(ct)
 	svc := s3.New(sess)
 	obj, err := svc.GetObject(&s3.GetObjectInput{
@@ -355,7 +356,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 	// may not have dfc metadata
 	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
 		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
-			v = newCksum(*htype, *hval)
+			v = cmn.NewCksum(*htype, *hval)
 		}
 	}
 	md5, _ := strconv.Unquote(*obj.ETag)
@@ -366,11 +367,11 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 		}
 		md5 = ""
 	}
-	props = &objectXprops{t: awsimpl.t, bucket: bucket, objname: objname, nhobj: v}
+	props = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Nhobj: v}
 	if obj.VersionId != nil {
-		props.version = *obj.VersionId
+		props.Version = *obj.VersionId
 	}
-	if _, props.nhobj, props.size, errstr = awsimpl.t.receive(fqn, props, md5, obj.Body); errstr != "" {
+	if _, props.Nhobj, props.Size, errstr = awsimpl.t.receive(fqn, props, md5, obj.Body); errstr != "" {
 		obj.Body.Close()
 		return
 	}
@@ -381,7 +382,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 	return
 }
 
-func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cksumValue) (version string, errstr string, errcode int) {
+func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cmn.CksumValue) (version string, errstr string, errcode int) {
 	var (
 		err          error
 		htype, hval  string
@@ -389,7 +390,7 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 		uploadoutput *s3manager.UploadOutput
 	)
 	if ohash != nil {
-		htype, hval = ohash.get()
+		htype, hval = ohash.Get()
 		md = make(map[string]*string)
 		md[awsPutDfcHashType] = aws.String(htype)
 		md[awsPutDfcHashVal] = aws.String(hval)

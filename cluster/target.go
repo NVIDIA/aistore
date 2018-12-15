@@ -4,6 +4,11 @@
  */
 package cluster
 
+import (
+	"github.com/NVIDIA/dfcpub/atime"
+	"github.com/NVIDIA/dfcpub/memsys"
+)
+
 // For implementations, please refer to dfc/target.go
 
 type Target interface {
@@ -11,4 +16,8 @@ type Target interface {
 	RunLRU()
 	PrefetchQueueLen() int
 	Prefetch()
+	GetBowner() Bowner
+	FSHC(err error, path string)
+	GetAtimeRunner() *atime.Runner
+	GetMem2() *memsys.Mem2
 }

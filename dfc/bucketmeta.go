@@ -67,15 +67,6 @@ func (m *bucketMD) del(b string, local bool) bool {
 	return true
 }
 
-func (m *bucketMD) get(b string, local bool) (*cmn.BucketProps, bool) {
-	mm := m.LBmap
-	if !local {
-		mm = m.CBmap
-	}
-	p, ok := mm[b]
-	return p, ok
-}
-
 func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 	mm := m.LBmap
 	if !local {
@@ -91,21 +82,11 @@ func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 
 func (m *bucketMD) propsAndChecksum(bucket string) (p *cmn.BucketProps, checksum string, defined bool) {
 	var ok bool
-	p, ok = m.get(bucket, m.IsLocal(bucket))
+	p, ok = m.Get(bucket, m.IsLocal(bucket))
 	if !ok || p.Checksum == cmn.ChecksumInherit {
 		return p, "", false
 	}
 	return p, p.Checksum, true
-}
-
-// lruEnabled returns whether or not LRU is enabled
-// for the bucket. Returns the global setting if bucket not found
-func (m *bucketMD) lruEnabled(bucket string) bool {
-	p, ok := m.get(bucket, m.IsLocal(bucket))
-	if !ok {
-		return cmn.GCO.Get().LRU.LRUEnabled
-	}
-	return p.LRUEnabled
 }
 
 func (m *bucketMD) clone() *bucketMD {

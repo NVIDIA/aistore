@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
@@ -183,22 +184,22 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	var (
 		errstr            string
 		vchanged, coldget bool
-		xmd               = &objectXprops{t: t, bucket: bucket, objname: objname}
+		lom               = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
 		versioncfg        = &cmn.GCO.Get().Ver
 	)
-	if errstr = xmd.fill(xmdFstat | xmdVersion | xmdCksum); errstr != "" {
+	if errstr = lom.Fill(cluster.LomFstat | cluster.LomVersion | cluster.LomCksum); errstr != "" {
 		glog.Error(errstr)
 		return
 	}
-	if xmd.bislocal { // must not come here
-		if xmd.doesnotexist {
-			glog.Errorf("prefetch: %s", xmd)
+	if lom.Bislocal { // must not come here
+		if lom.Doesnotexist {
+			glog.Errorf("prefetch: %s", lom)
 		}
 		return
 	}
-	coldget = xmd.doesnotexist
-	if xmd.exists() && versioncfg.ValidateWarmGet && xmd.version != "" && versioningConfigured(false) {
-		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, xmd.version); errstr != "" {
+	coldget = lom.Doesnotexist
+	if lom.Exists() && versioncfg.ValidateWarmGet && lom.Version != "" && versioningConfigured(false) {
+		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
 			return
 		}
 		coldget = vchanged
@@ -206,19 +207,19 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 	if !coldget {
 		return
 	}
-	if errstr, _ = t.getCold(ct, xmd, true); errstr != "" {
+	if errstr, _ = t.getCold(ct, lom, true); errstr != "" {
 		if errstr != "skip" {
 			glog.Errorln(errstr)
 		}
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("prefetch: %s", xmd)
+		glog.Infof("prefetch: %s", lom)
 	}
 	t.statsif.Add(stats.PrefetchCount, 1)
-	t.statsif.Add(stats.PrefetchSize, xmd.size)
+	t.statsif.Add(stats.PrefetchSize, lom.Size)
 	if vchanged {
-		t.statsif.Add(stats.VerChangeSize, xmd.size)
+		t.statsif.Add(stats.VerChangeSize, lom.Size)
 		t.statsif.Add(stats.VerChangeCount, 1)
 	}
 }

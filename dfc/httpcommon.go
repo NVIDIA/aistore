@@ -105,8 +105,8 @@ type cloudif interface {
 	//
 	headobject(ctx context.Context, bucket string, objname string) (objmeta cmn.SimpleKVs, errstr string, errcode int)
 	//
-	getobj(ctx context.Context, fqn, bucket, objname string) (props *objectXprops, errstr string, errcode int)
-	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cksumValue) (version string, errstr string, errcode int)
+	getobj(ctx context.Context, fqn, bucket, objname string) (props *cluster.LOM, errstr string, errcode int)
+	putobj(ctx context.Context, file *os.File, bucket, objname string, ohobj cmn.CksumValue) (version string, errstr string, errcode int)
 	deleteobj(ctx context.Context, bucket, objname string) (errstr string, errcode int)
 }
 

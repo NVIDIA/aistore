@@ -111,8 +111,8 @@ func (rcksctx *recksumctx) walk(fqn string, osfi os.FileInfo, err error) error {
 		break
 	}
 
-	// TODO: future scrubber to |xmdCksumPresentRecomp, and scrub
-	xmd := &objectXprops{fqn: fqn, size: osfi.Size()}
-	_ = xmd.fill(xmdCksum | xmdCksumMissingRecomp)
+	// TODO: future scrubber to |cluster.LomCksumPresentRecomp, and scrub
+	lom := &cluster.LOM{Fqn: fqn, Size: osfi.Size()}
+	_ = lom.Fill(cluster.LomCksum | cluster.LomCksumMissingRecomp)
 	return nil
 }

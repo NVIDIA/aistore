@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 )
 
@@ -41,7 +42,7 @@ func (t *targetrunner) objectInNextTier(nextTierURL, bucket, objname string) (in
 	return
 }
 
-func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn string) (props *objectXprops, errstr string, errcode int) {
+func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn string) (props *cluster.LOM, errstr string, errcode int) {
 	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname)
 
 	resp, err := t.httprunner.httpclientLongTimeout.Get(url)
@@ -66,12 +67,12 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn strin
 		return
 	}
 
-	props = &objectXprops{t: t, bucket: bucket, objname: objname}
-	if errstr = props.fill(0); errstr != "" {
+	props = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
+	if errstr = props.Fill(0); errstr != "" {
 		resp.Body.Close()
 		return
 	}
-	_, props.nhobj, props.size, errstr = t.receive(fqn, props, "", resp.Body)
+	_, props.Nhobj, props.Size, errstr = t.receive(fqn, props, "", resp.Body)
 	resp.Body.Close()
 	return
 }

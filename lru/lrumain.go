@@ -93,6 +93,9 @@ func InitAndRun(ini *InitLRU) {
 	wg := &sync.WaitGroup{}
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, cmn.GCO.Get().LRU.DontEvictTime)
 
+	ini.Ratime = ini.Targetif.GetAtimeRunner()
+	ini.Bmdowner = ini.Targetif.GetBowner()
+
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range ini.CtxResolver.RegisteredContentTypes {
 		if !contentResolver.PermToEvict() {

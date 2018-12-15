@@ -17,10 +17,6 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 )
 
-const (
-	maxAttrSize = 1024
-)
-
 //===========================================================================
 //
 // IPV4
@@ -210,35 +206,6 @@ func validateXactionQueryable(kind string) (errstr string) {
 		return
 	}
 	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, cmn.XactionRebalance, cmn.XactionPrefetch)
-}
-
-// helper: get checksum; only xxhash is currently supported/expected
-func getXattrCksum(fqn string, algo string) (cksum, errstr string) {
-	var b []byte
-	cmn.Assert(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
-	if b, errstr = GetXattr(fqn, cmn.XattrXXHashVal); errstr != "" {
-		return
-	}
-	if b == nil {
-		glog.Warningf("%s is not checksummed", fqn)
-		return
-	}
-	cksum = string(b)
-	return
-}
-
-// helper: a wrapper on top of cmn.ComputeXXHash
-func recomputeXXHash(fqn string, size int64) (cksum, errstr string) {
-	file, err := os.Open(fqn)
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to open %s, err: %v", fqn, err)
-		return
-	}
-	buf, slab := gmem2.AllocFromSlab2(size)
-	cksum, errstr = cmn.ComputeXXHash(file, buf)
-	file.Close()
-	slab.Free(buf)
-	return
 }
 
 // versioningConfigured returns true if versioning for a given bucket is enabled

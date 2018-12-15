@@ -6,10 +6,15 @@
 package dfc
 
 import (
-	"encoding/binary"
 	"fmt"
 	"syscall"
 	"unsafe"
+
+	"github.com/NVIDIA/dfcpub/cmn"
+)
+
+const (
+	maxAttrSize = 1024
 )
 
 // GetXattr returns specific attribute for specified fqn.
@@ -48,29 +53,4 @@ func SetXattr(fqn string, attrname string, data []byte) (errstr string) {
 			fqn, attrname, err)
 	}
 	return
-}
-
-// DeleteXattr deletes specific named attribute for specific fqn.
-func DeleteXattr(fqn string, attrname string) (errstr string) {
-	_, _, err := syscall.Syscall(syscall.SYS_REMOVEXATTR,
-		uintptr(unsafe.Pointer(syscall.StringBytePtr(fqn))),
-		uintptr(unsafe.Pointer(syscall.StringBytePtr(attrname))),
-		uintptr(0))
-	if err != syscall.Errno(0) {
-		errstr = fmt.Sprintf("Failed to remove extended attr for fqn %s attr %s, err: %v",
-			fqn, attrname, err)
-	}
-	return
-}
-
-// TotalMemory returns total physical memory of the system
-func TotalMemory() (uint64, error) {
-	v, err := syscall.Sysctl("hw.memsize")
-	if err != nil {
-		return 0, err
-	}
-
-	var buf [8]byte
-	copy(buf[:], v)
-	return binary.LittleEndian.Uint64(buf[:]) / MiB, nil
 }

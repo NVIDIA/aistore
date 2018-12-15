@@ -21,6 +21,25 @@ func (m *BMD) IsLocal(bucket string) bool {
 	return ok
 }
 
+func (m *BMD) Get(b string, local bool) (*cmn.BucketProps, bool) {
+	mm := m.LBmap
+	if !local {
+		mm = m.CBmap
+	}
+	p, ok := mm[b]
+	return p, ok
+}
+
+// lruEnabled returns whether or not LRU is enabled
+// for the bucket. Returns the global setting if bucket not found
+func (m *BMD) LRUenabled(bucket string) bool {
+	p, ok := m.Get(bucket, m.IsLocal(bucket))
+	if !ok {
+		return cmn.GCO.Get().LRU.LRUEnabled
+	}
+	return p.LRUEnabled
+}
+
 // interface to Get current bucket-metadata instance
 // (for implementation, see dfc/bucketmeta.go)
 type Bowner interface {

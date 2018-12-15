@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/atime"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
@@ -307,18 +308,18 @@ func (r *mpathReplicator) replicate(req *replRequest) {
 func (r *mpathReplicator) send(req *replRequest) error {
 	var errstr string
 
-	xmd := &objectXprops{t: r.t, fqn: req.fqn}
-	if errstr = xmd.fill(xmdFstat); errstr != "" {
+	lom := &cluster.LOM{T: r.t, Fqn: req.fqn}
+	if errstr = lom.Fill(cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
-	if xmd.doesnotexist {
-		return fmt.Errorf("%s/%s %s", xmd.bucket, xmd.objname, cmn.DoesNotExist)
+	if lom.Doesnotexist {
+		return fmt.Errorf("%s/%s %s", lom.Bucket, lom.Objname, cmn.DoesNotExist)
 	}
-	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, xmd.bucket, xmd.objname)
-	r.t.rtnamemap.Lock(xmd.uname, req.deleteObject)
-	defer r.t.rtnamemap.Unlock(xmd.uname, req.deleteObject)
+	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname)
+	r.t.rtnamemap.Lock(lom.Uname, req.deleteObject)
+	defer r.t.rtnamemap.Unlock(lom.Uname, req.deleteObject)
 
-	if errstr = xmd.fill(xmdCksum | xmdCksumMissingRecomp); errstr != "" {
+	if errstr = lom.Fill(cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
 
@@ -337,10 +338,10 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return os.Open(req.fqn)
 	}
 
-	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, xmd.lruEnabled())
+	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, lom.LRUenabled())
 
 	// obtain the version of the file
-	if version, errstr := GetXattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
+	if version, errstr := fs.GetXattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
 		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, cmn.XattrObjVersion, errstr)
 	} else if len(version) != 0 {
 		httpReq.Header.Add(cmn.HeaderDFCObjVersion, string(version))
@@ -348,8 +349,8 @@ func (r *mpathReplicator) send(req *replRequest) error {
 
 	// specify source direct URL in request header
 	httpReq.Header.Add(cmn.HeaderDFCReplicationSrc, r.directURL)
-	if xmd.nhobj != nil {
-		htype, hval := xmd.nhobj.get()
+	if lom.Nhobj != nil {
+		htype, hval := lom.Nhobj.Get()
 		httpReq.Header.Add(cmn.HeaderDFCChecksumType, htype)
 		httpReq.Header.Add(cmn.HeaderDFCChecksumVal, hval)
 	}
@@ -374,7 +375,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 			errstr = fmt.Sprintf(
 				"HTTP status code: %d, HTTP response body: %s, bucket/object: %s/%s, "+
 					"destination URL: %s",
-				resp.StatusCode, string(b), xmd.bucket, xmd.objname, req.remoteDirectURL,
+				resp.StatusCode, string(b), lom.Bucket, lom.Objname, req.remoteDirectURL,
 			)
 		}
 		return errors.New(errstr)
@@ -394,18 +395,18 @@ func (r *mpathReplicator) send(req *replRequest) error {
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
 		httpr = req.httpReq
-		xmd   = &objectXprops{t: r.t, fqn: req.fqn}
+		lom   = &cluster.LOM{T: r.t, Fqn: req.fqn}
 	)
-	if errstr := xmd.fill(0); errstr != "" {
+	if errstr := lom.Fill(0); errstr != "" {
 		return errors.New(errstr)
 	}
 	if timeStr := httpr.Header.Get(cmn.HeaderDFCObjAtime); timeStr != "" {
-		xmd.atimestr = timeStr
+		lom.Atimestr = timeStr
 		if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
-			xmd.atime = tm // FIXME: not used
+			lom.Atime = tm // FIXME: not used
 		}
 	}
-	if errstr, _ := r.t.doput(httpr, xmd.bucket, xmd.objname); errstr != "" {
+	if errstr, _ := r.t.doput(httpr, lom.Bucket, lom.Objname); errstr != "" {
 		return errors.New(errstr)
 	}
 	return nil
