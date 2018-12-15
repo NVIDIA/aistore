@@ -23,7 +23,7 @@ func (e *ErrFqnMisplaced) Error() string { return e.errstr }
 //
 // resolve and validate fqn
 //
-func ResolveFQN(fqn string, bowner Bowner) (parsedFQN fs.FQNparsed, newfqn string, err error) {
+func ResolveFQN(fqn string, bowner Bowner, islocal ...bool) (parsedFQN fs.FQNparsed, newfqn string, err error) {
 	var errstr string
 	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
 	if err != nil {
@@ -39,10 +39,15 @@ func ResolveFQN(fqn string, bowner Bowner) (parsedFQN fs.FQNparsed, newfqn strin
 		err = &ErrFqnMisplaced{errstr}
 		return
 	}
-	bmd := bowner.Get()
-	if bmd.IsLocal(parsedFQN.Bucket) != parsedFQN.IsLocal {
-		err = fmt.Errorf("%s (%s/%s) - islocal mismatch(%t, %t)", fqn,
-			parsedFQN.Bucket, parsedFQN.Objname, bmd.IsLocal(parsedFQN.Bucket), parsedFQN.IsLocal)
+	var bislocal bool
+	if len(islocal) == 0 {
+		bmd := bowner.Get()
+		bislocal = bmd.IsLocal(parsedFQN.Bucket)
+	} else {
+		bislocal = islocal[0] // caller has already done the above
+	}
+	if bislocal != parsedFQN.IsLocal {
+		err = fmt.Errorf("%s (%s/%s) - islocal mismatch(%t, %t)", fqn, parsedFQN.Bucket, parsedFQN.Objname, bislocal, parsedFQN.IsLocal)
 	}
 	return
 }

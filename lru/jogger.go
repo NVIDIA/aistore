@@ -34,22 +34,22 @@ func (lctx *lructx) jog(wg *sync.WaitGroup) {
 		return
 	}
 	if lctx.totsize < minevict {
-		glog.Infof("%s: below threshold, nothing to do", lctx.bucketdir)
+		glog.Infof("%s: below threshold, nothing to do", lctx.bckTypeDir)
 		return
 	}
-	glog.Infof("%s: evicting %s", lctx.bucketdir, cmn.B2S(lctx.totsize, 2))
+	glog.Infof("%s: evicting %s", lctx.bckTypeDir, cmn.B2S(lctx.totsize, 2))
 
-	if err := filepath.Walk(lctx.bucketdir, lctx.walk); err != nil {
+	if err := filepath.Walk(lctx.bckTypeDir, lctx.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
-			glog.Infof("%s: stopping traversal: %s", lctx.bucketdir, s)
+			glog.Infof("%s: stopping traversal: %s", lctx.bckTypeDir, s)
 		} else {
-			glog.Errorf("%s: failed to traverse, err: %v", lctx.bucketdir, err)
+			glog.Errorf("%s: failed to traverse, err: %v", lctx.bckTypeDir, err)
 		}
 		return
 	}
 	if err := lctx.evict(); err != nil {
-		glog.Errorf("%s: failed to evict, err: %v", lctx.bucketdir, err)
+		glog.Errorf("%s: failed to evict, err: %v", lctx.bckTypeDir, err)
 	}
 }
 
@@ -118,7 +118,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	}
 
 	// cleanup after rebalance
-	_, _, err = cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
+	_, _, err = cluster.ResolveFQN(fqn, nil, lctx.bislocal)
 	if err != nil {
 		glog.Infof("%s: is misplaced, err: %v", fqn, err)
 		fi := &fileInfo{fqn: fqn, size: stat.Size}
@@ -153,7 +153,7 @@ func (lctx *lructx) evict() error {
 	)
 	for _, fi := range lctx.oldwork {
 		if lctx.ini.Targetif.IsRebalancing() {
-			_, _, err := cluster.ResolveFQN(fi.fqn, lctx.ini.Bmdowner)
+			_, _, err := cluster.ResolveFQN(fi.fqn, nil, lctx.bislocal)
 			// keep a copy of a rebalanced file while rebalance is running
 			if movable := lctx.ctxResolver.PermToMove(fi.fqn); movable && err != nil {
 				continue
@@ -183,7 +183,7 @@ func (lctx *lructx) evict() error {
 
 // evictFQN evicts a given file
 func (lctx *lructx) evictFQN(fqn string) error {
-	parsedFQN, _, err := cluster.ResolveFQN(fqn, lctx.ini.Bmdowner)
+	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, lctx.bislocal)
 	bucket, objname := parsedFQN.Bucket, parsedFQN.Objname
 	if err != nil {
 		glog.Errorf("Evicting %q with error: %v", fqn, err)
@@ -207,7 +207,7 @@ func (lctx *lructx) evictFQN(fqn string) error {
 func (lctx *lructx) evictSize() (err error) {
 	config := cmn.GCO.Get()
 	hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
-	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bucketdir)
+	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bckTypeDir)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (lctx *lructx) evictSize() (err error) {
 	usedpct := used * 100 / blocks
 	if glog.V(4) {
 		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%",
-			lctx.bucketdir, blocks, bavail, usedpct, hwm, lwm)
+			lctx.bckTypeDir, blocks, bavail, usedpct, hwm, lwm)
 	}
 	if usedpct < uint64(hwm) {
 		return

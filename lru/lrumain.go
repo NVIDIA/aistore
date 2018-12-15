@@ -49,7 +49,6 @@ type (
 		Ratime      *atime.Runner
 		Xlru        cmn.XactInterface
 		Namelocker  cluster.NameLocker
-		Bmdowner    cluster.Bowner
 		Statsif     stats.Tracker
 		Targetif    cluster.Target
 		CtxResolver *fs.ContentSpecMgr
@@ -75,10 +74,11 @@ type (
 		// init-time
 		ini         InitLRU
 		fs          string
-		bucketdir   string
+		bckTypeDir  string
 		throttler   cluster.Throttler
 		atimeRespCh chan *atime.Response
 		ctxResolver *fs.ContentSpecMgr
+		bislocal    bool
 	}
 )
 
@@ -94,7 +94,6 @@ func InitAndRun(ini *InitLRU) {
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, cmn.GCO.Get().LRU.DontEvictTime)
 
 	ini.Ratime = ini.Targetif.GetAtimeRunner()
-	ini.Bmdowner = ini.Targetif.GetBowner()
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range ini.CtxResolver.RegisteredContentTypes {
@@ -105,13 +104,13 @@ func InitAndRun(ini *InitLRU) {
 		// NOTE the sequence: LRU local buckets first, Cloud buckets - second
 		//
 		for path, mpathInfo := range availablePaths {
-			lctx := newlru(ini, mpathInfo, fs.Mountpaths.MakePathLocal(path, contentType))
+			lctx := newlru(ini, mpathInfo, fs.Mountpaths.MakePathLocal(path, contentType), true /* these buckets are local */)
 			wg.Add(1)
 			go lctx.jog(wg)
 		}
 		wg.Wait()
 		for path, mpathInfo := range availablePaths {
-			lctx := newlru(ini, mpathInfo, fs.Mountpaths.MakePathCloud(path, contentType))
+			lctx := newlru(ini, mpathInfo, fs.Mountpaths.MakePathCloud(path, contentType), false /* cloud */)
 			wg.Add(1)
 			go lctx.jog(wg)
 		}
@@ -119,7 +118,7 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx {
+func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bckTypeDir string, bislocal bool) *lructx {
 	throttler := &cluster.Throttle{
 		Riostat: ini.Riostat,
 		Path:    mpathInfo.Path,
@@ -129,10 +128,11 @@ func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bucketdir string) *lructx
 		oldwork:     make([]*fileInfo, 0, 64),
 		ini:         *ini,
 		fs:          mpathInfo.FileSystem,
-		bucketdir:   bucketdir,
+		bckTypeDir:  bckTypeDir,
 		throttler:   throttler,
 		atimeRespCh: make(chan *atime.Response, 1),
 		ctxResolver: ini.CtxResolver,
+		bislocal:    bislocal,
 	}
 	return lctx
 }

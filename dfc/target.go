@@ -1022,21 +1022,27 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		bucketFrom, bucketTo := lbucket, msg.Name
+
+		t.bmdowner.Lock() // lock#1 begin
+
 		bucketmd := t.bmdowner.get()
 		props, ok := bucketmd.Get(bucketFrom, true)
 		if !ok {
+			t.bmdowner.Unlock()
 			s := fmt.Sprintf("Local bucket %s %s", bucketFrom, cmn.DoesNotExist)
 			t.invalmsghdlr(w, r, s)
 			return
 		}
 		bmd4ren, ok := msg.Value.(map[string]interface{})
 		if !ok {
+			t.bmdowner.Unlock()
 			t.invalmsghdlr(w, r, fmt.Sprintf("Unexpected Value format %+v, %T", msg.Value, msg.Value))
 			return
 		}
 		v1, ok1 := bmd4ren["version"]
 		v2, ok2 := v1.(float64)
 		if !ok1 || !ok2 {
+			t.bmdowner.Unlock()
 			t.invalmsghdlr(w, r, fmt.Sprintf("Invalid Value format (%+v, %T), (%+v, %T)", v1, v1, v2, v2))
 			return
 		}
@@ -1045,10 +1051,20 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			glog.Warningf("bucket-metadata version %d != %d - proceeding to rename anyway", bucketmd.version(), version)
 		}
 		clone := bucketmd.clone()
-		if errstr := t.renameLB(bucketFrom, bucketTo, props, clone); errstr != "" {
+		clone.LBmap[bucketTo] = props
+		t.bmdowner.put(clone) // bmd updated with an added bucket, lock#1 end
+		t.bmdowner.Unlock()
+
+		if errstr := t.renameLB(bucketFrom, bucketTo); errstr != "" {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
+
+		t.bmdowner.Lock() // lock#2 begin
+		bucketmd = t.bmdowner.get()
+		bucketmd.del(bucketFrom, true) // TODO: resolve conflicts
+		t.bmdowner.Unlock()
+
 		glog.Infof("renamed local bucket %s => %s, bucket-metadata version %d", bucketFrom, bucketTo, clone.version())
 	case cmn.ActListObjects:
 		lbucket := apitems[0]
@@ -1362,12 +1378,9 @@ func (t *targetrunner) pushHandler(w http.ResponseWriter, r *http.Request) {
 // supporting methods and misc
 //
 //====================================================================================
-func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p *cmn.BucketProps, clone *bucketMD) (errstr string) {
+func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 	// ready to receive migrated obj-s _after_ that point
 	// insert directly w/o incrementing the version (metasyncer will do at the end of the operation)
-	clone.LBmap[bucketTo] = p
-	t.bmdowner.put(clone)
-
 	wg := &sync.WaitGroup{}
 
 	availablePaths, _ := fs.Mountpaths.Get()
@@ -1406,7 +1419,6 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string, p *cmn.BucketProps,
 			}
 		}
 	}
-	clone.del(bucketFrom, true)
 	return
 }
 
@@ -1432,7 +1444,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if !fs.CSM.PermToProcess(fqn) {
 		return nil
 	}
-	parsedFQN, _, err := cluster.ResolveFQN(fqn, renctx.t.bmdowner)
+	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
 	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
 	if err == nil {
 		if bucket != renctx.bucketFrom {

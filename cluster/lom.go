@@ -125,7 +125,7 @@ func (lom *LOM) String() string {
 func (lom *LOM) Fill(action int) (errstr string) {
 	// init
 	if lom.Bucket == "" || lom.Objname == "" || lom.Fqn == "" {
-		if errstr = lom._init(); errstr != "" {
+		if errstr = lom.init(); errstr != "" {
 			return
 		}
 	}
@@ -158,7 +158,7 @@ func (lom *LOM) Fill(action int) (errstr string) {
 	}
 	if action&LomCksum != 0 {
 		cksumAction := action&LomCksumMissingRecomp | action&LomCksumPresentRecomp
-		if errstr = lom._checksum(cksumAction); errstr != "" {
+		if errstr = lom.checksum(cksumAction); errstr != "" {
 			return
 		}
 	}
@@ -214,15 +214,15 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 }
 
 //
-// private
+// private methods
 //
 
-func (lom *LOM) _init() (errstr string) {
+func (lom *LOM) init() (errstr string) {
 	bowner := lom.T.GetBowner()
 	// resolve fqn
 	if lom.Bucket == "" || lom.Objname == "" {
 		cmn.Assert(lom.Fqn != "")
-		if errstr = lom._resolveFQN(bowner); errstr != "" {
+		if errstr = lom.resolveFQN(bowner); errstr != "" {
 			return
 		}
 		lom.Bucket, lom.Objname = lom.ParsedFQN.Bucket, lom.ParsedFQN.Objname
@@ -244,17 +244,21 @@ func (lom *LOM) _init() (errstr string) {
 		lom.Fqn, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.Bislocal)
 	}
 	if lom.ParsedFQN.Bucket == "" || lom.ParsedFQN.Objname == "" {
-		errstr = lom._resolveFQN(bowner)
+		errstr = lom.resolveFQN(nil, lom.Bislocal)
 	}
 	return
 }
 
-func (lom *LOM) _resolveFQN(bowner Bowner) (errstr string) {
+func (lom *LOM) resolveFQN(bowner Bowner, bislocal ...bool) (errstr string) {
 	var (
 		err    error
 		newfqn string
 	)
-	lom.ParsedFQN, newfqn, err = ResolveFQN(lom.Fqn, bowner)
+	if len(bislocal) == 0 {
+		lom.ParsedFQN, newfqn, err = ResolveFQN(lom.Fqn, bowner)
+	} else {
+		lom.ParsedFQN, newfqn, err = ResolveFQN(lom.Fqn, nil, lom.Bislocal)
+	}
 	if err != nil {
 		if _, ok := err.(*ErrFqnMisplaced); ok {
 			lom.Misplaced = true
@@ -285,7 +289,7 @@ func (lom *LOM) _resolveFQN(bowner Bowner) (errstr string) {
 // * when two objects in the cluster have identical (bucket, object) names and checksums,
 //   they are considered to be full replicas of each other.
 // ==============================================================================
-func (lom *LOM) _checksum(action int) (errstr string) {
+func (lom *LOM) checksum(action int) (errstr string) {
 	var (
 		storedCksum, computedCksum string
 		algo                       = lom.Cksumcfg.Checksum
