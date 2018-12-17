@@ -269,8 +269,8 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 		}
 	}
 
-	h.smaplisteners = &smaplisteners{vec: make([]cluster.Slistener, 0, 8)}
-	h.smapowner = &smapowner{a: h.smaplisteners}
+	h.smaplisteners = &smaplisteners{listeners: make([]cluster.Slistener, 0, 8)}
+	h.smapowner = &smapowner{listeners: h.smaplisteners}
 	h.bmdowner = &bmdowner{}
 	h.xactinp = newxactinp() // extended actions
 }

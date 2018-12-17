@@ -339,7 +339,7 @@ func (t *targetrunner) IsRebalancing() bool {
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU() {
-	xlru := t.xactinp.renewLRU(t)
+	xlru := t.xactinp.renewLRU()
 	if xlru == nil {
 		return
 	}
@@ -348,20 +348,18 @@ func (t *targetrunner) RunLRU() {
 		Xlru:        xlru,
 		Namelocker:  t.rtnamemap,
 		Statsif:     t.statsif,
-		Targetif:    t,
+		T:           t,
 		CtxResolver: fs.CSM,
 	}
 	lru.InitAndRun(&ini) // blocking
 
 	xlru.EndTime(time.Now())
-	glog.Infoln(xlru.String())
-	t.xactinp.del(xlru.ID())
 }
 
 func (t *targetrunner) PrefetchQueueLen() int { return len(t.prefetchQueue) }
 
 func (t *targetrunner) Prefetch() {
-	xpre := t.xactinp.renewPrefetch(t)
+	xpre := t.xactinp.renewPrefetch()
 	if xpre == nil {
 		return
 	}
@@ -392,13 +390,13 @@ loop:
 		}
 	}
 	xpre.EndTime(time.Now())
-	t.xactinp.del(xpre.ID())
 }
 
 func (t *targetrunner) GetBowner() cluster.Bowner     { return t.bmdowner }
 func (t *targetrunner) FSHC(err error, path string)   { t.fshc(err, path) }
 func (t *targetrunner) GetAtimeRunner() *atime.Runner { return getatimerunner() }
 func (t *targetrunner) GetMem2() *memsys.Mem2         { return gmem2 }
+func (t *targetrunner) GetFSPRG() fs.PathRunGroup     { return &t.fsprg }
 
 //===========================================================================================
 //
@@ -2654,7 +2652,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		var (
 			jsbytes           []byte
 			sts               = getstorstatsrunner()
-			allXactionDetails = t.getXactionsByType(kind)
+			allXactionDetails = t.getXactionsByKind(kind)
 		)
 		if kind == cmn.XactionRebalance {
 			jsbytes = sts.GetRebalanceStats(allXactionDetails)
@@ -2691,7 +2689,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *targetrunner) getXactionsByType(kind string) []stats.XactionDetails {
+func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
 	allXactionDetails := []stats.XactionDetails{}
 	for _, xaction := range t.xactinp.xactinp {
 		if xaction.Kind() == kind {

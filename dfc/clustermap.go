@@ -171,8 +171,8 @@ func (m *smapX) pp() string {
 
 type smapowner struct {
 	sync.Mutex
-	smap unsafe.Pointer
-	a    *smaplisteners
+	smap      unsafe.Pointer
+	listeners *smaplisteners
 }
 
 // implements cluster.Sowner
@@ -183,7 +183,7 @@ func (r *smapowner) Get() *cluster.Smap {
 	return &smapx.Smap
 }
 func (r *smapowner) Listeners() cluster.SmapListeners {
-	return r.a
+	return r.listeners
 }
 
 //
@@ -199,8 +199,8 @@ func (r *smapowner) put(smap *smapX) {
 	}
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
 
-	if r.a != nil {
-		r.a.notify() // notify of Smap change all listeners (cluster.Slistener)
+	if r.listeners != nil {
+		r.listeners.notify() // notify of Smap change all listeners (cluster.Slistener)
 	}
 }
 
@@ -294,46 +294,49 @@ var _ cluster.SmapListeners = &smaplisteners{}
 
 type smaplisteners struct {
 	sync.RWMutex
-	vec []cluster.Slistener
+	listeners []cluster.Slistener
 }
 
-func (a *smaplisteners) Reg(sl cluster.Slistener) {
-	a.Lock()
-	l := len(a.vec)
+func (sls *smaplisteners) Reg(sl cluster.Slistener) {
+	sls.Lock()
+	l := len(sls.listeners)
 	for k := 0; k < l; k++ {
-		if a.vec[k] == sl {
+		if sls.listeners[k] == sl {
 			cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is already registered", sl))
 		}
-		if a.vec[k].String() == sl.String() {
+		if sls.listeners[k].String() == sl.String() {
 			glog.Warningf("duplicate smap-listener %s", sl)
 		}
 	}
-	a.vec = append(a.vec, sl)
-	a.Unlock()
+	sls.listeners = append(sls.listeners, sl)
+	sls.Unlock()
+	glog.Infof("registered smap-listener %s", sl)
 }
 
-func (a *smaplisteners) Unreg(sl cluster.Slistener) {
-	a.Lock()
-	l := len(a.vec)
+func (sls *smaplisteners) Unreg(sl cluster.Slistener) {
+	sls.Lock()
+	l := len(sls.listeners)
 	for k := 0; k < l; k++ {
-		if a.vec[k] == sl {
+		if sls.listeners[k] == sl {
 			if k < l-1 {
-				copy(a.vec[k:], a.vec[k+1:])
+				copy(sls.listeners[k:], sls.listeners[k+1:])
 			}
-			a.vec[l-1] = nil
-			a.vec = a.vec[:l-1]
-			a.Unlock()
+			sls.listeners[l-1] = nil
+			sls.listeners = sls.listeners[:l-1]
+			sls.Unlock()
+			glog.Infof("unregistered smap-listener %s", sl)
 			return
 		}
 	}
-	a.Unlock()
+	sls.Unlock()
 	cmn.Assert(false, fmt.Sprintf("FATAL: smap-listener %s is not registered", sl))
 }
 
-func (a *smaplisteners) notify() {
-	a.RLock()
-	for k := 0; k < len(a.vec); k++ {
-		a.vec[k].SmapChanged()
+func (sls *smaplisteners) notify() {
+	sls.RLock()
+	l := len(sls.listeners)
+	for k := 0; k < l; k++ {
+		sls.listeners[k].SmapChanged()
 	}
-	a.RUnlock()
+	sls.RUnlock()
 }

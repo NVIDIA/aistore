@@ -179,7 +179,7 @@ func (sb *StreamBundle) Send(hdr transport.Header, reader cmn.ReadOpenCloser, cb
 	return
 }
 
-// implements cluster.Slistener interface
+// implements cluster.Slistener interface. registers with cluster.SmapListeners
 
 var _ Slistener = &StreamBundle{}
 

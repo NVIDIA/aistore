@@ -186,7 +186,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	dir := filepath.Dir(lom.Newfqn)
 	if err := cmn.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
-		rb.xreb.abort()
+		rb.xreb.Abort()
 		rb.t.fshc(err, lom.Newfqn)
 		return nil
 	}
@@ -198,7 +198,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if errFQN, err := copyFile(fqn, lom.Newfqn); err != nil {
 		glog.Error(err.Error())
 		rb.t.fshc(err, errFQN)
-		rb.xreb.abort()
+		rb.xreb.Abort()
 		return nil
 	}
 	rb.objectMoved++
@@ -385,7 +385,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	}
 	runnerCnt := contentRebalancers * len(availablePaths) * 2
 
-	xreb := t.xactinp.renewRebalance(newsmap.Version, t, runnerCnt)
+	xreb := t.xactinp.renewRebalance(newsmap.Version, runnerCnt)
 	if xreb == nil {
 		return
 	}
@@ -449,8 +449,6 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		t.pollRebalancingDone(newsmap) // until the cluster is fully rebalanced - see t.httpobjget
 	}
 	xreb.EndTime(time.Now())
-	glog.Infoln(xreb.String())
-	t.xactinp.del(xreb.ID())
 }
 
 func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
@@ -481,7 +479,7 @@ func (t *targetrunner) runLocalRebalance() {
 		}
 	}
 	runnerCnt := contentRebalancers * len(availablePaths) * 2
-	xreb := t.xactinp.renewLocalRebalance(t, runnerCnt)
+	xreb := t.xactinp.renewLocalRebalance(runnerCnt)
 
 	pmarker := t.xactinp.localRebalanceInProgress()
 	file, err := cmn.CreateFile(pmarker)
@@ -539,6 +537,4 @@ func (t *targetrunner) runLocalRebalance() {
 	}
 
 	xreb.EndTime(time.Now())
-	glog.Infoln(xreb.String())
-	t.xactinp.del(xreb.ID())
 }

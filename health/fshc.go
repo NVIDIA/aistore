@@ -35,7 +35,7 @@ type (
 		Disable(path string, why string) (disabled, exists bool)
 	}
 	FSHC struct {
-		cmn.Named
+		cmn.NamedID
 		stopCh        chan struct{}
 		fileListCh    chan string
 		reqCh         chan fs.ChangeReq

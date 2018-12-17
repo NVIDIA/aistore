@@ -28,7 +28,7 @@ type recksumctx struct {
 // runRechecksumBucket traverses all objects in a bucket
 func (t *targetrunner) runRechecksumBucket(bucket string) {
 	// check if re-checksumming of a given bucket is currently being performed
-	xrcksum := t.xactinp.renewRechecksum(t, bucket)
+	xrcksum := t.xactinp.renewRechecksum(bucket)
 	if xrcksum == nil {
 		return
 	}
@@ -62,8 +62,6 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 
 	// finish up
 	xrcksum.EndTime(time.Now())
-	glog.Infoln(xrcksum.String())
-	t.xactinp.del(xrcksum.ID())
 }
 
 func (t *targetrunner) oneRechecksumBucket(mpathInfo *fs.MountpathInfo, bucketDir string, xrcksum *xactRechecksum) {

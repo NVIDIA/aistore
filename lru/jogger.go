@@ -152,7 +152,7 @@ func (lctx *lructx) evict() error {
 		h                  = lctx.heap
 	)
 	for _, fi := range lctx.oldwork {
-		if lctx.ini.Targetif.IsRebalancing() {
+		if lctx.ini.T.IsRebalancing() {
 			_, _, err := cluster.ResolveFQN(fi.fqn, nil, lctx.bislocal)
 			// keep a copy of a rebalanced file while rebalance is running
 			if movable := lctx.ctxResolver.PermToMove(fi.fqn); movable && err != nil {

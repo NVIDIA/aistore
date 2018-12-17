@@ -39,16 +39,6 @@ type filesWithDeadline struct {
 	done     chan struct{}
 }
 
-type xactPrefetch struct {
-	cmn.XactBase
-	targetrunner *targetrunner
-}
-
-type xactEvictDelete struct {
-	cmn.XactBase
-	targetrunner *targetrunner
-}
-
 type listf func(ct context.Context, objects []string, bucket string, deadline time.Duration, done chan struct{}) error
 
 func getCloudBucketPage(ct context.Context, bucket string, msg *cmn.GetMsg) (bucketList *cmn.BucketList, err error) {
@@ -113,7 +103,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if done != nil {
 			done <- struct{}{}
 		}
-		t.xactinp.del(xdel.ID())
+		xdel.EndTime(time.Now())
 	}()
 
 	var absdeadline time.Time
@@ -147,31 +137,6 @@ func (t *targetrunner) doListDelete(ct context.Context, objs []string, bucket st
 
 func (t *targetrunner) doListEvict(ct context.Context, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
 	return t.doListEvictDelete(ct, true /* evict */, objs, bucket, deadline, done)
-}
-
-// Creates and returns a new extended action after appending it to an array of extended actions in progress
-func (q *xactInProgress) newEvictDelete(evict bool) *xactEvictDelete {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	xact := cmn.ActDelete
-	if evict {
-		xact = cmn.ActEvict
-	}
-
-	id := q.uniqueid()
-	xpre := &xactEvictDelete{XactBase: *cmn.NewXactBase(id, xact)}
-	q.add(xpre)
-	return xpre
-}
-
-func (xact *xactEvictDelete) tostring() string {
-	start := xact.StartTime().Sub(xact.targetrunner.starttime())
-	if !xact.Finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.Kind(), xact.ID(), start)
-	}
-	fin := time.Since(xact.targetrunner.starttime())
-	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.Kind(), xact.ID(), start, fin)
 }
 
 //=========
@@ -236,31 +201,6 @@ func (t *targetrunner) addPrefetchList(ct context.Context, objs []string, bucket
 	}
 	t.prefetchQueue <- filesWithDeadline{ctx: ct, objnames: objs, bucket: bucket, deadline: absdeadline, done: done}
 	return nil
-}
-
-func (q *xactInProgress) renewPrefetch(t *targetrunner) *xactPrefetch {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	_, xx := q.findU(cmn.ActPrefetch)
-	if xx != nil {
-		xpre := xx.(*xactPrefetch)
-		glog.Infof("%s already running, nothing to do", xpre.tostring())
-		return nil
-	}
-	id := q.uniqueid()
-	xpre := &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch)}
-	xpre.targetrunner = t
-	q.add(xpre)
-	return xpre
-}
-
-func (xact *xactPrefetch) tostring() string {
-	start := xact.StartTime().Sub(xact.targetrunner.starttime())
-	if !xact.Finished() {
-		return fmt.Sprintf("xaction %s:%d started %v", xact.Kind(), xact.ID(), start)
-	}
-	fin := time.Since(xact.targetrunner.starttime())
-	return fmt.Sprintf("xaction %s:%d started %v finished %v", xact.Kind(), xact.ID(), start, fin)
 }
 
 //================

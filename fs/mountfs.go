@@ -42,8 +42,14 @@ var (
 // - mountpaths of the form <filesystem-mountpoint>/a/b/c are supported.
 
 type (
+	PathRunGroup interface {
+		Reg(r PathRunner)
+		Unreg(r PathRunner)
+	}
 	PathRunner interface {
 		cmn.Runner
+		SetID(int64)
+		ID() int64
 		ReqAddMountpath(mpath string)
 		ReqRemoveMountpath(mpath string)
 		ReqEnableMountpath(mpath string)

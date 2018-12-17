@@ -78,7 +78,7 @@ type (
 		atimeRespCh chan *atime.Response
 	}
 	replicationRunner struct {
-		cmn.Named
+		cmn.NamedID
 		t                *targetrunner // FIXME: package out
 		replReqCh        chan *replRequest
 		mpathReqCh       chan fs.ChangeReq

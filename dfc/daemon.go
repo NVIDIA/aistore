@@ -257,17 +257,17 @@ func dfcinit() {
 
 		iostat := ios.NewIostatRunner(fs.Mountpaths)
 		ctx.rg.add(iostat, xiostat)
-		t.fsprg.add(iostat)
+		t.fsprg.Reg(iostat)
 		ts.Riostat = iostat
 
 		fshc := health.NewFSHC(fs.Mountpaths, gmem2, fs.CSM)
 		ctx.rg.add(fshc, xfshc)
-		t.fsprg.add(fshc)
+		t.fsprg.Reg(fshc)
 
 		if config.Readahead.Enabled {
 			readaheader := newReadaheader()
 			ctx.rg.add(readaheader, xreadahead)
-			t.fsprg.add(readaheader)
+			t.fsprg.Reg(readaheader)
 			t.readahead = readaheader
 		} else {
 			t.readahead = &dummyreadahead{}
@@ -276,11 +276,11 @@ func dfcinit() {
 		// TODO: not ready yet but will be
 		// replRunner := newReplicationRunner(t, fs.Mountpaths)
 		// ctx.rg.add(replRunner, xreplication, nil)
-		// t.fsprg.add(replRunner)
+		// t.fsprg.Reg(replRunner)
 
 		atime := atime.NewRunner(fs.Mountpaths, iostat)
 		ctx.rg.add(atime, xatime)
-		t.fsprg.add(atime)
+		t.fsprg.Reg(atime)
 	}
 	ctx.rg.add(&sigrunner{}, xsignal)
 }

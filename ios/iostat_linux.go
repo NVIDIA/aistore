@@ -29,7 +29,7 @@ const (
 
 type IostatRunner struct {
 	sync.RWMutex
-	cmn.Named
+	cmn.NamedID
 	// public
 	Disk    map[string]cmn.SimpleKVs
 	CPUidle string

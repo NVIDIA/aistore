@@ -50,7 +50,7 @@ type (
 		Xlru        cmn.XactInterface
 		Namelocker  cluster.NameLocker
 		Statsif     stats.Tracker
-		Targetif    cluster.Target
+		T           cluster.Target
 		CtxResolver *fs.ContentSpecMgr
 	}
 
@@ -93,7 +93,7 @@ func InitAndRun(ini *InitLRU) {
 	wg := &sync.WaitGroup{}
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, cmn.GCO.Get().LRU.DontEvictTime)
 
-	ini.Ratime = ini.Targetif.GetAtimeRunner()
+	ini.Ratime = ini.T.GetAtimeRunner()
 
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range ini.CtxResolver.RegisteredContentTypes {

@@ -88,7 +88,7 @@ type (
 	// atime.Runner will also periodically call its mpathAtimeRunners
 	// to flush files (read description above).
 	Runner struct {
-		cmn.Named
+		cmn.NamedID
 		requestCh    chan *atimeRequest // Requests for file access times or set access times
 		stopCh       chan struct{}      // Control channel for stopping
 		mpathReqCh   chan fs.ChangeReq

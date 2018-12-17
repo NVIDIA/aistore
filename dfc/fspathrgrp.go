@@ -5,24 +5,48 @@
 package dfc
 
 import (
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
 type (
+	// implements fs.PathRunGroup interface
 	fsprungroup struct {
+		sync.Mutex
 		t       *targetrunner
-		runners []fs.PathRunner // subgroup of the ctx.runners rungroup
+		runners map[int64]fs.PathRunner // subgroup of the ctx.runners rungroup
+		nextid  int64
 	}
 )
 
 func (g *fsprungroup) init(t *targetrunner) {
 	g.t = t
-	g.runners = make([]fs.PathRunner, 0, 4)
+	g.runners = make(map[int64]fs.PathRunner, 8)
+	g.nextid = time.Now().UTC().UnixNano() & 0xfff
 }
 
-func (g *fsprungroup) add(r fs.PathRunner) {
-	g.runners = append(g.runners, r)
+func (g *fsprungroup) UID() int64 { return atomic.AddInt64(&g.nextid, 1) }
+
+func (g *fsprungroup) Reg(r fs.PathRunner) {
+	g.Lock()
+	_, ok := g.runners[r.ID()]
+	cmn.Assert(!ok)
+	r.SetID(g.UID())
+	g.runners[r.ID()] = r
+	g.Unlock()
+}
+
+func (g *fsprungroup) Unreg(r fs.PathRunner) {
+	g.Lock()
+	_, ok := g.runners[r.ID()]
+	cmn.Assert(ok)
+	delete(g.runners, r.ID())
+	g.Unlock()
 }
 
 // enableMountpath enables mountpath and notifies necessary runners about the

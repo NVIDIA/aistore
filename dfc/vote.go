@@ -289,8 +289,6 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 	glog.Infoln(xele.String())
 	p.doProxyElection(vr, curPrimary, xele)
 	xele.EndTime(time.Now())
-	glog.Infoln(xele.String())
-	p.xactinp.del(xele.ID()) // FIXME - keep it; handle xele.finished() in the renew...
 }
 
 func (p *proxyrunner) doProxyElection(vr *VoteRecord, curPrimary *cluster.Snode, xele *xactElection) {

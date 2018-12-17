@@ -14,7 +14,13 @@ type (
 	Named struct {
 		name string
 	}
+	NamedID struct {
+		Named
+		id int64
+	}
 )
 
 func (r *Named) Setname(n string) { r.name = n }
 func (r *Named) Getname() string  { return r.name }
+func (r *NamedID) SetID(id int64) { Assert(r.id == 0); r.id = id } // at construction
+func (r *NamedID) ID() int64      { return r.id }
