@@ -218,7 +218,7 @@ func (t *targetrunner) Run() error {
 
 	getfshealthchecker().SetDispatcher(t)
 
-	aborted, _ := t.xactinp.isAbortedOrRunningLocalRebalance()
+	aborted, _ := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted {
 		// resume local rebalance
 		f := func() {
@@ -261,7 +261,7 @@ func (t *targetrunner) registerStats() {
 // stop gracefully
 func (t *targetrunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", t.Getname(), err)
-	sleep := t.xactinp.abortAll()
+	sleep := t.xactions.abortAll()
 	if t.publicServer.s != nil {
 		t.unregister() // ignore errors
 	}
@@ -331,15 +331,15 @@ func (t *targetrunner) unregister() (int, error) {
 var _ cluster.Target = &targetrunner{}
 
 func (t *targetrunner) IsRebalancing() bool {
-	_, running := t.xactinp.isAbortedOrRunningRebalance()
-	_, runningLocal := t.xactinp.isAbortedOrRunningLocalRebalance()
+	_, running := t.xactions.isAbortedOrRunningRebalance()
+	_, runningLocal := t.xactions.isAbortedOrRunningLocalRebalance()
 	return running || runningLocal
 }
 
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU() {
-	xlru := t.xactinp.renewLRU()
+	xlru := t.xactions.renewLRU()
 	if xlru == nil {
 		return
 	}
@@ -359,7 +359,7 @@ func (t *targetrunner) RunLRU() {
 func (t *targetrunner) PrefetchQueueLen() int { return len(t.prefetchQueue) }
 
 func (t *targetrunner) Prefetch() {
-	xpre := t.xactinp.renewPrefetch()
+	xpre := t.xactions.renewPrefetch()
 	if xpre == nil {
 		return
 	}
@@ -590,7 +590,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 //
 func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) (errstr string, errcode int) {
 	// check FS-wide if local rebalance is running
-	aborted, running := t.xactinp.isAbortedOrRunningLocalRebalance()
+	aborted, running := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted || running {
 		oldFQN, oldSize := t.getFromOtherLocalFS(lom.Bucket, lom.Objname, lom.Bislocal)
 		if oldFQN != "" {
@@ -603,7 +603,7 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 		}
 	}
 	// check cluster-wide when global rebalance is running
-	aborted, running = t.xactinp.isAbortedOrRunningRebalance()
+	aborted, running = t.xactions.isAbortedOrRunningRebalance()
 	if aborted || running {
 		if props, errs := t.getFromNeighbor(r, lom); errs == "" {
 			lom.RestoredReceived(props)
@@ -883,15 +883,7 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		errstr := ""
-		errcode := 0
-		if replica, replicaSrc := isReplicationPUT(r); !replica {
-			// regular PUT
-			errstr, errcode = t.doput(r, bucket, objname)
-		} else {
-			// replication PUT
-			errstr = t.doReplicationPut(r, bucket, objname, replicaSrc)
-		}
+		errstr, errcode := t.doPut(r, bucket, objname)
 		if errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)
 		}
@@ -1306,9 +1298,9 @@ func (t *targetrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	from := query.Get(cmn.URLParamFromID)
 
-	aborted, running := t.xactinp.isAbortedOrRunningRebalance()
+	aborted, running := t.xactions.isAbortedOrRunningRebalance()
 	if !aborted && !running {
-		aborted, running = t.xactinp.isAbortedOrRunningLocalRebalance()
+		aborted, running = t.xactions.isAbortedOrRunningLocalRebalance()
 	}
 	status := &thealthstatus{IsRebalancing: aborted || running}
 
@@ -2038,7 +2030,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 // Cloud bucket:
 //  - if the Cloud returns a new version id then save it to xattr
 // In both case a new checksum is saved to xattrs
-func (t *targetrunner) doput(r *http.Request, bucket, objname string) (errstr string, errcode int) {
+func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr string, errcode int) {
 	var (
 		htype   = r.Header.Get(cmn.HeaderDFCChecksumType)
 		hval    = r.Header.Get(cmn.HeaderDFCChecksumVal)
@@ -2073,6 +2065,11 @@ func (t *targetrunner) doput(r *http.Request, bucket, objname string) (errstr st
 		t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
 		if glog.V(4) {
 			glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
+		}
+
+		if false { // TODO: bucket n-way mirror props
+			xlr := t.xactions.renewPutLR(lom.Bucket, lom.Bislocal) // TODO: optimize find
+			xlr.Copy(lom)
 		}
 	}
 	return
@@ -2568,7 +2565,7 @@ func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
 		} else {
 			glog.Infof("setconfig %s=%s", msg.Name, value)
 			if msg.Name == "lru_enabled" && value == "false" {
-				_, lruxact := t.xactinp.findU(cmn.ActLRU)
+				lruxact := t.xactions.findU(cmn.ActLRU)
 				if lruxact != nil {
 					if glog.V(3) {
 						glog.Infof("Aborting LRU due to lru_enabled config change")
@@ -2691,7 +2688,7 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
 	allXactionDetails := []stats.XactionDetails{}
-	for _, xaction := range t.xactinp.xactinp {
+	for _, xaction := range t.xactions.v {
 		if xaction.Kind() == kind {
 			status := cmn.XactionStatusCompleted
 			if !xaction.Finished() {
@@ -3217,7 +3214,7 @@ func (t *targetrunner) receiveSmap(newsmap *smapX, msg *cmn.ActionMsg) (errstr s
 		return
 	}
 
-	aborted, running = t.xactinp.isAbortedOrRunningRebalance()
+	aborted, running = t.xactions.isAbortedOrRunningRebalance()
 	if !aborted || running {
 		glog.Infof("the cluster is starting up, rebalancing=(aborted=%t, running=%t)", aborted, running)
 		return

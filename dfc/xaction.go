@@ -12,17 +12,17 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/mirror"
 )
 
 type (
-	xactInProgress struct {
-		xactinp []cmn.XactInterface
-		lock    *sync.Mutex
+	xactions struct {
+		sync.Mutex
+		v       []cmn.Xact
 		nextid  int64
 		cleanup bool
 	}
@@ -58,78 +58,75 @@ type (
 )
 
 //
-// xactInProgress
+// xactions
 //
 
-func newxactinp() *xactInProgress {
-	q := make([]cmn.XactInterface, 4)
-	qq := &xactInProgress{xactinp: q[0:0]}
-	qq.nextid = time.Now().UTC().UnixNano() & 0xffff
-	qq.lock = &sync.Mutex{}
-	return qq
+func newXs() *xactions {
+	xs := &xactions{v: make([]cmn.Xact, 0, 32)}
+	xs.nextid = time.Now().UTC().UnixNano() & 0xffff
+	return xs
 }
 
-func (q *xactInProgress) uniqueid() int64            { return atomic.AddInt64(&q.nextid, 1) }
-func (q *xactInProgress) add(xact cmn.XactInterface) { q.xactinp = append(q.xactinp, xact) }
+func (xs *xactions) uniqueid() int64   { xs.nextid++; return xs.nextid } // under lock
+func (xs *xactions) add(xact cmn.Xact) { xs.v = append(xs.v, xact) }     // ditto
 
-func (q *xactInProgress) findU(kind string) (idx int, xact cmn.XactInterface) {
-	if q.cleanup {
+func (xs *xactions) findU(kind string) (xact cmn.Xact) {
+	if xs.cleanup {
 		// TODO: keep longer, e.g. until creation of same kind
-		q._cleanup()
+		xs._cleanup()
 	}
-	idx = -1
-	for i, x := range q.xactinp {
+	for _, x := range xs.v {
 		if x.Finished() {
-			q.cleanup = true
+			xs.cleanup = true
 			continue
 		}
 		if x.Kind() == kind {
-			idx, xact = i, x
+			xact = x
 			return
 		}
 	}
 	return
 }
 
-func (q *xactInProgress) _cleanup() {
-	for i := len(q.xactinp) - 1; i >= 0; i-- {
-		x := q.xactinp[i]
+func (xs *xactions) _cleanup() {
+	for i := len(xs.v) - 1; i >= 0; i-- {
+		x := xs.v[i]
 		if x.Finished() {
-			q.delAt(i)
+			xs.delAt(i)
 		}
 	}
-	q.cleanup = false
+	xs.cleanup = false
 }
 
-func (q *xactInProgress) findL(kind string) (idx int, xact cmn.XactInterface) {
-	q.lock.Lock()
-	idx, xact = q.findU(kind)
-	q.lock.Unlock()
+func (xs *xactions) findL(kind string) (idx int, xact cmn.Xact) {
+	xs.Lock()
+	xact = xs.findU(kind)
+	xs.Unlock()
 	return
 }
 
-func (q *xactInProgress) delAt(k int) {
-	l := len(q.xactinp)
+func (xs *xactions) delAt(k int) {
+	l := len(xs.v)
 	if k < l-1 {
-		copy(q.xactinp[k:], q.xactinp[k+1:])
+		copy(xs.v[k:], xs.v[k+1:])
 	}
-	q.xactinp[l-1] = nil
-	q.xactinp = q.xactinp[:l-1]
+	xs.v[l-1] = nil
+	xs.v = xs.v[:l-1]
 }
 
-func (q *xactInProgress) renewRebalance(curversion int64, runnerCnt int) *xactRebalance {
-	q.lock.Lock()
-	_, xx := q.findU(cmn.ActGlobalReb)
+func (xs *xactions) renewRebalance(curversion int64, runnerCnt int) *xactRebalance {
+	xs.Lock()
+	xx := xs.findU(cmn.ActGlobalReb)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if xreb.curversion > curversion {
 			glog.Errorf("%s version is greater than curversion %d", xreb, curversion)
-			q.lock.Unlock()
+			xs.Unlock()
 			return nil
 		}
 		if xreb.curversion == curversion {
 			glog.Infof("%s already running, nothing to do", xreb)
-			q.lock.Unlock()
+			xs.Unlock()
 			return nil
 		}
 		xreb.Abort()
@@ -138,66 +135,66 @@ func (q *xactInProgress) renewRebalance(curversion int64, runnerCnt int) *xactRe
 		}
 		close(xreb.confirmCh)
 	}
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xreb := &xactRebalance{
 		XactBase:   *cmn.NewXactBase(id, cmn.ActGlobalReb),
 		curversion: curversion,
 		runnerCnt:  runnerCnt,
 		confirmCh:  make(chan struct{}, runnerCnt),
 	}
-	q.add(xreb)
-	q.lock.Unlock()
+	xs.add(xreb)
+	xs.Unlock()
 	return xreb
 }
 
 // persistent mark indicating rebalancing in progress
-func (q *xactInProgress) rebalanceInProgress() (pmarker string) {
+func (xs *xactions) rebalanceInProgress() (pmarker string) {
 	return filepath.Join(cmn.GCO.Get().Confdir, cmn.RebalanceMarker)
 }
 
 // persistent mark indicating rebalancing in progress
-func (q *xactInProgress) localRebalanceInProgress() (pmarker string) {
+func (xs *xactions) localRebalanceInProgress() (pmarker string) {
 	return filepath.Join(cmn.GCO.Get().Confdir, cmn.LocalRebalanceMarker)
 }
 
-func (q *xactInProgress) isAbortedOrRunningRebalance() (aborted, running bool) {
-	pmarker := q.rebalanceInProgress()
+func (xs *xactions) isAbortedOrRunningRebalance() (aborted, running bool) {
+	pmarker := xs.rebalanceInProgress()
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true
 	}
 
-	q.lock.Lock()
-	_, xx := q.findU(cmn.ActGlobalReb)
+	xs.Lock()
+	xx := xs.findU(cmn.ActGlobalReb)
 	if xx != nil {
 		xreb := xx.(*xactRebalance)
 		if !xreb.Finished() {
 			running = true
 		}
 	}
-	q.lock.Unlock()
+	xs.Unlock()
 	return
 }
 
-func (q *xactInProgress) isAbortedOrRunningLocalRebalance() (aborted, running bool) {
-	pmarker := q.localRebalanceInProgress()
+func (xs *xactions) isAbortedOrRunningLocalRebalance() (aborted, running bool) {
+	pmarker := xs.localRebalanceInProgress()
 	_, err := os.Stat(pmarker)
 	if err == nil {
 		aborted = true
 	}
 
-	q.lock.Lock()
-	_, xx := q.findU(cmn.ActLocalReb)
+	xs.Lock()
+	xx := xs.findU(cmn.ActLocalReb)
 	if xx != nil {
 		running = true
 	}
-	q.lock.Unlock()
+	xs.Unlock()
 	return
 }
 
-func (q *xactInProgress) renewLocalRebalance(runnerCnt int) *xactLocalRebalance {
-	q.lock.Lock()
-	_, xx := q.findU(cmn.ActLocalReb)
+func (xs *xactions) renewLocalRebalance(runnerCnt int) *xactLocalRebalance {
+	xs.Lock()
+	xx := xs.findU(cmn.ActLocalReb)
 	if xx != nil {
 		xLocalReb := xx.(*xactLocalRebalance)
 		xLocalReb.Abort()
@@ -206,108 +203,126 @@ func (q *xactInProgress) renewLocalRebalance(runnerCnt int) *xactLocalRebalance 
 		}
 		close(xLocalReb.confirmCh)
 	}
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xLocalReb := &xactLocalRebalance{
 		XactBase:  *cmn.NewXactBase(id, cmn.ActLocalReb),
 		runnerCnt: runnerCnt,
 		confirmCh: make(chan struct{}, runnerCnt),
 	}
-	q.add(xLocalReb)
-	q.lock.Unlock()
+	xs.add(xLocalReb)
+	xs.Unlock()
 	return xLocalReb
 }
 
-func (q *xactInProgress) renewLRU() *xactLRU {
-	q.lock.Lock()
-	_, xx := q.findU(cmn.ActLRU)
+func (xs *xactions) renewLRU() *xactLRU {
+	xs.Lock()
+	xx := xs.findU(cmn.ActLRU)
 	if xx != nil {
 		xlru := xx.(*xactLRU)
 		glog.Infof("%s already running, nothing to do", xlru)
-		q.lock.Unlock()
+		xs.Unlock()
 		return nil
 	}
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xlru := &xactLRU{XactBase: *cmn.NewXactBase(id, cmn.ActLRU)}
-	q.add(xlru)
-	q.lock.Unlock()
+	xs.add(xlru)
+	xs.Unlock()
 	return xlru
 }
 
-func (q *xactInProgress) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
-	q.lock.Lock()
-	_, xx := q.findU(cmn.ActElection)
+func (xs *xactions) renewElection(p *proxyrunner, vr *VoteRecord) *xactElection {
+	xs.Lock()
+	xx := xs.findU(cmn.ActElection)
 	if xx != nil {
 		xele := xx.(*xactElection)
 		glog.Infof("%s already running, nothing to do", xele)
-		q.lock.Unlock()
+		xs.Unlock()
 		return nil
 	}
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xele := &xactElection{
 		XactBase:    *cmn.NewXactBase(id, cmn.ActElection),
 		proxyrunner: p,
 		vr:          vr,
 	}
-	q.add(xele)
-	q.lock.Unlock()
+	xs.add(xele)
+	xs.Unlock()
 	return xele
 }
 
-func (q *xactInProgress) newEvictDelete(evict bool) *xactEvictDelete {
-	q.lock.Lock()
-	defer q.lock.Unlock()
+func (xs *xactions) newEvictDelete(evict bool) *xactEvictDelete {
+	xs.Lock()
+	defer xs.Unlock()
 
 	xact := cmn.ActDelete
 	if evict {
 		xact = cmn.ActEvict
 	}
 
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xdel := &xactEvictDelete{XactBase: *cmn.NewXactBase(id, xact)}
-	q.add(xdel)
+	xs.add(xdel)
 	return xdel
 }
 
-func (q *xactInProgress) renewPrefetch() *xactPrefetch {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-	_, xx := q.findU(cmn.ActPrefetch)
+func (xs *xactions) renewPrefetch() *xactPrefetch {
+	xs.Lock()
+	defer xs.Unlock()
+	xx := xs.findU(cmn.ActPrefetch)
 	if xx != nil {
 		xpre := xx.(*xactPrefetch)
 		glog.Infof("%s already running, nothing to do", xpre)
 		return nil
 	}
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xpre := &xactPrefetch{XactBase: *cmn.NewXactBase(id, cmn.ActPrefetch)}
-	q.add(xpre)
+	xs.add(xpre)
 	return xpre
 }
 
-func (q *xactInProgress) renewRechecksum(bucket string) *xactRechecksum {
+func (xs *xactions) renewRechecksum(bucket string) *xactRechecksum {
 	kind := path.Join(cmn.ActRechecksum, bucket)
-	q.lock.Lock()
-	_, xx := q.findU(kind)
+	xs.Lock()
+	xx := xs.findU(kind)
 	if xx != nil {
 		xrcksum := xx.(*xactRechecksum)
-		q.lock.Unlock()
+		xs.Unlock()
 		glog.Infof("%s already running for bucket %s, nothing to do", xrcksum, bucket)
 		return nil
 	}
-	id := q.uniqueid()
+	id := xs.uniqueid()
 	xrcksum := &xactRechecksum{XactBase: *cmn.NewXactBase(id, kind), bucket: bucket}
-	q.add(xrcksum)
-	q.lock.Unlock()
+	xs.add(xrcksum)
+	xs.Unlock()
 	return xrcksum
 }
 
-func (q *xactInProgress) abortAll() (sleep bool) {
-	q.lock.Lock()
-	for _, xact := range q.xactinp {
+func (xs *xactions) renewPutLR(bucket string, bislocal bool) (xputlr *mirror.XactPut) {
+	kind := path.Join(cmn.ActPutLR, bucket)
+	xs.Lock()
+	xx := xs.findU(kind)
+	if xx != nil {
+		xputlr = xx.(*mirror.XactPut)
+		xputlr.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+		xs.Unlock()
+		return
+	}
+	id := xs.uniqueid()
+	xputlr = &mirror.XactPut{XactDemandBase: *cmn.NewXactDemandBase(id, kind), Bucket: bucket, Bislocal: bislocal}
+	xs.add(xputlr)
+	xputlr.Run()
+	xs.Unlock()
+	return
+}
+
+func (xs *xactions) abortAll() (sleep bool) {
+	xs.Lock()
+	for _, xact := range xs.v {
 		if !xact.Finished() {
 			xact.Abort()
 			sleep = true
 		}
 	}
-	q.lock.Unlock()
+	xs.Unlock()
 	return
 }

@@ -406,7 +406,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 			lom.Atime = tm // FIXME: not used
 		}
 	}
-	if errstr, _ := r.t.doput(httpr, lom.Bucket, lom.Objname); errstr != "" {
+	if errstr, _ := r.t.doPut(httpr, lom.Bucket, lom.Objname); errstr != "" {
 		return errors.New(errstr)
 	}
 	return nil

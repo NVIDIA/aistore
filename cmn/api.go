@@ -60,6 +60,8 @@ const (
 	ActNewPrimary  = "newprimary"
 	ActRevokeToken = "revoketoken"
 	ActElection    = "election"
+	ActPutLR       = "putlreplica"
+	ActReLR        = "manlreplica"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"

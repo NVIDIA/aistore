@@ -218,7 +218,7 @@ func (p *proxyrunner) Stop(err error) {
 		isPrimary = smap.isPrimary(p.si)
 	}
 	glog.Infof("Stopping %s (ID %s, primary=%t), err: %v", p.Getname(), p.si, isPrimary, err)
-	p.xactinp.abortAll()
+	p.xactions.abortAll()
 
 	if isPrimary {
 		// give targets and non primary proxies some time to unregister
@@ -478,7 +478,7 @@ func (p *proxyrunner) metasyncHandler(w http.ResponseWriter, r *http.Request) {
 func (p *proxyrunner) metasyncHandlerPut(w http.ResponseWriter, r *http.Request) {
 	// FIXME: may not work if got disconnected for a while and have missed elections (#109)
 	if p.smapowner.get().isPrimary(p.si) {
-		_, xx := p.xactinp.findL(cmn.ActElection)
+		_, xx := p.xactions.findL(cmn.ActElection)
 		vote := xx != nil
 		s := fmt.Sprintf("Primary %s cannot receive cluster meta (election=%t)", p.si, vote)
 		p.invalmsghdlr(w, r, s)

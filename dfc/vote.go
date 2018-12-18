@@ -282,7 +282,7 @@ func (p *proxyrunner) proxyElection(vr *VoteRecord, curPrimary *cluster.Snode) {
 		glog.Infoln("Already in primary state")
 		return
 	}
-	xele := p.xactinp.renewElection(p, vr)
+	xele := p.xactions.renewElection(p, vr)
 	if xele == nil {
 		return
 	}

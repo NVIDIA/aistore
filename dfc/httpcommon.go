@@ -177,7 +177,7 @@ type httprunner struct {
 	smapowner             *smapowner
 	smaplisteners         *smaplisteners
 	bmdowner              *bmdowner
-	xactinp               *xactInProgress
+	xactions               *xactions
 	statsif               stats.Tracker
 	statsdC               statsd.Client
 }
@@ -272,7 +272,7 @@ func (h *httprunner) init(s stats.Tracker, isproxy bool) {
 	h.smaplisteners = &smaplisteners{listeners: make([]cluster.Slistener, 0, 8)}
 	h.smapowner = &smapowner{listeners: h.smaplisteners}
 	h.bmdowner = &bmdowner{}
-	h.xactinp = newxactinp() // extended actions
+	h.xactions = newXs() // extended actions
 }
 
 // initSI initializes this cluster.Snode
@@ -708,7 +708,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		jsbytes, err = jsoniter.Marshal(h.bmdowner.get())
 		cmn.Assert(err == nil, err)
 	case cmn.GetWhatSmapVote:
-		_, xx := h.xactinp.findL(cmn.ActElection)
+		_, xx := h.xactions.findL(cmn.ActElection)
 		vote := xx != nil
 		msg := SmapVoteMsg{VoteInProgress: vote, Smap: h.smapowner.get(), BucketMD: h.bmdowner.get()}
 		jsbytes, err = jsoniter.Marshal(msg)

@@ -77,11 +77,8 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	// Check if we should abort
 	select {
 	case <-rcl.xreb.ChanAbort():
-		err = fmt.Errorf("%s: aborted, path %s", rcl.xreb, rcl.mpathplus)
-		glog.Infoln(err)
-		glog.Flush()
 		rcl.aborted = true
-		return err
+		return fmt.Errorf("%s: aborted, path %s", rcl.xreb, rcl.mpathplus)
 	default:
 		break
 	}
@@ -149,11 +146,8 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	// Check if we should abort
 	select {
 	case <-rb.xreb.ChanAbort():
-		err = fmt.Errorf("%s aborted, path %s", rb.xreb, rb.mpath)
-		glog.Infoln(err)
-		glog.Flush()
 		rb.aborted = true
-		return err
+		return fmt.Errorf("%s aborted, path %s", rb.xreb, rb.mpath)
 	default:
 		break
 	}
@@ -385,11 +379,11 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	}
 	runnerCnt := contentRebalancers * len(availablePaths) * 2
 
-	xreb := t.xactinp.renewRebalance(newsmap.Version, runnerCnt)
+	xreb := t.xactions.renewRebalance(newsmap.Version, runnerCnt)
 	if xreb == nil {
 		return
 	}
-	pmarker := t.xactinp.rebalanceInProgress()
+	pmarker := t.xactions.rebalanceInProgress()
 	file, err := cmn.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
@@ -479,9 +473,9 @@ func (t *targetrunner) runLocalRebalance() {
 		}
 	}
 	runnerCnt := contentRebalancers * len(availablePaths) * 2
-	xreb := t.xactinp.renewLocalRebalance(runnerCnt)
+	xreb := t.xactions.renewLocalRebalance(runnerCnt)
 
-	pmarker := t.xactinp.localRebalanceInProgress()
+	pmarker := t.xactions.localRebalanceInProgress()
 	file, err := cmn.CreateFile(pmarker)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)

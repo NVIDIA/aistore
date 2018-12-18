@@ -28,7 +28,7 @@ type recksumctx struct {
 // runRechecksumBucket traverses all objects in a bucket
 func (t *targetrunner) runRechecksumBucket(bucket string) {
 	// check if re-checksumming of a given bucket is currently being performed
-	xrcksum := t.xactinp.renewRechecksum(bucket)
+	xrcksum := t.xactions.renewRechecksum(bucket)
 	if xrcksum == nil {
 		return
 	}
@@ -102,8 +102,6 @@ func (rcksctx *recksumctx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// stop traversing if xaction is aborted
 	select {
 	case <-rcksctx.xrcksum.ChanAbort():
-		glog.Infof("%s aborted, exiting rechecksum walk function", rcksctx.xrcksum)
-		glog.Flush()
 		return errors.New("rechecksumming aborted") // returning error stops bucket directory traversal
 	case <-time.After(time.Millisecond):
 		break

@@ -98,7 +98,7 @@ func acceptRegexRange(name, prefix string, regex *regexp.Regexp, min, max int64)
 //=============
 
 func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []string, bucket string, deadline time.Duration, done chan struct{}) error {
-	xdel := t.xactinp.newEvictDelete(evict)
+	xdel := t.xactions.newEvictDelete(evict)
 	defer func() {
 		if done != nil {
 			done <- struct{}{}

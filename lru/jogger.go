@@ -7,7 +7,6 @@ package lru
 
 import (
 	"container/heap"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,10 +78,7 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// abort?
 	select {
 	case <-xlru.ChanAbort():
-		s := fmt.Sprintf("%s aborted, exiting", xlru)
-		glog.Infoln(s)
-		glog.Flush()
-		return errors.New(s)
+		return fmt.Errorf("%s aborted, exiting", xlru)
 	case <-time.After(time.Millisecond):
 		break
 	}

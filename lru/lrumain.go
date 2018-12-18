@@ -47,7 +47,7 @@ type (
 	InitLRU struct {
 		Riostat     *ios.IostatRunner
 		Ratime      *atime.Runner
-		Xlru        cmn.XactInterface
+		Xlru        cmn.Xact
 		Namelocker  cluster.NameLocker
 		Statsif     stats.Tracker
 		T           cluster.Target
