@@ -105,7 +105,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	close(errCh)
 
 	msg := &cmn.GetMsg{GetPageSize: int(pagesize), GetProps: cmn.GetTargetURL}
-	bl, err := tutils.ListBucket(proxyURL, bucket, msg, num)
+	bl, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -132,7 +132,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	msg.GetProps = ""
-	bl, err = tutils.ListBucket(proxyURL, bucket, msg, num)
+	bl, err = api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, num)
 	tutils.CheckFatal(err, t)
 
 	if len(bl.Entries) != num {
@@ -195,7 +195,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	}()
 
 	listBucketMsg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize), GetProps: cmn.GetTargetURL}
-	bucketList, err := tutils.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
+	bucketList, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -225,7 +225,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 
 	// Ensure no target URLs are returned when the property is not requested
 	listBucketMsg.GetProps = ""
-	bucketList, err = tutils.ListBucket(proxyURL, bucketName, listBucketMsg, 0)
+	bucketList, err = api.ListBucket(tutils.HTTPClient, proxyURL, bucketName, listBucketMsg, 0)
 	tutils.CheckFatal(err, t)
 
 	if len(bucketList.Entries) != numberOfFiles {
@@ -970,7 +970,7 @@ func TestDeleteList(t *testing.T) {
 
 	// 3. Check to see that all the files have been deleted
 	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1105,7 +1105,7 @@ func TestDeleteRange(t *testing.T) {
 
 	// 3. Check to see that the correct files have been deleted
 	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != numfiles-smallrangesize {
 		t.Errorf("Incorrect number of remaining files: %d, should be %d", len(bktlst.Entries), numfiles-smallrangesize)
@@ -1131,7 +1131,7 @@ func TestDeleteRange(t *testing.T) {
 	}
 
 	// 5. Check to see that all the files have been deleted
-	bktlst, err = tutils.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err = api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))
@@ -1198,7 +1198,7 @@ func TestStressDeleteRange(t *testing.T) {
 	// 3. Check to see that correct objects have been deleted
 	expectedRemaining := tenth
 	msg := &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err := tutils.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
+	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != expectedRemaining {
 		t.Errorf("Incorrect number of remaining objects: %d, expected: %d", len(bktlst.Entries), expectedRemaining)
@@ -1227,7 +1227,7 @@ func TestStressDeleteRange(t *testing.T) {
 
 	// 5. Check to see that all files have been deleted
 	msg = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
-	bktlst, err = tutils.ListBucket(proxyURL, TestLocalBucketName, msg, 0)
+	bktlst, err = api.ListBucket(tutils.HTTPClient, proxyURL, TestLocalBucketName, msg, 0)
 	tutils.CheckFatal(err, t)
 	if len(bktlst.Entries) != 0 {
 		t.Errorf("Incorrect number of remaining files: %d, should be 0", len(bktlst.Entries))

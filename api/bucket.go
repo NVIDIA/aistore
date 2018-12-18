@@ -5,13 +5,13 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 
 	"github.com/NVIDIA/dfcpub/cmn"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SetBucketProps API operation for DFC
@@ -24,7 +24,7 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props cmn.
 		props.Checksum = cmn.ChecksumInherit
 	}
 
-	b, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActSetProps, Value: props})
 	if err != nil {
 		return err
 	}
@@ -38,7 +38,7 @@ func SetBucketProps(httpClient *http.Client, proxyURL, bucket string, props cmn.
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(httpClient *http.Client, proxyURL, bucket string) error {
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	b, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActResetProps})
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 		return nil, err
 	}
 	if len(b) != 0 {
-		err = json.Unmarshal(b, &bucketNames)
+		err = jsoniter.Unmarshal(b, &bucketNames)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to unmarshal bucket names, err: %v - [%s]", err, string(b))
 		}
@@ -141,7 +141,7 @@ func GetBucketNames(httpClient *http.Client, proxyURL string, localOnly bool) (*
 //
 // CreateLocalBucket sends a HTTP request to a proxy to create a local bucket with the given name
 func CreateLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
-	msg, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
+	msg, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActCreateLB})
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func CreateLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
 //
 // DestroyLocalBucket sends a HTTP request to a proxy to remove a local bucket with the given name
 func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error {
-	b, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActDestroyLB})
 	if err != nil {
 		return err
 	}
@@ -168,11 +168,71 @@ func DestroyLocalBucket(httpClient *http.Client, proxyURL, bucket string) error 
 //
 // RenameLocalBucket changes the name of a bucket from oldBucketName to newBucketName
 func RenameLocalBucket(httpClient *http.Client, proxyURL, oldBucketName, newBucketName string) error {
-	b, err := json.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBucketName})
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActRenameLB, Name: newBucketName})
 	if err != nil {
 		return err
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, oldBucketName)
 	_, err = DoHTTPRequest(httpClient, http.MethodPost, url, b)
 	return err
+}
+
+// ListBucket API operation for DFC
+//
+// ListBucket returns list of objects in a bucket. numObjects is the
+// maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
+func ListBucket(httpClient *http.Client, proxyURL, bucket string, msg *cmn.GetMsg, numObjects int) (*cmn.BucketList, error) {
+	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
+
+	// An optimization to read as few objects from bucket as possible.
+	// toRead is the current number of objects ListBucket must read before
+	// returning the list. Every cycle the loop reads objects by pages and
+	// decreases toRead by the number of received objects. When toRead gets less
+	// than pageSize, the loop does the final request with reduced pageSize
+	toRead := numObjects
+	for {
+		if toRead != 0 {
+			if (msg.GetPageSize == 0 && toRead < cmn.DefaultPageSize) ||
+				(msg.GetPageSize != 0 && msg.GetPageSize > toRead) {
+				msg.GetPageSize = toRead
+			}
+		}
+
+		b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
+		if err != nil {
+			return nil, err
+		}
+
+		optParams := ParamsOptional{Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		}}
+		respBody, err := DoHTTPRequest(httpClient, http.MethodPost, url, b, optParams)
+		if err != nil {
+			return nil, err
+		}
+
+		page := &cmn.BucketList{}
+		page.Entries = make([]*cmn.BucketEntry, 0, 1000)
+
+		if err = jsoniter.Unmarshal(respBody, page); err != nil {
+			return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
+		}
+
+		reslist.Entries = append(reslist.Entries, page.Entries...)
+		if page.PageMarker == "" {
+			break
+		}
+
+		if numObjects != 0 {
+			if len(reslist.Entries) >= numObjects {
+				break
+			}
+			toRead -= len(page.Entries)
+		}
+
+		msg.GetPageMarker = page.PageMarker
+	}
+
+	return reslist, nil
 }

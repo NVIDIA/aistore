@@ -297,13 +297,32 @@ DFC gateway can act as a reverse proxy vis-à-vis DFC storage targets. As of the
 
 ## Performance tuning
 
-DFC utilizes local filesystems, which means that under pressure a DFC target will have a significant number of open files. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
+DFC utilizes local filesystems, which means that under pressure a DFC target will have a significant number of open files. This is often the case when running stress tests that perform highly-intensive, concurrent object PUT operations. In the event that errors stating `too many open files` are encountered, system settings must be changed. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
 
 ```
 root             hard    nofile          10240
 ubuntu           hard    nofile          1048576
 ubuntu           soft    nofile          1048576
 ```
+After restarting, confirm that the limits have been increased accordingly using 
+```shell
+ulimit -n
+```
+
+If you find that the result is still lower than expected, take the additional steps of modifying
+both `/etc/systemd/system.conf` and `/etc/systemd/user.conf` to change the value of `DefaultLimitNOFILE` to the desired limit. If that line does not exist, append it under the `Manager` section of those two files as such:
+```
+DefaultLimitNOFILE=$desiredLimit
+```
+
+Additionally, add the following line to the end of `/etc/sysctl.conf`:
+```
+fs.file-max=$desiredLimit
+```
+
+After a restart, verify using the same command, `ulimit -n`, that the limit for the number of open files has been increased accordingly.
+
+For more information, refer to this [link](https://ro-che.info/articles/2017-03-26-increase-open-files-limit).
 
 Generally, configuring a DFC cluster to perform under load is a vast topic that would be outside the scope of this README. The usual checklist includes (but is not limited to):
 

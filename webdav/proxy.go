@@ -113,7 +113,7 @@ func (p *proxyServer) listObjectsDetails(bucket string, prefix string, limit int
 		GetProps:  "size, ctime",
 	}
 
-	bl, err := tutils.ListBucket(p.url, bucket, msg, limit)
+	bl, err := api.ListBucket(tutils.HTTPClient, p.url, bucket, msg, limit)
 	if err != nil {
 		return nil, err
 	}

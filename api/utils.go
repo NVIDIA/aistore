@@ -21,10 +21,10 @@ var (
 )
 
 // ParamsOptional is used in constructing client-side API requests to the DFC backend.
-// Stores Query and Headers for providing arguments that are not used commonly in API requests
+// Stores Query and Header for providing arguments that are not used commonly in API requests
 type ParamsOptional struct {
-	Query   url.Values
-	Headers map[string]string
+	Query  url.Values
+	Header http.Header
 }
 
 func init() {
@@ -77,9 +77,7 @@ func setRequestOptParams(req *http.Request, optParams ParamsOptional) {
 	if len(optParams.Query) != 0 {
 		req.URL.RawQuery = optParams.Query.Encode()
 	}
-	for k, v := range optParams.Headers {
-		req.Header.Set(k, v)
-	}
+	req.Header = optParams.Header
 }
 
 func getObjectOptParams(options GetObjectInput) (w io.Writer, q url.Values) {

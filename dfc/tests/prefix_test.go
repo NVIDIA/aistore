@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
@@ -109,7 +110,7 @@ func prefixLookupOne(t *testing.T, proxyURL string) {
 	tutils.Logf("Looking up for files than names start with %s\n", prefix)
 	var msg = &cmn.GetMsg{GetPrefix: prefix}
 	numFiles := 0
-	objList, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+	objList, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("List files with prefix failed, err = %v", err)
 		return
@@ -136,7 +137,7 @@ func prefixLookupDefault(t *testing.T, proxyURL string) {
 		key := letters[i : i+1]
 		lookFor := fmt.Sprintf("%s/%s", prefixDir, key)
 		var msg = &cmn.GetMsg{GetPrefix: lookFor}
-		objList, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+		objList, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return
@@ -178,7 +179,7 @@ func prefixLookupCornerCases(t *testing.T, proxyURL string) {
 		p := fmt.Sprintf("%s/%s", prefixDir, test.prefix)
 		tutils.Logf("%d. Prefix: %s [%s]\n", idx, test.title, p)
 		var msg = &cmn.GetMsg{GetPrefix: p}
-		objList, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+		objList, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 		if err != nil {
 			t.Errorf("List files with prefix failed, err = %v", err)
 			return

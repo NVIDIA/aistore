@@ -158,7 +158,7 @@ func Test_matchdelete(t *testing.T) {
 
 	// list the bucket
 	var msg = &cmn.GetMsg{GetPageSize: int(pagesize)}
-	reslist, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+	reslist, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -285,7 +285,7 @@ func Test_putdeleteRange(t *testing.T) {
 		}
 
 		totalFiles -= test.delta
-		bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+		bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 		if err != nil {
 			t.Error(err)
 		}
@@ -298,7 +298,7 @@ func Test_putdeleteRange(t *testing.T) {
 
 	tutils.Logf("Cleaning up remained objects...\n")
 	msg := &cmn.GetMsg{GetPrefix: commonPrefix + "/"}
-	bktlst, err := tutils.ListBucket(proxyURL, clibucket, msg, 0)
+	bktlst, err := api.ListBucket(tutils.HTTPClient, proxyURL, clibucket, msg, 0)
 	if err != nil {
 		t.Errorf("Failed to get the list of remained files, err: %v\n", err)
 	}
@@ -834,7 +834,7 @@ func getMatchingKeys(proxyURL string, regexmatch, bucket string, keynameChans []
 
 func testListBucket(t *testing.T, proxyURL, bucket string, msg *cmn.GetMsg, limit int) *cmn.BucketList {
 	tutils.Logf("LIST bucket %s (%s)\n", bucket, proxyURL)
-	reslist, err := tutils.ListBucket(proxyURL, bucket, msg, limit)
+	reslist, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, limit)
 	if err != nil {
 		t.Errorf("List bucket %s failed, err = %v", bucket, err)
 		return nil

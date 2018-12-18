@@ -139,7 +139,7 @@ func getRandomFiles(proxyURL string, seed int64, numGets int, bucket, prefix str
 	getsGroup := &sync.WaitGroup{}
 	var msg = &cmn.GetMsg{GetPrefix: prefix, GetPageSize: int(pagesize)}
 	for i := 0; i < numGets; i++ {
-		items, err := tutils.ListBucket(proxyURL, bucket, msg, 0)
+		items, err := api.ListBucket(tutils.HTTPClient, proxyURL, bucket, msg, 0)
 		if err != nil {
 			errCh <- err
 			t.Error(err)

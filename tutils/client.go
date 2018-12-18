@@ -10,7 +10,6 @@
 package tutils
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -280,102 +279,22 @@ func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan 
 	return err
 }
 
-// ListBucket returns list of objects in a bucket. objectCountLimit is the
-// maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
-func ListBucket(proxyURL, bucket string, msg *cmn.GetMsg, objectCountLimit int) (*cmn.BucketList, error) {
-	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	reslist := &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, 1000)}
-
-	// An optimization to read as few objects from bucket as possible.
-	// toRead is the current number of objects ListBucket must read before
-	// returning the list. Every cycle the loop reads objects by pages and
-	// decreases toRead by the number of received objects. When toRead gets less
-	// than pageSize, the loop does the final request with reduced pageSize
-	toRead := objectCountLimit
-	for {
-		var resp *http.Response
-
-		if toRead != 0 {
-			if (msg.GetPageSize == 0 && toRead < cmn.DefaultPageSize) ||
-				(msg.GetPageSize != 0 && msg.GetPageSize > toRead) {
-				msg.GetPageSize = toRead
-			}
-		}
-
-		injson, err := json.Marshal(msg)
-		if err != nil {
-			return nil, err
-		}
-		if len(injson) == 0 {
-			resp, err = HTTPClient.Get(url)
-		} else {
-			injson, err = json.Marshal(cmn.ActionMsg{Action: cmn.ActListObjects, Value: msg})
-			if err != nil {
-				return nil, err
-			}
-			resp, err = HTTPClient.Post(url, "application/json", bytes.NewBuffer(injson))
-		}
-
-		if err != nil {
-			return nil, err
-		}
-
-		defer func() {
-			if resp != nil {
-				resp.Body.Close()
-			}
-		}()
-
-		page := &cmn.BucketList{}
-		page.Entries = make([]*cmn.BucketEntry, 0, 1000)
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to read http response body, err: %v", err)
-		}
-
-		if resp.StatusCode >= http.StatusBadRequest {
-			return nil, fmt.Errorf("HTTP error %d, message = %v", resp.StatusCode, string(b))
-		}
-
-		err = json.Unmarshal(b, page)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to json-unmarshal, err: %v [%s]", err, string(b))
-		}
-
-		reslist.Entries = append(reslist.Entries, page.Entries...)
-		if page.PageMarker == "" {
-			break
-		}
-
-		if objectCountLimit != 0 {
-			if len(reslist.Entries) >= objectCountLimit {
-				break
-			}
-			toRead -= len(page.Entries)
-		}
-
-		msg.GetPageMarker = page.PageMarker
-	}
-
-	return reslist, nil
-}
-
 func doListRangeCall(proxyURL, bucket, action, method string, listrangemsg interface{}) error {
 	var (
-		injson []byte
-		err    error
+		b   []byte
+		err error
 	)
 	actionMsg := cmn.ActionMsg{Action: action, Value: listrangemsg}
-	injson, err = json.Marshal(actionMsg)
+	b, err = json.Marshal(actionMsg)
 	if err != nil {
 		return fmt.Errorf("Failed to marhsal cmn.ActionMsg, err: %v", err)
 	}
 	url := proxyURL + cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
-	headers := map[string]string{
-		"Content-Type": "application/json",
-	}
-	optParams := api.ParamsOptional{Headers: headers}
-	_, err = api.DoHTTPRequest(HTTPClient, method, url, injson, optParams)
+
+	optParams := api.ParamsOptional{Header: http.Header{
+		"Content-Type": []string{"application/json"},
+	}}
+	_, err = api.DoHTTPRequest(HTTPClient, method, url, b, optParams)
 	return err
 }
 
@@ -473,7 +392,7 @@ func ReplicateMultipleObjects(proxyURL string, bucketToObjects map[string][]stri
 // ListObjects returns a slice of object names of all objects that match the prefix in a bucket
 func ListObjects(proxyURL, bucket, prefix string, objectCountLimit int) ([]string, error) {
 	msg := &cmn.GetMsg{GetPrefix: prefix}
-	data, err := ListBucket(proxyURL, bucket, msg, objectCountLimit)
+	data, err := api.ListBucket(HTTPClient, proxyURL, bucket, msg, objectCountLimit)
 	if err != nil {
 		return nil, err
 	}

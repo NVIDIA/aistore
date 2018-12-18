@@ -1681,7 +1681,7 @@ func checkObjectDistribution(t *testing.T, m *metadata) {
 		targetObjectCount = make(map[string]int64)
 	)
 	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
-	bucketList, err := tutils.ListBucket(m.proxyURL, m.bucket, &cmn.GetMsg{GetProps: cmn.GetTargetURL}, 0)
+	bucketList, err := api.ListBucket(tutils.HTTPClient, m.proxyURL, m.bucket, &cmn.GetMsg{GetProps: cmn.GetTargetURL}, 0)
 	tutils.CheckFatal(err, t)
 	for _, obj := range bucketList.Entries {
 		targetObjectCount[obj.TargetURL] += 1
@@ -1840,7 +1840,7 @@ func TestAtimeRebalance(t *testing.T) {
 	close(errCh)
 	objNames := make(map[string]string, 0)
 	msg := &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
-	bucketList, err := tutils.ListBucket(m.proxyURL, m.bucket, msg, 0)
+	bucketList, err := api.ListBucket(tutils.HTTPClient, m.proxyURL, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 
 	for _, entry := range bucketList.Entries {
@@ -1863,7 +1863,7 @@ func TestAtimeRebalance(t *testing.T) {
 
 	waitForRebalanceToComplete(t, m.proxyURL)
 
-	bucketListReb, err := tutils.ListBucket(m.proxyURL, m.bucket, msg, 0)
+	bucketListReb, err := api.ListBucket(tutils.HTTPClient, m.proxyURL, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 
 	itemCount := 0
