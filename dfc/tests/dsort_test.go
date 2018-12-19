@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +17,9 @@ import (
 
 type dsortFramework struct {
 	m *metadata
+
+	inputPrefix  string
+	outputPrefix string
 
 	inputTempl        string
 	outputTempl       string
@@ -32,6 +36,10 @@ type dsortFramework struct {
 }
 
 func (df *dsortFramework) init() {
+	// Assumption is that all prefixes end with dash: "-"
+	df.inputPrefix = df.inputTempl[:strings.Index(df.inputTempl, "-")+1]
+	df.outputPrefix = df.outputTempl[:strings.Index(df.outputTempl, "-")+1]
+
 	df.tarballSize = df.fileInTarballCnt * df.fileInTarballSize
 	df.outputShardSize = int64(10 * df.fileInTarballCnt * df.fileInTarballSize)
 	df.outputShardCnt = (df.tarballCnt * df.tarballSize) / int(df.outputShardSize)
@@ -66,7 +74,7 @@ func (df *dsortFramework) createInputShards() {
 	wg := &sync.WaitGroup{}
 	errCh := make(chan error, df.tarballCnt)
 	for i := 0; i < df.tarballCnt; i++ {
-		path := fmt.Sprintf("%s/%s%d", tmpDir, "input-", i)
+		path := fmt.Sprintf("%s/%s%d", tmpDir, df.inputPrefix, i)
 		if df.extension == ".tar" {
 			err = tutils.CreateTarWithRandomFiles(path, false, df.fileInTarballCnt, df.fileInTarballSize)
 		} else if df.extension == ".tar.gz" {
@@ -108,7 +116,7 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 
 	inversions := 0
 	for i := 0; i < df.outputShardCnt; i++ {
-		shardName := fmt.Sprintf("%s%0*d%s", "output-", zeros, i, df.extension)
+		shardName := fmt.Sprintf("%s%0*d%s", df.outputPrefix, zeros, i, df.extension)
 		var buffer bytes.Buffer
 		getOptions := api.GetObjectInput{
 			Writer: &buffer,
@@ -153,6 +161,40 @@ func (df *dsortFramework) checkOutputShards(zeros int) {
 	}
 }
 
+// helper for dispatching i-th dSort job
+func dispatchDSortJob(m *metadata, i int) {
+	dsortFW := &dsortFramework{
+		m:                 m,
+		inputTempl:        fmt.Sprintf("input%d-{0..999}", i),
+		outputTempl:       fmt.Sprintf("output%d-{00000..01000}", i),
+		tarballCnt:        1000,
+		fileInTarballCnt:  50,
+		fileInTarballSize: 1024,
+		extension:         ".tar",
+		maxMemUsage:       "99%",
+	}
+	dsortFW.init()
+
+	dsortFW.createInputShards()
+
+	tutils.Logln("started distributed sort...")
+	rs := dsortFW.gen()
+	managerUUID, err := tutils.StartDSort(m.proxyURL, rs)
+	tutils.CheckFatal(err, m.t)
+
+	_, err = tutils.WaitForDSortToFinish(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, m.t)
+	tutils.Logln("finished distributed sort")
+
+	metrics, err := tutils.MetricsDSort(m.proxyURL, managerUUID)
+	tutils.CheckFatal(err, m.t)
+	if len(metrics) != m.originalTargetCount {
+		m.t.Errorf("number of metrics %d is not same as number of targets %d", len(metrics), m.originalTargetCount)
+	}
+
+	dsortFW.checkOutputShards(5)
+}
+
 func TestDistributedSort(t *testing.T) {
 	var (
 		err error
@@ -172,7 +214,7 @@ func TestDistributedSort(t *testing.T) {
 		}
 	)
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -207,6 +249,68 @@ func TestDistributedSort(t *testing.T) {
 	dsortFW.checkOutputShards(5)
 }
 
+// TestDistributedSortParallel runs multiple dSorts in parallel
+func TestDistributedSortParallel(t *testing.T) {
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dSortsCount = 5
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	// Initialize metadata
+	saveClusterState(m)
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	wg := &sync.WaitGroup{}
+	for i := 0; i < dSortsCount; i++ {
+		wg.Add(1)
+		go func(i int) {
+			dispatchDSortJob(m, i)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+}
+
+// TestDistributedSortChain runs multiple dSorts one after another
+func TestDistributedSortChain(t *testing.T) {
+	var (
+		m = &metadata{
+			t:      t,
+			bucket: TestLocalBucketName,
+		}
+		dSortsCount = 5
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	// Initialize metadata
+	saveClusterState(m)
+	if m.originalTargetCount < 3 {
+		t.Fatalf("Must have 3 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	// Create local bucket
+	createFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	for i := 0; i < dSortsCount; i++ {
+		dispatchDSortJob(m, i)
+	}
+}
+
 func TestDistributedSortShuffle(t *testing.T) {
 	var (
 		err error
@@ -228,7 +332,7 @@ func TestDistributedSortShuffle(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -283,7 +387,7 @@ func TestDistributedSortWithDisk(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -344,7 +448,7 @@ func TestDistributedSortZip(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -399,7 +503,7 @@ func TestDistributedSortWithCompression(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -454,7 +558,7 @@ func TestDistributedSortAbort(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -521,7 +625,7 @@ func TestDistributedSortAbortExtractionPhase(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -604,7 +708,7 @@ func TestDistributedSortAbortSortingPhase(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -687,7 +791,7 @@ func TestDistributedSortAbortCreationPhase(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
@@ -770,7 +874,7 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 	)
 
 	if testing.Short() {
-		t.Skip("skipping test in short mode.")
+		t.Skip(skipping)
 	}
 
 	dsortFW.init()
