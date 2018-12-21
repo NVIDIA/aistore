@@ -104,6 +104,9 @@ func server(c *net.UDPConn, stop <-chan bool) {
 	buf := make([]byte, 256)
 	for {
 		err := c.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if err != nil {
+			fmt.Printf("Failed to set read deadline: %v", err)
+		}
 		_, addr, err := c.ReadFromUDP(buf)
 		if err, ok := err.(net.Error); ok && !err.Timeout() {
 			fmt.Println("Server receive failed", addr, err, ok)
@@ -119,6 +122,9 @@ func server(c *net.UDPConn, stop <-chan bool) {
 
 func BenchmarkSend(b *testing.B) {
 	s, err := startServer()
+	if err != nil {
+		b.Fatal("Failed to start server", err)
+	}
 	defer s.Close()
 
 	stop := make(chan bool)
@@ -144,6 +150,9 @@ func BenchmarkSend(b *testing.B) {
 
 func BenchmarkSendParallel(b *testing.B) {
 	s, err := startServer()
+	if err != nil {
+		b.Fatal("Failed to start server", err)
+	}
 	defer s.Close()
 
 	stop := make(chan bool)

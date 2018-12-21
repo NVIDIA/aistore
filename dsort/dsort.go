@@ -166,7 +166,6 @@ func (m *Manager) extractLocalShards() (err error) {
 						atomic.AddUint64(&reservedMemory, ^uint64(size-1)) // decrement by size
 					default:
 						unreserve = false
-						break
 					}
 				}
 			}
@@ -187,7 +186,6 @@ ExtractAllShards:
 		case <-ctx.Done():
 			break ExtractAllShards // context was canceled, therefore we have an error
 		default:
-			break
 		}
 
 		m.acquireExtractGoroutineSema()
@@ -307,7 +305,6 @@ func (m *Manager) createShard(s *shard) (err error) {
 	case <-m.listenAborted():
 		return newAbortError(m.ManagerUUID)
 	default:
-		break
 	}
 
 	m.acquireCreateSema()
@@ -420,7 +417,6 @@ CreateAllShards:
 		case <-ctx.Done():
 			break CreateAllShards // context was canceled, therefore we have an error
 		default:
-			break
 		}
 
 		m.acquireCreateGoroutineSema()
@@ -518,7 +514,6 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		for atomic.LoadInt32(&m.received.count) < expectedReceived {
 			select {
 			case <-m.listenReceived():
-				break
 			case <-m.listenAborted():
 				err = newAbortError(m.ManagerUUID)
 				return

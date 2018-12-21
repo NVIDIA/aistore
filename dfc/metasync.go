@@ -90,9 +90,6 @@ type revs interface {
 	version() int64                 // version - locking not required
 	marshal() (b []byte, err error) // json-marshal - ditto
 }
-type revsowner interface {
-	getif() revs
-}
 
 // private types - used internally by the metasync
 type (
@@ -193,7 +190,7 @@ func (y *metasyncer) sync(wait bool, params ...interface{}) {
 	}
 	l := len(params) / 2
 	cmn.Assert(l > 0 && len(params) == l*2)
-	revsReq := revsReq{pairs: make([]revspair, l, l)}
+	revsReq := revsReq{pairs: make([]revspair, l)}
 	for i := 0; i < len(params); i += 2 {
 		revs, ok := params[i].(revs)
 		cmn.Assert(ok)

@@ -67,7 +67,7 @@ func Test_Throttle(t *testing.T) {
 
 	riostat.Lock()
 	for disk := range riostat.Disk {
-		riostat.Disk[disk] = make(cmn.SimpleKVs, 0)
+		riostat.Disk[disk] = make(cmn.SimpleKVs, 1)
 		riostat.Disk[disk]["%util"] = strconv.Itoa(0)
 	}
 	riostat.Unlock()

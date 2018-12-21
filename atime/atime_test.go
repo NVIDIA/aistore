@@ -343,7 +343,7 @@ func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 
 	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
@@ -385,7 +385,7 @@ func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
 
 	// simulate highly utilized disk
 	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
@@ -426,7 +426,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 
 	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
 		iostatr.Disk[disk]["%util"] = "99.94"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
@@ -467,7 +467,7 @@ func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 
 	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
 		iostatr.Disk[disk]["%util"] = "99.34"
 	}
 	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()

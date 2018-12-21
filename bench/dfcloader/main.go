@@ -315,7 +315,7 @@ L:
 		completeWorkOrder(wo)
 	}
 
-	fmt.Printf("\nActual run duration: %v\n", time.Now().Sub(tsStart))
+	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
 	accumulatedStats.aggregate(intervalStats)
 	writeStats(statsWriter, true /* final */, intervalStats, accumulatedStats)
 

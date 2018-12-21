@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	lrepTimeout = time.Minute * 3
 	workChanCap = 256
 )
 

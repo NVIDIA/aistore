@@ -23,7 +23,6 @@ import (
 
 const (
 	userListFile   = "users.json"
-	tokenFile      = ".tokens"
 	proxyTimeout   = time.Minute * 2 // maximum time for syncing Authn data with primary proxy
 	proxyRetryTime = time.Second * 5 // an interval between primary proxy detection attempts
 )
@@ -81,8 +80,8 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 	)
 	mgr := &userManager{
 		Path:   dbPath,
-		Users:  make(map[string]*userInfo, 0),
-		tokens: make(map[string]*tokenInfo, 0),
+		Users:  make(map[string]*userInfo, 10),
+		tokens: make(map[string]*tokenInfo, 10),
 		client: createHTTPClient(),
 		proxy:  proxy,
 	}
@@ -99,7 +98,7 @@ func newUserManager(dbPath string, proxy *proxy) *userManager {
 	// update loaded list: create empty map for users who do not have credentials in saved file
 	for _, uinfo := range mgr.Users {
 		if uinfo.Creds == nil {
-			uinfo.Creds = make(map[string]string, 0)
+			uinfo.Creds = make(map[string]string, 10)
 		}
 	}
 
@@ -139,7 +138,7 @@ func (m *userManager) addUser(userID, userPass string) error {
 		UserID:          userID,
 		passwordDecoded: userPass,
 		Password:        base64.StdEncoding.EncodeToString([]byte(userPass)),
-		Creds:           make(map[string]string, 0),
+		Creds:           make(map[string]string, 10),
 	}
 
 	return m.saveUsers()

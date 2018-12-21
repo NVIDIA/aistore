@@ -135,13 +135,13 @@ func (m *Metrics) unlock() {
 func (m *Metrics) update() {
 	m.lock()
 	if m.Extraction.End.IsZero() && !m.Extraction.Start.IsZero() {
-		m.Extraction.Elapsed = time.Now().Sub(m.Extraction.Start) / time.Second
+		m.Extraction.Elapsed = time.Since(m.Extraction.Start) / time.Second
 	}
 	if m.Sorting.End.IsZero() && !m.Sorting.Start.IsZero() {
-		m.Sorting.Elapsed = time.Now().Sub(m.Sorting.Start) / time.Second
+		m.Sorting.Elapsed = time.Since(m.Sorting.Start) / time.Second
 	}
 	if m.Creation.End.IsZero() && !m.Creation.Start.IsZero() {
-		m.Creation.Elapsed = time.Now().Sub(m.Creation.Start) / time.Second
+		m.Creation.Elapsed = time.Since(m.Creation.Start) / time.Second
 	}
 	m.unlock()
 }

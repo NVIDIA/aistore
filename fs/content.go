@@ -85,7 +85,7 @@ func init() {
 // NOTE: FIXME: All registration must happen at the startup, otherwise panic can
 // be expected.
 func (f *ContentSpecMgr) RegisterFileType(contentType string, spec ContentResolver) error {
-	if strings.Index(contentType, "/") != -1 {
+	if strings.Contains(contentType, "/") {
 		return fmt.Errorf("file type %s should not contain dot '.'", contentType)
 	}
 

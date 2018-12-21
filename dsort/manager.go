@@ -379,7 +379,6 @@ func (m *Manager) cleanup() {
 		ToOS:    true,
 	})
 	glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
-	return
 }
 
 // abort stops currently running sort job and frees associated resources.

@@ -8,4 +8,7 @@ This module provides a way to benchmark different HRW variants. The following ap
 For a detailed analysis of the experiment results, please refer to this [PDF](experiments.pdf).
 
 ## How to run tests and benchmarks?
-go test -bench=.
+
+```bash
+$ go test -tags hrw -bench=. 
+```

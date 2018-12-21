@@ -1,18 +1,18 @@
+// +build hrw
+
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
 package hrw_bench
 
 import (
+	"fmt"
 	"math"
+	"math/rand"
+	"runtime"
 	"sync"
 	"testing"
-
-	"math/rand"
 	"time"
-
-	"fmt"
-	"runtime"
 )
 
 var resultInt int
@@ -51,10 +51,7 @@ func BenchmarkHRW(b *testing.B) {
 	}
 }
 
-//
-// FIXME: spends too much time testing 3rd party stuff that has been already tested multiple times
-//
-func SKIP_TestEqualDistribution(t *testing.T) {
+func TestEqualDistribution(t *testing.T) {
 	// Testing for the previous approach as well as the new approach
 	// since if both fail the test then the hash algorithm isn't the cause.
 	hashFs := []hashFuncs{

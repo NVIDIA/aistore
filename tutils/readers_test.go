@@ -47,7 +47,7 @@ func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
 			t.Fatal("Failed to read after seek", n, err)
 		}
 
-		if reflect.DeepEqual(buf, data[100:120]) != true {
+		if !reflect.DeepEqual(buf, data[100:120]) {
 			t.Fatal("Failed to match data after seek and read", buf, data[100:120])
 		}
 
@@ -67,7 +67,7 @@ func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
 			t.Fatal("Failed to read after seek", n, err)
 		}
 
-		if reflect.DeepEqual(buf, data[size-40:size-20]) != true {
+		if !reflect.DeepEqual(buf, data[size-40:size-20]) {
 			t.Fatal("Failed to match data after seek and read", buf, data[size-40:size-20])
 		}
 
@@ -87,7 +87,7 @@ func testReaderBasic(t *testing.T, r tutils.Reader, size int64) {
 			t.Fatal("Failed to read after seek", n, err)
 		}
 
-		if reflect.DeepEqual(buf, data[size-40:size-20]) != true {
+		if !reflect.DeepEqual(buf, data[size-40:size-20]) {
 			t.Fatal("Failed to match data after seek and read", buf, data[size-40:size-20])
 		}
 
@@ -143,7 +143,7 @@ func testReaderAdv(t *testing.T, r tutils.Reader, size int64) {
 			t.Fatal("Failed to read after seek", n, err)
 		}
 
-		if reflect.DeepEqual(buf, data[size-60:size-40]) != true {
+		if !reflect.DeepEqual(buf, data[size-60:size-40]) {
 			t.Fatal("Failed to match data after seek and read", buf, data[size-60:size-40])
 		}
 

@@ -615,11 +615,10 @@ func TestHeadObject(t *testing.T) {
 	objName := "headobject_test_obj"
 	objSize := 1024
 	r, rrErr := tutils.NewRandReader(int64(objSize), false)
-	defer r.Close()
-
 	if rrErr != nil {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", rrErr)
 	}
+	defer r.Close()
 	if err := api.PutObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, objName, r.XXHash(), r); err != nil {
 		t.Fatalf("api.PutObject failed, err = %v", err)
 	}
@@ -634,7 +633,7 @@ func TestHeadObject(t *testing.T) {
 		t.Errorf("Returned object props not correct. Expected: %v, actual: %v", propsExp, props)
 	}
 
-	props, err = api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, "this_object_should_not_exist")
+	_, err = api.HeadObject(tutils.HTTPClient, proxyURL, TestLocalBucketName, "this_object_should_not_exist")
 	if err == nil {
 		t.Errorf("Expected non-nil error (404) from api.HeadObject, received nil error")
 	}
@@ -648,11 +647,10 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	fileName := "headobject_check_cached_test_file"
 	fileSize := 1024
 	r, err := tutils.NewRandReader(int64(fileSize), false)
-	defer r.Close()
-
 	if err != nil {
 		t.Fatalf("tutils.NewRandReader failed, err = %v", err)
 	}
+	defer r.Close()
 
 	err = api.PutObject(tutils.HTTPClient, proxyURL, clibucket, fileName, r.XXHash(), r)
 	tutils.CheckFatal(err, t)
@@ -856,7 +854,6 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		fqn         string
 		fileName    string
 		oldFileInfo os.FileInfo
-		newFileInfo os.FileInfo
 		errstr      string
 		filesList   = make([]string, 0, numFiles)
 		proxyURL    = getPrimaryURL(t, proxyURLRO)
@@ -914,7 +911,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	tutils.Logf("\nChanging contents of the file [%s]: %s\n", fileName, fqn)
 	err = ioutil.WriteFile(fqn, []byte("Contents of this file have been changed."), 0644)
 	tutils.CheckFatal(err, t)
-	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, newFileInfo, fqn, oldFileInfo)
+	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
 
 	// Test when the xxHash of the file is changed
 	fileName = <-fileNameCh
@@ -929,7 +926,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 	if errstr != "" {
 		t.Error(errstr)
 	}
-	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, newFileInfo, fqn, oldFileInfo)
+	validateGETUponFileChangeForChecksumValidation(t, proxyURL, fileName, fqn, oldFileInfo)
 
 	// Test for no checksum algo
 	fileName = <-fileNameCh
@@ -968,15 +965,13 @@ cleanup:
 	close(fileNameCh)
 }
 
-func validateGETUponFileChangeForChecksumValidation(
-	t *testing.T, proxyURL, fileName string, newFileInfo os.FileInfo, fqn string,
-	oldFileInfo os.FileInfo) {
+func validateGETUponFileChangeForChecksumValidation(t *testing.T, proxyURL, fileName string, fqn string, oldFileInfo os.FileInfo) {
 	// Do a GET to see to check if a cold get was executed by comparing old and new size
 	_, err := api.GetObjectWithValidation(tutils.HTTPClient, proxyURL, clibucket, filepath.Join(ChecksumWarmValidateStr, fileName))
 	if err != nil {
 		t.Errorf("Unable to GET file. Error: %v", err)
 	}
-	newFileInfo, err = os.Stat(fqn)
+	newFileInfo, err := os.Stat(fqn)
 	if err != nil {
 		t.Errorf("Failed while reading the file %s rom the local file system. Error: %v", fqn, err)
 	}
@@ -1382,8 +1377,6 @@ cleanup:
 	if created {
 		destroyLocalBucket(t, proxyURL, bucket)
 	}
-
-	return
 }
 
 // deletefromfilelist requires that errCh be twice the size of len(fileslist) as each

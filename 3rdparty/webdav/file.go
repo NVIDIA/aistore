@@ -69,7 +69,7 @@ type Dir string
 
 func (d Dir) resolve(name string) string {
 	// This implementation is based on Dir.Open's code in the standard net/http package.
-	if filepath.Separator != '/' && strings.IndexRune(name, filepath.Separator) >= 0 ||
+	if filepath.Separator != '/' && strings.ContainsRune(name, filepath.Separator) ||
 		strings.Contains(name, "\x00") {
 		return ""
 	}
@@ -550,11 +550,11 @@ func (f *memFile) Seek(offset int64, whence int) (int64, error) {
 	npos := f.pos
 	// TODO: How to handle offsets greater than the size of system int?
 	switch whence {
-	case os.SEEK_SET:
+	case io.SeekStart:
 		npos = int(offset)
-	case os.SEEK_CUR:
+	case io.SeekCurrent:
 		npos += int(offset)
-	case os.SEEK_END:
+	case io.SeekEnd:
 		npos = len(f.n.data) + int(offset)
 	default:
 		npos = -1

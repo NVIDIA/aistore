@@ -42,10 +42,8 @@ var (
 	errNegOutputShardSize       = errors.New("output shard size must be > 0")
 	errNegativeConcurrencyLimit = fmt.Errorf("concurrency limit must be 0 (default: %d) or > 0", defaultConcLimit)
 
-	errInvalidInputFormat      = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
-	errInvalidInputFormatType  = errors.New("input format type must be one of 'bash', '@'")
-	errInvalidOutputFormat     = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
-	errInvalidOutputFormatType = errors.New("output format type must be one of 'bash', '@'")
+	errInvalidInputFormat  = errors.New("could not parse given input format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
+	errInvalidOutputFormat = errors.New("could not parse given output format, example of bash format: 'prefix{0001..0010}suffix`, example of at format: 'prefix@00100suffix`")
 
 	errInvalidBashFormat = errors.New("input 'bash' format is invalid, should be 'prefix{0001..0010}suffix`")
 	errInvalidAtFormat   = errors.New("input 'at' format is invalid, should be 'prefix@00100suffix`")
@@ -54,7 +52,7 @@ var (
 	errNonPositiveStep   = errors.New("'step' is non positive number")
 
 	errInvalidMemUsage      = errors.New("invalid memory usage specified, format should be '81%' or '1GB'")
-	errInvalidMaxMemPercent = errors.New("max memory usage percent must be 0 (defaults to 80%) or in the range [1, 100]")
+	errInvalidMaxMemPercent = errors.New("max memory usage percent must be 0 (defaults to 80%) or in the range [1, 99]")
 	errInvalidMaxMemNumber  = errors.New("max memory usage value must be non-negative")
 
 	errInvalidAlgorithm = errors.New("invalid algorithm specified")
@@ -63,12 +61,6 @@ var (
 var (
 	// supportedExtensions is a list of supported extensions by dsort
 	supportedExtensions = []string{extTar, extTgz, extTarTgz, extZip}
-
-	// supportedInputTemplateTypes is a list of supported types for input template
-	supportedInputTemplateTypes = []string{templBash, templAt}
-
-	// supportedOutputTemplateTypes is a list of supported types for output template
-	supportedOutputTemplateTypes = []string{templBash, templAt}
 )
 
 // TODO: maybe this struct should be composed of `type` and `template` where
@@ -366,7 +358,7 @@ func parseMemUsage(memUsage string) (*parsedMemUsage, error) {
 	suffix := memUsage[idx:]
 	if suffix == "%" {
 		parsedMU.Type = memPercent
-		if parsedMU.Value < 0 || parsedMU.Value > 100 {
+		if parsedMU.Value <= 0 || parsedMU.Value >= 100 {
 			return nil, errInvalidMaxMemPercent
 		}
 	} else if value, err := cmn.S2B(memUsage); err != nil {

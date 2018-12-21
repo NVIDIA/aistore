@@ -2507,9 +2507,6 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
 		return fmt.Errorf("Invalid WM configuration. LowWM: %d, HighWM: %d, LowWM and HighWM must be in the range [0, 100] with LowWM <= HighWM", lwm, hwm)
 	}
-	if props.AtimeCacheMax < 0 {
-		return fmt.Errorf("Invalid value: %d, AtimeCacheMax cannot be negative", props.AtimeCacheMax)
-	}
 	if props.DontEvictTimeStr != "" {
 		dontEvictTime, err := time.ParseDuration(props.DontEvictTimeStr)
 		if err != nil {

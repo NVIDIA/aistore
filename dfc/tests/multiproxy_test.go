@@ -355,6 +355,7 @@ func targetRejoin(t *testing.T) {
 	}
 
 	cmd, args, err := kill(id, port)
+	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(proxyURL, "to synchronize on 'target crashed'", smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 
@@ -780,7 +781,7 @@ func setPrimaryTo(t *testing.T, proxyURL string, smap cluster.Smap, directURL, t
 	// http://host:8081/v1/cluster/proxy/15205:8080
 	tutils.Logf("Setting primary from %s to %s\n", smap.ProxySI.DaemonID, toID)
 	err := api.SetPrimaryProxy(tutils.HTTPClient, directURL, toID)
-
+	tutils.CheckFatal(err, t)
 	smap, err = waitForPrimaryProxy(proxyURL, "to designate new primary ID="+toID, smap.Version, testing.Verbose())
 	tutils.CheckFatal(err, t)
 	if smap.ProxySI.DaemonID != toID {
@@ -1218,6 +1219,7 @@ func networkFailurePrimary(t *testing.T) {
 	proxyCount, targetCount := len(smap.Pmap), len(smap.Tmap)
 	oldPrimaryID, oldPrimaryURL := smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DirectURL
 	newPrimaryID, newPrimaryURL, err := chooseNextProxy(&smap)
+	tutils.CheckFatal(err, t)
 
 	// Disconnect primary
 	tutils.Logf("Disconnecting primary %s from all networks\n", oldPrimaryID)

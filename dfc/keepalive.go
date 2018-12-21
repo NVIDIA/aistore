@@ -453,7 +453,7 @@ func (k *keepalive) updateTimeoutForDaemon(sid string, t time.Duration) time.Dur
 // maxKeepaliveNS, with the other stats loosely based on RFC 6298.
 func (k *keepalive) timeoutStatsForDaemon(sid string) *timeoutStats {
 	k.tt.mu.Lock()
-	if ts, _ := k.tt.timeoutStatsMap[sid]; ts != nil {
+	if ts := k.tt.timeoutStatsMap[sid]; ts != nil {
 		k.tt.mu.Unlock()
 		return ts
 	}

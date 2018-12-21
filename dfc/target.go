@@ -684,7 +684,9 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		if !dryRun.network {
 			rd := readers.NewRandReader(dryRun.size)
 			if _, err = io.Copy(w, rd); err != nil {
+				// NOTE: Cannot return invalid handler because it will be double header write
 				errstr = fmt.Sprintf("dry-run: failed to send random response, err: %v", err)
+				glog.Error(errstr)
 				t.statsif.Add(stats.ErrGetCount, 1)
 				return
 			}
@@ -768,6 +770,7 @@ send:
 		} else {
 			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", lom.Fqn, err)
 		}
+		glog.Error(errstr)
 		t.fshc(err, lom.Fqn)
 		t.statsif.Add(stats.ErrGetCount, 1)
 		return
@@ -2075,6 +2078,7 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr st
 	return
 }
 
+// TODO: this function is for now unused because replication does not work
 func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replicaSrc string) (errstr string) {
 
 	var (
@@ -2123,6 +2127,9 @@ func (t *targetrunner) doPutCommit(ct context.Context, lom *cluster.LOM, putfqn 
 		} else {
 			lom.Version, errstr, errcode = getcloudif().putobj(ct, file, lom.Bucket, lom.Objname, lom.Nhobj)
 			file.Close()
+			if errstr != "" {
+				return
+			}
 		}
 	}
 	// when all set and done:
@@ -2291,7 +2298,6 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg cm
 
 func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
 	t.invalmsghdlr(w, r, "not supported yet") // NOTE: daemon.go, proxy.go, config.sh, and tests/replication
-	return
 }
 
 func (t *targetrunner) renameObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
@@ -2887,10 +2893,6 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 // target's misc utilities and helpers
 //
 //==============================================================================
-func (t *targetrunner) starttime() time.Time {
-	return t.uxprocess.starttime
-}
-
 func (t *targetrunner) redirectLatency(started time.Time, query url.Values) (redelta int64) {
 	s := query.Get(cmn.URLParamUnixTime)
 	if s == "" {

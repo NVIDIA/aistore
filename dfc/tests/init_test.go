@@ -31,8 +31,7 @@ const (
 	SmokeStr                = "smoke"
 	ReplicationDir          = "/tmp/dfc/replicationTest"
 	ReplicationStr          = "replicationTest"
-	largefilesize           = 4                // in MB
-	PhysMemSizeWarn         = uint64(7 * 1024) // MBs
+	largefilesize           = 4 // in MB
 	ProxyURL                = "http://localhost:8080"
 	ProxyURLNext            = "http://localhost:11080" // the url for the next cluster's proxy
 )

@@ -62,25 +62,9 @@ func (sp *StreamPool) Stop() {
 }
 
 func NewStream(url string) *transport.Stream {
-	cpuCount := runtime.NumCPU() + 1
-
 	extra := &transport.Extra{
 		IdleTimeout: time.Minute * 5,
 	}
-	defaultTransport := http.DefaultTransport.(*http.Transport)
-	client := &http.Client{Transport: &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-			DualStack: true,
-		}).DialContext,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-		MaxIdleConnsPerHost:   cpuCount,
-	}}
-
+	client := newClient(runtime.NumCPU() + 1)
 	return transport.NewStream(client, url, extra)
 }

@@ -27,16 +27,18 @@ const (
 var (
 	// TODO: not ready yet but will be - see daemon.go as well
 	replTests = []Test{
-		//	{"testReplicationReceiveOneObject", testReplicationReceiveOneObject},
-		//	{"testReplicationReceiveOneObjectNoChecksum", testReplicationReceiveOneObjectNoChecksum},
-		//	{"testReplicationReceiveOneObjectBadChecksum", testReplicationReceiveOneObjectBadChecksum},
-		//	{"testReplicationReceiveManyObjectsCloudBucket", testReplicationReceiveManyObjectsCloudBucket},
-		//  {"testReplicationEndToEndUsingLocalBucket", testReplicationEndToEndUsingLocalBucket},
-		//  {"testReplicationEndToEndUsingCloudBucket", testReplicationEndToEndUsingCloudBucket},
+		{"testReplicationReceiveOneObject", testReplicationReceiveOneObject},
+		{"testReplicationReceiveOneObjectNoChecksum", testReplicationReceiveOneObjectNoChecksum},
+		{"testReplicationReceiveOneObjectBadChecksum", testReplicationReceiveOneObjectBadChecksum},
+		{"testReplicationReceiveManyObjectsCloudBucket", testReplicationReceiveManyObjectsCloudBucket},
+		{"testReplicationEndToEndUsingLocalBucket", testReplicationEndToEndUsingLocalBucket},
+		{"testReplicationEndToEndUsingCloudBucket", testReplicationEndToEndUsingCloudBucket},
 	}
 )
 
 func TestReplication(t *testing.T) {
+	t.Skip("skipping replication because it does not work yet")
+
 	for _, test := range replTests {
 		t.Run(test.name, test.method)
 		if t.Failed() && abortonerr {
@@ -141,9 +143,8 @@ func testReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 // through get requests.
 func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 	const (
-		objSize   = int64(1024)
-		numObj    = 100
-		seedValue = int64(111)
+		objSize = int64(1024)
+		numObj  = 100
 	)
 	var (
 		bucket       = TestLocalBucketName
@@ -221,9 +222,8 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 // through get requests.
 func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 	const (
-		objSize   = int64(1024)
-		numObj    = 100
-		seedValue = int64(111)
+		objSize = int64(1024)
+		numObj  = 100
 	)
 	var (
 		bucket       = clibucket

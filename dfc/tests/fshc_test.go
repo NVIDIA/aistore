@@ -179,8 +179,8 @@ func TestFSCheckerDetection(t *testing.T) {
 	defer destroyLocalBucket(t, proxyURL, bucket)
 
 	smap := getClusterMap(t, proxyURL)
-	mpList := make(map[string]string, 0)
-	allMps := make(map[string]*cmn.MountpathList, 0)
+	mpList := make(map[string]string, 10)
+	allMps := make(map[string]*cmn.MountpathList, 10)
 	origAvail := 0
 	for target, tinfo := range smap.Tmap {
 		tutils.Logf("Target: %s\n", target)
@@ -302,8 +302,8 @@ func TestFSCheckerDetection(t *testing.T) {
 			t.Errorf("Failed to create file: %v", err)
 		}
 		f.Close()
-		for _, n := range objList {
-			_, err = api.GetObject(tutils.HTTPClient, proxyURL, bucket, n)
+		for _, objName := range objList {
+			api.GetObject(tutils.HTTPClient, proxyURL, bucket, objName)
 		}
 		if detected := waitForMountpathChanges(t, failedTarget, len(failedMap.Available)-1, len(failedMap.Disabled)+1, false); detected {
 			t.Error("GETting objects from a broken mountpath should not disable the mountpath when FSHC is disabled")
@@ -326,8 +326,8 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 	}
 
 	smap := getClusterMap(t, proxyURL)
-	mpList := make(map[string]string, 0)
-	allMps := make(map[string]*cmn.MountpathList, 0)
+	mpList := make(map[string]string, 10)
+	allMps := make(map[string]*cmn.MountpathList, 10)
 	origAvail := 0
 	origOff := 0
 	for target, tinfo := range smap.Tmap {

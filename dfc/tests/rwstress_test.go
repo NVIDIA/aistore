@@ -112,7 +112,6 @@ func unlockFile(idx int, fileExists bool) {
 
 	filelock.files[idx].locked = false
 	filelock.files[idx].exists = fileExists
-	return
 }
 
 // generates a list of random file names and a buffer to keep random data for filling up files
@@ -319,7 +318,7 @@ func rwstress(t *testing.T) {
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	created := createLocalBucketIfNotExists(t, proxyURL, clibucket)
-	filelock.files = make([]fileLock, numFiles, numFiles)
+	filelock.files = make([]fileLock, numFiles)
 
 	generateRandomData(t, baseseed+10000, numFiles)
 

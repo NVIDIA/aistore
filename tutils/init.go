@@ -15,8 +15,7 @@ import (
 )
 
 const (
-	registerTimeout    = time.Minute * 2
-	maxBodyErrorLength = 256
+	registerTimeout = time.Minute * 2
 )
 
 var (

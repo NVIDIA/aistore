@@ -230,7 +230,7 @@ func TestMain(m *testing.M) {
 			w.Write([]byte(msg))
 		}
 
-		if *verifyHash == false {
+		if !*verifyHash {
 			return
 		}
 

@@ -181,7 +181,7 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if !changed {
 		t.Error("Credentials were not updated")
 	}
-	userInfo, _ = mgr.Users[userID]
+	userInfo = mgr.Users[userID]
 	userAws, ok = userInfo.Creds[cmn.ProviderAmazon]
 	if !ok || userAws != AWS02 {
 		t.Errorf("User %s AWS credentials are invalid: %s (expected %s)", userID, userAws, AWS02)
@@ -192,9 +192,9 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if changed {
 		t.Error("Credentials were updated")
 	}
-	userInfo, _ = mgr.Users[userID]
-	userAws, _ = userInfo.Creds[cmn.ProviderAmazon]
-	userGcp, _ = userInfo.Creds[cmn.ProviderGoogle]
+	userInfo = mgr.Users[userID]
+	userAws = userInfo.Creds[cmn.ProviderAmazon]
+	userGcp = userInfo.Creds[cmn.ProviderGoogle]
 	if userAws != AWS02 || userGcp != GCP01 {
 		t.Errorf("Credentials changed: AWS %s -> %s, GCP: %s -> %s",
 			AWS02, userAws, GCP01, userGcp)
@@ -238,7 +238,7 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to delete credentials: %v", err)
 	}
-	userInfo, _ = mgr.Users[userID]
+	userInfo = mgr.Users[userID]
 	if len(userInfo.Creds) != 1 {
 		t.Errorf("Invalid number of credentials: %d(expected 1)\n%v", len(userInfo.Creds), userInfo.Creds)
 	}
@@ -251,7 +251,7 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to delete credentials: %v", err)
 	}
-	userInfo, _ = mgr.Users[userID]
+	userInfo = mgr.Users[userID]
 	if len(userInfo.Creds) != 1 {
 		t.Errorf("Invalid number of credentials: %d(expected 1)\n%v", len(userInfo.Creds), userInfo.Creds)
 	}
@@ -264,7 +264,7 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to delete credentials: %v", err)
 	}
-	userInfo, _ = mgr.Users[userID]
+	userInfo = mgr.Users[userID]
 	if len(userInfo.Creds) != 0 {
 		t.Errorf("Invalid number of credentials: %d(expected empty)\n%v", len(userInfo.Creds), userInfo.Creds)
 	}

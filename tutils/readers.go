@@ -302,7 +302,9 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 	var hash string
 	if withHash {
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
-		_, hash, err = cmn.ReadWriteWithHash(f, ioutil.Discard, buf)
+		if _, hash, err = cmn.ReadWriteWithHash(f, ioutil.Discard, buf); err != nil {
+			return nil, err
+		}
 		slab.Free(buf)
 	}
 

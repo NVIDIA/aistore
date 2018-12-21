@@ -75,7 +75,6 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 	const (
 		num      = 1000
 		filesize = 1024
-		seed     = int64(111)
 		bucket   = TestLocalBucketName
 	)
 	var (
@@ -149,7 +148,6 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 	const (
 		numberOfFiles = 100
 		fileSize      = 1024
-		seed          = int64(111)
 	)
 
 	proxyURL := getPrimaryURL(t, proxyURLRO)

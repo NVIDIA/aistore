@@ -39,7 +39,6 @@ type (
 		body io.ReadCloser
 		hdr  Header
 		off  int64
-		hlen int
 	}
 	handler struct {
 		trname      string

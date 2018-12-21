@@ -72,7 +72,6 @@ type (
 		// omitempty
 		timeUpdatedCapacity time.Time
 		timeCheckedLogSizes time.Time
-		fsmap               map[syscall.Fsid]string
 	}
 	copyRunner struct {
 		Tracker  copyTracker              `json:"core"`

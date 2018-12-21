@@ -136,7 +136,7 @@ func (r *readahead) Run() error {
 	for mpath := range availablePaths {
 		r.addmp(mpath, "added")
 	}
-	_ = <-r.stopCh // forever
+	<-r.stopCh // forever
 	return nil
 }
 func (r *readahead) Stop(err error) {

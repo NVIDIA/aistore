@@ -111,7 +111,7 @@ func decryptToken(tokenStr string) (*authRec, error) {
 	if rec.expires, err = time.Parse(time.RFC822, expireStr); err != nil {
 		return nil, invalTokenErr
 	}
-	rec.creds = make(cmn.SimpleKVs, 0)
+	rec.creds = make(cmn.SimpleKVs, 10)
 	if cc, ok := claims["creds"].(map[string]interface{}); ok {
 		for key, value := range cc {
 			if asStr, ok := value.(string); ok {

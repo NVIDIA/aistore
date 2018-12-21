@@ -177,7 +177,7 @@ type httprunner struct {
 	smapowner             *smapowner
 	smaplisteners         *smaplisteners
 	bmdowner              *bmdowner
-	xactions               *xactions
+	xactions              *xactions
 	statsif               stats.Tracker
 	statsdC               statsd.Client
 }
@@ -1113,7 +1113,6 @@ func (h *httprunner) registerToURL(url string, psi *cluster.Snode, timeout time.
 		} else {
 			glog.Errorf("%s: (register => %s: %v)", h.si, path, res.err)
 		}
-		break
 	}
 	return
 }

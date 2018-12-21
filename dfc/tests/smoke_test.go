@@ -84,7 +84,7 @@ func oneSmoke(t *testing.T, proxyURL string, objSize int64, ratio float32, bseed
 	var (
 		nGet = int(float32(numworkers) * ratio)
 		nPut = numworkers - nGet
-		sgls = make([]*memsys.SGL, numworkers, numworkers)
+		sgls = make([]*memsys.SGL, numworkers)
 	)
 
 	// Get the workers started

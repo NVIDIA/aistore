@@ -36,7 +36,6 @@ var (
 	duration  time.Duration // test duration
 	flushFreq time.Duration // how often atimerunner flushes mpaths
 	diskUtil  string        // disk utility percentage
-	verbose   bool
 )
 
 func init() {
@@ -163,7 +162,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	// simulate highly utilized disk
 	iostatr.Disk = make(map[string]cmn.SimpleKVs)
 	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 0)
+		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
 		iostatr.Disk[disk]["%util"] = diskUtil
 	}
 

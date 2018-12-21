@@ -65,7 +65,6 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	const (
 		num       = 20000
 		filesize  = 1024
-		seed      = int64(111)
 		maxErrPct = 5
 	)
 
@@ -159,7 +158,6 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 		num                 = 20000
 		otherTasksToTrigger = 1
 		filesize            = 1024
-		seed                = int64(111)
 		maxErrPct           = 5
 	)
 
@@ -314,10 +312,8 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 
 func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 	const (
-		num       = 10000
-		filesize  = 1024
-		seed      = int64(111)
-		maxErrPct = 5
+		num      = 10000
+		filesize = 1024
 	)
 
 	var (
@@ -417,7 +413,6 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	const (
 		num       = 10000
 		filesize  = 1024
-		seed      = int64(111)
 		maxErrPct = 0
 	)
 
@@ -516,10 +511,8 @@ func TestPutDuringRebalance(t *testing.T) {
 	}
 
 	const (
-		num       = 10000
-		filesize  = 1024
-		seed      = int64(111)
-		maxErrPct = 0
+		num      = 10000
+		filesize = 1024
 	)
 
 	var (
@@ -609,7 +602,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	const (
 		num       = 20000
 		filesize  = 1024
-		seed      = int64(112)
 		maxErrPct = 0
 	)
 
@@ -671,6 +663,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	// Disable mountpaths temporarily
 	mpath := mpList.Available[0]
 	err = api.DisableMountpath(tutils.HTTPClient, targetURL, mpath)
+	tutils.CheckFatal(err, t)
 
 	// Unregister a target
 	tutils.Logf("Trying to unregister target: %s\n", killTarget.URL(cmn.NetworkPublic))
@@ -740,7 +733,6 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	const (
 		num       = 20000
 		filesize  = 1024
-		seed      = int64(112)
 		maxErrPct = 0
 	)
 
@@ -841,7 +833,6 @@ func TestGetDuringRebalance(t *testing.T) {
 	const (
 		num       = 10000
 		filesize  = 1024
-		seed      = int64(111)
 		maxErrPct = 0
 	)
 
@@ -1025,7 +1016,6 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 		newTestLocalBucketName = TestLocalBucketName + "_new"
 		num                    = 1000
 		filesize               = 1024
-		seed                   = int64(111)
 		maxErrPct              = 0
 	)
 
@@ -1154,7 +1144,6 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	const (
 		num       = 5000
 		filesize  = 1024
-		seed      = int64(111)
 		maxErrPct = 0
 	)
 
@@ -1249,7 +1238,6 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	const (
 		num          = 5000
 		filesize     = 1024
-		seed         = int64(111)
 		maxErrPct    = 0
 		newMountpath = "/tmp/dfc"
 	)
@@ -1326,7 +1314,6 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	const (
 		num          = 10000
 		filesize     = 1024
-		seed         = int64(111)
 		maxErrPct    = 0
 		newMountpath = "/tmp/dfc/mountpath"
 	)
@@ -1429,7 +1416,6 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	const (
 		num       = 5000
 		filesize  = 1024
-		seed      = int64(111)
 		maxErrPct = 0
 	)
 
@@ -1776,7 +1762,6 @@ func TestAtimeRebalance(t *testing.T) {
 	const (
 		num      = 50
 		filesize = 1024
-		seed     = int64(141)
 	)
 
 	var (
@@ -1837,7 +1822,7 @@ func TestAtimeRebalance(t *testing.T) {
 	selectErr(errCh, "put", t, false)
 	close(filenameCh)
 	close(errCh)
-	objNames := make(map[string]string, 0)
+	objNames := make(cmn.SimpleKVs, 10)
 	msg := &cmn.GetMsg{GetProps: cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
 	bucketList, err := api.ListBucket(tutils.HTTPClient, m.proxyURL, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)

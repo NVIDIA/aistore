@@ -91,7 +91,6 @@ type voteRetryMockTarget struct {
 
 func (*voteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
 	// Ignore all file requests
-	return
 }
 
 func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request) {

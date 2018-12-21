@@ -599,7 +599,7 @@ func TestDistributedSortAbort(t *testing.T) {
 	}
 
 	for target, metrics := range allMetrics {
-		if metrics.Aborted != true {
+		if !metrics.Aborted {
 			t.Errorf("dsort was not aborted by target: %s", target)
 		}
 	}
@@ -682,7 +682,7 @@ func TestDistributedSortAbortExtractionPhase(t *testing.T) {
 	}
 
 	for target, metrics := range allMetrics {
-		if metrics.Aborted != true {
+		if !metrics.Aborted {
 			t.Errorf("dsort was not aborted by target: %s", target)
 		}
 	}
@@ -765,7 +765,7 @@ func TestDistributedSortAbortSortingPhase(t *testing.T) {
 	}
 
 	for target, metrics := range allMetrics {
-		if metrics.Aborted != true {
+		if !metrics.Aborted {
 			t.Errorf("dsort was not aborted by target: %s", target)
 		}
 	}
@@ -848,7 +848,7 @@ func TestDistributedSortAbortCreationPhase(t *testing.T) {
 	}
 
 	for target, metrics := range allMetrics {
-		if metrics.Aborted != true {
+		if !metrics.Aborted {
 			t.Errorf("dsort was not aborted by target: %s", target)
 		}
 	}

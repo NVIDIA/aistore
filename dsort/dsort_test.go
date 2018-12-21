@@ -64,7 +64,6 @@ func getFreePorts(count int) ([]int, error) {
 //
 type testSmapListeners struct {
 	sync.RWMutex
-	vec []cluster.Slistener
 }
 
 func (a *testSmapListeners) Reg(sl cluster.Slistener) {}

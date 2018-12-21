@@ -37,7 +37,7 @@ const (
 	xmetasyncer      = "metasyncer"
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
-	xreplication     = "replication"
+	xreplication     = "replication" // TODO: fix replication
 )
 
 type (
@@ -324,13 +324,6 @@ func getproxykeepalive() *proxyKeepaliveRunner {
 	return rr
 }
 
-func gettarget() *targetrunner {
-	r := ctx.rg.runmap[xtarget]
-	rr, ok := r.(*targetrunner)
-	cmn.Assert(ok)
-	return rr
-}
-
 func getmem2() *memsys.Mem2 {
 	r := ctx.rg.runmap[xmem]
 	rr, ok := r.(*memsys.Mem2)
@@ -345,6 +338,7 @@ func gettargetkeepalive() *targetKeepaliveRunner {
 	return rr
 }
 
+// TODO: fix replication
 func getreplicationrunner() *replicationRunner {
 	r := ctx.rg.runmap[xreplication]
 	rr, ok := r.(*replicationRunner)

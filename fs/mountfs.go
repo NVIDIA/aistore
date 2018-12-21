@@ -143,7 +143,7 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 // NewMountedFS returns initialized instance of MountedFS struct.
 func NewMountedFS() *MountedFS {
 	return &MountedFS{
-		fsIDs:        make(map[syscall.Fsid]string),
+		fsIDs:        make(map[syscall.Fsid]string, 10),
 		checkFsID:    true,
 		localBuckets: cmn.LocalBs,
 		cloudBuckets: cmn.CloudBs,
@@ -299,12 +299,12 @@ func (mfs *MountedFS) Get() (map[string]*MountpathInfo, map[string]*MountpathInf
 	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
 	disabled := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.disabled))
 	if available == nil {
-		tmp := make(map[string]*MountpathInfo, 0)
+		tmp := make(map[string]*MountpathInfo, 10)
 		available = &tmp
 	}
 
 	if disabled == nil {
-		tmp := make(map[string]*MountpathInfo, 0)
+		tmp := make(map[string]*MountpathInfo, 10)
 		disabled = &tmp
 	}
 

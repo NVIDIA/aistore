@@ -77,6 +77,7 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn strin
 	return
 }
 
+// TODO: this function is currently unused should be placed in `put`
 func (t *targetrunner) putObjectNextTier(nextTierURL, bucket, object string, body io.ReadCloser,
 	reopenBody func() (io.ReadCloser, error)) (errstr string, errcode int) {
 	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)

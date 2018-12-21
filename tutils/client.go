@@ -259,7 +259,7 @@ func GetWithMetrics(url, bucket string, keyname string, silent bool, validate bo
 		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
 		TargetConn:          tr.tsTargetConn.Sub(tr.tsRedirect),
 		Target:              tr.tsHTTPEnd.Sub(tr.tsTargetConn),
-		PostHTTP:            time.Now().Sub(tr.tsHTTPEnd),
+		PostHTTP:            time.Since(tr.tsHTTPEnd),
 		ProxyWroteHeader:    tr.tsProxyWroteHeaders.Sub(tr.tsProxyConn),
 		ProxyWroteRequest:   tr.tsProxyWroteRequest.Sub(tr.tsProxyWroteHeaders),
 		ProxyFirstResponse:  tr.tsProxyFirstResponse.Sub(tr.tsProxyWroteRequest),
@@ -430,7 +430,7 @@ func GetConfig(server string) (HTTPLatencies, error) {
 	emitError(resp, err, nil)
 	l := HTTPLatencies{
 		ProxyConn: tr.tsProxyConn.Sub(tr.tsBegin),
-		Proxy:     time.Now().Sub(tr.tsProxyConn),
+		Proxy:     time.Since(tr.tsProxyConn),
 	}
 	return l, err
 }
@@ -662,7 +662,7 @@ func PutObjsFromList(proxyURL, bucket, readerPath, readerType, objPath string, o
 	)
 	// if len(objList) < numworkers, only need as many workers as there are objects to be PUT
 	numworkers = cmn.Min(numworkers, len(objList))
-	sgls := make([]*memsys.SGL, numworkers, numworkers)
+	sgls := make([]*memsys.SGL, numworkers)
 
 	// need an SGL for each worker with its size being that of the original SGL
 	if sgl != nil {

@@ -217,7 +217,7 @@ func (a *authServ) httpUserPut(w http.ResponseWriter, r *http.Request) {
 	provider := apiItems[1]
 
 	b, err := ioutil.ReadAll(r.Body)
-	if len(b) == 0 {
+	if err != nil || len(b) == 0 {
 		cmn.InvalidHandlerWithMsg(w, r, "Invalid request")
 		return
 	}
