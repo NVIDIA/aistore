@@ -292,6 +292,7 @@ const (
 	Mountpaths = "mountpaths"
 
 	// dsort
+	Init    = "init"
 	Sort    = "sort"
 	Start   = "start"
 	Abort   = "abort"

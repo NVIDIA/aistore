@@ -38,6 +38,7 @@ var _ = Describe("ManagerGroup", func() {
 	Context("add", func() {
 		It("should add a manager without an error", func() {
 			m, err := mgrp.Add("uuid")
+			m.unlock()
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(m).ToNot(BeNil())
 			Expect(m.ManagerUUID).To(Equal("uuid"))
@@ -45,7 +46,8 @@ var _ = Describe("ManagerGroup", func() {
 		})
 
 		It("should not add a manager when other manager with same uuid already exists", func() {
-			_, err := mgrp.Add("uuid")
+			m, err := mgrp.Add("uuid")
+			m.unlock()
 			Expect(err).ShouldNot(HaveOccurred())
 			_, err = mgrp.Add("uuid")
 			Expect(err).Should(HaveOccurred())
@@ -60,7 +62,8 @@ var _ = Describe("ManagerGroup", func() {
 		})
 
 		It("should return manager when manager with given uuid exists", func() {
-			_, err := mgrp.Add("uuid")
+			m, err := mgrp.Add("uuid")
+			m.unlock()
 			Expect(err).ShouldNot(HaveOccurred())
 			m, exists := mgrp.Get("uuid")
 			Expect(exists).To(BeTrue())
@@ -77,6 +80,7 @@ var _ = Describe("ManagerGroup", func() {
 			m, err := mgrp.Add("uuid")
 			rs := &ParsedRequestSpec{Extension: extTar, Algorithm: &SortAlgorithm{Kind: SortKindNone}}
 			m.init(rs)
+			m.unlock()
 			m.setInProgressTo(false)
 
 			Expect(err).ShouldNot(HaveOccurred())

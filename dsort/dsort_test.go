@@ -147,6 +147,7 @@ func newTargetMock(daemonID string, smap *testSmap) *targetMock {
 	Expect(err).ShouldNot(HaveOccurred())
 	ctx.node = smap.Get().Tmap[daemonID]
 	dsortManager.init(rs)
+	dsortManager.unlock()
 
 	net := smap.GetTarget(daemonID).PublicNet
 	return &targetMock{

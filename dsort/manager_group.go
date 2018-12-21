@@ -1,9 +1,7 @@
+// Package dsort provides APIs for distributed archive file shuffling.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dsort provides APIs for distributed archive file shuffling.
 package dsort
 
 import (
@@ -39,6 +37,7 @@ func NewManagerGroup() *ManagerGroup {
 }
 
 // Add new, non-initialized manager with given managerUUID to manager group.
+// Returned manager is locked, it's caller responsibility to unlock it.
 // Returns error when manager with specified managerUUID already exists.
 func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 	mg.mtx.Lock()
@@ -50,6 +49,7 @@ func (mg *ManagerGroup) Add(managerUUID string) (*Manager, error) {
 		ManagerUUID: managerUUID,
 	}
 	mg.managers[managerUUID] = manager
+	manager.lock()
 	return manager, nil
 }
 

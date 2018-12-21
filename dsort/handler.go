@@ -84,21 +84,46 @@ func proxyStartSortHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	glog.V(4).Infof("broadcasting sort request to all targets: %s", managerUUID)
+	checkResponses := func(responses []response) error {
+		for _, resp := range responses {
+			if resp.err != nil {
+				glog.Errorf("[%s] start sort request failed to be broadcast, err: %s", managerUUID, resp.err.Error())
 
-	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start, managerUUID)
-	responses := broadcast(http.MethodPost, path, b, ctx.smap.Get().Tmap)
-	for _, resp := range responses {
-		if resp.err != nil {
-			glog.Errorf("start sort request failed to be broadcast: %s, err: %s", managerUUID, resp.err.Error())
+				path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
+				broadcast(http.MethodDelete, path, nil, ctx.smap.Get().Tmap)
 
-			path = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Abort, managerUUID)
-			broadcast(http.MethodDelete, path, nil, ctx.smap.Get().Tmap)
-
-			s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
-			cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
-			return
+				s := fmt.Sprintf("failed to execute start sort, err: %s, status: %d", resp.err.Error(), resp.statusCode)
+				cmn.InvalidHandlerWithMsg(w, r, s, http.StatusInternalServerError)
+				return resp.err
+			}
 		}
+
+		return nil
+	}
+
+	// Starting dSort has two phases:
+	// 1. Initialization, ensures that all targets successfully initialized all
+	//    structures and are ready to receive requests: start, metrics, abort
+	// 2. Start, where we request targets to start the dSort.
+	//
+	// This prevents bugs where one targets would just start dSort (other did
+	// not have yet initialized) and starts to communicate with other targets
+	// but because the are not ready with their initialization will not recognize
+	// given dSort job. Also bug where we could send abort (which triggers cleanup)
+	// to not yet initialized target.
+
+	glog.V(4).Infof("[%s] broadcasting init request to all targets", managerUUID)
+	path := cmn.URLPath(cmn.Version, cmn.Sort, cmn.Init, managerUUID)
+	responses := broadcast(http.MethodPost, path, b, ctx.smap.Get().Tmap)
+	if err := checkResponses(responses); err != nil {
+		return
+	}
+
+	glog.V(4).Infof("[%s] broadcasting start request to all targets", managerUUID)
+	path = cmn.URLPath(cmn.Version, cmn.Sort, cmn.Start, managerUUID)
+	responses = broadcast(http.MethodPost, path, nil, ctx.smap.Get().Tmap)
+	if err := checkResponses(responses); err != nil {
+		return
 	}
 
 	w.Write([]byte(managerUUID))
@@ -171,6 +196,8 @@ func SortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch apiItems[0] {
+	case cmn.Init:
+		initSortHandler(w, r)
 	case cmn.Start:
 		startSortHandler(w, r)
 	case cmn.Records:
@@ -186,18 +213,15 @@ func SortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// startSortHandler is the handler called for the HTTP endpoint /v1/sort/start.
-// There are three major phases to this function:
-//
-// 1. extractLocalShards
-// 2. participateInRecordDistribution
-// 3. distributeShardRecords
-func startSortHandler(w http.ResponseWriter, r *http.Request) {
+// initSortHandler is the handler called for the HTTP endpoint /v1/sort/init.
+// It is responsible for initializing the dSort manager so it will be ready
+// to start receiving requests.
+func initSortHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid method: %s", r.Method))
 		return
 	}
-	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Start)
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Init)
 	if err != nil {
 		return
 	}
@@ -218,8 +242,34 @@ func startSortHandler(w http.ResponseWriter, r *http.Request) {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	defer dsortManager.unlock()
 	if err = dsortManager.init(rs); err != nil {
 		cmn.InvalidHandlerWithMsg(w, r, err.Error())
+		return
+	}
+}
+
+// startSortHandler is the handler called for the HTTP endpoint /v1/sort/start.
+// There are three major phases to this function:
+//
+// 1. extractLocalShards
+// 2. participateInRecordDistribution
+// 3. distributeShardRecords
+func startSortHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		cmn.InvalidHandlerWithMsg(w, r, fmt.Sprintf("invalid method: %s", r.Method))
+		return
+	}
+	apiItems, err := checkRESTItems(w, r, 1, cmn.Version, cmn.Sort, cmn.Start)
+	if err != nil {
+		return
+	}
+
+	managerUUID := apiItems[0]
+	dsortManager, exists := Managers.Get(managerUUID)
+	if !exists {
+		s := fmt.Sprintf("invalid request: manager with uuid %s does not exist", managerUUID)
+		cmn.InvalidHandlerWithMsg(w, r, s, http.StatusNotFound)
 		return
 	}
 

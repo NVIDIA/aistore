@@ -206,11 +206,10 @@ func RegisterNode(smap cluster.Sowner, snode *cluster.Snode) {
 	ctx.node = snode
 }
 
-// init cleans up previous state in the Manager and initializes all necessary fields.
+// init initializes all necessary fields.
+//
+// NOTE: should be done under lock.
 func (m *Manager) init(rs *ParsedRequestSpec) error {
-	m.lock()
-	defer m.unlock()
-
 	// Initialize memsys and register dsort file type but only at the first
 	// time some manager will be initialized.
 	once.Do(initOnce)
@@ -233,6 +232,8 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 		Transport: &http.Transport{
 			// defaults
 			Proxy: defaultTransport.Proxy,
+			// Such long timeouts are dictated by the fact that unmarshaling
+			// records can tak a long time, even couple of minutes.
 			DialContext: (&net.Dialer{
 				Timeout:   300 * time.Second,
 				KeepAlive: 300 * time.Second,
