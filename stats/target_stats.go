@@ -6,7 +6,6 @@
 package stats
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -66,18 +65,13 @@ type (
 		Riostat      *ios.IostatRunner      `json:"-"`
 		Core         *targetCoreStats       `json:"core"`
 		Capacity     map[string]*fscapacity `json:"capacity"`
-		// iostat
-		CPUidle string                   `json:"cpuidle"`
-		Disk    map[string]cmn.SimpleKVs `json:"disk"`
 		// omitempty
 		timeUpdatedCapacity time.Time
 		timeCheckedLogSizes time.Time
 	}
 	copyRunner struct {
-		Tracker  copyTracker              `json:"core"`
-		Capacity map[string]*fscapacity   `json:"capacity"`
-		CPUidle  string                   `json:"cpuidle"`
-		Disk     map[string]cmn.SimpleKVs `json:"disk"`
+		Tracker  copyTracker            `json:"core"`
+		Capacity map[string]*fscapacity `json:"capacity"`
 	}
 )
 
@@ -113,7 +107,6 @@ func (r *Trunner) Init() {
 	r.Core = &targetCoreStats{}
 	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
 
-	r.Disk = make(map[string]cmn.SimpleKVs, 8)
 	r.UpdateCapacity()
 }
 
@@ -121,7 +114,7 @@ func (r *Trunner) GetWhatStats() ([]byte, error) {
 	tracker := make(copyTracker, 48)
 	r.Core.copyCumulative(tracker)
 
-	crunner := &copyRunner{Tracker: tracker, Capacity: r.Capacity, Disk: r.Disk}
+	crunner := &copyRunner{Tracker: tracker, Capacity: r.Capacity}
 	return jsoniter.Marshal(crunner)
 }
 
@@ -151,32 +144,7 @@ func (r *Trunner) log() (runlru bool) {
 		}
 	}
 
-	// 3. iostat metrics
-	r.Riostat.RLock()
-	r.CPUidle = r.Riostat.CPUidle
-	for dev, iometrics := range r.Riostat.Disk {
-		r.Disk[dev] = iometrics
-		if r.Riostat.IsZeroUtil(dev) {
-			continue // skip zeros
-		}
-		b, err := jsoniter.Marshal(r.Disk[dev])
-		if err == nil {
-			lines = append(lines, dev+": "+string(b))
-		}
-
-		stats := make([]metric, len(iometrics))
-		idx := 0
-		for k, v := range iometrics {
-			stats[idx] = metric{statsd.Gauge, k, v}
-			idx++
-		}
-		r.Core.StatsdC.Send("iostat_"+dev, stats...)
-	}
-	r.Riostat.RUnlock()
-
-	lines = append(lines, fmt.Sprintf("CPU idle: %s%%", r.CPUidle))
-
-	// 4. log
+	// 3. log
 	for _, ln := range lines {
 		glog.Infoln(ln)
 	}

@@ -175,9 +175,11 @@ type LogConf struct {
 
 type PeriodConf struct {
 	StatsTimeStr     string `json:"stats_time"`
+	IostatTimeStr    string `json:"iostat_time"`
 	RetrySyncTimeStr string `json:"retry_sync_time"`
 	// omitempty
 	StatsTime     time.Duration `json:"-"`
+	IostatTime    time.Duration `json:"-"`
 	RetrySyncTime time.Duration `json:"-"`
 }
 
@@ -426,30 +428,31 @@ func ValidateVersion(version string) error {
 }
 
 func validateConfig(config *Config) (err error) {
+	const badfmt = "Bad %q format, err: %v"
 	// durations
 	if config.Periodic.StatsTime, err = time.ParseDuration(config.Periodic.StatsTimeStr); err != nil {
-		return fmt.Errorf("Bad stats-time format %s, err: %v", config.Periodic.StatsTimeStr, err)
+		return fmt.Errorf(badfmt, config.Periodic.StatsTimeStr, err)
 	}
-	if int(config.Periodic.StatsTime/time.Second) <= 0 {
-		return fmt.Errorf("stats-time refresh period is too low (should be higher than 1 second")
+	if config.Periodic.IostatTime, err = time.ParseDuration(config.Periodic.IostatTimeStr); err != nil {
+		return fmt.Errorf(badfmt, config.Periodic.IostatTimeStr, err)
 	}
 	if config.Periodic.RetrySyncTime, err = time.ParseDuration(config.Periodic.RetrySyncTimeStr); err != nil {
-		return fmt.Errorf("Bad retry_sync_time format %s, err: %v", config.Periodic.RetrySyncTimeStr, err)
+		return fmt.Errorf(badfmt, config.Periodic.RetrySyncTimeStr, err)
 	}
 	if config.Timeout.Default, err = time.ParseDuration(config.Timeout.DefaultStr); err != nil {
-		return fmt.Errorf("Bad Timeout default format %s, err: %v", config.Timeout.DefaultStr, err)
+		return fmt.Errorf(badfmt, config.Timeout.DefaultStr, err)
 	}
 	if config.Timeout.DefaultLong, err = time.ParseDuration(config.Timeout.DefaultLongStr); err != nil {
-		return fmt.Errorf("Bad Timeout default_long format %s, err %v", config.Timeout.DefaultLongStr, err)
+		return fmt.Errorf(badfmt, config.Timeout.DefaultLongStr, err)
 	}
 	if config.LRU.DontEvictTime, err = time.ParseDuration(config.LRU.DontEvictTimeStr); err != nil {
-		return fmt.Errorf("Bad dont_evict_time format %s, err: %v", config.LRU.DontEvictTimeStr, err)
+		return fmt.Errorf(badfmt, config.LRU.DontEvictTimeStr, err)
 	}
 	if config.LRU.CapacityUpdTime, err = time.ParseDuration(config.LRU.CapacityUpdTimeStr); err != nil {
-		return fmt.Errorf("Bad capacity_upd_time format %s, err: %v", config.LRU.CapacityUpdTimeStr, err)
+		return fmt.Errorf(badfmt, config.LRU.CapacityUpdTimeStr, err)
 	}
 	if config.Rebalance.DestRetryTime, err = time.ParseDuration(config.Rebalance.DestRetryTimeStr); err != nil {
-		return fmt.Errorf("Bad dest_retry_time format %s, err: %v", config.Rebalance.DestRetryTimeStr, err)
+		return fmt.Errorf(badfmt, config.Rebalance.DestRetryTimeStr, err)
 	}
 
 	hwm, lwm := config.LRU.HighWM, config.LRU.LowWM

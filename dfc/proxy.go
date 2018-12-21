@@ -2136,7 +2136,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 					method: http.MethodPost,
 					path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Register),
 				},
-				timeout: cmn.GCO.Get().Timeout.ProxyPing,
+				timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 			}
 			res := p.call(args)
 			if res.err != nil {
@@ -2302,7 +2302,7 @@ func (p *proxyrunner) httpcludel(w http.ResponseWriter, r *http.Request) {
 				method: http.MethodDelete,
 				path:   cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Unregister),
 			},
-			timeout: cmn.GCO.Get().Timeout.ProxyPing,
+			timeout: cmn.GCO.Get().Timeout.CplaneOperation,
 		}
 		res := p.call(args)
 		if res.err != nil {

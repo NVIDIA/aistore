@@ -14,7 +14,6 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/stats"
 )
 
@@ -45,7 +44,6 @@ const (
 
 type (
 	InitLRU struct {
-		Riostat     *ios.IostatRunner
 		Ratime      *atime.Runner
 		Xlru        cmn.Xact
 		Namelocker  cluster.NameLocker
@@ -120,10 +118,8 @@ func InitAndRun(ini *InitLRU) {
 
 func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bckTypeDir string, bislocal bool) *lructx {
 	throttler := &cluster.Throttle{
-		Riostat: ini.Riostat,
-		Path:    mpathInfo.Path,
-		FS:      mpathInfo.FileSystem,
-		Flag:    cluster.OnDiskUtil | cluster.OnFSUsed}
+		MpathInfo: mpathInfo,
+		Flag:      cluster.OnDiskUtil | cluster.OnFSUsed}
 	lctx := &lructx{
 		oldwork:     make([]*fileInfo, 0, 64),
 		ini:         *ini,

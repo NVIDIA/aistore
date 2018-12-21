@@ -17,6 +17,7 @@ cat > $CONFFILE <<EOL
 	},
 	"periodic": {
 		"stats_time":		"10s",
+		"iostat_time":		"2s",
 		"retry_sync_time":	"2s"
 	},
 	"timeout": {

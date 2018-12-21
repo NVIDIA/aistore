@@ -70,6 +70,20 @@ func MaxF64(a, b float64) float64 {
 	return b
 }
 
+func MinF32(a, b float32) float32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func MaxF32(a, b float32) float32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func DivCeil(a, b int64) int64 {
 	d, r := a/b, a%b
 	if r > 0 {

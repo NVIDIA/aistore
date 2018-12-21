@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/OneOfOne/xxhash"
@@ -50,7 +52,30 @@ const DoesNotExist = "does not exist"
 type (
 	StringSet map[string]struct{}
 	SimpleKVs map[string]string
+	PairF32   struct {
+		Prev float32
+		Curr float32
+	}
+	PairU32 struct {
+		Prev uint32
+		Curr uint32
+	}
 )
+
+func (upair *PairU32) Store(currval float32) {
+	nprev := atomic.LoadUint32(&upair.Curr)
+	atomic.StoreUint32(&upair.Prev, nprev)
+	curr := math.Float32bits(currval)
+	atomic.StoreUint32(&upair.Curr, curr)
+}
+
+func (upair *PairU32) Load() (fpair PairF32) {
+	prev := atomic.LoadUint32(&upair.Prev)
+	fpair.Prev = math.Float32frombits(prev)
+	curr := atomic.LoadUint32(&upair.Curr)
+	fpair.Curr = math.Float32frombits(curr)
+	return
+}
 
 func S2B(s string) (int64, error) {
 	if s == "" {

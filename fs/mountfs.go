@@ -65,6 +65,12 @@ type (
 		// atomic, only increasing counter to prevent name conflicts
 		// see: FastRemoveDir method
 		removeDirCounter uint64
+
+		// FileSystem utilization represented as
+		// utilizations and queue lengths of the underlying disks,
+		// where cmn.PairU32 structs atomically store the corresponding float32 bits
+		dutil cmn.PairU32 // prev and current %util
+		dquel cmn.PairU32 // prev and current queue length (iostat "avgqu-sz" or "aqu-sz")
 	}
 
 	// MountedFS holds all mountpaths for the target.
@@ -97,6 +103,10 @@ func MountpathAdd(p string) ChangeReq { return ChangeReq{Action: Add, Path: p} }
 func MountpathRem(p string) ChangeReq { return ChangeReq{Action: Remove, Path: p} }
 func MountpathEnb(p string) ChangeReq { return ChangeReq{Action: Enable, Path: p} }
 func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: p} }
+
+//
+// MountpathInfo
+//
 
 func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	cleanPath := filepath.Clean(path)
@@ -139,6 +149,18 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 
 	return nil
 }
+
+// GetIOStats returns the most recently updated previous/current (utilization, queue size) -
+// see related SetIOstats() below
+func (mi *MountpathInfo) GetIOstats() (dutil, dquel cmn.PairF32) {
+	dutil = (&mi.dutil).Load()
+	dquel = (&mi.dquel).Load()
+	return
+}
+
+//
+// MountedFS aka fs.Mountpaths
+//
 
 // NewMountedFS returns initialized instance of MountedFS struct.
 func NewMountedFS() *MountedFS {
@@ -312,9 +334,41 @@ func (mfs *MountedFS) Get() (map[string]*MountpathInfo, map[string]*MountpathInf
 }
 
 // DisableFsIDCheck disables fsid checking when adding new mountpath
-func (mfs *MountedFS) DisableFsIDCheck() {
-	mfs.checkFsID = false
+func (mfs *MountedFS) DisableFsIDCheck() { mfs.checkFsID = false }
+
+// builds fqn of directory for local buckets from mountpath
+func (mfs *MountedFS) MakePathLocal(basePath, contentType string) string {
+	return filepath.Join(basePath, contentType, mfs.localBuckets)
 }
+
+// builds fqn of directory for cloud buckets from mountpath
+func (mfs *MountedFS) MakePathCloud(basePath, contentType string) string {
+	return filepath.Join(basePath, contentType, mfs.cloudBuckets)
+}
+
+// SetIOstats is called via iostat runner's ReqStatsUpdate() interface
+// to fill-in the most recently updated utilizations and queue
+// lengths of the disks used by each respective mountpath (or, more precisely, each
+// corresponding filesystem)
+func (mfs *MountedFS) SetIOstats(dutil, dquel map[string]float32) {
+	available, _ := mfs.Get()
+	for mpath, mpathInfo := range available {
+		if f32, ok := dutil[mpath]; !ok {
+			glog.Errorf("Unexpected: mountpath %s does not exist", mpath)
+		} else {
+			pair := &mpathInfo.dutil
+			pair.Store(f32)
+		}
+		if f32, ok := dquel[mpath]; ok {
+			pair := &mpathInfo.dquel
+			pair.Store(f32)
+		}
+	}
+}
+
+//
+// private methods
+//
 
 func (mfs *MountedFS) updatePaths(available, disabled map[string]*MountpathInfo) {
 	atomic.StorePointer(&mfs.available, unsafe.Pointer(&available))
@@ -336,14 +390,4 @@ func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*M
 	}
 
 	return availableCopy, disabledCopy
-}
-
-// builds fqn of directory for local buckets from mountpath
-func (mfs *MountedFS) MakePathLocal(basePath, contentType string) string {
-	return filepath.Join(basePath, contentType, mfs.localBuckets)
-}
-
-// builds fqn of directory for cloud buckets from mountpath
-func (mfs *MountedFS) MakePathCloud(basePath, contentType string) string {
-	return filepath.Join(basePath, contentType, mfs.cloudBuckets)
 }

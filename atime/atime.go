@@ -18,8 +18,8 @@ import (
 //
 // The atime (access time) module provides atime.Runner - a long running task with the
 // purpose of updating object access times. The work is performed on a per local
-// filesystem bases, via mpathAtimeRunners (children). The atime.Runner's main responsibility
-// is to dispatch requests to the corresponding mpathAtimeRunner instance.
+// filesystem bases, via joggers (children). The atime.Runner's main responsibility
+// is to dispatch requests to the corresponding jogger instance.
 //
 // API exposed to the rest of the code includes the following operations:
 //
@@ -28,24 +28,24 @@ import (
 //   * Touch    - to request an access time update for a specified object
 //   * Atime    - to request the most recent access time of a given object
 // The Touch and Atime requests are added to the request queue
-// and then are dispatched to the mpathAtimeRunner for a given filesystem.
+// and then are dispatched to the jogger for a given filesystem.
 //
 // Note: atime.Runner assumes that object in question either belongs to a
 // bucket that has LRU enabled or LRU is enabled through the global config when bucket properties
 // are not present. Thus, it is the responsibility of the caller to ensure
 // that LRU is enabled. Although this check is not necessary for the Atime method (a zero-valued
-// Response will be returned because it will not exist in any mpathAtimeRunner's atimemap),
+// Response will be returned because it will not exist in any jogger's atimemap),
 // it is recommended to do this check.
 //
 // The remaining operations are private to the atime.Runner and used only internally.
 //
-// Each mpathAtimeRunner, which corresponds to a mountpath, has an access time map (in memory)
+// Each jogger, which corresponds to a mountpath, has an access time map (in memory)
 // that keeps track of object access times. Every so often atime.Runner
-// calls mpathAtimeRunners to flush access time maps.  Access times get flushed to
+// calls joggers to flush access time maps.  Access times get flushed to
 // the disk when the number of stored access times reaches a certain threshold and when:
 //   * disk utilization is low, or
 //   * access time map is filled over a certain point (watermark)
-// This way, the atime.Runner and mpathAtimeRunner operation will impact the
+// This way, the atime.Runner and jogger operation will impact the
 // datapath as little as possible.  As such, atime.Runner can be thought of as an
 // extension of the LRU, or any alternative
 // caching mechanism that can be implemented in the future.
@@ -62,11 +62,9 @@ import (
 
 //================================= Constants ==============================================
 const (
-	setChSize                = 256
-	mpathRunnersMapSize      = 8
-	atimeCacheFlushThreshold = 4 * 1024
-	atimeLWM                 = 60
-	atimeHWM                 = 80
+	chanCap = 256
+	LowWM   = 60
+	HighWM  = 80
 )
 
 const (
@@ -84,21 +82,21 @@ var atimeSyncTime = time.Minute * 3
 type (
 	// atime.Runner gets and sets access times for a given object identified by its fqn.
 	// atime.Runner implements the fsprunner interface where each mountpath has its own
-	// mpathAtimeRunner that manages requests on a per local filesystem basis.
-	// atime.Runner will also periodically call its mpathAtimeRunners
+	// jogger that manages requests on a per local filesystem basis.
+	// atime.Runner will also periodically call its joggers
 	// to flush files (read description above).
 	Runner struct {
 		cmn.NamedID
-		requestCh    chan *atimeRequest // Requests for file access times or set access times
-		stopCh       chan struct{}      // Control channel for stopping
-		mpathReqCh   chan fs.ChangeReq
-		mpathRunners map[string]*mpathAtimeRunner // mpath -> mpathAtimeRunner
-		mountpaths   *fs.MountedFS
-		riostat      *ios.IostatRunner
+		requestCh  chan *atimeRequest // Requests for file access times or set access times
+		stopCh     chan struct{}      // Control channel for stopping
+		mpathReqCh chan fs.ChangeReq
+		joggers    map[string]*jogger // mpath -> jogger
+		mountpaths *fs.MountedFS
+		riostat    *ios.IostatRunner
 	}
 	// The Response object is used to return the access time of
 	// an object in the atimemap and whether it actually existed in
-	// the atimemap of the mpathAtimeRunner it belongs to.
+	// the atimemap of the jogger it belongs to.
 	Response struct {
 		Ok         bool
 		AccessTime time.Time
@@ -109,25 +107,24 @@ type (
 // private types
 //
 type (
-	// Each mpathAtimeRunner corresponds to a mpath. All atime request for any file belonging
-	// to this mpath are handled by mpathAtimeRunner. This includes requests for getting,
+	// Each jogger corresponds to a mpath. All atime request for any file belonging
+	// to this mpath are handled by jogger. This includes requests for getting,
 	// setting and flushing atimes.
-	mpathAtimeRunner struct {
-		mpath    string
-		fs       string
-		stopCh   chan struct{}        // Control channel for stopping
-		atimemap map[string]time.Time // maps fqn:atime key-value pairs
-		getCh    chan *atimeRequest   // Requests for file access times
-		setCh    chan *atimeRequest   // Requests to set access times
-		flushCh  chan int             // Request to flush the file system
-		riostat  *ios.IostatRunner
+	jogger struct {
+		mpathInfo *fs.MountpathInfo
+		stopCh    chan struct{}        // Control channel for stopping
+		atimemap  map[string]time.Time // maps fqn:atime key-value pairs
+		getCh     chan *atimeRequest   // Requests for file access times
+		setCh     chan *atimeRequest   // Requests to set access times
+		flushCh   chan int             // Request to flush the file system
+		riostat   *ios.IostatRunner
 	}
 
 	// Each request to atime.Runner via its API is encapsulated in an
 	// atimeRequest object. The responseCh is used to ensure each atime request gets its
 	// corresponding response.
 	// The accessTime field is used by Touch to set the atime of the requested object.
-	// The mpath field is used by atime.Runner to determine which mpathAtimeRunner to
+	// The mpath field is used by atime.Runner to determine which jogger to
 	// dispatch the request to.
 	atimeRequest struct {
 		fqn         string
@@ -152,22 +149,22 @@ func (r *Runner) ReqDisableMountpath(mpath string) {}
 
 func NewRunner(mountpaths *fs.MountedFS, riostat *ios.IostatRunner) (r *Runner) {
 	return &Runner{
-		stopCh:       make(chan struct{}, 4),
-		mpathReqCh:   make(chan fs.ChangeReq, 1),
-		mpathRunners: make(map[string]*mpathAtimeRunner, mpathRunnersMapSize),
-		mountpaths:   mountpaths,
-		requestCh:    make(chan *atimeRequest),
-		riostat:      riostat,
+		stopCh:     make(chan struct{}, 4),
+		mpathReqCh: make(chan fs.ChangeReq, 1),
+		joggers:    make(map[string]*jogger, 8),
+		mountpaths: mountpaths,
+		requestCh:  make(chan *atimeRequest),
+		riostat:    riostat,
 	}
 }
 
 func (r *Runner) init() {
 	availablePaths, disabledPaths := r.mountpaths.Get()
 	for mpath := range availablePaths {
-		r.addMpathAtimeRunner(mpath)
+		r.addJogger(mpath)
 	}
 	for mpath := range disabledPaths {
-		r.addMpathAtimeRunner(mpath)
+		r.addJogger(mpath)
 	}
 }
 
@@ -179,23 +176,23 @@ func (r *Runner) Run() error {
 	for {
 		select {
 		case <-ticker.C:
-			for _, runner := range r.mpathRunners {
+			for _, runner := range r.joggers {
 				runner.flush()
 			}
 		case mpathRequest := <-r.mpathReqCh:
 			switch mpathRequest.Action {
 			case fs.Add:
-				r.addMpathAtimeRunner(mpathRequest.Path)
+				r.addJogger(mpathRequest.Path)
 			case fs.Remove:
-				r.removeMpathAtimeRunner(mpathRequest.Path)
+				r.removeJogger(mpathRequest.Path)
 			}
 		case request := <-r.requestCh:
-			mpathRunner, ok := r.mpathRunners[request.mpath]
+			jogger, ok := r.joggers[request.mpath]
 			if ok {
 				if request.requestType == atimeTouch {
-					mpathRunner.setCh <- request
+					jogger.setCh <- request
 				} else {
-					mpathRunner.getCh <- request
+					jogger.getCh <- request
 				}
 			} else if request.requestType == atimeGet {
 				// invalid mpath so return a nil time for atime request
@@ -203,8 +200,8 @@ func (r *Runner) Run() error {
 			}
 		case <-r.stopCh:
 			ticker.Stop() // NOTE: not flushing cached atimes
-			for _, runner := range r.mpathRunners {
-				runner.stop()
+			for _, jogger := range r.joggers {
+				jogger.stop()
 			}
 			return nil
 		}
@@ -318,8 +315,8 @@ func (r *Runner) FormatAtime(fqn string, respCh chan *Response, useCache bool, f
 // private methods
 //
 
-func (r *Runner) addMpathAtimeRunner(mpath string) {
-	if _, ok := r.mpathRunners[mpath]; ok {
+func (r *Runner) addJogger(mpath string) {
+	if _, ok := r.joggers[mpath]; ok {
 		glog.Warningf("Attempt to add already existing mountpath %q", mpath)
 		return
 	}
@@ -329,136 +326,122 @@ func (r *Runner) addMpathAtimeRunner(mpath string) {
 		return
 	}
 
-	r.mpathRunners[mpath] = r.newMpathAtimeRunner(mpath, mpathInfo.FileSystem, r.riostat)
-	go r.mpathRunners[mpath].run()
+	r.joggers[mpath] = r.newJogger(mpathInfo, r.riostat)
+	go r.joggers[mpath].run()
 }
 
-func (r *Runner) removeMpathAtimeRunner(mpath string) {
-	mpathRunner, ok := r.mpathRunners[mpath]
+func (r *Runner) removeJogger(mpath string) {
+	jogger, ok := r.joggers[mpath]
 	if !ok {
 		glog.Errorf("Invalid mountpath %q", mpath)
 		return
 	}
-	mpathRunner.stop()
-	delete(r.mpathRunners, mpath)
+	jogger.stop()
+	delete(r.joggers, mpath)
 }
 
-//================================= mpathAtimeRunner ===========================================
+//================================= jogger ===========================================
 
-func (r *Runner) newMpathAtimeRunner(mpath, fs string, riostat *ios.IostatRunner) *mpathAtimeRunner {
-	return &mpathAtimeRunner{
-		mpath:    mpath,
-		fs:       fs,
-		stopCh:   make(chan struct{}, 1),
-		atimemap: make(map[string]time.Time),
-		getCh:    make(chan *atimeRequest),
-		setCh:    make(chan *atimeRequest, setChSize),
-		flushCh:  make(chan int),
-		riostat:  riostat,
+func (r *Runner) newJogger(mpathInfo *fs.MountpathInfo, riostat *ios.IostatRunner) *jogger {
+	return &jogger{
+		mpathInfo: mpathInfo,
+		stopCh:    make(chan struct{}, 1),
+		atimemap:  make(map[string]time.Time),
+		getCh:     make(chan *atimeRequest),
+		setCh:     make(chan *atimeRequest, chanCap),
+		flushCh:   make(chan int),
+		riostat:   riostat,
 	}
 }
 
-func (m *mpathAtimeRunner) run() {
+func (j *jogger) run() {
 	for {
 		select {
-		case request := <-m.getCh:
-			accessTime, ok := m.atimemap[request.fqn]
+		case request := <-j.getCh:
+			accessTime, ok := j.atimemap[request.fqn]
 			request.responseCh <- &Response{ok, accessTime}
-		case request := <-m.setCh:
-			m.atimemap[request.fqn] = request.accessTime
-		case numToFlush := <-m.flushCh:
-			m.handleFlush(numToFlush)
-		case <-m.stopCh:
+		case request := <-j.setCh:
+			j.atimemap[request.fqn] = request.accessTime
+		case numToFlush := <-j.flushCh:
+			j.handleFlush(numToFlush)
+		case <-j.stopCh:
 			return
 		}
 	}
 }
 
-func (m *mpathAtimeRunner) stop() {
-	glog.Infof("Stopping mpathAtimeRunner for mpath: %s", m.mpath)
-	m.stopCh <- struct{}{}
-	close(m.stopCh)
+func (j *jogger) stop() {
+	glog.Infof("Stopping jogger [%s]", j.mpathInfo.Path)
+	j.stopCh <- struct{}{}
+	close(j.stopCh)
 }
 
-// getNumberItemsToFlush estimates the number of timestamps that must be flushed
-// the atime map, by taking into account the max utilitization of the corresponding
-// local mpath (or, more exactly, the corresponding local mpath's disks).
-func (m *mpathAtimeRunner) getNumberItemsToFlush() (n int) {
-	atimeMapSize := len(m.atimemap)
-	if atimeMapSize <= atimeCacheFlushThreshold {
-		return
-	}
-	max := cmn.GCO.Get().LRU.AtimeCacheMax
-	filling := cmn.MinU64(100, uint64(atimeMapSize)*100/max)
-
-	maxDiskUtil := float32(-1)
-	util, ok := m.riostat.MaxUtilFS(m.fs)
-	if ok {
-		maxDiskUtil = util
-	}
-
+// numToFlush estimates the number of timestamps that must be flushed
+func (j *jogger) numToFlush() (n int) {
+	curlen := len(j.atimemap)
+	max := cmn.MaxU64(cmn.GCO.Get().LRU.AtimeCacheMax, 1)
+	pct := cmn.MinU64(100, uint64(curlen)*100/max) // curlen as %%
+	low := int(max * LowWM / 100)
 	switch {
-	case maxDiskUtil >= 0 && maxDiskUtil < 50: // disk is idle so we can utilize it a bit
-		n = atimeMapSize / 4
-	case filling == 100: // max capacity reached - flushing a great number of items is required
-		n = atimeMapSize / 2
-	case filling > atimeHWM: // atime map capacity at high watermark
-		n = atimeMapSize / 4
-	case filling > atimeLWM: // low watermark => weighted formula
-		f := float64(filling-atimeLWM) / float64(atimeHWM-atimeLWM) * float64(atimeMapSize)
-		n = int(f) / 4
+	case pct > HighWM: // atime map capacity at high watermark
+		n = curlen - low
+	case pct > LowWM: // low watermark => weighted formula
+		f := float32(pct-LowWM) / float32(HighWM-LowWM) * float32(curlen)
+		n = int(float32(curlen-low) * f)
+	default:
+		// TODO: keep flushing in a loop while checking the current util...
+		dutil, _ := j.mpathInfo.GetIOstats()
+		if dutil.Curr >= 0 && dutil.Curr < 20 {
+			n = curlen / 4
+		}
 	}
-
 	return
 }
 
 // Flush accepts an optional paramter to set the number of items to flush for testing purposes.
-func (m *mpathAtimeRunner) flush(numToFlush ...int) {
+func (j *jogger) flush(numToFlush ...int) {
 	n := 0
 	if len(numToFlush) == 1 {
 		n = numToFlush[0]
 	}
-	m.flushCh <- n
+	j.flushCh <- n
 }
 
 // handleFlush tries to change access and modification time for at most n files in
 // the atime map, and removes them from the map.
-func (m *mpathAtimeRunner) handleFlush(n int) {
+func (j *jogger) handleFlush(n int) {
 	var (
 		i     int
 		mtime time.Time
 	)
 	if n == 0 {
-		n = m.getNumberItemsToFlush()
+		n = j.numToFlush()
 	}
 	if n <= 0 {
 		return
 	}
-	for fqn, atime := range m.atimemap {
+	for fqn, atime := range j.atimemap {
 		finfo, err := os.Stat(fqn)
 		if err != nil {
 			if os.IsNotExist(err) {
-				delete(m.atimemap, fqn)
+				delete(j.atimemap, fqn)
 				i++
 			} else {
-				glog.Warningf("failing to touch %s, err: %v", fqn, err)
+				glog.Warningf("Failed to touch %s, err: %v", fqn, err)
 			}
 			goto cont
 		}
 		mtime = finfo.ModTime()
 		if err = os.Chtimes(fqn, atime, mtime); err != nil {
 			if os.IsNotExist(err) {
-				delete(m.atimemap, fqn)
+				delete(j.atimemap, fqn)
 				i++
 			} else {
-				glog.Warningf("can't touch %s, err: %v", fqn, err) // FIXME: carry on forever?
+				glog.Warningf("Can't touch %s, err: %v", fqn, err) // FIXME: carry on forever?
 			}
 		} else {
-			delete(m.atimemap, fqn)
+			delete(j.atimemap, fqn)
 			i++
-			if glog.V(4) {
-				glog.Infof("touch %s at %v", fqn, atime)
-			}
 		}
 	cont:
 		if i >= n {

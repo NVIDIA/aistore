@@ -7,12 +7,10 @@ package ios
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/json-iterator/go"
@@ -20,32 +18,6 @@ import (
 
 func init() {
 	fs.Mountpaths = fs.NewMountedFS()
-}
-
-func TestGetFSDiskUtil(t *testing.T) {
-	if err := CheckIostatVersion(); err != nil {
-		t.Skip("iostat version is not okay.")
-	}
-
-	tempRoot := "/tmp"
-	fs.Mountpaths = fs.NewMountedFS()
-	fs.Mountpaths.Add(tempRoot)
-
-	updateTestConfig(time.Second)
-	riostat := NewIostatRunner(fs.Mountpaths)
-
-	go riostat.Run()
-
-	time.Sleep(50 * time.Millisecond)
-	percentage, ok := riostat.diskUtilFromFQN(tempRoot + "/test")
-	if !ok {
-		t.Error("Unable to retrieve disk utilization for File System!")
-	}
-	if percentage < 0 && percentage > 100 {
-		t.Errorf("Invalid FS disk utilization percentage [%f].", percentage)
-	}
-	glog.Infof("Disk utilization fetched. Value [%f]", percentage)
-	riostat.Stop(fmt.Errorf("test"))
 }
 
 func TestGetDiskFromFileSystem(t *testing.T) {
@@ -132,55 +104,6 @@ func TestMultipleMountPathsOnSameDisk(t *testing.T) {
 	}
 	if _, ok := disks["xvda"]; !ok {
 		t.Errorf("Expected disk [xvda] not returned. Disks: [%v]", disks)
-	}
-}
-
-func TestGetMaxUtil(t *testing.T) {
-	tempRoot := "/tmp"
-	fs.Mountpaths.Add(tempRoot)
-
-	updateTestConfig(time.Second)
-	riostat := NewIostatRunner(fs.Mountpaths)
-
-	riostat.Disk = make(map[string]cmn.SimpleKVs, 2)
-	disks := make(cmn.StringSet)
-	disk1 := "disk1"
-	disks[disk1] = struct{}{}
-	riostat.Disk[disk1] = make(cmn.SimpleKVs, 1)
-	riostat.Disk[disk1]["%util"] = "23.2"
-	util := maxUtilDisks(riostat.Disk, disks)
-	if math.Abs(23.2-util) > 0.0001 {
-		t.Errorf("Expected: 23.2. Actual: %f", util)
-	}
-	disk2 := "disk2"
-	riostat.Disk[disk2] = make(cmn.SimpleKVs, 1)
-	riostat.Disk[disk2]["%util"] = "25.9"
-	disks[disk2] = struct{}{}
-	util = maxUtilDisks(riostat.Disk, disks)
-	if math.Abs(25.9-util) > 0.0001 {
-		t.Errorf("Expected: 25.9. Actual: %f", util)
-	}
-	delete(disks, disk2)
-	util = maxUtilDisks(riostat.Disk, disks)
-	if math.Abs(23.2-util) > 0.0001 {
-		t.Errorf("Expected: 23.2. Actual: %f", util)
-	}
-}
-
-func TestGetFSDiskUtilizationInvalid(t *testing.T) {
-	tempRoot := "/tmp"
-	fs.Mountpaths.Add(tempRoot)
-
-	updateTestConfig(time.Second)
-	riostat := NewIostatRunner(fs.Mountpaths)
-
-	_, ok := riostat.diskUtilFromFQN("test")
-	if ok {
-		t.Errorf("Expected to fail since no file system.")
-	}
-	_, ok = riostat.diskUtilFromFQN("/tmp")
-	if ok {
-		t.Errorf("Expected to fail since no file system to disk mapping.")
 	}
 }
 
@@ -365,8 +288,7 @@ func TestLsblk(t *testing.T) {
 		if tst.diskCnt != 0 {
 			for _, disk := range tst.diskNames {
 				if _, ok := disks[disk]; !ok {
-					t.Errorf("Disk %s is not detected for device %s (disk list %v)",
-						disk, tst.dev, disks)
+					t.Errorf("%s is not detected for device %s (%v)", disk, tst.dev, disks)
 				}
 			}
 		}
@@ -376,5 +298,6 @@ func TestLsblk(t *testing.T) {
 func updateTestConfig(d time.Duration) {
 	config := cmn.GCO.BeginUpdate()
 	config.Periodic.StatsTime = d
+	config.Periodic.IostatTime = time.Second
 	cmn.GCO.CommitUpdate(config)
 }

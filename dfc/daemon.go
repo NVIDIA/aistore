@@ -255,7 +255,7 @@ func dfcinit() {
 			}
 		}
 
-		iostat := ios.NewIostatRunner(fs.Mountpaths)
+		iostat := ios.NewIostatRunner()
 		ctx.rg.add(iostat, xiostat)
 		t.fsprg.Reg(iostat)
 		ts.Riostat = iostat

@@ -529,7 +529,16 @@ where the fields are defined as follows:
 	line             The line number
 	msg              The user-supplied message
 */
+
+// selected filenames (and their line numbers) that we don't want to clutter the logs
+var redactFnames = map[string]int{
+	"target_stats.go": 0,
+	"proxy_stats.go":  0,
+	"log_iostat.go":   0,
+}
+
 func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {
+	var redact bool
 	_, file, line, ok := runtime.Caller(3 + depth)
 	if !ok {
 		file = "???"
@@ -539,12 +548,13 @@ func (l *loggingT) header(s severity, depth int) (*buffer, string, int) {
 		if slash >= 0 {
 			file = file[slash+1:]
 		}
+		_, redact = redactFnames[file]
 	}
-	return l.formatHeader(s, file, line), file, line
+	return l.formatHeader(s, file, line, redact), file, line
 }
 
 // formatHeader formats a log header using the provided file name and line number.
-func (l *loggingT) formatHeader(s severity, file string, line int) *buffer {
+func (l *loggingT) formatHeader(s severity, file string, line int, redact bool) *buffer {
 	now := timeNow()
 	if line < 0 {
 		line = 0 // not a real line number, but acceptable to someDigits
@@ -569,12 +579,15 @@ func (l *loggingT) formatHeader(s severity, file string, line int) *buffer {
 	buf.nDigits(6, 11, now.Nanosecond()/1000, '0')
 	buf.tmp[17] = ' '
 	buf.Write(buf.tmp[:18])
-	buf.WriteString(file)
-	buf.tmp[0] = ':'
-	n := buf.someDigits(1, line)
-	buf.tmp[n+1] = ']'
-	buf.tmp[n+2] = ' '
-	buf.Write(buf.tmp[:n+3])
+	if redact {
+		buf.WriteString("")
+	} else {
+		buf.WriteString(file)
+		buf.tmp[0] = ':'
+		n := buf.someDigits(1, line)
+		buf.tmp[n+1] = ' '
+		buf.Write(buf.tmp[:n+2])
+	}
 	return buf
 }
 
@@ -651,7 +664,7 @@ func (l *loggingT) printf(s severity, format string, args ...interface{}) {
 // alsoLogToStderr is true, the log message always appears on standard error; it
 // will also appear in the log file unless --logtostderr is set.
 func (l *loggingT) printWithFileLine(s severity, file string, line int, alsoToStderr bool, args ...interface{}) {
-	buf := l.formatHeader(s, file, line)
+	buf := l.formatHeader(s, file, line, false)
 	fmt.Fprint(buf, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')

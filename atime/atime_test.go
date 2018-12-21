@@ -6,7 +6,6 @@ package atime
 
 import (
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
@@ -16,9 +15,10 @@ import (
 )
 
 var (
-	riostat     *ios.IostatRunner
-	statsPeriod = time.Second
-	maxMapSize  = uint64(1000)
+	riostat        *ios.IostatRunner
+	statsPeriod    = time.Second
+	maxMapSize     = uint64(1000)
+	flushThreshold = 4 * 1024
 )
 
 func init() {
@@ -27,7 +27,7 @@ func init() {
 	fs.Mountpaths.Add(mpath)
 
 	updateTestConfig(statsPeriod)
-	riostat = ios.NewIostatRunner(fs.Mountpaths)
+	riostat = ios.NewIostatRunner()
 }
 
 func TestAtimerunnerStop(t *testing.T) {
@@ -66,7 +66,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 	timeBeforeTouch := time.Now()
 	atimer.Touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 1 {
+	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
 	}
 	atimeResponse := <-atimer.Atime(fileName)
@@ -92,7 +92,7 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 	defer func() { fs.Mountpaths = q }()
 
 	updateTestConfig(statsPeriod)
-	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	iostatr := ios.NewIostatRunner()
 
 	fileName := "/tmp/local/bck1/fqn1"
 
@@ -103,7 +103,7 @@ func TestAtimerunnerTouchNoMpath(t *testing.T) {
 
 	atimer.Touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 0 {
+	if len(atimer.joggers) != 0 {
 		t.Error("No files must be present in the map when the file's bucket has LRU Disabled")
 	}
 
@@ -117,9 +117,9 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 
 	fileName := "test"
 	atimer.Touch(fileName)
-	time.Sleep(50 * time.Millisecond) // wait for mpathAtimeRunner to process
-	if len(atimer.mpathRunners) != 1 {
-		t.Error("One mpathAtimeRunners should be present because one mountpath was added")
+	time.Sleep(50 * time.Millisecond) // wait for per-mpath jogger to process
+	if len(atimer.joggers) != 1 {
+		t.Error("One jogger should be present because one mountpath was added")
 	}
 
 	atimeResponse := <-atimer.Atime(fileName)
@@ -144,8 +144,8 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 
 	atimer.Touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 1 {
-		t.Error("One mpathAtimeRunner and one file must be present in the atimemap")
+	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
+		t.Error("One jogger and one file must be present in the atimemap")
 	}
 
 	atimeResponse := <-atimer.Atime(fileName)
@@ -186,7 +186,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 
 	atimer.Touch(fileName1)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 1 {
+	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
 	}
 	atimeResponse := <-atimer.Atime(fileName1)
@@ -196,7 +196,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 
 	atimer.Touch(fileName2)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 2 {
+	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 2 {
 		t.Error("Two files must be present in the map")
 	}
 
@@ -224,15 +224,15 @@ func TestAtimerunnerFlush(t *testing.T) {
 	atimer.Touch(fileName3)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 
-	atimer.mpathRunners[mpath].flush(1)
+	atimer.joggers[mpath].flush(1)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 2 {
+	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 2 {
 		t.Error("Invalid number of files in atimerunner")
 	}
 
-	atimer.mpathRunners[mpath].flush(2)
+	atimer.joggers[mpath].flush(2)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.mpathRunners) != 1 || len(atimer.mpathRunners[mpath].atimemap) != 0 {
+	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 0 {
 		t.Error("Invalid number of files in atimerunner")
 	}
 
@@ -262,217 +262,9 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	atimer.Touch(fileName2)
 	time.Sleep(time.Millisecond) // wait for runner to process
 
-	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
+	n := atimer.joggers[mpath].numToFlush()
 	if n != 0 {
 		t.Error("number items to flush should be 0 when capacity not achieved")
-	}
-}
-
-func TestAtimerunnerGetNumberItemsToFlushDiskIdle(t *testing.T) {
-	mpath := "/tmp"
-	statsPeriod = time.Second
-
-	q := riostat.Disk
-	defer func() { riostat.Disk = q }()
-
-	riostat.Disk = map[string]cmn.SimpleKVs{
-		"disk1": cmn.SimpleKVs{
-			"%util": "21.34",
-		},
-	}
-
-	config := cmn.GCO.BeginUpdate()
-	config.LRU.AtimeCacheMax = 1
-	cmn.GCO.CommitUpdate(config)
-
-	atimer := NewRunner(fs.Mountpaths, riostat)
-
-	go atimer.Run()
-	defer func() { atimer.Stop(nil) }()
-
-	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
-
-	itemCount := atimeCacheFlushThreshold * 2
-	// split files between the two types of buckets
-	for i := 0; i < itemCount; i++ {
-		if i%2 == 0 {
-			atimer.Touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
-		} else {
-			atimer.Touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
-		}
-	}
-
-	time.Sleep(time.Millisecond * 10) // wait for runner to process
-
-	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
-	if n != itemCount/4 {
-		t.Error("when idle we should flush 25% of the cache")
-	}
-}
-
-func TestAtimerunnerGetNumberItemsToFlushVeryHighWatermark(t *testing.T) {
-	mpath := "/tmp"
-	itemCount := atimeCacheFlushThreshold * 2
-	maxMapSize = uint64(itemCount)
-	statsPeriod = time.Second
-
-	updateTestConfig(statsPeriod)
-	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-
-	atimer := NewRunner(fs.Mountpaths, iostatr)
-	go atimer.Run()
-	defer func() { atimer.Stop(nil) }()
-	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
-
-	// split files between the two types of buckets
-	for i := 0; i < itemCount; i++ {
-		if i%2 == 0 {
-			atimer.Touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
-		} else {
-			atimer.Touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
-		}
-	}
-
-	time.Sleep(time.Millisecond * 10) // wait for runner to process
-
-	// simulate highly utilized disk
-	go iostatr.Run()
-	defer func() { iostatr.Stop(nil) }()
-	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-
-	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
-		iostatr.Disk[disk]["%util"] = "99.94"
-	}
-	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
-	if n != itemCount/2 {
-		t.Errorf("%d != %d: when used cap is 100%% we should flush 50%% of the cache", n, itemCount/2)
-	}
-}
-
-func TestAtimerunnerGetNumberItemsToFlushHighWatermark(t *testing.T) {
-	mpath := "/tmp"
-	itemCount := atimeCacheFlushThreshold * 2
-	maxMapSize = uint64(itemCount*(200-atimeHWM)/100) + 10
-	statsPeriod = time.Second
-
-	updateTestConfig(statsPeriod)
-	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-
-	atimer := NewRunner(fs.Mountpaths, iostatr)
-
-	go iostatr.Run()
-	go atimer.Run()
-	defer func() {
-		iostatr.Stop(nil)
-		atimer.Stop(nil)
-	}()
-	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
-
-	// split files between the two types of buckets
-	for i := 0; i < itemCount; i++ {
-		if i%2 == 0 {
-			atimer.Touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
-		} else {
-			atimer.Touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
-		}
-	}
-
-	time.Sleep(time.Millisecond * 10) // wait for runner to process
-
-	// simulate highly utilized disk
-	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
-		iostatr.Disk[disk]["%util"] = "99.94"
-	}
-	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
-	if n != itemCount/4 {
-		t.Error("when used cap is above high watermark we should flush 25% of the cache")
-	}
-}
-
-func TestAtimerunnerGetNumberItemsToFlushLowWatermark(t *testing.T) {
-	mpath := "/tmp"
-	itemCount := atimeCacheFlushThreshold * 2
-	maxMapSize = uint64(itemCount*(200-atimeLWM)/100) + 10
-	statsPeriod = time.Second
-
-	updateTestConfig(statsPeriod)
-	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-
-	atimer := NewRunner(fs.Mountpaths, iostatr)
-	go atimer.Run()
-	defer func() { atimer.Stop(nil) }()
-	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
-
-	// split files between the two types of buckets
-	for i := 0; i < itemCount; i++ {
-		if i%2 == 0 {
-			atimer.Touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
-		} else {
-			atimer.Touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
-		}
-	}
-
-	time.Sleep(time.Millisecond * 10) // wait for runner to process
-
-	// simulate highly utilized disk
-	go iostatr.Run()
-	defer func() { iostatr.Stop(nil) }()
-	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-
-	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
-		iostatr.Disk[disk]["%util"] = "99.94"
-	}
-	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
-	if n == 0 {
-		t.Error("when used cap is above low watermark we should flush some of the cache")
-	}
-}
-
-func TestAtimerunnerGetNumberItemsToFlushLowFilling(t *testing.T) {
-	mpath := "/tmp"
-	itemCount := atimeCacheFlushThreshold * 2
-	maxMapSize = uint64(itemCount * 1000)
-	statsPeriod = time.Second
-
-	updateTestConfig(statsPeriod)
-	iostatr := ios.NewIostatRunner(fs.Mountpaths)
-
-	atimer := NewRunner(fs.Mountpaths, iostatr)
-	go atimer.Run()
-	defer func() { atimer.Stop(nil) }()
-	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
-
-	// split files between the two types of buckets
-	for i := 0; i < itemCount; i++ {
-		if i%2 == 0 {
-			atimer.Touch("/tmp/cloud/bck1/fqn" + strconv.Itoa(i))
-		} else {
-			atimer.Touch("/tmp/local/bck2/fqn" + strconv.Itoa(i))
-		}
-	}
-
-	time.Sleep(time.Millisecond * 10) // wait for runner to process
-
-	// simulate highly utilized disk
-	go iostatr.Run()
-	defer func() { iostatr.Stop(nil) }()
-	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-
-	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
-		iostatr.Disk[disk]["%util"] = "99.34"
-	}
-	n := atimer.mpathRunners[mpath].getNumberItemsToFlush()
-	if n != 0 {
-		t.Errorf("%d: when used capacity is low and disk is busy we should not flush at all", n)
 	}
 }
 
@@ -489,6 +281,7 @@ func cleanMountpaths() {
 func updateTestConfig(d time.Duration) {
 	config := cmn.GCO.BeginUpdate()
 	config.Periodic.StatsTime = d
+	config.Periodic.IostatTime = time.Second
 	config.LRU.AtimeCacheMax = maxMapSize
 	cmn.GCO.CommitUpdate(config)
 }

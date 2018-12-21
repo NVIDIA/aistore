@@ -9,6 +9,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
 )
 
@@ -36,10 +37,8 @@ type (
 		prevUtilPct   float32
 		prevFSUsedPct uint64
 		// init-time
-		Riostat *ios.IostatRunner
-		Path    string
-		FS      string
-		Flag    uint64
+		MpathInfo *fs.MountpathInfo
+		Flag      uint64
 	}
 )
 
@@ -62,10 +61,10 @@ func (u *Throttle) recompute() {
 	if (u.Flag & OnFSUsed) != 0 {
 		usedFSPercentage := u.prevFSUsedPct
 		if now.After(u.nextCapCheck) {
-			usedFSPercentage, ok = ios.GetFSUsedPercentage(u.Path)
+			usedFSPercentage, ok = ios.GetFSUsedPercentage(u.MpathInfo.Path)
 			u.nextCapCheck = now.Add(fsCapCheckDuration)
 			if !ok {
-				glog.Errorf("Unable to retrieve used capacity for FS %s", u.FS)
+				glog.Errorf("Unable to retrieve used capacity for FS %s", u.MpathInfo.FileSystem)
 				u.sleep = 0
 				return
 			}
@@ -80,12 +79,9 @@ func (u *Throttle) recompute() {
 		curUtilPct := u.prevUtilPct
 
 		if now.After(u.nextUtilCheck) {
-			curUtilPct, ok = u.Riostat.MaxUtilFS(u.FS)
+			dutil, _ := u.MpathInfo.GetIOstats()
+			curUtilPct = dutil.Curr
 			u.nextUtilCheck = now.Add(config.Periodic.StatsTime)
-			if !ok {
-				curUtilPct = u.prevUtilPct
-				glog.Errorf("Unable to retrieve disk utilization for FS %s", u.FS)
-			}
 		}
 
 		if curUtilPct > float32(config.Xaction.DiskUtilHighWM) {

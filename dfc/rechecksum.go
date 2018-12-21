@@ -66,10 +66,8 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 
 func (t *targetrunner) oneRechecksumBucket(mpathInfo *fs.MountpathInfo, bucketDir string, xrcksum *xactRechecksum) {
 	throttler := &cluster.Throttle{
-		Riostat: getiostatrunner(),
-		Path:    mpathInfo.Path,
-		FS:      mpathInfo.FileSystem,
-		Flag:    cluster.OnDiskUtil}
+		MpathInfo: mpathInfo,
+		Flag:      cluster.OnDiskUtil}
 	rcksctx := &recksumctx{
 		xrcksum:   xrcksum,
 		t:         t,

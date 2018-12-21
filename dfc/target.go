@@ -211,7 +211,7 @@ func (t *targetrunner) Run() error {
 		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
 
-	glog.Infof("Target %s is ready", t.si)
+	glog.Infof("target %s is ready", t.si)
 	glog.Flush()
 	pid := int64(os.Getpid())
 	t.uxprocess = &uxprocess{time.Now(), strconv.FormatInt(pid, 16), pid}
@@ -344,7 +344,6 @@ func (t *targetrunner) RunLRU() {
 		return
 	}
 	ini := lru.InitLRU{
-		Riostat:     getiostatrunner(),
 		Xlru:        xlru,
 		Namelocker:  t.rtnamemap,
 		Statsif:     t.statsif,
@@ -1069,7 +1068,7 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			delta := time.Since(started)
 			t.statsif.AddMany(stats.NamedVal64{stats.ListCount, 1}, stats.NamedVal64{stats.ListLatency, int64(delta)})
-			if glog.V(3) {
+			if glog.V(4) {
 				glog.Infof("LIST %s: %s, %d µs", tag, lbucket, int64(delta/time.Microsecond))
 			}
 		}
@@ -2741,7 +2740,7 @@ func (t *targetrunner) httpdaepost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status, err := t.register(false, defaultTimeout); err != nil {
-		s := fmt.Sprintf("Target %s failed to register with proxy, status %d, err: %v", t.si, status, err)
+		s := fmt.Sprintf("%s failed to register with proxy, status %d, err: %v", t.si, status, err)
 		t.invalmsghdlr(w, r, s)
 		return
 	}

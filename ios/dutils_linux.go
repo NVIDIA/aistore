@@ -7,7 +7,6 @@ package ios
 
 import (
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -33,11 +32,14 @@ type BlockDevice struct {
 func fs2disks(fs string) (disks cmn.StringSet) {
 	getDiskCommand := exec.Command("lsblk", "-no", "name", "-J")
 	outputBytes, err := getDiskCommand.Output()
-	if err != nil || len(outputBytes) == 0 {
-		glog.Errorf("Unable to retrieve disks from FS [%s].", fs)
+	if err != nil {
+		glog.Errorf("Failed to lsblk, err %v", err)
 		return
 	}
-
+	if len(outputBytes) == 0 {
+		glog.Errorf("Failed to lsblk - no disks?")
+		return
+	}
 	disks = lsblkOutput2disks(outputBytes, fs)
 	return
 }
@@ -81,38 +83,9 @@ func lsblkOutput2disks(lsblkOutputBytes []byte, fs string) (disks cmn.StringSet)
 	}
 
 	findDevDisks(lsBlkOutput.BlockDevices, device, disks)
-	if glog.V(3) {
+	if glog.V(4) {
 		glog.Infof("Device: %s, disk list: %v\n", device, disks)
 	}
 
 	return disks
-}
-
-func maxUtilDisks(disksMetricsMap map[string]cmn.SimpleKVs, disks cmn.StringSet) (maxutil float64) {
-	maxutil = -1
-	util := func(disk string) (u float64) {
-		if ioMetrics, ok := disksMetricsMap[disk]; ok {
-			if utilStr, ok := ioMetrics["%util"]; ok {
-				var err error
-				if u, err = strconv.ParseFloat(utilStr, 32); err == nil {
-					return
-				}
-			}
-		}
-		return
-	}
-	if len(disks) > 0 {
-		for disk := range disks {
-			if u := util(disk); u > maxutil {
-				maxutil = u
-			}
-		}
-		return
-	}
-	for disk := range disksMetricsMap {
-		if u := util(disk); u > maxutil {
-			maxutil = u
-		}
-	}
-	return
 }

@@ -132,7 +132,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	}
 
 	updateTestConfig(time.Second)
-	iostatr := ios.NewIostatRunner(fs.Mountpaths)
+	iostatr := ios.NewIostatRunner()
 	atimer := NewRunner(fs.Mountpaths, iostatr)
 
 	go atimer.Run()
@@ -141,7 +141,7 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 		atimer.ReqAddMountpath(mpath)
 	}
 	time.Sleep(100 * time.Millisecond)
-	if len(atimer.mpathRunners) != len(mpaths) {
+	if len(atimer.joggers) != len(mpaths) {
 		t.Error(fmt.Errorf("There must be %d mpathAtimeRunners, one for each mpath", len(mpaths)))
 	}
 	wg := &sync.WaitGroup{}
@@ -158,13 +158,6 @@ func Test_AtimeReadWriteStress(t *testing.T) {
 	wg.Wait()
 
 	Logf("%v to touch %d files.\n", time.Since(start), numFilesTotal)
-
-	// simulate highly utilized disk
-	iostatr.Disk = make(map[string]cmn.SimpleKVs)
-	for disk := range iostatr.Disk {
-		iostatr.Disk[disk] = make(cmn.SimpleKVs, 1)
-		iostatr.Disk[disk]["%util"] = diskUtil
-	}
 
 	// start 22 go routines. 2 of them just create useless noise
 	for _, mpath := range allMpaths {

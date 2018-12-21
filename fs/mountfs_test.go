@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"math"
 	"os"
 	"testing"
 
@@ -291,6 +292,45 @@ func TestAddAndDisableMultipleMountpath(t *testing.T) {
 	}
 
 	assertMountpathCount(t, mfs, 1, 1)
+}
+
+func TestStoreLoadIostat(t *testing.T) {
+	mfs := NewMountedFS()
+	err := mfs.Add("/tmp")
+	if err != nil {
+		t.Error("adding existing mountpath failed")
+	}
+	var dutil, dquel = map[string]float32{}, map[string]float32{}
+	dutil["/tmp"] = 0.7
+	dquel["/tmp"] = 1.3
+	mfs.SetIOstats(dutil, dquel)
+	dutil["/tmp"] = 1.4
+	dquel["/tmp"] = 2.6
+	mfs.SetIOstats(dutil, dquel)
+
+	availableMountpaths, _ := mfs.Get()
+	mi, ok := availableMountpaths["/tmp"]
+	if !ok {
+		t.Fatal("Expecting to get /tmp")
+	}
+	util, quel := mi.GetIOstats()
+	if util.Prev != 0.7 || util.Curr != 1.4 {
+		t.Errorf("Wrong util stats [%+v], expecting (0.7, 1.4)", util)
+	}
+	if quel.Prev != 1.3 || quel.Curr != 2.6 {
+		t.Errorf("Wrong quel stats [%+v], expecting (1.3, 2.6)", quel)
+	}
+
+	dutil["/tmp"] = math.E
+	dquel["/tmp"] = math.Pi
+	mfs.SetIOstats(dutil, dquel)
+	util, quel = mi.GetIOstats()
+	if util.Prev != 1.4 || util.Curr != math.E {
+		t.Errorf("Wrong util stats [%+v], expecting (1.4, %f)", util, math.E)
+	}
+	if quel.Prev != 2.6 || quel.Curr != math.Pi {
+		t.Errorf("Wrong quel stats [%+v], expecting (2.6, %f)", quel, math.Pi)
+	}
 }
 
 func assertMountpathCount(t *testing.T, mfs *MountedFS, availableCount, disabledCount int) {
