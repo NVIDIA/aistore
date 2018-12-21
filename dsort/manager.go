@@ -85,7 +85,7 @@ type streamWriter struct {
 	w   io.Writer
 	n   int64
 	err error
-	wg  *sync.WaitGroup
+	wg  *cmn.TimeoutGroup
 }
 
 // Manager maintains all the state required for a single run of a distributed archive file shuffle.
@@ -628,7 +628,7 @@ func (m *Manager) mergeEnqueuedRecords() {
 func (m *Manager) newStreamWriter(pathToContents string, w io.Writer) *streamWriter {
 	writer := &streamWriter{
 		w:  w,
-		wg: &sync.WaitGroup{},
+		wg: cmn.NewTimeoutGroup(),
 	}
 	writer.wg.Add(1)
 	m.streamWriters.mu.Lock()
@@ -822,11 +822,8 @@ func (m *Manager) loadContent() loadContentFunc {
 			// It may happen that the target we are trying to contact was aborted or
 			// for some reason is not responding. Thus we need to do some precaution
 			// and wait for the content only for limited time.
-			if cmn.WaitTimeout(writer.wg, m.callTimeout) {
-				// Calling done on writer is necessary when we timed out
-				if writer := m.pullStreamWriter(pathToContents); writer != nil {
-					writer.wg.Done()
-				}
+			if writer.wg.WaitTimeout(m.callTimeout) {
+				m.pullStreamWriter(pathToContents)
 				return 0, fmt.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
 			}
 			return writer.n, writer.err
