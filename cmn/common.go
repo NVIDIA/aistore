@@ -53,29 +53,47 @@ type (
 	StringSet map[string]struct{}
 	SimpleKVs map[string]string
 	PairF32   struct {
-		Prev float32
-		Curr float32
+		Min float32
+		Max float32
 	}
 	PairU32 struct {
-		Prev uint32
-		Curr uint32
+		Min uint32
+		Max uint32
 	}
 )
 
-func (upair *PairU32) Store(currval float32) {
-	nprev := atomic.LoadUint32(&upair.Curr)
-	atomic.StoreUint32(&upair.Prev, nprev)
-	curr := math.Float32bits(currval)
-	atomic.StoreUint32(&upair.Curr, curr)
+//
+// PairU32 & PairF32
+//
+func (src *PairU32) CopyTo(dst *PairU32) {
+	atomic.StoreUint32(&dst.Min, atomic.LoadUint32(&src.Min))
+	atomic.StoreUint32(&dst.Max, atomic.LoadUint32(&src.Max))
 }
 
-func (upair *PairU32) Load() (fpair PairF32) {
-	prev := atomic.LoadUint32(&upair.Prev)
-	fpair.Prev = math.Float32frombits(prev)
-	curr := atomic.LoadUint32(&upair.Curr)
-	fpair.Curr = math.Float32frombits(curr)
+func (upair *PairU32) Init(f float32) {
+	u := math.Float32bits(f)
+	atomic.StoreUint32(&upair.Max, u)
+	atomic.StoreUint32(&upair.Min, u)
+}
+
+func (upair *PairU32) U2F() (fpair PairF32) {
+	min := atomic.LoadUint32(&upair.Min)
+	fpair.Min = math.Float32frombits(min)
+	max := atomic.LoadUint32(&upair.Max)
+	fpair.Max = math.Float32frombits(max)
 	return
 }
+
+func (fpair PairF32) String() string {
+	if fpair.Min == 0 && fpair.Max == 0 {
+		return "()"
+	}
+	return fmt.Sprintf("(%.2f, %.2f)", fpair.Min, fpair.Max)
+}
+
+//
+// common utils
+//
 
 func S2B(s string) (int64, error) {
 	if s == "" {

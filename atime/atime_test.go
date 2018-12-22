@@ -208,37 +208,6 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 	atimer.Stop(fmt.Errorf("test"))
 }
 
-func TestAtimerunnerFlush(t *testing.T) {
-	mpath := "/tmp"
-	fileName1 := "/tmp/cloud/bck1/fqn1"
-	fileName2 := "/tmp/local/bck2/fqn2"
-	fileName3 := "/tmp/local/bck2/fqn3"
-
-	atimer := NewRunner(fs.Mountpaths, riostat)
-	go atimer.Run()
-	atimer.ReqAddMountpath(mpath)
-	time.Sleep(50 * time.Millisecond)
-
-	atimer.Touch(fileName1)
-	atimer.Touch(fileName2)
-	atimer.Touch(fileName3)
-	time.Sleep(50 * time.Millisecond) // wait for runner to process
-
-	atimer.joggers[mpath].flush(1)
-	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 2 {
-		t.Error("Invalid number of files in atimerunner")
-	}
-
-	atimer.joggers[mpath].flush(2)
-	time.Sleep(50 * time.Millisecond) // wait for runner to process
-	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 0 {
-		t.Error("Invalid number of files in atimerunner")
-	}
-
-	atimer.Stop(fmt.Errorf("test"))
-}
-
 // TestAtimerunnerGetNumberItemsToFlushSimple tests the number of items to flush.
 func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	mpath := "/tmp"
@@ -262,7 +231,7 @@ func TestAtimerunnerGetNumberItemsToFlushSimple(t *testing.T) {
 	atimer.Touch(fileName2)
 	time.Sleep(time.Millisecond) // wait for runner to process
 
-	n := atimer.joggers[mpath].numToFlush()
+	n := atimer.joggers[mpath].num2flush()
 	if n != 0 {
 		t.Error("number items to flush should be 0 when capacity not achieved")
 	}

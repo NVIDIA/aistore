@@ -6,6 +6,7 @@ package fs
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,12 @@ const (
 	Remove  = "remove-mp"
 	Enable  = "enable-mp"
 	Disable = "disable-mp"
+)
+
+// filesystem utilization enum (<- iostat)
+const (
+	StatDiskUtil = "dutil"
+	StatQueueLen = "dquel"
 )
 
 // globals
@@ -69,8 +76,12 @@ type (
 		// FileSystem utilization represented as
 		// utilizations and queue lengths of the underlying disks,
 		// where cmn.PairU32 structs atomically store the corresponding float32 bits
-		dutil cmn.PairU32 // prev and current %util
-		dquel cmn.PairU32 // prev and current queue length (iostat "avgqu-sz" or "aqu-sz")
+		iostats map[string]*iotracker
+		ioepoch map[string]int64
+	}
+	iotracker struct {
+		prev cmn.PairU32
+		curr cmn.PairU32
 	}
 
 	// MountedFS holds all mountpaths for the target.
@@ -110,13 +121,18 @@ func MountpathDis(p string) ChangeReq { return ChangeReq{Action: Disable, Path: 
 
 func newMountpath(path string, fsid syscall.Fsid, fs string) *MountpathInfo {
 	cleanPath := filepath.Clean(path)
-	return &MountpathInfo{
+	mi := &MountpathInfo{
 		Path:       cleanPath,
 		OrigPath:   path,
 		Fsid:       fsid,
 		FileSystem: fs,
 		PathDigest: xxhash.ChecksumString64S(cleanPath, MLCG32),
+		iostats:    make(map[string]*iotracker, 2),
+		ioepoch:    make(map[string]int64, 2),
 	}
+	mi.iostats[StatDiskUtil] = &iotracker{} // FIXME: ios.Const
+	mi.iostats[StatQueueLen] = &iotracker{}
+	return mi
 }
 
 // FastRemoveDir removes directory in steps:
@@ -150,12 +166,47 @@ func (mi *MountpathInfo) FastRemoveDir(dir string) error {
 	return nil
 }
 
-// GetIOStats returns the most recently updated previous/current (utilization, queue size) -
-// see related SetIOstats() below
-func (mi *MountpathInfo) GetIOstats() (dutil, dquel cmn.PairF32) {
-	dutil = (&mi.dutil).Load()
-	dquel = (&mi.dquel).Load()
+// GetIOStats returns the most recently updated previous/current (utilization, queue size)
+func (mi *MountpathInfo) GetIOstats(name string) (prev, curr cmn.PairF32) {
+	cmn.Assert(name == StatDiskUtil || name == StatQueueLen)
+	tracker, _ := mi.iostats[name]
+	p := &tracker.prev
+	prev = p.U2F()
+	c := &tracker.curr
+	curr = c.U2F()
 	return
+}
+
+// SetIOstats is called by the iostat runner directly to fill-in the most recently
+// updated utilizations and queue lengths of the disks used by this mountpath
+// (or, more precisely, the underlying local FS)
+func (mi *MountpathInfo) SetIOstats(epoch int64, name string, f float32) {
+	tracker, _ := mi.iostats[name]
+	if mi.ioepoch[name] < epoch {
+		// current => prev, f => curr, mi.epoch = epoch
+		curr := &tracker.curr
+		curr.CopyTo(&tracker.prev)
+		curr.Init(f)
+		mi.ioepoch[name] = epoch
+	} else {
+		// curr min/max
+		curr := &tracker.curr
+		fpair := curr.U2F()
+		if fpair.Max < f {
+			u := math.Float32bits(f)
+			atomic.StoreUint32(&curr.Max, u)
+		} else if fpair.Min > f {
+			u := math.Float32bits(f)
+			atomic.StoreUint32(&curr.Min, u)
+		}
+	}
+	return
+}
+
+func (mi *MountpathInfo) String() string {
+	_, u := mi.GetIOstats(StatDiskUtil)
+	_, q := mi.GetIOstats(StatQueueLen)
+	return fmt.Sprintf("mp=%s, fs=%s, util=d%s:q%s", mi.Path, mi.FileSystem, u, q)
 }
 
 //
@@ -346,26 +397,6 @@ func (mfs *MountedFS) MakePathCloud(basePath, contentType string) string {
 	return filepath.Join(basePath, contentType, mfs.cloudBuckets)
 }
 
-// SetIOstats is called via iostat runner's ReqStatsUpdate() interface
-// to fill-in the most recently updated utilizations and queue
-// lengths of the disks used by each respective mountpath (or, more precisely, each
-// corresponding filesystem)
-func (mfs *MountedFS) SetIOstats(dutil, dquel map[string]float32) {
-	available, _ := mfs.Get()
-	for mpath, mpathInfo := range available {
-		if f32, ok := dutil[mpath]; !ok {
-			glog.Errorf("Unexpected: mountpath %s does not exist", mpath)
-		} else {
-			pair := &mpathInfo.dutil
-			pair.Store(f32)
-		}
-		if f32, ok := dquel[mpath]; ok {
-			pair := &mpathInfo.dquel
-			pair.Store(f32)
-		}
-	}
-}
-
 //
 // private methods
 //
@@ -390,4 +421,13 @@ func (mfs *MountedFS) mountpathsCopy() (map[string]*MountpathInfo, map[string]*M
 	}
 
 	return availableCopy, disabledCopy
+}
+
+func (mfs *MountedFS) String() string {
+	available, _ := mfs.Get()
+	s := "\n"
+	for _, mpathInfo := range available {
+		s += mpathInfo.String() + "\n"
+	}
+	return strings.TrimSuffix(s, "\n")
 }

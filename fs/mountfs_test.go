@@ -5,6 +5,7 @@
 package fs
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"testing"
@@ -300,37 +301,46 @@ func TestStoreLoadIostat(t *testing.T) {
 	if err != nil {
 		t.Error("adding existing mountpath failed")
 	}
-	var dutil, dquel = map[string]float32{}, map[string]float32{}
-	dutil["/tmp"] = 0.7
-	dquel["/tmp"] = 1.3
-	mfs.SetIOstats(dutil, dquel)
-	dutil["/tmp"] = 1.4
-	dquel["/tmp"] = 2.6
-	mfs.SetIOstats(dutil, dquel)
-
 	availableMountpaths, _ := mfs.Get()
 	mi, ok := availableMountpaths["/tmp"]
 	if !ok {
 		t.Fatal("Expecting to get /tmp")
 	}
-	util, quel := mi.GetIOstats()
-	if util.Prev != 0.7 || util.Curr != 1.4 {
-		t.Errorf("Wrong util stats [%+v], expecting (0.7, 1.4)", util)
-	}
-	if quel.Prev != 1.3 || quel.Curr != 2.6 {
-		t.Errorf("Wrong quel stats [%+v], expecting (1.3, 2.6)", quel)
-	}
+	mi.SetIOstats(1, StatDiskUtil, 0.7)
+	mi.SetIOstats(1, StatQueueLen, 1.3)
+	mi.SetIOstats(2, StatDiskUtil, 1.4)
+	mi.SetIOstats(2, StatQueueLen, 2.6)
 
-	dutil["/tmp"] = math.E
-	dquel["/tmp"] = math.Pi
-	mfs.SetIOstats(dutil, dquel)
-	util, quel = mi.GetIOstats()
-	if util.Prev != 1.4 || util.Curr != math.E {
-		t.Errorf("Wrong util stats [%+v], expecting (1.4, %f)", util, math.E)
+	//
+	// test various min/max, previous/current transitions
+	//
+	prev, curr := mi.GetIOstats(StatDiskUtil)
+	if prev.Min != 0.7 || curr.Min != 1.4 {
+		t.Errorf("Wrong util stats [%s:%s], expecting (0.7, 1.4)", prev, curr)
 	}
-	if quel.Prev != 2.6 || quel.Curr != math.Pi {
-		t.Errorf("Wrong quel stats [%+v], expecting (2.6, %f)", quel, math.Pi)
+	if prev.Max != 0.7 || curr.Max != 1.4 {
+		t.Errorf("Wrong util stats [%s:%s], expecting (0.7, 1.4)", prev, curr)
 	}
+	mi.SetIOstats(2, StatDiskUtil, math.E)
+
+	prev, curr = mi.GetIOstats(StatDiskUtil)
+	if prev.Min != 0.7 || prev.Max != 0.7 {
+		t.Errorf("Wrong prev stats %s, expecting (0.7, 0.7)", prev)
+	}
+	if curr.Min != 1.4 || curr.Max != math.E {
+		t.Errorf("Wrong curr stats %s, expecting (0.7, 0.7)", curr)
+	}
+	mi.SetIOstats(2, StatQueueLen, math.Pi/3)
+	prev, curr = mi.GetIOstats(StatQueueLen)
+	if prev.Min != 1.3 || curr.Min != math.Pi/3 {
+		t.Errorf("Wrong stats [%s:%s], expecting (min=1.3, min=%f)", prev, curr, math.Pi/3)
+	}
+	mi.SetIOstats(3, StatQueueLen, math.Pi)
+	prev, curr = mi.GetIOstats(StatQueueLen)
+	if prev.Min != math.Pi/3 || prev.Max != 2.6 || curr.Max != math.Pi {
+		t.Errorf("Wrong stats [%s:%s], expecting (%f, %f)", prev, curr, math.Pi/3, math.Pi)
+	}
+	fmt.Println("Success:", mi)
 }
 
 func assertMountpathCount(t *testing.T, mfs *MountedFS, availableCount, disabledCount int) {

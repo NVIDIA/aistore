@@ -31,7 +31,6 @@ type (
 		cmn.NamedID
 		stopCh      chan struct{} // terminate
 		syncCh      chan struct{} // synchronize disks, maps, mountpaths
-		statCh      chan struct{} // request stats update
 		metricNames []string
 		reader      *bufio.Reader
 		process     *os.Process  // running iostat process. Required so it can be killed later
@@ -39,9 +38,10 @@ type (
 		fs2disks    map[string]cmn.StringSet
 		disks2mpath cmn.SimpleKVs
 		stats       struct {
-			dutil          map[string]float32
-			dquel          map[string]float32
-			availablePaths map[string]*fs.MountpathInfo
+			dutil          map[string]float32           // disk utilizations (iostat's %util)
+			dquel          map[string]float32           // disk queue lengths ("avgqu-sz" or "aqu-sz")
+			availablePaths map[string]*fs.MountpathInfo // cached fs.Mountpaths.Get
+			lastUpdate     time.Time
 		}
 	}
 	DevIOMetrics map[string]float32
@@ -51,7 +51,6 @@ func NewIostatRunner() *IostatRunner {
 	return &IostatRunner{
 		stopCh:      make(chan struct{}, 1),
 		syncCh:      make(chan struct{}, 1),
-		statCh:      make(chan struct{}, 1),
 		metricNames: make([]string, 0, 16),
 	}
 }
@@ -66,11 +65,7 @@ func (r *IostatRunner) ReqDisableMountpath(mpath string) { r.syncCh <- struct{}{
 func (r *IostatRunner) ReqAddMountpath(mpath string)     { r.syncCh <- struct{}{} }
 func (r *IostatRunner) ReqRemoveMountpath(mpath string)  { r.syncCh <- struct{}{} }
 
-// request and get updated io-stats
-func (r *IostatRunner) ReqStatsUpdate()     { r.statCh <- struct{}{} }
-func (r *IostatRunner) deliverStatsUpdate() { fs.Mountpaths.SetIOstats(r.stats.dutil, r.stats.dquel) }
-
-// subscribing to config changes
+// having (NOT) subscribed to config changes - see below
 func (r *IostatRunner) ConfigUpdate(config *cmn.Config) {
 	if err := r.execCmd(config.Periodic.IostatTime); err != nil {
 		r.Stop(err)
@@ -81,21 +76,22 @@ func (r *IostatRunner) ConfigUpdate(config *cmn.Config) {
 // public methods
 //
 
+// TODO: cmn.GCO.Subscribe(r) when there's a mechanism to subscribe to specific changes, e.g. period
+// This code parses iostat output specifically looking for "Device", "%util",  "aqu-sz" and "avgqu-sz"
 func (r *IostatRunner) Run() error {
 	var (
-		lines cmn.SimpleKVs
-		f64   float64
-		val   float32
+		lines  cmn.SimpleKVs
+		epoch  int64
+		lm, lc int64 // time interval: multiplier and counter
 	)
 	glog.Infof("Starting %s", r.Getname())
 	r.resyncMpathsDisks()
-	// TODO: cmn.GCO.Subscribe(r) when there's a mechanism to subscribe to specific changes, e.g. period
-
-	if err := r.execCmd(cmn.GCO.Get().Periodic.IostatTime); err != nil {
+	d := cmn.GCO.Get().Periodic.IostatTime
+	if err := r.execCmd(d); err != nil {
 		return err
 	}
-	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime) // glog(iostat)
-
+	r.ticker = time.NewTicker(d) // epoch = one tick
+	lm = cmn.DivCeil(int64(cmn.GCO.Get().Periodic.StatsTime), int64(d))
 	lines = make(cmn.SimpleKVs, 16)
 	// main loop
 	for {
@@ -122,6 +118,11 @@ func (r *IostatRunner) Run() error {
 		}
 		device := fields[0]
 		if mpath, ok := r.disks2mpath[device]; ok {
+			var (
+				f64 float64
+				val float32
+			)
+			mpathInfo, _ := r.stats.availablePaths[mpath]
 			lines[device] = strings.Join(fields, ", ")
 			for i := 1; i < len(fields); i++ {
 				name := r.metricNames[i-1]
@@ -131,9 +132,9 @@ func (r *IostatRunner) Run() error {
 				}
 				val = float32(f64)
 				if name == "%util" {
-					r.stats.dutil[mpath] = val
+					mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, val) // FIXME: const
 				} else if name == "aqu-sz" || name == "avgqu-sz" {
-					r.stats.dquel[mpath] = val
+					mpathInfo.SetIOstats(epoch, fs.StatQueueLen, val)
 				}
 			}
 		}
@@ -144,11 +145,13 @@ func (r *IostatRunner) Run() error {
 			return nil
 		case <-r.syncCh:
 			r.resyncMpathsDisks()
-		case <-r.statCh:
-			r.deliverStatsUpdate() // NOTE: use this venue for time-critical updates
 		case <-r.ticker.C:
-			r.deliverStatsUpdate() // NOTE: periodic but not time-critical
-			log(lines)
+			epoch++
+			lc++
+			if lc >= lm {
+				log(lines)
+				lc = 0
+			}
 		default:
 		}
 	}

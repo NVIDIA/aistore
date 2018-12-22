@@ -107,16 +107,14 @@ type (
 // private types
 //
 type (
-	// Each jogger corresponds to a mpath. All atime request for any file belonging
-	// to this mpath are handled by jogger. This includes requests for getting,
-	// setting and flushing atimes.
+	// jogger handles a given specific mountpath/* as far as getting, setting, and flushing atimes
 	jogger struct {
 		mpathInfo *fs.MountpathInfo
 		stopCh    chan struct{}        // Control channel for stopping
 		atimemap  map[string]time.Time // maps fqn:atime key-value pairs
 		getCh     chan *atimeRequest   // Requests for file access times
 		setCh     chan *atimeRequest   // Requests to set access times
-		flushCh   chan int             // Request to flush the file system
+		flushCh   chan struct{}        // Request to flush atimes
 		riostat   *ios.IostatRunner
 	}
 
@@ -176,8 +174,8 @@ func (r *Runner) Run() error {
 	for {
 		select {
 		case <-ticker.C:
-			for _, runner := range r.joggers {
-				runner.flush()
+			for _, jogger := range r.joggers {
+				jogger.flushCh <- struct{}{}
 			}
 		case mpathRequest := <-r.mpathReqCh:
 			switch mpathRequest.Action {
@@ -208,18 +206,16 @@ func (r *Runner) Run() error {
 	}
 }
 
-// Stop terminates the atime.Runner
+// Stop terminates atime.Runner
 func (r *Runner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
 	r.stopCh <- struct{}{}
 	close(r.stopCh)
 }
 
-// touch requests an access time update for a given object to the current
-// time. touch additionally allows the caller to set the access time of an object
-// to a set time using the variadic function parameter setTime.
-// Note this method should only be called on objects belonging to buckets that have
-// LRU Enabled.
+// Touch requests an access time update for a given object. If not specified,
+// the current time will be used. Note LRU must be enabled on the corresponding
+// bucket.
 func (r *Runner) Touch(fqn string, setTime ...time.Time) {
 	mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn)
 	if mpathInfo == nil {
@@ -325,9 +321,9 @@ func (r *Runner) addJogger(mpath string) {
 		glog.Errorf("Attempt to add mountpath %q with no corresponding filesystem", mpath)
 		return
 	}
-
-	r.joggers[mpath] = r.newJogger(mpathInfo, r.riostat)
-	go r.joggers[mpath].run()
+	jogger := r.newJogger(mpathInfo, r.riostat)
+	r.joggers[mpath] = jogger
+	go jogger.jog()
 }
 
 func (r *Runner) removeJogger(mpath string) {
@@ -349,12 +345,12 @@ func (r *Runner) newJogger(mpathInfo *fs.MountpathInfo, riostat *ios.IostatRunne
 		atimemap:  make(map[string]time.Time),
 		getCh:     make(chan *atimeRequest),
 		setCh:     make(chan *atimeRequest, chanCap),
-		flushCh:   make(chan int),
+		flushCh:   make(chan struct{}, 16),
 		riostat:   riostat,
 	}
 }
 
-func (j *jogger) run() {
+func (j *jogger) jog() {
 	for {
 		select {
 		case request := <-j.getCh:
@@ -362,8 +358,8 @@ func (j *jogger) run() {
 			request.responseCh <- &Response{ok, accessTime}
 		case request := <-j.setCh:
 			j.atimemap[request.fqn] = request.accessTime
-		case numToFlush := <-j.flushCh:
-			j.handleFlush(numToFlush)
+		case <-j.flushCh:
+			j.flushAtimes()
 		case <-j.stopCh:
 			return
 		}
@@ -376,8 +372,8 @@ func (j *jogger) stop() {
 	close(j.stopCh)
 }
 
-// numToFlush estimates the number of timestamps that must be flushed
-func (j *jogger) numToFlush() (n int) {
+// num2flush estimates the number of timestamps that must be flushed
+func (j *jogger) num2flush() (n int) {
 	curlen := len(j.atimemap)
 	max := cmn.MaxU64(cmn.GCO.Get().LRU.AtimeCacheMax, 1)
 	pct := cmn.MinU64(100, uint64(curlen)*100/max) // curlen as %%
@@ -389,61 +385,35 @@ func (j *jogger) numToFlush() (n int) {
 		f := float32(pct-LowWM) / float32(HighWM-LowWM) * float32(curlen)
 		n = int(float32(curlen-low) * f)
 	default:
-		// TODO: keep flushing in a loop while checking the current util...
-		dutil, _ := j.mpathInfo.GetIOstats()
-		if dutil.Curr >= 0 && dutil.Curr < 20 {
+		prev, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
+		if prev.Max >= 0 && prev.Max < 20 && curr.Max >= 0 && curr.Max < 20 {
 			n = curlen / 4
 		}
 	}
 	return
 }
 
-// Flush accepts an optional paramter to set the number of items to flush for testing purposes.
-func (j *jogger) flush(numToFlush ...int) {
-	n := 0
-	if len(numToFlush) == 1 {
-		n = numToFlush[0]
-	}
-	j.flushCh <- n
-}
-
-// handleFlush tries to change access and modification time for at most n files in
-// the atime map, and removes them from the map.
-func (j *jogger) handleFlush(n int) {
+// flush stores computed number of access times and removes the corresponding entries from the map.
+func (j *jogger) flushAtimes() {
 	var (
-		i     int
 		mtime time.Time
+		i     int
+		n     = j.num2flush()
 	)
-	if n == 0 {
-		n = j.numToFlush()
-	}
-	if n <= 0 {
-		return
-	}
 	for fqn, atime := range j.atimemap {
 		finfo, err := os.Stat(fqn)
 		if err != nil {
-			if os.IsNotExist(err) {
-				delete(j.atimemap, fqn)
-				i++
-			} else {
-				glog.Warningf("Failed to touch %s, err: %v", fqn, err)
-			}
-			goto cont
-		}
-		mtime = finfo.ModTime()
-		if err = os.Chtimes(fqn, atime, mtime); err != nil {
-			if os.IsNotExist(err) {
-				delete(j.atimemap, fqn)
-				i++
-			} else {
-				glog.Warningf("Can't touch %s, err: %v", fqn, err) // FIXME: carry on forever?
+			if !os.IsNotExist(err) {
+				glog.Errorf("%s not-not-exists, fstat err: %v", fqn, err)
 			}
 		} else {
-			delete(j.atimemap, fqn)
-			i++
+			mtime = finfo.ModTime()
+			if err = os.Chtimes(fqn, atime, mtime); err != nil {
+				glog.Errorf("Failed to touch %s, err: %v", fqn, err)
+			}
 		}
-	cont:
+		delete(j.atimemap, fqn)
+		i++
 		if i >= n {
 			break
 		}

@@ -79,8 +79,8 @@ func (u *Throttle) recompute() {
 		curUtilPct := u.prevUtilPct
 
 		if now.After(u.nextUtilCheck) {
-			dutil, _ := u.MpathInfo.GetIOstats()
-			curUtilPct = dutil.Curr
+			_, curr := u.MpathInfo.GetIOstats(fs.StatDiskUtil)
+			curUtilPct = curr.Max
 			u.nextUtilCheck = now.Add(config.Periodic.StatsTime)
 		}
 
