@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,9 @@ const (
 
 var (
 	// Used as a compile-time check for correct interface implementation.
+	_ cmn.ConfigListener = &targetKeepaliveRunner{}
+	_ cmn.ConfigListener = &proxyKeepaliveRunner{}
+
 	_ keepaliver = &targetKeepaliveRunner{}
 	_ keepaliver = &proxyKeepaliveRunner{}
 
@@ -126,10 +130,12 @@ func newProxyKeepaliveRunner(p *proxyrunner) *proxyKeepaliveRunner {
 	return pkr
 }
 
-func (tkr *targetKeepaliveRunner) ConfigUpdate(config *cmn.Config) {
-	tkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Target, &tkr.t.statsdC)
-	tkr.interval = config.KeepaliveTracker.Target.Interval
-	tkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
+func (tkr *targetKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	if !reflect.DeepEqual(oldConf.KeepaliveTracker.Target, newConf.KeepaliveTracker.Target) {
+		tkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Target, &tkr.t.statsdC)
+		tkr.interval = newConf.KeepaliveTracker.Target.Interval
+	}
+	tkr.maxKeepaliveTime = float64(newConf.Timeout.MaxKeepalive.Nanoseconds())
 }
 
 func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
@@ -145,10 +151,12 @@ func (tkr *targetKeepaliveRunner) doKeepalive() (stopped bool) {
 	return
 }
 
-func (pkr *proxyKeepaliveRunner) ConfigUpdate(config *cmn.Config) {
-	pkr.kt = newKeepaliveTracker(config.KeepaliveTracker.Proxy, &pkr.p.statsdC)
-	pkr.interval = config.KeepaliveTracker.Proxy.Interval
-	pkr.maxKeepaliveTime = float64(config.Timeout.MaxKeepalive.Nanoseconds())
+func (pkr *proxyKeepaliveRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	if !reflect.DeepEqual(oldConf.KeepaliveTracker.Proxy, newConf.KeepaliveTracker.Proxy) {
+		pkr.kt = newKeepaliveTracker(newConf.KeepaliveTracker.Proxy, &pkr.p.statsdC)
+		pkr.interval = newConf.KeepaliveTracker.Proxy.Interval
+	}
+	pkr.maxKeepaliveTime = float64(newConf.Timeout.MaxKeepalive.Nanoseconds())
 }
 
 func (pkr *proxyKeepaliveRunner) doKeepalive() (stopped bool) {

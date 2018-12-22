@@ -173,8 +173,10 @@ func (tracker statsTracker) registerCommonStats() {
 // statsunner
 //
 
-// implements Tracker interface
-var _ Tracker = &statsRunner{}
+var (
+	_ Tracker            = &statsRunner{}
+	_ cmn.ConfigListener = &statsRunner{}
+)
 
 func (r *statsRunner) runcommon(logger statslogger) error {
 	r.stopCh = make(chan struct{}, 4)
@@ -202,9 +204,11 @@ func (r *statsRunner) runcommon(logger statslogger) error {
 	}
 }
 
-func (r *statsRunner) ConfigUpdate(config *cmn.Config) {
-	r.ticker.Stop()
-	r.ticker = time.NewTicker(config.Periodic.StatsTime)
+func (r *statsRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	if oldConf.Periodic.StatsTime != newConf.Periodic.StatsTime {
+		r.ticker.Stop()
+		r.ticker = time.NewTicker(newConf.Periodic.StatsTime)
+	}
 }
 
 func (r *statsRunner) Stop(err error) {

@@ -65,10 +65,14 @@ func (r *IostatRunner) ReqDisableMountpath(mpath string) { r.syncCh <- struct{}{
 func (r *IostatRunner) ReqAddMountpath(mpath string)     { r.syncCh <- struct{}{} }
 func (r *IostatRunner) ReqRemoveMountpath(mpath string)  { r.syncCh <- struct{}{} }
 
-// having (NOT) subscribed to config changes - see below
-func (r *IostatRunner) ConfigUpdate(config *cmn.Config) {
-	if err := r.execCmd(config.Periodic.IostatTime); err != nil {
-		r.Stop(err)
+// subscribing to config changes
+func (r *IostatRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	if oldConf.Periodic.IostatTime != newConf.Periodic.IostatTime {
+		if err := r.execCmd(newConf.Periodic.IostatTime); err != nil {
+			r.Stop(err)
+		}
+		r.ticker.Stop()
+		r.ticker = time.NewTicker(newConf.Periodic.IostatTime)
 	}
 }
 
@@ -76,7 +80,6 @@ func (r *IostatRunner) ConfigUpdate(config *cmn.Config) {
 // public methods
 //
 
-// TODO: cmn.GCO.Subscribe(r) when there's a mechanism to subscribe to specific changes, e.g. period
 // This code parses iostat output specifically looking for "Device", "%util",  "aqu-sz" and "avgqu-sz"
 func (r *IostatRunner) Run() error {
 	var (
@@ -93,6 +96,9 @@ func (r *IostatRunner) Run() error {
 	r.ticker = time.NewTicker(d) // epoch = one tick
 	lm = cmn.DivCeil(int64(cmn.GCO.Get().Periodic.StatsTime), int64(d))
 	lines = make(cmn.SimpleKVs, 16)
+
+	cmn.GCO.Subscribe(r)
+
 	// main loop
 	for {
 		b, err := r.reader.ReadBytes('\n')

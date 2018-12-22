@@ -62,8 +62,10 @@ type (
 		Subscribe(cl ConfigListener)
 	}
 
+	// ConfigListener is interface for listeners which require to be notified
+	// about config updates.
 	ConfigListener interface {
-		ConfigUpdate(config *Config)
+		ConfigUpdate(oldConf, newConf *Config)
 	}
 )
 
@@ -103,7 +105,13 @@ func (gco *globalConfigOwner) Get() *Config {
 func (gco *globalConfigOwner) BeginUpdate() *Config {
 	gco.mtx.Lock()
 	config := &Config{}
+
+	// FIXME: CopyStruct is actually shallow copy but because Config
+	// has only values (no pointers or slices, except FSPaths) it is
+	// deepcopy. This may break in the future, so we need solution
+	// to make sure that we do *proper* deepcopy with good performance.
 	CopyStruct(config, gco.Get())
+
 	return config
 }
 
@@ -112,16 +120,22 @@ func (gco *globalConfigOwner) BeginUpdate() *Config {
 //
 // NOTE: CommitUpdate should be preceded by BeginUpdate.
 func (gco *globalConfigOwner) CommitUpdate(config *Config) {
+	oldConf := gco.Get()
 	atomic.StorePointer(&GCO.c, unsafe.Pointer(config))
+
+	// TODO: Notify listeners is protected by GCO lock to make sure
+	// that config updates are done in correct order. But it has
+	// performance impact and it needs to be revisited.
+	gco.notifyListeners(oldConf)
+
 	gco.mtx.Unlock()
-	gco.notifyListeners()
 }
 
-func (gco *globalConfigOwner) notifyListeners() {
+func (gco *globalConfigOwner) notifyListeners(oldConf *Config) {
 	gco.lmtx.Lock()
-	config := gco.Get()
+	newConf := gco.Get()
 	for _, listener := range gco.listeners {
-		listener.ConfigUpdate(config)
+		listener.ConfigUpdate(oldConf, newConf)
 	}
 	gco.lmtx.Unlock()
 }
