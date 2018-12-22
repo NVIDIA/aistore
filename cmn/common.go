@@ -181,17 +181,32 @@ func CopyStruct(dst interface{}, src interface{}) {
 
 var (
 	_ ReadOpenCloser = &FileHandle{}
+	_ ReadSizer      = &SizedReader{}
 )
 
-type ReadOpenCloser interface {
-	io.ReadCloser
-	Open() (io.ReadCloser, error)
-}
+type (
+	ReadOpenCloser interface {
+		io.ReadCloser
+		Open() (io.ReadCloser, error)
+	}
 
-type FileHandle struct {
-	*os.File
-	fqn string
-}
+	// ReadSizer is the interface that adds Size method to the basic reader.
+	ReadSizer interface {
+		io.Reader
+		Size() int64
+	}
+
+	FileHandle struct {
+		*os.File
+		fqn string
+	}
+
+	// SizedReader is simple struct which implements ReadSizer interface.
+	SizedReader struct {
+		io.Reader
+		size int64
+	}
+)
 
 func NewFileHandle(fqn string) (*FileHandle, error) {
 	file, err := os.Open(fqn)
@@ -204,6 +219,14 @@ func NewFileHandle(fqn string) (*FileHandle, error) {
 
 func (f *FileHandle) Open() (io.ReadCloser, error) {
 	return os.Open(f.fqn)
+}
+
+func NewSizedReader(r io.Reader, size int64) *SizedReader {
+	return &SizedReader{r, size}
+}
+
+func (f *SizedReader) Size() int64 {
+	return f.size
 }
 
 const DefaultBufSize = 32 * KiB
