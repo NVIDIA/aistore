@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/stats"
 )
@@ -32,7 +34,7 @@ func (lctx *lructx) jog(wg *sync.WaitGroup) {
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
-	if lctx.totsize < minevict {
+	if lctx.totsize < minEvictThresh {
 		glog.Infof("%s: below threshold, nothing to do", lctx.bckTypeDir)
 		return
 	}
@@ -54,8 +56,9 @@ func (lctx *lructx) jog(wg *sync.WaitGroup) {
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	var (
-		evictOK, isOld bool
-		xlru, h        = lctx.ini.Xlru, lctx.heap
+		evictOK bool
+		isOld   bool
+		h       = lctx.heap
 	)
 	if err != nil {
 		glog.Errorf("invoked with err: %v", err)
@@ -64,26 +67,17 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if evictOK, isOld = lctx.ctxResolver.PermToEvict(fqn); !evictOK && !isOld {
+	if evictOK, isOld = lctx.ini.CtxResolver.PermToEvict(fqn); !evictOK && !isOld {
 		return nil
 	}
-	lctx.throttler.Sleep()
-
 	_, err = os.Stat(fqn)
 	if os.IsNotExist(err) {
 		glog.Infof("Warning (race?): %s "+cmn.DoesNotExist, fqn)
 		glog.Flush()
 		return nil
 	}
-	// abort?
-	select {
-	case <-xlru.ChanAbort():
-		return fmt.Errorf("%s aborted, exiting", xlru)
-	case <-time.After(time.Millisecond):
-		break
-	}
-	if xlru.Finished() {
-		return fmt.Errorf("%s aborted, exiting", xlru)
+	if err = lctx.yieldTerm(); err != nil {
+		return err
 	}
 
 	atime, mtime, stat := ios.GetAmTimes(osfi)
@@ -142,39 +136,71 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
-func (lctx *lructx) evict() error {
+func (lctx *lructx) evict() (err error) {
 	var (
 		fevicted, bevicted int64
+		capCheck           int64
 		h                  = lctx.heap
+		config             = cmn.GCO.Get()
 	)
 	for _, fi := range lctx.oldwork {
 		if lctx.ini.T.IsRebalancing() {
-			_, _, err := cluster.ResolveFQN(fi.fqn, nil, lctx.bislocal)
+			_, _, err = cluster.ResolveFQN(fi.fqn, nil, lctx.bislocal)
 			// keep a copy of a rebalanced file while rebalance is running
-			if movable := lctx.ctxResolver.PermToMove(fi.fqn); movable && err != nil {
+			if movable := lctx.ini.CtxResolver.PermToMove(fi.fqn); movable && err != nil {
 				continue
 			}
 		}
-		if err := os.Remove(fi.fqn); err != nil {
+		if err = os.Remove(fi.fqn); err != nil {
 			glog.Warningf("LRU: failed to remove %q", fi.fqn)
 			continue
 		}
-		lctx.totsize -= fi.size
+		if capCheck, err = lctx.postRemove(config, capCheck, fi.size); err != nil {
+			return
+		}
 		glog.Infof("Removed old %q", fi.fqn)
 	}
 	for h.Len() > 0 && lctx.totsize > 0 {
 		fi := heap.Pop(h).(*fileInfo)
-		if err := lctx.evictFQN(fi.fqn); err != nil {
+		if err = lctx.evictFQN(fi.fqn); err != nil {
 			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
 			continue
 		}
-		lctx.totsize -= fi.size
 		bevicted += fi.size
 		fevicted++
+		if capCheck, err = lctx.postRemove(config, capCheck, fi.size); err != nil {
+			return
+		}
 	}
 	lctx.ini.Statsif.Add(stats.LruEvictSize, bevicted)
 	lctx.ini.Statsif.Add(stats.LruEvictCount, fevicted)
 	return nil
+}
+
+func (lctx *lructx) postRemove(config *cmn.Config, capCheck, size int64) (int64, error) {
+	lctx.totsize -= size
+	capCheck += size
+	if err := lctx.yieldTerm(); err != nil {
+		return 0, err
+	}
+	if capCheck >= capCheckInterval {
+		capCheck = 0
+		usedpct, ok := ios.GetFSUsedPercentage(lctx.bckTypeDir)
+		lctx.throttle = false
+		if ok && usedpct < config.LRU.HighWM {
+			if !lctx.mpathInfo.IsIdle(config) {
+				// throttle self
+				ratioCapacity := cmn.Ratio(config.LRU.HighWM, config.LRU.LowWM, usedpct)
+				_, curr := lctx.mpathInfo.GetIOstats(fs.StatDiskUtil)
+				ratioUtilization := cmn.Ratio(config.Xaction.DiskUtilHighWM, config.Xaction.DiskUtilLowWM, int64(curr.Max))
+				if ratioUtilization > ratioCapacity {
+					lctx.throttle = true
+					time.Sleep(throttleTimeOut)
+				}
+			}
+		}
+	}
+	return capCheck, nil
 }
 
 // evictFQN evicts a given file
@@ -219,6 +245,25 @@ func (lctx *lructx) evictSize() (err error) {
 	lwmblocks := blocks * uint64(lwm) / 100
 	lctx.totsize = int64(used-lwmblocks) * bsize
 	return
+}
+
+func (lctx *lructx) yieldTerm() error {
+	xlru := lctx.ini.Xlru
+	select {
+	case <-xlru.ChanAbort():
+		return fmt.Errorf("%s aborted, exiting", xlru)
+	default:
+		if lctx.throttle {
+			time.Sleep(throttleTimeIn)
+		} else {
+			runtime.Gosched()
+		}
+		break
+	}
+	if xlru.Finished() {
+		return fmt.Errorf("%s aborted, exiting", xlru)
+	}
+	return nil
 }
 
 //=======================================================================

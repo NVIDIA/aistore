@@ -1168,7 +1168,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
 	w.Header().Add(cmn.HeaderBucketLRULowWM, strconv.FormatUint(uint64(props.LowWM), 10))
 	w.Header().Add(cmn.HeaderBucketLRUHighWM, strconv.FormatUint(uint64(props.HighWM), 10))
-	w.Header().Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatUint(props.AtimeCacheMax, 10))
+	w.Header().Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.AtimeCacheMax, 10))
 	w.Header().Add(cmn.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
 	w.Header().Add(cmn.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
 	w.Header().Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))

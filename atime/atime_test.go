@@ -14,11 +14,14 @@ import (
 	"github.com/NVIDIA/dfcpub/ios"
 )
 
-var (
-	riostat        *ios.IostatRunner
-	statsPeriod    = time.Second
-	maxMapSize     = uint64(1000)
+const (
+	maxMapSize     = 1000
 	flushThreshold = 4 * 1024
+)
+
+var (
+	riostat     *ios.IostatRunner
+	statsPeriod = time.Second
 )
 
 func init() {

@@ -39,7 +39,10 @@ import (
 
 // LRU defaults/tunables
 const (
-	minevict = cmn.MiB
+	minEvictThresh   = cmn.MiB
+	capCheckInterval = cmn.MiB * 256 // capacity checking "interval"
+	throttleTimeIn   = time.Millisecond * 10
+	throttleTimeOut  = time.Second
 )
 
 type (
@@ -71,12 +74,11 @@ type (
 		oldwork []*fileInfo
 		// init-time
 		ini         InitLRU
-		fs          string
+		mpathInfo   *fs.MountpathInfo
 		bckTypeDir  string
-		throttler   cluster.Throttler
 		atimeRespCh chan *atime.Response
-		ctxResolver *fs.ContentSpecMgr
 		bislocal    bool
+		throttle    bool
 	}
 )
 
@@ -117,17 +119,12 @@ func InitAndRun(ini *InitLRU) {
 }
 
 func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bckTypeDir string, bislocal bool) *lructx {
-	throttler := &cluster.Throttle{
-		MpathInfo: mpathInfo,
-		Flag:      cluster.OnDiskUtil | cluster.OnFSUsed}
 	lctx := &lructx{
 		oldwork:     make([]*fileInfo, 0, 64),
 		ini:         *ini,
-		fs:          mpathInfo.FileSystem,
+		mpathInfo:   mpathInfo,
 		bckTypeDir:  bckTypeDir,
-		throttler:   throttler,
 		atimeRespCh: make(chan *atime.Response, 1),
-		ctxResolver: ini.CtxResolver,
 		bislocal:    bislocal,
 	}
 	return lctx

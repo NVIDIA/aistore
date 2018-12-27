@@ -177,6 +177,15 @@ func (mi *MountpathInfo) GetIOstats(name string) (prev, curr cmn.PairF32) {
 	return
 }
 
+func (mi *MountpathInfo) IsIdle(config *cmn.Config) bool {
+	if config == nil {
+		config = cmn.GCO.Get()
+	}
+	prev, curr := mi.GetIOstats(StatDiskUtil)
+	return prev.Max >= 0 && prev.Max < float32(config.Xaction.DiskUtilLowWM) &&
+		curr.Max >= 0 && curr.Max < float32(config.Xaction.DiskUtilLowWM)
+}
+
 // SetIOstats is called by the iostat runner directly to fill-in the most recently
 // updated utilizations and queue lengths of the disks used by this mountpath
 // (or, more precisely, the underlying local FS)

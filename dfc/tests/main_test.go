@@ -1553,7 +1553,7 @@ func defaultBucketProps() cmn.BucketProps {
 		LRUConf: cmn.LRUConf{
 			LowWM:              int64(10),
 			HighWM:             int64(50),
-			AtimeCacheMax:      uint64(9999),
+			AtimeCacheMax:      int64(9999),
 			DontEvictTimeStr:   "1m",
 			CapacityUpdTimeStr: "2m",
 			LRUEnabled:         false,

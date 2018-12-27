@@ -374,21 +374,17 @@ func (j *jogger) stop() {
 
 // num2flush estimates the number of timestamps that must be flushed
 func (j *jogger) num2flush() (n int) {
-	curlen := len(j.atimemap)
-	max := cmn.MaxU64(cmn.GCO.Get().LRU.AtimeCacheMax, 1)
-	pct := cmn.MinU64(100, uint64(curlen)*100/max) // curlen as %%
-	low := int(max * LowWM / 100)
-	switch {
-	case pct > HighWM: // atime map capacity at high watermark
-		n = curlen - low
-	case pct > LowWM: // low watermark => weighted formula
-		f := float32(pct-LowWM) / float32(HighWM-LowWM) * float32(curlen)
-		n = int(float32(curlen-low) * f)
-	default:
-		prev, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
-		if prev.Max >= 0 && prev.Max < 20 && curr.Max >= 0 && curr.Max < 20 {
-			n = curlen / 4
-		}
+	config := cmn.GCO.Get()
+	maxlen := cmn.MaxI64(config.LRU.AtimeCacheMax, 1)
+	lowlen := maxlen * LowWM / 100
+	curlen := int64(len(j.atimemap))
+	curpct := curlen * 100 / maxlen
+	f := cmn.Ratio(HighWM, LowWM, curpct)
+	n = int(float32(curlen-lowlen) * f)
+
+	// TODO: handle the idle case in the slow path as part of the _TBD_ refactoring
+	if n == 0 && j.mpathInfo.IsIdle(config) {
+		n = int(curlen / 4)
 	}
 	return
 }

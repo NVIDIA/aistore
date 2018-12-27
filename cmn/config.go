@@ -230,7 +230,7 @@ type LRUConf struct {
 	HighWM int64 `json:"highwm"`
 
 	// AtimeCacheMax represents the maximum number of entries
-	AtimeCacheMax uint64 `json:"atime_cache_max"`
+	AtimeCacheMax int64 `json:"atime_cache_max"`
 
 	// DontEvictTimeStr denotes the period of time during which eviction of an object
 	// is forbidden [atime, atime + DontEvictTime]

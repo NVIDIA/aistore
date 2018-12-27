@@ -17,10 +17,9 @@ import (
 )
 
 type recksumctx struct {
-	xrcksum   *xactRechecksum
-	t         *targetrunner
-	fs        string
-	throttler cluster.Throttler
+	xrcksum *xactRechecksum
+	t       *targetrunner
+	fs      string
 }
 
 // TODO: Smap and mpath changes, fspath runner, progress bar, and more...
@@ -65,14 +64,10 @@ func (t *targetrunner) runRechecksumBucket(bucket string) {
 }
 
 func (t *targetrunner) oneRechecksumBucket(mpathInfo *fs.MountpathInfo, bucketDir string, xrcksum *xactRechecksum) {
-	throttler := &cluster.Throttle{
-		MpathInfo: mpathInfo,
-		Flag:      cluster.OnDiskUtil}
 	rcksctx := &recksumctx{
-		xrcksum:   xrcksum,
-		t:         t,
-		fs:        mpathInfo.FileSystem,
-		throttler: throttler,
+		xrcksum: xrcksum,
+		t:       t,
+		fs:      mpathInfo.FileSystem,
 	}
 
 	if err := filepath.Walk(bucketDir, rcksctx.walk); err != nil {
@@ -95,7 +90,7 @@ func (rcksctx *recksumctx) walk(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 
-	rcksctx.throttler.Sleep()
+	// FIXME: throttle self - see lru
 
 	// stop traversing if xaction is aborted
 	select {

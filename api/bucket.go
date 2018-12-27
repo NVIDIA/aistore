@@ -95,7 +95,7 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 		lruprops.HighWM = int64(b)
 	}
 
-	if b, err := strconv.ParseUint(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {
+	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketAtimeCacheMax), 10, 32); err == nil {
 		lruprops.AtimeCacheMax = b
 	}
 

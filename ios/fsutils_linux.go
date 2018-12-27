@@ -22,13 +22,13 @@ func GetFSStats(path string) (blocks uint64, bavail uint64, bsize int64, err err
 	return fsStats.Blocks, fsStats.Bavail, fsStats.Bsize, nil
 }
 
-func GetFSUsedPercentage(path string) (usedPercentage uint64, ok bool) {
+func GetFSUsedPercentage(path string) (usedPercentage int64, ok bool) {
 	totalBlocks, blocksAvailable, _, err := GetFSStats(path)
 	if err != nil {
 		return
 	}
 	usedBlocks := totalBlocks - blocksAvailable
-	return usedBlocks * 100 / totalBlocks, true
+	return int64(usedBlocks * 100 / totalBlocks), true
 }
 
 func GetAmTimes(osfi os.FileInfo) (time.Time, time.Time, *syscall.Stat_t) {
