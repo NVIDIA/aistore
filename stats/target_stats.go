@@ -65,9 +65,12 @@ type (
 		Riostat      *ios.IostatRunner      `json:"-"`
 		Core         *targetCoreStats       `json:"core"`
 		Capacity     map[string]*fscapacity `json:"capacity"`
-		// omitempty
-		timeUpdatedCapacity time.Time
-		timeCheckedLogSizes time.Time
+		// inner state
+		timecounts struct {
+			capLimit, capIdx int64 // update capacity: time interval counting
+			logLimit, logIdx int64 // check log size: ditto
+		}
+		lines []string
 	}
 	copyRunner struct {
 		Tracker  copyTracker            `json:"core"`
@@ -107,45 +110,59 @@ func (r *Trunner) Init() {
 	r.Core = &targetCoreStats{}
 	r.Core.init(48) // and register common stats (target's own stats are registered elsewhere via the Register() above)
 
+	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
+	r.lines = make([]string, 0, 16)
+
 	r.UpdateCapacity()
+
+	config := cmn.GCO.Get()
+	r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
+	r.timecounts.logLimit = cmn.DivCeil(int64(logsTotalSizeCheckTime), int64(config.Periodic.StatsTime))
+
+	// subscribe to config changes
+	cmn.GCO.Subscribe(r)
+}
+
+func (r *Trunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	r.statsRunner.ConfigUpdate(oldConf, newConf)
+	r.timecounts.capLimit = cmn.DivCeil(int64(newConf.LRU.CapacityUpdTime), int64(newConf.Periodic.StatsTime))
+	r.timecounts.logLimit = cmn.DivCeil(int64(logsTotalSizeCheckTime), int64(newConf.Periodic.StatsTime))
 }
 
 func (r *Trunner) GetWhatStats() ([]byte, error) {
-	tracker := make(copyTracker, 48)
-	r.Core.copyCumulative(tracker)
+	ctracker := make(copyTracker, 48)
+	r.Core.copyCumulative(ctracker)
 
-	crunner := &copyRunner{Tracker: tracker, Capacity: r.Capacity}
-	return jsoniter.Marshal(crunner)
+	crunner := &copyRunner{Tracker: ctracker, Capacity: r.Capacity}
+	return jsonCompat.Marshal(crunner)
 }
 
 func (r *Trunner) log() (runlru bool) {
-	var (
-		tracker = make(copyTracker, 48)
-		lines   = make([]string, 0, 16)
-	)
 	// copy stats values while skipping zeros; reset latency stats
 	r.Core.Tracker[Uptime].Value = int64(time.Since(r.starttime) / time.Microsecond)
-	r.Core.copyZeroReset(tracker)
+	r.Core.copyZeroReset(r.ctracker)
 
-	b, err := jsoniter.Marshal(tracker)
+	r.lines = r.lines[:0]
+	b, err := jsonCompat.Marshal(r.ctracker)
 	if err == nil {
-		lines = append(lines, string(b))
+		r.lines = append(r.lines, string(b))
 	}
 
 	// 2. capacity
-	if time.Since(r.timeUpdatedCapacity) >= cmn.GCO.Get().LRU.CapacityUpdTime {
+	r.timecounts.capIdx++
+	if r.timecounts.capIdx >= r.timecounts.capLimit {
 		runlru = r.UpdateCapacity()
-		r.timeUpdatedCapacity = time.Now()
+		r.timecounts.capIdx = 0
 		for mpath, fsCapacity := range r.Capacity {
 			b, err := jsoniter.Marshal(fsCapacity)
 			if err == nil {
-				lines = append(lines, mpath+": "+string(b))
+				r.lines = append(r.lines, mpath+": "+string(b))
 			}
 		}
 	}
 
 	// 3. log
-	for _, ln := range lines {
+	for _, ln := range r.lines {
 		glog.Infoln(ln)
 	}
 	return
@@ -166,9 +183,10 @@ func (r *Trunner) housekeep(runlru bool) {
 	}
 
 	// keep total log size below the configured max
-	if time.Since(r.timeCheckedLogSizes) >= logsTotalSizeCheckTime {
+	r.timecounts.logIdx++
+	if r.timecounts.logIdx >= r.timecounts.logLimit {
 		go r.removeLogs(config.Log.MaxTotal)
-		r.timeCheckedLogSizes = time.Now()
+		r.timecounts.logIdx = 0
 	}
 }
 

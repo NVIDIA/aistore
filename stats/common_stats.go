@@ -94,6 +94,7 @@ type (
 		workCh    chan NamedVal64
 		starttime time.Time
 		ticker    *time.Ticker
+		ctracker  copyTracker // to avoid making it at runtime
 	}
 	// Stats are tracked via a map of stats names (key) to statsValue (values).
 	// There are two main types of stats: counter and latency declared
@@ -112,6 +113,11 @@ type (
 	statsTracker map[string]*statsValue
 	copyTracker  map[string]*copyValue
 )
+
+//
+// globals
+//
+var jsonCompat = jsoniter.ConfigCompatibleWithStandardLibrary
 
 //
 // statsValue
@@ -182,9 +188,6 @@ func (r *statsRunner) runcommon(logger statslogger) error {
 	r.stopCh = make(chan struct{}, 4)
 	r.workCh = make(chan NamedVal64, 256)
 	r.starttime = time.Now()
-
-	// subscribe for config changes
-	cmn.GCO.Subscribe(r)
 
 	glog.Infof("Starting %s", r.Getname())
 	r.ticker = time.NewTicker(cmn.GCO.Get().Periodic.StatsTime)

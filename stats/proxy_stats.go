@@ -80,12 +80,12 @@ func (s *ProxyCoreStats) doAdd(name string, val int64) {
 	}
 }
 
-func (s *ProxyCoreStats) copyZeroReset(tracker copyTracker) {
+func (s *ProxyCoreStats) copyZeroReset(ctracker copyTracker) {
 	for name, v := range s.Tracker {
 		if v.kind == KindLatency {
 			v.Lock()
 			if v.numSamples > 0 {
-				tracker[name] = &copyValue{Value: v.Value / v.numSamples} // may be zero in the end
+				ctracker[name] = &copyValue{Value: v.Value / v.numSamples} // note: int divide
 			}
 			v.Value = 0
 			v.numSamples = 0
@@ -93,26 +93,26 @@ func (s *ProxyCoreStats) copyZeroReset(tracker copyTracker) {
 		} else if v.kind == KindCounter {
 			v.RLock()
 			if v.Value != 0 {
-				tracker[name] = &copyValue{Value: v.Value}
+				ctracker[name] = &copyValue{Value: v.Value}
 			}
 			v.RUnlock()
 		} else {
-			tracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
 		}
 	}
 }
 
-func (s *ProxyCoreStats) copyCumulative(tracker copyTracker) {
+func (s *ProxyCoreStats) copyCumulative(ctracker copyTracker) {
 	for name, v := range s.Tracker {
 		v.RLock()
 		if v.kind == KindLatency {
-			tracker[name] = &copyValue{Value: v.cumulative}
+			ctracker[name] = &copyValue{Value: v.cumulative}
 		} else if v.kind == KindCounter {
 			if v.Value != 0 {
-				tracker[name] = &copyValue{Value: v.Value}
+				ctracker[name] = &copyValue{Value: v.Value}
 			}
 		} else {
-			tracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
+			ctracker[name] = &copyValue{Value: v.Value} // KindSpecial as is and wo/ lock
 		}
 		v.RUnlock()
 	}
@@ -126,22 +126,28 @@ func (r *Prunner) Run() error { return r.runcommon(r) }
 func (r *Prunner) Init() {
 	r.Core = &ProxyCoreStats{}
 	r.Core.init(24)
+	r.ctracker = make(copyTracker, 24)
+
+	// subscribe to config changes
+	cmn.GCO.Subscribe(r)
+}
+
+func (r *Prunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
+	r.statsRunner.ConfigUpdate(oldConf, newConf)
 }
 
 func (r *Prunner) GetWhatStats() ([]byte, error) {
-	tracker := make(copyTracker, 24)
-	r.Core.copyCumulative(tracker)
-	return jsoniter.Marshal(tracker)
+	ctracker := make(copyTracker, 24)
+	r.Core.copyCumulative(ctracker)
+	return jsonCompat.Marshal(ctracker)
 }
 
 // statslogger interface impl
 func (r *Prunner) log() (runlru bool) {
-	tracker := make(copyTracker, 24)
-
 	// copy stats values while skipping zeros; reset latency stats
-	r.Core.copyZeroReset(tracker)
+	r.Core.copyZeroReset(r.ctracker)
 
-	b, err := jsoniter.Marshal(tracker)
+	b, err := jsonCompat.Marshal(r.ctracker)
 	if err == nil {
 		glog.Infoln(string(b))
 	}
