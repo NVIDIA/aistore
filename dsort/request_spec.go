@@ -121,6 +121,7 @@ type RequestSpec struct {
 	IsLocalBucket      bool          `json:"local"`                     // Default: false
 	ExtractConcLimit   int           `json:"extract_concurrency_limit"` // Default: DefaultConcLimit
 	CreateConcLimit    int           `json:"create_concurrency_limit"`  // Default: DefaultConcLimit
+	ExtendedMetrics    bool          `json:"extended_metrics"`          // Default: false
 }
 
 type ParsedRequestSpec struct {
@@ -136,6 +137,7 @@ type ParsedRequestSpec struct {
 	TargetOrderSalt    []byte                `json:"target_order_salt"`
 	ExtractConcLimit   int                   `json:"extract_concurrency_limit"`
 	CreateConcLimit    int                   `json:"create_concurrency_limit"`
+	ExtendedMetrics    bool                  `json:"extended_metrics"`
 }
 
 type SortAlgorithm struct {
@@ -217,6 +219,7 @@ func (rs *RequestSpec) Parse() (*ParsedRequestSpec, error) {
 	}
 	parsedRS.ExtractConcLimit = rs.ExtractConcLimit
 	parsedRS.CreateConcLimit = rs.CreateConcLimit
+	parsedRS.ExtendedMetrics = rs.ExtendedMetrics
 	return parsedRS, nil
 }
 

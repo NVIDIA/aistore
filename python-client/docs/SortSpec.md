@@ -13,6 +13,7 @@ Name | Type | Description | Notes
 **max_mem_usage** | **str** |  | [optional] 
 **extract_concurrency_limit** | **int** |  | [optional] [default to 10]
 **create_concurrency_limit** | **int** |  | [optional] [default to 10]
+**extended_metrics** | **bool** | Determines if metrics should include extened statistics | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

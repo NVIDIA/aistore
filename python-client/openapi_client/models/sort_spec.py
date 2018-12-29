@@ -41,7 +41,8 @@ class SortSpec(object):
         'algorithm': 'SortSpecAlgorithm',
         'max_mem_usage': 'str',
         'extract_concurrency_limit': 'int',
-        'create_concurrency_limit': 'int'
+        'create_concurrency_limit': 'int',
+        'extended_metrics': 'bool'
     }
 
     attribute_map = {
@@ -54,10 +55,11 @@ class SortSpec(object):
         'algorithm': 'algorithm',
         'max_mem_usage': 'max_mem_usage',
         'extract_concurrency_limit': 'extract_concurrency_limit',
-        'create_concurrency_limit': 'create_concurrency_limit'
+        'create_concurrency_limit': 'create_concurrency_limit',
+        'extended_metrics': 'extended_metrics'
     }
 
-    def __init__(self, bucket=None, local=False, extension=None, shard_size=None, input_format=None, output_format=None, algorithm=None, max_mem_usage=None, extract_concurrency_limit=10, create_concurrency_limit=10):  # noqa: E501
+    def __init__(self, bucket=None, local=False, extension=None, shard_size=None, input_format=None, output_format=None, algorithm=None, max_mem_usage=None, extract_concurrency_limit=10, create_concurrency_limit=10, extended_metrics=None):  # noqa: E501
         """SortSpec - a model defined in OpenAPI"""  # noqa: E501
 
         self._bucket = None
@@ -70,6 +72,7 @@ class SortSpec(object):
         self._max_mem_usage = None
         self._extract_concurrency_limit = None
         self._create_concurrency_limit = None
+        self._extended_metrics = None
         self.discriminator = None
 
         self.bucket = bucket
@@ -88,6 +91,8 @@ class SortSpec(object):
             self.extract_concurrency_limit = extract_concurrency_limit
         if create_concurrency_limit is not None:
             self.create_concurrency_limit = create_concurrency_limit
+        if extended_metrics is not None:
+            self.extended_metrics = extended_metrics
 
     @property
     def bucket(self):
@@ -314,6 +319,29 @@ class SortSpec(object):
             raise ValueError("Invalid value for `create_concurrency_limit`, must be a value greater than or equal to `0`")  # noqa: E501
 
         self._create_concurrency_limit = create_concurrency_limit
+
+    @property
+    def extended_metrics(self):
+        """Gets the extended_metrics of this SortSpec.  # noqa: E501
+
+        Determines if metrics should include extened statistics  # noqa: E501
+
+        :return: The extended_metrics of this SortSpec.  # noqa: E501
+        :rtype: bool
+        """
+        return self._extended_metrics
+
+    @extended_metrics.setter
+    def extended_metrics(self, extended_metrics):
+        """Sets the extended_metrics of this SortSpec.
+
+        Determines if metrics should include extened statistics  # noqa: E501
+
+        :param extended_metrics: The extended_metrics of this SortSpec.  # noqa: E501
+        :type: bool
+        """
+
+        self._extended_metrics = extended_metrics
 
     def to_dict(self):
         """Returns the model properties as a dict"""

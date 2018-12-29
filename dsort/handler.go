@@ -152,7 +152,7 @@ func proxyMetricsSortHandler(w http.ResponseWriter, r *http.Request) {
 			cmn.InvalidHandlerWithMsg(w, r, resp.err.Error(), resp.statusCode)
 			return
 		}
-		metrics := newMetrics()
+		metrics := &Metrics{}
 		if err := js.Unmarshal(resp.res, &metrics); err != nil {
 			cmn.InvalidHandlerWithMsg(w, r, err.Error(), http.StatusInternalServerError)
 			return

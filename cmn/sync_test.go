@@ -52,3 +52,57 @@ func TestTimeoutGroupTimeout(t *testing.T) {
 		t.Error("group timed out")
 	}
 }
+
+func TestTimeoutGroupStop(t *testing.T) {
+	wg := cmn.NewTimeoutGroup()
+	wg.Add(1)
+
+	go func() {
+		time.Sleep(time.Second * 3)
+		wg.Done()
+	}()
+
+	if !wg.WaitTimeout(time.Second) {
+		t.Error("group did not time out")
+	}
+
+	stopCh := make(chan struct{}, 1)
+	stopCh <- struct{}{}
+
+	timed, stopped := wg.WaitTimeoutWithStop(time.Second, stopCh)
+	if timed {
+		t.Error("group should not time out")
+	}
+
+	if !stopped {
+		t.Error("group should be stopped")
+	}
+
+	if timed, stopped = wg.WaitTimeoutWithStop(time.Second*3, stopCh); timed || stopped {
+		t.Error("group timed out or was stopped on finish")
+	}
+}
+
+func TestTimeoutGroupStopAndTimeout(t *testing.T) {
+	wg := cmn.NewTimeoutGroup()
+	wg.Add(1)
+
+	go func() {
+		time.Sleep(time.Second * 3)
+		wg.Done()
+	}()
+
+	stopCh := make(chan struct{}, 1)
+	timed, stopped := wg.WaitTimeoutWithStop(time.Second, stopCh)
+	if !timed {
+		t.Error("group should time out")
+	}
+
+	if stopped {
+		t.Error("group should not be stopped")
+	}
+
+	if timed, stopped = wg.WaitTimeoutWithStop(time.Second*3, stopCh); timed || stopped {
+		t.Error("group timed out or was stopped on finish")
+	}
+}

@@ -1,9 +1,40 @@
 package dsort
 
 import (
+	"math"
 	"sync"
 	"time"
+
+	"github.com/NVIDIA/dfcpub/cmn"
 )
+
+// TimeStats contains statistics about time spent on specific task. It calculates
+// min, max and avg times.
+type TimeStats struct {
+	// total contains total number of milliseconds spend on
+	// specific task.
+	Total int64 `json:"total_ms"`
+	// Count contains number of time specific task was triggered.
+	Count int64 `json:"count"`
+	Min   int64 `json:"min_ms"`
+	Max   int64 `json:"max_ms"`
+	Avg   int64 `json:"avg_ms"`
+}
+
+func newTimeStats() *TimeStats {
+	return &TimeStats{
+		Min: math.MaxInt64,
+	}
+}
+
+func (ts *TimeStats) update(newTime time.Duration) {
+	t := newTime.Nanoseconds() / int64(time.Millisecond)
+	ts.Total += t
+	ts.Count++
+	ts.Min = cmn.MinI64(ts.Min, t)
+	ts.Max = cmn.MaxI64(ts.Max, t)
+	ts.Avg = ts.Total / ts.Count
+}
 
 // PhaseInfo contains general stats and state for given phase. It is base struct
 // which is extended by actual phases structs.
@@ -62,18 +93,17 @@ type LocalExtraction struct {
 	// ExtractedToDiskSize describes uncompressed size of extracted shards to disk
 	// to given moment.
 	ExtractedToDiskSize int64 `json:"extracted_to_disk_size"`
+	// ShardExtractionStats describes time statistics about single shard extraction.
+	ShardExtractionStats *TimeStats `json:"single_shard_stats,omitempty"`
 }
 
 // MetaSorting contains metrics for second phase of DSort.
 type MetaSorting struct {
 	PhaseInfo
-	// SentCnt describes number of times records has been sent from this target
-	// to some other.
-	SentCnt int `json:"sent_count"`
-	// RecvCnt describes number of times given target has received records from
-	// some other target. Final target (which contains all record) should have
-	// this number bigger than other target.
-	RecvCnt int `json:"recv_count"`
+	// SentStats describes time statistics about records sending to another target
+	SentStats *TimeStats `json:"sent_stats,omitempty"`
+	// RecvStats describes time statistics about records receiving from another target
+	RecvStats *TimeStats `json:"recv_stats,omitempty"`
 }
 
 // ShardCreation contains metrics for third and last phase of DSort.
@@ -89,6 +119,12 @@ type ShardCreation struct {
 	// data. Sometimes is faster to create shard on specific target and send it
 	// via network than create shard on destination target.
 	MovedShardCnt int `json:"moved_shard_count"`
+	// RequestStats describes time statistics about request to other target.
+	RequestStats *TimeStats `json:"req_stats,omitempty"`
+	// ResponseStats describes time statistics about response to other target.
+	ResponseStats *TimeStats `json:"resp_stats,omitempty"`
+	// ShardCreationStats describes time statistics about single shard creation.
+	ShardCreationStats *TimeStats `json:"single_shard_stats,omitempty"`
 }
 
 // Metrics is general struct which contains all stats about DSort run.
@@ -98,14 +134,34 @@ type Metrics struct {
 	Creation   *ShardCreation   `json:"shard_creation,omitempty"`
 	// Aborted specifies if the DSort has been aborted or not.
 	Aborted bool `json:"aborted"`
+
+	// extended determines if we should calculate and send extended metrics like
+	// request/response times.
+	extended bool
 }
 
 // newMetrics creates new Metrics instance.
-func newMetrics() *Metrics {
+func newMetrics(extended bool) *Metrics {
+	extraction := &LocalExtraction{}
+	sorting := &MetaSorting{}
+	creation := &ShardCreation{}
+	if extended {
+		extraction.ShardExtractionStats = newTimeStats()
+
+		sorting.SentStats = newTimeStats()
+		sorting.RecvStats = newTimeStats()
+
+		creation.RequestStats = newTimeStats()
+		creation.ResponseStats = newTimeStats()
+		creation.ShardCreationStats = newTimeStats()
+	}
+
 	return &Metrics{
-		Extraction: &LocalExtraction{},
-		Sorting:    &MetaSorting{},
-		Creation:   &ShardCreation{},
+		extended: extended,
+
+		Extraction: extraction,
+		Sorting:    sorting,
+		Creation:   creation,
 	}
 }
 

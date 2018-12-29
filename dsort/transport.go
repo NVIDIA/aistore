@@ -25,7 +25,7 @@ func newClient(conns int) *http.Client {
 			KeepAlive: 30 * time.Second,
 			DualStack: true,
 		}).DialContext,
-		MaxIdleConns:          100,
+		MaxIdleConns:          1000,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
@@ -65,6 +65,6 @@ func NewStream(url string) *transport.Stream {
 	extra := &transport.Extra{
 		IdleTimeout: time.Minute * 5,
 	}
-	client := newClient(runtime.NumCPU() + 1)
+	client := newClient(runtime.NumCPU()*2 + 1)
 	return transport.NewStream(client, url, extra)
 }

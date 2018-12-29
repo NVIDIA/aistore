@@ -130,7 +130,6 @@ Class | Method | HTTP request | Description
  - [InputParameters](docs/InputParameters.md)
  - [KeepAliveTrackerConfiguration](docs/KeepAliveTrackerConfiguration.md)
  - [ListParameters](docs/ListParameters.md)
- - [MapOfMetrics](docs/MapOfMetrics.md)
  - [NetInfo](docs/NetInfo.md)
  - [ObjectProperties](docs/ObjectProperties.md)
  - [ObjectPropertiesRequestParams](docs/ObjectPropertiesRequestParams.md)
@@ -149,6 +148,7 @@ Class | Method | HTTP request | Description
  - [TargetCoreStatistics](docs/TargetCoreStatistics.md)
  - [TargetStatistics](docs/TargetStatistics.md)
  - [TimeFormat](docs/TimeFormat.md)
+ - [TimeStats](docs/TimeStats.md)
  - [Version](docs/Version.md)
  - [XactionDetails](docs/XactionDetails.md)
 

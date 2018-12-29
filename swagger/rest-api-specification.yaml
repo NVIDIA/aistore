@@ -810,6 +810,9 @@ components:
           minimum: 0
           default: 10
           example: 50
+        extended_metrics:
+          type: boolean
+          description: Determines if metrics should include extened statistics
       required:
         - bucket
         - extension
@@ -853,6 +856,8 @@ components:
               extracted_to_disk_size:
                 type: integer
                 format: int64
+              single_shard_stats:
+                $ref: '#/components/schemas/TimeStats'
           meta_sorting:
             type: object
             properties:
@@ -870,10 +875,10 @@ components:
                 type: boolean
               finished:
                 type: boolean
-              sent_count:
-                type: integer
-              recv_count:
-                type: integer
+              sent_stats:
+                $ref: '#/components/schemas/TimeStats'
+              recv_stats:
+                $ref: '#/components/schemas/TimeStats'
           shard_creation:
             type: object
             properties:
@@ -897,12 +902,31 @@ components:
                 type: integer
               moved_shard_count:
                 type: integer
+              req_stats:
+                $ref: '#/components/schemas/TimeStats'
+              resp_stats:
+                $ref: '#/components/schemas/TimeStats'
+              single_shard_stats:
+                $ref: '#/components/schemas/TimeStats'
           aborted:
             type: boolean
             description: Specifies if the distributed sort has been aborted or not.
     NameTemplate:
       type: string
       example: "prefix-{0001..0999}-suffix"
+    TimeStats:
+      type: object
+      properties:
+        total_ms:
+          type: integer
+        count:
+          type: integer
+        min_ms:
+          type: integer
+        max_ms:
+          type: integer
+        avg_ms:
+          type: integer
     InputParameters:
       type: object
       properties:

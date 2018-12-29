@@ -49,6 +49,7 @@ func main() {
 		ExtractConcLimit: extractConcLimit,
 		CreateConcLimit:  createConcLimit,
 		MaxMemUsage:      memUsage,
+		ExtendedMetrics:  true,
 	}
 	dsortUUID, err := tutils.StartDSort(proxyURL, rs)
 	if err != nil {

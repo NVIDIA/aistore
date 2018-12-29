@@ -36,7 +36,7 @@ const (
 	//
 	// FIXME(januszm): maybe it should be something that is configurable by the user
 	// and this would be default value.
-	defaultCallTimeout = time.Second * 30
+	defaultCallTimeout = time.Minute * 10
 )
 
 var (
@@ -154,7 +154,7 @@ func (m *Manager) init(rs *ParsedRequestSpec) error {
 	m.ctx = ctx
 	targetCount := m.ctx.smap.Get().CountTargets()
 	m.rs = rs
-	m.Metrics = newMetrics()
+	m.Metrics = newMetrics(rs.ExtendedMetrics)
 	m.startShardCreation = make(chan struct{}, 1)
 
 	// Set extract creator depending on extension provided by the user
@@ -705,21 +705,70 @@ func (m *Manager) loadContent() extract.LoadContentFunc {
 		}
 
 		loadRemote := func(w io.Writer, daemonID, pathToContents string) (int64, error) {
-			writer := m.newStreamWriter(pathToContents, w)
-			hdr := transport.Header{
-				Objname: pathToContents,
-				Opaque:  []byte(m.ctx.node.DaemonID),
+			var (
+				cbErr      error
+				beforeRecv time.Time
+				beforeSend time.Time
+
+				wg      = &sync.WaitGroup{}
+				writer  = m.newStreamWriter(pathToContents, w)
+				metrics = m.Metrics.Creation
+
+				hdr = transport.Header{
+					Objname: pathToContents,
+					Opaque:  []byte(m.ctx.node.DaemonID),
+				}
+				toNode = m.ctx.smap.Get().Tmap[daemonID]
+			)
+
+			if m.Metrics.extended {
+				beforeSend = time.Now()
 			}
-			toNode := m.ctx.smap.Get().Tmap[daemonID]
-			if err := m.streams.request[toNode.DaemonID].Get().Send(hdr, nil, nil); err != nil {
+
+			cb := func(hdr transport.Header, r io.ReadCloser, err error) {
+				if err != nil {
+					cbErr = err
+				}
+				if m.Metrics.extended {
+					metrics.Lock()
+					metrics.RequestStats.update(time.Since(beforeSend))
+					metrics.Unlock()
+				}
+				wg.Done()
+			}
+
+			wg.Add(1)
+			if err := m.streams.request[toNode.DaemonID].Get().Send(hdr, nil, cb); err != nil {
 				return 0, err
 			}
 
-			// It may happen that the target we are trying to contact was aborted or
-			// for some reason is not responding. Thus we need to do some precaution
-			// and wait for the content only for limited time.
-			if writer.wg.WaitTimeout(m.callTimeout) {
-				m.pullStreamWriter(pathToContents)
+			// Send should be synchronous to make sure that 'wait timeout' is calculated
+			// only for receive side.
+			wg.Wait()
+
+			if cbErr != nil {
+				return 0, cbErr
+			}
+
+			if m.Metrics.extended {
+				beforeRecv = time.Now()
+			}
+
+			// It may happen that the target we are trying to contact was
+			// aborted or for some reason is not responding. Thus we need to do
+			// some precaution and wait for the content only for limited time or
+			// until we receive abort signal.
+			timed, stopped := writer.wg.WaitTimeoutWithStop(m.callTimeout, m.listenAborted())
+
+			if m.Metrics.extended {
+				metrics.Lock()
+				metrics.ResponseStats.update(time.Since(beforeRecv))
+				metrics.Unlock()
+			}
+
+			if stopped {
+				return 0, fmt.Errorf("wait for remote content was aborted")
+			} else if timed {
 				return 0, fmt.Errorf("wait for remote content has timed out (%q was waiting for %q)", m.ctx.node.DaemonID, daemonID)
 			}
 			return writer.n, writer.err

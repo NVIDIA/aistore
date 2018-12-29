@@ -194,6 +194,14 @@ ExtractAllShards:
 		m.acquireExtractGoroutineSema()
 		extractShard := func(i int) func() error {
 			return func() error {
+				var (
+					beforeExtraction time.Time
+				)
+
+				if m.Metrics.extended {
+					beforeExtraction = time.Now()
+				}
+
 				metrics.Lock()
 				metrics.SeenCnt++
 				metrics.Unlock()
@@ -272,6 +280,9 @@ ExtractAllShards:
 					metrics.ExtractedToDiskCnt++
 					metrics.ExtractedToDiskSize += extractedSize
 				}
+				if m.Metrics.extended {
+					metrics.ShardExtractionStats.update(time.Since(beforeExtraction))
+				}
 				metrics.Unlock()
 
 				atomic.AddUint64(&totalExtractedCount, uint64(extractedCount))
@@ -300,12 +311,17 @@ ExtractAllShards:
 }
 
 func (m *Manager) createShard(s *extract.Shard) (err error) {
-	loadContent := m.loadContent()
-	metrics := m.Metrics.Creation
 
 	var (
-		shardFile *os.File
+		shardFile      *os.File
+		beforeCreation time.Time
+		loadContent    = m.loadContent()
+		metrics        = m.Metrics.Creation
 	)
+
+	if m.Metrics.extended {
+		beforeCreation = time.Now()
+	}
 
 	fqn, errStr := cluster.FQN(fs.ObjectType, s.Bucket, s.Name, s.IsLocal)
 	if errStr != "" {
@@ -394,6 +410,12 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 
 		metrics.Lock()
 		metrics.MovedShardCnt++
+		metrics.Unlock()
+	}
+
+	if m.Metrics.extended {
+		metrics.Lock()
+		metrics.ShardCreationStats.update(time.Since(beforeCreation))
 		metrics.Unlock()
 	}
 
@@ -492,6 +514,7 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 
 		if i%2 == 0 {
+			beforeSend := time.Now()
 			body, e := js.Marshal(m.recManager.Records)
 			if e != nil {
 				err = fmt.Errorf("failed to marshal into JSON, err: %v", e)
@@ -512,11 +535,15 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 
 			m.recManager.Records.Drain() // we do not need it anymore
 
-			metrics.Lock()
-			metrics.SentCnt++
-			metrics.Unlock()
+			if m.Metrics.extended {
+				metrics.Lock()
+				metrics.SentStats.update(time.Since(beforeSend))
+				metrics.Unlock()
+			}
 			return
 		}
+
+		beforeRecv := time.Now()
 
 		// i%2 == 1
 		receiveFrom := targetOrder[i-1]
@@ -534,9 +561,11 @@ func (m *Manager) participateInRecordDistribution(targetOrder []*cluster.Snode) 
 		}
 		expectedReceived++
 
-		metrics.Lock()
-		metrics.RecvCnt++
-		metrics.Unlock()
+		if m.Metrics.extended {
+			metrics.Lock()
+			metrics.RecvStats.update(time.Since(beforeRecv))
+			metrics.Unlock()
+		}
 
 		t := targetOrder[:0]
 		for i, d = range targetOrder {

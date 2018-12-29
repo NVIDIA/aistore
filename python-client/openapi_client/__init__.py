@@ -60,7 +60,6 @@ from openapi_client.models.headers import Headers
 from openapi_client.models.input_parameters import InputParameters
 from openapi_client.models.keep_alive_tracker_configuration import KeepAliveTrackerConfiguration
 from openapi_client.models.list_parameters import ListParameters
-from openapi_client.models.map_of_metrics import MapOfMetrics
 from openapi_client.models.net_info import NetInfo
 from openapi_client.models.object_properties import ObjectProperties
 from openapi_client.models.object_properties_request_params import ObjectPropertiesRequestParams
@@ -79,5 +78,6 @@ from openapi_client.models.sort_spec_algorithm import SortSpecAlgorithm
 from openapi_client.models.target_core_statistics import TargetCoreStatistics
 from openapi_client.models.target_statistics import TargetStatistics
 from openapi_client.models.time_format import TimeFormat
+from openapi_client.models.time_stats import TimeStats
 from openapi_client.models.version import Version
 from openapi_client.models.xaction_details import XactionDetails
