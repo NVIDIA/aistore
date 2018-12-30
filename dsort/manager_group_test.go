@@ -84,7 +84,7 @@ var _ = Describe("ManagerGroup", func() {
 			m.setInProgressTo(false)
 
 			Expect(err).ShouldNot(HaveOccurred())
-			mgrp.persist("uuid")
+			mgrp.persist("uuid", true)
 			m, exists := mgrp.Get("uuid")
 			Expect(exists).To(BeTrue())
 			Expect(m).ToNot(BeNil())

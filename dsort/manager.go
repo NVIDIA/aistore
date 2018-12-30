@@ -85,6 +85,8 @@ type streamWriter struct {
 
 // Manager maintains all the state required for a single run of a distributed archive file shuffle.
 type Manager struct {
+	// Fields with json tags are the only fields which are persisted
+	// into the disk once the dSort is finished.
 	ManagerUUID string   `json:"manager_uuid"`
 	Metrics     *Metrics `json:"metrics"`
 
@@ -270,8 +272,12 @@ func (m *Manager) initStreams() error {
 
 // cleanup removes all memory allocated and removes all files created during sort run.
 //
+// PRECONDITION: manager must be not in progress state (either actual finish or abort).
+//
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
+	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
+
 	glog.Infof("dsort %s has started a cleanup", m.ManagerUUID)
 	now := time.Now()
 
@@ -280,14 +286,6 @@ func (m *Manager) cleanup() {
 		m.unlock()
 		glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
 	}()
-
-	if m.inProgress() {
-		m.setAbortedTo(true)
-		// Don't wait locked on finishing
-		m.unlock()
-		m.waitForFinish()
-		m.lock()
-	}
 
 	for _, streamPoolArr := range []map[string]*StreamPool{m.streams.request, m.streams.response, m.streams.shards} {
 		for _, streamPool := range streamPoolArr {
@@ -400,7 +398,7 @@ func (m *Manager) decrementRef(by int64) {
 		m.lock()
 		if !m.inProgress() {
 			m.unlock()
-			go Managers.persist(m.ManagerUUID)
+			go Managers.persist(m.ManagerUUID, true /*cleanup*/)
 			return
 		}
 		m.unlock()

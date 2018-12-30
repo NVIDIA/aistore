@@ -424,7 +424,8 @@ func abortSortHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dsortManager.abort()
-	go Managers.persist(managerUUID)
+	// No need to perform cleanup since abort already scheduled one.
+	go Managers.persist(managerUUID, false /*cleanup*/)
 }
 
 // metricsHandler is the handler called for the HTTP endpoint /v1/sort/metrics.

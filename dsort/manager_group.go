@@ -11,7 +11,7 @@ import (
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/nanobox-io/golang-scribble"
+	scribble "github.com/nanobox-io/golang-scribble"
 )
 
 const (
@@ -68,7 +68,7 @@ func (mg *ManagerGroup) Get(managerUUID string) (*Manager, bool) {
 			return nil, false
 		}
 		if err := db.Read(managersCollection, managerUUID, &manager); err != nil {
-
+			glog.Error(err)
 			return nil, false
 		}
 		exists = true
@@ -82,23 +82,33 @@ func (mg *ManagerGroup) Get(managerUUID string) (*Manager, bool) {
 //
 // When error occurs during moving manager to persistent storage, manager is not
 // removed from memory.
-func (mg *ManagerGroup) persist(managerUUID string) {
+func (mg *ManagerGroup) persist(managerUUID string, cleanupRequired bool) {
 	mg.mtx.Lock()
-	defer mg.mtx.Unlock()
 	manager, exists := mg.managers[managerUUID]
 	if !exists {
+		mg.mtx.Unlock()
 		return
 	}
-	manager.cleanup()
+
 	config := cmn.GCO.Get()
 	db, err := scribble.New(filepath.Join(config.Confdir, persistManagersPath), nil)
 	if err != nil {
 		glog.Error(err)
-		return
+		goto cleanup
 	}
 	if err = db.Write(managersCollection, managerUUID, manager); err != nil {
 		glog.Error(err)
-		return
+		goto cleanup
 	}
 	delete(mg.managers, managerUUID)
+
+cleanup:
+	// Cleanup can be done at very end. This enables to read metrics without
+	// waiting for cleanup to finish - otherwise we would block on
+	// ManagerGroup.Get.
+	mg.mtx.Unlock()
+
+	if cleanupRequired {
+		manager.cleanup()
+	}
 }
