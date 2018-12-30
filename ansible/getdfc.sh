@@ -10,5 +10,7 @@ if [ ! -z $1 ]; then
     echo Git checkout branch $1
     git checkout $1
 fi
-BUILD=`git rev-parse --short HEAD`
-go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" setup/dfc.go
+
+VERSION=`git describe --tags`
+BUILD=`date +%FT%T%z`
+GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go

@@ -1,7 +1,7 @@
 FROM ubuntu
 
 #Setting ENV variables 
-ENV GOLANG_VERSION 1.9
+ENV GOLANG_VERSION 1.11.4
 ENV CONFFILE /etc/dfc/dfc.json
 ENV ROLE proxy
 ENV TARGETS 1000
@@ -37,8 +37,10 @@ RUN cd $GOPATH/src/github.com/NVIDIA &&\
     cd $WORKDIR &&\
     git reset --hard $HASH
 WORKDIR $WORKDIR
-RUN go get -v
-RUN go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$HASH" setup/dfc.go
+
+ENV VERSION `git describe --tags`
+ENV BUILD `date +%FT%T%z`
+RUN go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
 
 RUN apt-get -y remove wget
 RUN mkdir /etc/dfc

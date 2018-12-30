@@ -74,7 +74,7 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 ## Prerequisites
 
 * Linux (with sysstat and attr packages)
-* [Go 1.9 or later](https://golang.org/dl/)
+* [Go 1.10 or later](https://golang.org/dl/)
 * Optionally, extended attributes (xattrs)
 * Optionally, Amazon (AWS) or Google Cloud (GCP) account
 
