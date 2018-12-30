@@ -15,6 +15,10 @@ import (
 )
 
 var (
+	// NOTE: these variables are set by ldflags in `deploy.sh`
+	version string
+	build   string
+
 	configPath string
 	conf       = &config{}
 )
@@ -42,6 +46,8 @@ func updateLogOptions() error {
 }
 
 func main() {
+	fmt.Printf("version: %s | build_time: %s\n", version, build)
+
 	var (
 		err error
 	)

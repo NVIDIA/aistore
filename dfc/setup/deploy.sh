@@ -175,11 +175,13 @@ source $DIR/authn.sh
 # -alsologtostderr=false	 # Logs are written to standard error and files
 # -stderrthreshold=ERROR	 # Log errors and above are written to stderr and files
 # build
-BUILD=`git rev-parse --short HEAD`
+VERSION=`git describe --tags`
+BUILD=`date +%FT%T%z`
+
 if [ "$ENABLE_CODE_COVERAGE" == "" ]
 then
 	EXE=$GOPATH/bin/dfc
-	go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" setup/dfc.go
+	GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
 else
 	echo "Note: code test-coverage enabled!"
 	EXE=$GOPATH/bin/dfc_coverage.test
@@ -190,7 +192,7 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 # build authn
-go build && go install && GOBIN=$GOPATH/bin go install -ldflags "-X github.com/NVIDIA/dfcpub/dfc.build=$BUILD" ../authn
+GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" ../authn
 if [ $? -ne 0 ]; then
 	exit 1
 fi
