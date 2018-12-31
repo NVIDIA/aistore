@@ -18,3 +18,5 @@
         - cleandfcstate.sh
         - configdfc.sh
         - inventory
+        - getdfc.sh
+        - setupnodes.sh

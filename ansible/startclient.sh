@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -ex
 
 PROXYIP=`cat /home/ubuntu/inventory/proxy.txt`
 PROXYPORT='8081'
@@ -61,7 +61,7 @@ while getopts ":b:p:d:m:x:t:n:c:" opt; do
 done
 
 source /etc/profile.d/dfcpaths.sh
-cd $DFCSRC/../cmd/dfcloader
+cd $DFCSRC/../bench/dfcloader
 sudo rm -rf screenlog.0
 screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=$cleanup -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
 
@@ -75,10 +75,12 @@ do
 done
 
 echo "screenlog file created"
+cat screenlog.0
+
 if grep -q 'Failed to boot strap' screenlog.0; then
 	echo 'Failed to boot strap, restarting one more time'
 	sudo rm -rf screenlog.0
-	screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=64
+	screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
 	echo "started dfcloader, wait for screnlog file to show up with timeout of 2min"
 	x=0
 	while [ "$x" -lt 24 -a ! -f screenlog.0 ]
@@ -89,4 +91,5 @@ if grep -q 'Failed to boot strap' screenlog.0; then
 	done
 
 	echo "screenlog file created"
+        cat screenlog.0
 fi

@@ -6,7 +6,7 @@
     cluster: cluster3
   tasks:
     - fetch:
-        src: /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/cmd/dfcloader/screenlog.0
+        src: /home/ubuntu/dfc/src/github.com/NVIDIA/dfcpub/bench/dfcloader/screenlog.0
         dest: "{{ cluster }}/logs/{{ inventory_hostname }}/"
         flat: yes
 ...

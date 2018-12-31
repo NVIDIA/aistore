@@ -16,7 +16,7 @@ for i in `cat inventory/targets.txt; cat inventory/new_targets.txt`; do
         instanceId=$(aws ec2 describe-instances --filters "Name=private-ip-address,Values='$i'" | grep InstanceId | cut -d\" -f4)
         echo Target IP $i the instanceId is $instanceId
         for j in $(seq 1 $1); do
-                volumeId=$(aws ec2 create-volume --availability-zone us-east-2b --volume-type standard --size 100 | grep VolumeId | cut -d\" -f4)
+                volumeId=$(aws ec2 create-volume --availability-zone us-east-2b --volume-type standard --size 500 | grep VolumeId | cut -d\" -f4)
                 echo New volume created $volumeId
                 device=/dev/xvd${devices[$((j-1))]}
                 echo aws ec2 attach-volume --volume-id ${volumeId} --instance-id ${instanceId} --device ${device} | tee -a attachvolumes.sh

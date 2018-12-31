@@ -9,8 +9,12 @@ from boto.s3.key import Key
 import time
 import json
 import urllib2
+import ConfigParser
 from timeout import timeout
 
+# Global vars assigned from the config in load_global_defaults
+AWS_AK = None
+AWS_SAK = None
 security_group_name = 'DFC-SG1'
 vpc_name = 'DFC-2'
 subnet_name = 'DFC-2-Private'
@@ -26,6 +30,19 @@ def setupLogger():
     logging.basicConfig(format=FORMAT)
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
+
+def load_global_defaults():
+    global AWS_AK, AWS_SAK
+
+    conf_path = '/home/ubuntu/aws.ini'
+    c = ConfigParser.ConfigParser()
+    c.optionxform = str
+    c.read(conf_path)
+    AWS_AK = c.get('aws_defaults', 'ak')
+    AWS_SAK = c.get('aws_defaults', 'sak')
+    
+# Load global defaults
+load_global_defaults()
 
 def load_dfc_cluster(cluster, clients):
     dfc = {
@@ -62,8 +79,8 @@ def load_dfc_cluster(cluster, clients):
 
 def ec2_connect_to_region():
     try:
-        conn = boto.ec2.connect_to_region(region_name, aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'))
+        conn = boto.ec2.connect_to_region(region_name, aws_access_key_id=AWS_AK,
+                                          aws_secret_access_key=AWS_SAK)
     except Exception, e:
         logger.error("EC2 connection failed - {}".format(repr(e)))
         raise Exception("EC2 connection failed")
@@ -73,8 +90,8 @@ def vpc_connect_to_region(region_name):
     try:
         conn =  boto.vpc.connect_to_region(region_name)
     except:
-        conn = boto.vpc.connect_to_region(region_name,aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'))
+        conn = boto.vpc.connect_to_region(region_name,aws_access_key_id=AWS_AK,
+                                          aws_secret_access_key=AWS_SAK)
     return conn
 
 def create_vpc(vpc_conn, ec2_conn):
