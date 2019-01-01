@@ -276,16 +276,16 @@ func (m *Manager) initStreams() error {
 //
 // NOTE: If cleanup is invoked during the run it is treated as abort.
 func (m *Manager) cleanup() {
-	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
-
+	m.lock()
 	glog.Infof("dsort %s has started a cleanup", m.ManagerUUID)
 	now := time.Now()
 
-	m.lock()
 	defer func() {
 		m.unlock()
 		glog.Infof("dsort %s cleanup has been finished in %v", m.ManagerUUID, time.Since(now))
 	}()
+
+	cmn.Assert(!m.inProgress(), fmt.Sprintf("%s: was still in progress", m.ManagerUUID))
 
 	for _, streamPoolArr := range []map[string]*StreamPool{m.streams.request, m.streams.response, m.streams.shards} {
 		for _, streamPool := range streamPoolArr {
@@ -437,11 +437,10 @@ func (m *Manager) waitForFinish() {
 func (m *Manager) setInProgressTo(inProgress bool) {
 	// If marking as finished and job was aborted to need to free everyone
 	// who is waiting.
+	m.state.inProgress = inProgress
 	if !inProgress && m.aborted() {
 		m.state.wg.Done()
 	}
-
-	m.state.inProgress = inProgress
 }
 
 // setAbortedTo updates aborted state. If aborted is set to true and sort is not

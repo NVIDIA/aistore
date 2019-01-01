@@ -149,11 +149,12 @@ func (m *Manager) extractLocalShards() (err error) {
 	// + reserved. After we finish extraction we put reserved memory for the
 	// shard into the unreserve memory channel. Note that we cannot unreserve it
 	// right away because actual used memory has not yet been updated (but it
-	// surely changed). Once memory updater will update actually used memory we
-	// can drain the channel and unreserve memory. This way it is almost
-	// impossible exceed maximum memory to used - but unfortunately this can
-	// happen when we underestimate the number of memory to be used when
-	// extracting compressed files.
+	// surely changed). Once memory updater will fetch and update currently used
+	// memory in system we can unreserve memory (it is already calculated in
+	// newly fetched memory usage value). This way it is almost impossible to
+	// exceed maximum memory which we are able to use (set by user) -
+	// unfortunately it can happen when we underestimate the amount of memory
+	// which we will use when extracting compressed file.
 	ticker := time.NewTicker(memoryUpdateInterval)
 	go func() {
 		for range ticker.C {
