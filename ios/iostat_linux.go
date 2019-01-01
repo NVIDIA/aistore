@@ -29,7 +29,7 @@ const (
 type (
 	IostatRunner struct {
 		cmn.NamedID
-		stopCh      chan struct{} // terminate
+		stopCh      chan error    // terminate
 		syncCh      chan struct{} // synchronize disks, maps, mountpaths
 		metricNames []string
 		reader      *bufio.Reader
@@ -49,7 +49,7 @@ type (
 
 func NewIostatRunner() *IostatRunner {
 	return &IostatRunner{
-		stopCh:      make(chan struct{}, 1),
+		stopCh:      make(chan error, 2),
 		syncCh:      make(chan struct{}, 1),
 		metricNames: make([]string, 0, 16),
 	}
@@ -83,9 +83,10 @@ func (r *IostatRunner) ConfigUpdate(oldConf, newConf *cmn.Config) {
 // This code parses iostat output specifically looking for "Device", "%util",  "aqu-sz" and "avgqu-sz"
 func (r *IostatRunner) Run() error {
 	var (
-		lines  cmn.SimpleKVs
-		epoch  int64
-		lm, lc int64 // time interval: multiplier and counter
+		lines      cmn.SimpleKVs
+		epoch      int64
+		lm, lc     int64 // time interval: multiplier and counter
+		responseCh = make(chan string)
 	)
 	glog.Infof("Starting %s", r.Getname())
 	r.resyncMpathsDisks()
@@ -99,56 +100,59 @@ func (r *IostatRunner) Run() error {
 
 	cmn.GCO.Subscribe(r)
 
+	go func() {
+		// reader loop
+		for {
+			b, err := r.reader.ReadBytes('\n')
+			if r.process == nil {
+				return
+			}
+			if err == io.EOF {
+				continue
+			} else if err != nil {
+				if err = r.retry(2); err != nil {
+					r.stopCh <- err
+					return
+				}
+			}
+			responseCh <- string(b)
+		}
+	}()
+
 	// main loop
 	for {
-		b, err := r.reader.ReadBytes('\n')
-		if err == io.EOF {
-			continue
-		}
-		if err != nil {
-			if err = r.retry(2); err != nil {
-				r.cleanup()
-				return err
-			}
-		}
-		line := string(b)
-		fields := strings.Fields(line)
-		if len(fields) < iostatnumdsk {
-			continue
-		}
-		if strings.HasPrefix(fields[0], "Device") {
-			if len(r.metricNames) == 0 {
-				r.metricNames = append(r.metricNames, fields[1:]...)
-			}
-			continue
-		}
-		device := fields[0]
-		if mpath, ok := r.disks2mpath[device]; ok {
-			var (
-				f64 float64
-				val float32
-			)
-			mpathInfo, _ := r.stats.availablePaths[mpath]
-			lines[device] = strings.Join(fields, ", ")
-			for i := 1; i < len(fields); i++ {
-				name := r.metricNames[i-1]
-				f64, err = strconv.ParseFloat(fields[i], 32)
-				if err != nil {
-					continue
-				}
-				val = float32(f64)
-				if name == "%util" {
-					mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, val) // FIXME: const
-				} else if name == "aqu-sz" || name == "avgqu-sz" {
-					mpathInfo.SetIOstats(epoch, fs.StatQueueLen, val)
-				}
-			}
-		}
-
 		select {
-		case <-r.stopCh:
+		case line := <-responseCh:
+			fields := strings.Fields(line)
+			if len(fields) < iostatnumdsk {
+				continue
+			}
+			if strings.HasPrefix(fields[0], "Device") {
+				if len(r.metricNames) == 0 {
+					r.metricNames = append(r.metricNames, fields[1:]...)
+				}
+				continue
+			}
+			device := fields[0]
+			if mpath, ok := r.disks2mpath[device]; ok {
+				mpathInfo, _ := r.stats.availablePaths[mpath]
+				lines[device] = strings.Join(fields, ", ")
+				for i := 1; i < len(fields); i++ {
+					name := r.metricNames[i-1]
+					fieldVal, err := strconv.ParseFloat(fields[i], 32)
+					if err != nil {
+						continue
+					}
+					if name == "%util" {
+						mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, float32(fieldVal)) // FIXME: const
+					} else if name == "aqu-sz" || name == "avgqu-sz" {
+						mpathInfo.SetIOstats(epoch, fs.StatQueueLen, float32(fieldVal))
+					}
+				}
+			}
+		case err := <-r.stopCh:
 			r.cleanup()
-			return nil
+			return err
 		case <-r.syncCh:
 			r.resyncMpathsDisks()
 		case <-r.ticker.C:
@@ -158,14 +162,13 @@ func (r *IostatRunner) Run() error {
 				log(lines)
 				lc = 0
 			}
-		default:
 		}
 	}
 }
 
 func (r *IostatRunner) Stop(err error) {
 	glog.Infof("Stopping %s, err: %v", r.Getname(), err)
-	r.stopCh <- struct{}{}
+	r.stopCh <- err
 	close(r.stopCh)
 }
 
@@ -223,7 +226,6 @@ func (r *IostatRunner) execCmd(period time.Duration) error {
 	if err = cmd.Start(); err != nil {
 		return err
 	}
-
 	r.process = cmd.Process
 	return nil
 }
@@ -255,16 +257,14 @@ func (r *IostatRunner) resyncMpathsDisks() {
 
 func (r *IostatRunner) retry(cnt int) (err error) {
 	for i := 0; i < cnt; i++ {
-		glog.Errorf("Error reading StdoutPipe %v, retrying #%d", err, i+1)
 		time.Sleep(time.Second)
-		_, err = r.reader.ReadBytes('\n')
-		if err == io.EOF {
+		if _, err = r.reader.ReadBytes('\n'); err == nil {
+			return
+		} else if err == io.EOF {
 			err = nil
 			continue
 		}
-		if err == nil {
-			return
-		}
+		glog.Errorf("Error reading StdoutPipe %v, retrying #%d", err, i+1)
 	}
 	return
 }
@@ -278,5 +278,6 @@ func (r *IostatRunner) cleanup() {
 		if err := r.process.Kill(); err != nil {
 			glog.Errorf("Failed to kill iostat, err: %v", err)
 		}
+		r.process = nil
 	}
 }
