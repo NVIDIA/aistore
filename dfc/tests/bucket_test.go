@@ -5,7 +5,10 @@
 package dfc_test
 
 import (
+	"math/rand"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -101,6 +104,53 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 		bucketProps.NextTierURL = url
 		if err := api.SetBucketProps(tutils.DefaultBaseAPIParams(t), TestLocalBucketName, bucketProps); err == nil {
 			t.Fatalf("Setting the bucket's nextTierURL to daemon %q should fail, it is in the current cluster.", url)
+		}
+	}
+}
+
+func TestListObjects(t *testing.T) {
+	var (
+		iterations  = 20
+		workerCount = 10
+		dirLen      = 10
+		objectSize  = cmn.KiB
+
+		bucket   = t.Name() + "Bucket"
+		proxyURL = getPrimaryURL(t, proxyURLRO)
+		wg       = &sync.WaitGroup{}
+		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
+	)
+
+	createFreshLocalBucket(t, proxyURL, bucket)
+	defer destroyLocalBucket(t, proxyURL, bucket)
+
+	// Iterations of PUT
+	totalObjects := 0
+	for iter := 0; iter < iterations; iter++ {
+		objectCount := random.Intn(1024) + 1000
+		totalObjects += objectCount
+		for wid := 0; wid < workerCount; wid++ {
+			wg.Add(1)
+			go func(wid int) {
+				reader, err := tutils.NewRandReader(int64(objectSize), true)
+				tutils.CheckFatal(err, t)
+				objDir := tutils.RandomObjDir(random, dirLen, 5)
+				objectsToPut := objectCount / workerCount
+				if wid == workerCount-1 { // last worker puts leftovers
+					objectsToPut += objectCount % workerCount
+				}
+				putRR(t, wid, proxyURL, reader, bucket, objDir, objectsToPut)
+				wg.Done()
+			}(wid)
+		}
+		wg.Wait()
+
+		// Confirm PUTs
+		bckObjs, err := tutils.ListObjects(proxyURL, bucket, "", 0)
+		tutils.CheckFatal(err, t)
+
+		if len(bckObjs) != totalObjects {
+			t.Errorf("actual objects %d, expected: %d", len(bckObjs), totalObjects)
 		}
 	}
 }

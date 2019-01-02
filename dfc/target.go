@@ -1929,7 +1929,10 @@ func (ci *allfinfos) processDir(fqn string) error {
 		return filepath.SkipDir
 	}
 
-	if ci.markerDir != "" && relname < ci.markerDir {
+	// When markerDir = "b/c/d/" we should skip directories: "a/", "b/a/",
+	// "b/b/" etc. but should not skip entire "b/" or "b/c/" since it is our
+	// parent which we want to traverse (see that: "b/" < "b/c/d/").
+	if ci.markerDir != "" && relname < ci.markerDir && !strings.HasPrefix(ci.markerDir, relname) {
 		return filepath.SkipDir
 	}
 

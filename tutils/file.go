@@ -283,3 +283,11 @@ func GetFileInfosFromZipBuffer(buffer bytes.Buffer) ([]os.FileInfo, error) {
 
 	return files, nil
 }
+
+func RandomObjDir(src *mrand.Rand, dirLen, maxDepth int) (dir string) {
+	depth := src.Intn(maxDepth)
+	for i := 0; i < depth; i++ {
+		dir = filepath.Join(dir, FastRandomFilename(src, dirLen))
+	}
+	return
+}

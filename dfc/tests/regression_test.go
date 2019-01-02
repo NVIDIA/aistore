@@ -32,7 +32,7 @@ import (
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/tutils"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type Test struct {
@@ -334,7 +334,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 	})
 }
 
-func TestListObjects(t *testing.T) {
+func TestListObjectsPrefix(t *testing.T) {
 	const fileSize = 1024
 	var (
 		numFiles   = 20

@@ -27,7 +27,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/dsort"
 	"github.com/NVIDIA/dfcpub/stats"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const tokenStart = "Bearer"
@@ -1129,7 +1129,7 @@ func (p *proxyrunner) collectCachedFileList(bucket string, fileList *cmn.BucketL
 	return
 }
 
-func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allentries *cmn.BucketList, err error) {
+func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (allEntries *cmn.BucketList, err error) {
 	type targetReply struct {
 		resp *bucketResp
 		err  error
@@ -1152,12 +1152,12 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 	}
 
 	smap := p.smapowner.get()
-	chresult := make(chan *targetReply, len(smap.Tmap))
+	targetResults := make(chan *targetReply, len(smap.Tmap))
 	wg := &sync.WaitGroup{}
 
 	targetCallFn := func(si *cluster.Snode) {
 		resp, err := p.targetListBucket(nil, bucket, si, msg, islocal, cachedObjs)
-		chresult <- &targetReply{resp, err}
+		targetResults <- &targetReply{resp, err}
 		wg.Done()
 	}
 	smap = p.smapowner.get()
@@ -1168,11 +1168,11 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 		}(si)
 	}
 	wg.Wait()
-	close(chresult)
+	close(targetResults)
 
 	// combine results
-	allentries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
-	for r := range chresult {
+	allEntries = &cmn.BucketList{Entries: make([]*cmn.BucketEntry, 0, pageSize)}
+	for r := range targetResults {
 		if r.err != nil {
 			err = r.err
 			return
@@ -1191,27 +1191,27 @@ func (p *proxyrunner) getLocalBucketObjects(bucket string, listmsgjson []byte) (
 			continue
 		}
 
-		allentries.Entries = append(allentries.Entries, bucketList.Entries...)
+		allEntries.Entries = append(allEntries.Entries, bucketList.Entries...)
 	}
 
 	// return the list always sorted in alphabetical order
 	entryLess := func(i, j int) bool {
-		return allentries.Entries[i].Name < allentries.Entries[j].Name
+		return allEntries.Entries[i].Name < allEntries.Entries[j].Name
 	}
-	sort.Slice(allentries.Entries, entryLess)
+	sort.Slice(allEntries.Entries, entryLess)
 
 	// shrink the result to `pageSize` entries. If the page is full than
 	// mark the result incomplete by setting PageMarker
-	if len(allentries.Entries) >= pageSize {
-		for i := pageSize; i < len(allentries.Entries); i++ {
-			allentries.Entries[i] = nil
+	if len(allEntries.Entries) >= pageSize {
+		for i := pageSize; i < len(allEntries.Entries); i++ {
+			allEntries.Entries[i] = nil
 		}
 
-		allentries.Entries = allentries.Entries[:pageSize]
-		allentries.PageMarker = allentries.Entries[pageSize-1].Name
+		allEntries.Entries = allEntries.Entries[:pageSize]
+		allEntries.PageMarker = allEntries.Entries[pageSize-1].Name
 	}
 
-	return allentries, nil
+	return allEntries, nil
 }
 
 func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, listmsgjson []byte) (allentries *cmn.BucketList, err error) {
