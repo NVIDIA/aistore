@@ -63,7 +63,7 @@ func Test_Bundle(t *testing.T) {
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
-		cmn.Assert(written == hdr.Dsize)
+		cmn.Assert(written == hdr.ObjAttrs.Size)
 	}
 	callback := func(hdr transport.Header, reader io.ReadCloser, err error) {
 		atomic.AddInt64(&numCompleted, 1)
@@ -87,7 +87,7 @@ func Test_Bundle(t *testing.T) {
 		var err error
 		hdr := genRandomHeader(random)
 		if num%7 == 0 {
-			hdr.Dsize = 0
+			hdr.ObjAttrs.Size = 0
 			err = sb.SendV(hdr, nil, callback)
 		} else {
 			reader := newRandReader(random, hdr, slab)
@@ -97,7 +97,7 @@ func Test_Bundle(t *testing.T) {
 			t.Fatalf("%s: exiting with err [%v]\n", sb, err)
 		}
 		num++
-		size += hdr.Dsize
+		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
 			tutils.Logf("%s: %d GiB\n", sb, size/cmn.GiB)
 			prevsize = size

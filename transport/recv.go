@@ -177,17 +177,18 @@ func (h *handler) receive(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if objReader != nil {
-			h.callback(w, objReader.hdr, objReader, nil)
+			hdr := objReader.hdr
+			h.callback(w, hdr, objReader, nil)
 			num := atomic.AddInt64(&stats.Num, 1)
-			if objReader.hdr.Dsize != objReader.off {
+			if hdr.ObjAttrs.Size != objReader.off {
 				err = fmt.Errorf("%s[%d]: stream breakage type #3: reader offset %d != %d object size, num=%d",
-					trname, sessid, objReader.off, objReader.hdr.Dsize, num)
+					trname, sessid, objReader.off, hdr.ObjAttrs.Size, num)
 				glog.Errorln(err)
 			} else {
-				siz := atomic.AddInt64(&stats.Size, objReader.hdr.Dsize)
-				off := atomic.AddInt64(&stats.Offset, objReader.hdr.Dsize)
+				siz := atomic.AddInt64(&stats.Size, hdr.ObjAttrs.Size)
+				off := atomic.AddInt64(&stats.Offset, hdr.ObjAttrs.Size)
 				if bool(glog.V(4)) || debug {
-					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d", trname, sessid, off, siz, objReader.hdr.Dsize, num)
+					glog.Infof("%s[%d]: offset=%d, size=%d(%d), num=%d", trname, sessid, off, siz, hdr.ObjAttrs.Size, num)
 				}
 				continue
 			}
@@ -262,14 +263,14 @@ func (it iterator) next() (obj *objReader, sessid, hl64 int64, err error) {
 		return
 	}
 	if bool(glog.V(4)) || debug {
-		glog.Infof("%s[%d]: new object size=%d", it.trname, sessid, hdr.Dsize)
+		glog.Infof("%s[%d]: new object size=%d", it.trname, sessid, hdr.ObjAttrs.Size)
 	}
 	obj = &objReader{body: it.body, hdr: hdr}
 	return
 }
 
 func (obj *objReader) Read(b []byte) (n int, err error) {
-	rem := obj.hdr.Dsize - obj.off
+	rem := obj.hdr.ObjAttrs.Size - obj.off
 	if rem < int64(len(b)) {
 		b = b[:int(rem)]
 	}
@@ -277,15 +278,15 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	obj.off += int64(n)
 	switch err {
 	case nil:
-		if obj.off >= obj.hdr.Dsize {
+		if obj.off >= obj.hdr.ObjAttrs.Size {
 			err = io.EOF
 			if debug {
-				cmn.Assert(obj.off == obj.hdr.Dsize)
+				cmn.Assert(obj.off == obj.hdr.ObjAttrs.Size)
 			}
 		}
 	case io.EOF:
-		if obj.off != obj.hdr.Dsize {
-			glog.Errorf("size %d != %d Dsize", obj.off, obj.hdr.Dsize)
+		if obj.off != obj.hdr.ObjAttrs.Size {
+			glog.Errorf("actual offset: %d, expected: %d", obj.off, obj.hdr.ObjAttrs.Size)
 		}
 	default:
 		glog.Errorf("err %v", err) // canceled?
@@ -300,9 +301,10 @@ func ExtHeader(body []byte, hlen int) (hdr Header, sessid int64) {
 	var off int
 	off, hdr.Bucket = extString(0, body)
 	off, hdr.Objname = extString(off, body)
+	off, hdr.IsLocal = extBool(off, body)
 	off, hdr.Opaque = extByte(off, body)
+	off, hdr.ObjAttrs = extAttrs(off, body)
 	off, sessid = extInt64(off, body)
-	off, hdr.Dsize = extInt64(off, body)
 	if debug {
 		cmn.Assert(off == hlen, fmt.Sprintf("off %d, hlen %d", off, hlen))
 	}
@@ -310,9 +312,13 @@ func ExtHeader(body []byte, hlen int) (hdr Header, sessid int64) {
 }
 
 func extString(off int, from []byte) (int, string) {
-	l := int(binary.BigEndian.Uint64(from[off:]))
-	off += sizeofI64
-	return off + l, string(from[off : off+l])
+	off, bt := extByte(off, from)
+	return off, string(bt)
+}
+
+func extBool(off int, from []byte) (int, bool) {
+	off, bt := extByte(off, from)
+	return off, bt[0] != 0
 }
 
 func extByte(off int, from []byte) (int, []byte) {
@@ -322,13 +328,21 @@ func extByte(off int, from []byte) (int, []byte) {
 }
 
 func extInt64(off int, from []byte) (int, int64) {
-	size := int64(binary.BigEndian.Uint64(from[off:]))
-	off += sizeofI64
-	return off, size
+	off, val := extUint64(off, from)
+	return off, int64(val)
 }
 
 func extUint64(off int, from []byte) (int, uint64) {
 	size := binary.BigEndian.Uint64(from[off:])
 	off += sizeofI64
 	return off, size
+}
+
+func extAttrs(off int, from []byte) (n int, attr ObjectAttrs) {
+	off, attr.Size = extInt64(off, from)
+	off, attr.Atime = extInt64(off, from)
+	off, attr.CksumType = extString(off, from)
+	off, attr.Cksum = extString(off, from)
+	off, attr.Version = extString(off, from)
+	return off, attr
 }

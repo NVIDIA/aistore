@@ -26,7 +26,7 @@ var buf1 []byte
 func receive10G(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 	cmn.Assert(err == nil)
 	written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
-	cmn.Assert(written == hdr.Dsize)
+	cmn.Assert(written == hdr.ObjAttrs.Size)
 }
 
 func Test_OneStream10G(t *testing.T) {
@@ -60,7 +60,7 @@ func Test_OneStream10G(t *testing.T) {
 	for size < cmn.GiB*10 {
 		hdr := genStaticHeader()
 		if num%3 == 0 { // every so often send header-only
-			hdr.Dsize = 0
+			hdr.ObjAttrs.Size = 0
 			stream.Send(hdr, nil, nil)
 			numhdr++
 		} else {
@@ -68,7 +68,7 @@ func Test_OneStream10G(t *testing.T) {
 			stream.Send(hdr, reader, nil)
 		}
 		num++
-		size += hdr.Dsize
+		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
 			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
@@ -99,7 +99,7 @@ func Test_DryRunTB(t *testing.T) {
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil)
 		num++
-		size += hdr.Dsize
+		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB*100 {
 			prevsize = size
 			stats := stream.GetStats()
@@ -123,7 +123,7 @@ func Test_CompletionCount(t *testing.T) {
 	receive := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
 		cmn.Assert(err == nil)
 		written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf1)
-		cmn.Assert(written == hdr.Dsize)
+		cmn.Assert(written == hdr.ObjAttrs.Size)
 		atomic.AddInt64(&numReceived, 1)
 	}
 	callback := func(hdr transport.Header, reader io.ReadCloser, err error) {
@@ -147,7 +147,7 @@ func Test_CompletionCount(t *testing.T) {
 	for idx := 0; idx < 10000; idx++ {
 		if idx%7 == 0 {
 			hdr := genStaticHeader()
-			hdr.Dsize = 0
+			hdr.ObjAttrs.Size = 0
 			hdr.Opaque = []byte(strconv.FormatInt(104729*int64(idx), 10))
 			stream.Send(hdr, nil, callback)
 			rem = random.Int63() % 13

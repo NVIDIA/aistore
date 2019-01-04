@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -554,7 +553,7 @@ func (m *Manager) responseCallback(hdr transport.Header, rc io.ReadCloser, err e
 func (m *Manager) makeRecvRequestFunc() transport.Receive {
 	errHandler := func(err error, hdr transport.Header, node *cluster.Snode) {
 		hdr.Opaque = []byte(err.Error())
-		hdr.Dsize = 0
+		hdr.ObjAttrs.Size = 0
 		if err = m.streams.response[node.DaemonID].Get().Send(hdr, nil, nil); err != nil {
 			glog.Error(err)
 		}
@@ -589,13 +588,13 @@ func (m *Manager) makeRecvRequestFunc() transport.Receive {
 				errHandler(err, respHdr, fromNode)
 				return
 			}
-			respHdr.Dsize = fi.Size()
+			respHdr.ObjAttrs.Size = fi.Size()
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, f, m.responseCallback); err != nil {
 				glog.Error(err)
 			}
 		} else {
 			sgl := v.(*memsys.SGL)
-			respHdr.Dsize = sgl.Size()
+			respHdr.ObjAttrs.Size = sgl.Size()
 			if err := m.streams.response[fromNode.DaemonID].Get().Send(respHdr, sgl, m.responseCallback); err != nil {
 				glog.Error(err)
 			}
@@ -644,13 +643,7 @@ func (m *Manager) makeRecvShardFunc() transport.Receive {
 		buf, slab := mem.AllocFromSlab2(cmn.MiB)
 		defer slab.Free(buf)
 
-		isLocal, err := strconv.ParseBool(string(hdr.Opaque))
-		if err != nil {
-			glog.Error(err)
-			return
-		}
-
-		shardFQN, errStr := cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, isLocal)
+		shardFQN, errStr := cluster.FQN(fs.ObjectType, hdr.Bucket, hdr.Objname, hdr.IsLocal)
 		if errStr != "" {
 			glog.Error(errStr)
 			return

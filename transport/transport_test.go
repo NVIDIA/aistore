@@ -27,13 +27,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path"
+	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -90,7 +93,7 @@ func Example_Headers() {
 			hdr, _ = transport.ExtHeader(body[off:], hlen)
 			if !hdr.IsLast() {
 				fmt.Printf("%+v (%d)\n", hdr, hlen)
-				off += hlen + int(hdr.Dsize)
+				off += hlen + int(hdr.ObjAttrs.Size)
 			} else {
 				break
 			}
@@ -107,18 +110,38 @@ func Example_Headers() {
 	sendText(stream, text1, text2)
 	stream.Fin()
 	// Output:
-	// {Bucket:abc Objname:X Opaque:[] Dsize:231} (44)
-	// {Bucket:abracadabra Objname:p/q/s Opaque:[49 50 51] Dsize:213} (59)
+	// {Bucket:abc Objname:X IsLocal:false Opaque:[] ObjAttrs:{Atime:663346294 Size:231 CksumType:xxhash Cksum:hash Version:2}} (96)
+	// {Bucket:abracadabra Objname:p/q/s IsLocal:true Opaque:[49 50 51] ObjAttrs:{Atime:663346294 Size:213 CksumType:xxhash Cksum:hash Version:2}} (111)
 }
 
 func sendText(stream *transport.Stream, txt1, txt2 string) {
 	sgl1 := Mem2.NewSGL(0)
 	sgl1.Write([]byte(txt1))
-	stream.Send(transport.Header{"abc", "X", nil, sgl1.Size()}, sgl1, nil)
+	hdr := transport.Header{
+		"abc", "X", false, nil,
+		transport.ObjectAttrs{
+			Size:      sgl1.Size(),
+			Atime:     663346294,
+			CksumType: cmn.ChecksumXXHash,
+			Cksum:     "hash",
+			Version:   "2",
+		},
+	}
+	stream.Send(hdr, sgl1, nil)
 
 	sgl2 := Mem2.NewSGL(0)
 	sgl2.Write([]byte(txt2))
-	stream.Send(transport.Header{"abracadabra", "p/q/s", []byte{'1', '2', '3'}, sgl2.Size()}, sgl2, nil)
+	hdr = transport.Header{
+		"abracadabra", "p/q/s", true, []byte{'1', '2', '3'},
+		transport.ObjectAttrs{
+			Size:      sgl2.Size(),
+			Atime:     663346294,
+			CksumType: cmn.ChecksumXXHash,
+			Cksum:     "hash",
+			Version:   "2",
+		},
+	}
+	stream.Send(hdr, sgl2, nil)
 }
 
 func Example_Mux() {
@@ -128,8 +151,8 @@ func Example_Mux() {
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
-		if int64(len(object)) != hdr.Dsize {
-			panic(fmt.Sprintf("size %d != %d", len(object), hdr.Dsize))
+		if int64(len(object)) != hdr.ObjAttrs.Size {
+			panic(fmt.Sprintf("size %d != %d", len(object), hdr.ObjAttrs.Size))
 		}
 		// fmt.Printf("%s...\n", string(object[:16])) // FIXME
 	}
@@ -199,8 +222,8 @@ func Test_CancelStream(t *testing.T) {
 		written, err := io.CopyBuffer(ioutil.Discard, objReader, buf)
 		if err != nil && err != io.EOF {
 			tutils.Logf("err %v", err)
-		} else if err == io.EOF && written != hdr.Dsize {
-			t.Fatalf("size %d != %d", written, hdr.Dsize)
+		} else if err == io.EOF && written != hdr.ObjAttrs.Size {
+			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		slab.Free(buf)
 	}
@@ -218,11 +241,11 @@ func Test_CancelStream(t *testing.T) {
 	size, num, prevsize := int64(0), 0, int64(0)
 	for time.Since(now) < duration {
 		hdr := genStaticHeader()
-		slab := Mem2.SelectSlab2(hdr.Dsize)
+		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
 		reader := newRandReader(random, hdr, slab)
 		stream.Send(hdr, reader, nil)
 		num++
-		size += hdr.Dsize
+		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
 			tutils.Logf("%s: %d GiB\n", stream, size/cmn.GiB)
 			prevsize = size
@@ -317,7 +340,7 @@ func Test_MultipleNetworks(t *testing.T) {
 	for _, stream := range streams {
 		hdr, reader := makeRandReader()
 		stream.Send(hdr, reader, nil)
-		totalSend += hdr.Dsize
+		totalSend += hdr.ObjAttrs.Size
 	}
 
 	for _, stream := range streams {
@@ -358,7 +381,7 @@ func Test_OnSendCallback(t *testing.T) {
 		mu.Unlock()
 		rrc := &randReaderCtx{t, rr, posted, &mu, idx}
 		stream.Send(hdr, rr, rrc.sentCallback)
-		totalSend += hdr.Dsize
+		totalSend += hdr.ObjAttrs.Size
 	}
 	stream.Fin()
 
@@ -370,6 +393,81 @@ func Test_OnSendCallback(t *testing.T) {
 	}
 	if *totalRecv != totalSend {
 		t.Fatalf("total received bytes %d is different from expected: %d", *totalRecv, totalSend)
+	}
+}
+
+func Test_ObjAttrs(t *testing.T) {
+	testAttrs := []transport.ObjectAttrs{
+		transport.ObjectAttrs{
+			Size:      1024,
+			Atime:     1024,
+			CksumType: "",
+			Cksum:     "cheksum",
+			Version:   "102.44",
+		},
+		transport.ObjectAttrs{
+			Size:      1024,
+			Atime:     math.MaxInt64,
+			CksumType: cmn.ChecksumXXHash,
+			Cksum:     "120421",
+			Version:   "102.44",
+		},
+		transport.ObjectAttrs{
+			Size:      0,
+			Atime:     0,
+			CksumType: "",
+			Cksum:     "102412",
+			Version:   "",
+		},
+	}
+
+	mux := http.NewServeMux()
+	transport.SetMux("n1", mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	receivedCount := int64(0)
+	recvFunc := func(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+		cmn.Assert(err == nil)
+
+		idx := hdr.Opaque[0]
+		cmn.Assert(hdr.IsLocal, "incorrectly set is local value")
+		cmn.Assert(reflect.DeepEqual(testAttrs[idx], hdr.ObjAttrs), fmt.Sprintf("attrs are not equal: %v; %v;", testAttrs[idx], hdr.ObjAttrs))
+
+		written, err := io.Copy(ioutil.Discard, objReader)
+		cmn.Assert(err == nil)
+		cmn.Assert(written == hdr.ObjAttrs.Size, fmt.Sprintf("written: %d, expected: %d", written, hdr.ObjAttrs.Size))
+
+		atomic.AddInt64(&receivedCount, 1)
+	}
+	path, err := transport.Register("n1", "callback", recvFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	httpclient := &http.Client{Transport: &http.Transport{}}
+	url := ts.URL + path
+	stream := transport.NewStream(httpclient, url, nil)
+
+	random := newRand(time.Now().UnixNano())
+	for idx, attrs := range testAttrs {
+		hdr := transport.Header{
+			IsLocal:  true,
+			Opaque:   []byte{byte(idx)},
+			ObjAttrs: attrs,
+		}
+		slab := Mem2.SelectSlab2(hdr.ObjAttrs.Size)
+		reader := newRandReader(random, hdr, slab)
+		if err := stream.Send(hdr, reader, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := stream.Fin(); err != nil {
+		t.Fatal(err)
+	}
+
+	if receivedCount != int64(len(testAttrs)) {
+		t.Fatalf("invalid received count: %d, expected: %d", receivedCount, len(testAttrs))
 	}
 }
 
@@ -398,12 +496,10 @@ func streamWriteUntil(t *testing.T, ii int, wg *sync.WaitGroup, ts *httptest.Ser
 	random := newRand(time.Now().UnixNano())
 	size, num, prevsize := int64(0), 0, int64(0)
 	for time.Since(now) < duration {
-		hdr := genRandomHeader(random)
-		slab := Mem2.SelectSlab2(hdr.Dsize)
-		reader := newRandReader(random, hdr, slab)
+		hdr, reader := makeRandReader()
 		stream.Send(hdr, reader, nil)
 		num++
-		size += hdr.Dsize
+		size += hdr.ObjAttrs.Size
 		if size-prevsize >= cmn.GiB {
 			tutils.Logf("[%2d]: %d GiB\n", ii, size/cmn.GiB)
 			prevsize = size
@@ -445,8 +541,8 @@ func makeRecvFunc(t *testing.T) (*int64, transport.Receive) {
 		if err != io.EOF {
 			tutils.CheckFatal(err, t)
 		}
-		if written != hdr.Dsize {
-			t.Fatalf("size %d != %d", written, hdr.Dsize)
+		if written != hdr.ObjAttrs.Size {
+			t.Fatalf("size %d != %d", written, hdr.ObjAttrs.Size)
 		}
 		*totalReceived += written
 		slab.Free(buf)
@@ -463,7 +559,7 @@ func genStaticHeader() (hdr transport.Header) {
 	hdr.Bucket = "a"
 	hdr.Objname = "b"
 	hdr.Opaque = []byte("c")
-	hdr.Dsize = cmn.GiB
+	hdr.ObjAttrs.Size = cmn.GiB
 	return
 }
 
@@ -476,13 +572,13 @@ func genRandomHeader(random *rand.Rand) (hdr transport.Header) {
 	y := x & 3
 	switch y {
 	case 0:
-		hdr.Dsize = (x & 0xffffff) + 1
+		hdr.ObjAttrs.Size = (x & 0xffffff) + 1
 	case 1:
-		hdr.Dsize = (x & 0xfffff) + 1
+		hdr.ObjAttrs.Size = (x & 0xfffff) + 1
 	case 2:
-		hdr.Dsize = (x & 0xffff) + 1
+		hdr.ObjAttrs.Size = (x & 0xffff) + 1
 	default:
-		hdr.Dsize = (x & 0xfff) + 1
+		hdr.ObjAttrs.Size = (x & 0xfff) + 1
 	}
 	return
 }
@@ -520,7 +616,7 @@ func makeRandReader() (transport.Header, *randReader) {
 
 func (r *randReader) Read(p []byte) (n int, err error) {
 	for {
-		rem := r.hdr.Dsize - r.off
+		rem := r.hdr.ObjAttrs.Size - r.off
 		if rem == 0 {
 			return n, io.EOF
 		}

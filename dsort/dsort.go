@@ -18,7 +18,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -386,8 +385,10 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 		hdr := transport.Header{
 			Bucket:  s.Bucket,
 			Objname: s.Name,
-			Dsize:   stat.Size(),
-			Opaque:  strconv.AppendBool([]byte{}, s.IsLocal),
+			IsLocal: s.IsLocal,
+			ObjAttrs: transport.ObjectAttrs{
+				Size: stat.Size(),
+			},
 		}
 
 		// Make send synchronous

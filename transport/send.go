@@ -102,11 +102,22 @@ type (
 		IdlePct float64 // idle time % since --/---/--
 	}
 	EndpointStats map[int64]*Stats // all stats for a given http endpoint defined by a tuple (network, trname) by session ID
+
+	// attributes associated with given object
+	ObjectAttrs struct {
+		Atime     int64  // access time - nanoseconds since UNIX epoch
+		Size      int64  // size of objects in bytes
+		CksumType string // checksum type
+		Cksum     string // checksum of the object produced by given checksum type
+		Version   string // version of the object
+	}
+
 	// object header
 	Header struct {
-		Bucket, Objname string // uname at the destination
-		Opaque          []byte // custom control (optional)
-		Dsize           int64  // size of the object (size=0 (unknown) not supported yet)
+		Bucket, Objname string      // uname at the destination
+		IsLocal         bool        // determines if the bucket is local
+		Opaque          []byte      // custom control (optional)
+		ObjAttrs        ObjectAttrs // attributes/metadata of the sent object
 	}
 	// object-sent callback that has the following signature can optionally be defined on a:
 	// a) per-stream basis (via NewStream constructor - see Extra struct above)
@@ -244,7 +255,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 		return
 	}
 	if bool(glog.V(4)) || debug {
-		glog.Infof("%s: send %s/%s(%d)", s, hdr.Bucket, hdr.Objname, hdr.Dsize)
+		glog.Infof("%s: send %s/%s(%d)", s, hdr.Bucket, hdr.Objname, hdr.ObjAttrs.Size)
 	}
 	s.time.idle.Stop()
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
@@ -255,7 +266,7 @@ func (s *Stream) Send(hdr Header, reader io.ReadCloser, callback SendCallback, p
 	}
 	// next object => SQ
 	if reader == nil {
-		cmn.Assert(hdr.Dsize == 0, "nil reader: expecting zero-length data")
+		cmn.Assert(hdr.ObjAttrs.Size == 0, "nil reader: expecting zero-length data")
 		reader = nopRC
 	}
 	obj := obj{hdr: hdr, reader: reader, callback: callback}
@@ -271,7 +282,7 @@ func (s *Stream) Fin() (err error) {
 		err = fmt.Errorf("%s terminated(%s, %v), cannot Fin()", s, *s.term.reason, s.term.err)
 		return
 	}
-	s.workCh <- obj{hdr: Header{Dsize: lastMarker}}
+	s.workCh <- obj{hdr: Header{ObjAttrs: ObjectAttrs{Size: lastMarker}}}
 	if atomic.CompareAndSwapInt64(&s.lifecycle, expired, posted) {
 		glog.Infof("%s: (expired => posted) to handle Fin", s)
 		s.postCh <- struct{}{}
@@ -311,7 +322,7 @@ func (s *Stream) GetStats() (stats Stats) {
 	return
 }
 
-func (hdr *Header) IsLast() bool { return hdr.Dsize == lastMarker }
+func (hdr *Header) IsLast() bool { return hdr.ObjAttrs.Size == lastMarker }
 
 //
 // internal methods including the sending and completing loops below, each running in its own goroutine
@@ -458,7 +469,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	// current object
 	if s.sendoff.obj.reader != nil {
 		if s.sendoff.dod != 0 {
-			if s.sendoff.obj.hdr.Dsize == 0 { // when the object is header-only
+			if s.sendoff.obj.hdr.ObjAttrs.Size == 0 { // when the object is header-only
 				s.eoObj(nil)
 				return
 			} else {
@@ -515,7 +526,7 @@ func (s *Stream) sendHdr(b []byte) (n int, err error) {
 		obj := &s.sendoff.obj
 		if !obj.hdr.IsLast() {
 			if bool(glog.V(4)) || debug {
-				glog.Infof("%s: sent header %s/%s(%d)", s, obj.hdr.Bucket, obj.hdr.Objname, obj.hdr.Dsize)
+				glog.Infof("%s: sent header %s/%s(%d)", s, obj.hdr.Bucket, obj.hdr.Objname, obj.hdr.ObjAttrs.Size)
 			}
 		} else {
 			if bool(glog.V(4)) || debug {
@@ -536,7 +547,7 @@ func (s *Stream) sendData(b []byte) (n int, err error) {
 			err = nil
 		}
 		s.eoObj(err)
-	} else if s.sendoff.off >= s.sendoff.obj.hdr.Dsize {
+	} else if s.sendoff.off >= s.sendoff.obj.hdr.ObjAttrs.Size {
 		s.eoObj(err)
 	}
 	return
@@ -556,15 +567,15 @@ func (s *Stream) eoObj(err error) {
 	if err != nil {
 		goto exit
 	}
-	if s.sendoff.off != obj.hdr.Dsize {
-		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size", s, s.sendoff.obj.hdr.Bucket, s.sendoff.obj.hdr.Objname, s.sendoff.off, obj.hdr.Dsize)
+	if s.sendoff.off != obj.hdr.ObjAttrs.Size {
+		err = fmt.Errorf("%s: obj %s/%s offset %d != %d size", s, s.sendoff.obj.hdr.Bucket, s.sendoff.obj.hdr.Objname, s.sendoff.off, obj.hdr.ObjAttrs.Size)
 		goto exit
 	}
 	s.Numcur++
 	atomic.AddInt64(&s.stats.Num, 1)
 
 	if bool(glog.V(4)) || debug {
-		glog.Infof("%s: sent size=%d (%d/%d)", s, obj.hdr.Dsize, s.Numcur, s.stats.Num)
+		glog.Infof("%s: sent size=%d (%d/%d)", s, obj.hdr.ObjAttrs.Size, s.Numcur, s.stats.Num)
 	}
 exit:
 	if err != nil {
@@ -588,9 +599,10 @@ func (s *Stream) insHeader(hdr Header) (l int) {
 	l = sizeofI64 * 2
 	l = insString(l, s.maxheader, hdr.Bucket)
 	l = insString(l, s.maxheader, hdr.Objname)
+	l = insBool(l, s.maxheader, hdr.IsLocal)
 	l = insByte(l, s.maxheader, hdr.Opaque)
+	l = insAttrs(l, s.maxheader, hdr.ObjAttrs)
 	l = insInt64(l, s.maxheader, s.sessid)
-	l = insInt64(l, s.maxheader, hdr.Dsize)
 	hlen := l - sizeofI64*2
 	insInt64(0, s.maxheader, int64(hlen))
 	checksum := xoshiro256.Hash(uint64(hlen))
@@ -599,14 +611,15 @@ func (s *Stream) insHeader(hdr Header) (l int) {
 }
 
 func insString(off int, to []byte, str string) int {
-	var l = len(str)
-	binary.BigEndian.PutUint64(to[off:], uint64(l))
-	off += sizeofI64
-	n := copy(to[off:], str)
-	if debug {
-		cmn.Assert(n == l)
+	return insByte(off, to, []byte(str))
+}
+
+func insBool(off int, to []byte, b bool) int {
+	bt := byte(0)
+	if b {
+		bt = byte(1)
 	}
-	return off + l
+	return insByte(off, to, []byte{bt})
 }
 
 func insByte(off int, to []byte, b []byte) int {
@@ -621,13 +634,21 @@ func insByte(off int, to []byte, b []byte) int {
 }
 
 func insInt64(off int, to []byte, i int64) int {
-	binary.BigEndian.PutUint64(to[off:], uint64(i))
-	return off + sizeofI64
+	return insUint64(off, to, uint64(i))
 }
 
 func insUint64(off int, to []byte, i uint64) int {
 	binary.BigEndian.PutUint64(to[off:], i)
 	return off + sizeofI64
+}
+
+func insAttrs(off int, to []byte, attr ObjectAttrs) int {
+	off = insInt64(off, to, attr.Size)
+	off = insInt64(off, to, attr.Atime)
+	off = insString(off, to, attr.CksumType)
+	off = insString(off, to, attr.Cksum)
+	off = insString(off, to, attr.Version)
+	return off
 }
 
 // addIdle
@@ -644,7 +665,7 @@ func (s *Stream) dryrun() {
 		objReader, _, _, err := it.next()
 		if objReader != nil {
 			written, _ := io.CopyBuffer(ioutil.Discard, objReader, buf)
-			cmn.Assert(written == objReader.hdr.Dsize)
+			cmn.Assert(written == objReader.hdr.ObjAttrs.Size)
 			continue
 		}
 		if err != nil {
