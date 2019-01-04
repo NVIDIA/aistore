@@ -255,6 +255,28 @@ func MvFile(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
+func CopyFile(src, dst string, buf []byte) (err error) {
+	var (
+		reader *os.File
+		writer *os.File
+	)
+	if reader, err = os.Open(src); err != nil {
+		glog.Errorf("Failed to open %s: %v", src, err)
+		return
+	}
+	if writer, err = CreateFile(dst); err != nil {
+		glog.Errorf("Failed to create %s: %v", dst, err)
+		reader.Close()
+		return
+	}
+	if _, err = io.CopyBuffer(writer, reader, buf); err != nil {
+		glog.Errorf("Failed to copy %s -> %s: %v", src, dst, err)
+	}
+	writer.Close()
+	reader.Close()
+	return
+}
+
 // ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
 // xxHash on the data.
 func ReadWriteWithHash(r io.Reader, w io.Writer, buf []byte) (int64, string, error) {

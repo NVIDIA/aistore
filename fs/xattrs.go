@@ -14,7 +14,7 @@ import (
 func GetXattrCksum(fqn string, algo string) (cksum, errstr string) {
 	var b []byte
 	cmn.Assert(algo == cmn.ChecksumXXHash, fmt.Sprintf("Unsupported checksum algorithm '%s'", algo))
-	if b, errstr = GetXattr(fqn, cmn.XattrXXHashVal); errstr != "" {
+	if b, errstr = GetXattr(fqn, cmn.XattrXXHash); errstr != "" {
 		return
 	}
 	if b == nil {

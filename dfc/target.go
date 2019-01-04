@@ -36,6 +36,7 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/lru"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/mirror"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/NVIDIA/dfcpub/transport"
@@ -95,9 +96,10 @@ type (
 		prefetchQueue  chan filesWithDeadline
 		authn          *authManager
 		clusterStarted int64
-		regstate       regstate // registration state - the state of being registered (with the proxy) or maybe not
+		regstate       regstate // registration state - the state of being registered (with the proxy), or maybe not
 		fsprg          fsprungroup
 		readahead      readaheader
+		xcopy          *mirror.XactCopy
 	}
 )
 
@@ -339,16 +341,19 @@ func (t *targetrunner) IsRebalancing() bool {
 // gets triggered by the stats evaluation of a remaining capacity
 // and then runs in a goroutine - see stats package, target_stats.go
 func (t *targetrunner) RunLRU() {
+	if t.IsRebalancing() {
+		glog.Infoln("Warning: rebalancing (local or global) is in progress, skipping LRU run")
+		return
+	}
 	xlru := t.xactions.renewLRU()
 	if xlru == nil {
 		return
 	}
 	ini := lru.InitLRU{
-		Xlru:        xlru,
-		Namelocker:  t.rtnamemap,
-		Statsif:     t.statsif,
-		T:           t,
-		CtxResolver: fs.CSM,
+		Xlru:       xlru,
+		Namelocker: t.rtnamemap,
+		Statsif:    t.statsif,
+		T:          t,
 	}
 	lru.InitAndRun(&ini) // blocking
 
@@ -492,7 +497,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(cluster.LomFstat); errstr != "" { // (doesnotexist -> ok, other)
+	if errstr = lom.Fill(cluster.LomFstat, config); errstr != "" { // (doesnotexist -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -643,20 +648,19 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lom *cluster.LOM, started time.Time,
 	rangeOff, rangeLen int64, coldget bool) {
 	var (
-		file               *os.File
-		sgl                *memsys.SGL
-		slab               *memsys.Slab2
-		buf                []byte
-		rangeReader        io.ReadSeeker
-		reader             io.Reader
-		rahSize, written   int64
-		err                error
-		errstr             string
-		rahfcacher, rahsgl = t.readahead.get(lom.Fqn)
-		sendMore           bool
+		file        *os.File
+		sgl         *memsys.SGL
+		slab        *memsys.Slab2
+		buf         []byte
+		rangeReader io.ReadSeeker
+		reader      io.Reader
+		written     int64
+		err         error
+		errstr      string
+		fqn         = lom.Fqn
 	)
 	defer func() {
-		rahfcacher.got()
+		// rahfcacher.got()
 		if file != nil {
 			file.Close()
 		}
@@ -669,14 +673,17 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 	}()
 
 	cksumRange := lom.Cksumcfg.Checksum != cmn.ChecksumNone && rangeLen > 0 && lom.Cksumcfg.EnableReadRangeChecksum
+	hdr := w.Header()
+
 	if lom.Nhobj != nil && !cksumRange {
 		htype, hval := lom.Nhobj.Get()
-		w.Header().Add(cmn.HeaderDFCChecksumType, htype)
-		w.Header().Add(cmn.HeaderDFCChecksumVal, hval)
+		hdr.Add(cmn.HeaderObjCksumType, htype)
+		hdr.Add(cmn.HeaderObjCksumVal, hval)
 	}
 	if lom.Version != "" {
-		w.Header().Add(cmn.HeaderDFCObjVersion, lom.Version)
+		hdr.Add(cmn.HeaderObjVersion, lom.Version)
 	}
+	hdr.Add(cmn.HeaderObjSize, strconv.FormatInt(lom.Size, 10))
 
 	// loopback if disk IO is disabled
 	if dryRun.disk {
@@ -699,60 +706,35 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 		glog.Warningf("%s size=0(zero)", lom) // TODO: optimize out much of the below
 		return
 	}
-	if rahsgl != nil {
-		rahSize = rahsgl.Size()
-		if rangeLen == 0 {
-			sendMore = rahSize < lom.Size
+	fqn = lom.ChooseMirror()
+	file, err = os.Open(fqn)
+	if err != nil {
+		if os.IsPermission(err) {
+			errstr = fmt.Sprintf("Permission to access %s denied, err: %v", fqn, err)
+			t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
 		} else {
-			sendMore = rahSize < rangeLen
+			errstr = fmt.Sprintf("Failed to open %s, err: %v", fqn, err)
+			t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 		}
+		t.fshc(err, fqn)
+		return
 	}
-	if rahSize == 0 || sendMore {
-		file, err = os.Open(lom.Fqn)
-		if err != nil {
-			if os.IsPermission(err) {
-				errstr = fmt.Sprintf("Permission to access %s denied, err: %v", lom.Fqn, err)
-				t.invalmsghdlr(w, r, errstr, http.StatusForbidden)
-			} else {
-				errstr = fmt.Sprintf("Failed to open %s, err: %v", lom.Fqn, err)
-				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
-			}
-			t.fshc(err, lom.Fqn)
-			return
-		}
-	}
-
-send:
-	if rahsgl != nil && rahSize > 0 {
-		// reader = memsys.NewReader(rahsgl) - NOTE
-		reader = rahsgl
-		slab = rahsgl.Slab()
-		buf = slab.Alloc()
-		glog.Infof("%s readahead %d", lom.Fqn, rahSize) // FIXME: DEBUG
-	} else if rangeLen == 0 {
-		if rahSize > 0 {
-			file.Seek(rahSize, io.SeekStart)
-		}
+	if rangeLen == 0 {
 		reader = file
 		buf, slab = gmem2.AllocFromSlab2(lom.Size)
 	} else {
-		if rahSize > 0 {
-			rangeOff += rahSize
-			rangeLen -= rahSize
-		}
 		buf, slab = gmem2.AllocFromSlab2(rangeLen)
 		if cksumRange {
-			cmn.Assert(rahSize == 0, "NOT IMPLEMENTED YET") // TODO
 			var cksum string
-			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, lom.Fqn, rangeOff, rangeLen, buf)
+			cksum, sgl, rangeReader, errstr = t.rangeCksum(file, fqn, rangeOff, rangeLen, buf)
 			if errstr != "" {
 				t.invalmsghdlr(w, r, errstr, http.StatusInternalServerError)
 				return
 
 			}
 			reader = rangeReader
-			w.Header().Add(cmn.HeaderDFCChecksumType, lom.Cksumcfg.Checksum)
-			w.Header().Add(cmn.HeaderDFCChecksumVal, cksum)
+			hdr.Add(cmn.HeaderObjCksumType, lom.Cksumcfg.Checksum)
+			hdr.Add(cmn.HeaderObjCksumVal, cksum)
 		} else {
 			reader = io.NewSectionReader(file, rangeOff, rangeLen)
 		}
@@ -765,23 +747,18 @@ send:
 	}
 	if err != nil {
 		if !dryRun.network {
-			errstr = fmt.Sprintf("Failed to GET %s, err: %v", lom.Fqn, err)
+			errstr = fmt.Sprintf("Failed to GET %s, err: %v", fqn, err)
 		} else {
-			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", lom.Fqn, err)
+			errstr = fmt.Sprintf("dry-run: failed to read/discard %s, err: %v", fqn, err)
 		}
 		glog.Error(errstr)
-		t.fshc(err, lom.Fqn)
+		t.fshc(err, fqn)
 		t.statsif.Add(stats.ErrGetCount, 1)
 		return
 	}
-	if sendMore {
-		rahsgl = nil
-		sendMore = false
-		goto send
-	}
 
-	if !coldget && lom.LRUenabled() {
-		getatimerunner().Touch(lom.Fqn)
+	if !coldget {
+		lom.UpdateAtime(started)
 	}
 	if glog.V(4) {
 		s := fmt.Sprintf("GET: %s(%s), %d µs", lom, cmn.B2S(written, 1), int64(time.Since(started)/time.Microsecond))
@@ -1104,11 +1081,11 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	var (
 		bucket      string
-		islocal     bool
 		errstr      string
-		errcode     int
 		bucketprops cmn.SimpleKVs
 		cksumcfg    *cmn.CksumConf
+		errcode     int
+		islocal     bool
 	)
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
@@ -1147,8 +1124,9 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		bucketprops[cmn.HeaderVersioning] = cmn.VersionNone
 	}
 
+	hdr := w.Header()
 	for k, v := range bucketprops {
-		w.Header().Add(k, v)
+		hdr.Add(k, v)
 	}
 
 	props, _, defined := bucketmd.propsAndChecksum(bucket)
@@ -1157,21 +1135,24 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 	if defined {
 		cksumcfg = &props.CksumConf
 	}
-
-	// include lru settings in the response
-	w.Header().Add(cmn.HeaderNextTierURL, props.NextTierURL)
-	w.Header().Add(cmn.HeaderReadPolicy, props.ReadPolicy)
-	w.Header().Add(cmn.HeaderWritePolicy, props.WritePolicy)
-	w.Header().Add(cmn.HeaderBucketChecksumType, cksumcfg.Checksum)
-	w.Header().Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
-	w.Header().Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
-	w.Header().Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
-	w.Header().Add(cmn.HeaderBucketLRULowWM, strconv.FormatUint(uint64(props.LowWM), 10))
-	w.Header().Add(cmn.HeaderBucketLRUHighWM, strconv.FormatUint(uint64(props.HighWM), 10))
-	w.Header().Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.AtimeCacheMax, 10))
-	w.Header().Add(cmn.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
-	w.Header().Add(cmn.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
-	w.Header().Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))
+	// transfer bucket props via http header;
+	// note that it is totally legal for Cloud buckets to not have locally cached props
+	if props != nil {
+		hdr.Add(cmn.HeaderNextTierURL, props.NextTierURL)
+		hdr.Add(cmn.HeaderReadPolicy, props.ReadPolicy)
+		hdr.Add(cmn.HeaderWritePolicy, props.WritePolicy)
+		hdr.Add(cmn.HeaderBucketChecksumType, cksumcfg.Checksum)
+		hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
+		hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
+		hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
+		hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LowWM, 10))
+		hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.HighWM, 10))
+		hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.AtimeCacheMax, 10))
+		hdr.Add(cmn.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
+		hdr.Add(cmn.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
+		hdr.Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))
+		hdr.Add(cmn.HeaderBucketCopies, strconv.FormatInt(props.Copies, 10))
+	}
 }
 
 // HEAD /v1/objects/bucket-name/object-name
@@ -1215,8 +1196,8 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		objmeta = make(cmn.SimpleKVs)
-		objmeta["size"] = strconv.FormatInt(lom.Size, 10)
-		objmeta["version"] = lom.Version
+		objmeta[cmn.HeaderObjSize] = strconv.FormatInt(lom.Size, 10)
+		objmeta[cmn.HeaderObjVersion] = lom.Version
 		if glog.V(4) {
 			glog.Infof("%s(%s), ver=%s", lom, cmn.B2S(lom.Size, 1), lom.Version)
 		}
@@ -1227,8 +1208,9 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	hdr := w.Header()
 	for k, v := range objmeta {
-		w.Header().Add(k, v)
+		hdr.Add(k, v)
 	}
 }
 
@@ -1449,7 +1431,7 @@ func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, ve
 	if objmeta, errstr, errcode = t.cloudif.headobject(ct, bucket, objname); errstr != "" {
 		return
 	}
-	if cloudVersion, ok := objmeta["version"]; ok {
+	if cloudVersion, ok := objmeta[cmn.HeaderObjVersion]; ok {
 		if version != cloudVersion {
 			glog.Infof("Object %s/%s version changed, current version %s (old/local %s)",
 				bucket, objname, cloudVersion, version)
@@ -1459,8 +1441,8 @@ func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, ve
 	return
 }
 
-func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (props *cluster.LOM, errstr string) {
-	neighsi := t.lookupRemotely(lom.Bucket, lom.Objname)
+func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (rlom *cluster.LOM, errstr string) {
+	neighsi := t.lookupRemotely(lom)
 	if neighsi == nil {
 		errstr = fmt.Sprintf("Failed cluster-wide lookup %s", lom)
 		return
@@ -1479,7 +1461,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (props
 		return
 	}
 	// Do
-	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.SendFile)
+	contextwith, cancel := context.WithTimeout(context.Background(), lom.Config.Timeout.SendFile)
 	defer cancel()
 	newrequest := newr.WithContext(contextwith)
 
@@ -1489,40 +1471,39 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (props
 		return
 	}
 	var (
-		hval    = response.Header.Get(cmn.HeaderDFCChecksumVal)
-		htype   = response.Header.Get(cmn.HeaderDFCChecksumType)
+		hval    = response.Header.Get(cmn.HeaderObjCksumVal)
+		htype   = response.Header.Get(cmn.HeaderObjCksumType)
 		hksum   = cmn.NewCksum(htype, hval)
-		version = response.Header.Get(cmn.HeaderDFCObjVersion)
+		version = response.Header.Get(cmn.HeaderObjVersion)
 		getfqn  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	)
-	props = &cluster.LOM{}
-	*props = *lom
-	props.Nhobj = hksum
-	props.Version = version
-	if _, lom.Nhobj, lom.Size, errstr = t.receive(getfqn, props, "", response.Body); errstr != "" {
+	rlom = &cluster.LOM{}
+	*rlom = *lom
+	rlom.Nhobj = hksum
+	rlom.Version = version
+	if _, lom.Nhobj, lom.Size, errstr = t.receive(getfqn, rlom, "", response.Body); errstr != "" { // FIXME: transfer atime as well
 		response.Body.Close()
 		return
 	}
 	response.Body.Close()
 	// commit
-	if err = cmn.MvFile(getfqn, props.Fqn); err != nil {
+	if err = cmn.MvFile(getfqn, rlom.Fqn); err != nil {
 		glog.Errorln(err)
 		return
 	}
-	if errstr = props.Persist(); errstr != "" {
+	if errstr = rlom.Persist(); errstr != "" {
 		return
 	}
 	if glog.V(4) {
-		glog.Infof("Success: %s (%s, %s) from %s", lom, cmn.B2S(lom.Size, 1), lom.Nhobj, neighsi)
+		glog.Infof("Success: %s (%s, %s) from %s", rlom, cmn.B2S(rlom.Size, 1), rlom.Nhobj, neighsi)
 	}
 	return
 }
 
-// FIXME: when called with a bad checksum will recompute yet again (optimize)
+// FIXME: recomputes checksum if called with a bad one (optimize)
 func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bool) (errstr string, errcode int) {
 	var (
-		config          = cmn.GCO.Get()
-		versioncfg      = &config.Ver
+		versioncfg      = &lom.Config.Ver
 		errv            string
 		vchanged, crace bool
 		err             error
@@ -1633,14 +1614,14 @@ ret:
 	return
 }
 
-func (t *targetrunner) lookupRemotely(bucket, objname string) *cluster.Snode {
+func (t *targetrunner) lookupRemotely(lom *cluster.LOM) *cluster.Snode {
 	res := t.broadcastTo(
-		cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname),
+		cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname),
 		nil, // query
 		http.MethodHead,
 		nil,
 		t.smapowner.get(),
-		cmn.GCO.Get().Timeout.MaxKeepalive,
+		lom.Config.Timeout.MaxKeepalive,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
@@ -2037,8 +2018,8 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 // In both case a new checksum is saved to xattrs
 func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr string, errcode int) {
 	var (
-		htype   = r.Header.Get(cmn.HeaderDFCChecksumType)
-		hval    = r.Header.Get(cmn.HeaderDFCChecksumVal)
+		htype   = r.Header.Get(cmn.HeaderObjCksumType)
+		hval    = r.Header.Get(cmn.HeaderObjCksumVal)
 		hksum   = cmn.NewCksum(htype, hval)
 		started = time.Now()
 	)
@@ -2071,10 +2052,19 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr st
 		if glog.V(4) {
 			glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
 		}
-
-		if false { // TODO: bucket n-way mirror props
-			xlr := t.xactions.renewPutLR(lom.Bucket, lom.Bislocal) // TODO: optimize find
-			xlr.Copy(lom)
+		// local mirror
+		if lom.Bprops != nil && lom.Bprops.Copies != 0 {
+			if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
+				t.xcopy = t.xactions.renewAddCopies(lom.Bucket, lom.Bislocal, t)
+			}
+			err := t.xcopy.Copy(lom)
+			// renew upon xcopy timeout vs xcopy.Copy() race
+			if _, ok := err.(*cmn.ErrXpired); ok {
+				t.xcopy = t.xactions.renewAddCopies(lom.Bucket, lom.Bislocal, t)
+				if err = t.xcopy.Copy(lom); err != nil {
+					glog.Errorf("Unexpected: %v", err)
+				}
+			}
 		}
 	}
 	return
@@ -2117,6 +2107,7 @@ func (t *targetrunner) putCommit(ct context.Context, lom *cluster.LOM, putfqn st
 			}
 		}
 	}
+	lom.Doesnotexist = false
 	return
 }
 
@@ -2215,12 +2206,12 @@ func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname st
 
 		var (
 			size  int64
-			htype = r.Header.Get(cmn.HeaderDFCChecksumType)
-			hval  = r.Header.Get(cmn.HeaderDFCChecksumVal)
+			htype = r.Header.Get(cmn.HeaderObjCksumType)
+			hval  = r.Header.Get(cmn.HeaderObjCksumVal)
 			hksum = cmn.NewCksum(htype, hval)
 		)
-		lom.Version = r.Header.Get(cmn.HeaderDFCObjVersion)
-		if timeStr := r.Header.Get(cmn.HeaderDFCObjAtime); timeStr != "" {
+		lom.Version = r.Header.Get(cmn.HeaderObjVersion)
+		if timeStr := r.Header.Get(cmn.HeaderObjAtime); timeStr != "" {
 			lom.Atimestr = timeStr
 			if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
 				lom.Atime = tm
@@ -2384,18 +2375,19 @@ func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.
 	}
 	if lom.Nhobj != nil {
 		htype, hval := lom.Nhobj.Get()
-		request.Header.Set(cmn.HeaderDFCChecksumType, htype)
-		request.Header.Set(cmn.HeaderDFCChecksumVal, hval)
+		request.Header.Set(cmn.HeaderObjCksumType, htype)
+		request.Header.Set(cmn.HeaderObjCksumVal, hval)
 	}
 	if lom.Version != "" {
-		request.Header.Set(cmn.HeaderDFCObjVersion, lom.Version)
+		request.Header.Set(cmn.HeaderObjVersion, lom.Version)
 	}
+	request.Header.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size, 10))
 	if lom.Atimestr != "" {
-		request.Header.Set(cmn.HeaderDFCObjAtime, lom.Atimestr)
+		request.Header.Set(cmn.HeaderObjAtime, lom.Atimestr)
 	}
 
 	// Do
-	contextwith, cancel := context.WithTimeout(context.Background(), cmn.GCO.Get().Timeout.SendFile)
+	contextwith, cancel := context.WithTimeout(context.Background(), lom.Config.Timeout.SendFile)
 	defer cancel()
 	newrequest := request.WithContext(contextwith)
 
@@ -2791,14 +2783,9 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 		file       *os.File
 		filewriter io.Writer
 		nhval      string
-		cksumcfg   = &cmn.GCO.Get().Cksum
 	)
-
 	if dryRun.disk && dryRun.network {
 		return
-	}
-	if lom.Cksumcfg == nil { // FIXME: always initialize in the callers, include aws/gcp
-		lom.Fill(0)
 	}
 	if dryRun.network {
 		reader = readers.NewRandReader(dryRun.size)
@@ -2844,7 +2831,7 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 
 	// receive and checksum
 	if lom.Cksumcfg.Checksum != cmn.ChecksumNone {
-		cmn.Assert(cksumcfg.Checksum == cmn.ChecksumXXHash)
+		cmn.Assert(lom.Cksumcfg.Checksum == cmn.ChecksumXXHash)
 		xx := xxhash.New64()
 		if written, err = cmn.ReceiveAndChecksum(filewriter, reader, buf, xx); err != nil {
 			errstr = err.Error()
@@ -2863,7 +2850,7 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 				return
 			}
 		}
-	} else if omd5 != "" && cksumcfg.ValidateColdGet {
+	} else if omd5 != "" && lom.Cksumcfg.ValidateColdGet {
 		md5 := md5.New()
 		if written, err = cmn.ReceiveAndChecksum(filewriter, reader, buf, md5); err != nil {
 			errstr = err.Error()

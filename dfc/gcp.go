@@ -325,7 +325,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 		return
 	}
 	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderGoogle
-	objmeta["version"] = fmt.Sprintf("%d", attrs.Generation)
+	objmeta[cmn.HeaderObjVersion] = fmt.Sprintf("%d", attrs.Generation)
 	return
 }
 
@@ -334,7 +334,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, objname string) (props *cluster.LOM, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(ct context.Context, workfqn string, bucket string, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var v cmn.CksumValue
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -355,8 +355,11 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, fqn string, bucket string, ob
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	props = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Nhobj: v, Version: fmt.Sprintf("%d", attrs.Generation)}
-	if _, props.Nhobj, props.Size, errstr = gcpimpl.t.receive(fqn, props, md5, rc); errstr != "" {
+	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Nhobj: v, Version: fmt.Sprintf("%d", attrs.Generation)}
+	if errstr = lom.Fill(0); errstr != "" {
+		return
+	}
+	if _, lom.Nhobj, lom.Size, errstr = gcpimpl.t.receive(workfqn, lom, md5, rc); errstr != "" {
 		rc.Close()
 		return
 	}

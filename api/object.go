@@ -49,14 +49,14 @@ func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps
 			bucket, object, r.StatusCode, string(b))
 	}
 
-	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderSize))
+	size, err := strconv.Atoi(r.Header.Get(cmn.HeaderObjSize))
 	if err != nil {
 		return nil, err
 	}
 
 	return &cmn.ObjectProps{
 		Size:    size,
-		Version: r.Header.Get(cmn.HeaderVersion),
+		Version: r.Header.Get(cmn.HeaderObjVersion),
 	}, nil
 }
 
@@ -152,8 +152,8 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 		return 0, err
 	}
 	defer resp.Body.Close()
-	hdrHash := resp.Header.Get(cmn.HeaderDFCChecksumVal)
-	hdrHashType := resp.Header.Get(cmn.HeaderDFCChecksumType)
+	hdrHash := resp.Header.Get(cmn.HeaderObjCksumVal)
+	hdrHashType := resp.Header.Get(cmn.HeaderObjCksumType)
 
 	if hdrHashType == cmn.ChecksumXXHash {
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
@@ -198,11 +198,11 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 		return reader.Open()
 	}
 	if hash != "" {
-		req.Header.Set(cmn.HeaderDFCChecksumType, cmn.ChecksumXXHash)
-		req.Header.Set(cmn.HeaderDFCChecksumVal, hash)
+		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
+		req.Header.Set(cmn.HeaderObjCksumVal, hash)
 	}
 	if len(replicateOpts) > 0 {
-		req.Header.Set(cmn.HeaderDFCReplicationSrc, replicateOpts[0].SourceURL)
+		req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
 	}
 	resp, err := baseParams.Client.Do(req)
 	if err != nil {

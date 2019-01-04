@@ -330,7 +330,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 	}
 	objmeta[cmn.HeaderCloudProvider] = cmn.ProviderAmazon
 	if awsIsVersionSet(headOutput.VersionId) {
-		objmeta["version"] = *headOutput.VersionId
+		objmeta[cmn.HeaderObjVersion] = *headOutput.VersionId
 	}
 	return
 }
@@ -340,7 +340,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) (props *cluster.LOM, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(ct context.Context, workfqn, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var v cmn.CksumValue
 	sess := createSession(ct)
 	svc := s3.New(sess)
@@ -367,11 +367,14 @@ func (awsimpl *awsimpl) getobj(ct context.Context, fqn, bucket, objname string) 
 		}
 		md5 = ""
 	}
-	props = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Nhobj: v}
+	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Nhobj: v}
 	if obj.VersionId != nil {
-		props.Version = *obj.VersionId
+		lom.Version = *obj.VersionId
 	}
-	if _, props.Nhobj, props.Size, errstr = awsimpl.t.receive(fqn, props, md5, obj.Body); errstr != "" {
+	if errstr = lom.Fill(0); errstr != "" {
+		return
+	}
+	if _, lom.Nhobj, lom.Size, errstr = awsimpl.t.receive(workfqn, lom, md5, obj.Body); errstr != "" {
 		obj.Body.Close()
 		return
 	}

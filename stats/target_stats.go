@@ -113,8 +113,6 @@ func (r *Trunner) Init() {
 	r.ctracker = make(copyTracker, 48) // these two are allocated once and only used in serial context
 	r.lines = make([]string, 0, 16)
 
-	r.UpdateCapacity()
-
 	config := cmn.GCO.Get()
 	r.timecounts.capLimit = cmn.DivCeil(int64(config.LRU.CapacityUpdTime), int64(config.Periodic.StatsTime))
 	r.timecounts.logLimit = cmn.DivCeil(int64(logsTotalSizeCheckTime), int64(config.Periodic.StatsTime))
@@ -253,6 +251,10 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 
 func (r *Trunner) UpdateCapacity() (runlru bool) {
 	availableMountpaths, _ := fs.Mountpaths.Get()
+	if len(availableMountpaths) == 0 {
+		glog.Errorln("UpdateCapacity: no mountpaths")
+		return
+	}
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))
 	for mpath := range availableMountpaths {
 		statfs := &syscall.Statfs_t{}

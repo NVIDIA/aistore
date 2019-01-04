@@ -2594,6 +2594,7 @@ func validateCloudProvider(provider string, isLocal bool) error {
 	return nil
 }
 
+// FIXME: will always miss when adding new props - must change
 func (p *proxyrunner) copyBucketProps(oldProps, newProps *cmn.BucketProps, bucket string) {
 	oldProps.NextTierURL = newProps.NextTierURL
 	oldProps.CloudProvider = newProps.CloudProvider
@@ -2626,4 +2627,5 @@ func (p *proxyrunner) copyBucketProps(oldProps, newProps *cmn.BucketProps, bucke
 		oldProps.CapacityUpdTime = newProps.CapacityUpdTime // parsing done in validateBucketProps()
 	}
 	oldProps.LRUEnabled = newProps.LRUEnabled
+	oldProps.Copies = newProps.Copies
 }

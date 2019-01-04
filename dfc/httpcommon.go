@@ -888,7 +888,7 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 		hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
 		if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
 			config.LRU.LowWM, config.LRU.HighWM = lm, hm
-			errstr = fmt.Sprintf("Invalid LRU watermarks %+v", config.LRU)
+			errstr = fmt.Sprintf("Invalid LRU watermarks hwm=%d, lwm=%d", hwm, lwm)
 		}
 	}
 	return
@@ -1149,6 +1149,6 @@ func (h *httprunner) initStatsD(daemonStr string) (err error) {
 }
 
 func isReplicationPUT(r *http.Request) (isreplica bool, replicasrc string) {
-	replicasrc = r.Header.Get(cmn.HeaderDFCReplicationSrc)
+	replicasrc = r.Header.Get(cmn.HeaderObjReplicSrc)
 	return replicasrc != "", replicasrc
 }

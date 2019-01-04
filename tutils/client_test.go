@@ -236,7 +236,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Verify hash
-		t := r.Header.Get(cmn.HeaderDFCChecksumType)
+		t := r.Header.Get(cmn.HeaderObjCksumType)
 		if t != cmn.ChecksumXXHash {
 			errf(http.StatusBadRequest, fmt.Sprintf("Do not know how to handle hash type %s", t))
 			return
@@ -253,7 +253,7 @@ func TestMain(m *testing.M) {
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, uint64(hasher.Sum64()))
 		hash := hex.EncodeToString(b)
-		v := r.Header.Get(cmn.HeaderDFCChecksumVal)
+		v := r.Header.Get(cmn.HeaderObjCksumVal)
 		if hash != v {
 			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", v, hash))
 		}

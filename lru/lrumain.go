@@ -47,18 +47,17 @@ const (
 
 type (
 	InitLRU struct {
-		Ratime      *atime.Runner
-		Xlru        cmn.Xact
-		Namelocker  cluster.NameLocker
-		Statsif     stats.Tracker
-		T           cluster.Target
-		CtxResolver *fs.ContentSpecMgr
+		Ratime     *atime.Runner
+		Xlru       cmn.Xact
+		Namelocker cluster.NameLocker
+		Statsif    stats.Tracker
+		T          cluster.Target
 	}
 
 	fileInfo struct {
-		fqn     string
-		usetime time.Time
-		size    int64
+		fqn string
+		lom *cluster.LOM
+		old bool
 	}
 	fileInfoMinHeap []*fileInfo
 
@@ -73,12 +72,16 @@ type (
 		heap    *fileInfoMinHeap
 		oldwork []*fileInfo
 		// init-time
-		ini         InitLRU
-		mpathInfo   *fs.MountpathInfo
-		bckTypeDir  string
-		atimeRespCh chan *atime.Response
-		bislocal    bool
-		throttle    bool
+		ini             InitLRU
+		mpathInfo       *fs.MountpathInfo
+		contentType     string
+		contentResolver fs.ContentResolver
+		config          *cmn.Config
+		bckTypeDir      string
+		atimeRespCh     chan *atime.Response
+		dontevictime    time.Time
+		bislocal        bool
+		throttle        bool
 	}
 )
 
@@ -91,26 +94,32 @@ type (
 
 func InitAndRun(ini *InitLRU) {
 	wg := &sync.WaitGroup{}
-	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, cmn.GCO.Get().LRU.DontEvictTime)
+	config := cmn.GCO.Get()
+	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, config.LRU.DontEvictTime)
 
 	ini.Ratime = ini.T.GetAtimeRunner()
 
 	availablePaths, _ := fs.Mountpaths.Get()
-	for contentType, contentResolver := range ini.CtxResolver.RegisteredContentTypes {
+	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToEvict() {
+			continue
+		}
+		// TODO: extend LRU for other content types
+		if contentType != fs.WorkfileType && contentType != fs.ObjectType {
+			glog.Warningf("Skipping content type %q", contentType)
 			continue
 		}
 		//
 		// NOTE the sequence: LRU local buckets first, Cloud buckets - second
 		//
-		for path, mpathInfo := range availablePaths {
-			lctx := newlru(ini, mpathInfo, fs.Mountpaths.MakePathLocal(path, contentType), true /* these buckets are local */)
+		for _, mpathInfo := range availablePaths {
+			lctx := newlru(ini, mpathInfo, contentType, contentResolver, config, true /* these buckets are local */)
 			wg.Add(1)
 			go lctx.jog(wg)
 		}
 		wg.Wait()
-		for path, mpathInfo := range availablePaths {
-			lctx := newlru(ini, mpathInfo, fs.Mountpaths.MakePathCloud(path, contentType), false /* cloud */)
+		for _, mpathInfo := range availablePaths {
+			lctx := newlru(ini, mpathInfo, contentType, contentResolver, config, false /* cloud */)
 			wg.Add(1)
 			go lctx.jog(wg)
 		}
@@ -118,14 +127,24 @@ func InitAndRun(ini *InitLRU) {
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, bckTypeDir string, bislocal bool) *lructx {
+func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver,
+	config *cmn.Config, bislocal bool) *lructx {
+	var bckTypeDir string
+	if bislocal {
+		bckTypeDir = fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType)
+	} else {
+		bckTypeDir = fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType)
+	}
 	lctx := &lructx{
-		oldwork:     make([]*fileInfo, 0, 64),
-		ini:         *ini,
-		mpathInfo:   mpathInfo,
-		bckTypeDir:  bckTypeDir,
-		atimeRespCh: make(chan *atime.Response, 1),
-		bislocal:    bislocal,
+		oldwork:         make([]*fileInfo, 0, 64),
+		ini:             *ini,
+		mpathInfo:       mpathInfo,
+		contentType:     contentType,
+		contentResolver: contentResolver,
+		config:          config,
+		bckTypeDir:      bckTypeDir,
+		atimeRespCh:     make(chan *atime.Response, 1),
+		bislocal:        bislocal,
 	}
 	return lctx
 }

@@ -6,7 +6,6 @@ package dfc
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"net/url"
 	"os"
@@ -172,32 +171,6 @@ func parsebool(s string) (value bool, err error) {
 	}
 	value, err = strconv.ParseBool(s)
 	return
-}
-
-func copyFile(fromFQN, toFQN string) (fqnErr string, err error) {
-	fileIn, err := os.Open(fromFQN)
-	if err != nil {
-		glog.Errorf("Failed to open source %s: %v", fromFQN, err)
-		return fromFQN, err
-	}
-	defer fileIn.Close()
-
-	fileOut, err := os.Create(toFQN)
-	if err != nil {
-		glog.Errorf("Failed to open destination %s: %v", toFQN, err)
-		return toFQN, err
-	}
-	defer fileOut.Close()
-
-	buf, slab := gmem2.AllocFromSlab2(cmn.MiB)
-	defer slab.Free(buf)
-
-	if _, err = io.CopyBuffer(fileOut, fileIn, buf); err != nil {
-		glog.Errorf("Failed to copy %s -> %s: %v", fromFQN, toFQN, err)
-		return toFQN, err
-	}
-
-	return "", nil
 }
 
 // query-able xactions

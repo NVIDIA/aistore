@@ -338,24 +338,24 @@ func (r *mpathReplicator) send(req *replRequest) error {
 		return os.Open(req.fqn)
 	}
 
-	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, r.atimeRespCh, lom.LRUenabled())
+	atimestr, _, _ := getatimerunner().FormatAtime(req.fqn, lom.ParsedFQN.MpathInfo.Path, r.atimeRespCh, lom.LRUenabled())
 
 	// obtain the version of the file
-	if version, errstr := fs.GetXattr(req.fqn, cmn.XattrObjVersion); errstr != "" {
-		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, cmn.XattrObjVersion, errstr)
+	if version, errstr := fs.GetXattr(req.fqn, cmn.XattrVersion); errstr != "" {
+		glog.Errorf("Failed to read %q xattr %s, err %s", req.fqn, cmn.XattrVersion, errstr)
 	} else if len(version) != 0 {
-		httpReq.Header.Add(cmn.HeaderDFCObjVersion, string(version))
+		httpReq.Header.Add(cmn.HeaderObjVersion, string(version))
 	}
 
 	// specify source direct URL in request header
-	httpReq.Header.Add(cmn.HeaderDFCReplicationSrc, r.directURL)
+	httpReq.Header.Add(cmn.HeaderObjReplicSrc, r.directURL)
 	if lom.Nhobj != nil {
 		htype, hval := lom.Nhobj.Get()
-		httpReq.Header.Add(cmn.HeaderDFCChecksumType, htype)
-		httpReq.Header.Add(cmn.HeaderDFCChecksumVal, hval)
+		httpReq.Header.Add(cmn.HeaderObjCksumType, htype)
+		httpReq.Header.Add(cmn.HeaderObjCksumVal, hval)
 	}
 	if atimestr != "" {
-		httpReq.Header.Add(cmn.HeaderDFCObjAtime, atimestr)
+		httpReq.Header.Add(cmn.HeaderObjAtime, atimestr)
 	}
 
 	resp, err := r.t.httpclientLongTimeout.Do(httpReq)
@@ -400,7 +400,7 @@ func (r *mpathReplicator) receive(req *replRequest) error {
 	if errstr := lom.Fill(0); errstr != "" {
 		return errors.New(errstr)
 	}
-	if timeStr := httpr.Header.Get(cmn.HeaderDFCObjAtime); timeStr != "" {
+	if timeStr := httpr.Header.Get(cmn.HeaderObjAtime); timeStr != "" {
 		lom.Atimestr = timeStr
 		if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
 			lom.Atime = tm // FIXME: not used

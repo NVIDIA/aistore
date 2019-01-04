@@ -254,6 +254,7 @@ func dfcinit() {
 				glog.Fatal(err)
 			}
 		}
+		ts.UpdateCapacity() // goes after fs.Mountpaths.Init
 
 		iostat := ios.NewIostatRunner()
 		ctx.rg.add(iostat, xiostat)

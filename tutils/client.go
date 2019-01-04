@@ -240,8 +240,8 @@ func GetWithMetrics(url, bucket string, keyname string, silent bool, validate bo
 	tr.tsHTTPEnd = time.Now()
 
 	if validate && resp != nil {
-		hdhash = resp.Header.Get(cmn.HeaderDFCChecksumVal)
-		hdhashtype = resp.Header.Get(cmn.HeaderDFCChecksumType)
+		hdhash = resp.Header.Get(cmn.HeaderObjCksumVal)
+		hdhashtype = resp.Header.Get(cmn.HeaderObjCksumType)
 	}
 
 	v := hdhashtype == cmn.ChecksumXXHash

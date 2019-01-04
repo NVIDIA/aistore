@@ -28,6 +28,8 @@ import (
 
 func (lctx *lructx) jog(wg *sync.WaitGroup) {
 	defer wg.Done()
+	now := time.Now()
+	lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
 
 	lctx.heap = &fileInfoMinHeap{}
 	heap.Init(lctx.heap)
@@ -55,11 +57,7 @@ func (lctx *lructx) jog(wg *sync.WaitGroup) {
 }
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
-	var (
-		evictOK bool
-		isOld   bool
-		h       = lctx.heap
-	)
+	var h = lctx.heap
 	if err != nil {
 		glog.Errorf("invoked with err: %v", err)
 		return err
@@ -67,51 +65,39 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if osfi.Mode().IsDir() {
 		return nil
 	}
-	if evictOK, isOld = lctx.ini.CtxResolver.PermToEvict(fqn); !evictOK && !isOld {
-		return nil
-	}
-	_, err = os.Stat(fqn)
-	if os.IsNotExist(err) {
-		glog.Infof("Warning (race?): %s "+cmn.DoesNotExist, fqn)
-		glog.Flush()
-		return nil
-	}
 	if err = lctx.yieldTerm(); err != nil {
 		return err
 	}
-
-	atime, mtime, stat := ios.GetAmTimes(osfi)
-	if isOld {
-		fi := &fileInfo{fqn: fqn, size: stat.Size}
-		glog.Infof("%s is old", fqn)
-		lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
+	lom := &cluster.LOM{T: lctx.ini.T, Fqn: fqn}
+	if errstr := lom.Fill(cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || lom.Doesnotexist {
+		if glog.V(4) {
+			glog.Infof("Warning: %s", errstr)
+		}
 		return nil
 	}
-
-	// object eviction: access time
-	usetime := atime
-
-	atimeResponse := <-lctx.ini.Ratime.Atime(fqn, lctx.atimeRespCh)
-	accessTime, ok := atimeResponse.AccessTime, atimeResponse.Ok
-	if ok {
-		usetime = accessTime
-	} else if mtime.After(atime) {
-		usetime = mtime
-	}
-	now := time.Now()
-	dontevictime := now.Add(-cmn.GCO.Get().LRU.DontEvictTime)
-	if usetime.After(dontevictime) {
-		if glog.V(4) {
-			glog.Infof("%s: not evicting (usetime %v, dontevictime %v)", fqn, usetime, dontevictime)
+	if lctx.contentType == fs.WorkfileType {
+		_, base := filepath.Split(fqn)
+		_, old, ok := lctx.contentResolver.ParseUniqueFQN(base)
+		if ok && old {
+			fi := &fileInfo{fqn: fqn, lom: lom, old: old}
+			glog.Infof("%q is old", fqn)
+			lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		}
 		return nil
 	}
 
-	// cleanup after rebalance
-	_, _, err = cluster.ResolveFQN(fqn, nil, lctx.bislocal)
-	if err != nil {
-		glog.Infof("%s: is misplaced, err: %v", fqn, err)
-		fi := &fileInfo{fqn: fqn, size: stat.Size}
+	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
+	if lom.Atime.After(lctx.dontevictime) {
+		if glog.V(4) {
+			glog.Infof("%q: not evicting (usetime %v, dontevictime %v)", fqn, lom.Atime, lctx.dontevictime)
+		}
+		return nil
+	}
+
+	// includes post-rebalancing cleanup
+	if lom.Misplaced {
+		glog.Infof("%q: is misplaced, err: %v", fqn, err)
+		fi := &fileInfo{fqn: fqn, lom: lom}
 		lctx.oldwork = append(lctx.oldwork, fi)
 		return nil
 	}
@@ -120,18 +106,18 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// do nothing if the heap's cursize >= totsize &&
 	// the file is more recent then the the heap's newest
 	// full optimization (TODO) entails compacting the heap when its cursize >> totsize
-	if lctx.cursize >= lctx.totsize && usetime.After(lctx.newest) {
+	if lctx.cursize >= lctx.totsize && lom.Atime.After(lctx.newest) {
 		if glog.V(4) {
-			glog.Infof("%s: use-time-after (usetime=%v, newest=%v)", fqn, usetime, lctx.newest)
+			glog.Infof("%q: use-time-after (usetime=%v, newest=%v)", fqn, lom.Atime, lctx.newest)
 		}
 		return nil
 	}
 	// push and update the context
-	fi := &fileInfo{fqn: fqn, usetime: usetime, size: stat.Size}
+	fi := &fileInfo{fqn: fqn, lom: lom}
 	heap.Push(h, fi)
-	lctx.cursize += fi.size
-	if usetime.After(lctx.newest) {
-		lctx.newest = usetime
+	lctx.cursize += fi.lom.Size
+	if lom.Atime.After(lctx.newest) {
+		lctx.newest = lom.Atime
 	}
 	return nil
 }
@@ -141,35 +127,28 @@ func (lctx *lructx) evict() (err error) {
 		fevicted, bevicted int64
 		capCheck           int64
 		h                  = lctx.heap
-		config             = cmn.GCO.Get()
 	)
 	for _, fi := range lctx.oldwork {
-		if lctx.ini.T.IsRebalancing() {
-			_, _, err = cluster.ResolveFQN(fi.fqn, nil, lctx.bislocal)
-			// keep a copy of a rebalanced file while rebalance is running
-			if movable := lctx.ini.CtxResolver.PermToMove(fi.fqn); movable && err != nil {
-				continue
-			}
-		}
-		if err = os.Remove(fi.fqn); err != nil {
-			glog.Warningf("LRU: failed to remove %q", fi.fqn)
+		if !fi.old && lctx.ini.T.IsRebalancing() {
 			continue
 		}
-		if capCheck, err = lctx.postRemove(config, capCheck, fi.size); err != nil {
+		if err = os.Remove(fi.fqn); err != nil {
+			glog.Warningf("Failed to remove %q", fi.fqn)
+			continue
+		}
+		if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
 			return
 		}
 		glog.Infof("Removed old %q", fi.fqn)
 	}
 	for h.Len() > 0 && lctx.totsize > 0 {
 		fi := heap.Pop(h).(*fileInfo)
-		if err = lctx.evictFQN(fi.fqn); err != nil {
-			glog.Errorf("Failed to evict %q, err: %v", fi.fqn, err)
-			continue
-		}
-		bevicted += fi.size
-		fevicted++
-		if capCheck, err = lctx.postRemove(config, capCheck, fi.size); err != nil {
-			return
+		if lctx.evictObj(fi) {
+			bevicted += fi.lom.Size
+			fevicted++
+			if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
+				return
+			}
 		}
 	}
 	lctx.ini.Statsif.Add(stats.LruEvictSize, bevicted)
@@ -177,9 +156,9 @@ func (lctx *lructx) evict() (err error) {
 	return nil
 }
 
-func (lctx *lructx) postRemove(config *cmn.Config, capCheck, size int64) (int64, error) {
-	lctx.totsize -= size
-	capCheck += size
+func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
+	lctx.totsize -= fi.lom.Size
+	capCheck += fi.lom.Size
 	if err := lctx.yieldTerm(); err != nil {
 		return 0, err
 	}
@@ -187,12 +166,15 @@ func (lctx *lructx) postRemove(config *cmn.Config, capCheck, size int64) (int64,
 		capCheck = 0
 		usedpct, ok := ios.GetFSUsedPercentage(lctx.bckTypeDir)
 		lctx.throttle = false
-		if ok && usedpct < config.LRU.HighWM {
-			if !lctx.mpathInfo.IsIdle(config) {
+		lctx.config = cmn.GCO.Get()
+		now := time.Now()
+		lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
+		if ok && usedpct < lctx.config.LRU.HighWM {
+			if !lctx.mpathInfo.IsIdle(lctx.config) {
 				// throttle self
-				ratioCapacity := cmn.Ratio(config.LRU.HighWM, config.LRU.LowWM, usedpct)
+				ratioCapacity := cmn.Ratio(lctx.config.LRU.HighWM, lctx.config.LRU.LowWM, usedpct)
 				_, curr := lctx.mpathInfo.GetIOstats(fs.StatDiskUtil)
-				ratioUtilization := cmn.Ratio(config.Xaction.DiskUtilHighWM, config.Xaction.DiskUtilLowWM, int64(curr.Max))
+				ratioUtilization := cmn.Ratio(lctx.config.Xaction.DiskUtilHighWM, lctx.config.Xaction.DiskUtilLowWM, int64(curr.Max))
 				if ratioUtilization > ratioCapacity {
 					lctx.throttle = true
 					time.Sleep(throttleTimeOut)
@@ -203,32 +185,29 @@ func (lctx *lructx) postRemove(config *cmn.Config, capCheck, size int64) (int64,
 	return capCheck, nil
 }
 
-// evictFQN evicts a given file
-func (lctx *lructx) evictFQN(fqn string) error {
-	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, lctx.bislocal)
-	bucket, objname := parsedFQN.Bucket, parsedFQN.Objname
-	if err != nil {
-		glog.Errorf("Evicting %q with error: %v", fqn, err)
-		if e := os.Remove(fqn); e != nil {
-			return fmt.Errorf("nested error: %v and %v", err, e)
+func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
+	if fi.lom.Misplaced {
+		if err := os.Remove(fi.lom.Fqn); err != nil {
+			glog.Errorln(err)
+			return
 		}
-		glog.Infof("Removed %q", fqn)
-		return nil
+		glog.Infof("Removed misplaced object %s (%s)", fi.lom, fi.lom.Fqn)
+		return
 	}
-	uname := cluster.Uname(bucket, objname)
-	lctx.ini.Namelocker.Lock(uname, true)
-	defer lctx.ini.Namelocker.Unlock(uname, true)
+	lctx.ini.Namelocker.Lock(fi.lom.Uname, true)
 
-	if err := os.Remove(fqn); err != nil {
-		return err
+	if err := os.Remove(fi.lom.Fqn); err != nil {
+		glog.Errorf("Failed to evict %s (%s), err: %v", fi.lom, fi.lom.Fqn, err)
+	} else {
+		ok = true
+		glog.Infof("Evicted %s (%s)", fi.lom, fi.lom.Fqn)
 	}
-	glog.Infof("Evicted object %s/%s (%s)", bucket, objname, fqn)
-	return nil
+	lctx.ini.Namelocker.Unlock(fi.lom.Uname, true)
+	return
 }
 
 func (lctx *lructx) evictSize() (err error) {
-	config := cmn.GCO.Get()
-	hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
+	hwm, lwm := lctx.config.LRU.HighWM, lctx.config.LRU.LowWM
 	blocks, bavail, bsize, err := ios.GetFSStats(lctx.bckTypeDir)
 	if err != nil {
 		return err
@@ -275,7 +254,9 @@ func (lctx *lructx) yieldTerm() error {
 func (h fileInfoMinHeap) Len() int { return len(h) }
 
 func (h fileInfoMinHeap) Less(i, j int) bool {
-	return h[i].usetime.Before(h[j].usetime)
+	li := h[i].lom
+	lj := h[j].lom
+	return li.Atime.Before(lj.Atime)
 }
 
 func (h fileInfoMinHeap) Swap(i, j int) {

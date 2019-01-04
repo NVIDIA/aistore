@@ -728,8 +728,8 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 		return
 	}
 
-	hdhash := resp.Header.Get(cmn.HeaderDFCChecksumVal)
-	hdhashtype := resp.Header.Get(cmn.HeaderDFCChecksumType)
+	hdhash := resp.Header.Get(cmn.HeaderObjCksumVal)
+	hdhashtype := resp.Header.Get(cmn.HeaderObjCksumType)
 
 	// Create a local copy
 	fname := filepath.Join(LocalDestDir, keyname)
@@ -932,7 +932,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		t.Errorf("Failed while reading the bucket from the local file system. Error: [%v]", err)
 	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
+	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -947,7 +947,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		goto cleanup
 	}
 	tutils.Logf("\nChanging file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
+	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -1061,7 +1061,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 	fileName = <-fileNameCh
 	filepath.Walk(rootDir, fsWalkFunc)
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
+	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}
@@ -1075,7 +1075,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		goto cleanup
 	}
 	tutils.Logf("Changing file xattr[%s]: %s\n", fileName, fqn)
-	errstr = fs.SetXattr(fqn, cmn.XattrXXHashVal, []byte("01234abcde"))
+	errstr = fs.SetXattr(fqn, cmn.XattrXXHash, []byte("01234abcde"))
 	if errstr != "" {
 		t.Error(errstr)
 	}

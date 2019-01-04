@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/mirror"
 )
@@ -297,20 +298,22 @@ func (xs *xactions) renewRechecksum(bucket string) *xactRechecksum {
 	return xrcksum
 }
 
-func (xs *xactions) renewPutLR(bucket string, bislocal bool) (xputlr *mirror.XactPut) {
-	kind := path.Join(cmn.ActPutLR, bucket)
+func (xs *xactions) renewAddCopies(bucket string, bislocal bool, tif cluster.Target) (xcopy *mirror.XactCopy) {
+	kind := path.Join(cmn.ActAddCopies, bucket)
 	xs.Lock()
 	xx := xs.findU(kind)
 	if xx != nil {
-		xputlr = xx.(*mirror.XactPut)
-		xputlr.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
+		xcopy = xx.(*mirror.XactCopy)
+		xcopy.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 		xs.Unlock()
 		return
 	}
 	id := xs.uniqueid()
-	xputlr = &mirror.XactPut{XactDemandBase: *cmn.NewXactDemandBase(id, kind), Bucket: bucket, Bislocal: bislocal}
-	xs.add(xputlr)
-	xputlr.Run()
+	base := cmn.NewXactDemandBase(id, kind)
+	slab := gmem2.SelectSlab2(cmn.MiB)
+	xcopy = &mirror.XactCopy{XactDemandBase: *base, Bucket: bucket, Slab: slab, T: tif, Bislocal: bislocal}
+	xs.add(xcopy)
+	go xcopy.Run()
 	xs.Unlock()
 	return
 }

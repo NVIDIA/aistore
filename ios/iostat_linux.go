@@ -144,7 +144,7 @@ func (r *IostatRunner) Run() error {
 						continue
 					}
 					if name == "%util" {
-						mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, float32(fieldVal)) // FIXME: const
+						mpathInfo.SetIOstats(epoch, fs.StatDiskUtil, float32(fieldVal))
 					} else if name == "aqu-sz" || name == "avgqu-sz" {
 						mpathInfo.SetIOstats(epoch, fs.StatQueueLen, float32(fieldVal))
 					}

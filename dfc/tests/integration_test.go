@@ -320,7 +320,6 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 		err error
 		m   = metadata{
 			t:             t,
-			delay:         0 * time.Second,
 			num:           num,
 			repFilenameCh: make(chan repFile, num),
 			semaphore:     make(chan struct{}, 10), // 10 concurrent GET requests at a time
@@ -420,7 +419,6 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 1,
 			repFilenameCh:   make(chan repFile, num),
@@ -519,7 +517,6 @@ func TestPutDuringRebalance(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 1,
 			repFilenameCh:   make(chan repFile, num),
@@ -608,8 +605,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	var (
 		md = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
+			delay:           time.Second * 5,
 			numGetsEachFile: 10,
 			repFilenameCh:   make(chan repFile, num),
 			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
@@ -739,7 +736,6 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	var (
 		md = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 1,
 			repFilenameCh:   make(chan repFile, num),
@@ -839,7 +835,6 @@ func TestGetDuringRebalance(t *testing.T) {
 	var (
 		md = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 1,
 			repFilenameCh:   make(chan repFile, num),
@@ -849,7 +844,6 @@ func TestGetDuringRebalance(t *testing.T) {
 		}
 		mdAfterRebalance = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 1,
 			repFilenameCh:   make(chan repFile, num),
@@ -1023,7 +1017,6 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 2,
 			repFilenameCh:   make(chan repFile, num),
@@ -1151,7 +1144,6 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 2,
 			repFilenameCh:   make(chan repFile, num),
@@ -1246,7 +1238,6 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 2,
 			repFilenameCh:   make(chan repFile, num),
@@ -1323,7 +1314,6 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 5,
 			repFilenameCh:   make(chan repFile, num),
@@ -1428,7 +1418,6 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 2,
 			repFilenameCh:   make(chan repFile, num),
@@ -1535,9 +1524,9 @@ func doGetsInParallel(m *metadata) {
 	} else {
 		tutils.Logf("GET each of the %d objects %d times from bucket %s...\n", m.num, m.numGetsEachFile, m.bucket)
 	}
-
-	// GET is timed so a large portion of requests will happen both before and after the target is re-registered
-	time.Sleep(m.delay)
+	if m.delay != 0 {
+		time.Sleep(m.delay)
+	}
 	for i := 0; i < m.num*m.numGetsEachFile; i++ {
 		go func() {
 			<-m.semaphore
@@ -1545,10 +1534,9 @@ func doGetsInParallel(m *metadata) {
 				m.semaphore <- struct{}{}
 				m.wg.Done()
 			}()
-
 			repFile := <-m.repFilenameCh
 			if repFile.repetitions > 0 {
-				repFile.repetitions -= 1
+				repFile.repetitions--
 				m.repFilenameCh <- repFile
 			}
 			_, err := api.GetObject(tutils.DefaultBaseAPIParams(m.t), m.bucket, path.Join(SmokeStr, repFile.filename))
@@ -1776,7 +1764,6 @@ func TestAtimeRebalance(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           0 * time.Second,
 			num:             num,
 			numGetsEachFile: 2,
 			repFilenameCh:   make(chan repFile, num),

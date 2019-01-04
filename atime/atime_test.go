@@ -72,7 +72,7 @@ func TestAtimerunnerTouch(t *testing.T) {
 	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
 	}
-	atimeResponse := <-atimer.Atime(fileName)
+	atimeResponse := <-atimer.Atime(fileName, "")
 	accessTime, ok := atimeResponse.AccessTime, atimeResponse.Ok
 	if !ok {
 		t.Error("File is not present in atime map")
@@ -125,7 +125,7 @@ func TestAtimerunnerTouchNonExistingFile(t *testing.T) {
 		t.Error("One jogger should be present because one mountpath was added")
 	}
 
-	atimeResponse := <-atimer.Atime(fileName)
+	atimeResponse := <-atimer.Atime(fileName, "")
 	ok := atimeResponse.Ok
 	if ok {
 		t.Error("Atime should not be returned for a non existing file.")
@@ -151,7 +151,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 		t.Error("One jogger and one file must be present in the atimemap")
 	}
 
-	atimeResponse := <-atimer.Atime(fileName)
+	atimeResponse := <-atimer.Atime(fileName, "")
 	accessTime, ok := atimeResponse.AccessTime, atimeResponse.Ok
 	if !ok {
 		t.Errorf("File [%s] is not present in %s's atime map", fileName, mpath)
@@ -163,7 +163,7 @@ func TestAtimerunnerMultipleTouchSameFile(t *testing.T) {
 	atimer.Touch(fileName)
 	time.Sleep(50 * time.Millisecond) // wait for runner to process
 
-	atimeResponse = <-atimer.Atime(fileName)
+	atimeResponse = <-atimer.Atime(fileName, "")
 	accessTimeNext, okNext := atimeResponse.AccessTime, atimeResponse.Ok
 	if !okNext {
 		t.Errorf("File [%s] is not present in atime map", fileName)
@@ -192,7 +192,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 	if len(atimer.joggers) != 1 || len(atimer.joggers[mpath].atimemap) != 1 {
 		t.Error("One file must be present in the map")
 	}
-	atimeResponse := <-atimer.Atime(fileName1)
+	atimeResponse := <-atimer.Atime(fileName1, "")
 	if !atimeResponse.Ok {
 		t.Errorf("File [%s] is not present in atime map", fileName1)
 	}
@@ -203,7 +203,7 @@ func TestAtimerunnerTouchMultipleFile(t *testing.T) {
 		t.Error("Two files must be present in the map")
 	}
 
-	atimeResponse = <-atimer.Atime(fileName2)
+	atimeResponse = <-atimer.Atime(fileName2, "")
 	if !atimeResponse.Ok {
 		t.Errorf("File [%s] is not present in atime map", fileName2)
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/json-iterator/go"
 )
@@ -50,6 +51,8 @@ type (
 		wg          *sync.WaitGroup
 		objectMoved int64
 		byteMoved   int64
+		slab        *memsys.Slab2
+		buf         []byte
 		aborted     bool
 	}
 )
@@ -129,6 +132,7 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 //
 
 func (rb *localRebJogger) jog() {
+	rb.buf = rb.slab.Alloc()
 	if err := filepath.Walk(rb.mpath, rb.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -139,6 +143,7 @@ func (rb *localRebJogger) jog() {
 	}
 
 	rb.xreb.confirmCh <- struct{}{}
+	rb.slab.Free(rb.buf)
 	rb.wg.Done()
 }
 
@@ -175,24 +180,23 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		return nil
 	}
 	if glog.V(4) {
-		glog.Infof("%s => %s", lom, lom.Newfqn)
+		glog.Infof("%s => %s", lom, lom.HrwFQN)
 	}
-	dir := filepath.Dir(lom.Newfqn)
+	dir := filepath.Dir(lom.HrwFQN)
 	if err := cmn.CreateDir(dir); err != nil {
 		glog.Errorf("Failed to create dir: %s", dir)
 		rb.xreb.Abort()
-		rb.t.fshc(err, lom.Newfqn)
+		rb.t.fshc(err, lom.HrwFQN)
 		return nil
 	}
 
 	// Copy the object instead of moving, LRU takes care of obsolete copies
 	if glog.V(4) {
-		glog.Infof("Copying %s => %s", fqn, lom.Newfqn)
+		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
-	if errFQN, err := copyFile(fqn, lom.Newfqn); err != nil {
-		glog.Error(err.Error())
-		rb.t.fshc(err, errFQN)
+	if err := cmn.CopyFile(fqn, lom.HrwFQN, rb.buf); err != nil {
 		rb.xreb.Abort()
+		rb.t.fshc(err, lom.HrwFQN)
 		return nil
 	}
 	rb.objectMoved++
@@ -495,13 +499,16 @@ func (t *targetrunner) runLocalRebalance() {
 			continue
 		}
 
+		slab := gmem2.SelectSlab2(cmn.MiB)
 		for _, mpathInfo := range availablePaths {
-			jogger := &localRebJogger{t: t, mpath: fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), xreb: xreb, wg: wg}
+			mpath := fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType)
+			jogger := &localRebJogger{t: t, mpath: mpath, xreb: xreb, wg: wg, slab: slab}
 			wg.Add(1)
 			go jogger.jog()
 			allr = append(allr, jogger)
 
-			jogger = &localRebJogger{t: t, mpath: fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), xreb: xreb, wg: wg}
+			mpath = fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType)
+			jogger = &localRebJogger{t: t, mpath: mpath, xreb: xreb, wg: wg, slab: slab}
 			wg.Add(1)
 			go jogger.jog()
 			allr = append(allr, jogger)

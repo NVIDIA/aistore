@@ -14,53 +14,35 @@ import (
 	"github.com/NVIDIA/dfcpub/ios"
 )
 
-// ================================ Summary ===============================================
-//
+// ================================ Background ===========================================
 // The atime (access time) module provides atime.Runner - a long running task with the
 // purpose of updating object access times. The work is performed on a per local
 // filesystem bases, via joggers (children). The atime.Runner's main responsibility
-// is to dispatch requests to the corresponding jogger instance.
+// is to dispatch requests to the corresponding mountpath jogger.
 //
 // API exposed to the rest of the code includes the following operations:
-//
 //   * Run      - to run
 //   * Stop     - to stop
 //   * Touch    - to request an access time update for a specified object
 //   * Atime    - to request the most recent access time of a given object
-// The Touch and Atime requests are added to the request queue
-// and then are dispatched to the jogger for a given filesystem.
-//
-// Note: atime.Runner assumes that object in question either belongs to a
-// bucket that has LRU enabled or LRU is enabled through the global config when bucket properties
-// are not present. Thus, it is the responsibility of the caller to ensure
-// that LRU is enabled. Although this check is not necessary for the Atime method (a zero-valued
-// Response will be returned because it will not exist in any jogger's atimemap),
-// it is recommended to do this check.
-//
 // The remaining operations are private to the atime.Runner and used only internally.
 //
-// Each jogger, which corresponds to a mountpath, has an access time map (in memory)
+// Each mountpath jogger has an access time map (in memory)
 // that keeps track of object access times. Every so often atime.Runner
 // calls joggers to flush access time maps.  Access times get flushed to
-// the disk when the number of stored access times reaches a certain threshold and when:
+// the disk when the number of stored access times reaches a certain threshold
+// and when:
 //   * disk utilization is low, or
 //   * access time map is filled over a certain point (watermark)
 // This way, the atime.Runner and jogger operation will impact the
-// datapath as little as possible.  As such, atime.Runner can be thought of as an
-// extension of the LRU, or any alternative
-// caching mechanism that can be implemented in the future.
+// datapath as little as possible.
 //
-// The reason behind the existence of this module is the 'noatime' mounting option;
-// if a file system has been mounted with this option, reading accesses to the
-// file system will no longer result in an update to the atime information associated
-// with the file, which eliminates the need to make writes to the file system for files
-// that are simply being read, resulting in noticeable performance improvements.
-// Inside DFC cluster, this option is always set, so DFC implements its own access time
-// updating.
-//
-// ================================ Summary ===============================================
+// Important to keep in mind:
+// - local filesystems **must** be configured with the noatime option (see fstab(5))
+// - atime.Runner-cached timestamp takes precedence over the one stored by the filesystem
+// - GET requests are the primary reason for the Touch (above) to be called
+// ================================ Background ===========================================
 
-//================================= Constants ==============================================
 const (
 	chanCap = 256
 	LowWM   = 60
@@ -248,33 +230,33 @@ func (r *Runner) Touch(fqn string, setTime ...time.Time) {
 // Example usage:
 //     Response := <-atimer.atime("/tmp/fqn123")
 //     accessTime, ok := Response.AccessTime, Response.Ok
-func (r *Runner) Atime(fqn string, customRespCh ...chan *Response) (responseCh chan *Response) {
+func (r *Runner) Atime(fqn, mpath string, customRespCh ...chan *Response) (responseCh chan *Response) {
 	if len(customRespCh) == 1 {
 		responseCh = customRespCh[0]
 	} else {
 		responseCh = make(chan *Response, 1)
 	}
-	var mpath string
-	if mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn); mpathInfo != nil {
-		mpath = mpathInfo.Path
-		request := &atimeRequest{
-			responseCh:  responseCh,
-			fqn:         fqn,
-			mpath:       mpath,
-			requestType: atimeGet,
+	if mpath == "" {
+		if mpathInfo, _ := r.mountpaths.Path2MpathInfo(fqn); mpathInfo == nil {
+			responseCh <- &Response{AccessTime: time.Time{}, Ok: false} // mpath does not exist
+			return responseCh
+		} else {
+			mpath = mpathInfo.Path
 		}
-		r.requestCh <- request
-		return request.responseCh
 	}
-
-	// No mpath exists for the file
-	responseCh <- &Response{AccessTime: time.Time{}, Ok: false}
+	request := &atimeRequest{
+		responseCh:  responseCh,
+		fqn:         fqn,
+		mpath:       mpath,
+		requestType: atimeGet,
+	}
+	r.requestCh <- request
 	return responseCh
 }
 
 // convenience method to obtain atime from the (atime) cache or the file itself,
 // and format accordingly
-func (r *Runner) FormatAtime(fqn string, respCh chan *Response, useCache bool, format ...string) (atimestr string, atime time.Time, err error) {
+func (r *Runner) FormatAtime(fqn, mpath string, respCh chan *Response, useCache bool, format ...string) (atimestr string, atime time.Time, err error) {
 	var (
 		atimeResp *Response
 		finfo     os.FileInfo
@@ -282,9 +264,9 @@ func (r *Runner) FormatAtime(fqn string, respCh chan *Response, useCache bool, f
 	)
 	if useCache {
 		if respCh != nil {
-			atimeResp = <-r.Atime(fqn, respCh)
+			atimeResp = <-r.Atime(fqn, mpath, respCh)
 		} else {
-			atimeResp = <-r.Atime(fqn)
+			atimeResp = <-r.Atime(fqn, mpath)
 		}
 		atime, ok = atimeResp.AccessTime, atimeResp.Ok
 	}

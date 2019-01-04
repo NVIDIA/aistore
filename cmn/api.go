@@ -11,8 +11,9 @@ import (
 // string enum: http header, checksum, versioning
 const (
 	// http header
-	XattrXXHashVal  = "user.obj.dfchash"
-	XattrObjVersion = "user.obj.version"
+	XattrXXHash  = "user.obj.xxhash"
+	XattrVersion = "user.obj.version"
+	XattrCopies  = "user.obj.copies"
 	// checksum hash function
 	ChecksumNone   = "none"
 	ChecksumXXHash = "xxhash"
@@ -60,8 +61,7 @@ const (
 	ActNewPrimary  = "newprimary"
 	ActRevokeToken = "revoketoken"
 	ActElection    = "election"
-	ActPutLR       = "putlreplica"
-	ActReLR        = "manlreplica"
+	ActAddCopies   = "addcopies"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -79,11 +79,13 @@ const (
 
 // Header Key enum
 const (
-	HeaderCloudProvider         = "CloudProvider"         // from Cloud Provider enum
-	HeaderVersioning            = "Versioning"            // Versioning state for a bucket: "enabled"/"disabled"
-	HeaderNextTierURL           = "NextTierURL"           // URL of the next tier in a DFC multi-tier environment
-	HeaderReadPolicy            = "ReadPolicy"            // Policy used for reading in a DFC multi-tier environment
-	HeaderWritePolicy           = "WritePolicy"           // Policy used for writing in a DFC multi-tier environment
+	HeaderCloudProvider = "CloudProvider" // from Cloud Provider enum
+	HeaderVersioning    = "Versioning"    // Versioning state for a bucket: "enabled"/"disabled"
+	// tiering
+	HeaderNextTierURL = "NextTierURL" // URL of the next tier in a DFC multi-tier environment
+	HeaderReadPolicy  = "ReadPolicy"  // Policy used for reading in a DFC multi-tier environment
+	HeaderWritePolicy = "WritePolicy" // Policy used for writing in a DFC multi-tier environment
+	// bucket props
 	HeaderBucketChecksumType    = "BucketChecksumType"    // Checksum type used for objects in the bucket
 	HeaderBucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
 	HeaderBucketValidateWarmGet = "BucketValidateWarmGet" // Warm get validation policy used for objects in the bucket
@@ -94,13 +96,14 @@ const (
 	HeaderBucketDontEvictTime   = "LRUDontEvictTime"      // Enforces an eviction-free time period between [atime, atime+dontevicttime]
 	HeaderBucketCapUpdTime      = "LRUCapUpdTime"         // Minimum time to update the capacity
 	HeaderBucketLRUEnabled      = "LRUEnabled"            // LRU is run on a bucket only if this field is true
-	HeaderDFCChecksumType       = "DfcChecksumType"       // Checksum Type (xxhash, md5, none)
-	HeaderDFCChecksumVal        = "DfcChecksumVal"        // Checksum Value
-	HeaderDFCObjVersion         = "DfcObjVersion"         // Object version/generation
-	HeaderDFCObjAtime           = "DfcObjAtime"           // Object access time
-	HeaderDFCReplicationSrc     = "DfcReplicationSrc"     // In replication PUT request specifies the source target
-	HeaderSize                  = "Size"                  // Size of object in bytes
-	HeaderVersion               = "Version"               // Object version number
+	HeaderBucketCopies          = "Copies"                // # local copies
+	// object meta
+	HeaderObjCksumType = "ObjCksumType" // Checksum Type (xxhash, md5, none)
+	HeaderObjCksumVal  = "ObjCksumVal"  // Checksum Value
+	HeaderObjAtime     = "ObjAtime"     // Object access time
+	HeaderObjReplicSrc = "ObjReplicSrc" // In replication PUT request specifies the source target
+	HeaderObjSize      = "size"         // Object size (bytes)
+	HeaderObjVersion   = "version"      // Object version/generation - local or Cloud
 )
 
 // URL Query "?name1=val1&name2=..."
@@ -137,7 +140,7 @@ const (
 type GetMsg struct {
 	GetSort       string `json:"sort"`        // "ascending, atime" | "descending, name"
 	GetProps      string `json:"props"`       // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size"
-	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum below
+	GetTimeFormat string `json:"time_format"` // "RFC822" default - see the enum above
 	GetPrefix     string `json:"prefix"`      // object name filter: return only objects which name starts with prefix
 	GetPageMarker string `json:"pagemarker"`  // AWS/GCP: marker
 	GetPageSize   int    `json:"pagesize"`    // maximum number of entries returned by list bucket call
@@ -198,9 +201,10 @@ const (
 
 // GetMsg.GetTimeFormat enum
 const (
-	RFC822     = time.RFC822     // default
+	RFC822     = time.RFC822
 	Stamp      = time.Stamp      // e.g. "Jan _2 15:04:05"
 	StampMilli = time.StampMilli // e.g. "Jan 12 15:04:05.000"
+	StampMicro = time.StampMicro // e.g. "Jan _2 15:04:05.000000"
 	RFC822Z    = time.RFC822Z
 	RFC1123    = time.RFC1123
 	RFC1123Z   = time.RFC1123Z
@@ -348,6 +352,10 @@ type BucketProps struct {
 
 	// LRUConf is the embedded struct of the same name
 	LRUConf `json:"lru_props"`
+
+	// Copies != 0 is currently interpreted as a 2-way local mirroring
+	// (TODO, experimental)
+	Copies int64 `json:"copies"`
 }
 
 // ObjectProps

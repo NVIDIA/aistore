@@ -93,12 +93,12 @@ func atimeRandomFiles(r *Runner, mpath, fqn1, fqn2 string, numFiles int, duratio
 		randomInt := rand.Intn(fileRange)
 		numStr := strconv.Itoa(randomInt)
 		if randomInt%2 == 0 {
-			response := <-r.Atime(fqn1 + numStr)
+			response := <-r.Atime(fqn1+numStr, "")
 			if response.Ok {
 				numOk++
 			}
 		} else {
-			response := <-r.Atime(fqn2 + numStr)
+			response := <-r.Atime(fqn2+numStr, "")
 			if response.Ok {
 				numOk++
 			}

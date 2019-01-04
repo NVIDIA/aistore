@@ -33,6 +33,7 @@ const (
 	LomCksum
 	LomCksumMissingRecomp
 	LomCksumPresentRecomp
+	LomCopy
 )
 
 type (
@@ -41,21 +42,23 @@ type (
 		T           Target
 		Bucketmd    *BMD
 		AtimeRespCh chan *atime.Response
+		Config      *cmn.Config
 		Cksumcfg    *cmn.CksumConf
 		Bprops      *cmn.BucketProps
-		// this object's names
+		// names
 		Fqn             string
 		Bucket, Objname string
 		Uname           string
-		Newfqn          string
+		HrwFQN          string       // misplaced?
+		CopyFQN         string       // local replica
 		ParsedFQN       fs.FQNparsed // redundant in-part; tradeoff to speed-up workfile name gen, etc.
-		// this object's props
+		// props
 		Version  string
 		Atime    time.Time
 		Atimestr string
 		Size     int64
 		Nhobj    cmn.CksumValue
-		// other flags
+		// flags
 		Bislocal     bool // the bucket (that contains this object) is local
 		Doesnotexist bool // the object does not exists (by fstat)
 		Misplaced    bool // the object is misplaced
@@ -122,11 +125,20 @@ func (lom *LOM) String() string {
 }
 
 // main method
-func (lom *LOM) Fill(action int) (errstr string) {
+func (lom *LOM) Fill(action int, config ...*cmn.Config) (errstr string) {
 	// init
 	if lom.Bucket == "" || lom.Objname == "" || lom.Fqn == "" {
 		if errstr = lom.init(); errstr != "" {
 			return
+		}
+		if len(config) > 0 {
+			lom.Config = config[0]
+		} else {
+			lom.Config = cmn.GCO.Get()
+		}
+		lom.Cksumcfg = &lom.Config.Cksum
+		if lom.Bprops != nil && lom.Bprops.Checksum != cmn.ChecksumInherit {
+			lom.Cksumcfg = &lom.Bprops.CksumConf
 		}
 	}
 	//
@@ -145,22 +157,32 @@ func (lom *LOM) Fill(action int) (errstr string) {
 			return
 		}
 		lom.Size = finfo.Size()
+		if lom.Bprops != nil && lom.Bprops.Copies != 0 {
+			action |= LomCopy
+		}
 	}
 	if action&LomVersion != 0 {
 		var version []byte
-		if version, errstr = fs.GetXattr(lom.Fqn, cmn.XattrObjVersion); errstr != "" {
+		if version, errstr = fs.GetXattr(lom.Fqn, cmn.XattrVersion); errstr != "" {
 			return
 		}
 		lom.Version = string(version)
 	}
-	if action&LomAtime != 0 { // FIXME: check
-		lom.Atimestr, lom.Atime, _ = lom.T.GetAtimeRunner().FormatAtime(lom.Fqn, lom.AtimeRespCh, lom.LRUenabled())
+	if action&LomAtime != 0 { // FIXME: RFC822 format
+		lom.Atimestr, lom.Atime, _ = lom.T.GetAtimeRunner().FormatAtime(lom.Fqn, lom.ParsedFQN.MpathInfo.Path, lom.AtimeRespCh, lom.LRUenabled())
 	}
 	if action&LomCksum != 0 {
 		cksumAction := action&LomCksumMissingRecomp | action&LomCksumPresentRecomp
 		if errstr = lom.checksum(cksumAction); errstr != "" {
 			return
 		}
+	}
+	if action&LomCopy != 0 {
+		var copyfqn []byte
+		if copyfqn, errstr = fs.GetXattr(lom.Fqn, cmn.XattrCopies); errstr != "" {
+			return
+		}
+		lom.CopyFQN = string(copyfqn)
 	}
 	return
 }
@@ -178,17 +200,29 @@ func (lom *LOM) BadChecksum(hksum cmn.CksumValue) (errstr string) {
 func (lom *LOM) Persist() (errstr string) {
 	if lom.Nhobj != nil {
 		_, hval := lom.Nhobj.Get()
-		if errstr = fs.SetXattr(lom.Fqn, cmn.XattrXXHashVal, []byte(hval)); errstr != "" {
+		if errstr = fs.SetXattr(lom.Fqn, cmn.XattrXXHash, []byte(hval)); errstr != "" {
 			return errstr
 		}
 	}
 	if lom.Version != "" {
-		errstr = fs.SetXattr(lom.Fqn, cmn.XattrObjVersion, []byte(lom.Version))
+		errstr = fs.SetXattr(lom.Fqn, cmn.XattrVersion, []byte(lom.Version))
 	}
-	if !lom.Atime.IsZero() && lom.LRUenabled() {
-		lom.T.GetAtimeRunner().Touch(lom.Fqn, lom.Atime)
-	}
+	// NOTE: atime is updated explicitly, via UpdateAtime() below
+	//       cmn.XattrCopies is also updated separately by the 2-way mirroring code
 	return
+}
+
+func (lom *LOM) UpdateAtime(at time.Time) {
+	lom.Atime = at
+	if at.IsZero() {
+		return
+	}
+	lom.Atimestr = at.Format(cmn.RFC822) // TODO: add support for cmn.StampMicro
+	if !lom.LRUenabled() {
+		return
+	}
+	ratime := lom.T.GetAtimeRunner()
+	ratime.Touch(lom.Fqn, at)
 }
 
 // IncObjectVersion increments the current version xattrs and returns the new value.
@@ -202,13 +236,36 @@ func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 	}
 
 	var vbytes []byte
-	if vbytes, errstr = fs.GetXattr(lom.Fqn, cmn.XattrObjVersion); errstr != "" {
+	if vbytes, errstr = fs.GetXattr(lom.Fqn, cmn.XattrVersion); errstr != "" {
 		return
 	}
 	if currValue, err := strconv.Atoi(string(vbytes)); err != nil {
 		newVersion = initialVersion
 	} else {
 		newVersion = fmt.Sprintf("%d", currValue+1)
+	}
+	return
+}
+
+// best effort load balancing (GET)
+func (lom *LOM) ChooseMirror() (fqn string) {
+	fqn = lom.Fqn
+	if lom.CopyFQN == "" {
+		return
+	}
+	parsedCpyFQN, err := fs.Mountpaths.FQN2Info(lom.CopyFQN)
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+	_, currMain := lom.ParsedFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
+	_, currRepl := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
+	// if currRepl.Max < currMain.Max-5 && currRepl.Min <= currMain.Min { // FIXME 5% diff hardcoded
+	if currRepl.Max <= currMain.Max && currRepl.Min <= currMain.Min {
+		fqn = lom.CopyFQN
+		if glog.V(3) {
+			glog.Infof("GET %s from a mirror %s", lom, parsedCpyFQN.MpathInfo)
+		}
 	}
 	return
 }
@@ -236,10 +293,6 @@ func (lom *LOM) init() (errstr string) {
 	lom.Bislocal = lom.Bucketmd.IsLocal(lom.Bucket)
 	lom.Bprops, _ = lom.Bucketmd.Get(lom.Bucket, lom.Bislocal)
 	// cksumcfg
-	lom.Cksumcfg = &cmn.GCO.Get().Cksum
-	if lom.Bprops != nil && lom.Bprops.Checksum != cmn.ChecksumInherit {
-		lom.Cksumcfg = &lom.Bprops.CksumConf
-	}
 	if lom.Fqn == "" {
 		lom.Fqn, errstr = FQN(fs.ObjectType, lom.Bucket, lom.Objname, lom.Bislocal)
 	}
@@ -252,17 +305,17 @@ func (lom *LOM) init() (errstr string) {
 func (lom *LOM) resolveFQN(bowner Bowner, bislocal ...bool) (errstr string) {
 	var (
 		err    error
-		newfqn string
+		hrwfqn string
 	)
 	if len(bislocal) == 0 {
-		lom.ParsedFQN, newfqn, err = ResolveFQN(lom.Fqn, bowner)
+		lom.ParsedFQN, hrwfqn, err = ResolveFQN(lom.Fqn, bowner)
 	} else {
-		lom.ParsedFQN, newfqn, err = ResolveFQN(lom.Fqn, nil, lom.Bislocal)
+		lom.ParsedFQN, hrwfqn, err = ResolveFQN(lom.Fqn, nil, lom.Bislocal)
 	}
 	if err != nil {
 		if _, ok := err.(*ErrFqnMisplaced); ok {
 			lom.Misplaced = true
-			lom.Newfqn = newfqn
+			lom.HrwFQN = hrwfqn
 		} else {
 			errstr = err.Error()
 		}
@@ -315,7 +368,7 @@ func (lom *LOM) checksum(action int) (errstr string) {
 		if computedCksum, errstr = lom.recomputeXXHash(lom.Fqn, lom.Size); errstr != "" {
 			return
 		}
-		if errstr = fs.SetXattr(lom.Fqn, cmn.XattrXXHashVal, []byte(computedCksum)); errstr != "" {
+		if errstr = fs.SetXattr(lom.Fqn, cmn.XattrXXHash, []byte(computedCksum)); errstr != "" {
 			lom.Nhobj = nil
 			lom.T.FSHC(errors.New(errstr), lom.Fqn)
 			return

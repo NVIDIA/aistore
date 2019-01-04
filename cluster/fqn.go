@@ -23,19 +23,19 @@ func (e *ErrFqnMisplaced) Error() string { return e.errstr }
 //
 // resolve and validate fqn
 //
-func ResolveFQN(fqn string, bowner Bowner, islocal ...bool) (parsedFQN fs.FQNparsed, newfqn string, err error) {
+func ResolveFQN(fqn string, bowner Bowner, islocal ...bool) (parsedFQN fs.FQNparsed, hrwfqn string, err error) {
 	var errstr string
 	parsedFQN, err = fs.Mountpaths.FQN2Info(fqn)
 	if err != nil {
 		return
 	}
-	newfqn, errstr = FQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal)
+	hrwfqn, errstr = FQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal)
 	if errstr != "" {
 		err = errors.New(errstr)
 		return
 	}
-	if newfqn != fqn {
-		errstr = fmt.Sprintf("%s (%s/%s) appears to be locally misplaced: newfqn %s", fqn, parsedFQN.Bucket, parsedFQN.Objname, newfqn)
+	if hrwfqn != fqn {
+		errstr = fmt.Sprintf("%s (%s/%s) appears to be locally misplaced: hrwfqn %s", fqn, parsedFQN.Bucket, parsedFQN.Objname, hrwfqn)
 		err = &ErrFqnMisplaced{errstr}
 		return
 	}
@@ -52,10 +52,11 @@ func ResolveFQN(fqn string, bowner Bowner, islocal ...bool) (parsedFQN fs.FQNpar
 	return
 }
 
-func FQN(contentType, bucket, objname string, isLocal bool) (string, string) {
-	mpath, errstr := hrwMpath(bucket, objname)
-	if errstr != "" {
-		return "", errstr
+func FQN(contentType, bucket, objname string, isLocal bool) (fqn, errstr string) {
+	var mpath string
+	if mpath, errstr = hrwMpath(bucket, objname); errstr != "" {
+		return
 	}
-	return fs.CSM.FQN(mpath, contentType, isLocal, bucket, objname)
+	fqn = fs.CSM.FQN(mpath, contentType, isLocal, bucket, objname)
+	return
 }
