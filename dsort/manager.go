@@ -60,8 +60,9 @@ var (
 )
 
 type dsortContext struct {
-	smap cluster.Sowner
-	node *cluster.Snode
+	smap       cluster.Sowner
+	node       *cluster.Snode
+	nameLocker cluster.NameLocker
 }
 
 // progressState abstracts all information meta information about progress of
@@ -137,9 +138,10 @@ type Manager struct {
 // a contentPath aka recordPath and fullPath.
 type contentPathFunc func(string, string) (string, string)
 
-func RegisterNode(smap cluster.Sowner, snode *cluster.Snode) {
+func RegisterNode(smap cluster.Sowner, snode *cluster.Snode, nameLocker cluster.NameLocker) {
 	ctx.smap = smap
 	ctx.node = snode
+	ctx.nameLocker = nameLocker
 }
 
 // init initializes all necessary fields.

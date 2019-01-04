@@ -219,6 +219,7 @@ ExtractAllShards:
 				if errStr != "" {
 					return errors.New(errStr)
 				}
+				uname := cluster.Uname(m.rs.Bucket, shardName)
 
 				m.acquireExtractSema()
 				if m.aborted() {
@@ -226,9 +227,11 @@ ExtractAllShards:
 					return newAbortError(m.ManagerUUID)
 				}
 
+				m.ctx.nameLocker.Lock(uname, false)
 				f, err := os.Open(fqn)
 				if err != nil {
 					m.releaseExtractSema()
+					m.ctx.nameLocker.Unlock(uname, false)
 					return fmt.Errorf("unable to open local file, err: %v", err)
 				}
 				var compressedSize int64
@@ -236,6 +239,7 @@ ExtractAllShards:
 				if err != nil {
 					f.Close()
 					m.releaseExtractSema()
+					m.ctx.nameLocker.Unlock(uname, false)
 					return err
 				}
 
@@ -259,6 +263,7 @@ ExtractAllShards:
 				reader := io.NewSectionReader(f, 0, fi.Size())
 				extractedSize, extractedCount, err := m.extractCreator.ExtractShard(fqn, reader, m.recManager, toDisk)
 				m.releaseExtractSema()
+				m.ctx.nameLocker.Unlock(uname, false)
 
 				unreserveMemoryCh <- expectedUncompressedSize // schedule unreserving memory on next memory update
 				if err != nil {
@@ -326,6 +331,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	if errStr != "" {
 		return errors.New(errStr)
 	}
+	uname := cluster.Uname(s.Bucket, s.Name)
 	workFQN := fs.CSM.GenContentFQN(fqn, filetype.DSortWorkfileType, "")
 
 	// Check if aborted
@@ -368,17 +374,21 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 	// if we have an extra copy of the object local to this target, we
 	// optimize for performance by not removing the object now.
 	if si.DaemonID != m.ctx.node.DaemonID {
+		m.ctx.nameLocker.Lock(uname, false)
 		file, err := cmn.NewFileHandle(fqn)
 		if err != nil {
+			m.ctx.nameLocker.Unlock(uname, false)
 			return err
 		}
 
 		stat, err := file.Stat()
 		if err != nil {
+			m.ctx.nameLocker.Unlock(uname, false)
 			return err
 		}
 
 		if stat.Size() <= 0 {
+			m.ctx.nameLocker.Unlock(uname, false)
 			return nil
 		}
 
@@ -401,6 +411,7 @@ func (m *Manager) createShard(s *extract.Shard) (err error) {
 			streamWg.Done()
 		})
 		m.releaseCreateSema()
+		m.ctx.nameLocker.Unlock(uname, false)
 		if err != nil {
 			return err
 		}

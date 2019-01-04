@@ -170,6 +170,7 @@ func (p *proxyrunner) Run() error {
 	}
 	p.starttime = time.Now()
 
+	dsort.RegisterNode(p.smapowner, p.si, nil)
 	return p.httprunner.run()
 }
 

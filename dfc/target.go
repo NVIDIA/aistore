@@ -230,6 +230,7 @@ func (t *targetrunner) Run() error {
 		go runLocalRebalanceOnce.Do(f) // only once at startup
 	}
 
+	dsort.RegisterNode(t.smapowner, t.si, t.rtnamemap)
 	return t.httprunner.run()
 }
 
