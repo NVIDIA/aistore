@@ -2519,7 +2519,6 @@ func (t *targetrunner) daemonHandler(w http.ResponseWriter, r *http.Request) {
 	default:
 		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /daemon path")
 	}
-	glog.Flush()
 }
 
 func (t *targetrunner) httpdaeput(w http.ResponseWriter, r *http.Request) {
