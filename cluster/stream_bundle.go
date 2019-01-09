@@ -193,7 +193,7 @@ func (sb *StreamBundle) SmapChanged() {
 	if smap.Version == sb.smap.Version {
 		return
 	}
-	go sb.resync()
+	sb.resync()
 }
 
 func (sb *StreamBundle) apply(action int) {

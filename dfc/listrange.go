@@ -157,12 +157,12 @@ func (t *targetrunner) prefetchMissing(ct context.Context, objname, bucket strin
 		return
 	}
 	if lom.Bislocal { // must not come here
-		if lom.Doesnotexist {
+		if lom.DoesNotExist {
 			glog.Errorf("prefetch: %s", lom)
 		}
 		return
 	}
-	coldget = lom.Doesnotexist
+	coldget = lom.DoesNotExist
 	if lom.Exists() && versioncfg.ValidateWarmGet && lom.Version != "" && versioningConfigured(false) {
 		if vchanged, errstr, _ = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
 			return

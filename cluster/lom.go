@@ -61,7 +61,7 @@ type (
 		Nhobj    cmn.CksumValue
 		// flags
 		Bislocal     bool // the bucket (that contains this object) is local
-		Doesnotexist bool // the object does not exists (by fstat)
+		DoesNotExist bool // the object does not exists (by fstat)
 		Badchecksum  bool // this object has a bad checksum
 	}
 )
@@ -81,10 +81,10 @@ func (lom *LOM) RestoredReceived(props *LOM) {
 	}
 	lom.Nhobj = props.Nhobj
 	lom.Badchecksum = false
-	lom.Doesnotexist = false
+	lom.DoesNotExist = false
 }
 
-func (lom *LOM) Exists() bool     { return !lom.Doesnotexist }
+func (lom *LOM) Exists() bool     { return !lom.DoesNotExist }
 func (lom *LOM) LRUenabled() bool { return lom.Bucketmd.LRUenabled(lom.Bucket) }
 func (lom *LOM) Misplaced() bool  { return lom.HrwFQN != lom.Fqn && !lom.IsCopy() }         // misplaced (subj to rebalancing)
 func (lom *LOM) IsCopy() bool     { return lom.CopyFQN != "" && lom.CopyFQN == lom.HrwFQN } // is a
@@ -154,7 +154,7 @@ func (lom *LOM) String() string {
 			s += " " + lom.Nhobj.String()
 		}
 	}
-	if lom.Doesnotexist {
+	if lom.DoesNotExist {
 		a = "(x)"
 	} else {
 		if lom.Misplaced() {
@@ -206,7 +206,7 @@ func (lom *LOM) Fill(action int, config ...*cmn.Config) (errstr string) {
 		if err != nil {
 			switch {
 			case os.IsNotExist(err):
-				lom.Doesnotexist = true
+				lom.DoesNotExist = true
 			default:
 				errstr = fmt.Sprintf("Failed to fstat %s, err: %v", lom, err)
 				lom.T.FSHC(err, lom.Fqn)
@@ -284,7 +284,7 @@ func (lom *LOM) UpdateAtime(at time.Time) {
 // the version is set to "1"
 func (lom *LOM) IncObjectVersion() (newVersion string, errstr string) {
 	const initialVersion = "1"
-	if lom.Doesnotexist {
+	if lom.DoesNotExist {
 		newVersion = initialVersion
 		return
 	}

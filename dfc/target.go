@@ -13,12 +13,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -90,6 +92,27 @@ type (
 		sync.Mutex
 		disabled bool // target was unregistered by internal event (e.g, all mountpaths are down)
 	}
+
+	recvObjInfo struct {
+		t       *targetrunner
+		objname string
+		bucket  string
+		// Determines if the object was already in cluster and was received
+		// because some kind of migration.
+		migrated bool
+		r        io.Reader       // reader of the object
+		cksumVal cmn.CksumValue  // checksum value of the object
+		ctx      context.Context // context used when receiving object which is contained in cloud bucket
+
+		// internal
+
+		// FQN which is used only temporarily for receiving file. After
+		// successful receive is renamed to actual FQN.
+		workFQN string
+		started time.Time // started time of receiving - used to calculate the recv duration
+		lom     *cluster.LOM
+	}
+
 	targetrunner struct {
 		httprunner
 		cloudif        cloudif // multi-cloud backend
@@ -103,6 +126,10 @@ type (
 		readahead      readaheader
 		xcopy          *mirror.XactCopy
 		ecmanager      *ecManager
+
+		streams struct {
+			rebalance *cluster.StreamBundle
+		}
 	}
 )
 
@@ -216,6 +243,11 @@ func (t *targetrunner) Run() error {
 		t.registerIntraDataNetHandler("/", cmn.InvalidHandler)
 	}
 
+	if err := t.setupStreams(); err != nil {
+		glog.Error(err)
+		os.Exit(1)
+	}
+
 	glog.Infof("target %s is ready", t.si)
 	glog.Flush()
 	pid := int64(os.Getpid())
@@ -238,6 +270,39 @@ func (t *targetrunner) Run() error {
 
 	dsort.RegisterNode(t.smapowner, t.si, t.rtnamemap)
 	return t.httprunner.run()
+}
+
+func (t *targetrunner) setupStreams() error {
+	var (
+		network = cmn.NetworkIntraData
+		ncpu    = runtime.NumCPU()
+	)
+
+	// fallback to network public if intra data is not available
+	if !cmn.GCO.Get().Net.UseIntraData {
+		network = cmn.NetworkPublic
+	}
+
+	if _, err := transport.Register(network, "rebalance", t.recvRebalanceObj); err != nil {
+		return err
+	}
+
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+	client := &http.Client{Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          1000,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+		MaxIdleConnsPerHost:   ncpu,
+	}}
+	t.streams.rebalance = cluster.NewStreamBundle(t.smapowner, t.si, client, network, "rebalance", nil, cluster.Targets, ncpu)
+	return nil
 }
 
 // target-only stats
@@ -548,7 +613,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	coldget = lom.Doesnotexist
+	coldget = lom.DoesNotExist
 	if !coldget && !lom.Bislocal { // exists && cloud-bucket: check ver if requested
 		if versioncfg.ValidateWarmGet && (lom.Version != "" && versioningConfigured(lom.Bislocal)) {
 			if vchanged, errstr, errcode = t.checkCloudVersion(ct, bucket, objname, lom.Version); errstr != "" {
@@ -612,7 +677,7 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 			}
 			lom.Fqn = oldFQN
 			lom.Size = oldSize
-			lom.Doesnotexist = false
+			lom.DoesNotExist = false
 			return
 		}
 	}
@@ -648,7 +713,7 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 			glog.Infof("%s/%s is restored successfully", lom.Bucket, lom.Objname)
 		}
 		lom.Fill(cluster.LomFstat | cluster.LomAtime)
-		lom.Doesnotexist = false
+		lom.DoesNotExist = false
 		return
 	} else if ecErr != ec.ErrorECDisabled {
 		errstr = fmt.Sprintf("Failed to restore object %s/%s: %v", lom.Bucket, lom.Objname, ecErr)
@@ -857,39 +922,25 @@ func (t *targetrunner) httpobjput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := r.URL.Query()
-	from, to := query.Get(cmn.URLParamFromID), query.Get(cmn.URLParamToID)
-	if from != "" && to != "" {
-		// REBALANCE "?from_id="+from_id+"&to_id="+to_id
-		if objname == "" {
-			s := "Invalid URL: missing object name"
-			t.invalmsghdlr(w, r, s)
-			return
-		}
-		if errstr := t.dorebalance(r, from, to, bucket, objname); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-		}
-	} else {
-		if redelta := t.redirectLatency(time.Now(), query); redelta != 0 {
-			t.statsif.Add(stats.PutRedirLatency, redelta)
-		}
-		// PUT
-		pid := query.Get(cmn.URLParamProxyID)
-		if glog.V(4) {
-			glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
-		}
-		if pid == "" {
-			t.invalmsghdlr(w, r, "PUT requests are expected to be redirected")
-			return
-		}
-		if t.smapowner.get().GetProxy(pid) == nil {
-			t.invalmsghdlr(w, r, fmt.Sprintf("PUT from an unknown proxy/gateway ID '%s' - Smap out of sync?", pid))
-			return
-		}
+	if redelta := t.redirectLatency(time.Now(), query); redelta != 0 {
+		t.statsif.Add(stats.PutRedirLatency, redelta)
+	}
+	// PUT
+	pid := query.Get(cmn.URLParamProxyID)
+	if glog.V(4) {
+		glog.Infof("%s %s/%s <= %s", r.Method, bucket, objname, pid)
+	}
+	if pid == "" {
+		t.invalmsghdlr(w, r, "PUT requests are expected to be redirected")
+		return
+	}
+	if t.smapowner.get().GetProxy(pid) == nil {
+		t.invalmsghdlr(w, r, fmt.Sprintf("PUT from an unknown proxy/gateway ID '%s' - Smap out of sync?", pid))
+		return
+	}
 
-		errstr, errcode := t.doPut(r, bucket, objname)
-		if errstr != "" {
-			t.invalmsghdlr(w, r, errstr, errcode)
-		}
+	if err, errCode := t.doPut(r, bucket, objname); err != nil {
+		t.invalmsghdlr(w, r, err.Error(), errCode)
 	}
 }
 
@@ -1112,7 +1163,7 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 	}
 	switch msg.Action {
 	case cmn.ActRename:
-		t.renamefile(w, r, msg)
+		t.renameObject(w, r, msg)
 	case cmn.ActReplicate:
 		t.replicate(w, r, msg)
 	default:
@@ -1235,7 +1286,7 @@ func (t *targetrunner) httpobjhead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if lom.Bislocal || checkCached {
-		if lom.Doesnotexist {
+		if lom.DoesNotExist {
 			status := http.StatusNotFound
 			http.Error(w, http.StatusText(status), status)
 			return
@@ -1468,7 +1519,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 			return fmt.Errorf("Unexpected: bucket %s != %s bucketFrom", bucket, renctx.bucketFrom)
 		}
 	}
-	if errstr := renctx.t.renameObject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
+	if errstr := renctx.t.renameBucketObject(contentType, bucket, objname, renctx.bucketTo, objname); errstr != "" {
 		return fmt.Errorf(errstr)
 	}
 	return nil
@@ -1572,11 +1623,11 @@ func (t *targetrunner) getCold(ct context.Context, lom *cluster.LOM, prefetch bo
 	// refill
 	if errstr = lom.Fill(cluster.LomFstat | cluster.LomCksum | cluster.LomVersion); errstr != "" {
 		glog.Warning(errstr)
-		lom.Doesnotexist = true // NOTE: in an attempt to fix it
+		lom.DoesNotExist = true // NOTE: in an attempt to fix it
 	}
 
 	// existence, access & versioning
-	coldget := lom.Doesnotexist
+	coldget := lom.DoesNotExist
 	if !coldget {
 		if versioncfg.ValidateWarmGet && lom.Version != "" && versioningConfigured(lom.Bislocal) {
 			vchanged, errv, _ = t.checkCloudVersion(ct, lom.Bucket, lom.Objname, lom.Version)
@@ -2050,7 +2101,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		lom       = &cluster.LOM{T: ci.t, Fqn: fqn}
 	)
 	errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy)
-	if lom.Doesnotexist {
+	if lom.DoesNotExist {
 		return nil
 	}
 	if lom.IsCopy() {
@@ -2079,70 +2130,26 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 // Cloud bucket:
 //  - if the Cloud returns a new version id then save it to xattr
 // In both case a new checksum is saved to xattrs
-func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr string, errcode int) {
+func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error, errcode int) {
 	var (
-		htype   = r.Header.Get(cmn.HeaderObjCksumType)
-		hval    = r.Header.Get(cmn.HeaderObjCksumVal)
-		hksum   = cmn.NewCksum(htype, hval)
-		started = time.Now()
+		cksumType = r.Header.Get(cmn.HeaderObjCksumType)
+		cksum     = r.Header.Get(cmn.HeaderObjCksumVal)
+		cksumVal  = cmn.NewCksum(cksumType, cksum)
 	)
-	lom := &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(cluster.LomFstat); errstr != "" {
-		return
-	}
-	putfqn := fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
 
-	// optimize out if the checksums do match
-	if lom.Exists() {
-		if errstr = lom.Fill(cluster.LomCksum); errstr == "" {
-			if cmn.EqCksum(lom.Nhobj, hksum) {
-				glog.Infof("Existing %s is valid: PUT is a no-op", lom)
-				return
-			}
-		}
+	roi := &recvObjInfo{
+		t:        t,
+		objname:  objname,
+		bucket:   bucket,
+		ctx:      t.contextWithAuth(r),
+		r:        r.Body,
+		cksumVal: cksumVal,
 	}
-	lom.Nhobj = hksum
-	if _, lom.Nhobj, lom.Size, errstr = t.receive(putfqn, lom, "", r.Body); errstr != "" {
-		return
+	if err := roi.init(); err != nil {
+		return err, http.StatusInternalServerError
 	}
-	// commit
-	if !dryRun.disk && !dryRun.network {
-		errstr, errcode = t.putCommit(t.contextWithAuth(r), lom, putfqn, false /*rebalance*/)
-	}
-	if errstr == "" {
-		delta := time.Since(started)
-		t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
-		if glog.V(4) {
-			glog.Infof("PUT: %s, %d µs", lom, int64(delta/time.Microsecond))
-		}
-		// local mirror
-		if lom.Mirror.MirrorEnabled {
-			if fs.Mountpaths.NumAvail() > 1 { // FIXME: cache when filling-in the lom
-				t.putCopy(lom)
-			}
-		}
-	}
-	return
-}
 
-func (t *targetrunner) putCopy(lom *cluster.LOM) {
-	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
-		t.xcopy = t.xactions.renewPutCopies(lom, t)
-	}
-	if t.xcopy == nil {
-		return
-	}
-	err := t.xcopy.Copy(lom)
-	// retry in the (unlikely) case of sumultaneous xcopy-timeout
-	if _, ok := err.(*cmn.ErrXpired); ok {
-		t.xcopy = t.xactions.renewPutCopies(lom, t)
-		if t.xcopy != nil {
-			err = t.xcopy.Copy(lom)
-		}
-	}
-	if err != nil {
-		glog.Errorf("Unexpected: %v", err)
-	}
+	return roi.recv()
 }
 
 // TODO: this function is for now unused because replication does not work
@@ -2171,24 +2178,81 @@ func (t *targetrunner) doReplicationPut(r *http.Request, bucket, objname, replic
 	return ""
 }
 
-func (t *targetrunner) putCommit(ct context.Context, lom *cluster.LOM, putfqn string, rebalance bool) (errstr string, errcode int) {
-	var renamed bool
-	renamed, errstr, errcode = t.doPutCommit(ct, lom, putfqn, rebalance)
-	if errstr != "" && !renamed {
-		if _, err := os.Stat(putfqn); err == nil || !os.IsNotExist(err) {
-			if err == nil {
-				err = errors.New(errstr)
-			}
-			t.fshc(err, putfqn)
-			if err = os.Remove(putfqn); err != nil {
-				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
+func (roi *recvObjInfo) init() error {
+	cmn.Assert(roi.t != nil)
+
+	roi.started = time.Now()
+	roi.lom = &cluster.LOM{T: roi.t, Objname: roi.objname, Bucket: roi.bucket}
+	if errstr := roi.lom.Fill(cluster.LomFstat); errstr != "" {
+		return errors.New(errstr)
+	}
+	roi.workFQN = fs.CSM.GenContentParsedFQN(roi.lom.ParsedFQN, fs.WorkfileType, fs.WorkfilePut)
+
+	// All objects which are migrated should contain checksum.
+	if roi.migrated {
+		cmn.Assert(roi.cksumVal != nil)
+	}
+
+	return nil
+}
+
+func (roi *recvObjInfo) recv() (err error, errCode int) {
+	var (
+		errstr string
+	)
+
+	cmn.Assert(roi.lom != nil)
+
+	// optimize out if the checksums do match
+	if roi.lom.Exists() {
+		if errstr := roi.lom.Fill(cluster.LomCksum); errstr == "" {
+			if cmn.EqCksum(roi.lom.Nhobj, roi.cksumVal) {
+				glog.Infof("Existing %s is valid: PUT is a no-op", roi.lom)
+				io.Copy(ioutil.Discard, roi.r) // drain the reader
+				return nil, 0
 			}
 		}
 	}
-	lom.Doesnotexist = false
+	roi.lom.Nhobj = roi.cksumVal
 
-	if !rebalance && errstr == "" {
-		if err := t.ecmanager.EncodeObject(lom); err != nil && err != ec.ErrorECDisabled {
+	if _, roi.lom.Nhobj, roi.lom.Size, errstr = roi.t.receive(roi.workFQN, roi.lom, "", roi.r); errstr != "" {
+		return errors.New(errstr), http.StatusInternalServerError
+	}
+
+	// commit
+	if !dryRun.disk && !dryRun.network {
+		errstr, errCode := roi.commit()
+		if errstr != "" {
+			return errors.New(errstr), errCode
+		}
+	}
+
+	delta := time.Since(roi.started)
+	roi.t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
+	if glog.V(4) {
+		glog.Infof("PUT: %s/%s, %d µs", roi.bucket, roi.objname, int64(delta/time.Microsecond))
+	}
+
+	roi.t.localMirror(roi.lom)
+	return nil, 0
+}
+
+func (roi *recvObjInfo) commit() (errstr string, errCode int) {
+	if errstr, errCode = roi.tryCommit(); errstr != "" {
+		if _, err := os.Stat(roi.workFQN); err == nil || !os.IsNotExist(err) {
+			if err == nil {
+				err = errors.New(errstr)
+			}
+			roi.t.fshc(err, roi.workFQN)
+			if err = os.Remove(roi.workFQN); err != nil {
+				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, roi.workFQN, err)
+			}
+		}
+		roi.lom.DoesNotExist = false
+	}
+
+	if !roi.migrated && errstr == "" {
+		if err := roi.t.ecmanager.EncodeObject(roi.lom); err != nil && err != ec.ErrorECDisabled {
 			errstr = err.Error()
 		}
 	}
@@ -2196,128 +2260,106 @@ func (t *targetrunner) putCommit(ct context.Context, lom *cluster.LOM, putfqn st
 	return
 }
 
-func (t *targetrunner) doPutCommit(ct context.Context, lom *cluster.LOM, putfqn string,
-	rebalance bool) (renamed bool, errstr string, errcode int) {
-	if !lom.Bislocal && !rebalance {
-		if file, err := os.Open(putfqn); err != nil {
-			errstr = fmt.Sprintf("Failed to open %s err: %v", putfqn, err)
+func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
+	if !roi.lom.Bislocal && !roi.migrated {
+		if file, err := os.Open(roi.workFQN); err != nil {
+			errstr = fmt.Sprintf("Failed to open %s err: %v", roi.workFQN, err)
 			return
 		} else {
-			lom.Version, errstr, errcode = getcloudif().putobj(ct, file, lom.Bucket, lom.Objname, lom.Nhobj)
+			roi.lom.Version, errstr, errCode = getcloudif().putobj(roi.ctx, file, roi.lom.Bucket, roi.lom.Objname, roi.lom.Nhobj)
 			file.Close()
 			if errstr != "" {
 				return
 			}
 		}
 	}
-	// when all set and done:
-	t.rtnamemap.Lock(lom.Uname, true)
 
-	if lom.Bislocal && versioningConfigured(true) {
-		if lom.Version, errstr = lom.IncObjectVersion(); errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, true)
+	// Lock the uname for the object and rename it from workFQN to actual FQN.
+	roi.t.rtnamemap.Lock(roi.lom.Uname, true)
+	if roi.lom.Bislocal && versioningConfigured(true) {
+		if roi.lom.Version, errstr = roi.lom.IncObjectVersion(); errstr != "" {
+			roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
 			return
 		}
 	}
-	if lom.HasCopy() {
-		if errstr = lom.DelCopy(); errstr != "" {
-			t.rtnamemap.Unlock(lom.Uname, true)
+	if roi.lom.HasCopy() {
+		if errstr = roi.lom.DelCopy(); errstr != "" {
+			roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
 			return
 		}
 	}
-	if err := cmn.MvFile(putfqn, lom.Fqn); err != nil {
-		t.rtnamemap.Unlock(lom.Uname, true)
-		errstr = fmt.Sprintf("work => %s: %v", lom, err)
+	if err := cmn.MvFile(roi.workFQN, roi.lom.Fqn); err != nil {
+		roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
+		errstr = fmt.Sprintf("MvFile failed => %s: %v", roi.lom, err)
 		return
 	}
-	renamed = true
-	if errstr = lom.Persist(); errstr != "" {
-		glog.Errorf("Failed to persist %s: %s", lom, errstr)
+	if errstr = roi.lom.Persist(); errstr != "" {
+		glog.Errorf("Failed to persist %s: %s", roi.lom, errstr)
 	}
-	t.rtnamemap.Unlock(lom.Uname, true)
+	roi.t.rtnamemap.Unlock(roi.lom.Uname, true)
 	return
 }
 
-func (t *targetrunner) dorebalance(r *http.Request, from, to, bucket, objname string) (errstr string) {
-	if t.si.DaemonID != from && t.si.DaemonID != to {
-		errstr = fmt.Sprintf("File copy: %s is not the intended source %s nor the destination %s",
-			t.si.DaemonID, from, to)
+func (t *targetrunner) localMirror(lom *cluster.LOM) {
+	if !lom.Mirror.MirrorEnabled {
 		return
 	}
-	var (
-		putfqn string
-		lom    = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	)
-	if errstr = lom.Fill(0); errstr != "" {
+
+	if fs.Mountpaths.NumAvail() <= 1 { // FIXME: cache when filling-in the lom
+		return
+
+	}
+
+	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
+		t.xcopy = t.xactions.renewPutCopies(lom, t)
+	}
+	if t.xcopy == nil {
 		return
 	}
-	if t.si.DaemonID == from {
-		//
-		// the source
-		//
-		t.rtnamemap.Lock(lom.Uname, false)
-		defer t.rtnamemap.Unlock(lom.Uname, false)
-
-		if errstr = lom.Fill(cluster.LomFstat); errstr != "" {
-			return
-		}
-		if lom.Doesnotexist {
-			errstr = fmt.Sprintf("Rebalance: %s at the source %s", lom, t.si)
-			return
-		}
-		if glog.V(3) {
-			glog.Infof("Rebalancing %s from %s(self) to %s", lom, from, to)
-		}
-		si := t.smapowner.get().GetTarget(to)
-		if si == nil {
-			errstr = fmt.Sprintf("Unknown destination %s (Smap not in-sync?)", to)
-			return
-		}
-		if errstr = t.sendfile(r.Method, bucket, objname, si, lom.Size, "", "", nil); errstr != "" {
-			return
-		}
-		if glog.V(4) {
-			glog.Infof("Rebalance %s(%s) done", lom, cmn.B2S(lom.Size, 1))
-		}
-	} else {
-		//
-		// the destination
-		//
-		if glog.V(4) {
-			glog.Infof("Rebalance %s from %s to %s(self)", lom, from, to)
-		}
-		if errstr = lom.Fill(cluster.LomFstat); errstr != "" {
-			return
-		}
-		if lom.Exists() {
-			glog.Infof("%s already exists at the destination %s", lom, t.si)
-			return // not an error, nothing to do
-		}
-		putfqn = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRebalance)
-
-		var (
-			size  int64
-			htype = r.Header.Get(cmn.HeaderObjCksumType)
-			hval  = r.Header.Get(cmn.HeaderObjCksumVal)
-			hksum = cmn.NewCksum(htype, hval)
-		)
-		lom.Version = r.Header.Get(cmn.HeaderObjVersion)
-		if timeStr := r.Header.Get(cmn.HeaderObjAtime); timeStr != "" {
-			lom.Atimestr = timeStr
-			if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
-				lom.Atime = tm
-			}
-		}
-		lom.Nhobj = hksum
-		if _, lom.Nhobj, lom.Size, errstr = t.receive(putfqn, lom, "", r.Body); errstr != "" {
-			return
-		}
-		errstr, _ = t.putCommit(t.contextWithAuth(r), lom, putfqn, true /*rebalance*/)
-		if errstr == "" {
-			t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, size})
+	err := t.xcopy.Copy(lom)
+	// retry in the (unlikely) case of simultaneous xcopy-timeout
+	if _, ok := err.(*cmn.ErrXpired); ok {
+		t.xcopy = t.xactions.renewPutCopies(lom, t)
+		if t.xcopy != nil {
+			err = t.xcopy.Copy(lom)
 		}
 	}
-	return
+	if err != nil {
+		glog.Errorf("Unexpected: %v", err)
+	}
+}
+
+func (t *targetrunner) recvRebalanceObj(w http.ResponseWriter, hdr transport.Header, objReader io.Reader, err error) {
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+
+	roi := &recvObjInfo{
+		t:        t,
+		objname:  hdr.Objname,
+		bucket:   hdr.Bucket,
+		r:        objReader,
+		migrated: true,
+		cksumVal: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.Cksum),
+	}
+	if err := roi.init(); err != nil {
+		glog.Error(err)
+		return
+	}
+	roi.lom.Atime = time.Unix(0, hdr.ObjAttrs.Atime)
+	roi.lom.Version = hdr.ObjAttrs.Version
+
+	if glog.V(4) {
+		glog.Infof("Rebalance %s from %s", roi.lom, hdr.Opaque)
+	}
+
+	if err, _ := roi.recv(); err != nil {
+		glog.Error(err)
+		return
+	}
+
+	t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, hdr.ObjAttrs.Size})
 }
 
 func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evict bool) error {
@@ -2343,7 +2385,7 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	}
 
 	_ = lom.Fill(cluster.LomFstat) // ignore fstat errors
-	if lom.Doesnotexist {
+	if lom.DoesNotExist {
 		return nil
 	}
 	if !(evict && lom.Bislocal) {
@@ -2359,22 +2401,22 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 	return nil
 }
 
-func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
+func (t *targetrunner) renameObject(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
 	var errstr string
 
 	apitems, err := t.checkRESTItems(w, r, 2, false, cmn.Version, cmn.Objects)
 	if err != nil {
 		return
 	}
-	bucket, objname := apitems[0], apitems[1]
+	bucket, objnameFrom := apitems[0], apitems[1]
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
-	newobjname := msg.Name
-	uname := cluster.Uname(bucket, objname)
+	objnameTo := msg.Name
+	uname := cluster.Uname(bucket, objnameFrom)
 	t.rtnamemap.Lock(uname, true)
 
-	if errstr = t.renameObject(fs.ObjectType, bucket, objname, bucket, newobjname); errstr != "" {
+	if errstr = t.renameBucketObject(fs.ObjectType, bucket, objnameFrom, bucket, objnameTo); errstr != "" {
 		t.invalmsghdlr(w, r, errstr)
 	}
 	t.rtnamemap.Unlock(uname, true)
@@ -2384,10 +2426,13 @@ func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn
 	t.invalmsghdlr(w, r, cmn.NotSupported) // NOTE: daemon.go, proxy.go, config.sh, and tests/replication
 }
 
-func (t *targetrunner) renameObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
+func (t *targetrunner) renameBucketObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
 	var (
+		fi     os.FileInfo
+		file   *cmn.FileHandle
 		si     *cluster.Snode
-		newfqn string
+		newFQN string
+		err    error
 	)
 	if si, errstr = hrwTarget(bucketTo, objnameTo, t.smapowner.get()); errstr != "" {
 		return
@@ -2398,117 +2443,74 @@ func (t *targetrunner) renameObject(contentType, bucketFrom, objnameFrom, bucket
 	if errstr != "" {
 		return
 	}
-	finfo, err := os.Stat(fqn)
-	if err != nil {
+	if fi, err = os.Stat(fqn); err != nil {
 		errstr = fmt.Sprintf("Rename/move: failed to fstat %s (%s/%s), err: %v", fqn, bucketFrom, objnameFrom, err)
 		return
 	}
+
 	// local rename
 	if si.DaemonID == t.si.DaemonID {
 		islocalTo := bucketmd.IsLocal(bucketTo)
-		newfqn, errstr = cluster.FQN(contentType, bucketTo, objnameTo, islocalTo)
+		newFQN, errstr = cluster.FQN(contentType, bucketTo, objnameTo, islocalTo)
 		if errstr != "" {
 			return
 		}
-		if err := cmn.MvFile(fqn, newfqn); err != nil {
+		if err := cmn.MvFile(fqn, newFQN); err != nil {
 			errstr = fmt.Sprintf("Rename object %s/%s: %v", bucketFrom, objnameFrom, err)
 		} else {
 			t.statsif.Add(stats.RenameCount, 1)
 			if glog.V(3) {
-				glog.Infof("Renamed %s => %s", fqn, newfqn)
+				glog.Infof("Renamed %s => %s", fqn, newFQN)
 			}
 		}
 		return
 	}
-	// move/migrate
+
+	// migrate to another target
 	glog.Infof("Migrating %s/%s at %s => %s/%s at %s", bucketFrom, objnameFrom, t.si, bucketTo, objnameTo, si)
 
-	errstr = t.sendfile(http.MethodPut, bucketFrom, objnameFrom, si, finfo.Size(), bucketTo, objnameTo, nil)
-	return
-}
-
-// Rebalancing supports versioning. If an object in DFC cache has version in
-// xattrs then the sender adds to HTTP header object version. A receiver side
-// reads version from headers and set xattrs if the version is not empty
-func (t *targetrunner) sendfile(method, bucket, objname string, destsi *cluster.Snode, size int64,
-	newbucket, newobjname string, atimeRespCh chan *atime.Response) string {
-	if newobjname == "" {
-		newobjname = objname
-	}
-	if newbucket == "" {
-		newbucket = bucket
-	}
-
-	lom := &cluster.LOM{T: t, Size: size, Bucket: bucket, Objname: objname, AtimeRespCh: atimeRespCh}
-	errstr := lom.Fill(cluster.LomFstat | cluster.LomVersion | cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp)
-	if errstr != "" {
-		return errstr
-	}
-	if lom.Doesnotexist {
-		return lom.String()
-	}
-	// TODO make sure this Open will have no atime "side-effect", here and elsewhere
-	file, err := os.Open(lom.Fqn) // FIXME: make sure Open has no atime "side-effect", here and elsewhere
-	if err != nil {
-		return fmt.Sprintf("Failed to open %s(%q), err: %v", lom, lom.Fqn, err)
+	if file, err = cmn.NewFileHandle(fqn); err != nil {
+		return fmt.Sprintf("failed to open %s, err: %v", fqn, err)
 	}
 	defer file.Close()
 
-	//
-	// http request
-	//
-	fromid, toid := t.si.DaemonID, destsi.DaemonID // source=self and destination
-	url := destsi.IntraDataNet.DirectURL + cmn.URLPath(cmn.Version, cmn.Objects, newbucket, newobjname)
-	url += fmt.Sprintf("?%s=%s&%s=%s", cmn.URLParamFromID, fromid, cmn.URLParamToID, toid)
-	request, err := http.NewRequest(method, url, file)
-	if err != nil {
-		return fmt.Sprintf("Unexpected failure to create %s request %s, err: %v", method, url, err)
-	}
-	if lom.Nhobj != nil {
-		htype, hval := lom.Nhobj.Get()
-		request.Header.Set(cmn.HeaderObjCksumType, htype)
-		request.Header.Set(cmn.HeaderObjCksumVal, hval)
-	}
-	if lom.Version != "" {
-		request.Header.Set(cmn.HeaderObjVersion, lom.Version)
-	}
-	request.Header.Set(cmn.HeaderObjSize, strconv.FormatInt(lom.Size, 10))
-	if lom.Atimestr != "" {
-		request.Header.Set(cmn.HeaderObjAtime, lom.Atimestr)
-	}
-
-	// Do
-	contextwith, cancel := context.WithTimeout(context.Background(), lom.Config.Timeout.SendFile)
-	defer cancel()
-	newrequest := request.WithContext(contextwith)
-
-	response, err := t.httpclientLongTimeout.Do(newrequest)
-
-	// err handle
-	if err != nil {
-		errstr = fmt.Sprintf("Failed to sendfile %s/%s at %s => %s/%s at %s, err: %v",
-			bucket, objname, fromid, newbucket, newobjname, toid, err)
-		if response != nil && response.StatusCode > 0 {
-			errstr += fmt.Sprintf(", status %s", response.Status)
-		}
+	lom := &cluster.LOM{T: t, Fqn: fqn}
+	if errstr := lom.Fill(cluster.LomFstat | cluster.LomVersion | cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
 		return errstr
 	}
-	if _, err = ioutil.ReadAll(response.Body); err != nil {
-		errstr = fmt.Sprintf("Failed to read sendfile response: %s/%s at %s => %s/%s at %s, err: %v",
-			bucket, objname, fromid, newbucket, newobjname, toid, err)
-		if err == io.EOF {
-			trailer := response.Trailer.Get("Error")
-			if trailer != "" {
-				errstr += fmt.Sprintf(", trailer: %s", trailer)
-			}
-		}
-		response.Body.Close()
-		return errstr
+
+	cksumType, cksum := lom.Nhobj.Get()
+	hdr := transport.Header{
+		Bucket:  bucketTo,
+		Objname: objnameTo,
+		IsLocal: lom.Bislocal,
+		Opaque:  []byte(t.si.DaemonID),
+		ObjAttrs: transport.ObjectAttrs{
+			Size:      fi.Size(),
+			Atime:     lom.Atime.UnixNano(),
+			CksumType: cksumType,
+			Cksum:     cksum,
+			Version:   lom.Version,
+		},
 	}
-	response.Body.Close()
-	// stats
-	t.statsif.AddMany(stats.NamedVal64{stats.TxCount, 1}, stats.NamedVal64{stats.TxSize, size})
-	return ""
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	cb := func(hdr transport.Header, r io.ReadCloser, cbErr error) {
+		err = cbErr
+		wg.Done()
+	}
+	if err := t.streams.rebalance.SendV(hdr, file, cb, si); err != nil {
+		glog.Errorf("failed to migrate: %s, err: %v", lom.Fqn, err)
+		return err.Error()
+	}
+	wg.Wait()
+
+	if err != nil {
+		return err.Error()
+	}
+
+	t.statsif.AddMany(stats.NamedVal64{stats.TxCount, 1}, stats.NamedVal64{stats.TxSize, fi.Size()})
+	return
 }
 
 func (t *targetrunner) checkCacheQueryParameter(r *http.Request) (useCache bool, errstr string, errcode int) {

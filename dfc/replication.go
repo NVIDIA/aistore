@@ -312,7 +312,7 @@ func (r *mpathReplicator) send(req *replRequest) error {
 	if errstr = lom.Fill(cluster.LomFstat); errstr != "" {
 		return errors.New(errstr)
 	}
-	if lom.Doesnotexist {
+	if lom.DoesNotExist {
 		return fmt.Errorf("%s/%s %s", lom.Bucket, lom.Objname, cmn.DoesNotExist)
 	}
 	url := req.remoteDirectURL + cmn.URLPath(cmn.Version, cmn.Objects, lom.Bucket, lom.Objname)
@@ -394,20 +394,20 @@ func (r *mpathReplicator) send(req *replRequest) error {
 // FIXME: use atime
 func (r *mpathReplicator) receive(req *replRequest) error {
 	var (
-		httpr = req.httpReq
-		lom   = &cluster.LOM{T: r.t, Fqn: req.fqn}
+		httpReq = req.httpReq
+		lom     = &cluster.LOM{T: r.t, Fqn: req.fqn}
 	)
 	if errstr := lom.Fill(0); errstr != "" {
 		return errors.New(errstr)
 	}
-	if timeStr := httpr.Header.Get(cmn.HeaderObjAtime); timeStr != "" {
+	if timeStr := httpReq.Header.Get(cmn.HeaderObjAtime); timeStr != "" {
 		lom.Atimestr = timeStr
 		if tm, err := time.Parse(time.RFC822, timeStr); err == nil {
 			lom.Atime = tm // FIXME: not used
 		}
 	}
-	if errstr, _ := r.t.doPut(httpr, lom.Bucket, lom.Objname); errstr != "" {
-		return errors.New(errstr)
+	if err, _ := r.t.doPut(httpReq, lom.Bucket, lom.Objname); err != nil {
+		return err
 	}
 	return nil
 }

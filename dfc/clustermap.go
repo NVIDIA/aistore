@@ -199,6 +199,7 @@ func (r *smapowner) put(smap *smapX) {
 	}
 	atomic.StorePointer(&r.smap, unsafe.Pointer(smap))
 
+	// TODO: the logic for notification should be rewritten: see #237
 	if r.listeners != nil {
 		r.listeners.notify() // notify of Smap change all listeners (cluster.Slistener)
 	}

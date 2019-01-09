@@ -6,7 +6,9 @@ package dfc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -23,6 +25,7 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
+	"github.com/NVIDIA/dfcpub/transport"
 	"github.com/json-iterator/go"
 )
 
@@ -77,8 +80,26 @@ func (rcl *globalRebJogger) jog() {
 	rcl.wg.Done()
 }
 
+func (rcl *globalRebJogger) rebalanceObjCallback(hdr transport.Header, r io.ReadCloser, err error) {
+	uname := cluster.Uname(hdr.Bucket, hdr.Objname)
+	rcl.t.rtnamemap.Unlock(uname, false)
+
+	if err != nil {
+		glog.Errorf("failed to send obj rebalance: %s/%s, err: %v", hdr.Bucket, hdr.Objname, err)
+	} else {
+		atomic.AddInt64(&rcl.objectMoved, 1)
+		atomic.AddInt64(&rcl.byteMoved, hdr.ObjAttrs.Size)
+	}
+
+	rcl.wg.Done()
+}
+
 // the walking callback is executed by the LRU xaction
-func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error {
+func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
+	var (
+		file *cmn.FileHandle
+	)
+
 	// Check if we should abort
 	select {
 	case <-rcl.xreb.ChanAbort():
@@ -94,7 +115,7 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 		}
 		return nil
 	}
-	if osfi.Mode().IsDir() {
+	if fi.Mode().IsDir() {
 		return nil
 	}
 	lom := &cluster.LOM{T: rcl.t, Fqn: fqn}
@@ -104,10 +125,11 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 		}
 		return nil
 	}
+
 	// rebalance, maybe
 	si, errstr := hrwTarget(lom.Bucket, lom.Objname, rcl.newsmap)
 	if errstr != "" {
-		return fmt.Errorf(errstr)
+		return errors.New(errstr)
 	}
 	if si.DaemonID == rcl.t.si.DaemonID {
 		return nil
@@ -116,12 +138,41 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	if glog.V(4) {
 		glog.Infof("%s %s => %s", lom, rcl.t.si, si)
 	}
-	if errstr = rcl.t.sendfile(http.MethodPut, lom.Bucket, lom.Objname, si, osfi.Size(), "", "", rcl.atimeRespCh); errstr != "" {
-		glog.Infof("Failed to rebalance %s: %s", lom, errstr)
-	} else {
-		// LRU cleans up the object later
-		rcl.objectMoved++
-		rcl.byteMoved += osfi.Size()
+
+	if errstr := lom.Fill(cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
+		return errors.New(errstr)
+	}
+
+	// NOTE: Unlock happens in case of error or in rebalanceObjCallback.
+	rcl.t.rtnamemap.Lock(lom.Uname, false)
+
+	if file, err = cmn.NewFileHandle(lom.Fqn); err != nil {
+		glog.Errorf("failed to open file: %s, err: %v", lom.Fqn, err)
+		rcl.t.rtnamemap.Unlock(lom.Uname, false)
+		return err
+	}
+
+	cksumType, cksum := lom.Nhobj.Get()
+	hdr := transport.Header{
+		Bucket:  lom.Bucket,
+		Objname: lom.Objname,
+		IsLocal: lom.Bislocal,
+		Opaque:  []byte(rcl.t.si.DaemonID),
+		ObjAttrs: transport.ObjectAttrs{
+			Size:      fi.Size(),
+			Atime:     lom.Atime.UnixNano(),
+			CksumType: cksumType,
+			Cksum:     cksum,
+			Version:   lom.Version,
+		},
+	}
+
+	rcl.wg.Add(1) // NOTE: Done happens in case of SendV error or in rebalanceObjCallback.
+	if err := rcl.t.streams.rebalance.SendV(hdr, file, rcl.rebalanceObjCallback, si); err != nil {
+		glog.Errorf("failed to rebalance: %s, err: %v", lom.Fqn, err)
+		rcl.t.rtnamemap.Unlock(lom.Uname, false)
+		rcl.wg.Done()
+		return err
 	}
 	return nil
 }
