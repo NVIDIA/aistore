@@ -6,6 +6,7 @@ package dsort
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -68,7 +69,9 @@ func (mg *ManagerGroup) Get(managerUUID string) (*Manager, bool) {
 			return nil, false
 		}
 		if err := db.Read(managersCollection, managerUUID, &manager); err != nil {
-			glog.Error(err)
+			if !os.IsNotExist(err) {
+				glog.Error(err)
+			}
 			return nil, false
 		}
 		exists = true
