@@ -129,9 +129,13 @@ func (xact *XactBase) Abort() {
 
 var _ XactDemand = &XactDemandBase{}
 
-func NewXactDemandBase(id int64, kind string) *XactDemandBase {
+func NewXactDemandBase(id int64, kind string, idleTime ...time.Duration) *XactDemandBase {
 	base := NewXactBase(id, kind)
-	ticker := time.NewTicker(xactIdleTimeout)
+	tickTime := xactIdleTimeout
+	if len(idleTime) != 0 {
+		tickTime = idleTime[0]
+	}
+	ticker := time.NewTicker(tickTime)
 	return &XactDemandBase{XactBase: *base, ticker: ticker}
 }
 
