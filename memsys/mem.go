@@ -248,7 +248,9 @@ func (r *Mem2) Init(ignorerr bool) (err error) {
 	// CAS implemented to enforce only one invocation of gMem2.Init()
 	// for possible concurrent calls to memsys.Init() in multi-threaded context
 	if !atomic.CompareAndSwapInt64(&r.usageLvl, 0, Mem2Initialized) {
-		logMsg(fmt.Sprintf("%s is already %s", r.Name, usageLvls[r.usageLvl]))
+		if r.usageLvl != Mem2Running {
+			logMsg(fmt.Sprintf("%s is already %s", r.Name, usageLvls[r.usageLvl]))
+		}
 		return
 	}
 	if r.Name != "" {

@@ -173,7 +173,7 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 func (j *eraser) yieldTerm() error {
 	select {
 	case <-j.stopCh:
-		return fmt.Errorf("%s aborted, exiting", j)
+		return fmt.Errorf("eraser[%s] aborted, exiting", j.mpathInfo)
 	default:
 		_, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
 		j.num = 0
