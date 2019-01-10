@@ -28,6 +28,7 @@ import (
 
 func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh chan struct{}) {
 	defer wg.Done()
+	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bislocal)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
@@ -38,7 +39,6 @@ func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh ch
 	lctx.joggers = joggers
 	now := time.Now()
 
-	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bislocal)
 	lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
 	lctx.heap = &fileInfoMinHeap{}
 	heap.Init(lctx.heap)
