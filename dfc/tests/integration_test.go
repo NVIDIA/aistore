@@ -1867,3 +1867,75 @@ func TestAtimeRebalance(t *testing.T) {
 			len(bucketList.Entries), itemCount)
 	}
 }
+
+func _TestLocalMirror(t *testing.T) {
+	const (
+		num      = 1000
+		filesize = cmn.MiB
+	)
+	var (
+		m = metadata{
+			t:               t,
+			delay:           time.Second * 5,
+			num:             num,
+			numGetsEachFile: 2,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 100),
+			wg:              &sync.WaitGroup{},
+			bucket:          "mirror",
+		}
+		sgl        *memsys.SGL
+		filenameCh = make(chan string, m.num)
+		errCh      = make(chan error, m.num)
+	)
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+	saveClusterState(&m)
+
+	createFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	if usingSG {
+		sgl = tutils.Mem2.NewSGL(filesize)
+		defer sgl.Free()
+	}
+	{
+		var (
+			bucketProps cmn.BucketProps
+			config      *cmn.Config
+			err         error
+		)
+		baseParams := tutils.DefaultBaseAPIParams(t)
+		config, err = api.GetDaemonConfig(baseParams)
+		tutils.CheckFatal(err, t)
+
+		// copy default config and change one field
+		bucketProps.MirrorConf = config.Mirror
+		bucketProps.MirrorConf.MirrorEnabled = true
+		err = api.SetBucketProps(baseParams, m.bucket, bucketProps)
+		tutils.CheckFatal(err, t)
+
+		p, err := api.HeadBucket(tutils.DefaultBaseAPIParams(t), m.bucket)
+		tutils.CheckFatal(err, t)
+		if 2 != p.Copies {
+			t.Fatalf("%d copies != 2", p.Copies)
+		}
+	}
+	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, filesize, num, errCh, filenameCh, sgl)
+	tutils.Logln("PUT done")
+	selectErr(errCh, "put", t, false)
+	close(filenameCh)
+	close(errCh)
+
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+	m.wg.Add(num * m.numGetsEachFile)
+	tutils.Logln("GET in parallel...")
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	tutils.Logln("Done")
+}

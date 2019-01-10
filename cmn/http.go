@@ -112,7 +112,7 @@ func InvalidHandlerDetailed(w http.ResponseWriter, r *http.Request, msg string, 
 			if !strings.Contains(msg, ".go, #") {
 				f := filepath.Base(file)
 				if stack != "(" {
-					stack += " -> "
+					stack += " <- "
 				}
 				stack += fmt.Sprintf("[%s, #%d]", f, line)
 			}

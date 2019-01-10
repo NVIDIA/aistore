@@ -41,8 +41,6 @@ import (
 const (
 	minEvictThresh   = cmn.MiB
 	capCheckInterval = cmn.MiB * 256 // capacity checking "interval"
-	throttleTimeIn   = time.Millisecond * 10
-	throttleTimeOut  = time.Second
 )
 
 type (
@@ -73,15 +71,18 @@ type (
 		oldwork []*fileInfo
 		// init-time
 		ini             InitLRU
+		stopCh          chan struct{}
+		joggers         map[string]*lructx
 		mpathInfo       *fs.MountpathInfo
 		contentType     string
+		bckTypeDir      string
 		contentResolver fs.ContentResolver
 		config          *cmn.Config
-		bckTypeDir      string
 		atimeRespCh     chan *atime.Response
 		dontevictime    time.Time
 		bislocal        bool
 		throttle        bool
+		aborted         bool
 	}
 )
 
@@ -98,7 +99,6 @@ func InitAndRun(ini *InitLRU) {
 	glog.Infof("LRU: %s started: dont-evict-time %v", ini.Xlru, config.LRU.DontEvictTime)
 
 	ini.Ratime = ini.T.GetAtimeRunner()
-
 	availablePaths, _ := fs.Mountpaths.Get()
 	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
 		if !contentResolver.PermToEvict() {
@@ -110,41 +110,57 @@ func InitAndRun(ini *InitLRU) {
 			continue
 		}
 		//
-		// NOTE the sequence: LRU local buckets first, Cloud buckets - second
+		// NOTE the sequence: Cloud buckets first, local buckets second
 		//
-		for _, mpathInfo := range availablePaths {
-			lctx := newlru(ini, mpathInfo, contentType, contentResolver, config, true /* these buckets are local */)
-			wg.Add(1)
-			go lctx.jog(wg)
+		startLRUJoggers := func(bislocal bool) (aborted bool) {
+			joggers := make(map[string]*lructx, len(availablePaths))
+			errCh := make(chan struct{}, len(availablePaths))
+			for mpath, mpathInfo := range availablePaths {
+				joggers[mpath] = newlru(ini, mpathInfo, contentType, contentResolver, config, bislocal)
+			}
+			for _, j := range joggers {
+				wg.Add(1)
+				go j.jog(wg, joggers, errCh)
+			}
+			wg.Wait()
+			close(errCh)
+			select {
+			case <-errCh:
+				aborted = true
+			default:
+				break
+			}
+			return
 		}
-		wg.Wait()
-		for _, mpathInfo := range availablePaths {
-			lctx := newlru(ini, mpathInfo, contentType, contentResolver, config, false /* cloud */)
-			wg.Add(1)
-			go lctx.jog(wg)
+		if aborted := startLRUJoggers(false /*cloud*/); aborted {
+			break
 		}
-		wg.Wait()
+		if aborted := startLRUJoggers(true /*local*/); aborted {
+			break
+		}
 	}
 }
 
-func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver,
-	config *cmn.Config, bislocal bool) *lructx {
-	var bckTypeDir string
-	if bislocal {
-		bckTypeDir = fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType)
-	} else {
-		bckTypeDir = fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType)
-	}
+func newlru(ini *InitLRU, mpathInfo *fs.MountpathInfo, contentType string, contentResolver fs.ContentResolver, config *cmn.Config, bislocal bool) *lructx {
 	lctx := &lructx{
 		oldwork:         make([]*fileInfo, 0, 64),
 		ini:             *ini,
+		stopCh:          make(chan struct{}, 1),
 		mpathInfo:       mpathInfo,
 		contentType:     contentType,
 		contentResolver: contentResolver,
 		config:          config,
-		bckTypeDir:      bckTypeDir,
 		atimeRespCh:     make(chan *atime.Response, 1),
 		bislocal:        bislocal,
 	}
 	return lctx
+}
+
+func stopAll(joggers map[string]*lructx, exceptMpath string) {
+	for _, j := range joggers {
+		if j.mpathInfo.Path == exceptMpath {
+			continue
+		}
+		j.stopCh <- struct{}{}
+	}
 }

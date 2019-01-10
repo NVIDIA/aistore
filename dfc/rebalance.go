@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -42,8 +43,9 @@ type (
 		atimeRespCh chan *atime.Response
 		objectMoved int64
 		byteMoved   int64
-		aborted     bool
+		aborted     int64
 	}
+	// FIXME: copy-paste, embed same base
 	localRebJogger struct {
 		t           *targetrunner
 		mpath       string
@@ -53,7 +55,7 @@ type (
 		byteMoved   int64
 		slab        *memsys.Slab2
 		buf         []byte
-		aborted     bool
+		aborted     int64
 	}
 )
 
@@ -80,20 +82,17 @@ func (rcl *globalRebJogger) walk(fqn string, osfi os.FileInfo, err error) error 
 	// Check if we should abort
 	select {
 	case <-rcl.xreb.ChanAbort():
-		rcl.aborted = true
+		atomic.StoreInt64(&rcl.aborted, 2019)
 		return fmt.Errorf("%s: aborted, path %s", rcl.xreb, rcl.mpathplus)
 	default:
 		break
 	}
 	if err != nil {
-		// If we are traversing non-existing object we should not care
-		if os.IsNotExist(err) {
-			glog.Warningf("%s %s", fqn, cmn.DoesNotExist)
-			return nil
+		if errstr := cmn.PathWalkErr(err); errstr != "" {
+			glog.Errorf(errstr)
+			return err
 		}
-		// Otherwise we care
-		glog.Errorf("invoked with err: %v", err)
-		return err
+		return nil
 	}
 	if osfi.Mode().IsDir() {
 		return nil
@@ -151,20 +150,17 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	// Check if we should abort
 	select {
 	case <-rb.xreb.ChanAbort():
-		rb.aborted = true
+		atomic.StoreInt64(&rb.aborted, 2019)
 		return fmt.Errorf("%s aborted, path %s", rb.xreb, rb.mpath)
 	default:
 		break
 	}
 	if err != nil {
-		// If we are traversing non-existing object we should not care
-		if os.IsNotExist(err) {
-			glog.Warningf("%s %s", fqn, cmn.DoesNotExist)
-			return nil
+		if errstr := cmn.PathWalkErr(err); errstr != "" {
+			glog.Errorf(errstr)
+			return err
 		}
-		// Otherwise we care
-		glog.Errorf("invoked with err: %v", err)
-		return err
+		return nil
 	}
 	if fileInfo.IsDir() {
 		return nil
@@ -176,7 +172,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		}
 		return nil
 	}
-	if !lom.Misplaced {
+	if !lom.Misplaced() {
 		return nil
 	}
 	if glog.V(4) {
@@ -194,7 +190,7 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 	if glog.V(4) {
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
-	if err := cmn.CopyFile(fqn, lom.HrwFQN, rb.buf); err != nil {
+	if err := lom.CopyObject(lom.HrwFQN, rb.buf); err != nil {
 		rb.xreb.Abort()
 		rb.t.fshc(err, lom.HrwFQN)
 		return nil
@@ -373,16 +369,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	// find and abort in-progress x-action if exists and if its smap version is lower
 	// start new x-action unless the one for the current version is already in progress
 	availablePaths, _ := fs.Mountpaths.Get()
-
-	// FIXME: It is a little bit hacky... Duplication is not the best idea..
-	contentRebalancers := 0
-	for _, contentResolver := range fs.CSM.RegisteredContentTypes {
-		if contentResolver.PermToMove() {
-			contentRebalancers++
-		}
-	}
-	runnerCnt := contentRebalancers * len(availablePaths) * 2
-
+	runnerCnt := len(availablePaths) * 2
 	xreb := t.xactions.renewRebalance(newsmap.Version, runnerCnt)
 	if xreb == nil {
 		return
@@ -400,25 +387,19 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 	wg = &sync.WaitGroup{}
 
 	allr := make([]*globalRebJogger, 0, runnerCnt)
-	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
-		// Do not start rebalance if given content type has no permission to move.
-		// NOTE: In the future we might have case where we would like to check it
-		// per object/workfile basis rather that directory level.
-		if !contentResolver.PermToMove() {
-			continue
-		}
+	// TODO: currently supporting a single content-type: Object
+	for _, mpathInfo := range availablePaths {
+		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+		rc := &globalRebJogger{t: t, mpathplus: mpathC, xreb: xreb, wg: wg, newsmap: newsmap}
+		wg.Add(1)
+		allr = append(allr, rc)
+		go rc.jog()
 
-		for _, mpathInfo := range availablePaths {
-			rc := &globalRebJogger{t: t, mpathplus: fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), xreb: xreb, wg: wg, newsmap: newsmap}
-			wg.Add(1)
-			go rc.jog()
-			allr = append(allr, rc)
-
-			rl := &globalRebJogger{t: t, mpathplus: fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), xreb: xreb, wg: wg, newsmap: newsmap}
-			wg.Add(1)
-			go rl.jog()
-			allr = append(allr, rl)
-		}
+		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
+		rl := &globalRebJogger{t: t, mpathplus: mpathL, xreb: xreb, wg: wg, newsmap: newsmap}
+		wg.Add(1)
+		allr = append(allr, rl)
+		go rl.jog()
 	}
 	wg.Wait()
 
@@ -426,7 +407,7 @@ func (t *targetrunner) runRebalance(newsmap *smapX, newtargetid string) {
 		var aborted bool
 		totalMovedN, totalMovedBytes := int64(0), int64(0)
 		for _, r := range allr {
-			if r.aborted {
+			if atomic.LoadInt64(&r.aborted) != 0 {
 				aborted = true
 			}
 			totalMovedN += r.objectMoved
@@ -468,51 +449,37 @@ func (t *targetrunner) pollRebalancingDone(newSmap *smapX) {
 }
 
 func (t *targetrunner) runLocalRebalance() {
-	availablePaths, _ := fs.Mountpaths.Get()
-	// FIXME: It is a little bit hacky... Duplication is not the best idea..
-	contentRebalancers := 0
-	for _, contentResolver := range fs.CSM.RegisteredContentTypes {
-		if contentResolver.PermToMove() {
-			contentRebalancers++
-		}
-	}
-	runnerCnt := contentRebalancers * len(availablePaths) * 2
-	xreb := t.xactions.renewLocalRebalance(runnerCnt)
-
-	pmarker := t.xactions.localRebalanceInProgress()
-	file, err := cmn.CreateFile(pmarker)
+	var (
+		availablePaths, _ = fs.Mountpaths.Get()
+		runnerCnt         = len(availablePaths) * 2
+		allr              = make([]*localRebJogger, 0, runnerCnt)
+		xreb              = t.xactions.renewLocalRebalance(runnerCnt)
+		pmarker           = t.xactions.localRebalanceInProgress()
+		file, err         = cmn.CreateFile(pmarker)
+	)
 	if err != nil {
 		glog.Errorln("Failed to create", pmarker, err)
 		pmarker = ""
 	} else {
 		_ = file.Close()
 	}
-	allr := make([]*localRebJogger, 0, runnerCnt)
-
 	wg := &sync.WaitGroup{}
 	glog.Infof("starting local rebalance with %d runners\n", runnerCnt)
-	for contentType, contentResolver := range fs.CSM.RegisteredContentTypes {
-		// Do not start rebalance if given content type has no permission to move.
-		// NOTE: In the future we might have case where we would like to check it
-		// per object/workfile basis rather that directory level.
-		if !contentResolver.PermToMove() {
-			continue
-		}
+	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
 
-		slab := gmem2.SelectSlab2(cmn.MiB)
-		for _, mpathInfo := range availablePaths {
-			mpath := fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType)
-			jogger := &localRebJogger{t: t, mpath: mpath, xreb: xreb, wg: wg, slab: slab}
-			wg.Add(1)
-			go jogger.jog()
-			allr = append(allr, jogger)
+	// TODO: currently supporting a single content-type: Object
+	for _, mpathInfo := range availablePaths {
+		mpathC := mpathInfo.MakePath(fs.ObjectType, false /*cloud*/)
+		jogger := &localRebJogger{t: t, mpath: mpathC, xreb: xreb, wg: wg, slab: slab}
+		wg.Add(1)
+		allr = append(allr, jogger)
+		go jogger.jog()
 
-			mpath = fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType)
-			jogger = &localRebJogger{t: t, mpath: mpath, xreb: xreb, wg: wg, slab: slab}
-			wg.Add(1)
-			go jogger.jog()
-			allr = append(allr, jogger)
-		}
+		mpathL := mpathInfo.MakePath(fs.ObjectType, true /*is local*/)
+		jogger = &localRebJogger{t: t, mpath: mpathL, xreb: xreb, wg: wg, slab: slab}
+		wg.Add(1)
+		allr = append(allr, jogger)
+		go jogger.jog()
 	}
 	wg.Wait()
 
@@ -520,7 +487,7 @@ func (t *targetrunner) runLocalRebalance() {
 		var aborted bool
 		totalMovedN, totalMovedBytes := int64(0), int64(0)
 		for _, r := range allr {
-			if r.aborted {
+			if atomic.LoadInt64(&r.aborted) != 0 {
 				aborted = true
 			}
 			totalMovedN += r.objectMoved

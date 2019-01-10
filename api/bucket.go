@@ -102,9 +102,10 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 	if b, err := strconv.ParseBool(r.Header.Get(cmn.HeaderBucketLRUEnabled)); err == nil {
 		lruprops.LRUEnabled = b
 	}
-	var copies int64
+
+	mirror := cmn.MirrorConf{}
 	if b, err := strconv.ParseInt(r.Header.Get(cmn.HeaderBucketCopies), 10, 32); err == nil {
-		copies = b
+		mirror.Copies = b
 	}
 	return &cmn.BucketProps{
 		CloudProvider: r.Header.Get(cmn.HeaderCloudProvider),
@@ -114,7 +115,7 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 		WritePolicy:   r.Header.Get(cmn.HeaderWritePolicy),
 		CksumConf:     cksumconf,
 		LRUConf:       lruprops,
-		Copies:        copies,
+		MirrorConf:    mirror,
 	}, nil
 }
 

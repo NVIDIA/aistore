@@ -61,7 +61,8 @@ const (
 	ActNewPrimary  = "newprimary"
 	ActRevokeToken = "revoketoken"
 	ActElection    = "election"
-	ActAddCopies   = "addcopies"
+	ActPutCopies   = "putcopies"
+	ActEraseCopies = "erasecopies"
 
 	// Actions for manipulating mountpaths (/v1/daemon/mountpaths)
 	ActMountpathEnable  = "enable"
@@ -353,9 +354,8 @@ type BucketProps struct {
 	// LRUConf is the embedded struct of the same name
 	LRUConf `json:"lru_props"`
 
-	// Copies != 0 is currently interpreted as a 2-way local mirroring
-	// (TODO, experimental)
-	Copies int64 `json:"copies"`
+	// MirrorConf defines local-mirroring policy for the bucket
+	MirrorConf `json:"mirror"`
 }
 
 // ObjectProps

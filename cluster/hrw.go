@@ -68,21 +68,22 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
 	return
 }
 
-func hrwMpath(bucket, objname string) (mpath string, errstr string) {
+func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, errstr string) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
 		errstr = fmt.Sprintf("Cannot select mountpath for %s/%s", bucket, objname)
 		return
 	}
-
-	var max uint64
-	name := Uname(bucket, objname)
-	digest := xxhash.ChecksumString64S(name, MLCG32)
+	var (
+		max    uint64
+		name   = Uname(bucket, objname)
+		digest = xxhash.ChecksumString64S(name, MLCG32)
+	)
 	for _, mpathInfo := range availablePaths {
 		cs := xoshiro256.Hash(mpathInfo.PathDigest ^ digest)
 		if cs > max {
 			max = cs
-			mpath = mpathInfo.Path
+			mi = mpathInfo
 		}
 	}
 	return

@@ -143,6 +143,7 @@ func (r *XactDemandBase) ChanCheckTimeout() <-chan time.Time { return r.ticker.C
 func (r *XactDemandBase) Renew()                             { atomic.StoreInt64(&r.renew, 1) } // see Timeout()
 func (r *XactDemandBase) IncPending()                        { atomic.AddInt64(&r.pending, 1) }
 func (r *XactDemandBase) DecPending()                        { atomic.AddInt64(&r.pending, -1) }
+func (r *XactDemandBase) Pending() int64                     { return atomic.LoadInt64(&r.pending) }
 
 func (r *XactDemandBase) Timeout() bool {
 	if atomic.LoadInt64(&r.pending) > 0 {

@@ -42,6 +42,7 @@ func newBucketMD() *bucketMD {
 }
 
 func (m *bucketMD) add(b string, local bool, p *cmn.BucketProps) bool {
+	cmn.Assert(p != nil)
 	mm := m.LBmap
 	if !local {
 		mm = m.CBmap
@@ -78,15 +79,6 @@ func (m *bucketMD) set(b string, local bool, p *cmn.BucketProps) {
 
 	m.Version++
 	mm[b] = p
-}
-
-func (m *bucketMD) propsAndChecksum(bucket string) (p *cmn.BucketProps, checksum string, defined bool) {
-	var ok bool
-	p, ok = m.Get(bucket, m.IsLocal(bucket))
-	if !ok || p.Checksum == cmn.ChecksumInherit {
-		return p, "", false
-	}
-	return p, p.Checksum, true
 }
 
 func (m *bucketMD) clone() *bucketMD {

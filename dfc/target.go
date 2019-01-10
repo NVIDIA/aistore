@@ -154,11 +154,11 @@ func (t *targetrunner) Run() error {
 		os.Exit(1)
 	}
 
-	if err := fs.Mountpaths.CreateBucketDir(fs.BucketLocalType); err != nil {
+	if err := fs.Mountpaths.CreateBucketDir(cmn.LocalBs); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
-	if err := fs.Mountpaths.CreateBucketDir(fs.BucketCloudType); err != nil {
+	if err := fs.Mountpaths.CreateBucketDir(cmn.CloudBs); err != nil {
 		glog.Error(err)
 		os.Exit(1)
 	}
@@ -498,7 +498,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lom = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = lom.Fill(cluster.LomFstat, config); errstr != "" { // (doesnotexist -> ok, other)
+	if errstr = lom.Fill(cluster.LomFstat, config); errstr != "" { // (doesnotexist|misplaced -> ok, other)
 		t.invalmsghdlr(w, r, errstr)
 		return
 	}
@@ -531,8 +531,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-	}
-	if lom.Doesnotexist && lom.Bislocal { // does not exist in the local bucket: restore from neighbors
+	} else if lom.Bislocal { // does not exist in the local bucket: restore from neighbors
 		if errstr, errcode = t.restoreObjLocalBucket(lom, r); errstr == "" {
 			t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, false)
 			t.rtnamemap.Unlock(lom.Uname, false)
@@ -542,6 +541,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
+
 	coldget = lom.Doesnotexist
 	if !coldget && !lom.Bislocal { // exists && cloud-bucket: check ver if requested
 		if versioncfg.ValidateWarmGet && (lom.Version != "" && versioningConfigured(lom.Bislocal)) {
@@ -597,13 +597,15 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 	// check FS-wide if local rebalance is running
 	aborted, running := t.xactions.isAbortedOrRunningLocalRebalance()
 	if aborted || running {
-		oldFQN, oldSize := t.getFromOtherLocalFS(lom.Bucket, lom.Objname, lom.Bislocal)
+		// FIXME: move this part to lom
+		oldFQN, oldSize := t.getFromOtherLocalFS(lom)
 		if oldFQN != "" {
 			if glog.V(4) {
 				glog.Infof("Restored (local rebalance in-progress?): %s (%s)", oldFQN, cmn.B2S(oldSize, 1))
 			}
 			lom.Fqn = oldFQN
 			lom.Size = oldSize
+			lom.Doesnotexist = false
 			return
 		}
 	}
@@ -624,7 +626,8 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 				inNextTier bool
 			)
 			if inNextTier, errstr, errcode = t.objectInNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname); inNextTier {
-				if props, errstr, errcode = t.getObjectNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname, lom.Fqn); errstr == "" {
+				if props, errstr, errcode =
+					t.getObjectNextTier(lom.Bprops.NextTierURL, lom.Bucket, lom.Objname, lom.Fqn); errstr == "" {
 					lom.RestoredReceived(props)
 					return
 				}
@@ -1080,19 +1083,12 @@ func (t *targetrunner) httpobjpost(w http.ResponseWriter, r *http.Request) {
 
 // HEAD /v1/buckets/bucket-name
 func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
-	var (
-		bucket      string
-		errstr      string
-		bucketprops cmn.SimpleKVs
-		cksumcfg    *cmn.CksumConf
-		errcode     int
-		islocal     bool
-	)
+	var bucketprops cmn.SimpleKVs
 	apitems, err := t.checkRESTItems(w, r, 1, false, cmn.Version, cmn.Buckets)
 	if err != nil {
 		return
 	}
-	bucket = apitems[0]
+	bucket := apitems[0]
 	if !t.validatebckname(w, r, bucket) {
 		return
 	}
@@ -1102,8 +1098,8 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		glog.Infof("%s %s <= %s", r.Method, bucket, pid)
 	}
 	bucketmd := t.bmdowner.get()
-	islocal = bucketmd.IsLocal(bucket)
-	errstr, errcode = t.IsBucketLocal(bucket, &bucketmd.BMD, query, islocal)
+	islocal := bucketmd.IsLocal(bucket)
+	errstr, errcode := t.IsBucketLocal(bucket, &bucketmd.BMD, query, islocal)
 	if errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
@@ -1130,29 +1126,35 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		hdr.Add(k, v)
 	}
 
-	props, _, defined := bucketmd.propsAndChecksum(bucket)
-	// include checksumming settings in the response
-	cksumcfg = &cmn.GCO.Get().Cksum
-	if defined {
+	// include bucket's own config override
+	props, ok := bucketmd.Get(bucket, islocal)
+	if props == nil {
+		return
+	}
+	config := cmn.GCO.Get()
+	cksumcfg := &config.Cksum // FIXME: must be props.CksumConf w/o conditions, here and elsewhere
+	if ok && props.Checksum != cmn.ChecksumInherit {
 		cksumcfg = &props.CksumConf
 	}
 	// transfer bucket props via http header;
-	// note that it is totally legal for Cloud buckets to not have locally cached props
-	if props != nil {
-		hdr.Add(cmn.HeaderNextTierURL, props.NextTierURL)
-		hdr.Add(cmn.HeaderReadPolicy, props.ReadPolicy)
-		hdr.Add(cmn.HeaderWritePolicy, props.WritePolicy)
-		hdr.Add(cmn.HeaderBucketChecksumType, cksumcfg.Checksum)
-		hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
-		hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
-		hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
-		hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LowWM, 10))
-		hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.HighWM, 10))
-		hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.AtimeCacheMax, 10))
-		hdr.Add(cmn.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
-		hdr.Add(cmn.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
-		hdr.Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))
-		hdr.Add(cmn.HeaderBucketCopies, strconv.FormatInt(props.Copies, 10))
+	// (it is totally legal for Cloud buckets to not have locally cached props)
+	hdr.Add(cmn.HeaderNextTierURL, props.NextTierURL)
+	hdr.Add(cmn.HeaderReadPolicy, props.ReadPolicy)
+	hdr.Add(cmn.HeaderWritePolicy, props.WritePolicy)
+	hdr.Add(cmn.HeaderBucketChecksumType, cksumcfg.Checksum)
+	hdr.Add(cmn.HeaderBucketValidateColdGet, strconv.FormatBool(cksumcfg.ValidateColdGet))
+	hdr.Add(cmn.HeaderBucketValidateWarmGet, strconv.FormatBool(cksumcfg.ValidateWarmGet))
+	hdr.Add(cmn.HeaderBucketValidateRange, strconv.FormatBool(cksumcfg.EnableReadRangeChecksum))
+	hdr.Add(cmn.HeaderBucketLRULowWM, strconv.FormatInt(props.LowWM, 10))
+	hdr.Add(cmn.HeaderBucketLRUHighWM, strconv.FormatInt(props.HighWM, 10))
+	hdr.Add(cmn.HeaderBucketAtimeCacheMax, strconv.FormatInt(props.AtimeCacheMax, 10))
+	hdr.Add(cmn.HeaderBucketDontEvictTime, props.DontEvictTimeStr)
+	hdr.Add(cmn.HeaderBucketCapUpdTime, props.CapacityUpdTimeStr)
+	hdr.Add(cmn.HeaderBucketLRUEnabled, strconv.FormatBool(props.LRUEnabled))
+	if props.MirrorEnabled {
+		hdr.Add(cmn.HeaderBucketCopies, strconv.FormatInt(props.MirrorConf.Copies, 10))
+	} else {
+		hdr.Add(cmn.HeaderBucketCopies, "0")
 	}
 }
 
@@ -1363,14 +1365,14 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 	for contentType := range fs.CSM.RegisteredContentTypes {
 		for _, mpathInfo := range availablePaths {
 			// Create directory for new local bucket
-			toDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketTo)
+			toDir := mpathInfo.MakePathBucket(contentType, bucketTo, true /*bucket is local*/)
 			if err := cmn.CreateDir(toDir); err != nil {
 				ch <- fmt.Sprintf("Failed to create dir %s, error: %v", toDir, err)
 				continue
 			}
 
 			wg.Add(1)
-			fromDir := filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucketFrom)
+			fromDir := mpathInfo.MakePathBucket(contentType, bucketFrom, true /*bucket is local*/)
 			go func(fromDir string) {
 				time.Sleep(time.Millisecond * 100) // FIXME: 2-phase for the targets to 1) prep (above) and 2) rebalance
 				ch <- t.renameOne(fromDir, bucketFrom, bucketTo)
@@ -1385,7 +1387,7 @@ func (t *targetrunner) renameLB(bucketFrom, bucketTo string) (errstr string) {
 			return
 		}
 	}
-	removeBuckets("rename", bucketFrom)
+	fs.Mountpaths.CreateDestroyLocalBuckets("rename", false /*false=destroy*/, bucketFrom)
 	return
 }
 
@@ -1400,8 +1402,11 @@ func (t *targetrunner) renameOne(fromdir, bucketFrom, bucketTo string) (errstr s
 
 func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		glog.Errorf("walkf invoked with err: %v", err)
-		return err
+		if errstr := cmn.PathWalkErr(err); errstr != "" {
+			glog.Errorf(errstr)
+			return err
+		}
+		return nil
 	}
 	if osfi.Mode().IsDir() {
 		return nil
@@ -1411,6 +1416,7 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	if !fs.CSM.PermToProcess(fqn) {
 		return nil
 	}
+	// FIXME: ignoring "misplaced" (non-error) and errors that ResolveFQN may return
 	parsedFQN, _, err := cluster.ResolveFQN(fqn, nil, true /* bucket is local */)
 	contentType, bucket, objname := parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname
 	if err == nil {
@@ -1694,14 +1700,8 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 		}
 		for _, mpathInfo := range availablePaths {
 			wg.Add(1)
-			var localDir string
-			if islocal {
-				localDir = filepath.Join(fs.Mountpaths.MakePathLocal(mpathInfo.Path, contentType), bucket)
-			} else {
-				localDir = filepath.Join(fs.Mountpaths.MakePathCloud(mpathInfo.Path, contentType), bucket)
-			}
-
-			go walkMpath(localDir)
+			dir := mpathInfo.MakePathBucket(contentType, bucket, islocal)
+			go walkMpath(dir)
 		}
 	}
 	wg.Wait()
@@ -1979,11 +1979,11 @@ func (ci *allfinfos) processRegularFile(lom *cluster.LOM, osfi os.FileInfo, objS
 
 func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
+		if errstr := cmn.PathWalkErr(err); errstr != "" {
+			glog.Errorf(errstr)
+			return err
 		}
-		glog.Errorf("listwalkf callback invoked with err: %v", err)
-		return err
+		return nil
 	}
 	if ci.fileCount >= ci.limit {
 		return filepath.SkipDir
@@ -1996,9 +1996,12 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		objStatus = cmn.ObjStatusOK
 		lom       = &cluster.LOM{T: ci.t, Fqn: fqn}
 	)
-	errstr := lom.Fill(0)
+	errstr := lom.Fill(cluster.LomFstat)
+	if lom.Doesnotexist {
+		return nil
+	}
 	if ci.needStatus || ci.needAtime {
-		if errstr != "" || lom.Misplaced {
+		if errstr != "" || lom.Misplaced() {
 			glog.Warning(errstr)
 			objStatus = cmn.ObjStatusMoved
 		}
@@ -2051,19 +2054,23 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr st
 		delta := time.Since(started)
 		t.statsif.AddMany(stats.NamedVal64{stats.PutCount, 1}, stats.NamedVal64{stats.PutLatency, int64(delta)})
 		if glog.V(4) {
-			glog.Infof("PUT: %s/%s, %d µs", bucket, objname, int64(delta/time.Microsecond))
+			glog.Infof("PUT: %s, %d µs", lom, int64(delta/time.Microsecond))
 		}
 		// local mirror
-		if lom.Bprops != nil && lom.Bprops.Copies != 0 {
+		if lom.Mirror.MirrorEnabled {
 			if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
-				t.xcopy = t.xactions.renewAddCopies(lom.Bucket, lom.Bislocal, t)
+				t.xcopy = t.xactions.renewPutCopies(lom, t)
 			}
-			err := t.xcopy.Copy(lom)
-			// renew upon xcopy timeout vs xcopy.Copy() race
-			if _, ok := err.(*cmn.ErrXpired); ok {
-				t.xcopy = t.xactions.renewAddCopies(lom.Bucket, lom.Bislocal, t)
-				if err = t.xcopy.Copy(lom); err != nil {
-					glog.Errorf("Unexpected: %v", err)
+			if t.xcopy != nil {
+				err := t.xcopy.Copy(lom)
+				// renew upon race between xcopy-timeout and xcopy.Copy()
+				if _, ok := err.(*cmn.ErrXpired); ok {
+					t.xcopy = t.xactions.renewPutCopies(lom, t)
+					if t.xcopy != nil {
+						if err = t.xcopy.Copy(lom); err != nil {
+							glog.Errorf("Unexpected: %v", err)
+						}
+					}
 				}
 			}
 		}
@@ -2131,6 +2138,12 @@ func (t *targetrunner) doPutCommit(ct context.Context, lom *cluster.LOM, putfqn 
 
 	if lom.Bislocal && versioningConfigured(true) {
 		if lom.Version, errstr = lom.IncObjectVersion(); errstr != "" {
+			t.rtnamemap.Unlock(lom.Uname, true)
+			return
+		}
+	}
+	if lom.HasCopy() {
+		if errstr = lom.DelCopy(); errstr != "" {
 			t.rtnamemap.Unlock(lom.Uname, true)
 			return
 		}
@@ -2291,7 +2304,7 @@ func (t *targetrunner) renamefile(w http.ResponseWriter, r *http.Request, msg cm
 }
 
 func (t *targetrunner) replicate(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg) {
-	t.invalmsghdlr(w, r, "not supported yet") // NOTE: daemon.go, proxy.go, config.sh, and tests/replication
+	t.invalmsghdlr(w, r, cmn.NotSupported) // NOTE: daemon.go, proxy.go, config.sh, and tests/replication
 }
 
 func (t *targetrunner) renameObject(contentType, bucketFrom, objnameFrom, bucketTo, objnameTo string) (errstr string) {
@@ -3138,23 +3151,26 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	t.bmdowner.put(newbucketmd)
 	t.bmdowner.Unlock()
 
-	// Delete buckets which don't exist in (new)bucketmd
+	// Delete buckets that do not exist in the new bucket metadata
 	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
 	for bucket := range bucketmd.LBmap {
 		if _, ok := newbucketmd.LBmap[bucket]; !ok {
 			bucketsToDelete = append(bucketsToDelete, bucket)
+			// TODO: separate API to stop ActPut and ActErase xactions and/or disable mirroring
+			// (needed in part for cloud buckets)
+			t.xactions.abortBucketSpecific(bucket)
 		}
 	}
-	removeBuckets("receive-bucketmd", bucketsToDelete...)
+	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)
 
-	// Create buckets which don't exist in (old)bucketmd
+	// Create buckets that have been added
 	bucketsToCreate := make([]string, 0, len(newbucketmd.LBmap))
 	for bucket := range newbucketmd.LBmap {
 		if _, ok := bucketmd.LBmap[bucket]; !ok {
 			bucketsToCreate = append(bucketsToCreate, bucket)
 		}
 	}
-	createBuckets("receive-bucketmd", bucketsToCreate...)
+	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", true /*create*/, bucketsToCreate...)
 
 	return
 }
@@ -3361,69 +3377,14 @@ func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists b
 	return t.fsprg.disableMountpath(mountpath)
 }
 
-func (t *targetrunner) getFromOtherLocalFS(bucket, object string, islocal bool) (fqn string, size int64) {
+func (t *targetrunner) getFromOtherLocalFS(lom *cluster.LOM) (fqn string, size int64) {
 	availablePaths, _ := fs.Mountpaths.Get()
-	fn := fs.Mountpaths.MakePathCloud
-	if islocal {
-		fn = fs.Mountpaths.MakePathLocal
-	}
 	for _, mpathInfo := range availablePaths {
-		dir := fn(mpathInfo.Path, fs.ObjectType)
-
-		filePath := filepath.Join(dir, bucket, object)
+		filePath := mpathInfo.MakePathBucketObject(fs.ObjectType, lom.Bucket, lom.Objname, lom.Bislocal)
 		stat, err := os.Stat(filePath)
 		if err == nil {
 			return filePath, stat.Size()
 		}
 	}
-
-	return "", 0
-}
-
-func removeBuckets(op string, buckets ...string) {
-	availablePaths, _ := fs.Mountpaths.Get()
-	contentTypes := fs.CSM.RegisteredContentTypes
-
-	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mi *fs.MountpathInfo) {
-			for _, bucket := range buckets {
-				for contentType := range contentTypes {
-					localBucketFQN := filepath.Join(fs.Mountpaths.MakePathLocal(mi.Path, contentType), bucket)
-					glog.Warningf("%s: FastRemoveDir %q for content-type %q, bucket %q", op, localBucketFQN, contentType, bucket)
-					if err := mi.FastRemoveDir(localBucketFQN); err != nil {
-						// TODO: in case of error, we need to abort and rollback whole operation
-						glog.Errorf("Failed to destroy local bucket dir %q, err: %v", localBucketFQN, err)
-					}
-				}
-			}
-			wg.Done()
-		}(mpathInfo)
-	}
-	wg.Wait()
-}
-
-func createBuckets(op string, buckets ...string) {
-	availablePaths, _ := fs.Mountpaths.Get()
-	contentTypes := fs.CSM.RegisteredContentTypes
-
-	wg := &sync.WaitGroup{}
-	for _, mpathInfo := range availablePaths {
-		wg.Add(1)
-		go func(mi *fs.MountpathInfo) {
-			for _, bucket := range buckets {
-				for contentType := range contentTypes {
-					localBucketFQN := filepath.Join(fs.Mountpaths.MakePathLocal(mi.Path, contentType), bucket)
-					glog.Warningf("%s: CreateDir %q for content-type %q, bucket %q", op, localBucketFQN, contentType, bucket)
-					if err := cmn.CreateDir(localBucketFQN); err != nil {
-						// TODO: in case of error, we need to abort and rollback whole operation
-						glog.Errorf("Failed to create local bucket dir %q, err: %v", localBucketFQN, err)
-					}
-				}
-			}
-			wg.Done()
-		}(mpathInfo)
-	}
-	wg.Wait()
+	return
 }

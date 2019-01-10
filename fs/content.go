@@ -122,7 +122,7 @@ func (f *ContentSpecMgr) GenContentParsedFQN(parsedFQN FQNparsed, contentType, p
 		cmn.Assert(false, fmt.Sprintf("Invalid content type '%s'", contentType))
 	}
 	fqn = f.FQN(
-		parsedFQN.MpathInfo.OrigPath,
+		parsedFQN.MpathInfo,
 		contentType,
 		parsedFQN.IsLocal,
 		parsedFQN.Bucket,
@@ -156,17 +156,11 @@ func (f *ContentSpecMgr) FileSpec(fqn string) (resolver ContentResolver, info *C
 	return
 }
 
-func (f *ContentSpecMgr) FQN(mpath string, contentType string, isLocal bool, bucket, objName string) (fqn string) {
+func (f *ContentSpecMgr) FQN(mi *MountpathInfo, contentType string, isLocal bool, bucket, objName string) (fqn string) {
 	if _, ok := f.RegisteredContentTypes[contentType]; !ok {
 		cmn.Assert(false, fmt.Sprintf("contentType %s was not registered", contentType))
-		return
 	}
-	if isLocal {
-		fqn = filepath.Join(Mountpaths.MakePathLocal(mpath, contentType), bucket, objName)
-	} else {
-		fqn = filepath.Join(Mountpaths.MakePathCloud(mpath, contentType), bucket, objName)
-	}
-	return
+	return mi.MakePathBucketObject(contentType, bucket, objName, isLocal)
 }
 
 func (f *ContentSpecMgr) PermToEvict(fqn string) (ok, isOld bool) {

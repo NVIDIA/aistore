@@ -298,24 +298,66 @@ func (xs *xactions) renewRechecksum(bucket string) *xactRechecksum {
 	return xrcksum
 }
 
-func (xs *xactions) renewAddCopies(bucket string, bislocal bool, tif cluster.Target) (xcopy *mirror.XactCopy) {
-	kind := path.Join(cmn.ActAddCopies, bucket)
+func (xs *xactions) renewPutCopies(lom *cluster.LOM, tif cluster.Target) (xcopy *mirror.XactCopy) {
+	kindput := path.Join(cmn.ActPutCopies, lom.Bucket)
 	xs.Lock()
-	xx := xs.findU(kind)
+	xx := xs.findU(kindput)
 	if xx != nil {
 		xcopy = xx.(*mirror.XactCopy)
 		xcopy.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 		xs.Unlock()
 		return
 	}
+	kinderase := path.Join(cmn.ActEraseCopies, lom.Bucket)
+	xx = xs.findU(kinderase)
+	if xx != nil {
+		xerase := xx.(*mirror.XactErase)
+		if !xerase.Finished() {
+			glog.Errorf("cannot start '%s' xaction when %s is running", cmn.ActPutCopies, xx)
+			xs.Unlock()
+			return nil
+		}
+	}
+	// construct new
 	id := xs.uniqueid()
-	base := cmn.NewXactDemandBase(id, kind)
-	slab := gmem2.SelectSlab2(cmn.MiB)
-	xcopy = &mirror.XactCopy{XactDemandBase: *base, Bucket: bucket, Slab: slab, T: tif, Bislocal: bislocal}
+	base := cmn.NewXactDemandBase(id, kindput)
+	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
+	xcopy = &mirror.XactCopy{XactDemandBase: *base, Bucket: lom.Bucket, Slab: slab, Mirror: *lom.Mirror, T: tif, Bislocal: lom.Bislocal}
+	xcopy.Init()
 	xs.add(xcopy)
 	go xcopy.Run()
 	xs.Unlock()
 	return
+}
+
+// PutCopies and EraseCopies as those are currently the only bucket-specific xaction we may have
+func (xs *xactions) abortBucketSpecific(bucket string) {
+	xs.Lock()
+	defer xs.Unlock()
+	var (
+		bucketSpecific = []string{cmn.ActPutCopies, cmn.ActEraseCopies}
+		wg             = &sync.WaitGroup{}
+	)
+	for _, act := range bucketSpecific {
+		k := path.Join(act, bucket)
+		wg.Add(1)
+		go func(kind string, wg *sync.WaitGroup) {
+			defer wg.Done()
+			xx := xs.findU(kind)
+			if xx == nil {
+				return
+			}
+			xx.Abort()
+			for i := 0; i < 5; i++ {
+				time.Sleep(time.Millisecond * 500)
+				if xx.Finished() {
+					return
+				}
+			}
+			glog.Errorf("%s: timed-out waiting for termination", xx)
+		}(k, wg)
+		wg.Wait()
+	}
 }
 
 func (xs *xactions) abortAll() (sleep bool) {

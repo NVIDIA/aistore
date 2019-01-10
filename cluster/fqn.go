@@ -11,15 +11,6 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 )
 
-// error types
-type (
-	ErrFqnMisplaced struct {
-		errstr string
-	}
-)
-
-func (e *ErrFqnMisplaced) Error() string { return e.errstr }
-
 //
 // resolve and validate fqn
 //
@@ -29,14 +20,10 @@ func ResolveFQN(fqn string, bowner Bowner, islocal ...bool) (parsedFQN fs.FQNpar
 	if err != nil {
 		return
 	}
+	// NOTE: "misplaced" (when hrwfqn != fqn) is to be checked separately, via lom.Misplaced()
 	hrwfqn, errstr = FQN(parsedFQN.ContentType, parsedFQN.Bucket, parsedFQN.Objname, parsedFQN.IsLocal)
 	if errstr != "" {
 		err = errors.New(errstr)
-		return
-	}
-	if hrwfqn != fqn {
-		errstr = fmt.Sprintf("%s (%s/%s) appears to be locally misplaced: hrwfqn %s", fqn, parsedFQN.Bucket, parsedFQN.Objname, hrwfqn)
-		err = &ErrFqnMisplaced{errstr}
 		return
 	}
 	var bislocal bool
@@ -53,10 +40,9 @@ func ResolveFQN(fqn string, bowner Bowner, islocal ...bool) (parsedFQN fs.FQNpar
 }
 
 func FQN(contentType, bucket, objname string, isLocal bool) (fqn, errstr string) {
-	var mpath string
-	if mpath, errstr = hrwMpath(bucket, objname); errstr != "" {
-		return
+	var mpathInfo *fs.MountpathInfo
+	if mpathInfo, errstr = hrwMpath(bucket, objname); errstr == "" {
+		fqn = fs.CSM.FQN(mpathInfo, contentType, isLocal, bucket, objname)
 	}
-	fqn = fs.CSM.FQN(mpath, contentType, isLocal, bucket, objname)
 	return
 }

@@ -47,7 +47,10 @@ var toBiBytes = map[string]int64{
 	"TIB": TiB,
 }
 
-const DoesNotExist = "does not exist"
+const (
+	DoesNotExist = "does not exist"
+	NotSupported = "not supported yet"
+)
 
 type (
 	StringSet map[string]struct{}
@@ -275,6 +278,13 @@ func CopyFile(src, dst string, buf []byte) (err error) {
 	writer.Close()
 	reader.Close()
 	return
+}
+
+func PathWalkErr(err error) string {
+	if os.IsNotExist(err) {
+		return ""
+	}
+	return fmt.Sprintf("filepath-walk invoked with err: %v", err)
 }
 
 // ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes

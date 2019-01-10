@@ -26,22 +26,24 @@ import (
 // contextual LRU "jogger" traverses a given (cloud/ or local/) subdirectory to
 // evict or delete selected objects and workfiles
 
-func (lctx *lructx) jog(wg *sync.WaitGroup) {
+func (lctx *lructx) jog(wg *sync.WaitGroup, joggers map[string]*lructx, errCh chan struct{}) {
 	defer wg.Done()
-	now := time.Now()
-	lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
-
-	lctx.heap = &fileInfoMinHeap{}
-	heap.Init(lctx.heap)
 	if err := lctx.evictSize(); err != nil {
 		return
 	}
 	if lctx.totsize < minEvictThresh {
-		glog.Infof("%s: below threshold, nothing to do", lctx.bckTypeDir)
+		glog.Infof("%s: below threshold, nothing to do", lctx.mpathInfo)
 		return
 	}
-	glog.Infof("%s: evicting %s", lctx.bckTypeDir, cmn.B2S(lctx.totsize, 2))
+	lctx.joggers = joggers
+	now := time.Now()
 
+	lctx.bckTypeDir = lctx.mpathInfo.MakePath(lctx.contentType, lctx.bislocal)
+	lctx.dontevictime = now.Add(-lctx.config.LRU.DontEvictTime)
+	lctx.heap = &fileInfoMinHeap{}
+	heap.Init(lctx.heap)
+	glog.Infof("%s: evicting %s", lctx.mpathInfo, cmn.B2S(lctx.totsize, 2))
+	// phase 1: collect
 	if err := filepath.Walk(lctx.bckTypeDir, lctx.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -51,16 +53,22 @@ func (lctx *lructx) jog(wg *sync.WaitGroup) {
 		}
 		return
 	}
+	// phase 2: evict
 	if err := lctx.evict(); err != nil {
-		glog.Errorf("%s: failed to evict, err: %v", lctx.bckTypeDir, err)
+		glog.Errorf("%s: err: %v", lctx.bckTypeDir, err)
+	}
+	if lctx.aborted {
+		errCh <- struct{}{}
 	}
 }
 
 func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
-	var h = lctx.heap
 	if err != nil {
-		glog.Errorf("invoked with err: %v", err)
-		return err
+		if errstr := cmn.PathWalkErr(err); errstr != "" {
+			glog.Errorf(errstr)
+			return err
+		}
+		return nil
 	}
 	if osfi.Mode().IsDir() {
 		return nil
@@ -68,35 +76,41 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	if err = lctx.yieldTerm(); err != nil {
 		return err
 	}
-	lom := &cluster.LOM{T: lctx.ini.T, Fqn: fqn}
+	var (
+		h   = lctx.heap
+		lom = &cluster.LOM{T: lctx.ini.T, Fqn: fqn}
+	)
 	if errstr := lom.Fill(cluster.LomFstat|cluster.LomAtime, lctx.config); errstr != "" || lom.Doesnotexist {
 		if glog.V(4) {
 			glog.Infof("Warning: %s", errstr)
 		}
 		return nil
 	}
+	// workfiles: evict old or do nothing
 	if lctx.contentType == fs.WorkfileType {
 		_, base := filepath.Split(fqn)
 		_, old, ok := lctx.contentResolver.ParseUniqueFQN(base)
 		if ok && old {
 			fi := &fileInfo{fqn: fqn, lom: lom, old: old}
-			glog.Infof("%q is old", fqn)
+			if glog.V(4) {
+				glog.Infof("old-work: %s, fqn=%s", lom, fqn)
+			}
 			lctx.oldwork = append(lctx.oldwork, fi) // TODO: upper-limit to avoid OOM; see Push as well
 		}
 		return nil
 	}
-
+	// objects
 	cmn.Assert(lctx.contentType == fs.ObjectType) // see also lrumain.go
 	if lom.Atime.After(lctx.dontevictime) {
 		if glog.V(4) {
-			glog.Infof("%q: not evicting (usetime %v, dontevictime %v)", fqn, lom.Atime, lctx.dontevictime)
+			glog.Infof("dont-evict: %s(%v > %v)", lom, lom.Atime, lctx.dontevictime)
 		}
 		return nil
 	}
 
 	// includes post-rebalancing cleanup
-	if lom.Misplaced {
-		glog.Infof("%q: is misplaced, err: %v", fqn, err)
+	if lom.Misplaced() {
+		glog.Infof("misplaced: %s, fqn=%s", lom, fqn)
 		fi := &fileInfo{fqn: fqn, lom: lom}
 		lctx.oldwork = append(lctx.oldwork, fi)
 		return nil
@@ -107,12 +121,12 @@ func (lctx *lructx) walk(fqn string, osfi os.FileInfo, err error) error {
 	// the file is more recent then the the heap's newest
 	// full optimization (TODO) entails compacting the heap when its cursize >> totsize
 	if lctx.cursize >= lctx.totsize && lom.Atime.After(lctx.newest) {
-		if glog.V(4) {
-			glog.Infof("%q: use-time-after (usetime=%v, newest=%v)", fqn, lom.Atime, lctx.newest)
-		}
 		return nil
 	}
 	// push and update the context
+	if glog.V(4) {
+		glog.Infof("old-obj: %s, fqn=%s", lom, fqn)
+	}
 	fi := &fileInfo{fqn: fqn, lom: lom}
 	heap.Push(h, fi)
 	lctx.cursize += fi.lom.Size
@@ -133,7 +147,9 @@ func (lctx *lructx) evict() (err error) {
 			continue
 		}
 		if err = os.Remove(fi.fqn); err != nil {
-			glog.Warningf("Failed to remove %q", fi.fqn)
+			if !os.IsNotExist(err) {
+				glog.Warningf("Failed to remove old %q: %v", fi.fqn, err)
+			}
 			continue
 		}
 		if capCheck, err = lctx.postRemove(capCheck, fi); err != nil {
@@ -177,7 +193,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 				ratioUtilization := cmn.Ratio(lctx.config.Xaction.DiskUtilHighWM, lctx.config.Xaction.DiskUtilLowWM, int64(curr.Max))
 				if ratioUtilization > ratioCapacity {
 					lctx.throttle = true
-					time.Sleep(throttleTimeOut)
+					time.Sleep(cmn.ThrottleSleepOut)
 				}
 			}
 		}
@@ -186,21 +202,22 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 }
 
 func (lctx *lructx) evictObj(fi *fileInfo) (ok bool) {
-	if fi.lom.Misplaced {
-		if err := os.Remove(fi.lom.Fqn); err != nil {
-			glog.Errorln(err)
-			return
-		}
-		glog.Infof("Removed misplaced object %s (%s)", fi.lom, fi.lom.Fqn)
-		return
-	}
 	lctx.ini.Namelocker.Lock(fi.lom.Uname, true)
-
-	if err := os.Remove(fi.lom.Fqn); err != nil {
-		glog.Errorf("Failed to evict %s (%s), err: %v", fi.lom, fi.lom.Fqn, err)
-	} else {
+	// local replica must be go with the object; the replica, however, is
+	// located in a different local FS and belongs, therefore, to a different LRU jogger
+	// (hence, precise size accounting TODO)
+	if fi.lom.HasCopy() {
+		if errstr := fi.lom.DelCopy(); errstr != "" {
+			glog.Warningf("remove(%s=>%s): %s", fi.lom, fi.lom.CopyFQN, errstr)
+		}
+	}
+	if err := os.Remove(fi.lom.Fqn); err == nil {
+		glog.Infof("Evicted %s", fi.lom)
 		ok = true
-		glog.Infof("Evicted %s (%s)", fi.lom, fi.lom.Fqn)
+	} else if os.IsNotExist(err) {
+		ok = true
+	} else {
+		glog.Errorf("Failed to evict %s, err: %v", fi.lom, err)
 	}
 	lctx.ini.Namelocker.Unlock(fi.lom.Uname, true)
 	return
@@ -215,8 +232,7 @@ func (lctx *lructx) evictSize() (err error) {
 	used := blocks - bavail
 	usedpct := used * 100 / blocks
 	if glog.V(4) {
-		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%",
-			lctx.bckTypeDir, blocks, bavail, usedpct, hwm, lwm)
+		glog.Infof("%s: Blocks %d Bavail %d used %d%% hwm %d%% lwm %d%%", lctx.mpathInfo, blocks, bavail, usedpct, hwm, lwm)
 	}
 	if usedpct < uint64(hwm) {
 		return
@@ -230,10 +246,15 @@ func (lctx *lructx) yieldTerm() error {
 	xlru := lctx.ini.Xlru
 	select {
 	case <-xlru.ChanAbort():
+		stopAll(lctx.joggers, lctx.mpathInfo.Path)
+		lctx.aborted = true
+		return fmt.Errorf("%s aborted, exiting", xlru)
+	case <-lctx.stopCh:
+		lctx.aborted = true
 		return fmt.Errorf("%s aborted, exiting", xlru)
 	default:
 		if lctx.throttle {
-			time.Sleep(throttleTimeIn)
+			time.Sleep(cmn.ThrottleSleepIn)
 		} else {
 			runtime.Gosched()
 		}

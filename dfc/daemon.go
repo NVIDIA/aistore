@@ -107,7 +107,7 @@ func (g *rungroup) run() error {
 	for i, r := range g.runarr {
 		go func(i int, r cmn.Runner) {
 			err := r.Run()
-			glog.Warningf("Runner [%s] threw error [%v].", r.Getname(), err)
+			glog.Warningf("Runner [%s] exited with err [%v].", r.Getname(), err)
 			g.errCh <- err
 		}(i, r)
 	}

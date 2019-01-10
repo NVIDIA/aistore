@@ -354,7 +354,7 @@ func (j *jogger) stop() {
 	close(j.stopCh)
 }
 
-// num2flush estimates the number of timestamps that must be flushed
+// [throttle] num2flush estimates the number of timestamps that must be flushed
 func (j *jogger) num2flush() (n int) {
 	config := cmn.GCO.Get()
 	maxlen := cmn.MaxI64(config.LRU.AtimeCacheMax, 1)

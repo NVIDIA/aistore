@@ -722,6 +722,7 @@ func (h *httprunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 }
 
+// FIXME: redundant vs. validateBucketProps; flat naming (#235)
 func (h *httprunner) setconfig(name, value string) (errstr string) {
 	config := cmn.GCO.BeginUpdate()
 	defer cmn.GCO.CommitUpdate(config)
@@ -878,6 +879,26 @@ func (h *httprunner) setconfig(name, value string) (errstr string) {
 			errstr = fmt.Sprintf("Failed to parse fschecker_enabled, err: %v", err)
 		} else {
 			config.FSHC.Enabled = v
+		}
+	case "mirror_enabled":
+		if v, err := strconv.ParseBool(value); err != nil {
+			errstr = fmt.Sprintf("Failed to parse mirror_enabled, err: %v", err)
+		} else {
+			config.Mirror.MirrorEnabled = v
+		}
+	case "mirror_burst_buffer":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf("Failed to convert mirror_burst_buffer, err: %v", err)
+		} else {
+			config.Mirror.MirrorBurst = v
+		}
+	case "mirror_util_thresh":
+		if v, err := atoi(value); err != nil {
+			errstr = fmt.Sprintf("Failed to convert mirror_util_thresh, err: %v", err)
+		} else if v <= 0 || v > 100 {
+			errstr = fmt.Sprintf("Invalid mirror_util_thresh=%d", v)
+		} else {
+			config.Mirror.MirrorUtilThresh = v
 		}
 	default:
 		errstr = fmt.Sprintf("Cannot set config var %s - is readonly or unsupported", name)

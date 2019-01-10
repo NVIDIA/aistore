@@ -40,6 +40,11 @@ const (
 	KeepaliveAverageType   = "average"
 )
 
+const (
+	ThrottleSleepIn  = time.Millisecond * 10
+	ThrottleSleepOut = time.Second
+)
+
 //
 // CONFIG PROVIDER
 //
@@ -153,6 +158,7 @@ func (gco *globalConfigOwner) Subscribe(cl ConfigListener) {
 type Config struct {
 	Confdir          string          `json:"confdir"`
 	CloudProvider    string          `json:"cloudprovider"`
+	Mirror           MirrorConf      `json:"mirror"`
 	Readahead        RahConf         `json:"readahead"`
 	Log              LogConf         `json:"log"`
 	Periodic         PeriodConf      `json:"periodic"`
@@ -170,6 +176,14 @@ type Config struct {
 	FSHC             FSHCConf        `json:"fshc"`
 	Auth             AuthConf        `json:"auth"`
 	KeepaliveTracker KeepaliveConf   `json:"keepalivetracker"`
+}
+
+type MirrorConf struct {
+	Copies             int64 `json:"copies"`               // num local copies
+	MirrorBurst        int64 `json:"mirror_burst_buffer"`  // channel buffer size
+	MirrorUtilThresh   int64 `json:"mirror_util_thresh"`   // utilizations are considered equivalent when below this threshold
+	MirrorOptimizeRead bool  `json:"mirror_optimize_read"` // optimization objective: read load balancing (true) | data redundancy (false)
+	MirrorEnabled      bool  `json:"mirror_enabled"`       // will only generate local copies when set to true
 }
 
 type RahConf struct {
@@ -443,35 +457,43 @@ func ValidateVersion(version string) error {
 
 func validateConfig(config *Config) (err error) {
 	const badfmt = "Bad %q format, err: %v"
+	var (
+		periodic  = &config.Periodic
+		lru       = &config.LRU
+		mirror    = &config.Mirror
+		timeout   = &config.Timeout
+		keepalive = &config.KeepaliveTracker
+		net       = &config.Net
+	)
 	// durations
-	if config.Periodic.StatsTime, err = time.ParseDuration(config.Periodic.StatsTimeStr); err != nil {
-		return fmt.Errorf(badfmt, config.Periodic.StatsTimeStr, err)
+	if periodic.StatsTime, err = time.ParseDuration(periodic.StatsTimeStr); err != nil {
+		return fmt.Errorf(badfmt, periodic.StatsTimeStr, err)
 	}
-	if config.Periodic.IostatTime, err = time.ParseDuration(config.Periodic.IostatTimeStr); err != nil {
-		return fmt.Errorf(badfmt, config.Periodic.IostatTimeStr, err)
+	if periodic.IostatTime, err = time.ParseDuration(periodic.IostatTimeStr); err != nil {
+		return fmt.Errorf(badfmt, periodic.IostatTimeStr, err)
 	}
-	if config.Periodic.RetrySyncTime, err = time.ParseDuration(config.Periodic.RetrySyncTimeStr); err != nil {
-		return fmt.Errorf(badfmt, config.Periodic.RetrySyncTimeStr, err)
+	if periodic.RetrySyncTime, err = time.ParseDuration(periodic.RetrySyncTimeStr); err != nil {
+		return fmt.Errorf(badfmt, periodic.RetrySyncTimeStr, err)
 	}
-	if config.Timeout.Default, err = time.ParseDuration(config.Timeout.DefaultStr); err != nil {
-		return fmt.Errorf(badfmt, config.Timeout.DefaultStr, err)
+	if lru.DontEvictTime, err = time.ParseDuration(lru.DontEvictTimeStr); err != nil {
+		return fmt.Errorf(badfmt, lru.DontEvictTimeStr, err)
 	}
-	if config.Timeout.DefaultLong, err = time.ParseDuration(config.Timeout.DefaultLongStr); err != nil {
-		return fmt.Errorf(badfmt, config.Timeout.DefaultLongStr, err)
-	}
-	if config.LRU.DontEvictTime, err = time.ParseDuration(config.LRU.DontEvictTimeStr); err != nil {
-		return fmt.Errorf(badfmt, config.LRU.DontEvictTimeStr, err)
-	}
-	if config.LRU.CapacityUpdTime, err = time.ParseDuration(config.LRU.CapacityUpdTimeStr); err != nil {
-		return fmt.Errorf(badfmt, config.LRU.CapacityUpdTimeStr, err)
+	if lru.CapacityUpdTime, err = time.ParseDuration(lru.CapacityUpdTimeStr); err != nil {
+		return fmt.Errorf(badfmt, lru.CapacityUpdTimeStr, err)
 	}
 	if config.Rebalance.DestRetryTime, err = time.ParseDuration(config.Rebalance.DestRetryTimeStr); err != nil {
 		return fmt.Errorf(badfmt, config.Rebalance.DestRetryTimeStr, err)
 	}
 
-	hwm, lwm := config.LRU.HighWM, config.LRU.LowWM
+	hwm, lwm := lru.HighWM, lru.LowWM
 	if hwm <= 0 || lwm <= 0 || hwm < lwm || lwm > 100 || hwm > 100 {
-		return fmt.Errorf("Invalid LRU configuration %+v", config.LRU)
+		return fmt.Errorf("Invalid LRU configuration %+v", lru)
+	}
+	if mirror.MirrorUtilThresh < 0 || mirror.MirrorUtilThresh > 100 || mirror.MirrorBurst < 0 {
+		return fmt.Errorf("Invalid mirror configuration %+v", mirror)
+	}
+	if mirror.MirrorEnabled && mirror.Copies != 2 {
+		return fmt.Errorf("Invalid mirror configuration %+v", mirror)
 	}
 
 	diskUtilHWM, diskUtilLWM := config.Xaction.DiskUtilHighWM, config.Xaction.DiskUtilLowWM
@@ -485,87 +507,91 @@ func validateConfig(config *Config) (err error) {
 	if err := ValidateVersion(config.Ver.Versioning); err != nil {
 		return err
 	}
-	if config.Timeout.MaxKeepalive, err = time.ParseDuration(config.Timeout.MaxKeepaliveStr); err != nil {
-		return fmt.Errorf("Bad Timeout max_keepalive format %s, err %v", config.Timeout.MaxKeepaliveStr, err)
+	if timeout.Default, err = time.ParseDuration(timeout.DefaultStr); err != nil {
+		return fmt.Errorf(badfmt, timeout.DefaultStr, err)
 	}
-	if config.Timeout.ProxyPing, err = time.ParseDuration(config.Timeout.ProxyPingStr); err != nil {
-		return fmt.Errorf("Bad Timeout proxy_ping format %s, err %v", config.Timeout.ProxyPingStr, err)
+	if timeout.DefaultLong, err = time.ParseDuration(timeout.DefaultLongStr); err != nil {
+		return fmt.Errorf(badfmt, timeout.DefaultLongStr, err)
 	}
-	if config.Timeout.CplaneOperation, err = time.ParseDuration(config.Timeout.CplaneOperationStr); err != nil {
-		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", config.Timeout.CplaneOperationStr, err)
+	if timeout.MaxKeepalive, err = time.ParseDuration(timeout.MaxKeepaliveStr); err != nil {
+		return fmt.Errorf("Bad Timeout max_keepalive format %s, err %v", timeout.MaxKeepaliveStr, err)
 	}
-	if config.Timeout.SendFile, err = time.ParseDuration(config.Timeout.SendFileStr); err != nil {
-		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", config.Timeout.SendFileStr, err)
+	if timeout.ProxyPing, err = time.ParseDuration(timeout.ProxyPingStr); err != nil {
+		return fmt.Errorf("Bad Timeout proxy_ping format %s, err %v", timeout.ProxyPingStr, err)
 	}
-	if config.Timeout.Startup, err = time.ParseDuration(config.Timeout.StartupStr); err != nil {
-		return fmt.Errorf("Bad Proxy startup_time format %s, err %v", config.Timeout.StartupStr, err)
+	if timeout.CplaneOperation, err = time.ParseDuration(timeout.CplaneOperationStr); err != nil {
+		return fmt.Errorf("Bad Timeout vote_request format %s, err %v", timeout.CplaneOperationStr, err)
 	}
-
-	config.KeepaliveTracker.Proxy.Interval, err = time.ParseDuration(config.KeepaliveTracker.Proxy.IntervalStr)
+	if timeout.SendFile, err = time.ParseDuration(timeout.SendFileStr); err != nil {
+		return fmt.Errorf("Bad Timeout send_file_time format %s, err %v", timeout.SendFileStr, err)
+	}
+	if timeout.Startup, err = time.ParseDuration(timeout.StartupStr); err != nil {
+		return fmt.Errorf("Bad Proxy startup_time format %s, err %v", timeout.StartupStr, err)
+	}
+	keepalive.Proxy.Interval, err = time.ParseDuration(keepalive.Proxy.IntervalStr)
 	if err != nil {
-		return fmt.Errorf("bad proxy keep alive interval %s", config.KeepaliveTracker.Proxy.IntervalStr)
+		return fmt.Errorf("bad proxy keep alive interval %s", keepalive.Proxy.IntervalStr)
 	}
 
-	config.KeepaliveTracker.Target.Interval, err = time.ParseDuration(config.KeepaliveTracker.Target.IntervalStr)
+	keepalive.Target.Interval, err = time.ParseDuration(keepalive.Target.IntervalStr)
 	if err != nil {
-		return fmt.Errorf("bad target keep alive interval %s", config.KeepaliveTracker.Target.IntervalStr)
+		return fmt.Errorf("bad target keep alive interval %s", keepalive.Target.IntervalStr)
 	}
 
-	if !validKeepaliveType(config.KeepaliveTracker.Proxy.Name) {
-		return fmt.Errorf("bad proxy keepalive tracker type %s", config.KeepaliveTracker.Proxy.Name)
+	if !validKeepaliveType(keepalive.Proxy.Name) {
+		return fmt.Errorf("bad proxy keepalive tracker type %s", keepalive.Proxy.Name)
 	}
 
-	if !validKeepaliveType(config.KeepaliveTracker.Target.Name) {
-		return fmt.Errorf("bad target keepalive tracker type %s", config.KeepaliveTracker.Target.Name)
+	if !validKeepaliveType(keepalive.Target.Name) {
+		return fmt.Errorf("bad target keepalive tracker type %s", keepalive.Target.Name)
 	}
 
 	// NETWORK
 
 	// Parse ports
-	if config.Net.L4.Port, err = ParsePort(config.Net.L4.PortStr); err != nil {
+	if net.L4.Port, err = ParsePort(net.L4.PortStr); err != nil {
 		return fmt.Errorf("Bad public port specified: %v", err)
 	}
 
-	config.Net.L4.PortIntraControl = 0
-	if config.Net.L4.PortIntraControlStr != "" {
-		if config.Net.L4.PortIntraControl, err = ParsePort(config.Net.L4.PortIntraControlStr); err != nil {
+	net.L4.PortIntraControl = 0
+	if net.L4.PortIntraControlStr != "" {
+		if net.L4.PortIntraControl, err = ParsePort(net.L4.PortIntraControlStr); err != nil {
 			return fmt.Errorf("Bad internal port specified: %v", err)
 		}
 	}
-	config.Net.L4.PortIntraData = 0
-	if config.Net.L4.PortIntraDataStr != "" {
-		if config.Net.L4.PortIntraData, err = ParsePort(config.Net.L4.PortIntraDataStr); err != nil {
+	net.L4.PortIntraData = 0
+	if net.L4.PortIntraDataStr != "" {
+		if net.L4.PortIntraData, err = ParsePort(net.L4.PortIntraDataStr); err != nil {
 			return fmt.Errorf("Bad replication port specified: %v", err)
 		}
 	}
 
-	config.Net.IPv4 = strings.Replace(config.Net.IPv4, " ", "", -1)
-	config.Net.IPv4IntraControl = strings.Replace(config.Net.IPv4IntraControl, " ", "", -1)
-	config.Net.IPv4IntraData = strings.Replace(config.Net.IPv4IntraData, " ", "", -1)
+	net.IPv4 = strings.Replace(net.IPv4, " ", "", -1)
+	net.IPv4IntraControl = strings.Replace(net.IPv4IntraControl, " ", "", -1)
+	net.IPv4IntraData = strings.Replace(net.IPv4IntraData, " ", "", -1)
 
-	if overlap, addr := ipv4ListsOverlap(config.Net.IPv4, config.Net.IPv4IntraControl); overlap {
+	if overlap, addr := ipv4ListsOverlap(net.IPv4, net.IPv4IntraControl); overlap {
 		return fmt.Errorf(
 			"Public and internal addresses overlap: %s (public: %s; internal: %s)",
-			addr, config.Net.IPv4, config.Net.IPv4IntraControl,
+			addr, net.IPv4, net.IPv4IntraControl,
 		)
 	}
-	if overlap, addr := ipv4ListsOverlap(config.Net.IPv4, config.Net.IPv4IntraData); overlap {
+	if overlap, addr := ipv4ListsOverlap(net.IPv4, net.IPv4IntraData); overlap {
 		return fmt.Errorf(
 			"Public and replication addresses overlap: %s (public: %s; replication: %s)",
-			addr, config.Net.IPv4, config.Net.IPv4IntraData,
+			addr, net.IPv4, net.IPv4IntraData,
 		)
 	}
-	if overlap, addr := ipv4ListsOverlap(config.Net.IPv4IntraControl, config.Net.IPv4IntraData); overlap {
+	if overlap, addr := ipv4ListsOverlap(net.IPv4IntraControl, net.IPv4IntraData); overlap {
 		return fmt.Errorf(
 			"Internal and replication addresses overlap: %s (internal: %s; replication: %s)",
-			addr, config.Net.IPv4IntraControl, config.Net.IPv4IntraData,
+			addr, net.IPv4IntraControl, net.IPv4IntraData,
 		)
 	}
-
-	if config.Net.HTTP.RevProxy != "" {
-		if config.Net.HTTP.RevProxy != RevProxyCloud && config.Net.HTTP.RevProxy != RevProxyTarget {
+	if net.HTTP.RevProxy != "" {
+		if net.HTTP.RevProxy != RevProxyCloud && net.HTTP.RevProxy != RevProxyTarget {
 			return fmt.Errorf("Invalid http rproxy configuration: %s (expecting: ''|%s|%s)",
-				config.Net.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
+				net.HTTP.RevProxy, RevProxyCloud, RevProxyTarget)
 		}
 	}
 	return nil

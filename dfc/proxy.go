@@ -426,7 +426,7 @@ func (p *proxyrunner) httpbckdelete(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if errstr := p.savebmdconf(clone); errstr != "" {
+		if errstr := p.savebmdconf(clone, cmn.GCO.Get()); errstr != "" {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, errstr)
 			return
@@ -560,6 +560,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
+	config := cmn.GCO.Get()
 	switch msg.Action {
 	case cmn.ActCreateLB:
 		if p.forwardCP(w, r, &msg, lbucket, nil) {
@@ -568,15 +569,16 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		p.bmdowner.Lock()
 		clone := p.bmdowner.get().clone()
 		bprops := cmn.BucketProps{
-			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:   cmn.GCO.Get().LRU,
+			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRUConf:    config.LRU,
+			MirrorConf: config.Mirror,
 		}
-		if !clone.add(lbucket, true, &bprops) {
+		if !clone.add(lbucket, true /*bucket is local*/, &bprops) {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
 			return
 		}
-		if errstr := p.savebmdconf(clone); errstr != "" {
+		if errstr := p.savebmdconf(clone, config); errstr != "" {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, errstr)
 			return
@@ -708,8 +710,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	if !p.validatebckname(w, r, bucket) {
 		return
 	}
-	props := &cmn.BucketProps{} // every field has to have zero value
-	msg := cmn.ActionMsg{Value: props}
+	nprops := &cmn.BucketProps{} // every field has to have zero value
+	msg := cmn.ActionMsg{Value: nprops}
 	if cmn.ReadJSON(w, r, &msg) != nil {
 		return
 	}
@@ -722,34 +724,36 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
 	isLocal := clone.IsLocal(bucket)
+	config := cmn.GCO.Get()
 
-	oldProps, exists := clone.Get(bucket, isLocal)
+	bprops, exists := clone.Get(bucket, isLocal)
 	if !exists {
 		cmn.Assert(!isLocal)
-		oldProps = &cmn.BucketProps{
-			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:   cmn.GCO.Get().LRU,
+		bprops = &cmn.BucketProps{
+			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRUConf:    config.LRU,
+			MirrorConf: config.Mirror,
 		}
-		clone.add(bucket, false, oldProps)
+		clone.add(bucket, false /* bucket is local */, bprops)
 	}
 
 	switch msg.Action {
 	case cmn.ActSetProps:
-		if err := p.validateBucketProps(props, isLocal); err != nil {
+		if err := p.validateBucketProps(nprops, isLocal); err != nil {
 			p.bmdowner.Unlock()
 			p.invalmsghdlr(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		p.copyBucketProps(oldProps, props, bucket)
+		p.copyBucketProps(bprops /*to*/, nprops /*from*/, bucket)
 	case cmn.ActResetProps:
-		oldProps = &cmn.BucketProps{
-			CksumConf: cmn.CksumConf{Checksum: cmn.ChecksumInherit},
-			LRUConf:   cmn.GCO.Get().LRU,
+		bprops = &cmn.BucketProps{
+			CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
+			LRUConf:    config.LRU,
+			MirrorConf: config.Mirror,
 		}
 	}
-
-	clone.set(bucket, isLocal, oldProps)
-	if e := p.savebmdconf(clone); e != "" {
+	clone.set(bucket, isLocal, bprops)
+	if e := p.savebmdconf(clone, config); e != "" {
 		glog.Errorln(e)
 	}
 	p.bmdowner.put(clone)
@@ -846,7 +850,7 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
 	msg *cmn.ActionMsg) bool {
 	smap4bcast := p.smapowner.get()
-
+	config := cmn.GCO.Get()
 	msg.Value = clone
 	jsbytes, err := jsoniter.Marshal(msg)
 	cmn.Assert(err == nil, err)
@@ -857,7 +861,7 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 		http.MethodPost,
 		jsbytes,
 		smap4bcast,
-		cmn.GCO.Get().Timeout.Default,
+		config.Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
@@ -874,7 +878,7 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	clone = p.bmdowner.get().clone()
 	clone.del(bucketFrom, true)
 	clone.add(bucketTo, true, props)
-	if errstr := p.savebmdconf(clone); errstr != "" {
+	if errstr := p.savebmdconf(clone, config); errstr != "" {
 		glog.Errorln(errstr)
 	}
 	p.bmdowner.put(clone)
@@ -1305,8 +1309,8 @@ func (p *proxyrunner) listbucket(w http.ResponseWriter, r *http.Request, bucket 
 	return
 }
 
-func (p *proxyrunner) savebmdconf(bucketmd *bucketMD) (errstr string) {
-	bucketmdfull := filepath.Join(cmn.GCO.Get().Confdir, cmn.BucketmdBackupFile)
+func (p *proxyrunner) savebmdconf(bucketmd *bucketMD, config *cmn.Config) (errstr string) {
+	bucketmdfull := filepath.Join(config.Confdir, cmn.BucketmdBackupFile)
 	if err := cmn.LocalSave(bucketmdfull, bucketmd); err != nil {
 		errstr = fmt.Sprintf("Failed to store bucket-metadata at %s, err: %v", bucketmdfull, err)
 	}
@@ -1346,7 +1350,7 @@ func (p *proxyrunner) filrename(w http.ResponseWriter, r *http.Request, msg *cmn
 }
 
 func (p *proxyrunner) replicate(w http.ResponseWriter, r *http.Request, msg *cmn.ActionMsg) {
-	p.invalmsghdlr(w, r, "not supported yet") // see also: daemon.go, config.sh, and tests/replication
+	p.invalmsghdlr(w, r, cmn.NotSupported) // see also: daemon.go, config.sh, and tests/replication
 }
 
 func (p *proxyrunner) doListRange(w http.ResponseWriter, r *http.Request, actionMsg *cmn.ActionMsg, method string) {
@@ -2435,7 +2439,7 @@ func (p *proxyrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg)
 		return
 	}
 	p.bmdowner.put(newbucketmd)
-	if errstr := p.savebmdconf(newbucketmd); errstr != "" {
+	if errstr := p.savebmdconf(newbucketmd, cmn.GCO.Get()); errstr != "" {
 		glog.Errorln(errstr)
 	}
 	p.bmdowner.Unlock()
@@ -2459,6 +2463,7 @@ func (p *proxyrunner) urlOutsideCluster(url string) bool {
 	return true
 }
 
+// FIXME: copy-paste vs. httprunner.setconfig; flat naming
 func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) error {
 	if props.NextTierURL != "" {
 		if _, err := url.ParseRequestURI(props.NextTierURL); err != nil {
@@ -2467,7 +2472,6 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 		if !p.urlOutsideCluster(props.NextTierURL) {
 			return fmt.Errorf("Invalid next tier URL: %s, URL is in current cluster", props.NextTierURL)
 		}
-
 	}
 	if err := validateCloudProvider(props.CloudProvider, isLocal); err != nil {
 		return err
@@ -2503,10 +2507,9 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 		return fmt.Errorf("invalid checksum: %s - expecting %s or %s or %s",
 			props.Checksum, cmn.ChecksumXXHash, cmn.ChecksumNone, cmn.ChecksumInherit)
 	}
-
 	lwm, hwm := props.LowWM, props.HighWM
 	if lwm < 0 || hwm < 0 || lwm > 100 || hwm > 100 || lwm > hwm {
-		return fmt.Errorf("Invalid WM configuration. LowWM: %d, HighWM: %d, LowWM and HighWM must be in the range [0, 100] with LowWM <= HighWM", lwm, hwm)
+		return fmt.Errorf("Invalid WM configuration. LowWM: %d, HighWM: %d", lwm, hwm)
 	}
 	if props.DontEvictTimeStr != "" {
 		dontEvictTime, err := time.ParseDuration(props.DontEvictTimeStr)
@@ -2514,7 +2517,6 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 			return fmt.Errorf("Bad dont_evict_time format %s, err: %v", dontEvictTime, err)
 		}
 		props.DontEvictTime = dontEvictTime
-
 	}
 	if props.CapacityUpdTimeStr != "" {
 		capacityUpdTime, err := time.ParseDuration(props.CapacityUpdTimeStr)
@@ -2595,38 +2597,43 @@ func validateCloudProvider(provider string, isLocal bool) error {
 	return nil
 }
 
-// FIXME: will always miss when adding new props - must change
-func (p *proxyrunner) copyBucketProps(oldProps, newProps *cmn.BucketProps, bucket string) {
-	oldProps.NextTierURL = newProps.NextTierURL
-	oldProps.CloudProvider = newProps.CloudProvider
-	if newProps.ReadPolicy != "" {
-		oldProps.ReadPolicy = newProps.ReadPolicy
+// FIXME: redundant vs. setconfig; will always miss when adding new props
+func (p *proxyrunner) copyBucketProps(bprops /*to*/, nprops /*from*/ *cmn.BucketProps, bucket string) {
+	bprops.NextTierURL = nprops.NextTierURL
+	bprops.CloudProvider = nprops.CloudProvider
+	if nprops.ReadPolicy != "" {
+		bprops.ReadPolicy = nprops.ReadPolicy
 	}
-	if newProps.WritePolicy != "" {
-		oldProps.WritePolicy = newProps.WritePolicy
+	if nprops.WritePolicy != "" {
+		bprops.WritePolicy = nprops.WritePolicy
 	}
-	if rechecksumRequired(cmn.GCO.Get().Cksum.Checksum, oldProps.Checksum, newProps.Checksum) {
+	if rechecksumRequired(cmn.GCO.Get().Cksum.Checksum, bprops.Checksum, nprops.Checksum) {
 		go p.notifyTargetsRechecksum(bucket)
 	}
-	if newProps.Checksum != "" {
-		oldProps.Checksum = newProps.Checksum
-		if newProps.Checksum != cmn.ChecksumInherit {
-			oldProps.ValidateColdGet = newProps.ValidateColdGet
-			oldProps.ValidateWarmGet = newProps.ValidateWarmGet
-			oldProps.EnableReadRangeChecksum = newProps.EnableReadRangeChecksum
+	if nprops.Checksum != "" {
+		bprops.Checksum = nprops.Checksum
+		if nprops.Checksum != cmn.ChecksumInherit {
+			bprops.ValidateColdGet = nprops.ValidateColdGet
+			bprops.ValidateWarmGet = nprops.ValidateWarmGet
+			bprops.EnableReadRangeChecksum = nprops.EnableReadRangeChecksum
 		}
 	}
-	oldProps.LowWM = newProps.LowWM // can't conditionally assign if value != 0 since 0 is valid
-	oldProps.HighWM = newProps.HighWM
-	oldProps.AtimeCacheMax = newProps.AtimeCacheMax
-	if newProps.DontEvictTimeStr != "" {
-		oldProps.DontEvictTimeStr = newProps.DontEvictTimeStr
-		oldProps.DontEvictTime = newProps.DontEvictTime // parsing done in validateBucketProps()
+	bprops.LowWM = nprops.LowWM // can't conditionally assign if value != 0 since 0 is valid
+	bprops.HighWM = nprops.HighWM
+	bprops.AtimeCacheMax = nprops.AtimeCacheMax
+	if nprops.DontEvictTimeStr != "" {
+		bprops.DontEvictTimeStr = nprops.DontEvictTimeStr
+		bprops.DontEvictTime = nprops.DontEvictTime // parsing done in validateBucketProps()
 	}
-	if newProps.CapacityUpdTimeStr != "" {
-		oldProps.CapacityUpdTimeStr = newProps.CapacityUpdTimeStr
-		oldProps.CapacityUpdTime = newProps.CapacityUpdTime // parsing done in validateBucketProps()
+	if nprops.CapacityUpdTimeStr != "" {
+		bprops.CapacityUpdTimeStr = nprops.CapacityUpdTimeStr
+		bprops.CapacityUpdTime = nprops.CapacityUpdTime // parsing done in validateBucketProps()
 	}
-	oldProps.LRUEnabled = newProps.LRUEnabled
-	oldProps.Copies = newProps.Copies
+	bprops.LRUEnabled = nprops.LRUEnabled
+	bprops.MirrorEnabled = nprops.MirrorEnabled
+	if bprops.MirrorEnabled {
+		bprops.Copies = 2 // 2-way mirror, or none
+	}
+	bprops.MirrorBurst = nprops.MirrorBurst
+	bprops.MirrorUtilThresh = nprops.MirrorUtilThresh
 }

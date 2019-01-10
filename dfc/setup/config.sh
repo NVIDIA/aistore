@@ -2,6 +2,13 @@ cat > $CONFFILE <<EOL
 {
 	"confdir":                	"$CONFDIR",
 	"cloudprovider":		"${CLDPROVIDER}",
+	"mirror": {
+		"copies":		2,
+		"mirror_burst_buffer":	256,
+		"mirror_util_thresh":	5,
+		"mirror_optimize_read":	true,
+		"mirror_enabled": 	false
+	},
 	"readahead": {
 		"rahobjectmem":		1048576,
 		"rahtotalmem":		1073741824,
