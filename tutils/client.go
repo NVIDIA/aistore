@@ -635,8 +635,8 @@ func putObjs(proxyURL, bucket, readerPath, readerType, objPath string, objSize u
 		err    error
 	)
 	for {
-		objName := <-objCh
-		if objName == "" {
+		objName, ok := <-objCh
+		if !ok {
 			return
 		}
 		if size == 0 {
