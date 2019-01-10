@@ -2109,6 +2109,9 @@ func (t *targetrunner) putCommit(ct context.Context, lom *cluster.LOM, putfqn st
 	renamed, errstr, errcode = t.doPutCommit(ct, lom, putfqn, rebalance)
 	if errstr != "" && !renamed {
 		if _, err := os.Stat(putfqn); err == nil || !os.IsNotExist(err) {
+			if err == nil {
+				err = errors.New(errstr)
+			}
 			t.fshc(err, putfqn)
 			if err = os.Remove(putfqn); err != nil {
 				glog.Errorf("Nested error: %s => (remove %s => err: %v)", errstr, putfqn, err)
