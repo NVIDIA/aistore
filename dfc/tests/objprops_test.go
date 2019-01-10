@@ -431,7 +431,7 @@ func propsMainTest(t *testing.T, versioning string) {
 			setClusterConfig(t, proxyURL, "versioning", oldVersioning)
 		}
 		if created {
-			destroyLocalBucket(t, proxyURL, clibucket)
+			tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 		}
 	}()
 

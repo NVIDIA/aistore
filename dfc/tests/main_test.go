@@ -139,7 +139,7 @@ func Test_download(t *testing.T) {
 func Test_matchdelete(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
+		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 
 	// Declare one channel per worker to pass the keyname
@@ -215,7 +215,7 @@ func Test_putdeleteRange(t *testing.T) {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
 	}
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
+		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 
 	errCh := make(chan error, numfiles*5)
@@ -356,7 +356,7 @@ func Test_putdelete(t *testing.T) {
 	const filesize = 512 * 1024
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
+		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 
 	if usingSG {
@@ -564,8 +564,8 @@ func TestHeadLocalBucket(t *testing.T) {
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.ValidateWarmGet = true
@@ -617,8 +617,8 @@ func TestHeadObject(t *testing.T) {
 		objName  = "headobject_test_obj"
 		objSize  = 1024
 	)
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	r, rrErr := tutils.NewRandReader(int64(objSize), false)
 	if rrErr != nil {
@@ -653,7 +653,7 @@ func TestHeadObjectCheckCached(t *testing.T) {
 	)
 
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
+		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 	r, err := tutils.NewRandReader(int64(fileSize), false)
 	if err != nil {
@@ -1016,7 +1016,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		t.Skip(fmt.Sprintf("test %q requires Xattributes to be set, doesn't work with docker", t.Name()))
 	}
 
-	createFreshLocalBucket(t, proxyURL, bucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucketName)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(fileSize)
@@ -1086,7 +1086,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 
 cleanup:
 	// Restore old config
-	destroyLocalBucket(t, proxyURL, bucketName)
+	tutils.DestroyLocalBucket(t, proxyURL, bucketName)
 	setClusterConfig(t, proxyURL, "checksum", oldChecksum)
 	setClusterConfig(t, proxyURL, "validate_checksum_warm_get", oldWarmGet)
 	close(errCh)
@@ -1179,7 +1179,7 @@ cleanup:
 	close(fileNameCh)
 
 	if created {
-		destroyLocalBucket(t, proxyURL, clibucket)
+		tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 }
 
@@ -1389,7 +1389,7 @@ cleanup:
 	setClusterConfig(t, proxyURL, "validate_checksum_cold_get", ocoldget)
 
 	if created {
-		destroyLocalBucket(t, proxyURL, bucket)
+		tutils.DestroyLocalBucket(t, proxyURL, bucket)
 	}
 }
 

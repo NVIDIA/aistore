@@ -475,6 +475,23 @@ func DoesLocalBucketExist(serverURL string, bucket string) (bool, error) {
 	return false, nil
 }
 
+func CreateFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
+	DestroyLocalBucket(t, proxyURL, bucketFQN)
+	baseParams := BaseAPIParams(proxyURL)
+	err := api.CreateLocalBucket(baseParams, bucketFQN)
+	CheckFatal(err, t)
+}
+
+func DestroyLocalBucket(t *testing.T, proxyURL, bucket string) {
+	exists, err := DoesLocalBucketExist(proxyURL, bucket)
+	CheckFatal(err, t)
+	if exists {
+		baseParams := BaseAPIParams(proxyURL)
+		err = api.DestroyLocalBucket(baseParams, bucket)
+		CheckFatal(err, t)
+	}
+}
+
 func GetWhatRawQuery(getWhat string, getProps string) string {
 	q := url.Values{}
 	q.Add(cmn.URLParamWhat, getWhat)

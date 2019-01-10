@@ -56,6 +56,29 @@ type metadata struct {
 	proxyURL            string
 }
 
+func checkObjectDistribution(t *testing.T, m *metadata) {
+	var (
+		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
+		targetObjectCount = make(map[string]int64)
+	)
+	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.GetMsg{GetProps: cmn.GetTargetURL}, 0)
+	tutils.CheckFatal(err, t)
+	for _, obj := range bucketList.Entries {
+		targetObjectCount[obj.TargetURL] += 1
+	}
+	if len(targetObjectCount) != m.originalTargetCount {
+		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",
+			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bucket)
+	}
+	for targetURL, objCount := range targetObjectCount {
+		if objCount < requiredCount {
+			t.Fatalf("Rebalance error, target %s didn't receive required number of objects\n", targetURL)
+		}
+	}
+}
+
 // Intended for a deployment with multiple targets
 // 1. Unregister target T
 // 2. Create local bucket
@@ -96,8 +119,8 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 2.
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	target := extractTargetNodes(m.smap)[0]
 	err = tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
@@ -196,8 +219,8 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 	}
 
 	// Step 2.
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	target := extractTargetNodes(m.smap)[0]
 	err = tutils.UnregisterTarget(m.proxyURL, target.DaemonID)
@@ -346,8 +369,8 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 
 	// Create local bucket
 	m.bucket = TestLocalBucketName
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -439,8 +462,8 @@ func TestRebalanceAfterUnregisterAndReregister(t *testing.T) {
 	targets := extractTargetNodes(m.smap)
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -537,8 +560,8 @@ func TestPutDuringRebalance(t *testing.T) {
 	target := extractTargetNodes(m.smap)[0]
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -626,8 +649,8 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -756,8 +779,8 @@ func TestGetDuringLocalRebalance(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -867,8 +890,8 @@ func TestGetDuringRebalance(t *testing.T) {
 	target := extractTargetNodes(md.smap)[0]
 
 	// Create local bucket
-	createFreshLocalBucket(t, md.proxyURL, md.bucket)
-	defer destroyLocalBucket(t, md.proxyURL, md.bucket)
+	tutils.CreateFreshLocalBucket(t, md.proxyURL, md.bucket)
+	defer tutils.DestroyLocalBucket(t, md.proxyURL, md.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -964,11 +987,11 @@ func TestRegisterTargetsAndCreateLocalBucketsInParallel(t *testing.T) {
 	m.wg.Add(newLocalBucketCount)
 	for i := 0; i < newLocalBucketCount; i++ {
 		go func(number int) {
-			createFreshLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
+			tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(number))
 			m.wg.Done()
 		}(i)
 
-		defer destroyLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(i))
+		defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket+strconv.Itoa(i))
 	}
 	m.wg.Wait()
 	assertClusterState(&m)
@@ -994,15 +1017,15 @@ func TestRenameEmptyLocalBucket(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
 	// Rename it
 	err = api.RenameLocalBucket(tutils.DefaultBaseAPIParams(t), m.bucket, newTestLocalBucketName)
 	tutils.CheckFatal(err, t)
 
 	// Destroy renamed local bucket
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 }
 
 func TestRenameNonEmptyLocalBucket(t *testing.T) {
@@ -1036,8 +1059,8 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)
@@ -1069,7 +1092,7 @@ func TestRenameNonEmptyLocalBucket(t *testing.T) {
 	resultsBeforeAfter(&m, num, maxErrPct)
 
 	// Destroy renamed local bucket
-	destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 }
 
 func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
@@ -1108,8 +1131,8 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	newBucketFQN := filepath.Join(localBucketDir, newTestLocalBucketName)
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 
 	if _, err := os.Stat(bucketFQN); os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not created")
@@ -1127,7 +1150,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	}
 
 	// Destroy renamed local bucket
-	destroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
+	tutils.DestroyLocalBucket(t, m.proxyURL, newTestLocalBucketName)
 	if _, err := os.Stat(newBucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("new local bucket folder was not deleted")
 	}
@@ -1190,8 +1213,8 @@ func TestAddAndRemoveMountpath(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1263,11 +1286,11 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	target := extractTargetNodes(m.smap)[0]
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 
 	defer func() {
 		os.RemoveAll(newMountpath)
-		destroyLocalBucket(t, m.proxyURL, m.bucket)
+		tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 	}()
 
 	// Put random files
@@ -1339,13 +1362,13 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 	targets := extractTargetNodes(m.smap)
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
 
 	defer func() {
 		if !tutils.DockerRunning() {
 			os.RemoveAll(newMountpath)
 		}
-		destroyLocalBucket(t, m.proxyURL, m.bucket)
+		tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 	}()
 
 	// Put random files
@@ -1468,8 +1491,8 @@ func TestDisableAndEnableMountpath(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Add target mountpath again
 	for _, mpath := range oldMountpaths.Available {
@@ -1638,46 +1661,6 @@ func assertClusterState(m *metadata) {
 	}
 }
 
-func createFreshLocalBucket(t *testing.T, proxyURL, bucketFQN string) {
-	destroyLocalBucket(t, proxyURL, bucketFQN)
-	baseParams := tutils.BaseAPIParams(proxyURL)
-	err := api.CreateLocalBucket(baseParams, bucketFQN)
-	tutils.CheckFatal(err, t)
-}
-
-func destroyLocalBucket(t *testing.T, proxyURL, bucket string) {
-	exists, err := tutils.DoesLocalBucketExist(proxyURL, bucket)
-	tutils.CheckFatal(err, t)
-	if exists {
-		baseParams := tutils.BaseAPIParams(proxyURL)
-		err = api.DestroyLocalBucket(baseParams, bucket)
-		tutils.CheckFatal(err, t)
-	}
-}
-
-func checkObjectDistribution(t *testing.T, m *metadata) {
-	var (
-		requiredCount     = int64(rebalanceObjectDistributionTestCoef * (float64(m.num) / float64(m.originalTargetCount)))
-		targetObjectCount = make(map[string]int64)
-	)
-	tutils.Logf("Checking if each target has a required number of object in bucket %s...\n", m.bucket)
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
-	bucketList, err := api.ListBucket(baseParams, m.bucket, &cmn.GetMsg{GetProps: cmn.GetTargetURL}, 0)
-	tutils.CheckFatal(err, t)
-	for _, obj := range bucketList.Entries {
-		targetObjectCount[obj.TargetURL] += 1
-	}
-	if len(targetObjectCount) != m.originalTargetCount {
-		t.Fatalf("Rebalance error, %d/%d targets received no objects from bucket %s\n",
-			m.originalTargetCount-len(targetObjectCount), m.originalTargetCount, m.bucket)
-	}
-	for targetURL, objCount := range targetObjectCount {
-		if objCount < requiredCount {
-			t.Fatalf("Rebalance error, target %s didn't receive required number of objects\n", targetURL)
-		}
-	}
-}
-
 func TestForwardCP(t *testing.T) {
 	const (
 		num      = 10000
@@ -1710,9 +1693,9 @@ func TestForwardCP(t *testing.T) {
 	origID, origURL := m.smap.ProxySI.DaemonID, m.smap.ProxySI.PublicNet.DirectURL
 	nextProxyID, nextProxyURL, _ := chooseNextProxy(&m.smap)
 
-	destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
-	createFreshLocalBucket(t, nextProxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, nextProxyURL, m.bucket)
 	tutils.Logf("Created bucket %s via non-primary %s\n", m.bucket, nextProxyID)
 
 	if usingSG {
@@ -1746,7 +1729,7 @@ func TestForwardCP(t *testing.T) {
 	}
 
 	// Step 5. destroy local bucket via original primary which is not primary at this point
-	destroyLocalBucket(t, origURL, m.bucket)
+	tutils.DestroyLocalBucket(t, origURL, m.bucket)
 	tutils.Logf("Destroyed bucket %s via non-primary %s/%s\n", m.bucket, origID, origURL)
 }
 
@@ -1789,8 +1772,8 @@ func TestAtimeRebalance(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	// Enable bucket level LRU properties
 	bucketProps.LRUEnabled = true
@@ -1893,8 +1876,8 @@ func _TestLocalMirror(t *testing.T) {
 	}
 	saveClusterState(&m)
 
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	if usingSG {
 		sgl = tutils.Mem2.NewSGL(filesize)

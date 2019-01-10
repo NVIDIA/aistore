@@ -24,7 +24,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		wg         = &sync.WaitGroup{}
 		dir        = t.Name()
 	)
-	createFreshLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	for i := 0; i < numworkers; i++ {
 		reader, err := tutils.NewRandReader(fileSize, true)
 		tutils.CheckFatal(err, t)
@@ -35,7 +35,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	destroyLocalBucket(t, proxyURL, bucket)
+	tutils.DestroyLocalBucket(t, proxyURL, bucket)
 }
 
 func putRR(t *testing.T, id int, proxyURL string, reader tutils.Reader, bucket, dir string, numobjects int) {

@@ -60,8 +60,8 @@ func testReplicationReceiveOneObject(t *testing.T) {
 	xxhash := getXXHashChecksum(t, reader)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s\n", TestLocalBucketName, object, proxyURLData)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLData, TestLocalBucketName, object, xxhash, reader)
@@ -88,8 +88,8 @@ func testReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLData)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLData, TestLocalBucketName, object, "", reader)
@@ -119,8 +119,8 @@ func testReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	proxyURL := getPrimaryURL(t, proxyURLRO)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	tutils.Logf("Sending %s/%s for replication. Destination proxy: %s. Expecting to fail\n", TestLocalBucketName, object, proxyURLData)
 	err = httpReplicationPut(t, dummySrcURL, proxyURLData, TestLocalBucketName, object, badChecksum, reader)
@@ -172,11 +172,11 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 
 	// 1. Create and Configure the Buckets on two different clusters
 	tutils.Logln("Creating local buckets on first and second tier cluster for replication...")
-	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
-	createFreshLocalBucket(t, proxyURLNext, bucket)
-	defer destroyLocalBucket(t, proxyURLNext, bucket)
+	tutils.CreateFreshLocalBucket(t, proxyURLNext, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURLNext, bucket)
 
 	// 2. Send N Put Requests to first cluster, where N is equal to numObj
 	tutils.Logf("Uploading %d objects to (local bucket: %s) for replication...\n", numObj, bucket)

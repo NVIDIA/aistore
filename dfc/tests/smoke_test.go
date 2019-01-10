@@ -72,7 +72,7 @@ func Test_smoke(t *testing.T) {
 	}
 
 	if created {
-		destroyLocalBucket(t, proxyURL, clibucket)
+		tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 }
 

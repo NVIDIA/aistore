@@ -180,8 +180,8 @@ func TestFSCheckerDetection(t *testing.T) {
 		t.Skip("TestFSCheckerDetection requires direct filesystem access, doesn't work with docker")
 	}
 
-	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
 	smap := getClusterMap(t, proxyURL)
 	mpList := make(map[string]string, 10)

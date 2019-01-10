@@ -80,8 +80,8 @@ func TestGetObjectInNextTier(t *testing.T) {
 	defer nextTierMockForLocalBucket.Close()
 	defer nextTierMockForCloudBucket.Close()
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC
@@ -312,8 +312,8 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 	defer nextTierMockForLocalBucket.Close()
 	defer nextTierMockForCloudBucket.Close()
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := testBucketProps(t)
 	bucketProps.CloudProvider = cmn.ProviderDFC

@@ -38,7 +38,7 @@ func TestPrefix(t *testing.T) {
 
 	tutils.Logf("Looking for files with prefix [%s]\n", prefix)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
-		defer destroyLocalBucket(t, proxyURL, clibucket)
+		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 	prefixFileNumber = numfiles
 	prefixCreateFiles(t, proxyURL)

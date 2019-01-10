@@ -342,7 +342,7 @@ func rwstress(t *testing.T) {
 	rwstressCleanup(t)
 
 	if created {
-		destroyLocalBucket(t, proxyURL, clibucket)
+		tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
 }
 

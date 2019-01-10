@@ -573,7 +573,7 @@ func concurrentPutGetDel(t *testing.T) {
 	for err := range errCh {
 		tutils.CheckFatal(err, t)
 	}
-	destroyLocalBucket(t, proxyURL, clibucket)
+	tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 }
 
 // proxyPutGetDelete repeats put/get/del N times, all requests go to the same proxy
@@ -772,7 +772,7 @@ loop:
 	}
 
 	wg.Wait()
-	destroyLocalBucket(t, proxyURL, localBucketName)
+	tutils.DestroyLocalBucket(t, proxyURL, localBucketName)
 }
 
 // smap 	- current Smap

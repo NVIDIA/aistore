@@ -281,8 +281,8 @@ func TestDistributedSort(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -324,8 +324,8 @@ func TestDistributedSortParallel(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	wg := &sync.WaitGroup{}
 	for i := 0; i < dSortsCount; i++ {
@@ -358,8 +358,8 @@ func TestDistributedSortChain(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	for i := 0; i < dSortsCount; i++ {
 		dispatchDSortJob(m, i)
@@ -399,8 +399,8 @@ func TestDistributedSortShuffle(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -454,8 +454,8 @@ func TestDistributedSortWithDisk(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -515,8 +515,8 @@ func TestDistributedSortZip(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -570,8 +570,8 @@ func TestDistributedSortWithCompression(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -629,8 +629,8 @@ func TestDistributedSortWithContentInt(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -688,8 +688,8 @@ func TestDistributedSortWithContentFloat(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -747,8 +747,8 @@ func TestDistributedSortWithContentString(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -802,8 +802,8 @@ func TestDistributedSortAbort(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -869,8 +869,8 @@ func TestDistributedSortAbortExtractionPhase(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -952,8 +952,8 @@ func TestDistributedSortAbortSortingPhase(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -1035,8 +1035,8 @@ func TestDistributedSortAbortCreationPhase(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 
@@ -1118,8 +1118,8 @@ func TestDistributedSortMetricsAfterFinish(t *testing.T) {
 	}
 
 	// Create local bucket
-	createFreshLocalBucket(t, m.proxyURL, m.bucket)
-	defer destroyLocalBucket(t, m.proxyURL, m.bucket)
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
 
 	dsortFW.createInputShards()
 

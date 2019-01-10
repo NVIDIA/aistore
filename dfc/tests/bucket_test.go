@@ -32,8 +32,8 @@ func TestResetBucketProps(t *testing.T) {
 		globalConfig = getDaemonConfig(t, proxyURL)
 	)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	bucketProps := defaultBucketProps()
 	bucketProps.Checksum = cmn.ChecksumNone
@@ -69,8 +69,8 @@ func TestSetBucketNextTierURLInvalid(t *testing.T) {
 		invalidDaemonURLs []string
 	)
 
-	createFreshLocalBucket(t, proxyURL, TestLocalBucketName)
-	defer destroyLocalBucket(t, proxyURL, TestLocalBucketName)
+	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
+	defer tutils.DestroyLocalBucket(t, proxyURL, TestLocalBucketName)
 
 	smap := getClusterMap(t, proxyURL)
 
@@ -121,8 +121,8 @@ func TestListObjects(t *testing.T) {
 		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)
 
-	createFreshLocalBucket(t, proxyURL, bucket)
-	defer destroyLocalBucket(t, proxyURL, bucket)
+	tutils.CreateFreshLocalBucket(t, proxyURL, clibucket)
+	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
 	// Iterations of PUT
 	totalObjects := 0
