@@ -291,9 +291,8 @@ func TestUnregisterPreviouslyUnregisteredTarget(t *testing.T) {
 	var (
 		err error
 		m   = metadata{
-			t:      t,
-			wg:     &sync.WaitGroup{},
-			bucket: TestLocalBucketName,
+			t:  t,
+			wg: &sync.WaitGroup{},
 		}
 	)
 	if testing.Short() {
@@ -1614,8 +1613,15 @@ func doReregisterTarget(target *cluster.Snode, m *metadata) {
 			smap = getClusterMap(m.t, m.proxyURL)
 			if _, ok := smap.Tmap[target.DaemonID]; ok {
 				tutils.Logf("T2: re-registered target %s\n", target.DaemonID)
+
+				// In case the bucket is empty we don't need to wait for the
+				// bucket metadata update.
+				if m.bucket == "" {
+					return
+				}
 			}
 		} else {
+			baseParams.URL = target.URL(cmn.NetworkPublic)
 			lbNames, err := api.GetBucketNames(baseParams, true)
 			tutils.CheckFatal(err, m.t)
 			// T3
@@ -1625,10 +1631,12 @@ func doReregisterTarget(target *cluster.Snode, m *metadata) {
 					m.t.Errorf("reregistered should have swapped from 0 to 1. Actual reregistered = %d\n", m.reregistered)
 				}
 				tutils.Logf("T3: re-registered target %s got updated with the new bucket-metadata\n", target.DaemonID)
-				break
+				return
 			}
 		}
 	}
+
+	m.t.Fatalf("failed to reregister target %s. Either is not in the smap or did not receive bucket metadata", target.DaemonID)
 }
 
 func saveClusterState(m *metadata) {
@@ -1921,4 +1929,169 @@ func _TestLocalMirror(t *testing.T) {
 	m.wg.Wait()
 
 	tutils.Logln("Done")
+}
+
+// 1. Unregister target
+// 2. Add bucket - unregistered target should miss the update
+// 3. Reregister target
+// 4. Put objects
+// 5. Get objects - everything should succeed
+func TestGetAndPutAfterReregisterWithMissedBucketUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	const (
+		num       = 10000
+		fileSize  = 1024
+		maxErrPct = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			num:             num,
+			numGetsEachFile: 5,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          t.Name() + "Bucket",
+		}
+		sgl        *memsys.SGL
+		filenameCh = make(chan string, m.num)
+		errCh      = make(chan error, m.num)
+	)
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 2 {
+		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	if usingSG {
+		sgl = tutils.Mem2.NewSGL(fileSize)
+		defer sgl.Free()
+	}
+
+	targets := extractTargetNodes(m.smap)
+
+	// Unregister target 0
+	err = tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
+	tutils.CheckFatal(err, t)
+	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	if n != m.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	// Reregister target 0
+	doReregisterTarget(targets[0], &m)
+	tutils.Logln("reregistering complete")
+
+	// Do puts
+	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	start := time.Now()
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, fileSize, num, errCh, filenameCh, sgl)
+	selectErr(errCh, "put", t, false)
+	close(filenameCh)
+	close(errCh)
+	tutils.Logf("PUT time: %v\n", time.Since(start))
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	// Do gets
+	m.wg.Add(num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	resultsBeforeAfter(&m, num, maxErrPct)
+	assertClusterState(&m)
+}
+
+// 1. Unregister target
+// 2. Add bucket - unregistered target should miss the update
+// 3. Put objects
+// 4. Reregister target - rebalance kicks in
+// 5. Get objects - everything should succeed
+func TestGetAfterReregisterWithMissedBucketUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip(skipping)
+	}
+
+	const (
+		num       = 10000
+		fileSize  = 1024
+		maxErrPct = 0
+	)
+
+	var (
+		err error
+		m   = metadata{
+			t:               t,
+			num:             num,
+			numGetsEachFile: 5,
+			repFilenameCh:   make(chan repFile, num),
+			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
+			wg:              &sync.WaitGroup{},
+			bucket:          t.Name() + "Bucket",
+		}
+		sgl        *memsys.SGL
+		filenameCh = make(chan string, m.num)
+		errCh      = make(chan error, m.num)
+	)
+
+	// Initialize metadata
+	saveClusterState(&m)
+	if m.originalTargetCount < 2 {
+		t.Fatalf("Must have 2 or more targets in the cluster, have only %d", m.originalTargetCount)
+	}
+
+	if usingSG {
+		sgl = tutils.Mem2.NewSGL(fileSize)
+		defer sgl.Free()
+	}
+
+	targets := extractTargetNodes(m.smap)
+
+	// Unregister target 0
+	err = tutils.UnregisterTarget(m.proxyURL, targets[0].DaemonID)
+	tutils.CheckFatal(err, t)
+	n := len(getClusterMap(t, m.proxyURL).Tmap)
+	if n != m.originalTargetCount-1 {
+		t.Fatalf("%d targets expected after unregister, actually %d targets", m.originalTargetCount-1, n)
+	}
+
+	// Create local bucket
+	tutils.CreateFreshLocalBucket(t, m.proxyURL, m.bucket)
+	defer tutils.DestroyLocalBucket(t, m.proxyURL, m.bucket)
+
+	tutils.Logf("PUT %d objects into bucket %s...\n", num, m.bucket)
+	start := time.Now()
+	tutils.PutRandObjs(m.proxyURL, m.bucket, SmokeDir, readerType, SmokeStr, fileSize, num, errCh, filenameCh, sgl)
+	selectErr(errCh, "put", t, false)
+	close(filenameCh)
+	close(errCh)
+	tutils.Logf("PUT time: %v\n", time.Since(start))
+	for f := range filenameCh {
+		m.repFilenameCh <- repFile{repetitions: m.numGetsEachFile, filename: f}
+	}
+
+	// Reregister target 0
+	doReregisterTarget(targets[0], &m)
+	tutils.Logln("reregistering complete")
+
+	// Wait for rebalance and do gets
+	waitForRebalanceToComplete(t, m.proxyURL)
+
+	m.wg.Add(num * m.numGetsEachFile)
+	doGetsInParallel(&m)
+	m.wg.Wait()
+
+	resultsBeforeAfter(&m, num, maxErrPct)
+	assertClusterState(&m)
 }

@@ -121,7 +121,7 @@ func TestListObjects(t *testing.T) {
 		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)
 
-	tutils.CreateFreshLocalBucket(t, proxyURL, clibucket)
+	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 
 	// Iterations of PUT

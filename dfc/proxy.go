@@ -2073,7 +2073,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	var (
 		nsi                   cluster.Snode
 		keepalive, register   bool
-		isproxy, nonelectable bool
+		isProxy, nonElectable bool
 		msg                   *cmn.ActionMsg
 		s                     string
 	)
@@ -2087,21 +2087,20 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 	if len(apitems) > 0 {
 		keepalive = apitems[0] == cmn.Keepalive
 		register = apitems[0] == cmn.Register
-		isproxy = apitems[0] == cmn.Proxy
-		if isproxy {
+		isProxy = apitems[0] == cmn.Proxy
+		if isProxy {
 			if len(apitems) > 1 {
 				keepalive = apitems[1] == cmn.Keepalive
 			}
 			s := r.URL.Query().Get(cmn.URLParamNonElectable)
-			var err error
-			if nonelectable, err = parsebool(s); s != "" && err != nil {
+			if nonElectable, err = parsebool(s); err != nil {
 				glog.Errorf("Failed to parse %s for non-electability: %v", s, err)
 			}
 		}
 	}
-	s = fmt.Sprintf("register %s (isproxy=%t, keepalive=%t)", &nsi, isproxy, keepalive)
+	s = fmt.Sprintf("register %s (isProxy=%t, keepalive=%t)", &nsi, isProxy, keepalive)
 	msg = &cmn.ActionMsg{Action: cmn.ActRegTarget}
-	if isproxy {
+	if isProxy {
 		msg = &cmn.ActionMsg{Action: cmn.ActRegProxy}
 	}
 	body, err := jsoniter.Marshal(nsi)
@@ -2119,7 +2118,7 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 
 	p.smapowner.Lock()
 	smap := p.smapowner.get()
-	if isproxy {
+	if isProxy {
 		osi := smap.GetProxy(nsi.DaemonID)
 		if !p.addOrUpdateNode(&nsi, osi, keepalive, "proxy") {
 			p.smapowner.Unlock()
@@ -2153,24 +2152,17 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if p.startedup(0) == 0 { // see clusterStartup()
-		p.registerToSmap(isproxy, &nsi, nonelectable)
+		p.registerToSmap(isProxy, &nsi, nonElectable)
 		p.smapowner.Unlock()
 		return
 	}
 	p.smapowner.Unlock()
 
-	// upon joining a running cluster new target gets bucket-metadata right away
-	if !isproxy {
-		bmd4reg := p.bmdowner.get()
-		outjson, err := jsoniter.Marshal(bmd4reg)
-		cmn.Assert(err == nil, err)
-		p.writeJSON(w, r, outjson, "bucket-metadata")
-	}
 	// update and distribute Smap
-	go func(isproxy, nonelectable bool) {
+	go func(isProxy, nonElectable bool) {
 		p.smapowner.Lock()
 
-		p.registerToSmap(isproxy, &nsi, nonelectable)
+		p.registerToSmap(isProxy, &nsi, nonElectable)
 		smap := p.smapowner.get()
 
 		if errstr := p.smapowner.persist(smap, true); errstr != "" {
@@ -2179,12 +2171,21 @@ func (p *proxyrunner) httpclupost(w http.ResponseWriter, r *http.Request) {
 		p.smapowner.Unlock()
 		tokens := p.authn.revokedTokenList()
 		msg.Action = path.Join(msg.Action, nsi.DaemonID)
-		if len(tokens.Tokens) == 0 {
-			p.metasyncer.sync(false, smap, msg)
-		} else {
-			p.metasyncer.sync(false, smap, msg, tokens, msg)
+
+		params := []interface{}{smap, msg}
+		// if not proxy we need to ensure that target has the newest bucket metadata
+		if !isProxy {
+			// FIXME: it is not necessary to send bucket metadata for the whole
+			// cluster but only to specific target (nsi).
+			bmd := p.bmdowner.get()
+			params = append(params, bmd, msg)
 		}
-	}(isproxy, nonelectable)
+		if len(tokens.Tokens) > 0 {
+			params = append(params, tokens, msg)
+		}
+
+		p.metasyncer.sync(false, params...)
+	}(isProxy, nonElectable)
 }
 
 func (p *proxyrunner) registerToSmap(isproxy bool, nsi *cluster.Snode, nonelectable bool) {
