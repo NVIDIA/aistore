@@ -1140,7 +1140,7 @@ func TestDirectoryExistenceWhenModifyingBucket(t *testing.T) {
 	}
 
 	// Rename local bucket
-	err = api.RenameLocalBucket(tutils.DefaultBaseAPIParams(t), m.bucket, newTestLocalBucketName)
+	err = api.RenameLocalBucket(tutils.DefaultBaseAPIParams(m.t), m.bucket, newTestLocalBucketName)
 	tutils.CheckFatal(err, t)
 	if _, err := os.Stat(bucketFQN); !os.IsNotExist(err) {
 		t.Fatalf("local bucket folder was not deleted")
@@ -1642,7 +1642,7 @@ func doReregisterTarget(target *cluster.Snode, m *metadata) {
 }
 
 func saveClusterState(m *metadata) {
-	m.proxyURL = getPrimaryURL(m.t, proxyURLRO)
+	m.proxyURL = getPrimaryURL(m.t, proxyURLReadOnly)
 	m.smap = getClusterMap(m.t, m.proxyURL)
 	m.originalTargetCount = len(m.smap.Tmap)
 	m.originalProxyCount = len(m.smap.Pmap)

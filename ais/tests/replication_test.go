@@ -55,8 +55,8 @@ func testReplicationReceiveOneObject(t *testing.T) {
 	reader, err := tutils.NewRandReader(objSize, false)
 	tutils.CheckFatal(err, t)
 
-	proxyURLData := getPrimaryIntraDataURL(t, proxyURLRO)
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURLData := getPrimaryIntraDataURL(t, proxyURLReadOnly)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	xxhash := getXXHashChecksum(t, reader)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
@@ -84,8 +84,8 @@ func testReplicationReceiveOneObjectNoChecksum(t *testing.T) {
 	reader, err := tutils.NewRandReader(objSize, false)
 	tutils.CheckFatal(err, t)
 
-	proxyURLData := getPrimaryIntraDataURL(t, proxyURLRO)
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURLData := getPrimaryIntraDataURL(t, proxyURLReadOnly)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -115,8 +115,8 @@ func testReplicationReceiveOneObjectBadChecksum(t *testing.T) {
 	reader, err := tutils.NewRandReader(objSize, false)
 	tutils.CheckFatal(err, t)
 
-	proxyURLData := getPrimaryIntraDataURL(t, proxyURLRO)
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURLData := getPrimaryIntraDataURL(t, proxyURLReadOnly)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	isCloud := isCloudBucket(t, proxyURL, clibucket)
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, TestLocalBucketName)
@@ -150,7 +150,7 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 		bucket       = TestLocalBucketName
 		sgl          *memsys.SGL
 		err          error
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		proxyURLNext string
 		objNameCh    = make(chan string, numObj)
 	)
@@ -168,7 +168,7 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 		t.Skip("test requires a docker running with two clusters")
 	}
 
-	proxyURLNext = getPrimaryURL(t, proxyNextTierURLRO)
+	proxyURLNext = getPrimaryURL(t, proxyNextTierURLReadOnly)
 
 	// 1. Create and Configure the Buckets on two different clusters
 	tutils.Logln("Creating local buckets on first and second tier cluster for replication...")
@@ -229,7 +229,7 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 		bucket       = clibucket
 		sgl          *memsys.SGL
 		err          error
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		proxyURLNext string
 		objNameCh    = make(chan string, numObj)
 	)
@@ -251,7 +251,7 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 		defer sgl.Free()
 	}
 
-	proxyURLNext = getPrimaryURL(t, proxyNextTierURLRO)
+	proxyURLNext = getPrimaryURL(t, proxyNextTierURLReadOnly)
 
 	// 1. Send N Put Requests to first cluster, where N is equal to numObj
 	tutils.Logf("Uploading %d objects to (cloud bucket: %s) for replication...\n", numObj, bucket)
@@ -310,8 +310,8 @@ func testReplicationReceiveManyObjectsCloudBucket(t *testing.T) {
 		seedValue = int64(111)
 	)
 	var (
-		proxyURLData = getPrimaryIntraDataURL(t, proxyURLRO)
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURLData = getPrimaryIntraDataURL(t, proxyURLReadOnly)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		bucket       = clibucket
 		size         = int64(objSize)
 		r            tutils.Reader

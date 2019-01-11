@@ -35,7 +35,7 @@ import (
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
 	"github.com/OneOfOne/xxhash"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // worker's result
@@ -45,7 +45,7 @@ type workres struct {
 }
 
 func Test_download(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("test requires a Cloud bucket")
@@ -137,7 +137,7 @@ func Test_download(t *testing.T) {
 
 // delete existing objects that match the regex
 func Test_matchdelete(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
 		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
@@ -209,7 +209,7 @@ func Test_putdeleteRange(t *testing.T) {
 		objSize      = 16 * 1024
 	)
 	var sgl *memsys.SGL
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 
 	if err := cmn.CreateDir(DeleteDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", DeleteDir, err)
@@ -354,7 +354,7 @@ func Test_putdelete(t *testing.T) {
 	errCh := make(chan error, numfiles)
 	filesPutCh := make(chan string, numfiles)
 	const filesize = 512 * 1024
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
 		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
@@ -492,7 +492,7 @@ func Test_coldgetmd5(t *testing.T) {
 		bucket     = clibucket
 		totalsize  = numPuts * largefilesize
 		sgl        *memsys.SGL
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -560,7 +560,7 @@ cleanup:
 
 func TestHeadLocalBucket(t *testing.T) {
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -582,7 +582,7 @@ func TestHeadLocalBucket(t *testing.T) {
 
 func TestHeadCloudBucket(t *testing.T) {
 	var (
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams = tutils.BaseAPIParams(proxyURL)
 	)
 
@@ -613,7 +613,7 @@ func TestHeadCloudBucket(t *testing.T) {
 
 func TestHeadObject(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		objName  = "headobject_test_obj"
 		objSize  = 1024
 	)
@@ -647,7 +647,7 @@ func TestHeadObject(t *testing.T) {
 
 func TestHeadObjectCheckCached(t *testing.T) {
 	var (
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		fileName = "headobject_check_cached_test_file"
 		fileSize = 1024
 	)
@@ -866,7 +866,7 @@ func TestChecksumValidateOnWarmGetForCloudBucket(t *testing.T) {
 		oldFileInfo os.FileInfo
 		errstr      string
 		filesList   = make([]string, 0, numFiles)
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -1006,7 +1006,7 @@ func TestChecksumValidateOnWarmGetForLocalBucket(t *testing.T) {
 		errCh      = make(chan error, 100)
 		sgl        *memsys.SGL
 		bucketName = TestLocalBucketName
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		fqn        string
 		errstr     string
 		err        error
@@ -1117,7 +1117,7 @@ func TestRangeRead(t *testing.T) {
 		fileNameCh = make(chan string, numFiles)
 		errCh      = make(chan error, numFiles)
 		sgl        *memsys.SGL
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		bucketName = clibucket
 		fileName   string
 	)
@@ -1297,7 +1297,7 @@ func Test_checksum(t *testing.T) {
 		duration    time.Duration
 		sgl         *memsys.SGL
 		totalio     = numPuts * largefilesize
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	created := createLocalBucketIfNotExists(t, proxyURL, bucket)

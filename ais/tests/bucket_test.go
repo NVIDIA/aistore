@@ -16,7 +16,7 @@ import (
 )
 
 func testBucketProps(t *testing.T) *cmn.BucketProps {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	globalConfig := getDaemonConfig(t, proxyURL)
 
 	return &cmn.BucketProps{
@@ -27,7 +27,7 @@ func testBucketProps(t *testing.T) *cmn.BucketProps {
 
 func TestResetBucketProps(t *testing.T) {
 	var (
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		globalProps  cmn.BucketProps
 		globalConfig = getDaemonConfig(t, proxyURL)
 	)
@@ -64,7 +64,7 @@ func TestResetBucketProps(t *testing.T) {
 
 func TestSetBucketNextTierURLInvalid(t *testing.T) {
 	var (
-		proxyURL          = getPrimaryURL(t, proxyURLRO)
+		proxyURL          = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps       cmn.BucketProps
 		invalidDaemonURLs []string
 	)
@@ -116,7 +116,7 @@ func TestListObjects(t *testing.T) {
 		objectSize  = cmn.KiB
 
 		bucket   = t.Name() + "Bucket"
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		wg       = &sync.WaitGroup{}
 		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)

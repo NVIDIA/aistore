@@ -20,7 +20,7 @@ func TestRandomReaderPutStress(t *testing.T) {
 		numworkers = 1000
 		numobjects = 10 // NOTE: increase this number if need be ...
 		bucket     = "RRTestBucket"
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		wg         = &sync.WaitGroup{}
 		dir        = t.Name()
 	)

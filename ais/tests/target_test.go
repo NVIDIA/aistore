@@ -21,7 +21,7 @@ func TestPutObjectNoDaemonID(t *testing.T) {
 	var (
 		sid          string
 		objDummyData = []byte("testing is so much fun")
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		smap         = getClusterMap(t, proxyURL)
 	)
 

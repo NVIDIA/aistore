@@ -25,7 +25,7 @@ func TestGetObjectInNextTier(t *testing.T) {
 		cloudData           = []byte("Here's looking at you, kid.")
 		localBucketListener net.Listener
 		cloudBucketListener net.Listener
-		proxyURL            = getPrimaryURL(t, proxyURLRO)
+		proxyURL            = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams          = tutils.BaseAPIParams(proxyURL)
 		err                 error
 	)
@@ -115,7 +115,7 @@ func TestGetObjectInNextTierErrorOnGet(t *testing.T) {
 		object   = t.Name()
 		data     = []byte("this is the object you want!")
 		listener net.Listener
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		err      error
 	)
 
@@ -177,7 +177,7 @@ func TestGetObjectNotInNextTier(t *testing.T) {
 		data     = []byte("this is some other object - not the one you want!")
 		filesize = 1024
 		listener net.Listener
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		err      error
 	)
 
@@ -245,7 +245,7 @@ func TestPutObjectNextTierPolicy(t *testing.T) {
 		nextTierMockForCloudBucketReached int
 		localBucketListener               net.Listener
 		cloudBucketListener               net.Listener
-		proxyURL                          = getPrimaryURL(t, proxyURLRO)
+		proxyURL                          = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams                        = tutils.BaseAPIParams(proxyURL)
 		err                               error
 	)
@@ -352,7 +352,7 @@ func TestPutObjectNextTierPolicyErrorOnPut(t *testing.T) {
 		object   = t.Name()
 		data     = []byte("this object will go to the cloud!")
 		listener net.Listener
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		err      error
 	)
 
@@ -407,7 +407,7 @@ func TestPutObjectCloudPolicy(t *testing.T) {
 		object   = t.Name()
 		data     = []byte("this object will go to the cloud!")
 		listener net.Listener
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		err      error
 	)
 

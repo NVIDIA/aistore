@@ -29,7 +29,7 @@ func Test_smoke(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	if err := cmn.CreateDir(LocalDestDir); err != nil {
 		t.Fatalf("Failed to create dir %s, err: %v", LocalDestDir, err)
 	}

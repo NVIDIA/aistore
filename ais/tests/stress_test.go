@@ -19,11 +19,10 @@ func TestStressDeleteBucketSingle(t *testing.T) {
 		objectCountPerWorker = 25000
 		objSize              = int64(cmn.KiB)
 		totalObjs            = objectCountPerWorker * workerCount
-
-		bucket   = t.Name() + "Bucket"
-		proxyURL = getPrimaryURL(t, proxyURLRO)
-		wg       = &sync.WaitGroup{}
-		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
+		bucket               = t.Name() + "Bucket"
+		proxyURL             = getPrimaryURL(t, proxyURLReadOnly)
+		wg                   = &sync.WaitGroup{}
+		random               = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)
 
 	if testing.Short() {
@@ -62,7 +61,7 @@ func TestStressDeleteBucketMultiple(t *testing.T) {
 		objSize         = int64(cmn.KiB)
 
 		bucket   = t.Name() + "Bucket"
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 		wg       = &sync.WaitGroup{}
 		random   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	)

@@ -44,6 +44,9 @@ save_setup() {
     echo "TESTFSPATHCOUNT=$TESTFSPATHCOUNT" >> $setup_file
     echo "FSPATHS=$FSPATHS" >> $setup_file
 
+    echo "PRIMARYHOSTIP=$PRIMARYHOSTIP" >> $setup_file
+    echo "NEXTTIERHOSTIP=$NEXTTIERHOSTIP" >> $setup_file
+
     echo "PORT=$PORT" >> $setup_file
     echo "PORT_INTRA_CONTROL=$PORT_INTRA_CONTROL" >> $setup_file
     echo "PORT_INTRA_DATA=$PORT_INTRA_DATA" >> $setup_file
@@ -320,9 +323,7 @@ PORT=8080
 PORT_INTRA_CONTROL=9080
 PORT_INTRA_DATA=10080
 
-# Records all environment variables into $setup_file
-save_setup
-
+# Setting the IP addresses for the containers
 echo "Network type: ${network}"
 for ((i=0; i<${CLUSTER_CNT}; i++)); do
     PUB_NET="172.5$((0 + ($i * 3))).0"
@@ -331,6 +332,13 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     INT_CONTROL_SUBNET="${INT_CONTROL_NET}.0/24"
     INT_DATA_NET="172.5$((2 + ($i * 3))).0"
     INT_DATA_SUBNET="${INT_DATA_NET}.0/24"
+
+    if [ $i -eq 0 ]; then
+        PRIMARYHOSTIP="${PUB_NET}.2"   
+    fi
+    if [ $i -eq 1 ]; then
+        NEXTTIERHOSTIP="${PUB_NET}.2"
+    fi
 
     PROXYURL="http://${PUB_NET}.2:${PORT}"
 
@@ -397,6 +405,8 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
 done
 
 sleep 5
+# Records all environment variables into $setup_file
+save_setup
 
 if [ "$CLUSTER_CNT" -gt 1 ] && [ "$network" = "multi" ]; then
     echo Connecting clusters together...

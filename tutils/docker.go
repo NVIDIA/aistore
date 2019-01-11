@@ -8,8 +8,17 @@ package tutils
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
+)
+
+//For container naming
+const (
+	prefixStr = "dfc"
+	proxyStr  = "_proxy_"
+	targetStr = "_target_"
+	pattern   = "^\"" + prefixStr + "[0-9]+" + proxyStr + "[1-9]+\"$" //Checking '_proxy_' should suffice
 )
 
 var (
@@ -18,10 +27,24 @@ var (
 
 // Detect docker cluster at startup
 func init() {
-	cmd := exec.Command("docker", "ps")
+	cmd := exec.Command("docker", "ps", "--format", "\"{{.Names}}\"")
 	bytes, err := cmd.Output()
-	if err == nil && strings.Contains(string(bytes), "proxy_1") {
-		dockerRunning = true
+	if err != nil {
+		return
+	}
+
+	r := regexp.MustCompile(pattern)
+	lines := strings.Split(string(bytes), "\n")
+
+	// Checks to see if there is any container P_proxy_{jj}" running
+	// Note: ./deploy_docker.sh will only let yPonce
+	// ie. running ./deploy_docker.sh again wilPvious instance first
+	for _, line := range lines {
+		match := r.MatchString(line)
+		if match {
+			dockerRunning = true
+			return
+		}
 	}
 }
 
@@ -44,8 +67,8 @@ func ContainerCount(clusterNumber ...int) (proxyCnt int, targetCnt int) {
 	}
 
 	lines := strings.Split(string(bytes), "\n")
-	proxyPrefix := "dfc" + strconv.Itoa(cluster) + "_proxy_"
-	targetPrefix := "dfc" + strconv.Itoa(cluster) + "_target_"
+	proxyPrefix := prefixStr + strconv.Itoa(cluster) + proxyStr
+	targetPrefix := prefixStr + strconv.Itoa(cluster) + targetStr
 	for _, line := range lines {
 		if strings.Contains(line, proxyPrefix) {
 			proxyCnt++
@@ -67,9 +90,9 @@ func ClusterCount() int {
 	m := make(map[string]int)
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {
-		if len(line) > len("\"dfci_") && strings.HasPrefix(line, "\"dfc") {
-			// containter names have the prefix dfci_ where i is the ith dfc cluster
-			m[line[:len("\"dfci_")]]++
+		if len(line) > len("\""+prefixStr+"i_") && strings.HasPrefix(line, "\""+prefixStr) {
+			// container names have the prefix dfci_ where i is the ith dfc cluster
+			m[line[:len("\""+prefixStr+"i_")]]++
 		}
 	}
 	return len(m)
@@ -82,7 +105,7 @@ func TargetsInCluster(i int) (ans []string) {
 	if err != nil {
 		return
 	}
-	targetPrefix := "dfc" + strconv.Itoa(i) + "_target_"
+	targetPrefix := prefixStr + strconv.Itoa(i) + targetStr
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {
 		if strings.Contains(line, targetPrefix) {

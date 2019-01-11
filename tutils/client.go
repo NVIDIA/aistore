@@ -34,8 +34,14 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-const (
-	ProxyURL = "http://localhost:8080" // assuming local proxy is listening on 8080
+var (
+	// This value is holds the input of 'proxyURLFlag' from init_tests.go.
+	// It is used in DefaultBaseAPIParams to determine if the cluster is running
+	// on a
+	// 	1. local instance (no docker) 	- works
+	//	2. local docker instance		- works
+	// 	3. AWS-deployed cluster 		- not tested (but runs mainly with Ansible)
+	readProxyURL = "http://localhost:8080" // Just setting a default, will get actual value later
 )
 
 type (
@@ -448,6 +454,7 @@ func GetConfig(server string) (HTTPLatencies, error) {
 
 // GetPrimaryProxy returns the primary proxy's url of a cluster
 func GetPrimaryProxy(proxyURL string) (string, error) {
+	readProxyURL = proxyURL //Sets the appropriate proxy url based on local, docker or url flag
 	baseParams := BaseAPIParams(proxyURL)
 	smap, err := api.GetClusterMap(baseParams)
 	if err != nil {
@@ -810,7 +817,7 @@ func MetricsDSort(proxyURL, managerUUID string) (map[string]*dsort.Metrics, erro
 }
 
 func DefaultBaseAPIParams(t *testing.T) *api.BaseParams {
-	primaryURL, err := GetPrimaryProxy(ProxyURL)
+	primaryURL, err := GetPrimaryProxy(readProxyURL)
 	CheckFatal(err, t)
 	return BaseAPIParams(primaryURL)
 }
@@ -820,4 +827,29 @@ func BaseAPIParams(url string) *api.BaseParams {
 		Client: HTTPClient,
 		URL:    url,
 	}
+}
+
+// ParseEnvVariables takes in a .env file and parses its contents
+func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
+	m := map[string]string{}
+	dlim := "="
+	data, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		Logf("Could not read file: %v\n", err)
+		return nil
+	}
+
+	if len(delimiter) > 0 {
+		dlim = delimiter[0]
+	}
+
+	paramList := strings.Split(string(data), "\n")
+	for _, dat := range paramList {
+		datum := strings.Split(dat, dlim)
+		//key=val
+		if len(datum) == 2 {
+			m[datum[0]] = datum[1]
+		}
+	}
+	return m
 }

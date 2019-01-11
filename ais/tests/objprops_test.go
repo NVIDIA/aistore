@@ -322,7 +322,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 		bucket     = clibucket
 		versionDir = "versionid"
 		sgl        *memsys.SGL
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	if usingSG {
@@ -407,7 +407,7 @@ func propsTestCore(t *testing.T, versionEnabled bool, isLocalBucket bool) {
 }
 
 func propsMainTest(t *testing.T, versioning string) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	chkVersion := true
 
 	config := getDaemonConfig(t, proxyURL)

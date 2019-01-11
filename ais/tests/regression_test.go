@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/ais"
+	dfc "github.com/NVIDIA/dfcpub/ais"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -82,7 +82,7 @@ func TestLocalListBucketGetTargetURL(t *testing.T) {
 		errCh      = make(chan error, num)
 		sgl        *memsys.SGL
 		targets    = make(map[string]struct{})
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	smap := getClusterMap(t, proxyURL)
 	if len(smap.Tmap) == 1 {
@@ -157,7 +157,7 @@ func TestCloudListBucketGetTargetURL(t *testing.T) {
 		sgl        *memsys.SGL
 		bucketName = clibucket
 		targets    = make(map[string]struct{})
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		random     = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 		prefix     = tutils.FastRandomFilename(random, 32)
 	)
@@ -246,7 +246,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 		errCh      = make(chan error, 100)
 		sgl        *memsys.SGL
 		fqn        string
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	if tutils.DockerRunning() {
 		t.Skip(fmt.Sprintf("%q requires setting Xattrs, doesn't work with docker", t.Name()))
@@ -305,7 +305,7 @@ func TestGetCorruptFileAfterPut(t *testing.T) {
 
 func TestRegressionLocalBuckets(t *testing.T) {
 	bucket := TestLocalBucketName
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	tutils.CreateFreshLocalBucket(t, proxyURL, bucket)
 	defer tutils.DestroyLocalBucket(t, proxyURL, bucket)
 	doBucketRegressionTest(t, proxyURL, regressionTestData{bucket: bucket})
@@ -317,7 +317,7 @@ func TestRenameLocalBuckets(t *testing.T) {
 		t.Skip(skipping)
 	}
 	var (
-		proxyURL      = getPrimaryURL(t, proxyURLRO)
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 		bucket        = TestLocalBucketName
 		renamedBucket = bucket + "_renamed"
 	)
@@ -343,7 +343,7 @@ func TestListObjectsPrefix(t *testing.T) {
 		errCh      = make(chan error, numFiles*5)
 		filesPutCh = make(chan string, numfiles)
 		dir        = DeleteDir
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		sgl        *memsys.SGL
 	)
 	if usingSG {
@@ -436,7 +436,7 @@ func TestRenameObjects(t *testing.T) {
 		basenames = make([]string, 0, numPuts) // basenames
 		bnewnames = make([]string, 0, numPuts) // new basenames
 		sgl       *memsys.SGL
-		proxyURL  = getPrimaryURL(t, proxyURLRO)
+		proxyURL  = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	tutils.CreateFreshLocalBucket(t, proxyURL, RenameLocalBucketName)
@@ -505,7 +505,7 @@ func TestRenameObjects(t *testing.T) {
 }
 
 func TestObjectPrefix(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
 		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
 	}
@@ -521,7 +521,7 @@ func TestObjectsVersions(t *testing.T) {
 }
 
 func TestRegressionCloudBuckets(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestRegressionCloudBuckets requires a cloud bucket")
 	}
@@ -541,7 +541,7 @@ func TestRebalance(t *testing.T) {
 		errCh        = make(chan error, 100)
 		wg           = &sync.WaitGroup{}
 		sgl          *memsys.SGL
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	filesSentOrig := make(map[string]int64)
 	bytesSentOrig := make(map[string]int64)
@@ -647,7 +647,7 @@ func TestRebalance(t *testing.T) {
 }
 
 func TestGetClusterStats(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	smap := getClusterMap(t, proxyURL)
 	stats := getClusterStats(t, proxyURL)
 
@@ -682,7 +682,7 @@ func TestGetClusterStats(t *testing.T) {
 }
 
 func TestConfig(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	oconfig := getDaemonConfig(t, proxyURL)
 	olruconfig := oconfig.LRU
 	operiodic := oconfig.Periodic
@@ -744,7 +744,7 @@ func TestLRU(t *testing.T) {
 	var (
 		errCh    = make(chan error, 100)
 		usedpct  = 100
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	if !isCloudBucket(t, proxyURL, clibucket) {
 		t.Skip("TestLRU test requires a cloud bucket")
@@ -867,7 +867,7 @@ func TestPrefetchList(t *testing.T) {
 	var (
 		toprefetch    = make(chan string, numfiles)
 		netprefetches = int64(0)
-		proxyURL      = getPrimaryURL(t, proxyURLRO)
+		proxyURL      = getPrimaryURL(t, proxyURLReadOnly)
 	)
 
 	if !isCloudBucket(t, proxyURL, clibucket) {
@@ -935,7 +935,7 @@ func TestDeleteList(t *testing.T) {
 		wg       = &sync.WaitGroup{}
 		errCh    = make(chan error, numfiles)
 		files    = make([]string, 0, numfiles)
-		proxyURL = getPrimaryURL(t, proxyURLRO)
+		proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 	)
 	if created := createLocalBucketIfNotExists(t, proxyURL, clibucket); created {
 		defer tutils.DestroyLocalBucket(t, proxyURL, clibucket)
@@ -981,7 +981,7 @@ func TestPrefetchRange(t *testing.T) {
 		err            error
 		rmin, rmax     int64
 		re             *regexp.Regexp
-		proxyURL       = getPrimaryURL(t, proxyURLRO)
+		proxyURL       = getPrimaryURL(t, proxyURLReadOnly)
 		prefetchPrefix = "regressionList/obj"
 		prefetchRegex  = "\\d*"
 	)
@@ -1073,7 +1073,7 @@ func TestDeleteRange(t *testing.T) {
 		regex          = "\\d?\\d"
 		wg             = &sync.WaitGroup{}
 		errCh          = make(chan error, numfiles)
-		proxyURL       = getPrimaryURL(t, proxyURLRO)
+		proxyURL       = getPrimaryURL(t, proxyURLReadOnly)
 		baseParams     = tutils.DefaultBaseAPIParams(t)
 	)
 
@@ -1148,7 +1148,7 @@ func TestStressDeleteRange(t *testing.T) {
 		prefix       = ListRangeStr + "/tstf-"
 		wg           = &sync.WaitGroup{}
 		errCh        = make(chan error, numFiles)
-		proxyURL     = getPrimaryURL(t, proxyURLRO)
+		proxyURL     = getPrimaryURL(t, proxyURLReadOnly)
 		regex        = "\\d*"
 		tenth        = numFiles / 10
 		partial_rnge = fmt.Sprintf("%d:%d", 0, numFiles-tenth-1) // TODO: partial range with non-zero left boundary

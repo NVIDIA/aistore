@@ -112,7 +112,7 @@ func repairMountpath(t *testing.T, target, mpath string, availLen, disabledLen i
 func runAsyncJob(t *testing.T, wg *sync.WaitGroup, op, mpath string, filelist []string, chfail,
 	chstop chan struct{}, sgl *memsys.SGL, bucket string) {
 	const filesize = 64 * 1024
-	var proxyURL = getPrimaryURL(t, proxyURLRO)
+	var proxyURL = getPrimaryURL(t, proxyURLReadOnly)
 
 	tutils.Logf("Testing mpath fail detection on %s\n", op)
 	stopTime := time.Now().Add(fshcRunTimeMax)
@@ -167,7 +167,7 @@ func TestFSCheckerDetection(t *testing.T) {
 		sgl        *memsys.SGL
 		seed       = baseseed + 300
 		numObjs    = 100
-		proxyURL   = getPrimaryURL(t, proxyURLRO)
+		proxyURL   = getPrimaryURL(t, proxyURLReadOnly)
 		bucket     = TestLocalBucketName
 		baseParams *api.BaseParams
 	)
@@ -326,7 +326,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 		t.Skip(skipping)
 	}
 
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	bucket := clibucket
 	if isCloudBucket(t, proxyURL, bucket) {
 		bucket = TestLocalBucketName
@@ -380,7 +380,7 @@ func TestFSCheckerEnablingMpath(t *testing.T) {
 }
 
 func TestFSCheckerTargetDisable(t *testing.T) {
-	proxyURL := getPrimaryURL(t, proxyURLRO)
+	proxyURL := getPrimaryURL(t, proxyURLReadOnly)
 	smap := getClusterMap(t, proxyURL)
 	proxyCnt := len(smap.Pmap)
 	targetCnt := len(smap.Tmap)
