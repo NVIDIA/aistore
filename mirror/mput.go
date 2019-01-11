@@ -156,7 +156,7 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 //
 func (r *XactCopy) checkErrNumMp(l int) error {
 	if l < 2 {
-		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", r)
+		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", r, l)
 	}
 	return nil
 }
