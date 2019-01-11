@@ -1267,6 +1267,7 @@ func (p *proxyrunner) getCloudBucketObjects(r *http.Request, bucket string, list
 	}
 	if strings.Contains(msg.GetProps, cmn.GetPropsAtime) ||
 		strings.Contains(msg.GetProps, cmn.GetPropsStatus) ||
+		strings.Contains(msg.GetProps, cmn.GetPropsCopies) ||
 		strings.Contains(msg.GetProps, cmn.GetPropsIsCached) {
 		// Now add local properties to the cloud objects
 		// The call replaces allentries.Entries with new values

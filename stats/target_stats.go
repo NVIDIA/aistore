@@ -252,7 +252,7 @@ func (r *Trunner) removeOlderLogs(tot, maxtotal int64, filteredInfos []os.FileIn
 func (r *Trunner) UpdateCapacity() (runlru bool) {
 	availableMountpaths, _ := fs.Mountpaths.Get()
 	if len(availableMountpaths) == 0 {
-		glog.Errorln("UpdateCapacity: no mountpaths")
+		glog.Errorln("UpdateCapacity: " + cmn.NoMountpaths)
 		return
 	}
 	capacities := make(map[string]*fscapacity, len(availableMountpaths))

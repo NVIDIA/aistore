@@ -68,6 +68,7 @@ type (
 		needChkSum   bool
 		needVersion  bool
 		needStatus   bool
+		needCopies   bool
 		atimeRespCh  chan *atime.Response
 	}
 	uxprocess struct {
@@ -1883,6 +1884,7 @@ func (t *targetrunner) newFileWalk(bucket string, msg *cmn.GetMsg) *allfinfos {
 		needChkSum:   strings.Contains(msg.GetProps, cmn.GetPropsChecksum),
 		needVersion:  strings.Contains(msg.GetProps, cmn.GetPropsVersion),
 		needStatus:   strings.Contains(msg.GetProps, cmn.GetPropsStatus),
+		needCopies:   strings.Contains(msg.GetProps, cmn.GetPropsCopies),
 		atimeRespCh:  make(chan *atime.Response, 1),
 	}
 
@@ -1925,26 +1927,37 @@ func (ci *allfinfos) processDir(fqn string) error {
 //  - its name starts with prefix (if prefix is set)
 //  - it has not been already returned by previous page request
 //  - this target responses getobj request for the object
-func (ci *allfinfos) processRegularFile(lom *cluster.LOM, osfi os.FileInfo, objStatus string) error {
+func (ci *allfinfos) lsObject(lom *cluster.LOM, osfi os.FileInfo, objStatus string) error {
 	relname := lom.Fqn[ci.rootLength:]
 	if ci.prefix != "" && !strings.HasPrefix(relname, ci.prefix) {
 		return nil
 	}
-
 	if ci.marker != "" && relname <= ci.marker {
 		return nil
 	}
-
-	// the file passed all checks - add it to the batch
+	// add the obj to the page
 	ci.fileCount++
 	fileInfo := &cmn.BucketEntry{
 		Name:     relname,
 		Atime:    "",
 		IsCached: true,
 		Status:   objStatus,
+		Copies:   1,
+	}
+	lomAction := 0
+	if ci.needAtime {
+		lomAction |= cluster.LomAtime
+	}
+	if ci.needChkSum {
+		lomAction |= cluster.LomCksum
+	}
+	if ci.needVersion {
+		lomAction |= cluster.LomVersion
+	}
+	if lomAction != 0 {
+		lom.Fill(lomAction)
 	}
 	if ci.needAtime {
-		lom.Fill(cluster.LomAtime)
 		fileInfo.Atime = lom.Atimestr
 	}
 	if ci.needCtime {
@@ -1958,18 +1971,15 @@ func (ci *allfinfos) processRegularFile(lom *cluster.LOM, osfi os.FileInfo, objS
 			fileInfo.Ctime = t.Format(ci.msg.GetTimeFormat)
 		}
 	}
-	if ci.needChkSum {
-		errstr := lom.Fill(cluster.LomCksum)
-		if errstr == "" && lom.Nhobj != nil {
-			_, storedCksum := lom.Nhobj.Get()
-			fileInfo.Checksum = hex.EncodeToString([]byte(storedCksum))
-		}
+	if ci.needChkSum && lom.Nhobj != nil {
+		_, storedCksum := lom.Nhobj.Get()
+		fileInfo.Checksum = hex.EncodeToString([]byte(storedCksum))
 	}
 	if ci.needVersion {
-		errstr := lom.Fill(cluster.LomVersion)
-		if errstr == "" {
-			fileInfo.Version = lom.Version
-		}
+		fileInfo.Version = lom.Version
+	}
+	if ci.needCopies && lom.HasCopy() {
+		fileInfo.Copies = 2 // 2-way, or not replicated
 	}
 	fileInfo.Size = osfi.Size()
 	ci.files = append(ci.files, fileInfo)
@@ -1996,22 +2006,27 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		objStatus = cmn.ObjStatusOK
 		lom       = &cluster.LOM{T: ci.t, Fqn: fqn}
 	)
-	errstr := lom.Fill(cluster.LomFstat)
+	if errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy); errstr != "" {
+		glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
+	}
 	if lom.Doesnotexist {
 		return nil
 	}
-	if ci.needStatus || ci.needAtime {
-		if errstr != "" || lom.Misplaced() {
-			glog.Warning(errstr)
-			objStatus = cmn.ObjStatusMoved
-		}
+	if lom.IsCopy() {
+		return nil
+	}
+	if lom.Misplaced() {
+		objStatus = cmn.ObjStatusMoved
+	} else {
 		si, errstr := hrwTarget(lom.Bucket, lom.Objname, ci.t.smapowner.get())
-		if errstr != "" || ci.t.si.DaemonID != si.DaemonID {
-			glog.Warningf("%s appears to be misplaced: %s", lom, errstr)
+		if errstr != "" {
+			glog.Errorf("%s: %s", lom, errstr)
+		}
+		if ci.t.si.DaemonID != si.DaemonID {
 			objStatus = cmn.ObjStatusMoved
 		}
 	}
-	return ci.processRegularFile(lom, osfi, objStatus)
+	return ci.lsObject(lom, osfi, objStatus)
 }
 
 // After putting a new version it updates xattr attributes for the object

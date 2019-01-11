@@ -1859,17 +1859,16 @@ func TestAtimeRebalance(t *testing.T) {
 	}
 }
 
-func _TestLocalMirror(t *testing.T) {
+func TestLocalMirror(t *testing.T) {
 	const (
-		num      = 1000
-		filesize = cmn.MiB
+		num      = 10000
+		filesize = cmn.KiB
 	)
 	var (
 		m = metadata{
 			t:               t,
-			delay:           time.Second * 5,
 			num:             num,
-			numGetsEachFile: 2,
+			numGetsEachFile: 5,
 			repFilenameCh:   make(chan repFile, num),
 			semaphore:       make(chan struct{}, 100),
 			wg:              &sync.WaitGroup{},
@@ -1926,9 +1925,29 @@ func _TestLocalMirror(t *testing.T) {
 	m.wg.Add(num * m.numGetsEachFile)
 	tutils.Logln("GET in parallel...")
 	doGetsInParallel(&m)
+
+	// List Bucket - primarily for the copies
+	msg := &cmn.GetMsg{GetProps: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
+	tutils.CheckFatal(err, t)
+
 	m.wg.Wait()
 
-	tutils.Logln("Done")
+	total, copied := 0, 0
+	for _, entry := range objectList.Entries {
+		if entry.Atime == "" {
+			t.Errorf("%s/%s: access time is empty", m.bucket, entry.Name)
+		}
+		total++
+		if entry.Copies == 2 {
+			copied++
+		}
+	}
+	tutils.Logf("objects (total, copied) = (%d, %d)\n", total, copied)
+	if copied < total/2 {
+		t.Fatal("Expecting at least half of the objects to be replicated")
+	}
 }
 
 // 1. Unregister target

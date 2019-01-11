@@ -50,6 +50,7 @@ var toBiBytes = map[string]int64{
 const (
 	DoesNotExist = "does not exist"
 	NotSupported = "not supported yet"
+	NoMountpaths = "no mountpaths"
 )
 
 type (

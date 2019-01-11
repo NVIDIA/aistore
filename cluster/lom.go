@@ -95,7 +95,7 @@ func (lom *LOM) HasCopy() bool    { return lom.CopyFQN != "" && lom.Fqn == lom.H
 //
 func (lom *LOM) SetXcopy(cpyfqn string) (errstr string) { // cross-ref
 	if errstr = fs.SetXattr(lom.Fqn, cmn.XattrCopies, []byte(cpyfqn)); errstr == "" {
-		if errstr = fs.SetXattr(lom.CopyFQN, cmn.XattrCopies, []byte(lom.Fqn)); errstr == "" {
+		if errstr = fs.SetXattr(cpyfqn, cmn.XattrCopies, []byte(lom.Fqn)); errstr == "" {
 			lom.CopyFQN = cpyfqn
 			return
 		}
@@ -155,16 +155,20 @@ func (lom *LOM) String() string {
 		}
 	}
 	if lom.Doesnotexist {
-		a = "(" + cmn.DoesNotExist + ")"
-	}
-	if lom.Misplaced() {
-		a += "(misplaced)"
-	}
-	if lom.IsCopy() {
-		a += "(is a local replica)"
-	}
-	if lom.Badchecksum {
-		a += "(bad checksum)"
+		a = "(x)"
+	} else {
+		if lom.Misplaced() {
+			a += "(misplaced)"
+		}
+		if lom.IsCopy() {
+			a += "(is-copy)"
+		}
+		if lom.HasCopy() {
+			a += "(has-copy)"
+		}
+		if lom.Badchecksum {
+			a += "(bad-checksum)"
+		}
 	}
 	return s + a + "]"
 }
@@ -312,7 +316,7 @@ func (lom *LOM) ChooseMirror() (fqn string) {
 	_, currRepl := parsedCpyFQN.MpathInfo.GetIOstats(fs.StatDiskUtil)
 	if currRepl.Max < currMain.Max-float32(lom.Mirror.MirrorUtilThresh) && currRepl.Min <= currMain.Min {
 		fqn = lom.CopyFQN
-		if glog.V(3) {
+		if glog.V(4) {
 			glog.Infof("GET %s from a mirror %s", lom, parsedCpyFQN.MpathInfo)
 		}
 	}

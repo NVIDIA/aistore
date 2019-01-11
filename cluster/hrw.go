@@ -7,6 +7,7 @@ package cluster
 import (
 	"fmt"
 
+	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/xoshiro256"
 	"github.com/OneOfOne/xxhash"
@@ -71,7 +72,7 @@ func HrwProxy(smap *Smap, idToSkip string) (pi *Snode, errstr string) {
 func hrwMpath(bucket, objname string) (mi *fs.MountpathInfo, errstr string) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) == 0 {
-		errstr = fmt.Sprintf("Cannot select mountpath for %s/%s", bucket, objname)
+		errstr = fmt.Sprintf("%s: cannot hrw(%s/%s)", cmn.NoMountpaths, bucket, objname)
 		return
 	}
 	var (

@@ -79,21 +79,10 @@ func (g *fsprungroup) disableMountpath(mpath string) (disabled, exists bool) {
 	if !disabled || !exists {
 		return
 	}
-
 	for _, r := range g.runners {
 		r.ReqDisableMountpath(mpath)
 	}
-	glog.Infof("Disabled mountpath %s", mpath)
-
-	availablePaths, _ := fs.Mountpaths.Get()
-	if len(availablePaths) > 0 {
-		return
-	}
-
-	glog.Warningf("The last available mountpath has been disabled: unregistering %s (self)", g.t.si)
-	if err := g.t.disable(); err != nil {
-		glog.Errorf("Failed to unregister %s (self), err: %v", g.t.si, err)
-	}
+	g.checkNoMountpaths("Disabled")
 	return
 }
 
@@ -103,7 +92,6 @@ func (g *fsprungroup) addMountpath(mpath string) (err error) {
 	if err = fs.Mountpaths.Add(mpath); err != nil {
 		return
 	}
-
 	if err = fs.Mountpaths.CreateBucketDir(cmn.LocalBs); err != nil {
 		return
 	}
@@ -134,19 +122,22 @@ func (g *fsprungroup) removeMountpath(mpath string) (err error) {
 	if err = fs.Mountpaths.Remove(mpath); err != nil {
 		return
 	}
-
 	for _, r := range g.runners {
 		r.ReqRemoveMountpath(mpath)
 	}
+	g.checkNoMountpaths("Removed")
+	return
+}
 
+// check for no-mounpaths and UNREGISTER
+func (g *fsprungroup) checkNoMountpaths(action string) {
 	availablePaths, _ := fs.Mountpaths.Get()
 	if len(availablePaths) > 0 {
-		glog.Infof("Removed mountpath %s", mpath)
-	} else {
-		glog.Infof("Removed the last mountpath %s", mpath)
-		if err := g.t.disable(); err != nil {
-			glog.Errorf("Failed to unregister %s (self), err: %v", g.t.si, err)
-		}
+		return
 	}
-	return
+	if err := g.t.disable(); err != nil {
+		glog.Errorf("%s the last available mountpath, failed to unregister target %s (self), err: %v", action, g.t.si, err)
+	} else {
+		glog.Errorf("%s the last available mountpath and unregistered target %s (self)", action, g.t.si)
+	}
 }

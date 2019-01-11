@@ -193,7 +193,7 @@ func (lctx *lructx) postRemove(capCheck int64, fi *fileInfo) (int64, error) {
 				ratioUtilization := cmn.Ratio(lctx.config.Xaction.DiskUtilHighWM, lctx.config.Xaction.DiskUtilLowWM, int64(curr.Max))
 				if ratioUtilization > ratioCapacity {
 					lctx.throttle = true
-					time.Sleep(cmn.ThrottleSleepOut)
+					time.Sleep(cmn.ThrottleSleepMax)
 				}
 			}
 		}
@@ -254,7 +254,7 @@ func (lctx *lructx) yieldTerm() error {
 		return fmt.Errorf("%s aborted, exiting", xlru)
 	default:
 		if lctx.throttle {
-			time.Sleep(cmn.ThrottleSleepIn)
+			time.Sleep(cmn.ThrottleSleepMin)
 		} else {
 			runtime.Gosched()
 		}

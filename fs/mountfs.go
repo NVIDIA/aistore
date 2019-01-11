@@ -318,7 +318,7 @@ func (mfs *MountedFS) Remove(mpath string) error {
 	availablePaths, disabledPaths := mfs.mountpathsCopy()
 	if mp, exists = availablePaths[mpath]; !exists {
 		if mp, exists = disabledPaths[mpath]; !exists {
-			return fmt.Errorf("tried to remove nonexisting mountpath: %v", mpath)
+			return fmt.Errorf("tried to remove non-existing mountpath: %v", mpath)
 		}
 
 		delete(disabledPaths, mpath)
@@ -329,8 +329,10 @@ func (mfs *MountedFS) Remove(mpath string) error {
 
 	delete(availablePaths, mpath)
 	delete(mfs.fsIDs, mp.Fsid)
-	if len(availablePaths) == 0 {
-		glog.Errorf("removed last available mountpath: %s", mpath)
+	if l := len(availablePaths); l == 0 {
+		glog.Errorf("removed the last available mountpath %s", mp)
+	} else {
+		glog.Infof("removed mountpath %s (%d remain(s) active)", mp, l)
 	}
 
 	mfs.updatePaths(availablePaths, disabledPaths)
@@ -373,13 +375,16 @@ func (mfs *MountedFS) Disable(mpath string) (disabled, exists bool) {
 		disabledPaths[mpath] = mpathInfo
 		delete(availablePaths, mpath)
 		mfs.updatePaths(availablePaths, disabledPaths)
+		if l := len(availablePaths); l == 0 {
+			glog.Errorf("disabled the last available mountpath %s", mpathInfo)
+		} else {
+			glog.Infof("disabled mountpath %s (%d remain(s) active)", mpathInfo, l)
+		}
 		return true, true
 	}
-
 	if _, ok := disabledPaths[mpath]; ok {
 		return false, true
 	}
-
 	return
 }
 

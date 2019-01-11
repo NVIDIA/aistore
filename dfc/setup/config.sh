@@ -4,7 +4,7 @@ cat > $CONFFILE <<EOL
 	"cloudprovider":		"${CLDPROVIDER}",
 	"mirror": {
 		"copies":		2,
-		"mirror_burst_buffer":	256,
+		"mirror_burst_buffer":	384,
 		"mirror_util_thresh":	5,
 		"mirror_optimize_read":	true,
 		"mirror_enabled": 	false

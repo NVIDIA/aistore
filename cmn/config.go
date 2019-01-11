@@ -41,8 +41,9 @@ const (
 )
 
 const (
-	ThrottleSleepIn  = time.Millisecond * 10
-	ThrottleSleepOut = time.Second
+	ThrottleSleepMin = time.Millisecond * 10
+	ThrottleSleepAvg = time.Millisecond * 100
+	ThrottleSleepMax = time.Second
 )
 
 //

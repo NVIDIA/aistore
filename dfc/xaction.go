@@ -298,7 +298,7 @@ func (xs *xactions) renewRechecksum(bucket string) *xactRechecksum {
 	return xrcksum
 }
 
-func (xs *xactions) renewPutCopies(lom *cluster.LOM, tif cluster.Target) (xcopy *mirror.XactCopy) {
+func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mirror.XactCopy) {
 	kindput := path.Join(cmn.ActPutCopies, lom.Bucket)
 	xs.Lock()
 	xx := xs.findU(kindput)
@@ -322,10 +322,20 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, tif cluster.Target) (xcopy 
 	id := xs.uniqueid()
 	base := cmn.NewXactDemandBase(id, kindput)
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
-	xcopy = &mirror.XactCopy{XactDemandBase: *base, Bucket: lom.Bucket, Slab: slab, Mirror: *lom.Mirror, T: tif, Bislocal: lom.Bislocal}
-	xcopy.Init()
-	xs.add(xcopy)
-	go xcopy.Run()
+	xcopy = &mirror.XactCopy{
+		XactDemandBase: *base,
+		Bucket:         lom.Bucket,
+		Slab:           slab,
+		Mirror:         *lom.Mirror,
+		T:              t,
+		Namelocker:     t.rtnamemap,
+		Bislocal:       lom.Bislocal,
+	}
+	if err := xcopy.InitAndRun(); err != nil {
+		glog.Errorln(err)
+	} else {
+		xs.add(xcopy)
+	}
 	xs.Unlock()
 	return
 }

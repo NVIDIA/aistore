@@ -7,6 +7,7 @@ package mirror
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -26,11 +27,13 @@ type (
 		mpathChangeCh chan struct{}
 		copiers       map[string]*copier
 		// init
-		Bucket   string
-		Mirror   cmn.MirrorConf
-		Slab     *memsys.Slab2
-		T        cluster.Target
-		Bislocal bool
+		Bucket     string
+		Mirror     cmn.MirrorConf
+		Slab       *memsys.Slab2
+		T          cluster.Target
+		Namelocker cluster.NameLocker
+		wg         *sync.WaitGroup
+		Bislocal   bool
 	}
 	copier struct { // one per mountpath
 		parent    *XactCopy
@@ -60,72 +63,89 @@ func (r *XactCopy) ReqDisableMountpath(mpath string) { r.mpathChangeCh <- struct
 // - runs on a per-mirrored bucket basis
 // - dispatches replication requests to a dedicated mountpath copier
 // - ref-counts pending requests and self-terminates when idle for a while
-func (r *XactCopy) Init() {
+func (r *XactCopy) InitAndRun() error {
 	availablePaths, _ := fs.Mountpaths.Get()
+	l := len(availablePaths)
+	if err := r.checkErrNumMp(l); err != nil {
+		return err
+	}
 	r.workCh = make(chan *cluster.LOM, r.Mirror.MirrorBurst)
 	r.mpathChangeCh = make(chan struct{}, 1)
-	r.copiers = make(map[string]*copier, len(availablePaths))
+	r.copiers = make(map[string]*copier, l)
+	r.wg = &sync.WaitGroup{}
+	r.wg.Add(1)
+	go r.Run()
+	for _, mpathInfo := range availablePaths {
+		copier := &copier{parent: r, mpathInfo: mpathInfo}
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bislocal)
+		r.copiers[mpathLC] = copier
+		r.wg.Add(1)
+		go copier.jog()
+	}
+	r.wg.Wait() // wait for all to start
+	return nil
 }
 
 func (r *XactCopy) Run() error {
-	availablePaths, _ := fs.Mountpaths.Get()
-outer:
+	glog.Infoln(r.String())
+	r.wg.Done()
 	for {
-		// start mpath copiers
-		for _, mpathInfo := range availablePaths {
-			copier := &copier{parent: r, mpathInfo: mpathInfo}
-			mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bislocal)
-			r.copiers[mpathLC] = copier
-			go copier.jog()
-		}
-		// control loop
-		for {
-			select {
-			case lom := <-r.workCh:
-				cmn.Assert(r.Mirror.MirrorOptimizeRead, cmn.NotSupported)
-				// [throttle] when the optimization objective is read load balancing (rather than
-				// data redundancy), we drop to make sure senders won't block on the workCh
-				if pending := r.Pending(); r.Mirror.MirrorBurst > 1 && pending >= r.Mirror.MirrorBurst {
-					glog.Errorf("pending=%d, burst=%d - dropping %s", pending, r.Mirror.MirrorBurst, lom)
-					break
+		select {
+		case lom := <-r.workCh:
+			cmn.Assert(r.Mirror.MirrorOptimizeRead, cmn.NotSupported)
+			// load balance
+			if copier := r.loadBalance(lom); copier != nil {
+				if glog.V(4) {
+					glog.Infof("%s=>%s", lom.ParsedFQN.MpathInfo, copier.mpathInfo)
 				}
-				// load balance
-				if copier := r.loadBalance(lom); copier != nil {
-					copier.workCh <- lom
-				}
-			case <-r.ChanCheckTimeout():
-				if r.Timeout() {
-					r.stop()
-					return nil
-				}
-			case <-r.ChanAbort():
-				r.stop()
-				return fmt.Errorf("%s aborted, exiting", r)
-			case <-r.mpathChangeCh:
-				for _, copier := range r.copiers {
-					copier.stop()
-				}
-				availablePaths, _ = fs.Mountpaths.Get()
-				l := len(availablePaths)
-				if l == 0 {
-					r.stop()
-					return fmt.Errorf("%s no mountpaths, exiting", r)
-				}
-				r.copiers = make(map[string]*copier, l) // new copiers map
-				continue outer                          // reinitialize and keep running
+				copier.workCh <- lom
+			} else {
+				glog.Errorf("%s: failed to load balance (drop type 1)", lom)
 			}
+		case <-r.ChanCheckTimeout():
+			if r.Timeout() {
+				r.stop()
+				return nil
+			}
+		case <-r.ChanAbort():
+			r.stop()
+			return fmt.Errorf("%s aborted, exiting", r)
+		case <-r.mpathChangeCh:
+			r.stop()
+			return fmt.Errorf("%s mpath-changed, exiting", r) // will be renewed by the next PUT
 		}
 	}
 }
 
 // main method: replicate a given locally stored object
 func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
-	r.IncPending() // ref-count via base to support on-demand action
 	if r.Finished() {
 		err = cmn.NewErrXpired("Cannot replicate: " + r.String())
 		return
 	}
+	// [throttle]
+	// when the optimization objective is - read load balancing
+	// (rather than data redundancy), we start dropping requests to make sure
+	// callers never block
+	pending, max := r.Pending(), r.Mirror.MirrorBurst
+	if pending > 1 && pending >= max {
+		glog.Errorf("%s: pending/burst=(%d, %d), drop type 2", lom, pending, max)
+		return
+	}
+	r.IncPending() // ref-count via base to support on-demand action
 	r.workCh <- lom
+
+	// [throttle]
+	// on the other hand, when approaching the fixed boundary
+	// a bit of back-pressure may be just necessary
+	// (this code is by no means a replacement of the (TODO) adaptive logic)
+	if pending > 1 && max > 10 {
+		if pending >= max-max/8 {
+			time.Sleep(cmn.ThrottleSleepMax)
+		} else if pending > max/2 {
+			time.Sleep(cmn.ThrottleSleepAvg)
+		}
+	}
 	return
 }
 
@@ -134,6 +154,12 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 //
 // private methods
 //
+func (r *XactCopy) checkErrNumMp(l int) error {
+	if l < 2 {
+		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", r)
+	}
+	return nil
+}
 
 // =================== load balancing and self-throttling ========================
 // Generally,
@@ -156,19 +182,10 @@ func (r *XactCopy) loadBalance(lom *cluster.LOM) (copier *copier) {
 		if j.mpathInfo.Path == lom.ParsedFQN.MpathInfo.Path {
 			continue
 		}
-		// TODO: minimize or eliminate the cases when replication
-		//       destination happens to be busier than the source;
-		//       throttle via delay or rescheduling
 		if _, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil); curr.Max < util.Max {
 			copier = j
 			util = curr
 		}
-	}
-	// [throttle] when the optimization objective is read load balancing (rather than
-	// data redundancy), we start dropping requests at high utilizations of local filesystems
-	if util.Max >= float32(lom.Config.Xaction.DiskUtilHighWM) && util.Min > float32(lom.Config.Xaction.DiskUtilLowWM) {
-		glog.Errorf("utilization %s - dropping %s", util, lom)
-		copier = nil
 	}
 	return
 }
@@ -202,6 +219,8 @@ func (j *copier) stop() {
 }
 
 func (j *copier) jog() {
+	glog.Infof("copier[%s] started", j.mpathInfo)
+	j.parent.wg.Done()
 	j.workCh = make(chan *cluster.LOM, j.parent.Mirror.MirrorBurst)
 	j.stopCh = make(chan struct{}, 1)
 	j.buf = j.parent.Slab.Alloc()
@@ -218,31 +237,32 @@ loop:
 	j.parent.Slab.Free(j.buf)
 }
 
-// TODO: - versioned updates
-//       - disable active mirror via bucket props
 func (j *copier) mirror(lom *cluster.LOM) {
 	// copy
 	var (
 		cpyfqn       string
 		parsedCpyFQN = lom.ParsedFQN
 	)
+	j.parent.Namelocker.Lock(lom.Uname, false)
+	defer j.parent.Namelocker.Unlock(lom.Uname, false)
+
 	parsedCpyFQN.MpathInfo = j.mpathInfo
 	workfqn := fs.CSM.GenContentParsedFQN(parsedCpyFQN, fs.WorkfileType, fs.WorkfilePut)
 	if err := lom.CopyObject(workfqn, j.buf); err != nil {
 		return
 	}
-	if glog.V(4) {
-		glog.Infof("Copied %s => workfile %s", lom, workfqn)
-	}
 	cpyfqn = fs.CSM.FQN(j.mpathInfo, lom.ParsedFQN.ContentType, lom.Bislocal, lom.Bucket, lom.Objname)
+	if glog.V(4) {
+		glog.Infof("Copied %s => workfile %s, cpyfqn %s", lom, workfqn, cpyfqn)
+	}
 	if err := cmn.MvFile(workfqn, cpyfqn); err != nil {
 		glog.Errorln(err)
 		goto fail
 	}
 	if errstr := lom.SetXcopy(cpyfqn); errstr != "" {
 		glog.Errorln(errstr)
-	} else if glog.V(3) {
-		glog.Infof("Copied %s => %s", lom, j.mpathInfo)
+	} else if glog.V(4) {
+		glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
 	}
 	return
 fail:

@@ -32,11 +32,12 @@ type (
 		erasers       map[string]*eraser
 		config        *cmn.Config
 		// init
-		Bucket   string
-		Mirror   cmn.MirrorConf
-		Slab     *memsys.Slab2
-		T        cluster.Target
-		Bislocal bool
+		Bucket     string
+		Mirror     cmn.MirrorConf
+		Slab       *memsys.Slab2
+		T          cluster.Target
+		Namelocker cluster.NameLocker
+		Bislocal   bool
 	}
 	eraser struct { // one per mountpath
 		parent    *XactErase
@@ -63,6 +64,7 @@ func (r *XactErase) ReqDisableMountpath(mpath string) { r.mpathChangeCh <- struc
 //
 
 func (r *XactErase) Run() error {
+	glog.Infoln(r.String())
 	// init
 	availablePaths, _ := fs.Mountpaths.Get()
 	r.erasers = make(map[string]*eraser, len(availablePaths))
@@ -91,7 +93,7 @@ init:
 			r.erasers = make(map[string]*eraser, l) // new erasers map
 			if l == 0 {
 				r.stop()
-				return fmt.Errorf("%s no mountpaths, exiting", r)
+				return fmt.Errorf("%s: %s, exiting", r, cmn.NoMountpaths)
 			}
 			goto init // reinitialize and keep running
 		}
@@ -121,6 +123,7 @@ func (r *XactErase) stop() {
 func (j *eraser) stop() { j.stopCh <- struct{}{}; close(j.stopCh) }
 
 func (j *eraser) jog() {
+	glog.Infof("eraser[%s] started", j.mpathInfo)
 	j.stopCh = make(chan struct{}, 1)
 	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket, j.parent.Bislocal)
 	if err := filepath.Walk(dir, j.walk); err != nil {
@@ -155,6 +158,10 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 	if !lom.HasCopy() {
 		return nil
 	}
+
+	j.parent.Namelocker.Lock(lom.Uname, true)
+	defer j.parent.Namelocker.Unlock(lom.Uname, true)
+
 	if errstr := lom.DelCopy(); errstr != "" {
 		return errors.New(errstr)
 	}
@@ -178,9 +185,9 @@ func (j *eraser) yieldTerm() error {
 		_, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
 		j.num = 0
 		if curr.Max >= float32(j.parent.config.Xaction.DiskUtilHighWM) && curr.Min > float32(j.parent.config.Xaction.DiskUtilLowWM) {
-			time.Sleep(cmn.ThrottleSleepOut)
+			time.Sleep(cmn.ThrottleSleepAvg)
 		} else {
-			time.Sleep(cmn.ThrottleSleepIn)
+			time.Sleep(cmn.ThrottleSleepMin)
 		}
 		break
 	}
