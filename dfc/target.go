@@ -2170,7 +2170,7 @@ func (t *targetrunner) putCommit(ct context.Context, lom *cluster.LOM, putfqn st
 	lom.Doesnotexist = false
 
 	if !rebalance && errstr == "" {
-		if err := t.ecmanager.EncodeObject(lom); err != nil {
+		if err := t.ecmanager.EncodeObject(lom); err != nil && err != ec.ErrorECDisabled {
 			errstr = err.Error()
 		}
 	}

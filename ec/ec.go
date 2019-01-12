@@ -105,7 +105,7 @@ const (
 	MetaType  = "meta" // metafile prefix
 
 	DefaultSizeLimit = 256 * cmn.KiB // default minimal object size for EC
-	MinSliceCount    = 2             // minimum number of data or parity slices
+	MinSliceCount    = 1             // minimum number of data or parity slices
 	MaxSliceCount    = 32            // maximum number of data or parity slices
 
 	ActSplit   = "split"

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
+	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/ec"
 	"github.com/NVIDIA/dfcpub/fs"
@@ -37,14 +38,38 @@ const (
 	ecObjMinSize = 1024 * 64
 	ecObjMaxSize = 64 * cmn.MiB
 	ecObjLimit   = 256 * cmn.KiB
-	ecSliceCnt   = 2
-	ecParityCnt  = 2
 
 	ecMinSmallSize = 32 * cmn.KiB
 	ecSmallDelta   = 200 * cmn.KiB
 	ecMinBigSize   = ecObjLimit * 2
 	ecBigDelta     = 10 * cmn.MiB
 )
+
+var (
+	ecSliceCnt  = 2
+	ecParityCnt = 2
+)
+
+func ecSliceNumInit(smap cluster.Smap) error {
+	tCnt := len(smap.Tmap)
+	if tCnt < 4 {
+		return fmt.Errorf("Test requires at least 4 targets")
+	}
+
+	if tCnt == 4 {
+		ecSliceCnt = 1
+		ecParityCnt = 1
+		return nil
+	} else if tCnt == 5 {
+		ecSliceCnt = 1
+		ecParityCnt = 1
+		return nil
+	}
+
+	ecSliceCnt = 2
+	ecParityCnt = 2
+	return nil
+}
 
 // Since all replicas are equal, it is hard to tell main one from others. Main
 // replica is the replica that is on the target chosen by proxy using HrwTarget
@@ -217,8 +242,8 @@ func TestECPropsChange(t *testing.T) {
 	bucketProps.ECConf = cmn.ECConf{
 		ECEnabled:      true,
 		ECObjSizeLimit: ecObjLimit,
-		DataSlices:     ecSliceCnt,
-		ParitySlices:   ecParityCnt,
+		DataSlices:     1,
+		ParitySlices:   1,
 	}
 	baseParams := tutils.BaseAPIParams(proxyURL)
 
@@ -235,8 +260,8 @@ func TestECPropsChange(t *testing.T) {
 	}
 
 	tutils.Logln("Enabling EC")
-	bucketProps.DataSlices = ecSliceCnt
-	bucketProps.ParitySlices = ecParityCnt
+	bucketProps.DataSlices = 1
+	bucketProps.ParitySlices = 1
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
 	tutils.CheckFatal(err, t)
 
@@ -294,8 +319,8 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) < 5 {
-		t.Fatal("Not enough targets to run EC tests, must be at least 5")
+	if err := ecSliceNumInit(smap); err != nil {
+		t.Fatal(err)
 	}
 
 	if usingSG {
@@ -331,7 +356,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 		delSlice := false // delete only main object
 		deletedFiles := 1
-		if rnd.Intn(100) < sliceDelPct {
+		if ecSliceCnt+ecParityCnt > 2 && rnd.Intn(100) < sliceDelPct {
 			// delete a random slice, too
 			delSlice = true
 			deletedFiles = 2
@@ -495,8 +520,8 @@ func TestECStress(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) < 5 {
-		t.Fatal("Not enough targets to run EC tests, must be at least 5")
+	if err := ecSliceNumInit(smap); err != nil {
+		t.Fatal(err)
 	}
 
 	if usingSG {
@@ -697,8 +722,8 @@ func TestECExtraStress(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) < 5 {
-		t.Fatal("Not enough targets to run EC tests, must be at least 5")
+	if err := ecSliceNumInit(smap); err != nil {
+		t.Fatal(err)
 	}
 
 	if usingSG {
@@ -812,8 +837,8 @@ func TestECXattrs(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) < 5 {
-		t.Fatal("Not enough targets to run EC tests, must be at least 5")
+	if err := ecSliceNumInit(smap); err != nil {
+		t.Fatal(err)
 	}
 
 	if usingSG {
@@ -842,7 +867,7 @@ func TestECXattrs(t *testing.T) {
 	oneObj := func(idx int, objName string) {
 		delSlice := false // delete only main object
 		deletedFiles := 1
-		if rnd.Intn(100) < sliceDelPct {
+		if ecSliceCnt+ecParityCnt > 2 && rnd.Intn(100) < sliceDelPct {
 			// delete a random slice, too
 			delSlice = true
 			deletedFiles = 2
@@ -982,8 +1007,8 @@ func TestECEmergencyTarget(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) < 6 {
-		t.Fatal("Not enough targets to run EC tests, must be at least 6")
+	if err := ecSliceNumInit(smap); err != nil {
+		t.Fatal(err)
 	}
 
 	if usingSG {
@@ -1144,9 +1169,10 @@ func TestECEmergencyMpath(t *testing.T) {
 	)
 
 	smap := getClusterMap(t, proxyURL)
-	if len(smap.Tmap) < 5 {
-		t.Fatal("Not enough targets to run EC tests, must be at least 5")
+	if err := ecSliceNumInit(smap); err != nil {
+		t.Fatal(err)
 	}
+
 	removeTarget := extractTargetNodes(smap)[0]
 	tgtParams := tutils.BaseAPIParams(removeTarget.URL(cmn.NetworkPublic))
 

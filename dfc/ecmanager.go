@@ -106,7 +106,9 @@ func (mgr *ecManager) makeRecvResponse() transport.Receive {
 }
 
 func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
-	cmn.Assert(lom.Bprops != nil)
+	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
+		return ec.ErrorECDisabled
+	}
 	cmn.Assert(lom.Fqn != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
@@ -135,8 +137,9 @@ func (mgr *ecManager) EncodeObject(lom *cluster.LOM) error {
 }
 
 func (mgr *ecManager) CleanupObject(lom *cluster.LOM) {
-	// EC cleanup if EC is enabled
-	cmn.Assert(lom.Bprops != nil)
+	if lom.Bprops == nil || !lom.Bprops.ECEnabled {
+		return
+	}
 	cmn.Assert(lom.Fqn != "")
 	cmn.Assert(lom.ParsedFQN.MpathInfo != nil && lom.ParsedFQN.MpathInfo.Path != "")
 
