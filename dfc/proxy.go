@@ -554,8 +554,8 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	lbucket := apitems[0]
-	if !p.validatebckname(w, r, lbucket) {
+	bucket := apitems[0]
+	if !p.validatebckname(w, r, bucket) {
 		return
 	}
 	if cmn.ReadJSON(w, r, &msg) != nil {
@@ -564,7 +564,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	config := cmn.GCO.Get()
 	switch msg.Action {
 	case cmn.ActCreateLB:
-		if p.forwardCP(w, r, &msg, lbucket, nil) {
+		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
 		p.bmdowner.Lock()
@@ -574,9 +574,9 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			LRUConf:    config.LRU,
 			MirrorConf: config.Mirror,
 		}
-		if !clone.add(lbucket, true /*bucket is local*/, &bprops) {
+		if !clone.add(bucket, true /*bucket is local*/, &bprops) {
 			p.bmdowner.Unlock()
-			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
+			p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", bucket))
 			return
 		}
 		if errstr := p.savebmdconf(clone, config); errstr != "" {
@@ -586,13 +586,13 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		p.bmdowner.put(clone)
 		p.bmdowner.Unlock()
-		msg.Action = path.Join(msg.Action, lbucket)
+		msg.Action = path.Join(msg.Action, bucket)
 		p.metasyncer.sync(true, clone, &msg)
 	case cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
-		bucketFrom, bucketTo := lbucket, msg.Name
+		bucketFrom, bucketTo := bucket, msg.Name
 		if bucketFrom == "" || bucketTo == "" {
 			errstr := fmt.Sprintf("Invalid rename local bucket request: empty name %s => %s",
 				bucketFrom, bucketTo)
@@ -612,7 +612,7 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 			p.invalmsghdlr(w, r, s)
 			return
 		}
-		if !p.renameLB(bucketFrom, bucketTo, clone, props, &msg) {
+		if !p.renameLB(bucketFrom, bucketTo, clone, props, &msg, config) {
 			errstr := fmt.Sprintf("Failed to rename local bucket %s => %s", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, errstr)
 		}
@@ -625,15 +625,17 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 	case cmn.ActPrefetch:
 		p.doListRange(w, r, &msg, http.MethodPost)
 	case cmn.ActListObjects:
-		p.listBucketAndCollectStats(w, r, lbucket, msg, started)
+		p.listBucketAndCollectStats(w, r, bucket, msg, started)
+	case cmn.ActEraseCopies:
+		p.eraseCopies(w, r, bucket, &msg, config)
 	default:
 		s := fmt.Sprintf("Unexpected cmn.ActionMsg <- JSON [%v]", msg)
 		p.invalmsghdlr(w, r, s)
 	}
 }
 
-func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter,
-	r *http.Request, lbucket string, msg cmn.ActionMsg, started time.Time) {
+func (p *proxyrunner) listBucketAndCollectStats(w http.ResponseWriter, r *http.Request,
+	lbucket string, msg cmn.ActionMsg, started time.Time) {
 	pagemarker, ok := p.listbucket(w, r, lbucket, &msg)
 	if ok {
 		delta := time.Since(started)
@@ -868,9 +870,8 @@ func (p *proxyrunner) reverseDP(w http.ResponseWriter, r *http.Request, tsi *clu
 }
 
 func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, props *cmn.BucketProps,
-	msg *cmn.ActionMsg) bool {
+	msg *cmn.ActionMsg, config *cmn.Config) bool {
 	smap4bcast := p.smapowner.get()
-	config := cmn.GCO.Get()
 	msg.Value = clone
 	jsbytes, err := jsoniter.Marshal(msg)
 	cmn.Assert(err == nil, err)
@@ -905,6 +906,32 @@ func (p *proxyrunner) renameLB(bucketFrom, bucketTo string, clone *bucketMD, pro
 	p.bmdowner.Unlock()
 	p.metasyncer.sync(true, clone, msg)
 	return true
+}
+
+func (p *proxyrunner) eraseCopies(w http.ResponseWriter, r *http.Request, bucket string, msg *cmn.ActionMsg, config *cmn.Config) {
+	jsbytes, err := jsoniter.Marshal(msg)
+	cmn.Assert(err == nil, err)
+	results := p.broadcastTo(
+		cmn.URLPath(cmn.Version, cmn.Buckets, bucket),
+		nil, // query
+		http.MethodPost,
+		jsbytes,
+		p.smapowner.get(),
+		config.Timeout.CplaneOperation,
+		cmn.NetworkIntraControl,
+		cluster.Targets,
+	)
+	for res := range results {
+		if res.err != nil {
+			s := fmt.Sprintf("Failed to remove object copies, target %s, bucket %s, err: %v(%d)",
+				res.si.DaemonID, bucket, res.err, res.status)
+			if res.errstr != "" {
+				glog.Errorln(res.errstr)
+			}
+			p.invalmsghdlr(w, r, s)
+			return
+		}
+	}
 }
 
 func (p *proxyrunner) getbucketnames(w http.ResponseWriter, r *http.Request, bucketspec string) {
@@ -1975,19 +2002,11 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 	getWhat := r.URL.Query().Get(cmn.URLParamWhat)
 	switch getWhat {
 	case cmn.GetWhatStats:
-		ok := p.invokeHTTPGetClusterStats(w, r)
-		if !ok {
-			return
-		}
+		p.invokeHTTPGetClusterStats(w, r)
 	case cmn.GetWhatXaction:
-		ok := p.invokeHTTPGetXaction(w, r)
-		if !ok {
-			return
-		}
+		p.invokeHTTPGetXaction(w, r)
 	case cmn.GetWhatMountpaths:
-		if ok := p.invokeHTTPGetClusterMountpaths(w, r); !ok {
-			return
-		}
+		p.invokeHTTPGetClusterMountpaths(w, r)
 	default:
 		s := fmt.Sprintf("Unexpected GET request, invalid param 'what': [%s]", getWhat)
 		cmn.InvalidHandlerWithMsg(w, r, s)
@@ -1995,61 +2014,47 @@ func (p *proxyrunner) httpcluget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *proxyrunner) invokeHTTPGetXaction(w http.ResponseWriter, r *http.Request) bool {
-	kind := r.URL.Query().Get(cmn.URLParamProps)
-	if errstr := validateXactionQueryable(kind); errstr != "" {
-		p.invalmsghdlr(w, r, errstr)
-		return false
-	}
-	outputXactionStats := &stats.XactionStats{}
-	outputXactionStats.Kind = kind
-	targetStats, ok := p.invokeHTTPGetMsgOnTargets(w, r)
+	results, ok := p.invokeHTTPGetMsgOnTargets(w, r)
 	if !ok {
-		e := fmt.Sprintf(
-			"Unable to invoke cmn.GetMsg on targets. Query: [%s]",
-			r.URL.RawQuery)
-		glog.Errorf(e)
-		p.invalmsghdlr(w, r, e)
 		return false
 	}
-
-	outputXactionStats.TargetStats = targetStats
-	jsonBytes, err := jsoniter.Marshal(outputXactionStats)
-	if err != nil {
-		glog.Errorf(
-			"Unable to marshal outputXactionStats. Error: [%s]", err)
-		p.invalmsghdlr(w, r, err.Error())
-		return false
+	var (
+		jsbytes []byte
+		err     error
+		kind    = r.URL.Query().Get(cmn.URLParamProps)
+	)
+	if kind == cmn.ActGlobalReb || kind == cmn.ActPrefetch {
+		outputXactionStats := &stats.XactionStats{}
+		outputXactionStats.Kind = kind
+		outputXactionStats.TargetStats = results
+		jsbytes, err = jsoniter.Marshal(outputXactionStats)
+	} else {
+		jsbytes, err = jsoniter.Marshal(results)
 	}
-
-	ok = p.writeJSON(w, r, jsonBytes, "getXaction")
-	return ok
+	cmn.Assert(err == nil, err)
+	return p.writeJSON(w, r, jsbytes, "getXaction")
 }
 
 func (p *proxyrunner) invokeHTTPGetMsgOnTargets(w http.ResponseWriter, r *http.Request) (map[string]jsoniter.RawMessage, bool) {
+	smapX := p.smapowner.get()
 	results := p.broadcastTo(
 		cmn.URLPath(cmn.Version, cmn.Daemon),
 		r.URL.Query(),
 		r.Method,
 		nil, // message
-		p.smapowner.get(),
+		smapX,
 		cmn.GCO.Get().Timeout.Default,
 		cmn.NetworkIntraControl,
 		cluster.Targets,
 	)
-
-	targetResults := make(map[string]jsoniter.RawMessage, p.smapowner.get().CountTargets())
+	targetResults := make(map[string]jsoniter.RawMessage, smapX.CountTargets())
 	for result := range results {
 		if result.err != nil {
-			glog.Errorf(
-				"Failed to fetch xaction, query: %s",
-				r.URL.RawQuery)
 			p.invalmsghdlr(w, r, result.errstr)
 			return nil, false
 		}
-
 		targetResults[result.si.DaemonID] = jsoniter.RawMessage(result.outjson)
 	}
-
 	return targetResults, true
 }
 

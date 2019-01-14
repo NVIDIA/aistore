@@ -34,11 +34,11 @@ type ActionMsg struct {
 	Value  interface{} `json:"value"`
 }
 
-// ActionMsg.Action enum
+// ActionMsg.Action enum (includes xactions)
 const (
 	ActShutdown    = "shutdown"
-	ActGlobalReb   = "rebalance"      // global rebalance between targets
-	ActLocalReb    = "localrebalance" // local rebalance on single target
+	ActGlobalReb   = "rebalance"      // global cluster-wide rebalance
+	ActLocalReb    = "localrebalance" // local rebalance
 	ActRechecksum  = "rechecksum"
 	ActLRU         = "lru"
 	ActSyncLB      = "synclb"
@@ -312,17 +312,10 @@ const (
 	Records = "records"
 	Shards  = "shards"
 )
-
 const (
-	// Used by various Xaction APIs
-	XactionRebalance = ActGlobalReb
-	XactionPrefetch  = ActPrefetch
-
-	// Denote the status of an Xaction
 	XactionStatusInProgress = "InProgress"
 	XactionStatusCompleted  = "Completed"
 )
-
 const (
 	RWPolicyCloud    = "cloud"
 	RWPolicyNextTier = "next_tier"

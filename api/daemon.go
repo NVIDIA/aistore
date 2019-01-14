@@ -14,7 +14,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// GetMountpaths API operation for DFC
+// GetMountpaths API
 //
 // Given the direct public URL of the target, GetMountPaths returns its mountpaths and error, if any exists
 func GetMountpaths(baseParams *BaseParams) (*cmn.MountpathList, error) {
@@ -31,7 +31,7 @@ func GetMountpaths(baseParams *BaseParams) (*cmn.MountpathList, error) {
 	return mpl, err
 }
 
-// AddMountpath API operation for DFC
+// AddMountpath API
 func AddMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodPut
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
@@ -43,7 +43,7 @@ func AddMountpath(baseParams *BaseParams, mountPath string) error {
 	return err
 }
 
-// RemoveMountpath API operation for DFC
+// RemoveMountpath API
 func RemoveMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodDelete
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
@@ -55,7 +55,7 @@ func RemoveMountpath(baseParams *BaseParams, mountPath string) error {
 	return err
 }
 
-// EnableMountpath API operation for DFC
+// EnableMountpath API
 func EnableMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
@@ -67,7 +67,7 @@ func EnableMountpath(baseParams *BaseParams, mountPath string) error {
 	return err
 }
 
-// DisableMountpath API operation for DFC
+// DisableMountpath API
 func DisableMountpath(baseParams *BaseParams, mountPath string) error {
 	baseParams.Method = http.MethodPost
 	path := cmn.URLPath(cmn.Version, cmn.Daemon, cmn.Mountpaths)
@@ -79,7 +79,7 @@ func DisableMountpath(baseParams *BaseParams, mountPath string) error {
 	return err
 }
 
-// GetConfig API operation for DFC
+// GetConfig API
 //
 // Returns the configuration of a specific daemon in a cluster
 func GetDaemonConfig(baseParams *BaseParams) (config *cmn.Config, err error) {
@@ -103,7 +103,7 @@ func GetDaemonConfig(baseParams *BaseParams) (config *cmn.Config, err error) {
 	return
 }
 
-// SetDaemonConfig API operation for DFC
+// SetDaemonConfig API
 //
 // Given a key and a value for a specific configuration parameter
 // this operation sets the configuration accordingly for a specific daemon

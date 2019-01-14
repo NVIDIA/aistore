@@ -20,6 +20,7 @@ type (
 	Xact interface {
 		ID() int64
 		Kind() string
+		Bucket() string
 		StartTime(s ...time.Time) time.Time
 		EndTime(e ...time.Time) time.Time
 		String() string
@@ -32,6 +33,7 @@ type (
 		sutime int64
 		eutime int64
 		kind   string
+		bucket string
 		abrt   chan struct{}
 	}
 	//
@@ -66,15 +68,19 @@ func NewErrXpired(s string) *ErrXpired { return &ErrXpired{errstr: s} }
 
 var _ Xact = &XactBase{}
 
-func NewXactBase(id int64, kind string) *XactBase {
+func NewXactBase(id int64, kind string, bucket ...string) *XactBase {
 	stime := time.Now()
 	xact := &XactBase{id: id, kind: kind, abrt: make(chan struct{}, 1)}
+	if len(bucket) > 0 {
+		xact.bucket = bucket[0]
+	}
 	atomic.StoreInt64(&xact.sutime, stime.UnixNano())
 	return xact
 }
 
 func (xact *XactBase) ID() int64                  { return xact.id }
 func (xact *XactBase) Kind() string               { return xact.kind }
+func (xact *XactBase) Bucket() string             { return xact.bucket }
 func (xact *XactBase) Finished() bool             { return atomic.LoadInt64(&xact.eutime) != 0 }
 func (xact *XactBase) ChanAbort() <-chan struct{} { return xact.abrt }
 
@@ -129,8 +135,8 @@ func (xact *XactBase) Abort() {
 
 var _ XactDemand = &XactDemandBase{}
 
-func NewXactDemandBase(id int64, kind string, idleTime ...time.Duration) *XactDemandBase {
-	base := NewXactBase(id, kind)
+func NewXactDemandBase(id int64, kind string, bucket string, idleTime ...time.Duration) *XactDemandBase {
+	base := NewXactBase(id, kind, bucket)
 	tickTime := xactIdleTimeout
 	if len(idleTime) != 0 {
 		tickTime = idleTime[0]

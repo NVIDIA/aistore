@@ -1361,7 +1361,7 @@ OUTER:
 
 func getXactionRebalance(proxyURL string) (stats.RebalanceStats, error) {
 	var rebalanceStats stats.RebalanceStats
-	responseBytes, err := tutils.GetXactionResponse(proxyURL, cmn.XactionRebalance)
+	responseBytes, err := tutils.GetXactionResponse(proxyURL, cmn.ActGlobalReb)
 	if err != nil {
 		return rebalanceStats, err
 	}

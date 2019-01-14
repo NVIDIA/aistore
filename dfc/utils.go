@@ -173,14 +173,6 @@ func parsebool(s string) (value bool, err error) {
 	return
 }
 
-// query-able xactions
-func validateXactionQueryable(kind string) (errstr string) {
-	if kind == cmn.XactionRebalance || kind == cmn.XactionPrefetch {
-		return
-	}
-	return fmt.Sprintf("Invalid xaction '%s', expecting one of [%s, %s]", kind, cmn.XactionRebalance, cmn.XactionPrefetch)
-}
-
 // versioningConfigured returns true if versioning for a given bucket is enabled
 // NOTE:
 //    AWS bucket versioning can be disabled on the cloud. In this case we do not

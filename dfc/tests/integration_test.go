@@ -6,6 +6,7 @@
 package dfc_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"os"
@@ -23,6 +24,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
 
@@ -1860,6 +1862,13 @@ func TestAtimeRebalance(t *testing.T) {
 }
 
 func TestLocalMirror(t *testing.T) {
+	testLocalMirror(t, false)
+}
+func TestLocalMirrorErase(t *testing.T) {
+	testLocalMirror(t, true /* erase */)
+}
+
+func testLocalMirror(t *testing.T, erase bool) {
 	const (
 		num      = 10000
 		filesize = cmn.KiB
@@ -1926,9 +1935,41 @@ func TestLocalMirror(t *testing.T) {
 	tutils.Logln("GET in parallel...")
 	doGetsInParallel(&m)
 
+	baseParams := tutils.BaseAPIParams(m.proxyURL)
+
+	if erase {
+		tutils.Logln("Erase in parallel...")
+		if err := api.EraseCopies(baseParams, m.bucket); err != nil {
+			t.Fatalf("Failed to start erase-copies xaction, err: %v", err)
+		}
+		timedout := 30 // seconds
+		ok := false
+		for i := 0; i < timedout+1; i++ {
+			var allDetails = make(map[string][]stats.XactionDetails) // TODO: missing API
+			time.Sleep(time.Second)
+
+			responseBytes, err := tutils.GetXactionResponse(m.proxyURL, cmn.ActEraseCopies)
+			tutils.CheckFatal(err, t)
+			err = json.Unmarshal(responseBytes, &allDetails)
+			ok = true
+			for tid := range allDetails {
+				detail := allDetails[tid][0] // TODO
+				if detail.Status == cmn.XactionStatusInProgress {
+					ok = false
+					break
+				}
+			}
+			if ok {
+				break
+			}
+		}
+		if !ok {
+			t.Errorf("timed-out waiting for %s to finish", cmn.ActEraseCopies)
+		}
+	}
+
 	// List Bucket - primarily for the copies
 	msg := &cmn.GetMsg{GetProps: cmn.GetPropsCopies + ", " + cmn.GetPropsAtime + ", " + cmn.GetPropsStatus}
-	baseParams := tutils.BaseAPIParams(m.proxyURL)
 	objectList, err := api.ListBucket(baseParams, m.bucket, msg, 0)
 	tutils.CheckFatal(err, t)
 
@@ -1945,7 +1986,14 @@ func TestLocalMirror(t *testing.T) {
 		}
 	}
 	tutils.Logf("objects (total, copied) = (%d, %d)\n", total, copied)
-	if copied < total/2 {
+	if total != m.num {
+		t.Fatalf("listbucket: expecting %d objects, got %d", m.num, total)
+	}
+	if erase {
+		if copied > 0 {
+			t.Fatalf("post-erase listbucket: expecting zero copies, got %d", copied)
+		}
+	} else if copied < total/2 { // best-effort: may have missed some at high util
 		t.Fatal("Expecting at least half of the objects to be replicated")
 	}
 }

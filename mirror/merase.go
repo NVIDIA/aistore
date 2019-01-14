@@ -17,10 +17,15 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/memsys"
 )
 
-const throttleNumErased = 16
+const (
+	throttleNumErased = 16                     // unit of self-throttling
+	logNumErased      = throttleNumErased * 16 // unit of house-keeping
+)
+
+// XactErase (extended action) reduces data redundancy of a given bucket to 1 (single copy)
+// It runs in a background and traverses all local mountpaths to do the job.
 
 type (
 	XactErase struct {
@@ -29,12 +34,9 @@ type (
 		cmn.Named
 		// runtime
 		mpathChangeCh chan struct{}
+		doneCh        chan struct{}
 		erasers       map[string]*eraser
-		config        *cmn.Config
 		// init
-		Bucket     string
-		Mirror     cmn.MirrorConf
-		Slab       *memsys.Slab2
 		T          cluster.Target
 		Namelocker cluster.NameLocker
 		Bislocal   bool
@@ -42,6 +44,7 @@ type (
 	eraser struct { // one per mountpath
 		parent    *XactErase
 		mpathInfo *fs.MountpathInfo
+		config    *cmn.Config
 		num       int64
 		stopCh    chan struct{}
 	}
@@ -63,20 +66,12 @@ func (r *XactErase) ReqDisableMountpath(mpath string) { r.mpathChangeCh <- struc
 // public methods
 //
 
-func (r *XactErase) Run() error {
-	glog.Infoln(r.String())
-	// init
-	availablePaths, _ := fs.Mountpaths.Get()
-	r.erasers = make(map[string]*eraser, len(availablePaths))
-	r.config = cmn.GCO.Get()
-init:
-	// start mpath erasers
-	for _, mpathInfo := range availablePaths {
-		eraser := &eraser{parent: r, mpathInfo: mpathInfo}
-		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bislocal)
-		r.erasers[mpathLC] = eraser
-		go eraser.jog()
+func (r *XactErase) Run() (err error) {
+	var numjs int
+	if numjs, err = r.init(); err != nil {
+		return err
 	}
+	glog.Infoln(r.String())
 	// control loop
 	for {
 		select {
@@ -84,18 +79,16 @@ init:
 			r.stop()
 			return fmt.Errorf("%s aborted, exiting", r)
 		case <-r.mpathChangeCh:
-			r.config = cmn.GCO.Get()
-			for _, eraser := range r.erasers {
-				eraser.stop()
-			}
-			availablePaths, _ = fs.Mountpaths.Get()
-			l := len(availablePaths)
-			r.erasers = make(map[string]*eraser, l) // new erasers map
-			if l == 0 {
+			r.stop()
+			return fmt.Errorf("%s mpath-changed, exiting", r)
+		case <-r.doneCh:
+			numjs--
+			if numjs == 0 {
+				glog.Infof("%s: all erasers completed", r)
+				r.erasers = nil
 				r.stop()
-				return fmt.Errorf("%s: %s, exiting", r, cmn.NoMountpaths)
+				return
 			}
-			goto init // reinitialize and keep running
 		}
 	}
 }
@@ -105,6 +98,25 @@ func (r *XactErase) Stop(error) { r.Abort() } // call base method
 //
 // private methods
 //
+
+func (r *XactErase) init() (numjs int, err error) {
+	availablePaths, _ := fs.Mountpaths.Get()
+	numjs = len(availablePaths)
+	if err = checkErrNumMp(r, numjs); err != nil {
+		return
+	}
+	r.mpathChangeCh = make(chan struct{}, 1)
+	r.doneCh = make(chan struct{}, numjs)
+	r.erasers = make(map[string]*eraser, numjs)
+	config := cmn.GCO.Get()
+	for _, mpathInfo := range availablePaths {
+		eraser := &eraser{parent: r, mpathInfo: mpathInfo, config: config}
+		mpathLC := mpathInfo.MakePath(fs.ObjectType, r.Bislocal)
+		r.erasers[mpathLC] = eraser
+		go eraser.jog()
+	}
+	return
+}
 
 func (r *XactErase) stop() {
 	if r.Finished() {
@@ -123,9 +135,9 @@ func (r *XactErase) stop() {
 func (j *eraser) stop() { j.stopCh <- struct{}{}; close(j.stopCh) }
 
 func (j *eraser) jog() {
-	glog.Infof("eraser[%s] started", j.mpathInfo)
+	glog.Infof("eraser[%s/%s] started", j.mpathInfo, j.parent.Bucket())
 	j.stopCh = make(chan struct{}, 1)
-	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket, j.parent.Bislocal)
+	dir := j.mpathInfo.MakePathBucket(fs.ObjectType, j.parent.Bucket(), j.parent.Bislocal)
 	if err := filepath.Walk(dir, j.walk); err != nil {
 		s := err.Error()
 		if strings.Contains(s, "xaction") {
@@ -133,8 +145,8 @@ func (j *eraser) jog() {
 		} else {
 			glog.Errorf("%s: failed to traverse, err: %v", dir, err)
 		}
-		return
 	}
+	j.parent.doneCh <- struct{}{}
 }
 
 func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
@@ -149,7 +161,7 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 		return nil
 	}
 	lom := &cluster.LOM{T: j.parent.T, Fqn: fqn}
-	if errstr := lom.Fill(cluster.LomFstat|cluster.LomCopy, j.parent.config); errstr != "" || lom.Doesnotexist {
+	if errstr := lom.Fill(cluster.LomFstat|cluster.LomCopy, j.config); errstr != "" || lom.Doesnotexist {
 		if glog.V(4) {
 			glog.Infof("Warning: %s", errstr)
 		}
@@ -166,10 +178,13 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 		return errors.New(errstr)
 	}
 	j.num++
-	if j.num >= throttleNumErased {
-		j.num = 0
+	if (j.num % throttleNumErased) == 0 {
 		if err = j.yieldTerm(); err != nil {
 			return err
+		}
+		if (j.num % logNumErased) == 0 {
+			glog.Infof("eraser[%s/%s] erased %d copies...", j.mpathInfo, j.parent.Bucket(), j.num)
+			j.config = cmn.GCO.Get()
 		}
 	} else {
 		runtime.Gosched()
@@ -177,19 +192,30 @@ func (j *eraser) walk(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
+// [throttle]
 func (j *eraser) yieldTerm() error {
+	xaction := &j.config.Xaction
 	select {
 	case <-j.stopCh:
-		return fmt.Errorf("eraser[%s] aborted, exiting", j.mpathInfo)
+		return fmt.Errorf("eraser[%s/%s] aborted, exiting", j.mpathInfo, j.parent.Bucket())
 	default:
 		_, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
-		j.num = 0
-		if curr.Max >= float32(j.parent.config.Xaction.DiskUtilHighWM) && curr.Min > float32(j.parent.config.Xaction.DiskUtilLowWM) {
+		if curr.Max >= float32(xaction.DiskUtilHighWM) && curr.Min > float32(xaction.DiskUtilLowWM) {
+			time.Sleep(cmn.ThrottleSleepMax)
+		} else if curr.Max >= float32(xaction.DiskUtilLowWM) && curr.Min > float32(xaction.DiskUtilLowWM) {
 			time.Sleep(cmn.ThrottleSleepAvg)
 		} else {
 			time.Sleep(cmn.ThrottleSleepMin)
 		}
 		break
+	}
+	return nil
+}
+
+// common helper
+func checkErrNumMp(xx cmn.Xact, l int) error {
+	if l < 2 {
+		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", xx, l)
 	}
 	return nil
 }

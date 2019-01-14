@@ -27,7 +27,6 @@ type (
 		mpathChangeCh chan struct{}
 		copiers       map[string]*copier
 		// init
-		Bucket     string
 		Mirror     cmn.MirrorConf
 		Slab       *memsys.Slab2
 		T          cluster.Target
@@ -66,7 +65,7 @@ func (r *XactCopy) ReqDisableMountpath(mpath string) { r.mpathChangeCh <- struct
 func (r *XactCopy) InitAndRun() error {
 	availablePaths, _ := fs.Mountpaths.Get()
 	l := len(availablePaths)
-	if err := r.checkErrNumMp(l); err != nil {
+	if err := checkErrNumMp(r, l); err != nil {
 		return err
 	}
 	r.workCh = make(chan *cluster.LOM, r.Mirror.MirrorBurst)
@@ -154,13 +153,6 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 //
 // private methods
 //
-func (r *XactCopy) checkErrNumMp(l int) error {
-	if l < 2 {
-		return fmt.Errorf("%s: number of mountpaths (%d) is insufficient for local mirroring, exiting", r, l)
-	}
-	return nil
-}
-
 // =================== load balancing and self-throttling ========================
 // Generally,
 // load balancing decision must (... TODO ...) be configurable and a function of:

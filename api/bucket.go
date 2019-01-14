@@ -14,7 +14,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// SetBucketProps API operation for DFC
+// SetBucketProps API
 //
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
 // Validation of the properties passed in is performed by DFC Proxy.
@@ -33,7 +33,7 @@ func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps
 	return err
 }
 
-// ResetBucketProps API operation for DFC
+// ResetBucketProps API
 //
 // Reset the properties of a bucket, identified by its name, to the global configuration.
 func ResetBucketProps(baseParams *BaseParams, bucket string) error {
@@ -47,7 +47,7 @@ func ResetBucketProps(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
-// HeadBucket API operation for DFC
+// HeadBucket API
 //
 // Returns the properties of a bucket specified by its name.
 // Converts the string type fields returned from the HEAD request to their
@@ -135,7 +135,7 @@ func HeadBucket(baseParams *BaseParams, bucket string) (*cmn.BucketProps, error)
 	}, nil
 }
 
-// GetBucketNames API operation for DFC
+// GetBucketNames API
 //
 // If localOnly is false, returns two lists, one for local buckets and one for cloud buckets.
 // Otherwise, i.e. localOnly is true, still returns two lists, but the one for cloud buckets is empty
@@ -159,7 +159,7 @@ func GetBucketNames(baseParams *BaseParams, localOnly bool) (*cmn.BucketNames, e
 	return &bucketNames, nil
 }
 
-// CreateLocalBucket API operation for DFC
+// CreateLocalBucket API
 //
 // CreateLocalBucket sends a HTTP request to a proxy to create a local bucket with the given name
 func CreateLocalBucket(baseParams *BaseParams, bucket string) error {
@@ -173,7 +173,7 @@ func CreateLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
-// DestroyLocalBucket API operation for DFC
+// DestroyLocalBucket API
 //
 // DestroyLocalBucket sends a HTTP request to a proxy to remove a local bucket with the given name
 func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
@@ -187,7 +187,7 @@ func DestroyLocalBucket(baseParams *BaseParams, bucket string) error {
 	return err
 }
 
-// RenameLocalBucket API operation for DFC
+// RenameLocalBucket API
 //
 // RenameLocalBucket changes the name of a bucket from oldName to newBucketName
 func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
@@ -201,7 +201,7 @@ func RenameLocalBucket(baseParams *BaseParams, oldName, newName string) error {
 	return err
 }
 
-// ListBucket API operation for DFC
+// ListBucket API
 //
 // ListBucket returns list of objects in a bucket. numObjects is the
 // maximum number of objects returned by ListBucket (0 - return all objects in a bucket)
@@ -260,4 +260,18 @@ func ListBucket(baseParams *BaseParams, bucket string, msg *cmn.GetMsg, numObjec
 	}
 
 	return reslist, nil
+}
+
+// EraseCopies API
+//
+// EraseCopies starts an extended action (xaction) to reduce redundancy of a given bucket to 1 (single copy)
+func EraseCopies(baseParams *BaseParams, bucket string) error {
+	b, err := jsoniter.Marshal(cmn.ActionMsg{Action: cmn.ActEraseCopies})
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Buckets, bucket)
+	_, err = DoHTTPRequest(baseParams, path, b)
+	return err
 }

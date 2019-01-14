@@ -30,7 +30,7 @@ type ReplicateObjectInput struct {
 	SourceURL string
 }
 
-// HeadObject API operation for DFC
+// HeadObject API
 //
 // Returns the size and version of the object specified by bucket/object
 func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps, error) {
@@ -60,7 +60,7 @@ func HeadObject(baseParams *BaseParams, bucket, object string) (*cmn.ObjectProps
 	}, nil
 }
 
-// DeleteObject API operation for DFC
+// DeleteObject API
 //
 // Deletes an object specified by bucket/object
 func DeleteObject(baseParams *BaseParams, bucket, object string) error {
@@ -70,7 +70,7 @@ func DeleteObject(baseParams *BaseParams, bucket, object string) error {
 	return err
 }
 
-// EvictObject API operation for DFC
+// EvictObject API
 //
 // Evicts an object specified by bucket/object
 func EvictObject(baseParams *BaseParams, bucket, object string) error {
@@ -84,7 +84,7 @@ func EvictObject(baseParams *BaseParams, bucket, object string) error {
 	return err
 }
 
-// GetObject API operation for DFC
+// GetObject API
 //
 // Returns the length of the object. Does not validate checksum of the object in the response.
 //
@@ -121,7 +121,7 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 	return n, nil
 }
 
-// GetObjectWithValidation API operation for DFC
+// GetObjectWithValidation API
 //
 // Same behaviour as GetObject, but performs checksum validation of the object
 // by comparing the checksum in the response header with the calculated checksum
@@ -172,7 +172,7 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 	return n, nil
 }
 
-// PutObject API operation for DFC
+// PutObject API
 //
 // Creates an object from the body of the io.Reader parameter and puts it in the 'bucket' bucket
 // The object name is specified by the 'object' argument.
@@ -220,7 +220,7 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 	return nil
 }
 
-// RenameObject API operation for DFC
+// RenameObject API
 //
 // Creates a cmn.ActionMsg with the new name of the object
 // and sends a POST HTTP Request to /v1/objects/bucket-name/object-name
@@ -235,7 +235,7 @@ func RenameObject(baseParams *BaseParams, bucket, oldName, newName string) error
 	return err
 }
 
-// ReplicateObject API operation for DFC
+// ReplicateObject API
 //
 // ReplicateObject replicates given object in bucket using targetrunner's replicate endpoint.
 func ReplicateObject(baseParams *BaseParams, bucket, object string) error {

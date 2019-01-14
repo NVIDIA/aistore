@@ -321,11 +321,10 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 	}
 	// construct new
 	id := xs.uniqueid()
-	base := cmn.NewXactDemandBase(id, kindput)
+	base := cmn.NewXactDemandBase(id, kindput, lom.Bucket)
 	slab := gmem2.SelectSlab2(cmn.MiB) // FIXME: estimate
 	xcopy = &mirror.XactCopy{
 		XactDemandBase: *base,
-		Bucket:         lom.Bucket,
 		Slab:           slab,
 		Mirror:         *lom.Mirror,
 		T:              t,
@@ -337,6 +336,39 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 	} else {
 		xs.add(xcopy)
 	}
+	xs.Unlock()
+	return
+}
+
+func (xs *xactions) abortPutCopies(bucket string) {
+	kindput := path.Join(cmn.ActPutCopies, bucket)
+	xs.Lock()
+	xx := xs.findU(kindput)
+	if xx != nil {
+		xx.Abort()
+	}
+	xs.Unlock()
+}
+
+func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, islocal bool) {
+	kinderase := path.Join(cmn.ActEraseCopies, bucket)
+	xs.Lock()
+	xx := xs.findU(kinderase)
+	if xx != nil && !xx.Finished() {
+		glog.Infof("nothing to do: %s", xx)
+		xs.Unlock()
+		return
+	}
+	id := xs.uniqueid()
+	base := cmn.NewXactBase(id, kinderase, bucket)
+	xerase := &mirror.XactErase{
+		XactBase:   *base,
+		T:          t,
+		Namelocker: t.rtnamemap,
+		Bislocal:   islocal,
+	}
+	xs.add(xerase)
+	go xerase.Run()
 	xs.Unlock()
 	return
 }
@@ -397,7 +429,7 @@ func (xs *xactions) renewEC() *ec.XactEC {
 
 	id := xs.uniqueid()
 	xec := ECM.newXact()
-	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, ec.IdleTimeout)
+	xec.XactDemandBase = *cmn.NewXactDemandBase(id, kind, "" /* all buckets */, ec.IdleTimeout)
 	go xec.Run()
 	xs.add(xec)
 	xs.Unlock()

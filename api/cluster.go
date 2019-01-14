@@ -16,7 +16,7 @@ import (
 	"github.com/json-iterator/go"
 )
 
-// GetClusterMap API operation for DFC
+// GetClusterMap API
 //
 // GetClusterMap retrives a DFC's server map
 func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
@@ -49,7 +49,7 @@ func GetClusterMap(baseParams *BaseParams) (cluster.Smap, error) {
 	return smap, nil
 }
 
-// RegisterTarget API operation for DFC
+// RegisterTarget API
 //
 // Registers an existing target to the clustermap.
 func RegisterTarget(baseParams *BaseParams, targetInfo *cluster.Snode) error {
@@ -63,7 +63,7 @@ func RegisterTarget(baseParams *BaseParams, targetInfo *cluster.Snode) error {
 	return err
 }
 
-// UnregisterTarget API operation for DFC
+// UnregisterTarget API
 //
 // Unregisters an existing target to the clustermap.
 func UnregisterTarget(baseParams *BaseParams, unregisterSID string) error {
@@ -73,7 +73,7 @@ func UnregisterTarget(baseParams *BaseParams, unregisterSID string) error {
 	return err
 }
 
-// SetPrimaryProxy API operation for DFC
+// SetPrimaryProxy API
 //
 // Given a daemonID, it sets that corresponding proxy as the primary proxy of the cluster
 func SetPrimaryProxy(baseParams *BaseParams, newPrimaryID string) error {
@@ -83,7 +83,7 @@ func SetPrimaryProxy(baseParams *BaseParams, newPrimaryID string) error {
 	return err
 }
 
-// SetClusterConfig API operation for DFC
+// SetClusterConfig API
 //
 // Given a key and a value for a specific configuration parameter
 // this operation sets the cluster-wide configuration accordingly.

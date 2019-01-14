@@ -211,7 +211,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 			r.unregWriter(uname)
 			writer.wg.Done()
 		}
-		glog.Error("Response failed: %v", err)
+		glog.Errorf("Response failed: %v", err)
 		return
 	}
 
@@ -332,7 +332,7 @@ func (r *XactEC) DispatchResp(w http.ResponseWriter, hdr transport.Header, objec
 		}
 		slab.Free(buf)
 		if err != nil {
-			glog.Error("Failed to save metadata to %q: %v", metaFQN, err)
+			glog.Errorf("Failed to save metadata to %q: %v", metaFQN, err)
 		}
 	default:
 		// should be unreachable

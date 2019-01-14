@@ -1090,6 +1090,15 @@ func (t *targetrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		}
 		// re-checksum the bucket and return
 		t.runRechecksumBucket(bucket)
+	case cmn.ActEraseCopies:
+		bucket := apitems[0]
+		if !t.validatebckname(w, r, bucket) {
+			return
+		}
+		t.xactions.abortPutCopies(bucket)
+		bucketmd := t.bmdowner.get()
+		islocal := bucketmd.IsLocal(bucket)
+		t.xactions.renewEraseCopies(bucket, t, islocal)
 	default:
 		t.invalmsghdlr(w, r, "Unexpected action "+msg.Action)
 	}
@@ -2040,9 +2049,7 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 		objStatus = cmn.ObjStatusOK
 		lom       = &cluster.LOM{T: ci.t, Fqn: fqn}
 	)
-	if errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy); errstr != "" {
-		glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
-	}
+	errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy)
 	if lom.Doesnotexist {
 		return nil
 	}
@@ -2052,6 +2059,9 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 	if lom.Misplaced() {
 		objStatus = cmn.ObjStatusMoved
 	} else {
+		if errstr != "" {
+			glog.Errorf("%s: %s", lom, errstr) // proceed to list this object anyway
+		}
 		si, errstr := hrwTarget(lom.Bucket, lom.Objname, ci.t.smapowner.get())
 		if errstr != "" {
 			glog.Errorf("%s: %s", lom, errstr)
@@ -2107,7 +2117,7 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr st
 		}
 		// local mirror
 		if lom.Mirror.MirrorEnabled {
-			if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
+			if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
 				t.xcopy = t.xactions.renewPutCopies(lom, t)
 			}
 			if t.xcopy != nil {
@@ -2713,21 +2723,20 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		cmn.Assert(err == nil, err)
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatXaction:
-		kind := r.URL.Query().Get(cmn.URLParamProps)
-		if errstr := validateXactionQueryable(kind); errstr != "" {
-			t.invalmsghdlr(w, r, errstr)
-			return
-		}
 		var (
-			jsbytes           []byte
-			sts               = getstorstatsrunner()
-			allXactionDetails = t.getXactionsByKind(kind)
+			jsbytes     []byte
+			err         error
+			sts         = getstorstatsrunner()
+			kind        = r.URL.Query().Get(cmn.URLParamProps)
+			kindDetails = t.getXactionsByKind(kind)
 		)
-		if kind == cmn.XactionRebalance {
-			jsbytes = sts.GetRebalanceStats(allXactionDetails)
+		if kind == cmn.ActGlobalReb {
+			jsbytes = sts.GetRebalanceStats(kindDetails)
+		} else if kind == cmn.ActPrefetch {
+			jsbytes = sts.GetPrefetchStats(kindDetails)
 		} else {
-			cmn.Assert(kind == cmn.XactionPrefetch)
-			jsbytes = sts.GetPrefetchStats(allXactionDetails)
+			jsbytes, err = jsoniter.Marshal(kindDetails)
+			cmn.Assert(err == nil, err)
 		}
 		t.writeJSON(w, r, jsbytes, "httpdaeget-"+getWhat)
 	case cmn.GetWhatMountpaths:
@@ -2759,26 +2768,26 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
-	allXactionDetails := []stats.XactionDetails{}
+	kindDetails := []stats.XactionDetails{}
 	for _, xaction := range t.xactions.v {
-		if xaction.Kind() == kind {
+		// TODO: cleanup xactions - API and this part as well
+		if xaction.Kind() == kind || path.Dir(xaction.Kind()) == kind {
 			status := cmn.XactionStatusCompleted
 			if !xaction.Finished() {
 				status = cmn.XactionStatusInProgress
 			}
-
-			xactionStats := stats.XactionDetails{
+			details := stats.XactionDetails{ // FIXME: redundant vs XactBase
 				Id:        xaction.ID(),
+				Kind:      xaction.Kind(),
+				Bucket:    xaction.Bucket(),
 				StartTime: xaction.StartTime(),
 				EndTime:   xaction.EndTime(),
 				Status:    status,
 			}
-
-			allXactionDetails = append(allXactionDetails, xactionStats)
+			kindDetails = append(kindDetails, details)
 		}
 	}
-
-	return allXactionDetails
+	return kindDetails
 }
 
 // register target
@@ -3213,11 +3222,15 @@ func (t *targetrunner) receiveBucketMD(newbucketmd *bucketMD, msg *cmn.ActionMsg
 	// Delete buckets that do not exist in the new bucket metadata
 	bucketsToDelete := make([]string, 0, len(bucketmd.LBmap))
 	for bucket := range bucketmd.LBmap {
-		if _, ok := newbucketmd.LBmap[bucket]; !ok {
+		if nprops, ok := newbucketmd.LBmap[bucket]; !ok {
 			bucketsToDelete = append(bucketsToDelete, bucket)
 			// TODO: separate API to stop ActPut and ActErase xactions and/or disable mirroring
 			// (needed in part for cloud buckets)
 			t.xactions.abortBucketSpecific(bucket)
+		} else if bprops, ok := bucketmd.LBmap[bucket]; ok && bprops != nil && nprops != nil {
+			if bprops.MirrorConf.MirrorEnabled && !nprops.MirrorConf.MirrorEnabled {
+				t.xactions.abortPutCopies(bucket)
+			}
 		}
 	}
 	fs.Mountpaths.CreateDestroyLocalBuckets("receive-bucketmd", false /*false=destroy*/, bucketsToDelete...)

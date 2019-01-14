@@ -16,12 +16,16 @@ type (
 		Kind        string                         `json:"kind"`
 		TargetStats map[string]jsoniter.RawMessage `json:"target"`
 	}
+	// FIXME: redundant vs. XactBase
 	XactionDetails struct {
 		Id        int64     `json:"id"`
+		Kind      string    `json:"kind"`
+		Bucket    string    `json:"bucket"`
 		StartTime time.Time `json:"startTime"`
 		EndTime   time.Time `json:"endTime"`
 		Status    string    `json:"status"`
 	}
+
 	RebalanceTargetStats struct {
 		Xactions     []XactionDetails `json:"xactionDetails"`
 		NumSentFiles int64            `json:"numSentFiles"`

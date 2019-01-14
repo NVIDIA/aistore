@@ -593,6 +593,7 @@ func WaitMapVersionSync(timeout time.Time, smap cluster.Smap, prevVersion int64,
 	return nil
 }
 
+// TODO: rename, and move to the api package
 func GetXactionResponse(proxyURL string, kind string) ([]byte, error) {
 	q := GetWhatRawQuery(cmn.GetWhatXaction, kind)
 	url := fmt.Sprintf("%s?%s", proxyURL+cmn.URLPath(cmn.Version, cmn.Cluster), q)
