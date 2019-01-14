@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -297,8 +298,29 @@ func (f *FSHC) tryReadFile(fqn string, sgl *memsys.SGL) error {
 	return err
 }
 
+// checks if a given mpath is disabled. d.Path is always cleaned, that is
+// why d.Path is searching inside mpath and not vice versa
+func (f *FSHC) isMpathDisabled(mpath string) bool {
+	_, disabled := fs.Mountpaths.Get()
+
+	for _, d := range disabled {
+		if strings.HasPrefix(mpath, d.Path) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // creates a random file in a random directory inside a mountpath
 func (f *FSHC) tryWriteFile(mountpath string, fileSize int, sgl *memsys.SGL) error {
+	// do not test a mountpath if it is already disabled. To avoid a race
+	// when a lot of PUTs fails and each of them calls FSHC, FSHC disables
+	// the mountpath on the first run, so all other tryWriteFile are redundant
+	if f.isMpathDisabled(mountpath) {
+		return nil
+	}
+
 	tmpdir, err := ioutil.TempDir(mountpath, fshcNameTemplate)
 	if err != nil {
 		glog.Errorf("Failed to create temporary directory: %v", err)

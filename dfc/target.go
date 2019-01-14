@@ -3056,20 +3056,23 @@ func (t *targetrunner) detectMpathChanges() {
 
 // fshc wakes up FSHC and makes it to run filesystem check immediately if err != nil
 func (t *targetrunner) fshc(err error, filepath string) {
+	if !cmn.GCO.Get().FSHC.Enabled {
+		return
+	}
+
 	glog.Errorf("FSHC: fqn %s, err %v", filepath, err)
 	if !cmn.IsIOError(err) {
 		return
 	}
 	mpathInfo, _ := fs.Mountpaths.Path2MpathInfo(filepath)
-	if mpathInfo != nil {
-		keyName := mpathInfo.Path
-		// keyName is the mountpath is the fspath - counting IO errors on a per basis..
-		t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
+	if mpathInfo == nil {
+		return
 	}
 
-	if cmn.GCO.Get().FSHC.Enabled {
-		getfshealthchecker().OnErr(filepath)
-	}
+	keyName := mpathInfo.Path
+	// keyName is the mountpath is the fspath - counting IO errors on a per basis..
+	t.statsdC.Send(keyName+".io.errors", metric{statsd.Counter, "count", 1})
+	getfshealthchecker().OnErr(filepath)
 }
 
 // Decrypts token and retreives userID from request header
