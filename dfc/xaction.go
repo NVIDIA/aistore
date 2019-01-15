@@ -107,6 +107,20 @@ func (xs *xactions) findL(kind string) (idx int, xact cmn.Xact) {
 	return
 }
 
+func (xs *xactions) selectL(kind string) (matching []cmn.Xact) {
+	xs.Lock()
+	for _, x := range xs.v {
+		if x.Kind() == kind || path.Dir(x.Kind()) == kind {
+			if matching == nil {
+				matching = make([]cmn.Xact, 0, 4)
+			}
+			matching = append(matching, x) // NOTE: may include Finished()
+		}
+	}
+	xs.Unlock()
+	return
+}
+
 func (xs *xactions) delAt(k int) {
 	l := len(xs.v)
 	if k < l-1 {

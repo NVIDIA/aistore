@@ -2777,23 +2777,21 @@ func (t *targetrunner) httpdaeget(w http.ResponseWriter, r *http.Request) {
 
 func (t *targetrunner) getXactionsByKind(kind string) []stats.XactionDetails {
 	kindDetails := []stats.XactionDetails{}
-	for _, xaction := range t.xactions.v {
-		// TODO: cleanup xactions - API and this part as well
-		if xaction.Kind() == kind || path.Dir(xaction.Kind()) == kind {
-			status := cmn.XactionStatusCompleted
-			if !xaction.Finished() {
-				status = cmn.XactionStatusInProgress
-			}
-			details := stats.XactionDetails{ // FIXME: redundant vs XactBase
-				Id:        xaction.ID(),
-				Kind:      xaction.Kind(),
-				Bucket:    xaction.Bucket(),
-				StartTime: xaction.StartTime(),
-				EndTime:   xaction.EndTime(),
-				Status:    status,
-			}
-			kindDetails = append(kindDetails, details)
+	matching := t.xactions.selectL(kind)
+	for _, xaction := range matching {
+		status := cmn.XactionStatusCompleted
+		if !xaction.Finished() {
+			status = cmn.XactionStatusInProgress
 		}
+		details := stats.XactionDetails{ // FIXME: redundant vs XactBase
+			Id:        xaction.ID(),
+			Kind:      xaction.Kind(),
+			Bucket:    xaction.Bucket(),
+			StartTime: xaction.StartTime(),
+			EndTime:   xaction.EndTime(),
+			Status:    status,
+		}
+		kindDetails = append(kindDetails, details)
 	}
 	return kindDetails
 }
