@@ -333,6 +333,7 @@ func (xs *xactions) renewPutCopies(lom *cluster.LOM, t *targetrunner) (xcopy *mi
 	}
 	if err := xcopy.InitAndRun(); err != nil {
 		glog.Errorln(err)
+		xcopy = nil
 	} else {
 		xs.add(xcopy)
 	}

@@ -2117,24 +2117,32 @@ func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (errstr st
 		}
 		// local mirror
 		if lom.Mirror.MirrorEnabled {
-			if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
-				t.xcopy = t.xactions.renewPutCopies(lom, t)
-			}
-			if t.xcopy != nil {
-				err := t.xcopy.Copy(lom)
-				// renew upon race between xcopy-timeout and xcopy.Copy()
-				if _, ok := err.(*cmn.ErrXpired); ok {
-					t.xcopy = t.xactions.renewPutCopies(lom, t)
-					if t.xcopy != nil {
-						if err = t.xcopy.Copy(lom); err != nil {
-							glog.Errorf("Unexpected: %v", err)
-						}
-					}
-				}
+			if fs.Mountpaths.NumAvail() > 1 { // FIXME: cache when filling-in the lom
+				t.putCopy(lom)
 			}
 		}
 	}
 	return
+}
+
+func (t *targetrunner) putCopy(lom *cluster.LOM) {
+	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
+		t.xcopy = t.xactions.renewPutCopies(lom, t)
+	}
+	if t.xcopy == nil {
+		return
+	}
+	err := t.xcopy.Copy(lom)
+	// retry in the (unlikely) case of sumultaneous xcopy-timeout
+	if _, ok := err.(*cmn.ErrXpired); ok {
+		t.xcopy = t.xactions.renewPutCopies(lom, t)
+		if t.xcopy != nil {
+			err = t.xcopy.Copy(lom)
+		}
+	}
+	if err != nil {
+		glog.Errorf("Unexpected: %v", err)
+	}
 }
 
 // TODO: this function is for now unused because replication does not work

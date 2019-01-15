@@ -388,6 +388,15 @@ func (mfs *MountedFS) Disable(mpath string) (disabled, exists bool) {
 	return
 }
 
+// Returns number of available mountpaths
+func (mfs *MountedFS) NumAvail() int {
+	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
+	if available == nil {
+		return 0
+	}
+	return len(*available)
+}
+
 // Mountpaths returns both available and disabled mountpaths.
 func (mfs *MountedFS) Get() (map[string]*MountpathInfo, map[string]*MountpathInfo) {
 	available := (*map[string]*MountpathInfo)(atomic.LoadPointer(&mfs.available))
