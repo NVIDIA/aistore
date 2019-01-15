@@ -31,11 +31,9 @@ type (
 	XactErase struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactBase
-		cmn.Named
 		// runtime
-		mpathChangeCh chan struct{}
-		doneCh        chan struct{}
-		erasers       map[string]*eraser
+		doneCh  chan struct{}
+		erasers map[string]*eraser
 		// init
 		T          cluster.Target
 		Namelocker cluster.NameLocker
@@ -49,18 +47,6 @@ type (
 		stopCh    chan struct{}
 	}
 )
-
-/*
- * implements fs.PathRunner interface
- */
-var _ fs.PathRunner = &XactErase{}
-
-func (r *XactErase) SetID(id int64) { cmn.Assert(false) }
-
-func (r *XactErase) ReqAddMountpath(mpath string)     { r.mpathChangeCh <- struct{}{} } // TODO: same for other "erasers"
-func (r *XactErase) ReqRemoveMountpath(mpath string)  { r.mpathChangeCh <- struct{}{} }
-func (r *XactErase) ReqEnableMountpath(mpath string)  { r.mpathChangeCh <- struct{}{} }
-func (r *XactErase) ReqDisableMountpath(mpath string) { r.mpathChangeCh <- struct{}{} }
 
 //
 // public methods
@@ -78,9 +64,6 @@ func (r *XactErase) Run() (err error) {
 		case <-r.ChanAbort():
 			r.stop()
 			return fmt.Errorf("%s aborted, exiting", r)
-		case <-r.mpathChangeCh:
-			r.stop()
-			return fmt.Errorf("%s mpath-changed, exiting", r)
 		case <-r.doneCh:
 			numjs--
 			if numjs == 0 {
@@ -105,7 +88,6 @@ func (r *XactErase) init() (numjs int, err error) {
 	if err = checkErrNumMp(r, numjs); err != nil {
 		return
 	}
-	r.mpathChangeCh = make(chan struct{}, 1)
 	r.doneCh = make(chan struct{}, numjs)
 	r.erasers = make(map[string]*eraser, numjs)
 	config := cmn.GCO.Get()

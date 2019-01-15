@@ -260,6 +260,9 @@ type LRUConf struct {
 	// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
 	CapacityUpdTime time.Duration `json:"-"`
 
+	// LRULocalBuckets: Enables or disables LRU for local buckets
+	LRULocalBuckets bool `json:"lru_local_buckets"`
+
 	// LRUEnabled: LRU will only run when set to true
 	LRUEnabled bool `json:"lru_enabled"`
 }

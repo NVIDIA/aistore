@@ -48,6 +48,7 @@ cat > $CONFFILE <<EOL
 		"atime_cache_max":	65536,
 		"dont_evict_time":	"120m",
 		"capacity_upd_time":	"10m",
+		"lru_local_buckets": false,
 		"lru_enabled":  	true
 	},
 	"xaction_config":{

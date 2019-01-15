@@ -1249,6 +1249,10 @@ func TestECEmergencyMpath(t *testing.T) {
 	tutils.Logf("Disabling a mountpath %s at target: %s\n", removeMpath, removeTarget.DaemonID)
 	err = api.DisableMountpath(tgtParams, removeMpath)
 	tutils.CheckFatal(err, t)
+	defer func() {
+		err = api.EnableMountpath(tgtParams, removeMpath)
+		tutils.CheckFatal(err, t)
+	}()
 
 	// 3. Read objects
 	getOneObj := func(idx int, objName string) {
@@ -1279,6 +1283,4 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	// 5. Enable mountpah
 	tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
-	err = api.EnableMountpath(tgtParams, removeMpath)
-	tutils.CheckFatal(err, t)
 }

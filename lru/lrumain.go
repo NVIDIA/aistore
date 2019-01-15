@@ -135,8 +135,11 @@ func InitAndRun(ini *InitLRU) {
 		if aborted := startLRUJoggers(false /*cloud*/); aborted {
 			break
 		}
-		if aborted := startLRUJoggers(true /*local*/); aborted {
-			break
+
+		if config.LRU.LRULocalBuckets {
+			if aborted := startLRUJoggers(true /*local*/); aborted {
+				break
+			}
 		}
 	}
 }

@@ -3166,6 +3166,17 @@ func (t *targetrunner) handleMountpathReq(w http.ResponseWriter, r *http.Request
 	}
 }
 
+func (t *targetrunner) stopXactions(xacts []string) {
+	for _, name := range xacts {
+		xactList := t.xactions.selectL(name)
+		for _, xact := range xactList {
+			if !xact.Finished() {
+				xact.Abort()
+			}
+		}
+	}
+}
+
 func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
 	enabled, exists := t.fsprg.enableMountpath(mountpath)
 	if !enabled && exists {
@@ -3177,6 +3188,7 @@ func (t *targetrunner) handleEnableMountpathReq(w http.ResponseWriter, r *http.R
 		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
 		return
 	}
+	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
 }
 
 func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3190,6 +3202,8 @@ func (t *targetrunner) handleDisableMountpathReq(w http.ResponseWriter, r *http.
 		t.invalmsghdlr(w, r, fmt.Sprintf("Mountpath %s not found", mountpath), http.StatusNotFound)
 		return
 	}
+
+	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
 }
 
 func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3198,6 +3212,7 @@ func (t *targetrunner) handleAddMountpathReq(w http.ResponseWriter, r *http.Requ
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not add mountpath, error: %v", err))
 		return
 	}
+	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
 }
 
 func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.Request, mountpath string) {
@@ -3206,6 +3221,8 @@ func (t *targetrunner) handleRemoveMountpathReq(w http.ResponseWriter, r *http.R
 		t.invalmsghdlr(w, r, fmt.Sprintf("Could not remove mountpath, error: %v", err))
 		return
 	}
+
+	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
 }
 
 // FIXME: use the message
@@ -3457,6 +3474,7 @@ func (t *targetrunner) enable() error {
 func (t *targetrunner) Disable(mountpath string, why string) (disabled, exists bool) {
 	// TODO: notify admin that the mountpath is gone
 	glog.Warningf("Disabling mountpath %s: %s", mountpath, why)
+	t.stopXactions([]string{cmn.ActLRU, cmn.ActPutCopies, cmn.ActEraseCopies})
 	return t.fsprg.disableMountpath(mountpath)
 }
 

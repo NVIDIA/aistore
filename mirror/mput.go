@@ -21,11 +21,9 @@ type (
 	XactCopy struct {
 		// implements cmn.Xact a cmn.Runner interfaces
 		cmn.XactDemandBase
-		cmn.Named
 		// runtime
-		workCh        chan *cluster.LOM
-		mpathChangeCh chan struct{}
-		copiers       map[string]*copier
+		workCh  chan *cluster.LOM
+		copiers map[string]*copier
 		// init
 		Mirror     cmn.MirrorConf
 		Slab       *memsys.Slab2
@@ -43,18 +41,6 @@ type (
 	}
 )
 
-/*
- * implements fs.PathRunner interface
- */
-var _ fs.PathRunner = &XactCopy{}
-
-func (r *XactCopy) SetID(id int64) { cmn.Assert(false) }
-
-func (r *XactCopy) ReqAddMountpath(mpath string)     { r.mpathChangeCh <- struct{}{} } // TODO: same for other "copiers"
-func (r *XactCopy) ReqRemoveMountpath(mpath string)  { r.mpathChangeCh <- struct{}{} }
-func (r *XactCopy) ReqEnableMountpath(mpath string)  { r.mpathChangeCh <- struct{}{} }
-func (r *XactCopy) ReqDisableMountpath(mpath string) { r.mpathChangeCh <- struct{}{} }
-
 //
 // public methods
 //
@@ -69,7 +55,6 @@ func (r *XactCopy) InitAndRun() error {
 		return err
 	}
 	r.workCh = make(chan *cluster.LOM, r.Mirror.MirrorBurst)
-	r.mpathChangeCh = make(chan struct{}, 1)
 	r.copiers = make(map[string]*copier, l)
 	r.wg = &sync.WaitGroup{}
 	r.wg.Add(1)
@@ -109,9 +94,6 @@ func (r *XactCopy) Run() error {
 		case <-r.ChanAbort():
 			r.stop()
 			return fmt.Errorf("%s aborted, exiting", r)
-		case <-r.mpathChangeCh:
-			r.stop()
-			return fmt.Errorf("%s mpath-changed, exiting", r) // will be renewed by the next PUT
 		}
 	}
 }
