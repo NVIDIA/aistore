@@ -1,19 +1,16 @@
-DFC: Distributed File Cache with Amazon and Google Cloud Backends
------------------------------------------------------------------
+Distributed specialized open-source Object Storage
+--------------------------------------------------
+This is a distributed object store - built from scratch and designed from ground up for large-scale AI applications. The storage service *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
 
-## Overview
+Both **gateways/proxies** and **targets** are realized as software daemons that join (and by virtue of joining - form) a storage cluster at their respective startup times or upon user request. The cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. The code itself is free, open, and MIT-licensed.
 
-DFC is a simple distributed caching service written in Go. The service consists of an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks:
+A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, in particular, the fact that client <=> storage traffic is *no-extra-hops* direct, and also the caching/tiering capability. The latter may or may not be utilized - the deployment-time decision that would presumably depend, among other things, on use case, total usable storage capacity, and location of the original dataset(s) if any.
 
-<img src="images/dfc-overview-mp.png" alt="DFC overview" width="480">
+<img src="images/dfc-overview-mp.png" alt="DFC overview" width="448">
 
-Users connect to the proxies and execute RESTful commands. Data then moves directly between storage targets (that store or cache this data) and the requesting HTTP or HTTPS clients. All DFC proxies/gateways provide API endpoints and are identical, functionality-wise, as far as user-accessible control and data planes.
-
+Users connect to proxies and execute RESTful operations. All proxies (aka gateways) are identical as far as supported API that includes documented-below control and data planes. Data moves **directly** between HTTP(S) clients and storage targets with no metadata servers and no extra-processing in-between. The distribution of objects is defined by a two-dimensional very fast consistent-hashing technique whereby objects get, first, distributed across all clustered targets, and, second, across local disks of each target. Specialized-type software that we call [extended action](#extended-actions-xactions) maintains balanced distribution of the stored content in presence of servers joining or leaving the cluster.
 
 ## Table of Contents
-
-- [Overview](#overview)
-- [Table of Contents](#table-of-contents)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
     - [Quick trial start with Docker](#quick-trial-start-with-docker)
@@ -38,11 +35,12 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
 - [Read and Write Data Paths](#read-and-write-data-paths)
     - [`GET`](#get)
     - [`PUT`](#put)
+- [Extended Actions (xactions)](#extended-actions-xactions)
 - [List Bucket](#list-bucket)
         - [properties-and-options](#properties-and-options)
         - [Example: listing local and Cloud buckets](#example-listing-local-and-cloud-buckets)
         - [Example: Listing all pages](#example-listing-all-pages)
-- [Cache Rebalancing](#cache-rebalancing)
+- [Rebalancing](#rebalancing)
 - [List/Range Operations](#listrange-operations)
         - [List](#list)
         - [Range](#range)
@@ -53,11 +51,6 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
     - [Election](#election)
     - [Non-electable gateways](#non-electable-gateways)
     - [Metasync](#metasync)
-- [WebDAV](#webdav)
-- [Extended Actions (xactions)](#extended-actions-xactions)
-    - [Throttling of Xactions](#throttling-of-xactions)
-- [Replication](#replication)
-- [Multi-tiering](#multi-tiering)
 - [Bucket-specific Configuration](#bucket-specific-configuration)
     - [Checksumming](#checksumming)
     - [LRU](#lru)
@@ -70,7 +63,10 @@ Users connect to the proxies and execute RESTful commands. Data then moves direc
         - [Disk Metrics](#disk-metrics)
         - [Keepalive Metrics](#keepalive-metrics)
         - [dfcloader Metrics](#dfcloader-metrics)
-
+- [Experimental](#experimental)
+	- [WebDAV](#webdav)
+	- [Multi-tiering](#multi-tiering)
+	- [Inter-cluster replication](#inter-cluster-replication)
 
 ## Prerequisites
 
@@ -536,6 +532,54 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 
 <img src="images/dfc-put-flow.png" alt="DFC PUT flow" width="800">
 
+## Extended Actions (xactions)
+
+Extended actions (xactions) are batch operations that may take seconds, sometimes minutes or even hours, to execute. Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. Xactions start running based on a wide variety of runtime conditions that include:
+
+* periodic (defined by a configured interval of time)
+* resource utilization (e.g., usable capacity falling below configured watermark)
+* certain type of workload (e.g., PUT into a mirrored or erasure-coded bucket)
+* user request (e.g., to reduce a number of local object copies in a given bucket)
+* adding or removing storage targets (the events that trigger cluster-wide rebalancing)
+* adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing filesystems](#managing-filesystems))
+* and more.
+
+Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](dfc/setup/config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
+
+The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors. To give concrete examples, an extended action that runs LRU evictions performs its "balancing act" by taking into account remaining storage capacity _and_ the current utilization of the local filesystems. The two-way mirroring (xaction) takes into account congestion on its communication channel that callers use for posting requests to create local replicas. And the `atimer` - extended action responsible for [access time updates](atime/atime.go) - self-throttles based on the remaining space (to buffer atimes), etc.
+
+Supported extended actions are enumerated in the [user-facing API](cmn/api.go) and include:
+
+* Cluster-wide rebalancing (denoted as `ActGlobalReb` in the [API](cmn/api.go)) that gets triggered when storage targets join or leave the cluster;
+* LRU-based cache eviction (see section [LRU](#lru)) that depends on the remaining free capacity and [configuration](dfc/setup/config.sh);
+* Prefetching batches of objects (or arbitrary size) from the Cloud (see section [List/Range Operations](#listrange-operations));
+* Consensus voting (when conducting new leader [election](#election));
+* Erasure-encoding objects in a EC-configured bucket (see section [Erasure coding](#erasure-coding));
+* Creating additional local replicas, and
+* Reducing number of object replicas in a given locally-mirrored bucket (see [Bucket-specific Configuration](#bucket-specific-configuration));
+* and more.
+
+The picture illustrates results of a generic query that checks whether the (in this example) LRU-based cache eviction has already finished in a cluster containing 3 storage targets (which it has, as per the "status" field below):
+
+<img src="images/ais-xaction-lru.png" alt="Querying LRU progress" width="320">
+
+The query itself looks as follows:
+
+```shell
+$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=lru
+```
+
+>> As always, `localhost:8080` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address.
+
+The corresponding RESTful API (section [REST Operations](#rest-operations)) includes support for querying absolutely all xactions including global-rebalancing and prefetch operations:
+
+```shell
+$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
+$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=prefetch
+```
+
+At the time of this writing, unlike all the rest xactions global-rebalancing and prefetch queries provide [extended statistics](stats/xaction_stats.go) on top and in addition to the generic "common denominator" mentioned and illustrated above.
+
 ## List Bucket
 
 The ListBucket API returns a page of object names (and, optionally, their properties including sizes, creation times, checksums, and more), in addition to a token allowing the next page to be retrieved.
@@ -604,9 +648,9 @@ for {
 
 Note that the PageMarker returned as a part of pagelist is for the next page.
 
-## Cache Rebalancing
+## Rebalancing
 
-DFC rebalances its cached content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
+DFC rebalances its stored content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
 
 Thus, the rebalancing process is completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the content will get rebalanced via direct target-to-target transfers.
 
@@ -714,74 +758,6 @@ DFC cluster can be *stretched* to collocate its redundant gateways with the comp
 ### Metasync
 
 By design DFC does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In DFC, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](dfc/metasync.go). DFC metasync makes sure to keep cluster-level metadata in-sync at all times.
-
-## WebDAV
-
-WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
-
-For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
-
-## Extended Actions (xactions)
-
-Extended actions (xactions) are the operations that may take seconds, sometimes minutes or even hours, to execute. Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics.
-
-Extended actions throttle themselves based on xaction-specific configurable watermarks and local system utilizations. Extended action that runs LRU-based evictions, for instance, will perform the "balancing act" (of running faster or slower) by taking into account remaining free local capacity as well as the current target's utilization.
-
-Examples of the supported extended actions include:
-
-* Cluster-wide rebalancing
-* LRU-based eviction
-* Prefetch
-* Consensus voting when electing a new leader
-* Object re-checksumming
-
-At the time of this writing the corresponding RESTful API (section [REST Operations](#rest-operations)) includes support for querying two xaction kinds: "rebalance" and "prefetch". The following command, for instance, will query the cluster for an active/pending rebalancing operation (if presently running), and report associated statistics:
-
-```shell
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
-```
-
-### Throttling of Xactions
-DFC supports throttling Xactions based on disk utilization. This is governed by two parameters in the [configuration file](dfc/setup/config.sh) - 'disk_util_low_wm' and 'disk_util_high_wm'. If the disk utilization is below the low watermark then the xaction is not throttled; if it is above the watermark, the xaction is throttled with a sleep duration which increases or decreases linearly with the disk utilization. The throttle duration maxes out at 1 second.
-
-At the time of this writing, only LRU and re-checksumming support throttling.
-
-## Replication
-
-Object replication (service) sends and receives objects via HTTP(S). Each replicating worker (aka _replicator_) is associated with a single configured local filesystem and is tasked with queuing and subsequent FIFO processing of *replication requests*. To isolate the, potentially, massive replication traffic from all other intra- and inter-cluster workloads, the service can be configured to utilize a separate network. Replication transfers themselves are end-to-end protected by checksums.
-
-The picture below illustrates some of the aspects of replication service as far as its design and data flows.
-
-<img src="images/replication-overview.png" alt="Replication overview" width="800">
-
-**Note:** The service is currently in its prototype stage and is not yet available.
-
-## Multi-tiering
-
-DFC can be deployed with multiple consecutive DFC clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
-
-<img src="images/multi-tier.png" alt="DFC multi-tier overview" width="680">
-
-Tiering is configured at the bucket level by setting bucket properties, for example:
-
-```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
-```
-
-The following fields are used to configure multi-tiering:
-
-* `next_tier_url`: an absolute URI corresponding to the primary proxy of the next tier configured for the bucket specified
-* `read_policy`: `"next_tier"` or `"cloud"` (defaults to `"next_tier"` if not set)
-* `write_policy`: `"next_tier"` or `"cloud"` (defaults to `"cloud"` if not set)
-
-For the `"next_tier"` policy, a tier will read or write to the next tier specified by the `next_tier_url` field. On failure, it will read or write to the cloud (aka AWS or GCP).
-
-For the `"cloud"` policy, a tier will read or write to the cloud (aka AWS or GCP) directly from that tier.
-
-Currently, the endpoints which support multi-tier policies are the following:
-
-* GET /v1/objects/bucket-name/object-name
-* PUT /v1/objects/bucket-name/object-name
 
 ## Bucket-specific Configuration
 Global configuration of buckets is done by default using the fields provided in `config.sh`, but certain bucket properties pertaining to checksumming and LRU can be specified at a more granular level - namely, on a per bucket basis.
@@ -972,3 +948,51 @@ Example of how these metrics show up in a grafana dashboard:
 * `dfcloader.<ip>.<loader_id>.getconfig.latency.<value>|ms`
 * `dfcloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>|ms`
 * `dfcloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>|ms`
+
+## Experimental
+
+There are features, capabilities and modules that we designate as _experimental_ - not ready yet for deployment and usage. Some of those might be eventually removed from the product, others - completed and stabilized. This section contains a partial list.
+
+### WebDAV
+
+WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
+
+For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
+
+### Multi-tiering
+
+DFC can be deployed with multiple consecutive DFC clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
+
+<img src="images/multi-tier.png" alt="DFC multi-tier overview" width="680">
+
+Tiering is configured at the bucket level by setting bucket properties, for example:
+
+```shell
+$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
+```
+
+The following fields are used to configure multi-tiering:
+
+* `next_tier_url`: an absolute URI corresponding to the primary proxy of the next tier configured for the bucket specified
+* `read_policy`: `"next_tier"` or `"cloud"` (defaults to `"next_tier"` if not set)
+* `write_policy`: `"next_tier"` or `"cloud"` (defaults to `"cloud"` if not set)
+
+For the `"next_tier"` policy, a tier will read or write to the next tier specified by the `next_tier_url` field. On failure, it will read or write to the cloud (aka AWS or GCP).
+
+For the `"cloud"` policy, a tier will read or write to the cloud (aka AWS or GCP) directly from that tier.
+
+Currently, the endpoints which support multi-tier policies are the following:
+
+* GET /v1/objects/bucket-name/object-name
+* PUT /v1/objects/bucket-name/object-name
+
+### Inter-cluster replication
+
+Object replication (service) sends and receives objects via HTTP(S). Each replicating worker (aka _replicator_) is associated with a single configured local filesystem and is tasked with queuing and subsequent FIFO processing of *replication requests*. To isolate the, potentially, massive replication traffic from all other intra- and inter-cluster workloads, the service can be configured to utilize a separate network. Replication transfers themselves are end-to-end protected by checksums.
+
+The picture below illustrates some of the aspects of replication service as far as its design and data flows.
+
+<img src="images/replication-overview.png" alt="Replication overview" width="800">
+
+**Note:** The service is currently in its prototype stage and is not yet available.
+
