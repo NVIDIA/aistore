@@ -13,4 +13,5 @@ fi
 
 VERSION=`git describe --tags`
 BUILD=`date +%FT%T%z`
-GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
+echo "Cloud provider set to: ${CLDPROVIDER}"
+GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go

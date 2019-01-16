@@ -126,19 +126,21 @@ if ! [[ "$testfspathcnt" =~ ^[0-9]+$ ]] ; then
 fi
 TESTFSPATHCOUNT=$testfspathcnt
 
+# If not specified, CLDPROVIDER it will be empty and build
+# will not include neither AWS nor GCP. As long as CLDPROVIDER
+# is not equal to `aws` nor `gcp` it will be assumed to be empty.
+CLDPROVIDER=""
+
 echo Select Cloud Provider:
 echo  1: Amazon Cloud
 echo  2: Google Cloud
+echo  3: None
 echo Enter your choice:
 read cldprovider
-if [ $cldprovider -eq 1 ]
-then
+if [ $cldprovider -eq 1 ]; then
 	CLDPROVIDER="aws"
-elif [ $cldprovider -eq 2 ]
-then
+elif [ $cldprovider -eq 2 ]; then
 	CLDPROVIDER="gcp"
-else
-	echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
 fi
 
 mkdir -p $CONFDIR
@@ -182,7 +184,7 @@ BUILD=`date +%FT%T%z`
 if [ "$ENABLE_CODE_COVERAGE" == "" ]
 then
 	EXE=$GOPATH/bin/dfc
-	GOBIN=$GOPATH/bin go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
+	GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
 else
 	echo "Note: code test-coverage enabled!"
 	EXE=$GOPATH/bin/dfc_coverage.test

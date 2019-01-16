@@ -1982,7 +1982,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
-	if baseURL == gcsURL && r.Method == http.MethodGet {
+	if baseURL == cmn.GCS_URL && r.Method == http.MethodGet {
 		s := cmn.RESTItems(r.URL.Path)
 		if len(s) == 2 {
 			r.URL.Path = cmn.URLPath(cmn.Version, cmn.Objects) + r.URL.Path

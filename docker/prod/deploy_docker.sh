@@ -123,9 +123,11 @@ echo $FSPATHS
 FSPATHS=$fspath
 TESTFSPATHCOUNT=$testfspathcnt
 
+CLDPROVIDER="" # See deploy.sh for more informations about empty CLDPROVIDER
 echo Select Cloud Provider:
 echo  1: Amazon Cloud
 echo  2: Google Cloud
+echo  3: None
 echo Enter your choice:
 read cldprovider
 if [ $cldprovider -eq 1 ]
@@ -135,17 +137,16 @@ then
 elif [ $cldprovider -eq 2 ]
 then
   CLDPROVIDER="gcp"
-else
-  echo "Error: '$cldprovider' is not a valid input, can be either 1 or 2"; exit 1
 fi
 
 CONFFILE="dfc.json"
 c=0
 CONFFILE_STATSD="statsd.conf"
 CONFFILE_COLLECTD="collectd.conf"
-source $DIR/../dfc/setup/config.sh
+source $DIR/../ais/setup/config.sh
 
 #)  run the cluster
+export CLDPROVIDER=${CLDPROVIDER}
 
 echo Stoping running  cluster..
 sudo docker-compose -f $environment"_docker-compose.yml" down

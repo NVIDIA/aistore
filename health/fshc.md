@@ -13,7 +13,7 @@ Filesystem check includes the following tests: availability, reading existing fi
 
 ## Getting started
 
-Check FSHC configuration before deploying a cluster. All settings are in the section `fschecker` of [DFC configuration file](./dfc/setup/config.sh)
+Check FSHC configuration before deploying a cluster. All settings are in the section `fschecker` of [DFC configuration file](./ais/setup/config.sh)
 
 | Name | Default value | Description |
 |---|---|---|

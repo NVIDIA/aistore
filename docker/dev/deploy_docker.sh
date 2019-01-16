@@ -366,9 +366,10 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export INT_CONTROL_SUBNET=$INT_CONTROL_SUBNET
     export INT_DATA_SUBNET=$INT_DATA_SUBNET
     export TARGET_CNT=$TARGET_CNT
+    export CLDPROVIDER=${CLDPROVIDER}
 
     CONFFILE="dfc.json"
-    source $DIR/../../dfc/setup/config.sh
+    source $DIR/../../ais/setup/config.sh
     
     echo Stopping running clusters...
     docker-compose -p dfc${i} -f ${composer_file} down

@@ -1,6 +1,8 @@
+// +build gcp
+
 // Package ais provides core functionality for the AIStore object storage.
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.  *
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
 package dfc
 
@@ -20,15 +22,13 @@ import (
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
 const (
-	gcsURL = "http://storage.googleapis.com"
-
 	gcpDfcHashType = "x-goog-meta-dfc-hash-type"
 	gcpDfcHashVal  = "x-goog-meta-dfc-hash-val"
 
@@ -55,6 +55,10 @@ type (
 	gcpimpl struct {
 		t *targetrunner
 	}
+)
+
+var (
+	_ cloudif = &gcpimpl{}
 )
 
 //======

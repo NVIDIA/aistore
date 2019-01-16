@@ -43,8 +43,7 @@ devrefresh:
 	fi
 
 build:
-	GOBIN=${GOPATH}/bin go build && go install
-	GOBIN=${GOPATH}/bin go install setup/dfc.go
+	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" setup/dfc.go
 
 kill:
 	@pkill -SIGINT dfc 2>/dev/null; sleep 1; true

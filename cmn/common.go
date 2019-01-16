@@ -51,6 +51,8 @@ const (
 	DoesNotExist = "does not exist"
 	NotSupported = "not supported yet"
 	NoMountpaths = "no mountpaths"
+
+	GCS_URL = "http://storage.googleapis.com"
 )
 
 type (

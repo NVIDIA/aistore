@@ -1,5 +1,8 @@
 FROM ubuntu
 
+ARG CLDPROVIDER
+ENV CLD $CLDPROVIDER
+
 #Setting ENV variables 
 ENV GOLANG_VERSION 1.11.4
 ENV CONFFILE /etc/dfc/dfc.json
@@ -40,7 +43,7 @@ WORKDIR $WORKDIR
 
 ENV VERSION `git describe --tags`
 ENV BUILD `date +%FT%T%z`
-RUN go install -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
+RUN go install -tags="${CLD}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
 
 RUN apt-get -y remove wget
 RUN mkdir /etc/dfc

@@ -1,3 +1,5 @@
+// +build aws
+
 // Package ais provides core functionality for the AIStore object storage.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
@@ -22,7 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -45,9 +47,14 @@ type (
 		key    string
 		secret string
 	}
+
 	awsimpl struct {
 		t *targetrunner
 	}
+)
+
+var (
+	_ cloudif = &awsimpl{}
 )
 
 // If extractAWSCreds returns no error and awsCreds is nil then the default

@@ -40,13 +40,20 @@ RUN curl -LO https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd
   tar -C /usr/local -xvzf go${GOLANG_VERSION}.linux-amd64.tar.gz &&\
   rm -rf go${GOLANG_VERSION}.linux-amd64.tar.gz
 
+ARG CLDPROVIDER
+ENV CLD $CLDPROVIDER
+
 ARG TARGETS
 ENV TARGETCNT $TARGETS
 COPY dfc.json $CONFFILE
 
 EXPOSE 8080 9080 10080
 
-RUN echo "cd $WORKDIR && go build && go install && go install $WORKDIR/setup/dfc.go \ncd $GOBIN && $GOBIN/dfc -config=\$1 -role=\$2 -ntargets=$TARGETCNT  -alsologtostderr=true \n" \
+ENV VERSION `git describe --tags`
+ENV BUILD `date +%FT%T%z`
+RUN echo "\
+cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/dfc.go \n \
+cd $GOBIN && $GOBIN/dfc -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-CMD ["sh","-c", "DFCDAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETS"]
+CMD ["sh","-c", "DFCDAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT"]
