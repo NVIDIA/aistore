@@ -1223,7 +1223,15 @@ func TestECEmergencyMpath(t *testing.T) {
 		defer r.Close()
 		tutils.CheckFatal(err, t)
 
-		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+		// try PUT for a few times
+		for i := 0; i < 3; i++ {
+			err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
+			if err == nil {
+				break
+			}
+			tutils.Logf("Failed to PUT %s: %v. Retrying...\n", objName, err)
+			time.Sleep(50 * time.Millisecond)
+		}
 		tutils.CheckFatal(err, t)
 
 		foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, fullPath, objName)
@@ -1250,6 +1258,8 @@ func TestECEmergencyMpath(t *testing.T) {
 	err = api.DisableMountpath(tgtParams, removeMpath)
 	tutils.CheckFatal(err, t)
 	defer func() {
+		// Enable mountpah
+		tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
 		err = api.EnableMountpath(tgtParams, removeMpath)
 		tutils.CheckFatal(err, t)
 	}()
@@ -1280,7 +1290,4 @@ func TestECEmergencyMpath(t *testing.T) {
 	if len(reslist.Entries) != numFiles {
 		t.Fatalf("Invalid number of objects: %d, expected %d", len(reslist.Entries), numFiles)
 	}
-
-	// 5. Enable mountpah
-	tutils.Logf("Enabling mountpath %s at target %s...\n", removeMpath, removeTarget.DaemonID)
 }
