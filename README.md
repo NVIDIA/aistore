@@ -1,6 +1,6 @@
-Distributed specialized open-source Object Storage
+Distributed Specialized Open-source Object Storage
 --------------------------------------------------
-This is a distributed object store - built from scratch and designed from ground up for large-scale AI applications. The storage service *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
+This is a distributed object store - built from scratch and designed from ground up for large-scale AI applications. Storage cluster *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
 
 Both **gateways/proxies** and **targets** are realized as software daemons that join (and by virtue of joining - form) a storage cluster at their respective startup times or upon user request. The cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. The code itself is free, open, and MIT-licensed.
 
@@ -8,7 +8,9 @@ A bird's-eye view follows - and tries to emphasize a few distinguishing characte
 
 <img src="images/dfc-overview-mp.png" alt="DFC overview" width="448">
 
-Users connect to proxies and execute RESTful operations. All proxies (aka gateways) are identical as far as supported API that includes documented-below control and data planes. Data moves **directly** between HTTP(S) clients and storage targets with no metadata servers and no extra-processing in-between. The distribution of objects is defined by a two-dimensional very fast consistent-hashing technique whereby objects get, first, distributed across all clustered targets, and, second, across local disks of each target. Specialized-type software that we call [extended action](#extended-actions-xactions) maintains balanced distribution of the stored content in presence of servers joining or leaving the cluster.
+Provided storage services include [end-to-end checksumming](#checksumming), object versioning, Reed-Solomon based [erasure coding](#erasure-coding), health monitoring and recovery, and [local mirroring](#local-mirroring). I/O load balancing is also supported - at the time of this writing it requires "mirrored" buckets (that is, buckets configured for local replication).
+
+All inter- and intra-cluster networking is HTTP/1.1 based. Users can connect to proxies and execute RESTful operations. All clustered proxies (gateways) are identical as far as supported API that in turn includes documented-below control and data planes. Data moves **directly** between HTTP(S) clients and storage targets with no metadata servers and no extra-processing in-between. Distribution of data in the cluster is organized as a (lightning fast) two-dimensional consistent-hash, whereby objects, first, get distributed across all storage targets and, second, local disks of each target. Specialized-type software that we call [extended action](#extended-actions-xactions) maintains balanced distribution of the stored content in presence of servers joining or leaving the cluster.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -51,10 +53,11 @@ Users connect to proxies and execute RESTful operations. All proxies (aka gatewa
     - [Election](#election)
     - [Non-electable gateways](#non-electable-gateways)
     - [Metasync](#metasync)
-- [Bucket-specific Configuration](#bucket-specific-configuration)
+- [Storage Services](#storage-services)
     - [Checksumming](#checksumming)
     - [LRU](#lru)
     - [Erasure coding](#erasure-coding)
+    - [Local mirroring and load balancing](#local-mirroring-and-load-balancing)
 - [Object checksums: brief theory of operations](#object-checksums-brief-theory-of-operations)
 - [Command-line Load Generator](#command-line-load-generator)
 - [Metrics with StatsD](#metrics-with-statsd)
@@ -67,6 +70,7 @@ Users connect to proxies and execute RESTful operations. All proxies (aka gatewa
 	- [WebDAV](#webdav)
 	- [Multi-tiering](#multi-tiering)
 	- [Inter-cluster replication](#inter-cluster-replication)
+	- [Authentication](#authentication)
 
 ## Prerequisites
 
@@ -759,8 +763,9 @@ DFC cluster can be *stretched* to collocate its redundant gateways with the comp
 
 By design DFC does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In DFC, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](dfc/metasync.go). DFC metasync makes sure to keep cluster-level metadata in-sync at all times.
 
-## Bucket-specific Configuration
-Global configuration of buckets is done by default using the fields provided in `config.sh`, but certain bucket properties pertaining to checksumming and LRU can be specified at a more granular level - namely, on a per bucket basis.
+## Storage Services
+
+By default, buckets inherit [global configuration](dfc/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
 
 ### Checksumming
 
@@ -805,9 +810,11 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}
 
 ### Erasure coding
 
-DFC provides data protection for local buckets. It comes in two flavors: replication (for small objects) and erasure coding(EC) for big objects. EC is a method of data protection in which data is broken into fragments, expanded with redundant data pieces and stored across a set of different storage targets.
+DFC provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-mirroring-and-load-balancing), replication (for *small* objects), and erasure coding.
 
-After creation data protection for a new local is disabled. Configure EC prior to putting objects by setting bucket properties:
+Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into N fragments or slices, computing K redundant (parity) slices, and then storing the resulting (N+K) slices on (N+K) storage servers - one slice per target server.
+
+EC schemas are flexible and user-configurable: users can select the N and the K (above), thus ensurng that user data remains available even if the cluster loses **any** (emphasis on the **any**) of its K servers.
 
 * `ec_config.enabled`: bool - enables or disabled data protection the bucket
 * `ec_config.data_slices`: integer in the range [2, 100], representing the number of fragments the object is broken into
@@ -818,7 +825,7 @@ Choose the number data and parity slices depending on required level of protecti
 
 Notes:
 
-- Every data and parity slice is stored on a separate storage target. To reconstruct damaged object, DFC requires at least `ec_config.data_slices` slices in total out of data and parity sets
+- Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, DFC requires at least `ec_config.data_slices` slices in total out of data and parity sets
 - Small objects are replicated `ec_config.parity_slices` times to have the same level of data protection that big objects do
 - Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
 
@@ -826,6 +833,16 @@ Example of setting bucket properties:
 ```shell
 $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru_props":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","lru_enabled":true}, "ec_config": {"enabled": true, "data": 4, "parity": 2}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
 ```
+
+#### Limitations
+
+In the version 2.0, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
+
+Secondly, only local buckets are currently supported. Both limitations will be removed in the subsequent releases.
+
+### Local mirroring and load balancing
+
+TODO
 
 ## Object checksums: brief theory of operations
 
@@ -996,3 +1013,7 @@ The picture below illustrates some of the aspects of replication service as far 
 
 **Note:** The service is currently in its prototype stage and is not yet available.
 
+
+### Authentication
+
+Please see [AuthN documentation](./authn/README.md).
