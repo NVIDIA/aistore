@@ -749,9 +749,8 @@ func (p *proxyrunner) httpbckput(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// forbid changing EC properites if EC is already enabled (for now)
-		if bprops.ECEnabled &&
-			(bprops.ECEnabled != nprops.ECEnabled ||
-				bprops.ParitySlices != nprops.ParitySlices ||
+		if bprops.ECEnabled && nprops.ECEnabled &&
+			(bprops.ParitySlices != nprops.ParitySlices ||
 				bprops.DataSlices != nprops.DataSlices ||
 				bprops.ECObjSizeLimit != nprops.ECObjSizeLimit) {
 			p.bmdowner.Unlock()

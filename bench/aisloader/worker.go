@@ -35,12 +35,13 @@ func doPut(wo *workOrder) {
 		return
 	}
 	baseParams := tutils.BaseAPIParams(wo.proxyURL)
+	baseParams.Client = tutils.TracedClient()
 	wo.err = api.PutObject(baseParams, wo.bucket, wo.objName, r.XXHash(), r)
 }
 
 func doGet(wo *workOrder) {
-	wo.size, wo.latencies, wo.err = tutils.GetWithMetrics(wo.proxyURL, wo.bucket, wo.objName, true, /* silent */
-		runParams.verifyHash /* validate */)
+	wo.size, wo.latencies, wo.err = tutils.GetWithMetrics(wo.proxyURL, wo.bucket, wo.objName,
+		runParams.verifyHash /* validate */, runParams.readOff, runParams.readLen)
 }
 
 func doGetConfig(wo *workOrder) {

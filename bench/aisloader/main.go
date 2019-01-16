@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,8 +76,16 @@ type (
 		tmpDir            string // only used when usingFile is true
 		loaderID          int    // when multiple of instances of loader running on the same host
 		statsdPort        int
-		batchSize         int  // batch is used for bootstraping(list) and delete
-		getConfig         bool // true if only run get proxy config request
+		batchSize         int    // batch is used for bootstraping(list) and delete
+		getConfig         bool   // true if only run get proxy config request
+		readOffStr        string // read offset \
+		readLenStr        string // read length / to test range read
+		readOff           int64  // read offset \
+		readLen           int64  // read length / to test range read
+
+		// bucket-related options
+		bPropsStr string
+		bProps    cmn.BucketProps
 	}
 
 	// sts records accumulated puts/gets information.
@@ -102,13 +111,16 @@ var (
 )
 
 func parseCmdLine() (params, error) {
-	var p params
+	var (
+		p   params
+		err error
+	)
 
 	// Command line options
 	ip := flag.String("ip", "localhost", "IP address for proxy server")
 	port := flag.Int("port", 8080, "Port number for proxy server")
 	flag.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
-	flag.StringVar(&p.bucket, "bucket", "nvdfc", "Bucket name")
+	flag.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
 	flag.BoolVar(&p.isLocal, "local", true, "True if using local bucket")
 	flag.DurationVar(&p.duration, "duration", time.Minute, "How long to run the test; 0 = Unbounded."+
 		"If duration is 0 and totalputsize is also 0, it is a no op.")
@@ -127,6 +139,9 @@ func parseCmdLine() (params, error) {
 	flag.IntVar(&p.statsdPort, "statsdport", 8125, "UDP port number for local statsd server")
 	flag.IntVar(&p.batchSize, "batchsize", 100, "List and delete batch size")
 	flag.BoolVar(&p.getConfig, "getconfig", false, "True if send get proxy config requests only")
+	flag.StringVar(&p.bPropsStr, "bprops", "", "Set local bucket properties(a JSON string in API SetBucketProps format)")
+	flag.StringVar(&p.readOffStr, "readoff", "", "Read range offset")
+	flag.StringVar(&p.readLenStr, "readlen", "", "Read range length (0 - read the entire object)")
 
 	flag.Parse()
 	p.usingSG = p.readerType == tutils.ReaderTypeSG
@@ -143,6 +158,66 @@ func parseCmdLine() (params, error) {
 
 	if p.statsShowInterval < 0 {
 		return params{}, fmt.Errorf("Invalid option: stats show interval %d", p.statsShowInterval)
+	}
+
+	if p.readOffStr != "" {
+		if p.readOff, err = cmn.S2B(p.readOffStr); err != nil {
+			return params{}, fmt.Errorf("Failed to parse read offset %s: %v", p.readOffStr, err)
+		}
+	}
+	if p.readLenStr != "" {
+		if p.readLen, err = cmn.S2B(p.readLenStr); err != nil {
+			return params{}, fmt.Errorf("Failed to parse read length %s: %v", p.readLenStr, err)
+		}
+	}
+
+	if p.bPropsStr != "" {
+		var bprops cmn.BucketProps
+		jsonStr := strings.TrimRight(p.bPropsStr, ",")
+		if !strings.HasPrefix(jsonStr, "{") {
+			jsonStr = "{" + strings.TrimRight(jsonStr, ",") + "}"
+		}
+
+		if err := json.Unmarshal([]byte(jsonStr), &bprops); err != nil {
+			return params{}, fmt.Errorf("Failed to parse bucket properties: %v", err)
+		}
+
+		p.bProps = bprops
+		if p.bProps.ECEnabled {
+			// fill EC defaults
+			if p.bProps.ParitySlices == 0 {
+				p.bProps.ParitySlices = 2
+			}
+			if p.bProps.DataSlices == 0 {
+				p.bProps.DataSlices = 2
+			}
+
+			if p.bProps.ParitySlices < 1 || p.bProps.ParitySlices > 32 {
+				return params{}, fmt.Errorf(
+					"Invalid number of parity slices: %d, it must be between 1 and 32",
+					p.bProps.ParitySlices)
+			}
+			if p.bProps.DataSlices < 1 || p.bProps.DataSlices > 32 {
+				return params{}, fmt.Errorf(
+					"Invalid number of data slices: %d, it must be between 1 and 32",
+					p.bProps.DataSlices)
+			}
+		}
+
+		if p.bProps.MirrorEnabled {
+			// fill mirror default properties
+			if p.bProps.MirrorUtilThresh == 0 {
+				p.bProps.MirrorUtilThresh = 5
+			}
+			if p.bProps.Copies == 0 {
+				p.bProps.Copies = 2
+			}
+			if p.bProps.Copies != 2 {
+				return params{}, fmt.Errorf(
+					"Invalid number of mirror copies: %d, it must equal 2",
+					p.bProps.Copies)
+			}
+		}
 	}
 
 	p.proxyURL = "http://" + *ip + ":" + strconv.Itoa(*port)
@@ -207,11 +282,47 @@ func main() {
 			return
 		}
 
+		baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 		if !exists {
-			baseParams := tutils.BaseAPIParams(runParams.proxyURL)
 			err := api.CreateLocalBucket(baseParams, runParams.bucket)
 			if err != nil {
 				fmt.Println("Failed to create local bucket", runParams.bucket, "err = ", err)
+				return
+			}
+		}
+
+		oldProps, err := api.HeadBucket(baseParams, runParams.bucket)
+		if err != nil {
+			fmt.Printf("Failed to read bucket %s properties: %v\n", runParams.bucket, err)
+			return
+		}
+		change := false
+		if runParams.bProps.ECEnabled != oldProps.ECEnabled {
+			if !runParams.bProps.ECEnabled {
+				oldProps.ECEnabled = false
+			} else {
+				oldProps.ECConf = cmn.ECConf{
+					ECEnabled:      true,
+					ECObjSizeLimit: runParams.bProps.ECObjSizeLimit,
+					DataSlices:     runParams.bProps.DataSlices,
+					ParitySlices:   runParams.bProps.ParitySlices,
+				}
+			}
+			change = true
+		}
+		if runParams.bProps.MirrorEnabled != oldProps.MirrorEnabled {
+			if runParams.bProps.MirrorEnabled {
+				oldProps.MirrorEnabled = runParams.bProps.MirrorEnabled
+				oldProps.Copies = runParams.bProps.Copies
+				oldProps.MirrorUtilThresh = runParams.bProps.MirrorUtilThresh
+			} else {
+				oldProps.MirrorEnabled = false
+			}
+			change = true
+		}
+		if change {
+			if err = api.SetBucketProps(baseParams, runParams.bucket, *oldProps); err != nil {
+				fmt.Printf("Failed to enable EC for the bucket %s properties: %v\n", runParams.bucket, err)
 				return
 			}
 		}

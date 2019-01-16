@@ -223,13 +223,18 @@ func emitError(r *http.Response, err error, errCh chan error) {
 }
 
 // Get sends a GET request to url and discards returned data
-func GetWithMetrics(url, bucket string, keyname string, silent bool, validate bool) (int64, HTTPLatencies, error) {
+func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, length int64) (int64, HTTPLatencies, error) {
 	var (
 		hash, hdhash, hdhashtype string
 		w                        = ioutil.Discard
 	)
 
 	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, keyname)
+	if length > 0 {
+		url += fmt.Sprintf("?%s=%d&%s=%d",
+			cmn.URLParamOffset, offset,
+			cmn.URLParamLength, length)
+	}
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return 0, HTTPLatencies{}, err
@@ -258,10 +263,6 @@ func GetWithMetrics(url, bucket string, keyname string, silent bool, validate bo
 	if v {
 		if hdhash != hash {
 			err = cmn.NewInvalidCksumError(hdhash, hash)
-		} else {
-			if !silent {
-				fmt.Printf("Header's hash %s matches the file's %s \n", hdhash, hash)
-			}
 		}
 	}
 
@@ -852,4 +853,8 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 		}
 	}
 	return m
+}
+
+func TracedClient() *http.Client {
+	return tracedClient
 }
