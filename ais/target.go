@@ -194,13 +194,10 @@ func (t *targetrunner) Run() error {
 	}
 	t.detectMpathChanges()
 
-	// cloud provider
+	// cloud provider (empty stubs that may get populated via build tags)
 	if config.CloudProvider == cmn.ProviderAmazon {
-		// TODO: sessions
 		t.cloudif = &awsimpl{t}
-
 	} else {
-		cmn.Assert(config.CloudProvider == cmn.ProviderGoogle)
 		t.cloudif = &gcpimpl{t}
 	}
 
