@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	pollInterval = time.Second
+	pollInterval = time.Millisecond * 100
 )
 
 // Implements cluster.NameLocker interface.
@@ -26,12 +26,11 @@ const (
 var _ cluster.NameLocker = &rtnamemap{}
 
 type rtnamemap struct {
-	mu *sync.Mutex
-	m  map[string]*pendinginfo
+	mu sync.Mutex
+	m  map[string]*lockInfo
 }
 
-type pendinginfo struct {
-	time.Time
+type lockInfo struct {
 	rc        int
 	exclusive bool
 }
@@ -40,39 +39,39 @@ type pendinginfo struct {
 // methods
 //
 func newrtnamemap(size int) *rtnamemap {
-	m := make(map[string]*pendinginfo, size)
-	return &rtnamemap{mu: &sync.Mutex{}, m: m}
+	return &rtnamemap{
+		m: make(map[string]*lockInfo, size),
+	}
 }
 
 func (rtnamemap *rtnamemap) TryLock(uname string, exclusive bool) bool {
 	rtnamemap.mu.Lock()
 
-	realinfo, found := rtnamemap.m[uname]
-	if found && exclusive {
-		rtnamemap.mu.Unlock()
-		return false
-	}
-	info := &pendinginfo{Time: time.Now()}
+	realInfo, found := rtnamemap.m[uname]
+	info := &lockInfo{}
 	if exclusive {
+		if found {
+			rtnamemap.mu.Unlock()
+			return false
+		}
+
 		rtnamemap.m[uname] = info
 		info.exclusive = true
-		info.rc = 0
 		rtnamemap.mu.Unlock()
 		return true
 	}
+
 	// rlock
 	if found {
-		if realinfo.exclusive {
+		if realInfo.exclusive {
 			rtnamemap.mu.Unlock()
 			return false
 		}
 	} else {
 		rtnamemap.m[uname] = info // the 1st rlock
-		realinfo = info
-		realinfo.exclusive = false
-		realinfo.rc = 0
+		realInfo = info
 	}
-	realinfo.rc++
+	realInfo.rc++
 	rtnamemap.mu.Unlock()
 	return true
 }
@@ -92,18 +91,22 @@ func (rtnamemap *rtnamemap) Lock(uname string, exclusive bool) {
 	for {
 		time.Sleep(pollInterval)
 		if rtnamemap.TryLock(uname, exclusive) {
-			glog.Infof("Lock %s(%t) - success", uname, exclusive)
+			if glog.V(4) {
+				glog.Infof("Lock %s(%t) - success", uname, exclusive)
+			}
 			return
 		}
-		glog.Infof("Lock %s(%t) - retrying...", uname, exclusive)
+
+		if glog.V(4) {
+			glog.Infof("Lock %s(%t) - retrying...", uname, exclusive)
+		}
 	}
 }
 
 func (rtnamemap *rtnamemap) DowngradeLock(uname string) {
 	rtnamemap.mu.Lock()
-
 	info, found := rtnamemap.m[uname]
-	cmn.Assert(found)
+	cmn.Assert(found && info.exclusive)
 	info.exclusive = false
 	info.rc++
 	cmn.Assert(info.rc == 1)
@@ -112,8 +115,8 @@ func (rtnamemap *rtnamemap) DowngradeLock(uname string) {
 
 func (rtnamemap *rtnamemap) Unlock(uname string, exclusive bool) {
 	rtnamemap.mu.Lock()
-	info, ok := rtnamemap.m[uname]
-	cmn.Assert(ok)
+	info, found := rtnamemap.m[uname]
+	cmn.Assert(found)
 	if exclusive {
 		cmn.Assert(info.exclusive)
 		delete(rtnamemap.m, uname)
