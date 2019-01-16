@@ -231,7 +231,7 @@ func randObjectSize(rnd *rand.Rand, n, every int) (
 // EC is enabled
 func TestECPropsChange(t *testing.T) {
 	var (
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 	)
 
@@ -313,7 +313,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 
 	var (
 		sgl         *memsys.SGL
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		sema        = make(chan struct{}, semaCnt)
 	)
@@ -511,7 +511,7 @@ func TestECStress(t *testing.T) {
 
 	var (
 		sgl         *memsys.SGL
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
 
@@ -713,7 +713,7 @@ func TestECExtraStress(t *testing.T) {
 
 	var (
 		sgl         *memsys.SGL
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		waitAllTime = time.Minute * 4              // should be enough for all object to complete EC
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
@@ -832,7 +832,7 @@ func TestECXattrs(t *testing.T) {
 
 	var (
 		sgl         *memsys.SGL
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 	)
 
@@ -1001,7 +1001,7 @@ func TestECEmergencyTarget(t *testing.T) {
 
 	var (
 		sgl         *memsys.SGL
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
 	)
@@ -1162,7 +1162,7 @@ func TestECEmergencyMpath(t *testing.T) {
 
 	var (
 		sgl         *memsys.SGL
-		proxyURL    = getPrimaryURL(t, proxyURLRO)
+		proxyURL    = getPrimaryURL(t, proxyURLReadOnly)
 		bucketProps cmn.BucketProps
 		baseParams  = tutils.BaseAPIParams(proxyURL)
 		semaphore   = make(chan struct{}, concurr) // concurrent EC jobs at a time
