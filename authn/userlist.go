@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/dfcpub/ais"
 	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dfc"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/json-iterator/go"
 )
