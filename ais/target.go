@@ -583,8 +583,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	if redelta := t.redirectLatency(started, query); redelta != 0 {
 		t.statsif.Add(stats.GetRedirLatency, redelta)
 	}
-	errstr, errcode = t.IsBucketLocal(bucket, lom.Bucketmd, query, lom.Bislocal)
-	if errstr != "" {
+	if errstr, errcode = t.IsBucketLocal(bucket, lom.Bucketmd, query, lom.Bislocal); errstr != "" {
 		t.invalmsghdlr(w, r, errstr, errcode)
 		return
 	}
@@ -2301,13 +2300,12 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 }
 
 func (t *targetrunner) localMirror(lom *cluster.LOM) {
-	if !lom.Mirror.MirrorEnabled {
+	if dryRun.disk || !lom.Mirror.MirrorEnabled {
 		return
 	}
 
 	if fs.Mountpaths.NumAvail() <= 1 { // FIXME: cache when filling-in the lom
 		return
-
 	}
 
 	if t.xcopy == nil || t.xcopy.Finished() || t.xcopy.Bucket() != lom.Bucket || t.xcopy.Bislocal != lom.Bislocal {
@@ -2870,7 +2868,7 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 	var (
 		err        error
 		file       *os.File
-		filewriter io.Writer
+		filewriter = ioutil.Discard
 		nhval      string
 	)
 	if dryRun.disk && dryRun.network {
@@ -2886,8 +2884,6 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 			return
 		}
 		filewriter = file
-	} else {
-		filewriter = ioutil.Discard
 	}
 
 	buf, slab := gmem2.AllocFromSlab2(0)
