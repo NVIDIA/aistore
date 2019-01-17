@@ -157,7 +157,7 @@ func (r *XactCopy) Stop(error) { r.Abort() } // call base method
 // =================== load balancing and self-throttling ========================
 
 func (r *XactCopy) loadBalance(lom *cluster.LOM) (copier *copier) {
-	var util = cmn.PairF32{100, 100}
+	var util = cmn.PairF32{101, 101}
 	for _, j := range r.copiers {
 		if j.mpathInfo.Path == lom.ParsedFQN.MpathInfo.Path {
 			continue
