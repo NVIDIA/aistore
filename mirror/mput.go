@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/dfcpub/3rdparty/glog"
@@ -25,12 +26,13 @@ type (
 		workCh  chan *cluster.LOM
 		copiers map[string]*copier
 		// init
-		Mirror     cmn.MirrorConf
-		Slab       *memsys.Slab2
-		T          cluster.Target
-		Namelocker cluster.NameLocker
-		wg         *sync.WaitGroup
-		Bislocal   bool
+		Mirror                 cmn.MirrorConf
+		Slab                   *memsys.Slab2
+		T                      cluster.Target
+		Namelocker             cluster.NameLocker
+		wg                     *sync.WaitGroup
+		total, dropped, copied int64
+		Bislocal               bool
 	}
 	copier struct { // one per mountpath
 		parent    *XactCopy
@@ -76,7 +78,6 @@ func (r *XactCopy) Run() error {
 	for {
 		select {
 		case lom := <-r.workCh:
-			cmn.Assert(r.Mirror.MirrorOptimizeRead, cmn.NotSupported)
 			// load balance
 			if copier := r.loadBalance(lom); copier != nil {
 				if glog.V(4) {
@@ -104,25 +105,30 @@ func (r *XactCopy) Copy(lom *cluster.LOM) (err error) {
 		err = cmn.NewErrXpired("Cannot replicate: " + r.String())
 		return
 	}
+	r.total++
 	// [throttle]
-	// when the optimization objective is - read load balancing
-	// (rather than data redundancy), we start dropping requests to make sure
-	// callers never block
+	// when the optimization objective is write perf,
+	// we start dropping requests to make sure callers don't block
 	pending, max := r.Pending(), r.Mirror.MirrorBurst
-	if pending > 1 && pending >= max {
-		glog.Errorf("%s: pending/burst=(%d, %d), drop type 2", lom, pending, max)
-		return
+	if r.Mirror.MirrorOptimizePUT {
+		if pending > 1 && pending >= max {
+			r.dropped++
+			if (r.dropped % logNumDropped) == 0 {
+				glog.Errorf("%s: pending=%d, total=%d, dropped=%d", r, pending, r.total, r.dropped)
+			}
+			return
+		}
 	}
 	r.IncPending() // ref-count via base to support on-demand action
 	r.workCh <- lom
 
 	// [throttle]
-	// on the other hand, when approaching the fixed boundary
-	// a bit of back-pressure may be just necessary
-	// (this code is by no means a replacement of the (TODO) adaptive logic)
+	// a bit of back-pressure when approaching the fixed boundary
 	if pending > 1 && max > 10 {
-		if pending >= max-max/8 {
+		if pending >= max-max/8 && !r.Mirror.MirrorOptimizePUT {
 			time.Sleep(cmn.ThrottleSleepMax)
+		} else if pending > max-max/4 {
+			time.Sleep((cmn.ThrottleSleepAvg + cmn.ThrottleSleepMax) / 2)
 		} else if pending > max/2 {
 			time.Sleep(cmn.ThrottleSleepAvg)
 		}
@@ -235,8 +241,13 @@ func (j *copier) mirror(lom *cluster.LOM) {
 	}
 	if errstr := lom.SetXcopy(cpyfqn); errstr != "" {
 		glog.Errorln(errstr)
-	} else if glog.V(4) {
-		glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
+	} else {
+		if glog.V(4) {
+			glog.Infof("copied %s/%s %s=>%s", lom.Bucket, lom.Objname, lom.ParsedFQN.MpathInfo, j.mpathInfo)
+		}
+		if v := atomic.AddInt64(&j.parent.copied, 1); (v % logNumCopied) == 0 {
+			glog.Infof("%s: total~=%d, copied=%d", j.parent.String(), j.parent.total, v)
+		}
 	}
 	return
 fail:

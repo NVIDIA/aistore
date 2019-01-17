@@ -180,11 +180,11 @@ type Config struct {
 }
 
 type MirrorConf struct {
-	Copies             int64 `json:"copies"`               // num local copies
-	MirrorBurst        int64 `json:"mirror_burst_buffer"`  // channel buffer size
-	MirrorUtilThresh   int64 `json:"mirror_util_thresh"`   // utilizations are considered equivalent when below this threshold
-	MirrorOptimizeRead bool  `json:"mirror_optimize_read"` // optimization objective: read load balancing (true) | data redundancy (false)
-	MirrorEnabled      bool  `json:"mirror_enabled"`       // will only generate local copies when set to true
+	Copies            int64 `json:"copies"`              // num local copies
+	MirrorBurst       int64 `json:"mirror_burst_buffer"` // channel buffer size
+	MirrorUtilThresh  int64 `json:"mirror_util_thresh"`  // utilizations are considered equivalent when below this threshold
+	MirrorOptimizePUT bool  `json:"mirror_optimize_put"` // optimization objective
+	MirrorEnabled     bool  `json:"mirror_enabled"`      // will only generate local copies when set to true
 }
 
 type RahConf struct {

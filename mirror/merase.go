@@ -22,6 +22,8 @@ import (
 const (
 	throttleNumErased = 16                     // unit of self-throttling
 	logNumErased      = throttleNumErased * 16 // unit of house-keeping
+	logNumCopied      = logNumErased
+	logNumDropped     = logNumErased
 )
 
 // XactErase (extended action) reduces data redundancy of a given bucket to 1 (single copy)
