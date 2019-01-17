@@ -19,7 +19,7 @@ import (
 	"github.com/NVIDIA/dfcpub/ios"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/stats"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // runners
@@ -38,7 +38,6 @@ const (
 	xfshc            = "fshc"
 	xreadahead       = "readahead"
 	xreplication     = "replication" // TODO: fix replication
-	xec              = "ec"
 )
 
 type (

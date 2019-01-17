@@ -385,7 +385,6 @@ func (xs *xactions) renewEraseCopies(bucket string, t *targetrunner, islocal boo
 	xs.add(xerase)
 	go xerase.Run()
 	xs.Unlock()
-	return
 }
 
 // PutCopies and EraseCopies as those are currently the only bucket-specific xaction we may have
