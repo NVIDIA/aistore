@@ -11,7 +11,7 @@ ENV TARGETS 1000
 ENV GOPATH /go
 ENV GOBIN /go/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
-ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
+ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/ais
 
 #Installing go
 RUN apt-get update &&\
@@ -32,7 +32,7 @@ RUN pip install awscli
 RUN rm -rf go$GOLANG_VERSION.linux-amd64.tar.gz
 
 #Get Source code with a specific hash 
-RUN go get -u -v github.com/NVIDIA/dfcpub/dfc
+RUN go get -u -v github.com/NVIDIA/dfcpub/ais
 ARG HASH
 RUN rm -rf $GOPATH/src/github.com/NVIDIA/dfcpub
 RUN cd $GOPATH/src/github.com/NVIDIA &&\
