@@ -127,6 +127,8 @@ Tests detect docker cluster and use primary URL "http://172.50.0.2:8080" (see PU
 BUCKET=vlocal go test -v ./tests -count 1 -p 1 -timeout 1h --args -url=http://172.51.0.7:8080
 ```
 
+**NOTE:** Some tests require a minimum number of targets or proxies. Also, due to Docker permissioning, you might have to run tests with `sudo ...` too.
+
 ## Utility Scripts
 ### `logs.sh`
 To quickly view the logs of all running containers, use the following command:

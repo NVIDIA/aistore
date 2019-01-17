@@ -95,7 +95,7 @@ It’s OK if apt-get reports that none of these packages are installed.
 ## Starting DFC
 1. If you have already installed go and configured $GOPATH execute the below command to download DFC source code and all its dependencies.
 ```
-$go get -u -v github.com/NVIDIA/dfcpub/dfc
+$go get -u -v github.com/NVIDIA/dfcpub/ais
 ```
 
 2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command. 
@@ -151,8 +151,8 @@ Note:
     $docker exec -it CONTAINER_NAME /bin/bash
 ```
 Note:
-* In production mode, the logs are expected to be in `/var/log/dfc/`.By deafult (Devlopment mode) the logs are under `tmp/dfc/log`
-* The docker/dev directory has a script named `container_shell.sh` that does the same thing
+* In production mode, the logs are expected to be in `/var/log/dfc/`.By default (development mode) the logs are under `tmp/dfc/log`
+* The `docker/dev` directory has a script named `container_shell.sh` that does the same thing
 
 ### List Docker Images
 ```

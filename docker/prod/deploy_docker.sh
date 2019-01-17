@@ -143,10 +143,12 @@ CONFFILE="dfc.json"
 c=0
 CONFFILE_STATSD="statsd.conf"
 CONFFILE_COLLECTD="collectd.conf"
+
 source $DIR/../ais/setup/config.sh
 
 #)  run the cluster
-export CLDPROVIDER=${CLDPROVIDER}
+export CLDPROVIDER=$CLDPROVIDER
+export MIRROR_ENABLED=false
 
 echo Stoping running  cluster..
 sudo docker-compose -f $environment"_docker-compose.yml" down
