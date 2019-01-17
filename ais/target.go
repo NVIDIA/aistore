@@ -1806,8 +1806,12 @@ func (t *targetrunner) prepareLocalObjectList(bucket string, msg *cmn.GetMsg) (*
 	fileCount := 0
 	for r := range ch {
 		if r.err != nil {
-			t.fshc(r.err, r.failedPath)
-			return nil, fmt.Errorf("Failed to read %s", r.failedPath)
+			if !os.IsNotExist(r.err) {
+				t.fshc(r.err, r.failedPath)
+				return nil, fmt.Errorf("Failed to read %s", r.failedPath)
+			} else {
+				continue
+			}
 		}
 
 		pageSize = r.infos.limit

@@ -142,6 +142,10 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	if errstr := lom.Fill(cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
+	// global rebalance: skip locally-misplaced and local copies (not to confuse with HasCopy())
+	if lom.DoesNotExist || lom.Misplaced() || lom.IsCopy() {
+		return nil
+	}
 
 	// NOTE: Unlock happens in case of error or in rebalanceObjCallback.
 	rcl.t.rtnamemap.Lock(lom.Uname, false)
@@ -217,12 +221,17 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		return nil
 	}
 	lom := &cluster.LOM{T: rb.t, Fqn: fqn}
-	if errstr := lom.Fill(0); errstr != "" {
+	if errstr := lom.Fill(cluster.LomFstat | cluster.LomCopy); errstr != "" {
 		if glog.V(4) {
 			glog.Infof("%s, err %v - skipping...", lom, err)
 		}
 		return nil
 	}
+	// local rebalance: skip local copies
+	if lom.DoesNotExist || lom.IsCopy() {
+		return nil
+	}
+	// check whether locally-misplaced
 	if !lom.Misplaced() {
 		return nil
 	}
@@ -242,8 +251,10 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
 	if err := lom.CopyObject(lom.HrwFQN, rb.buf); err != nil {
-		rb.xreb.Abort()
-		rb.t.fshc(err, lom.HrwFQN)
+		if !os.IsNotExist(err) {
+			rb.xreb.Abort()
+			rb.t.fshc(err, lom.HrwFQN)
+		}
 		return nil
 	}
 	rb.objectMoved++
