@@ -1,9 +1,9 @@
 # coding: utf-8
 
 """
-    DFC
+    AIS
 
-    DFC is a scalable object-storage based caching system with Amazon and
+    AIStore is a scalable object-storage based caching system with Amazon and
     Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
@@ -55,10 +55,10 @@ class TestObjectApi(unittest.TestCase):
     def test_object_headers(self):
         object_name, _ = self.__put_random_object()
         headers = self.object.get_with_http_info(self.BUCKET_NAME, object_name)[2]
-        self.assertTrue(self.models.Headers.DFCCHECKSUMTYPE in headers,
+        self.assertTrue(self.models.Headers.HEADEROBJCKSUMTYPE in headers,
                         "ChecksumType not in header for [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
-        self.assertTrue(headers[self.models.Headers.DFCCHECKSUMVAL] ,
+        self.assertTrue(headers[self.models.Headers.HEADEROBJCKSUMVAL] ,
                         "ChecksumVal is None or empty [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
 

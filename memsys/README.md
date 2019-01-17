@@ -42,10 +42,10 @@ In that sense, a typical initialization sequence includes 2 or 3 steps, e.g.:
 In addition, there are several environment variables that can be used
 (to circumvent the need to change the code, for instance):
 ```shell
-	DFC_MINMEM_FREE
-	DFC_MINMEM_PCT_TOTAL
-	DFC_MINMEM_PCT_FREE
-	DFC_MEM_DEBUG
+	AIS_MINMEM_FREE
+	AIS_MINMEM_PCT_TOTAL
+	AIS_MINMEM_PCT_FREE
+	AIS_MEM_DEBUG
 ```
 These names must be self-explanatory.
 
@@ -96,7 +96,7 @@ go test -v -logtostderr=true -run=Test_Sleep -duration=100s
 * All tests for 2 minutes with verbose tracing and debug (i.e., assertions) enabled:
 
 ```
-DFC_MEM_DEBUG=1 go test -v -logtostderr=true -duration=2m
+AIS_MEM_DEBUG=1 go test -v -logtostderr=true -duration=2m
 ```
 
 ## Global Memory Manager

@@ -1,4 +1,4 @@
-// Helper functions for interfacing with DFC proxy
+// Helper functions for interfacing with AIStore proxy
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -64,7 +64,7 @@ func (p *proxyServer) listBuckets(local bool) ([]string, error) {
 	return bns.Local, nil
 }
 
-// doesObjectExists checks whether a resource exists by querying DFC.
+// doesObjectExists checks whether a resource exists by querying AIStore.
 func (p *proxyServer) doesObjectExist(bucket, prefix string) (bool, *fileInfo, error) {
 	entries, err := p.listObjectsDetails(bucket, prefix, 1)
 	if err != nil {

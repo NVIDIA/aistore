@@ -5,7 +5,7 @@ sudo touch /etc/profile.d/dfcpaths.sh
 sudo sh -c "echo export PATH=$PATH:/usr/local/go/bin > /etc/profile.d/dfcpaths.sh"
 sudo sh -c "echo export GOBIN=$HOME/dfc/bin >> /etc/profile.d/dfcpaths.sh"
 sudo sh -c "echo export GOPATH=$HOME/dfc/ >> /etc/profile.d/dfcpaths.sh"
-sudo sh -c "echo export DFCSRC=$HOME/dfc/src/github.com/NVIDIA/dfcpub/dfc >> /etc/profile.d/dfcpaths.sh"
+sudo sh -c "echo export AISSRC=$HOME/dfc/src/github.com/NVIDIA/dfcpub/dfc >> /etc/profile.d/dfcpaths.sh"
 sudo chmod 777 /etc/profile.d/dfcpaths.sh
 . /etc/profile.d/dfcpaths.sh
 rm -rf ~/dfc || true
@@ -21,10 +21,10 @@ if [ ! -d "/usr/local/go" ]; then
 fi
 echo 'Setup go dep binary'
 curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-echo 'Go get DFC'
+echo 'Go get AIS'
 cd $GOPATH/src
 go get -v github.com/NVIDIA/dfcpub/dfc
-cd $DFCSRC
+cd $AISSRC
 
 VERSION=`git describe --tags`
 BUILD=`date +%FT%T%z`

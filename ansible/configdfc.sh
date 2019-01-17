@@ -33,5 +33,5 @@ export IPV4LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$
 sudo rm -rf dfcproxy.json || true
 sudo rm -rf dfc.json || true
 source /etc/profile.d/dfcpaths.sh
-$DFCSRC/setup/config.sh
+$AISSRC/setup/config.sh
 

@@ -142,8 +142,8 @@ source $DIR/../ais/setup/config.sh
 
 # Deploying kubernetes cluster
 echo Starting kubernetes deployment ..
-#Create DFC configmap to attach during runtime
-echo Creating DFC configMap
+#Create AIStore configmap to attach during runtime
+echo Creating AIStore configMap
 kubectl delete configmap dfc-config
 kubectl delete configmap collectd-config
 kubectl delete configmap statsd-config
@@ -151,7 +151,7 @@ kubectl create configmap dfc-config --from-file=dfc.json
 kubectl create configmap statsd-config --from-file=statsd.conf
 kubectl create configmap collectd-config --from-file=collectd.conf
 
-echo Stopping DFC cluster
+echo Stopping AIStore cluster
 kubectl delete -f dfctarget_deployment.yml
 kubectl delete -f dfcproxy_deployment.yml
 kubectl delete -f dfcprimaryproxy_deployment.yml

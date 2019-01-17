@@ -98,7 +98,7 @@ func (*voteRetryMockTarget) filehdlr(w http.ResponseWriter, r *http.Request) {
 func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		msg := dfc.NewVoteMsg(p.voteInProgress) // treat all Get requests as requests for a VoteMsg
+		msg := ais.NewVoteMsg(p.voteInProgress) // treat all Get requests as requests for a VoteMsg
 		jsbytes, err := jsoniter.Marshal(msg)
 		if err == nil {
 			_, err = w.Write(jsbytes)
@@ -114,5 +114,5 @@ func (p *voteRetryMockTarget) daemonhdlr(w http.ResponseWriter, r *http.Request)
 
 func (p *voteRetryMockTarget) votehdlr(w http.ResponseWriter, r *http.Request) {
 	// Always vote yes.
-	w.Write([]byte(dfc.VoteYes))
+	w.Write([]byte(ais.VoteYes))
 }

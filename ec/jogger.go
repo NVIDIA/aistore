@@ -1,4 +1,4 @@
-// Package ec provides erasure coding support for DFC.
+// Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

@@ -1,4 +1,4 @@
-// Package api provides RESTful API to DFC object storage
+// Package api provides RESTful API to AIS object storage
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -26,7 +26,7 @@ type BaseParams struct {
 	Method string
 }
 
-// OptionalParams is used in constructing client-side API requests to the DFC backend.
+// OptionalParams is used in constructing client-side API requests to the AIStore.
 // Stores Query and Headers for providing arguments that are not used commonly in API requests
 type OptionalParams struct {
 	Query  url.Values

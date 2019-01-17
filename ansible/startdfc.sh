@@ -9,7 +9,7 @@ parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/startproxy.sh >/dev
 sleep 5
 echo Starting all targets
 parallel-ssh -h inventory/targets.txt -i 'nohup /home/ubuntu/starttarget.sh >/dev/null 2>&1'
-echo Wait 20 seconds before checking DFC health
+echo Wait 20 seconds before checking AIS health
 sleep 20
 parallel-ssh -h inventory/proxy.txt -i 'ps -C dfc'
 parallel-ssh -h inventory/targets.txt -i 'ps -C dfc'

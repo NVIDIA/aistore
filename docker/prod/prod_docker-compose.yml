@@ -10,7 +10,7 @@ services:
       - "8080:8080"
     environment:
       - ROLE-proxy
-      - DFCPRIMARYPROXY=${DFCPRIMARYPROXY}
+      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY}
     env_file:
       - aws.env
   dfctarget:

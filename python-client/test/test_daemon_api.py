@@ -1,9 +1,9 @@
 # coding: utf-8
 
 """
-    DFC
+    AIS
 
-    DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
     Contact: dfcdev@exchange.nvidia.com
@@ -150,7 +150,7 @@ class TestDaemonApi(unittest.TestCase):
     def test_perform_operation(self):
         """Test case for perform_operation
 
-        Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon  # noqa: E501
+        Perform operations such as setting config value, shutting down proxy/target etc. on a AIS daemon  # noqa: E501
         """
         pass
 

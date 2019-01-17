@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"flag"
@@ -68,10 +68,10 @@ type (
 // - the values can be set via CLI or environment (environment will override CLI).
 // - for details see README, section "Performance testing"
 type dryRunConfig struct {
-	sizeStr string // random content size used when disk IO is disabled (-dryobjsize/DFCDRYOBJSIZE)
+	sizeStr string // random content size used when disk IO is disabled (-dryobjsize/AIS_DRYOBJSIZE)
 	size    int64  // as above converted to bytes from a string like '8m'
-	disk    bool   // dry-run disk (-nodiskio/DFCNODISKIO)
-	network bool   // dry-run network (-nonetio/DFCNONETIO)
+	disk    bool   // dry-run disk (-nodiskio/AIS_NODISKIO)
+	network bool   // dry-run network (-nonetio/AIS_NONETIO)
 }
 
 //====================
@@ -141,15 +141,15 @@ func init() {
 
 // dry-run environment overrides dry-run CLI
 func dryinit() {
-	str := os.Getenv("DFCNODISKIO")
+	str := os.Getenv("AIS_NODISKIO")
 	if b, err := strconv.ParseBool(str); err == nil {
 		dryRun.disk = b
 	}
-	str = os.Getenv("DFCNONETIO")
+	str = os.Getenv("AIS_NONETIO")
 	if b, err := strconv.ParseBool(str); err == nil {
 		dryRun.network = b
 	}
-	str = os.Getenv("DFCDRYOBJSIZE")
+	str = os.Getenv("AIS_DRYOBJSIZE")
 	if str != "" {
 		if size, err := cmn.S2B(str); size > 0 && err == nil {
 			dryRun.size = size

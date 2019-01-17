@@ -869,7 +869,7 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 	if asPrimary {
 		// Sets the environment variable to start as primary proxy to true
 		env := os.Environ()
-		env = append(env, "DFCPRIMARYPROXY=TRUE")
+		env = append(env, "AIS_PRIMARYPROXY=TRUE")
 		ncmd.Env = env
 	}
 
@@ -1100,12 +1100,12 @@ func primarySetToOriginal(t *testing.T) {
 }
 
 // This is duplicated in the tests because the `idDigest` of `daemonInfo` is not
-// exported. As a result of this, dfc.HrwProxy will not return the correct
+// exported. As a result of this, ais.HrwProxy will not return the correct
 // proxy since the `idDigest` will be initialized to 0. To avoid this, we
 // compute the checksum directly in this method.
 func hrwProxyTest(smap *cluster.Smap, idToSkip string) (pi string, errstr string) {
 	if len(smap.Pmap) == 0 {
-		errstr = "DFC cluster map is empty: no proxies"
+		errstr = "AIStore cluster map is empty: no proxies"
 		return
 	}
 	var (

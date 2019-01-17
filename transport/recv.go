@@ -67,7 +67,7 @@ func init() {
 	mu = &sync.Mutex{}
 	muxers = make(map[string]*http.ServeMux)
 	handlers = make(map[string]map[string]*handler)
-	debug = os.Getenv("DFC_STREAM_DEBUG") != ""
+	debug = os.Getenv("AIS_STREAM_DEBUG") != ""
 }
 
 //

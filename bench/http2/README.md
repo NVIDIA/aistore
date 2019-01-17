@@ -2,7 +2,7 @@
 
 ### Setup
 1. Install [nghttp2](http://www.nghttp2.org). If you have apt-get installed, `./setup_nghttp.sh` will do all the required setup.
-2. Start DFC with any number of proxies and one target. Since nghttp2 does not follow redirects, the benchmarking scripts must point directly at a target.
+2. Start AIStore with any number of proxies and one target. Since nghttp2 does not follow redirects, the benchmarking scripts must point directly at a target.
 
 ### Usage
 
@@ -23,15 +23,15 @@ Each benchmark has four arguments:
 ./http1_bench localhost:8081 local_benchmark_bucket 100 5
 ```
 ### Helpers
-1. [put_files.go](./put_files.go) puts a given number of files with a given size into DFC. It has five command-line parameters:
+1. [put_files.go](./put_files.go) puts a given number of files with a given size into AIStore. It has five command-line parameters:
 
-- `-url`: the URL of the DFC proxy (default: http://localhost:8080)
+- `-url`: the URL of the AIStore proxy (default: http://localhost:8080)
 - `-files`: the number of files to put (default: 10)
 - `-filesize`: the size of files to put, in KB (default: 1)
 - `-bucket`: the name of the bucket to put them in (default: local_benchmark_bucket)
 - `-workers`: The number of workers to use to put files (default: 10)
 
-2. [create_local_bucket](./create_local_bucket) creates a local bucket in DFC. It takes one parameter:
+2. [create_local_bucket](./create_local_bucket) creates a local bucket in AIStore. It takes one parameter:
 
 - B: The local bucket to create
 

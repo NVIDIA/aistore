@@ -14,15 +14,15 @@ package memsys_test
 //
 // 2) run a given test (name matching "No") with debug enabled:
 //
-// DFC_MEM_DEBUG=1 go test -v -logtostderr=true -run=No
+// AIS_MEM_DEBUG=1 go test -v -logtostderr=true -run=No
 //
 // 3) run each test for 10 minutes with the permission to use up to 90% of total RAM
 //
-// DFC_MINMEM_PCT_TOTAL=10 DFC_MEM_DEBUG=1 go test -v -logtostderr=true -run=No -duration 10m
+// AIS_MINMEM_PCT_TOTAL=10 AIS_MEM_DEBUG=1 go test -v -logtostderr=true -run=No -duration 10m
 //
 // 4) same, with both debug and verbose output enabled:
 //
-// DFC_MINMEM_PCT_TOTAL=10 go test -v -logtostderr=true -run=No -duration 10m -verbose true
+// AIS_MINMEM_PCT_TOTAL=10 go test -v -logtostderr=true -run=No -duration 10m -verbose true
 
 import (
 	"flag"

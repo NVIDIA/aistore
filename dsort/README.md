@@ -2,9 +2,9 @@
 
 ## Introduction
 
-DSort is extension for DFC. It was designed to perform map-reduce like
+DSort is extension for AIStore. It was designed to perform map-reduce like
 operations on terabytes and petabytes of AI datasets. As a part of the whole
-system, DSort is capable of taking advantage of objects stored on DFC without
+system, DSort is capable of taking advantage of objects stored on AIStore without
 much overhead.
 
 AI datasets are usually stored in tarballs, zip objects, msgpacks or tf-records.
@@ -42,8 +42,8 @@ says, it is given as an input for the dSort operation. Output on the other hand
 is something that is the result of the operation. Output shards can differ from
 input shards in many ways: size, number of objects, names etc.
 
-Shards are assumed to be already on DFC cluster or somewhere in the cloud bucket
-so that DFC can access them. Output shards will always be placed in the same
+Shards are assumed to be already on AIStore cluster or somewhere in the cloud bucket
+so that AIStore can access them. Output shards will always be placed in the same
 bucket and directory as the input shards - accessing them after completed dSort,
 is the same as input shards but of course with different names.
 

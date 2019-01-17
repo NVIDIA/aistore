@@ -40,7 +40,7 @@ func TestResetBucketProps(t *testing.T) {
 	bucketProps.ValidateWarmGet = true
 	bucketProps.EnableReadRangeChecksum = true
 
-	globalProps.CloudProvider = cmn.ProviderDFC
+	globalProps.CloudProvider = cmn.ProviderAIS
 	globalProps.CksumConf = globalConfig.Cksum
 	globalProps.LRUConf = testBucketProps(t).LRUConf
 

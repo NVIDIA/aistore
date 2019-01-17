@@ -21,9 +21,9 @@ import (
 //
 // The LRU module implements a well-known least-recently-used cache replacement policy.
 //
-// In DFC, LRU-driven eviction is based on the two configurable watermarks: config.LRU.LowWM and
+// LRU-driven eviction is based on the two configurable watermarks: config.LRU.LowWM and
 // config.LRU.HighWM (section "lru_config" in the setup/config.sh).
-// When and if exceeded, DFC storage target will start gradually evicting objects from its
+// When and if exceeded, AIStore target will start gradually evicting objects from its
 // stable storage: oldest first access-time wise.
 //
 // LRU is implemented as a so-called extended action (aka x-action, see xaction.go) that gets

@@ -1,12 +1,14 @@
-Distributed Specialized Open-source Object Storage
---------------------------------------------------
-This is a distributed object store - built from scratch and designed from ground up for large-scale AI applications. Storage cluster *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
+AIStore: storage for AI applications
+------------------------------------
+AIStore (AIS for short) is storage solution that is built from scratch and designed from ground up for large-scale AI applications. At the core of it's an open-source object storage with extensions and components tailored specifically for Deep Learning.
 
-Both **gateways/proxies** and **targets** are realized as software daemons that join (and by virtue of joining - form) a storage cluster at their respective startup times or upon user request. The cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. The code itself is free, open, and MIT-licensed.
+AIStore cluster *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
+
+Both **gateways/proxies** and **targets** are realized as software daemons that join (and, by virtue of joining, form) a storage cluster at their respective startup times, or upon user request. AIStore cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. There are no dependecies or designed-in limitations as far as special hardware capabilities. The code itself is free, open, and MIT-licensed.
 
 A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, in particular, the fact that client <=> storage traffic is *no-extra-hops* direct, and also the caching/tiering capability. The latter may or may not be utilized - the deployment-time decision that would presumably depend, among other things, on use case, total usable storage capacity, and location of the original dataset(s) if any.
 
-<img src="images/dfc-overview-mp.png" alt="DFC overview" width="448">
+<img src="images/dfc-overview-mp.png" alt="AIStore overview" width="448">
 
 Provided storage services include [end-to-end checksumming](#checksumming), object versioning, Reed-Solomon based [erasure coding](#erasure-coding), health monitoring and recovery, and [local mirroring](#local-mirroring). I/O load balancing is also supported - at the time of this writing it requires "mirrored" buckets (that is, buckets configured for local replication).
 
@@ -16,7 +18,7 @@ All inter- and intra-cluster networking is HTTP/1.1 based. Users can connect to 
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
     - [Quick trial start with Docker](#quick-trial-start-with-docker)
-    - [Quick trial start with DFC as an HTTP proxy](#quick-trial-start-with-dfc-as-an-http-proxy)
+    - [Quick trial start with AIStore as an HTTP proxy](#quick-trial-start-with-aistore-as-an-http-proxy)
     - [Regular installation](#regular-installation)
     - [A few tips](#a-few-tips)
 - [Helpful Links: Go](#helpful-links-go)
@@ -86,14 +88,14 @@ $ apt-get install sysstat
 $ apt-get install attr
 ```
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not always be enabled in the OS kernel configurations - the fact that can be easily found out by running setfattr (Linux) or xattr (macOS) command as shown in this [single-host local deployment script](dfc/setup/deploy.sh).
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not always be enabled in the OS kernel configurations - the fact that can be easily found out by running setfattr (Linux) or xattr (macOS) command as shown in this [single-host local deployment script](ais/setup/deploy.sh).
 
-If this is the case - that is, if you happen not to have xattrs handy, you can configure DFC not to use them at all (section **Configuration** below).
+If this is the case - that is, if you happen not to have xattrs handy, you can configure AIStore not to use them at all (section **Configuration** below).
 
-To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket. If you don't have or don't want to use Amazon and/or Google Cloud accounts - or if you simply deploy DFC as a non-redundant object store - you can use so called *local buckets* as illustrated:
+To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket. If you don't have or don't want to use Amazon and/or Google Cloud accounts - or if you simply deploy AIStore as a non-redundant object store - you can use so called *local buckets* as illustrated:
 
 a) in the [REST Operations](#rest-operations) section below, and
-b) in the [test sources](dfc/tests/regression_test.go)
+b) in the [test sources](ais/tests/regression_test.go)
 
 Note that local and Cloud-based buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
 
@@ -101,22 +103,22 @@ Note that local and Cloud-based buckets support the same API with minor exceptio
 
 ### Quick trial start with Docker
 
-To get started quickly with a containerized, one-proxy, one-target deployment of DFC, see [Getting started quickly with DFC using Docker](docker/quick_start/README.md).
+To get started quickly with a containerized, one-proxy, one-target deployment of AIStore, see [Getting started quickly with AIStore using Docker](docker/quick_start/README.md).
 
-### Quick trial start with DFC as an HTTP proxy
+### Quick trial start with AIStore as an HTTP proxy
 
-1. Set the field `rproxy` to `cloud` or `target` in  [the configuration](dfc/setup/config.sh) prior to deployment.
-2. Set the environment variable `http_proxy` (supported by most UNIX systems) to the primary proxy URL of your DFC cluster.
+1. Set the field `rproxy` to `cloud` or `target` in  [the configuration](ais/setup/config.sh) prior to deployment.
+2. Set the environment variable `http_proxy` (supported by most UNIX systems) to the primary proxy URL of your AIStore cluster.
 
 ```shell
 $ export http_proxy=<PRIMARY-PROXY-URL>
 ```
 
-When these two are set, DFC will act as a reverse proxy for your outgoing HTTP requests. _Note that this should only be used for a quick trial of DFC, and not for production systems_.
+When these two are set, AIStore will act as a reverse proxy for your outgoing HTTP requests. _Note that this should only be used for a quick trial of AIStore, and not for production systems_.
 
 ### Regular installation
 
-If you've already installed [Go](https://golang.org/dl/), getting started with DFC takes about 30 seconds:
+If you've already installed [Go](https://golang.org/dl/), getting started with AIStore takes about 30 seconds:
 
 ```shell
 $ cd $GOPATH/src
@@ -126,9 +128,9 @@ $ make deploy
 $ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
 ```
 
-The `go get` command will install the DFC source code and all its versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
+The `go get` command will install the AIStore source code and all its versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 
-The `make deploy` command deploys DFC daemons locally (for details, please see [the script](dfc/setup/deploy.sh)). If you'd want to enable optional DFC authentication server, execute instead:
+The `make deploy` command deploys AIStore daemons locally (for details, please see [the script](ais/setup/deploy.sh)). If you'd want to enable optional AIStore authentication server, execute instead:
 
 ```shell
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
@@ -137,7 +139,7 @@ $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 For information about AuthN server, please see [AuthN documentation](./authn/README.md).
 
 Finally, for the last command in the sequence above to work, you'll need to have a name - the bucket name.
-The bucket could be an Amazon or GCP based one, **or** a DFC-own *local bucket*.
+The bucket could be an Amazon or GCP based one, **or** a AIStore *local bucket*.
 
 Assuming the bucket exists, the `go test` command above will download two objects.
 
@@ -152,42 +154,42 @@ downloads up to 100 objects from the bucket called myS3bucket, whereby names of 
 will match 'a\d+' regex.
 
 For more testing commands and command line options, please refer to the corresponding
-[README](dfc/tests/README.md) and/or the [test sources](dfc/tests/).
+[README](ais/tests/README.md) and/or the [test sources](ais/tests/).
 
-For other useful commands, see the [Makefile](dfc/Makefile).
+For other useful commands, see the [Makefile](ais/Makefile).
 
 ### A few tips
 
 The following sequence downloads up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
 
 ```shell
-$ cd $GOPATH/src/github.com/NVIDIA/dfcpub/dfc/tests
+$ cd $GOPATH/src/github.com/NVIDIA/dfcpub/ais/tests
 $ BUCKET=myS3bucket go test -v -run=down
 $ find /tmp/dfc -type f | grep local
 $ find /tmp/dfc -type f | grep cloud
 ```
 
-This, of course, assumes that all DFC daemons are local and non-containerized (don't forget to run `make deploy` to make it happen) - and that the "test_fspaths" sections in their respective configurations point to the /tmp/dfc.
+This, of course, assumes that all AIStore daemons are local and non-containerized (don't forget to run `make deploy` to make it happen) - and that the "test_fspaths" sections in their respective configurations point to the /tmp/dfc.
 
 To show all existing buckets, run:
 
 ```shell
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub
-$ BUCKET=x go test ./dfc/tests -v -run=bucketnames
+$ BUCKET=x go test ./ais/tests -v -run=bucketnames
 ```
 
 Note that the output will include both local and Cloud bucket names.
 
-Further, to locate DFC logs, run:
+Further, to locate AIStore logs, run:
 
 ```shell
 $ find $LOGDIR -type f | grep log
 ```
 
-where $LOGDIR is the configured logging directory as per [DFC configuration](dfc/setup/config.sh).
+where $LOGDIR is the configured logging directory as per [AIStore configuration](ais/setup/config.sh).
 
 
-To terminate a running DFC service and cleanup local caches, run:
+To terminate a running AIStore service and cleanup local caches, run:
 ```shell
 $ make kill
 $ make rmcache
@@ -215,13 +217,13 @@ $ make rmcache
 
 ## Configuration
 
-DFC configuration is consolidated in a single [JSON file](dfc/setup/config.sh) where all of the knobs must be self-explanatory and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
+AIStore configuration is consolidated in a single [JSON file](ais/setup/config.sh) where all of the knobs must be self-explanatory and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
 
-<img src="images/dfc-config-1.png" alt="DFC configuration: TCP port and URL" width="512">
+<img src="images/dfc-config-1.png" alt="AIStore configuration: TCP port and URL" width="512">
 
 and
 
-<img src="images/dfc-config-2-commented.png" alt="DFC configuration: local filesystems" width="548">
+<img src="images/dfc-config-2-commented.png" alt="AIStore configuration: local filesystems" width="548">
 
 As shown above, the "test_fspaths" section of the configuration corresponds to a single local filesystem being partitioned between both local and Cloud buckets. In production deployments, we use the (alternative) "fspaths" section that includes a number of local directories, whereby each directory is based on a different local filesystem. An example of 12 fspaths (and 12 local filesystems) follows below:
 
@@ -245,7 +247,7 @@ Warning: as of the version 1.2, all changes done via REST API(below) are not per
 | dont_evict_time | 120m | LRU does not evict an object which was accessed less than dont_evict_time ago |
 | disk_util_low_wm | 60 | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
 | disk_util_high_wm | 80 | Operations that implement self-throttling mechanism, e.g. LRU, turn on maximum throttle if disk utilization is higher than `disk_util_high_wm` |
-| capacity_upd_time | 10m | Determines how often DFC updates filesystem usage |
+| capacity_upd_time | 10m | Determines how often AIStore updates filesystem usage |
 | dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
 | send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
 | default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
@@ -255,7 +257,7 @@ Warning: as of the version 1.2, all changes done via REST API(below) are not per
 | lru_enabled | true | Enables and disabled the LRU |
 | rebalancing_enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
 | validate_checksum_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
-| validate_checksum_warm_get | false | If the option is enabled, DFC checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next DFC tier based version |
+| validate_checksum_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |
 | checksum | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
 | versioning | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
 | fschecker_enabled | true | Enables and disables filesystem health checker (FSHC) |
@@ -266,21 +268,21 @@ Configuration option `fspaths` specifies the list of local directories where sto
 
 NOTE: there must be a 1-to-1 relationship between `fspath` and an underlying local filesystem. Note as well that this may be not the case for the development environments where multiple mountpaths are allowed to coexist within a single filesystem (e.g., tmpfs).
 
-DFC REST API makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the DFC built-in mechanism of object distribution. For further details about FSHC and filesystem REST API, please [see FSHC readme](./health/fshc.md).
+AIStore REST API makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC and filesystem REST API, please [see FSHC readme](./health/fshc.md).
 
 Warning: as of the version 1.2, all changes done via REST API are not persistent.
 
 ### Disabling extended attributes
 
-To make sure that DFC does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all targets in a DFC cluster. This can be done via the [common configuration "part"](dfc/setup/config.sh) that'd be further used to deploy the cluster.
+To make sure that AIStore does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all targets in a AIStore cluster. This can be done via the [common configuration "part"](ais/setup/config.sh) that'd be further used to deploy the cluster.
 
 ### Enabling HTTPS
 
-To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify "server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key files respectively (see [DFC configuration](dfc/setup/config.sh)).
+To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify "server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key files respectively (see [AIStore configuration](ais/setup/config.sh)).
 
 ### Filesystem Health Checker
 
-Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fschecker" of the [configuration](dfc/setup/config.sh).
+Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fschecker" of the [configuration](ais/setup/config.sh).
 
 When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
 
@@ -288,17 +290,17 @@ Please see [FSHC readme](./health/fshc.md) for further details.
 
 ### Networking
 
-In addition to user-accessible public network, DFC will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [netconfig section of the configuration](dfc/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
+In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [netconfig section of the configuration](ais/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
 
 All the 3 (three) networking options are enumerated [here](common/network.go).
 
 ### Reverse proxy
 
-DFC gateway can act as a reverse proxy vis-à-vis DFC storage targets. As of the v1.2, this functionality is restricted to GET requests only and must be used with caution and consideration. Related [configuration variable](dfc/setup/config.sh) is called "rproxy" - see sub-section "http" of the section "netconfig". To eliminate HTTP redirects, simply set the "rproxy" value to "target" ("rproxy": "target").
+AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the v1.2, this functionality is restricted to GET requests only and must be used with caution and consideration. Related [configuration variable](ais/setup/config.sh) is called "rproxy" - see sub-section "http" of the section "netconfig". To eliminate HTTP redirects, simply set the "rproxy" value to "target" ("rproxy": "target").
 
 ## Performance tuning
 
-DFC utilizes local filesystems, which means that under pressure a DFC target will have a significant number of open files. This is often the case when running stress tests that perform highly-intensive, concurrent object PUT operations. In the event that errors stating `too many open files` are encountered, system settings must be changed. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
+AIStore utilizes local filesystems, which means that under pressure a AIStore target will have a significant number of open files. This is often the case when running stress tests that perform highly-intensive, concurrent object PUT operations. In the event that errors stating `too many open files` are encountered, system settings must be changed. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
 
 ```
 root             hard    nofile          10240
@@ -325,7 +327,7 @@ After a restart, verify using the same command, `ulimit -n`, that the limit for 
 
 For more information, refer to this [link](https://ro-che.info/articles/2017-03-26-increase-open-files-limit).
 
-Generally, configuring a DFC cluster to perform under load is a vast topic that would be outside the scope of this README. The usual checklist includes (but is not limited to):
+Generally, configuring a AIStore cluster to perform under load is a vast topic that would be outside the scope of this README. The usual checklist includes (but is not limited to):
 
 1. Setting MTU = 9000 (aka Jumbo frames)
 
@@ -342,32 +344,32 @@ $ sysctl -a | grep -i ipv4
 
 And more.
 
-Virtualization overhead may require a separate investigation. It is strongly recommended that a (virtualized) DFC storage node (whether it's a gateway or a target) would have a direct and non-shared access to the (CPU, disk, memory and network) resources of its bare-metal host. Ensure that DFC VMs do not get swapped out when idle.
+Virtualization overhead may require a separate investigation. It is strongly recommended that a (virtualized) AIStore storage node (whether it's a gateway or a target) would have a direct and non-shared access to the (CPU, disk, memory and network) resources of its bare-metal host. Ensure that AIStore VMs do not get swapped out when idle.
 
-DFC storage node, in particular, needs to have a physical resource in its entirety: RAM, CPU, network and storage. The underlying hypervisor must "resort" to the remaining minimum that is absolutely required.
+AIStore storage node, in particular, needs to have a physical resource in its entirety: RAM, CPU, network and storage. The underlying hypervisor must "resort" to the remaining minimum that is absolutely required.
 
-And, of course, make sure to use PCI passthrough for all local hard drives given to DFC.
+And, of course, make sure to use PCI passthrough for all local hard drives given to AIStore.
 
-Finally, to ease troubleshooting, consider the usual and familiar load generators such as `fio` and `iperf`, and observability tools: `iostat`, `mpstat`, `sar`, `top`, and more. For instance, `fio` and `iperf` may appear to be almost indispensable in terms of validating and then tuning performances of local storages and clustered networks, respectively. Goes without saying that it does make sense to do this type of basic checking-and-validating prior to running DFC under stressful workloads.
+Finally, to ease troubleshooting, consider the usual and familiar load generators such as `fio` and `iperf`, and observability tools: `iostat`, `mpstat`, `sar`, `top`, and more. For instance, `fio` and `iperf` may appear to be almost indispensable in terms of validating and then tuning performances of local storages and clustered networks, respectively. Goes without saying that it does make sense to do this type of basic checking-and-validating prior to running AIStore under stressful workloads.
 
 ## Performance testing
 
-[Command-line load generator](#command-line-load-generator) is a good tool to test overall DFC performance. But it does not show what local subsystem - disk or network one - is a bottleneck. DFC provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then DFC uses the environment variable.
+[Command-line load generator](#command-line-load-generator) is a good tool to test overall AIStore performance. But it does not show what local subsystem - disk or network one - is a bottleneck. AIStore provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then AIStore uses the environment variable.
 
-If any kind of IO is disabled then DFC sends a warning to stderr and turns off some internal features including object checksumming, versioning, atime and extended attributes management.
+If any kind of IO is disabled then AIStore sends a warning to stderr and turns off some internal features including object checksumming, versioning, atime and extended attributes management.
 
 Warning: as of version 1.2, disabling and enabling IO on the fly is not supported, it must be done at target's startup.
 
 | CLI argument | Environment variable | Default value | Description |
 |---|---|---|---|
-| nodiskio | DFCNODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see DFCDRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
-| nonetio | DFCNONETIO | false | true - disables HTTP read and write. For GET requests a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, DFC reads the data from in-memory object and saves the data to disks.<br>Valid values are true or 1, and false or 0 |
-| dryobjsize | DFCDRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m' - the size of an object is 8 megabytes |
+| nodiskio | AIS_NODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
+| nonetio | AIS_NONETIO | false | true - disables HTTP read and write. For GET requests a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, AIStore reads the data from in-memory object and saves the data to disks.<br>Valid values are true or 1, and false or 0 |
+| dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m' - the size of an object is 8 megabytes |
 
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
 ```
-/opt/dfcpub/dfc$ DFCNODISKIO=true DFCDRYOBJSIZE=256k make deploy
+/opt/dfcpub/dfc$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
 Warning: the command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
@@ -375,13 +377,13 @@ Warning: the command-line load generator shows 0 bytes throughput for GET operat
 ## REST Operations
 
 
-DFC supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
+AIStore supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
 
 ```shell
 $ curl -X GET http://localhost:8080/v1/daemon?what=config
 ```
 
-This command queries the DFC configuration; at the time of this writing it'll result in a JSON output that looks as follows:
+This command queries the AIStore configuration; at the time of this writing it'll result in a JSON output that looks as follows:
 
 > {"smap":{"":{"node_ip_addr":"","daemon_port":"","daemon_id":"","direct_url":""},"15205:8081":{"node_ip_addr":"localhost","daemon_port":"8081","daemon_id":"15205:8081","direct_url":"http://localhost:8081"},"15205:8082":{"node_ip_addr":"localhost","daemon_port":"8082","daemon_id":"15205:8082","direct_url":"http://localhost:8082"},"15205:8083":{"node_ip_addr":"localhost","daemon_port":"8083","daemon_id":"15205:8083","direct_url":"http://localhost:8083"}},"version":5}
 
@@ -391,9 +393,9 @@ Notice the 4 (four) ubiquitous elements in the `curl` command line above:
 
 In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
 
-2. URL path: hostname or IP address of one of the DFC servers.
+2. URL path: hostname or IP address of one of the AIStore servers.
 
-By convention, a RESTful operation performed on a DFC proxy server usually implies a "clustered" scope. Exceptions include querying
+By convention, a RESTful operation performed on a AIStore proxy server usually implies a "clustered" scope. Exceptions include querying
 proxy's own configuration via `?what=config` query string parameter.
 
 3. URL path: version of the REST API, resource that is operated upon, and possibly more forward-slash delimited specifiers.
@@ -404,14 +406,14 @@ For example: /v1/cluster where 'v1' is the currently supported API version and '
 
 > Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e.g., an entire cluster or a given daemon. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
 
-Note that 'localhost' in the examples below is mostly intended for developers and first time users that run the entire DFC system on their Linux laptops. It is implied, however, that the gateway's IP address or hostname is used in all other cases/environments/deployment scenarios.
+Note that 'localhost' in the examples below is mostly intended for developers and first time users that run the entire AIStore system on their Linux laptops. It is implied, however, that the gateway's IP address or hostname is used in all other cases/environments/deployment scenarios.
 
 | Operation | HTTP action | Example |
 |--- | --- | ---|
 | Unregister storage target | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://localhost:8080/v1/cluster/daemon/15205:8083` |
 | Register storage target | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"node_ip_addr": "172.16.175.41", "daemon_port": "8083", "daemon_id": "43888:8083", "direct_url": "http://172.16.175.41:8083"}' http://localhost:8083/v1/cluster/register` |
 | Set primary proxy forcefully(primary proxy)| PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G http://localhost:8083/v1/daemon/proxy/23ef189ed  --data-urlencode "frc=true" --data-urlencode "can=http://localhost:8084"`  <sup id="a8">[8](#ft8)</sup>|
-| Update individual DFC daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8081/v1/daemon`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
+| Update individual AIStore daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8081/v1/daemon`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
 | Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8080/v1/cluster`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
 | Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8082/v1/daemon` |
 | Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8080/v1/cluster` |
@@ -444,7 +446,7 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 | Add mountpath in target | PUT {"action": "add", "value": "/new/mountpath"} /v1/daemon/mountpaths | `curl -X PUT -L -H 'Content-Type: application/json' -d '{"action": "add", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
 | Remove mountpath from target | DELETE {"action": "remove", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "remove", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
 ___
-<a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all DFC supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
+<a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
 
 <a name="ft2">2</a>: See the List Bucket section for details. [↩](#a2)
 
@@ -462,7 +464,7 @@ ___
 
 ### Querying information
 
-DFC provides an extensive list of RESTful operations to retrieve cluster current state:
+AIStore provides an extensive list of RESTful operations to retrieve cluster current state:
 
 | Operation | HTTP action | Example |
 |--- | --- | ---|
@@ -483,19 +485,19 @@ DFC provides an extensive list of RESTful operations to retrieve cluster current
 $ curl -X GET http://localhost:8080/v1/cluster?what=stats
 ```
 
-This single command causes execution of multiple `GET ?what=stats` requests within the DFC cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
+This single command causes execution of multiple `GET ?what=stats` requests within the AIStore cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
 
-<img src="images/dfc-get-stats.png" alt="DFC statistics" width="440">
+<img src="images/dfc-get-stats.png" alt="AIStore statistics" width="440">
 
-More usage examples can be found in the [the source](dfc/tests/regression_test.go).
+More usage examples can be found in the [the source](ais/tests/regression_test.go).
 
 ## Read and Write Data Paths
 
-`GET object` and `PUT object` are by far the most common operations performed by a DFC cluster.
+`GET object` and `PUT object` are by far the most common operations performed by a AIStore cluster.
 As far as I/O processing pipeline, the first few steps of the GET and, respectively, PUT processing are
 very similar if not identical:
 
-1. Client sends a `GET` or `PUT` request to any of the DFC proxies/gateways.
+1. Client sends a `GET` or `PUT` request to any of the AIStore proxies/gateways.
 2. The proxy determines which storage target to redirect the request to, the steps including:
     1. extract bucket and object names from the request;
     2. select storage target as an HRW function of the (cluster map, bucket, object) triplet,
@@ -504,7 +506,7 @@ very similar if not identical:
        (consistently) the same for the same `(bucket, object)` pair and cluster configuration.
     3. redirect the request to the selected target.
 3. Target parses the bucket and object from the (redirected) request and determines whether the bucket
-   is a DFC local bucket or a Cloud-based bucket.
+   is a AIStore local bucket or a Cloud-based bucket.
 4. Target then determines a `mountpath` (and therefore, a local filesystem) that will be used to perform
    the I/O operation. This time, the target computes HRW(configured mountpaths, bucket, object) on the
    input that, in addition to the same `(bucket, object)` pair includes all currently active/enabled mountpaths.
@@ -517,24 +519,24 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 
 ### `GET`
 
-5. If the object already exists locally (meaning, it belongs to a DFC local bucket or the most recent version of a Cloud-based object is cached
+5. If the object already exists locally (meaning, it belongs to a AIStore local bucket or the most recent version of a Cloud-based object is cached
    and resides on a local disk), the target optionally validates the object's checksum and version.
    This type of `GET` is often referred to as a "warm `GET`".
-6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next DFC tier or from the Cloud.
+6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next AIStore tier or from the Cloud.
 7. Finally, the target delivers the object to the client via HTTP(S) response.
 
-<img src="images/dfc-get-flow.png" alt="DFC GET flow" width="800">
+<img src="images/dfc-get-flow.png" alt="AIStore GET flow" width="800">
 
 ### `PUT`
 
 5. If the object already exists locally and its checksum matches the checksum from the `PUT` request, processing stops because the object hasn't
    changed.
 6. Target streams the object contents from an HTTP request to a temporary work file.
-7. Upon receiving the last byte of the object, the target sends the new version of the object to the next DFC tier or the Cloud.
+7. Upon receiving the last byte of the object, the target sends the new version of the object to the next AIStore tier or the Cloud.
 8. The target then writes the object to the local disk replacing the old one if it exists.
 9. Finally, the target writes extended attributes that include the versioning and checksum information, and thus commits the PUT transaction.
 
-<img src="images/dfc-put-flow.png" alt="DFC PUT flow" width="800">
+<img src="images/dfc-put-flow.png" alt="AIStore PUT flow" width="800">
 
 ## Extended Actions (xactions)
 
@@ -548,14 +550,14 @@ Extended actions (xactions) are batch operations that may take seconds, sometime
 * adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing filesystems](#managing-filesystems))
 * and more.
 
-Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](dfc/setup/config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
+Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](ais/setup/config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
 
 The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors. To give concrete examples, an extended action that runs LRU evictions performs its "balancing act" by taking into account remaining storage capacity _and_ the current utilization of the local filesystems. The two-way mirroring (xaction) takes into account congestion on its communication channel that callers use for posting requests to create local replicas. And the `atimer` - extended action responsible for [access time updates](atime/atime.go) - self-throttles based on the remaining space (to buffer atimes), etc.
 
 Supported extended actions are enumerated in the [user-facing API](cmn/api.go) and include:
 
 * Cluster-wide rebalancing (denoted as `ActGlobalReb` in the [API](cmn/api.go)) that gets triggered when storage targets join or leave the cluster;
-* LRU-based cache eviction (see section [LRU](#lru)) that depends on the remaining free capacity and [configuration](dfc/setup/config.sh);
+* LRU-based cache eviction (see section [LRU](#lru)) that depends on the remaining free capacity and [configuration](ais/setup/config.sh);
 * Prefetching batches of objects (or arbitrary size) from the Cloud (see section [List/Range Operations](#listrange-operations));
 * Consensus voting (when conducting new leader [election](#election));
 * Erasure-encoding objects in a EC-configured bucket (see section [Erasure coding](#erasure-coding));
@@ -599,7 +601,7 @@ The properties-and-options specifier must be a JSON-encoded structure, for insta
 | pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
 | pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and local bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html). |\b
 
- <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the DFC cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the DFC cache. [↩](#a6)
+ <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a6)
 
 #### Example: listing local and Cloud buckets
 
@@ -611,9 +613,9 @@ $ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobject
 
 This request will produce an output that (in part) may look as follows:
 
-<img src="images/dfc-ls-subdir.png" alt="DFC list directory" width="440">
+<img src="images/dfc-ls-subdir.png" alt="AIStore list directory" width="440">
 
-For many more examples, please refer to the [test sources](dfc/tests/) in the repository.
+For many more examples, please refer to the [test sources](ais/tests/) in the repository.
 
 #### Example: Listing all pages
 
@@ -654,13 +656,13 @@ Note that the PageMarker returned as a part of pagelist is for the next page.
 
 ## Rebalancing
 
-DFC rebalances its stored content based on the DFC cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
+AIStore rebalances its stored content based on the AIStore cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
 
 Thus, the rebalancing process is completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the content will get rebalanced via direct target-to-target transfers.
 
 ## List/Range Operations
 
-DFC provides two APIs to operate on groups of objects: List, and Range. Both of these share two optional parameters:
+AIStore provides two APIs to operate on groups of objects: List, and Range. Both of these share two optional parameters:
 
 | Parameter | Description | Default |
 |--- | --- | --- |
@@ -695,17 +697,17 @@ Range APIs take an optional prefix, a regular expression, and a numeric range. A
 
 ## Joining a Running Cluster
 
-DFC clusters can be deployed with an arbitrary number of DFC proxies. Each proxy/gateway provides full access to the clustered objects and collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](#highly-available-control-plane) below).
+AIStore clusters can be deployed with an arbitrary number of AIStore proxies. Each proxy/gateway provides full access to the clustered objects and collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](#highly-available-control-plane) below).
 
-Not all proxies are equal though. Two out of all proxies can be designated via [DFC configuration](dfc/setup/config.sh)) as an "original" and a "discovery." The "original" one (located at the configurable "original_url") is expected to point to the primary at the cluster initial deployment time.
+Not all proxies are equal though. Two out of all proxies can be designated via [AIStore configuration](ais/setup/config.sh)) as an "original" and a "discovery." The "original" one (located at the configurable "original_url") is expected to point to the primary at the cluster initial deployment time.
 
 Later on, when and if an HA event triggers automated failover, the role of the primary will be automatically assumed by a different proxy/gateway, with the corresponding cluster map (Smap) update getting synchronized across all running nodes.
 
-A new node, however, could potentially experience a problem when trying to join an already deployed and running cluster - simply because its configuration may still be referring to the old primary. The "discovery_url" (see [DFC configuration](dfc/setup/config.sh)) is precisely intended to address this scenario.
+A new node, however, could potentially experience a problem when trying to join an already deployed and running cluster - simply because its configuration may still be referring to the old primary. The "discovery_url" (see [AIStore configuration](ais/setup/config.sh)) is precisely intended to address this scenario.
 
-Here's how a new node joins a running DFC cluster:
+Here's how a new node joins a running AIStore cluster:
 
-- first, there's the primary proxy/gateway referenced by the current cluster map (Smap) and/or - during the cluster deployment time - by the configured "primary_url" (see [DFC configuration](dfc/setup/config.sh))
+- first, there's the primary proxy/gateway referenced by the current cluster map (Smap) and/or - during the cluster deployment time - by the configured "primary_url" (see [AIStore configuration](ais/setup/config.sh))
 
 - if joining via the "primary_url" fails, then the new node goes ahead and tries the alternatives:
   - "discovery_url"
@@ -714,10 +716,10 @@ Here's how a new node joins a running DFC cluster:
 
 ## Highly Available Control Plane
 
-DFC cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
-Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via DFC REST API (section [REST Operations](#rest-operations)).
+AIStore cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
+Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore REST API (section [REST Operations](#rest-operations)).
 
-It is, therefore, recommended that DFC cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).
+It is, therefore, recommended that AIStore cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).
 
 When there are multiple proxies, only one of them acts as the primary while all the rest are, respectively, non-primaries. The primary proxy's (primary) responsibility is serializing updates of the cluster-level metadata (which is also versioned and immutable).
 
@@ -733,7 +735,7 @@ The proxy's bootstrap sequence initiates by executing the following three main s
 
 - step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;
 - step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
-- step 3: use all of the above _and_ the environment setting "DFCPRIMARYPROXY" to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
+- step 3: use all of the above _and_ the environment setting "AIS_PRIMARYPROXY" to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
 
 Further, the (potentially) primary proxy executes more steps:
 
@@ -757,15 +759,15 @@ The primary proxy election process is as follows:
 
 ### Non-electable gateways
 
-DFC cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([DFC configuration](dfc/setup/config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
+AIStore cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([AIStore configuration](ais/setup/config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
 
 ### Metasync
 
-By design DFC does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In DFC, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](dfc/metasync.go). DFC metasync makes sure to keep cluster-level metadata in-sync at all times.
+By design AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
 
 ## Storage Services
 
-By default, buckets inherit [global configuration](dfc/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
+By default, buckets inherit [global configuration](ais/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
 
 ### Checksumming
 
@@ -810,7 +812,7 @@ $ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}
 
 ### Erasure coding
 
-DFC provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-mirroring-and-load-balancing), replication (for *small* objects), and erasure coding.
+AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-mirroring-and-load-balancing), replication (for *small* objects), and erasure coding.
 
 Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into N fragments or slices, computing K redundant (parity) slices, and then storing the resulting (N+K) slices on (N+K) storage servers - one slice per target server.
 
@@ -825,7 +827,7 @@ Choose the number data and parity slices depending on required level of protecti
 
 Notes:
 
-- Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, DFC requires at least `ec_config.data_slices` slices in total out of data and parity sets
+- Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, AIStore requires at least `ec_config.data_slices` slices in total out of data and parity sets
 - Small objects are replicated `ec_config.parity_slices` times to have the same level of data protection that big objects do
 - Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
 
@@ -864,13 +866,13 @@ TODO
 
 ## Command-line Load Generator
 
-`dfcloader` is a command-line tool that is included with DFC and that can be immediately used to generate load and evaluate cluster performance.
+`dfcloader` is a command-line tool that is included with AIStore and that can be immediately used to generate load and evaluate cluster performance.
 
 For usage, run `$ dfcloader -help` or see [the source](cmd/dfcloader/main.go) for usage examples.
 
 ## Metrics with StatsD
 
-In DFC, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) local daemon listening on a UDP port `8125` (which is currently fixed). If a target or proxy cannot connect to the StatsD daemon at startup, the target (or proxy) will run without StatsD.
+In AIStore, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) local daemon listening on a UDP port `8125` (which is currently fixed). If a target or proxy cannot connect to the StatsD daemon at startup, the target (or proxy) will run without StatsD.
 
 StatsD publishes local statistics to a compliant backend service (e.g., [graphite](https://graphite.readthedocs.io/en/latest/)) for easy but powerful stats aggregation and visualization.
 
@@ -882,7 +884,7 @@ All metric tags (or simply, metrics) are logged using the following pattern:
 
 where `prefix` is one of: `dfcproxy.<daemon_id>`, `dfctarget.<daemon_id>`, or `dfcloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
 
-Metrics that DFC generates are named and grouped as follows:
+Metrics that AIStore generates are named and grouped as follows:
 
 #### Proxy metrics:
 
@@ -972,15 +974,15 @@ There are features, capabilities and modules that we designate as _experimental_
 
 ### WebDAV
 
-WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. DFC WebDAV server is a reverse proxy (with interoperable WebDAV on the front and DFC's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
+WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. AIStore WebDAV server is a reverse proxy (with interoperable WebDAV on the front and AIStore's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
 
 For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
 
 ### Multi-tiering
 
-DFC can be deployed with multiple consecutive DFC clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
+AIStore can be deployed with multiple consecutive AIStore clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
 
-<img src="images/multi-tier.png" alt="DFC multi-tier overview" width="680">
+<img src="images/multi-tier.png" alt="AIStore multi-tier overview" width="680">
 
 Tiering is configured at the bucket level by setting bucket properties, for example:
 

@@ -1,4 +1,4 @@
-// Authorization server for DFC
+// Authorization server for AIStore
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -43,7 +43,7 @@ type tokenMsg struct {
 }
 
 //-------------------------------------
-// global functions (borrowed from DFC)
+// global functions (borrowed from ais)
 //-------------------------------------
 func isSyscallWriteError(err error) bool {
 	switch e := err.(type) {
@@ -59,7 +59,7 @@ func isSyscallWriteError(err error) bool {
 }
 
 func isValidProvider(prov string) bool {
-	return prov == cmn.ProviderAmazon || prov == cmn.ProviderGoogle || prov == cmn.ProviderDFC
+	return prov == cmn.ProviderAmazon || prov == cmn.ProviderGoogle || prov == cmn.ProviderAIS
 }
 
 func checkRESTItems(w http.ResponseWriter, r *http.Request, itemsAfter int, items ...string) ([]string, error) {
@@ -328,7 +328,7 @@ func (a *authServ) userLogin(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, r, []byte(repl), "auth")
 }
 
-// Borrowed from DFC (modified cmn.InvalidHandler calls)
+// Borrowed from ais (modified cmn.InvalidHandler calls)
 func (a *authServ) writeJSON(w http.ResponseWriter, r *http.Request, jsbytes []byte, tag string) (ok bool) {
 	w.Header().Set("Content-Type", "application/json")
 	var err error

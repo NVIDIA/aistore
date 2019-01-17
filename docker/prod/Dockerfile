@@ -69,7 +69,7 @@ node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
 $GOBIN/dfc -config=\$1 -role=\$2 -ntargets=\$3  -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
-CMD ["sh","-c", "DFCDAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETS"]
+CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETS"]
 
 HEALTHCHECK cmd curl --fail http://127.0.0.1:8080/v1/health || exit 1
 

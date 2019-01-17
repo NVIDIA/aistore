@@ -5,7 +5,7 @@
 //
 // extended action aka xaction
 //
-package dfc
+package ais
 
 import (
 	"os"

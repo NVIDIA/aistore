@@ -244,7 +244,7 @@ const (
 	dir3           = "dir3"
 	dirTest        = "testfile"
 	content1       = "Hello world from webdav!"
-	content2       = "Hello world from DFC!"
+	content2       = "Hello world from AIStore!"
 )
 
 var (
@@ -367,7 +367,7 @@ func readDir(t *testing.T, fs webdav.FileSystem, pth string) ([]os.FileInfo, err
 	return dir.Readdir(100)
 }
 
-// Note: A DFC instance is required in order to run this test.
+// Note: A AIStore instance is required in order to run this test.
 // This requirement can be removed after proxy/target can be started in unit test
 // Also assumes the localhost:8080 is one of the proxy
 func TestFS(t *testing.T) {

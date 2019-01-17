@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
 
-// 'dfcloader' is a load generator for DFC.
+// 'dfcloader' is a load generator for AIStore.
 // It sends HTTP requests to a proxy server fronting targets.
 // Run with -help for usage information.
 

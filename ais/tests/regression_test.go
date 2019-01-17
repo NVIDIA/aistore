@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	dfc "github.com/NVIDIA/dfcpub/ais"
+	"github.com/NVIDIA/dfcpub/ais"
 	"github.com/NVIDIA/dfcpub/api"
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
@@ -1329,7 +1329,7 @@ func doBucketRegressionTest(t *testing.T, proxyURL string, rtd regressionTestDat
 //========
 
 func waitForRebalanceToComplete(t *testing.T, proxyURL string) {
-	time.Sleep(dfc.NeighborRebalanceStartDelay)
+	time.Sleep(ais.NeighborRebalanceStartDelay)
 OUTER:
 	for {
 		// Wait before querying so the rebalance statistics are populated.
@@ -1451,7 +1451,7 @@ func getDaemonStats(t *testing.T, url string) (stats map[string]interface{}) {
 	// If this isn't used, json.Unmarshal converts uint32s to floats, losing precision
 	err = dec.Decode(&stats)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal Dfconfig: %v", err)
+		t.Fatalf("Failed to unmarshal config: %v", err)
 	}
 
 	return

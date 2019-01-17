@@ -1,4 +1,4 @@
-// DFC's implementation of go webdav's FileSystem
+// AIStore's implementation of go webdav's FileSystem
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -24,28 +24,28 @@ import (
 )
 
 type (
-	// FileSystem presents a DFC backend as a file system
+	// FileSystem presents a AIStore backend as a file system
 	FileSystem struct {
 		proxy    *proxyServer
-		localDir string // local directory where DFC objects are temporarily stored while they are being used for read/write
+		localDir string // local directory where AIStore objects are temporarily stored while they are being used for read/write
 
 		// in memory directory cache
-		// to avoid putting webdav specific objects in DFC, this in memory directory cache helps webdav keep track of directories
-		// that do not have any objects in DFC. this is in memory only and is not persisted, it will get lost if webdav dies or shutdown.
+		// to avoid putting webdav specific objects in AIStore, this in memory directory cache helps webdav keep track of directories
+		// that do not have any objects in AIStore. this is in memory only and is not persisted, it will get lost if webdav dies or shutdown.
 		// first level directories are buckets.
 		// to extent the usage beyond empty directories only, this can be used for caching all buckets and directories, this will
 		// help speed up bucket and directory look ups.
-		// downside is concurrent access and transaction protection, for example, access to DFC not through webdav.
+		// downside is concurrent access and transaction protection, for example, access to AIStore not through webdav.
 		// concurrent access should be done by webdav locking.
 		// transaction protection: TBD
 		// if too much memory is used to cache all directories, can implement cache empty directory only, might
-		// affect performance because more trips to DFC.
+		// affect performance because more trips to AIStore.
 		// objects can also be cached; needs to implements it as when too many nodes cached, can evict
 		// object nodes.
 		root *inode
 	}
 
-	// File represents a bucket or an object in DFC; it implements interface webdav.File
+	// File represents a bucket or an object in AIStore; it implements interface webdav.File
 	File struct {
 		fs   *FileSystem // back pointer to file system
 		name string      // original name when a file operation is called
@@ -68,8 +68,8 @@ type (
 		pos   int
 		dirty bool
 
-		// For 'Object' only; full path of the local copy of a DFC object while it is open for read or write;
-		// read/write goes to this file and flushed to DFC when file is closed if it is dirty
+		// For 'Object' only; full path of the local copy of a AIStore object while it is open for read or write;
+		// read/write goes to this file and flushed to AIStore when file is closed if it is dirty
 		// local file only exists on first time a file is read from or written to; handle != nil implies a local file exists.
 		localPath string
 		handle    *os.File
@@ -117,7 +117,7 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) 
 	)
 
 	defer func() {
-		webdavLog(logLevelDFC, "%-15s: %-70s perm = %-30v err = %v", "FS "+op, name, perm, err)
+		webdavLog(logLevelAIS, "%-15s: %-70s perm = %-30v err = %v", "FS "+op, name, perm, err)
 	}()
 
 	f, err = fs.newFile(name)
@@ -205,7 +205,7 @@ func (fs *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm 
 	)
 
 	defer func() {
-		webdavLog(logLevelDFC, "%-15s: %-70s flag = %-10d perm = %-30v err = %v", "FS "+op, name, flag, perm, err)
+		webdavLog(logLevelAIS, "%-15s: %-70s flag = %-10d perm = %-30v err = %v", "FS "+op, name, flag, perm, err)
 	}()
 
 	f, err = fs.newFile(name)
@@ -312,7 +312,7 @@ func (fs *FileSystem) RemoveAll(ctx context.Context, name string) error {
 	)
 
 	defer func() {
-		webdavLog(logLevelDFC, "%-15s: %-70s err = %v", "FS "+op, name, err)
+		webdavLog(logLevelAIS, "%-15s: %-70s err = %v", "FS "+op, name, err)
 	}()
 
 	f, err = fs.newFile(name)
@@ -398,7 +398,7 @@ func (fs *FileSystem) Rename(ctx context.Context, oldName, newName string) error
 	)
 
 	defer func() {
-		webdavLog(logLevelDFC, "%-15s: %-70s %-50s err = %v", "FS "+op, oldName, newName, err)
+		webdavLog(logLevelAIS, "%-15s: %-70s %-50s err = %v", "FS "+op, oldName, newName, err)
 	}()
 
 	oldf, err = fs.newFile(oldName)
@@ -511,7 +511,7 @@ func (fs *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error
 	)
 
 	defer func() {
-		webdavLog(logLevelDFC, "%-15s: %-70s err = %v", "FS "+op, name, err)
+		webdavLog(logLevelAIS, "%-15s: %-70s err = %v", "FS "+op, name, err)
 	}()
 
 	f, err = fs.newFile(name)
@@ -654,7 +654,7 @@ func join(pth string, base string) string {
 	return path.Join(pth, base)
 }
 
-// NewFS returns a DFC file system
+// NewFS returns a AIStore file system
 func NewFS(url url.URL, localDir string) webdav.FileSystem {
 	return &FileSystem{
 		&proxyServer{url.String()},
@@ -734,7 +734,7 @@ func parseResource(name string) (*File, error) {
 
 // Close closes a previously opened local file, call proxy put if the object is updated
 func (f *File) Close() error {
-	webdavLog(logLevelDFC, "%-15s: %-70s", "File Close", f.name)
+	webdavLog(logLevelAIS, "%-15s: %-70s", "File Close", f.name)
 
 	if f.typ != Object {
 		// No op for root/bucket/directory
@@ -763,7 +763,7 @@ func (f *File) Close() error {
 // Read reads from a bucket or an object
 // If it is the first time the file is accessed for read/write, create local file
 func (f *File) Read(b []byte) (n int, err error) {
-	webdavLog(logLevelDFC, "%-15s: %-70s # bytes = %d", "File Read", f.name, len(b))
+	webdavLog(logLevelAIS, "%-15s: %-70s # bytes = %d", "File Read", f.name, len(b))
 
 	if f.handle == nil {
 		err := f.downlaodFile()
@@ -780,7 +780,7 @@ func (f *File) Read(b []byte) (n int, err error) {
 // Write Writes to a bucket or an object
 // If it is the first time the file is accessed for read/write, create local file
 func (f *File) Write(data []byte) (n int, err error) {
-	webdavLog(logLevelDFC, "%-15s: %-70s # bytes = %d", "File Write", f.name, len(data))
+	webdavLog(logLevelAIS, "%-15s: %-70s # bytes = %d", "File Write", f.name, len(data))
 
 	if f.flag&(os.O_WRONLY|os.O_RDWR) == 0 {
 		return 0, os.ErrPermission
@@ -801,7 +801,7 @@ func (f *File) Write(data []byte) (n int, err error) {
 
 // Readdir returns a slice of file info
 func (f *File) Readdir(count int) ([]os.FileInfo, error) {
-	webdavLog(logLevelDFC, "%-15s: %-70s count = %d pos = %d", "File Readdir", f.name, count, f.pos)
+	webdavLog(logLevelAIS, "%-15s: %-70s count = %d pos = %d", "File Readdir", f.name, count, f.pos)
 
 	var fis []os.FileInfo
 	switch f.typ {
@@ -834,7 +834,7 @@ func (f *File) Readdir(count int) ([]os.FileInfo, error) {
 		}
 
 		for _, c := range n.children {
-			// adding a "/" at the end to indicate to DFC this is a directory
+			// adding a "/" at the end to indicate to AIStore this is a directory
 			objs = append(objs, &cmn.BucketEntry{Name: c.name + separator})
 		}
 
@@ -877,7 +877,7 @@ func (f *File) createLocalFile(perm os.FileMode) error {
 	return f.handle.Chmod(perm)
 }
 
-// downlaodFile creates a local file, get the file from DFC.
+// downlaodFile creates a local file, get the file from AIStore.
 func (f *File) downlaodFile() error {
 	err := f.createLocalFile(f.perm)
 	if err != nil {
@@ -1074,7 +1074,7 @@ func group(objs []*cmn.BucketEntry, prefix string) []os.FileInfo {
 	return fis
 }
 
-// localFileName returns a full path of a temporary file used while a DFC object is opened for read or write
+// localFileName returns a full path of a temporary file used while a AIStore object is opened for read or write
 func (fs *FileSystem) localFileName() string {
 	return filepath.Join(fs.localDir,
 		tutils.FastRandomFilename(rand.New(rand.NewSource(time.Now().UnixNano())), 32 /* length */))

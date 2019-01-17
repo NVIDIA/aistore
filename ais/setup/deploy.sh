@@ -4,10 +4,10 @@
 #
 # Usage: deploy.sh [-loglevel=0|1|2|3] [-statstime=<DURATION>]
 #
-# To deploy DFC with code coverage enabled, set ENABLE_CODE_COVERAGE=1.
+# To deploy AIStore with code coverage enabled, set ENABLE_CODE_COVERAGE=1.
 # After runs, to collect code coverage data:
 # 1. run: make kill
-#	wait until all DFC processes are stopped, currently this is not automated, on screen, it will
+#	wait until all AIStore processes are stopped, currently this is not automated, on screen, it will
 #	show "coverage: x.y% of statements" for each process, this indicates the proper termination and
 #	successful creation of coverage data for one process.
 # 2. run: make code-coverage
@@ -15,8 +15,8 @@
 # 3. view the result
 #	open /tmp/dfc/dfc_cov.html in a browser
 #
-# To deploy DFC as a next tier cluster to the *already running*
-# DFC cluster set DEPLOY_AS_NEXT_TIER=1.
+# To deploy AIStore as a next tier cluster to the *already running*
+# AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
 #
 ############################################
 
@@ -70,7 +70,7 @@ CONFDIR="$HOME/.dfc$NEXT_TIER"
 TESTFSPATHCOUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
-	echo "Error: TCP port $PORT is not open (check if DFC is already running)"
+	echo "Error: TCP port $PORT is not open (check if AIStore is already running)"
 	exit 1
 fi
 TMPF=$(mktemp /tmp/dfc$NEXT_TIER.XXXXXXXXX)
@@ -217,11 +217,11 @@ do
 
 	if [ $c -eq 0 ]
 	then
-		export DFCPRIMARYPROXY="true"
+		export AIS_PRIMARYPROXY="true"
 		set -x
 		$CMD $PROXY_PARAM&
 		{ set +x; } 2>/dev/null
-		unset DFCPRIMARYPROXY
+		unset AIS_PRIMARYPROXY
 		# wait for the proxy to start up
 		sleep 2
 	elif [ $c -lt $proxycount ]

@@ -48,7 +48,7 @@ func init() {
 	}
 }
 
-// DockerRunning returns true if docker-based DFC cluster is detected
+// DockerRunning returns true if docker-based AIStore cluster is detected
 func DockerRunning() bool {
 	return dockerRunning
 }
@@ -91,7 +91,7 @@ func ClusterCount() int {
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {
 		if len(line) > len("\""+prefixStr+"i_") && strings.HasPrefix(line, "\""+prefixStr) {
-			// container names have the prefix dfci_ where i is the ith dfc cluster
+			// container names have the prefix dfci_ where i is the ith ais cluster
 			m[line[:len("\""+prefixStr+"i_")]]++
 		}
 	}

@@ -1,11 +1,11 @@
 openapi: "3.0.0"
 info:
   version: "1.1.0"
-  title: DFC
-  description: "DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends."
+  title: AIS
+  description: "AIS is a scalable object-storage based caching system with Amazon and Google Cloud backends."
   termsOfService: ""
   contact:
-    name: "NVIDIA-DFC"
+    name: "NVIDIA-AIS"
     email: "dfcdev@exchange.nvidia.com"
     url: "https://github.com/NVIDIA/dfcpub"
   license:
@@ -13,19 +13,19 @@ info:
     url: https://github.com/NVIDIA/dfcpub/blob/master/LICENSE
 tags:
   - name: Object
-    description: All APIs to interact with DFC objects
+    description: All APIs to interact with AIS objects
     externalDocs:
       url: https://github.com/NVIDIA/dfcpub
   - name: Bucket
-    description: All APIs to interact with DFC buckets
+    description: All APIs to interact with AIS buckets
     externalDocs:
       url: https://github.com/NVIDIA/dfcpub
   - name: Cluster
-    description: All APIs to perform operations on the DFC cluster
+    description: All APIs to perform operations on the AIS cluster
     externalDocs:
       url: https://github.com/NVIDIA/dfcpub
   - name: Daemon
-    description: All APIs to perform operations on individual DFC daemons
+    description: All APIs to perform operations on individual AIS daemons
     externalDocs:
       url: https://github.com/NVIDIA/dfcpub
   - name: Sort
@@ -70,10 +70,10 @@ paths:
         '200':
           description: Object at the location bucket-name/object-name
           headers:
-            DfcChecksumType:
+            ObjCksumType:
               schema:
                 type: string
-            DfcChecksumVal:
+            ObjCksumVal:
               schema:
                 type: string
           content:
@@ -591,7 +591,7 @@ paths:
               schema:
                 type: string
     put:
-      summary: Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon
+      summary: Perform operations such as setting config value, shutting down proxy/target etc. on a AIS daemon
       operationId: performOperation
       tags:
         - Daemon
@@ -603,7 +603,7 @@ paths:
               $ref: '#/components/schemas/InputParameters'
       responses:
         '200':
-          description: Operation on DFC daemon triggered successfully
+          description: Operation on AIS daemon triggered successfully
         default:
           description: An unexpected error was encountered
           content:
@@ -624,7 +624,7 @@ paths:
               $ref: '#/components/schemas/InputParameters'
       responses:
         '200':
-          description: Operation on DFC daemon triggered successfully
+          description: Operation on AIS daemon triggered successfully
         '204':
           description: Return status if the mountpath was already enabled or disabled
         '404':
@@ -648,7 +648,7 @@ paths:
               $ref: '#/components/schemas/InputParameters'
       responses:
         '200':
-          description: Operation on DFC daemon triggered successfully
+          description: Operation on AIS daemon triggered successfully
         default:
           description: An unexpected error was encountered
           content:
@@ -668,7 +668,7 @@ paths:
               $ref: '#/components/schemas/InputParameters'
       responses:
         '200':
-          description: Operation on DFC daemon triggered successfully
+          description: Operation on AIS daemon triggered successfully
         default:
           description: An unexpected error was encountered
           content:
@@ -1061,10 +1061,10 @@ components:
       enum: [ANSIC, UnixDate, RubyDate, RFC822, RFC822Z, RFC850, RFC1123, RFC1123Z, RFC3339, RFC3339Nano, Kitchen, Stamp, StampMilli, StampMicro, StampNano]
     CloudProvider:
       type: string
-      enum: [dfc, aws, gcp]
+      enum: [ais, aws, gcp]
     Headers:
       type: string
-      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, Version, Size, DfcChecksumType, DfcChecksumVal]
+      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, Version, Size, HEADEROBJCKSUMTYPE, HEADEROBJCKSUMVAL]
     RWPolicy:
       type: string
       enum: [cloud, next_tier]

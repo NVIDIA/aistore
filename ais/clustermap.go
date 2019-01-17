@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"fmt"
@@ -20,16 +20,16 @@ import (
 )
 
 // NOTE: to access Snode, Smap and related structures, external
-//       packages and HTTP clients must import dfcpub/cluster (and not dfc)
+//       packages and HTTP clients must import dfcpub/cluster (and not ais)
 
 //=====================================================================
 //
 // - smapX is a server-side extension of the cluster.Smap
-// - smapX represents DFC cluster in terms of its nodes and their properties
+// - smapX represents AIStore cluster in terms of its member nodes and their properties
 // - smapX (instance) can be obtained via smapowner.get()
 // - smapX is immutable and versioned
 // - smapX versioning is monotonic and incremental
-// - smapX uniquely and solely defines the current primary proxy in the DFC cluster
+// - smapX uniquely and solely defines the current primary proxy in the AIStore cluster
 //
 // smapX typical update transaction:
 // lock -- clone() -- modify the clone -- smapowner.put(clone) -- unlock

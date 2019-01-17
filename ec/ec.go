@@ -1,4 +1,4 @@
-// Package ec provides erasure coding support for DFC.
+// Package ec provides erasure coding (EC) based data protection for AIStore.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -18,29 +18,34 @@ import (
 	"github.com/json-iterator/go"
 )
 
-// EC module provides data protection on a per bucket basis. By default the
+// EC module provides data protection on a per bucket basis. By default, the
 // data protection is off. To enable it, set the bucket EC configuration:
 //	ECConf:
-//		Enable: true|false, # enables or disables protection
-//		DataSlices: [2-32],      # the number of data slices
-//		ParitySlices: [2-32],    # the number of parity slices
-//		ObjSizeLimit: 0,    # replicating small object is cheaper than
-//			erasure encoding them, the option sets the threshold - all objects
-//			which size is below it are always replicated. Set it to the minimal
-//			size of an object in bytes that should be erasure encoded, or to 0
-//			for using the DFC default threshold (256KiB as of version 1.2)
+//		Enable: true|false    # enables or disables protection
+//		DataSlices: [2-32]    # the number of data slices
+//		ParitySlices: [2-32]  # the number of parity slices
+//		ObjSizeLimit: 0       # replication versus erasure coding
+//
+// NOTE: replicating small object is cheaper than erasure encoding.
+// The ObjSizeLimit option sets the corresponding threshold. Set it to the
+// size (in bytes), or 0 (zero) to use the AIStore default 256KiB.
+//
 // NOTE: ParitySlices defines the maximum number of storage targets a cluster
 // can loose but it is still able to restore the original object
+//
 // NOTE: Since small objects are always replicated, they always have only one
-//	data slice and #ParitySlices replicas
+// data slice and #ParitySlices replicas
+//
 // NOTE: All slices and replicas must be on the different targets. The target
-//	list is calculated by HrwTargetList. The first target in the list is the
-//	main target that keeps the full object, the others keep only slices/replicas
+// list is calculated by HrwTargetList. The first target in the list is the
+// "main" target that keeps the full object, the others keep only slices/replicas
+//
 // NOTE: All slices must be of the same size. So, the last slice can be padded
-//	with zeros. It results in that, in most cases, the total size of data
-//	replicas is a bit bigger than than the size of the original object.
+// with zeros. In most cases, padding results in the total size of data
+// replicas being a bit bigger than than the size of the original object.
+//
 // NOTE: Every slice and replica must have corresponding metadata file that is
-//	located in the same mountpath as its slice/replica
+// located in the same mountpath as its slice/replica
 //
 //
 // EC local storage directories inside mountpaths:

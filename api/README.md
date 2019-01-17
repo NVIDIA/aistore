@@ -1,8 +1,8 @@
-DFC Client API
+AIStore Client API
 --------------
 
 ## Overview
-The DFC Client API package provides wrappers for core DFC RESTful operations. The `api` package can be imported by other projects for quickly integrating DFC functionality with minimal imports of other supporting packages.
+The AIStore Client API package provides wrappers for core AIStore RESTful operations. The `api` package can be imported by other projects for quickly integrating AIStore functionality with minimal imports of other supporting packages.
 
 ## Types of Operations
 The APIs provided are separated into different levels of granularity:
@@ -15,7 +15,7 @@ The APIs provided are separated into different levels of granularity:
 ### **Cluster**
 
 #### GetClusterMap
-Retrieves DFC's cluster map as stored by the proxy to which this request is sent
+Retrieves AIStore's cluster map as stored by the proxy to which this request is sent
 
 ##### Parameters
 | Name        | Type         | Description                                                                           |
@@ -26,7 +26,7 @@ Retrieves DFC's cluster map as stored by the proxy to which this request is sent
 ##### Return
 A copy of type `cluster.Smap` containing a map of targets, a map of proxies, proxies non-eligible for primary, the current primary proxy, and the version of the cluster map
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 #### SetPrimaryProxy
 Given a daemonID, it sets that proxy as the primary proxy of the cluster
@@ -38,7 +38,7 @@ Given a daemonID, it sets that proxy as the primary proxy of the cluster
 | proxyURL     | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | newPrimaryID | string       | DaemonID of the new primary proxy                                                     |
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 #### SetClusterConfig
 Given a key-value pair for a specific configuration parameter this operation sets the cluster-wide configuration accordingly. Setting cluster-wide configuration requires sending the request to a proxy
@@ -52,7 +52,7 @@ Given a key-value pair for a specific configuration parameter this operation set
 | value      | interface{}  | Value of the corresponding key to be modified; of dynamic type                        |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### RegisterTarget
@@ -66,7 +66,7 @@ Registers an existing target to the clustermap.
 | targetInfo | *cluster.Snode | Pointer to a cluster.Snode struct containing details of the new Target                |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### UnregisterTarget
@@ -80,7 +80,7 @@ Unregisters an existing target from the clustermap.
 | unregisterSID | string       | DaemonID of the Target to be unregistered                                             |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 ### **Daemon**
@@ -95,7 +95,7 @@ Given the direct public URL of a target, `GetMountpaths` returns its mountpaths
 ##### Return
 A pointer to an instance of a `cmn.MountpathList` struct consisting of Available and Disabled mountpaths of a specific target
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### AddMountpath
@@ -107,7 +107,7 @@ Given a target and a mountpath, `AddMountpath` adds that mountpath to the specif
 | targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
 | mountPath  | string       | Mountpath to be added to a target                                                     |
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### RemoveMountpath
@@ -121,7 +121,7 @@ Given a target and a mountpath, `RemoveMountpath` removes that mountpath from th
 | mountPath  | string       | Mountpath to be removed from a target                                                 |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### EnableMountpath
@@ -135,7 +135,7 @@ Given a target and a mountpath, `EnableMountpath` enables that mountpath on the 
 | mountPath  | string       | Mountpath to be enabled on a target                                                   |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### DisableMountpath
@@ -148,7 +148,7 @@ Given a target and a mountpath, `DisableMountpath` disables that mountpath on th
 | targetURL  | string       | URL of the target to which the HTTP Request is sent                                   |
 | mountPath  | string       | Mountpath to be disabled on a target                                                   |
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### GetDaemonConfig
@@ -162,7 +162,7 @@ Given the URL of a daemon, `GetDaemonConfig` returns the corresponding daemon's 
 ##### Return
 A pointer to an instance of type `cmn.Config` containing all the configuration settings applied to a specific daemon
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### SetDaemonConfig
@@ -176,7 +176,7 @@ Given a key-value pair for a specific configuration parameter, `SetDaemonConfig`
 | value      | interface{}  | Value of the corresponding key to be modified; of dynamic type                        |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 
@@ -195,7 +195,7 @@ Given a bucket name, returns its properties
 ##### Return
 A pointer to an instance of `cmn.BucketProps`, consisting of all the properties of the specified bucket
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### GetBucketNames
@@ -209,7 +209,7 @@ Given the url of an existing proxy in a cluster, `GetBucketNames` returns the na
 ##### Return
 Two lists: one for the names of local buckets, and the other for the names of cloud buckets
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### CreateLocalBucket
@@ -222,7 +222,7 @@ Creates a local bucket with a given name
 | proxyURL   | string       | URL of the proxy to which the HTTP Request is sent                                    |
 | bucket     | string       | Name of the bucket                                                                    |
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### RenameLocalBucket
@@ -237,7 +237,7 @@ Rename an existing bucket to the new name provided
 | newName    | string       | New name for the existing bucket                                                      |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### DestroyLocalBucket
@@ -251,7 +251,7 @@ Removes a local bucket using its name as the identifier
 | bucket     | string       | Name of the existing bucket                                                           |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### SetBucketProps
@@ -266,7 +266,7 @@ Sets the properties of a bucket, using the bucket name as the identifier and the
 | props      | cmn.BucketProps | Bucket properties to be set                                                           |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### ResetBucketProps
@@ -280,7 +280,7 @@ Resets the properties of a bucket, identified by its name, to the global configu
 | bucket     | string       | Name of the existing bucket                                                           |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 
@@ -300,7 +300,7 @@ Returns the size and version of an object identified by a combination of its buc
 ##### Return
 A pointer of an instance of `cmn.ObjectProps`, containing information on the size and version of the object
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### GetObject
@@ -321,7 +321,7 @@ Otherwise, it discards the response body read.
 ##### Return
 Size of the object computed from the number of bytes read
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### GetObjectWithValidation
@@ -339,7 +339,7 @@ Same behaviour as `GetObject`, but performs checksum validation of the object by
 ##### Return
 Size of the object computed from the number of bytes read
 
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### PutObject
@@ -355,7 +355,7 @@ Creates an object from the body of the `cmn.ReadOpenCloser` argument and puts it
 | reader     | cmn.ReadOpenCloser | Interface used to read the bytes of object data                                       |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### RenameObject
@@ -371,7 +371,7 @@ Renames an existing object
 | newName    | string       | New name for the existing object                                                      |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### ReplicateObject
@@ -386,7 +386,7 @@ Replicates a given object
 | object     | string       | Name of the object to be replicated                                                   |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### DeleteObject
@@ -401,7 +401,7 @@ Deletes an object identified by the combination of its bucket and object name
 | object     | string       | Name of the object to be replicated                                                   |
 
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 #### EvictObject
@@ -415,7 +415,7 @@ Evicts an object identified by the combination of its bucket and object name
 | bucket     | string       | Name of the bucket storing the object                                                 |
 | object     | string       | Name of the object to be evicted                                                      |
 ##### Return
-Error from DFC in completing the request
+Error from AIStore in completing the request
 ___
 
 

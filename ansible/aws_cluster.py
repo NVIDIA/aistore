@@ -15,11 +15,11 @@ from timeout import timeout
 # Global vars assigned from the config in load_global_defaults
 AWS_AK = None
 AWS_SAK = None
-security_group_name = 'DFC-SG1'
-vpc_name = 'DFC-2'
-subnet_name = 'DFC-2-Private'
-gateway_name = 'DFC-2-GW'
-route_table_name = 'DFC-2-RT1'
+security_group_name = 'AIS-SG1'
+vpc_name = 'AIS-2'
+subnet_name = 'AIS-2-Private'
+gateway_name = 'AIS-2-GW'
+route_table_name = 'AIS-2-RT1'
 region_name = 'us-east-2'
 cluster = None
 logger = None

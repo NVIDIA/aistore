@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"fmt"
@@ -72,7 +72,7 @@ func (p *proxyrunner) bootstrap() {
 		}
 	}
 	// step 2: the information at this point includes (up to) 3 different pieces:
-	// 	   local Smap +	discovered max-versioned Smap + environment setting "DFCPRIMARYPROXY"
+	// 	   local Smap +	discovered max-versioned Smap + environment setting "AIS_PRIMARYPROXY"
 	// 	   Based on all of the above, we figure out if this proxy *may be* the primary,
 	// 	   and if it may, proceed to start it up as such - until and if there's more evidence
 	// 	   that points to the contrary
@@ -90,11 +90,11 @@ func (p *proxyrunner) bootstrap() {
 		smap.Pmap[p.si.DaemonID] = p.si
 		guessAmPrimary = smap.isPrimary(p.si)
 		// environment is a clue, not a prescription: discovered Smap outweighs
-		if os.Getenv("DFCPRIMARYPROXY") != "" && !guessAmPrimary {
+		if os.Getenv("AIS_PRIMARYPROXY") != "" && !guessAmPrimary {
 			glog.Warningf("Smap v%d (primary=%s): disregarding the environment setting primary=%s (self)",
 				smap.version(), smap.ProxySI.DaemonID, p.si.DaemonID)
 		}
-	} else if os.Getenv("DFCPRIMARYPROXY") != "" { // environment rules!
+	} else if os.Getenv("AIS_PRIMARYPROXY") != "" { // environment rules!
 		smap.Pmap[p.si.DaemonID] = p.si
 		smap.ProxySI = p.si
 		guessAmPrimary = true

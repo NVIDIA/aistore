@@ -21,14 +21,14 @@ import (
 )
 
 const (
-	fshcNameTemplate = "DFC-TMP"
+	fshcNameTemplate = "AIS-TMP"
 	fshcFileSize     = 10 * 1024 * 1024 // size of temporary file
 	fshcMaxFileList  = 100              // maximum number of files to read by Readdir
 )
 
 // When an IO error is triggered, it runs a few tests to make sure that the
 // failed mountpath is healthy. Once the mountpath is considered faulty the
-// mountpath is disabled and removed from the list of mountpaths utilized by DFC
+// mountpath is disabled and removed from the list.
 //
 // for mountpath definition, see fs/mountfs.go
 type (

@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"fmt"
@@ -36,7 +36,7 @@ const (
 // The main internal method, doSync, does most of the metasync-ing job and is
 // commented with its 6 steps executed in a single serial context.
 //
-// The job itself consists in synchronoizing REVS across a DFC cluster.
+// The job itself consists in synchronoizing REVS across a AIStore cluster.
 //
 // REVS (interface below) stands for REplicated, Versioned and Shared/Synchronized.
 //

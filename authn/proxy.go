@@ -1,4 +1,4 @@
-// Authorization server for DFC
+// Authorization server for AIStore
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

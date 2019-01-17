@@ -26,7 +26,7 @@ spec:
         env:
          - name: ROLE
            value: "proxy"
-         - name: DFCPRIMARYPROXY
+         - name: AIS_PRIMARYPROXY
            value: "TRUE"
         volumeMounts:
          - name: dfc-config

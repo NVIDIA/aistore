@@ -1,4 +1,4 @@
-// Package api provides RESTful API to DFC object storage
+// Package api provides RESTful API to AIS object storage
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */

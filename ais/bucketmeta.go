@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"strconv"
@@ -15,7 +15,7 @@ import (
 )
 
 // NOTE: to access bucket metadata and related structures, external
-//       packages and HTTP clients must import dfcpub/cluster (and not dfc)
+//       packages and HTTP clients must import dfcpub/cluster (and not ais)
 
 // - bucketMD is a server-side extension of the cluster.BMD
 // - bucketMD represents buckets (that store objects) and associated metadata

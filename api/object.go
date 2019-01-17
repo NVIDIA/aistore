@@ -1,4 +1,4 @@
-// Package api provides RESTful API to DFC object storage
+// Package api provides RESTful API to AIS object storage
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -26,7 +26,7 @@ type GetObjectInput struct {
 
 // ReplicateObjectInput is used to hold optional parameters for PutObject when it is used for replication
 type ReplicateObjectInput struct {
-	// Used to set the request header to determine whether PUT object request is for replication in DFC
+	// Used to set the request header to determine whether PUT object request is for replication in AIStore
 	SourceURL string
 }
 

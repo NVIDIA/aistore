@@ -1540,7 +1540,7 @@ func validateBucketProps(t *testing.T, expected, actual cmn.BucketProps) {
 
 func defaultBucketProps() cmn.BucketProps {
 	return cmn.BucketProps{
-		CloudProvider: cmn.ProviderDFC,
+		CloudProvider: cmn.ProviderAIS,
 		NextTierURL:   "http://foo.com",
 		ReadPolicy:    cmn.RWPolicyNextTier,
 		WritePolicy:   cmn.RWPolicyNextTier,

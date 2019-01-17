@@ -193,7 +193,7 @@ func testReplicationEndToEndUsingLocalBucket(t *testing.T) {
 	// that occurs when the NextTierURL is set for the bucket.
 	tutils.Logf("Setting local bucket properties to allow for replication...\n")
 	bucketProps := defaultBucketProps()
-	bucketProps.CloudProvider = cmn.ProviderDFC
+	bucketProps.CloudProvider = cmn.ProviderAIS
 	bucketProps.NextTierURL = proxyURLNext
 	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
 	tutils.CheckFatal(err, t)
@@ -274,7 +274,7 @@ func testReplicationEndToEndUsingCloudBucket(t *testing.T) {
 	// that occurs when the NextTierURL is set for the bucket.
 	tutils.Logf("Setting cloud bucket properties to allow for replication\n")
 	bucketProps := defaultBucketProps()
-	bucketProps.CloudProvider = cmn.ProviderDFC
+	bucketProps.CloudProvider = cmn.ProviderAIS
 	bucketProps.NextTierURL = proxyURLNext
 	err = api.SetBucketProps(tutils.DefaultBaseAPIParams(t), bucket, bucketProps)
 	tutils.CheckFatal(err, t)

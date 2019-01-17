@@ -286,12 +286,9 @@ func NewFileReader(filepath, name string, size int64, withHash bool) (Reader, er
 	return &fileReader{f, fn, name, hash}, nil
 }
 
-// NewFileReaderFromFile opens an existing file, read data to compute hash, closes it and returns
-// a new fileReader.
-// Note: The difference between NewFileReader and this is NewFileReader generates a file from random
-//       data first, then returns the file as the source for DFC put. This reader doesn't generate a
-//       file but reads an existing file to compute xxHash, then returns the same file as source for
-//       DFC put.
+// NewFileReaderFromFile opens an existing file, reads it to compute checksum, closes it,
+// and returns a new reader.
+// See also (and note the difference from): NewFileReader
 func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 	f, err := os.Open(fn)
 	if err != nil {

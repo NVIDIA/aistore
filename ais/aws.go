@@ -4,7 +4,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"context"
@@ -28,10 +28,10 @@ import (
 )
 
 const (
-	awsPutDfcHashType = "x-amz-meta-dfc-hash-type"
-	awsPutDfcHashVal  = "x-amz-meta-dfc-hash-val"
-	awsGetDfcHashType = "X-Amz-Meta-Dfc-Hash-Type"
-	awsGetDfcHashVal  = "X-Amz-Meta-Dfc-Hash-Val"
+	awsPutAisHashType = "x-amz-meta-dfc-hash-type"
+	awsPutAisHashVal  = "x-amz-meta-dfc-hash-val"
+	awsGetAisHashType = "X-Amz-Meta-Ais-Hash-Type"
+	awsGetAisHashVal  = "X-Amz-Meta-Ais-Hash-Val"
 	awsMultipartDelim = "-"
 	awsMaxPageSize    = 1000
 )
@@ -361,8 +361,8 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workfqn, bucket, objname stri
 		return
 	}
 	// may not have dfc metadata
-	if htype, ok := obj.Metadata[awsGetDfcHashType]; ok {
-		if hval, ok := obj.Metadata[awsGetDfcHashVal]; ok {
+	if htype, ok := obj.Metadata[awsGetAisHashType]; ok {
+		if hval, ok := obj.Metadata[awsGetAisHashVal]; ok {
 			v = cmn.NewCksum(*htype, *hval)
 		}
 	}
@@ -402,8 +402,8 @@ func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	if ohash != nil {
 		htype, hval = ohash.Get()
 		md = make(map[string]*string)
-		md[awsPutDfcHashType] = aws.String(htype)
-		md[awsPutDfcHashVal] = aws.String(hval)
+		md[awsPutAisHashType] = aws.String(htype)
+		md[awsPutAisHashVal] = aws.String(hval)
 	}
 	sess := createSession(ct)
 	uploader := s3manager.NewUploader(sess)

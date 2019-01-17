@@ -61,7 +61,7 @@ while getopts ":b:p:d:m:x:t:n:c:" opt; do
 done
 
 source /etc/profile.d/dfcpaths.sh
-cd $DFCSRC/../bench/dfcloader
+cd $AISSRC/../bench/dfcloader
 sudo rm -rf screenlog.0
 screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=$cleanup -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
 

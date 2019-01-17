@@ -168,9 +168,9 @@ func addRemoveCreds(mgr *userManager, t *testing.T) {
 	if !ok || userGcp != GCP01 {
 		t.Errorf("User %s GCP credentials are invalid: %s (expected %s)", userID, userGcp, GCP01)
 	}
-	userDfc, ok := userInfo.Creds[cmn.ProviderDFC]
-	if ok || userDfc != "" {
-		t.Errorf("DFC credentials must be empty (current: %s)", userDfc)
+	userAIS, ok := userInfo.Creds[cmn.ProviderAIS]
+	if ok || userAIS != "" {
+		t.Errorf("AIStore credentials must be empty (current: %s)", userAIS)
 	}
 
 	// update credentials

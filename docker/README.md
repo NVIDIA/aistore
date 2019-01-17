@@ -2,12 +2,12 @@
 
 ## Introduction
 
-DFC can be run as a cluster of Docker containers. There are three modes of operation: development (docker/dev directory), production (docker/prod directory), and quick start (docker/quick_start directory).
+AIStore can be run as a cluster of Docker containers. There are three modes of operation: development (docker/dev directory), production (docker/prod directory), and quick start (docker/quick_start directory).
 
 ### Development Mode
 
 This mode is currently used for development purposes.
-All docker containers mount the same host's DFC source directory, and then execute from this single source. Upon restart (of the DFC cluster), all changes made in the host will, therefore, take an immediate effect.
+All docker containers mount the same host's AIStore source directory, and then execute from this single source. Upon restart (of the AIStore cluster), all changes made in the host will, therefore, take an immediate effect.
 Note: The development mode is currently being maintained and updated.
 
 ### Production Mode
@@ -16,11 +16,11 @@ Note the `docker/prod` folder is currently not up to date and might require some
 
 ### Quick Start Mode
 
-Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of DFC within seconds.
+Use this mode if you would like to set up a containerized, one-proxy, one-target deployment of AIStore within seconds.
 
 For introduction to Docker, please watch [Docker 101 youtube](https://www.youtube.com/watch?v=V9IJj4MzZBc)
 
-This README documents the steps to install and run DFC
+This README documents the steps to install and run AIStore
 
 ## Install Docker and Docker Compose
 Note: Using docker requires one of the following versions of Ubuntu:
@@ -92,20 +92,20 @@ It’s OK if apt-get reports that none of these packages are installed.
     $sudo rm -rf /var/lib/docker
     ```
 
-## Starting DFC
-1. If you have already installed go and configured $GOPATH execute the below command to download DFC source code and all its dependencies.
+## Starting AIStore
+1. If you have already installed go and configured $GOPATH execute the below command to download AIStore source code and all its dependencies.
 ```
 $go get -u -v github.com/NVIDIA/dfcpub/ais
 ```
 
 2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command. 
-To run DFC docker containers, you will need to pass your AWS config and credential directory via flag -a=<aws directory> CLI. By default, AWS stores config and credential files in `~/.aws/`
+To run AIStore docker containers, you will need to pass your AWS config and credential directory via flag -a=<aws directory> CLI. By default, AWS stores config and credential files in `~/.aws/`
 Example:
 ```
 $./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy DFC, refer to the deployment scripts in `docker/dev`, `docker/prod`, and `docker/quick_start`.
+3. To deploy AIStore, refer to the deployment scripts in `docker/dev`, `docker/prod`, and `docker/quick_start`.
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 ## Helpful docker commands

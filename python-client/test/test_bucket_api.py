@@ -1,9 +1,9 @@
 # coding: utf-8
 
 """
-    DFC
+    AIS
 
-    DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
     Contact: test@nvidia.com
@@ -147,7 +147,7 @@ class TestBucketApi(unittest.TestCase):
             enable_read_range_checksum=False,
         )
         input_params.value = self.models.BucketProps(
-            self.models.CloudProvider.DFC,
+            self.models.CloudProvider.AIS,
             self.NEXT_TIER_URL,
             self.models.RWPolicy.NEXT_TIER,
             self.models.RWPolicy.NEXT_TIER,
@@ -157,7 +157,7 @@ class TestBucketApi(unittest.TestCase):
 
         headers = self.bucket.get_properties_with_http_info(bucket_name)[2]
         cloud_provider = headers[self.models.Headers.CLOUDPROVIDER]
-        self.assertEqual(cloud_provider, self.models.CloudProvider.DFC,
+        self.assertEqual(cloud_provider, self.models.CloudProvider.AIS,
                          "Incorrect CloudProvider in HEADER returned")
         versioning = headers[self.models.Headers.VERSIONING]
         self.assertEqual(versioning, self.models.Version.LOCAL,

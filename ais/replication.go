@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"errors"
@@ -24,9 +24,7 @@ import (
 
 // ================================================= Summary ===============================================
 //
-// This replication module implements a replication service in DFC - a long running task with the
-// purpose of creating replicas of stored objects.
-//
+// This replication module implements a replication service for AIStore.
 // The API exposed to the rest of the code includes the following operations:
 //   * reqSendReplica    - to send a replica of a specified object to a specified URL
 //   * reqReceiveReplica - to receive a replica of an object

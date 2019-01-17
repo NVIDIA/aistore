@@ -12,7 +12,7 @@ services:
         public:
     environment:
       - ROLE=proxy
-      - DFCPRIMARYPROXY=${DFCPRIMARYPROXY}
+      - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY}
     env_file:
       - /tmp/docker_dfc/aws.env
     volumes:

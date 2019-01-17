@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"fmt"
@@ -138,7 +138,7 @@ func newTransportServer(primary *proxyrunner, s *metaSyncServer, ch chan<- trans
 func TestMetaSyncDeepCopy(t *testing.T) {
 	bucketmd := newBucketMD()
 	bucketmd.add("bucket1", true, &cmn.BucketProps{
-		CloudProvider: cmn.ProviderDFC,
+		CloudProvider: cmn.ProviderAIS,
 		NextTierURL:   "http://foo.com",
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
@@ -150,7 +150,7 @@ func TestMetaSyncDeepCopy(t *testing.T) {
 		},
 	})
 	bucketmd.add("bucket3", false, &cmn.BucketProps{
-		CloudProvider: cmn.ProviderDFC,
+		CloudProvider: cmn.ProviderAIS,
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
@@ -561,13 +561,13 @@ func TestMetaSyncData(t *testing.T) {
 
 	// sync bucketmd, fail target and retry
 	bucketmd.add("bucket1", true, &cmn.BucketProps{
-		CloudProvider: cmn.ProviderDFC,
+		CloudProvider: cmn.ProviderAIS,
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,
 		},
 	})
 	bucketmd.add("bucket2", true, &cmn.BucketProps{
-		CloudProvider: cmn.ProviderDFC,
+		CloudProvider: cmn.ProviderAIS,
 		NextTierURL:   "http://localhost:8082",
 		CksumConf: cmn.CksumConf{
 			Checksum: cmn.ChecksumInherit,

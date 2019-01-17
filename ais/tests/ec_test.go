@@ -488,7 +488,7 @@ func TestECRestoreObjAndSlice(t *testing.T) {
 	wg.Wait()
 }
 
-// Stress test to check that EC works as expected for DFC
+// Stress test to check that EC works as expected.
 //  - Changes bucket props to use EC
 //  - Generates `objCount` objects, size between `ecObjMinSize` and `ecObjMinSize`+ecObjMaxSize`
 //  - Objects smaller `ecObjLimit` must be copies, while others must be EC'ed

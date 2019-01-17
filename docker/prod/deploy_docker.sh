@@ -155,7 +155,7 @@ sudo docker-compose -f $environment"_docker-compose.yml" down
 echo Building Image..
 sudo docker-compose -f $environment"_docker-compose.yml" build
 echo Starting Primary Proxy
-sudo DFCPRIMARYPROXY=TRUE docker-compose -f $environment"_docker-compose.yml" up -d dfcproxy
+sudo AIS_PRIMARYPROXY=TRUE docker-compose -f $environment"_docker-compose.yml" up -d dfcproxy
 echo Starting cluster ..
 sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale dfctarget=$servcount --scale dfcproxy=$proxycount --no-recreate
 sleep 3

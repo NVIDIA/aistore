@@ -12,7 +12,7 @@ import "github.com/NVIDIA/dfcpub/cmn"
 // - BMD versioning is monotonic and incremental
 type BMD struct {
 	LBmap   map[string]*cmn.BucketProps `json:"l_bmap"`  // local cache-only buckets and their props
-	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their DFC-only metadata
+	CBmap   map[string]*cmn.BucketProps `json:"c_bmap"`  // Cloud-based buckets and their AIStore-only metadata
 	Version int64                       `json:"version"` // version - gets incremented on every update
 }
 

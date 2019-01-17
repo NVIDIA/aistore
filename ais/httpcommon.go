@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"bytes"
@@ -322,7 +322,7 @@ func (h *httprunner) initSI() {
 		Port: config.Net.L4.PortIntraData,
 	}
 
-	daemonID := os.Getenv("DFCDAEMONID")
+	daemonID := os.Getenv("AIS_DAEMONID")
 	if daemonID == "" {
 		cs := xxhash.ChecksumString32S(publicAddr.String(), cluster.MLCG32)
 		daemonID = strconv.Itoa(int(cs & 0xfffff))
@@ -1043,7 +1043,7 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 
 // ================================== Background =========================================
 //
-// Generally, DFC clusters can be deployed with an arbitrary numbers of DFC proxies.
+// Generally, AIStore clusters can be deployed with an arbitrary numbers of proxies.
 // Each proxy/gateway provides full access to the clustered objects and collaborates with
 // all other proxies to perform majority-voted HA failovers.
 //
@@ -1060,7 +1060,7 @@ func (h *httprunner) extractRevokedTokenList(payload cmn.SimpleKVs) (*TokenList,
 // cluster simply because its configuration would still be referring to the old primary.
 // The added "discovery_url" is precisely intended to address this scenario.
 //
-// Here's how a node joins a DFC cluster:
+// Here's how a node joins a AIStore cluster:
 // - first, there's the primary proxy/gateway referenced by the current cluster map (Smap)
 //   or - during the cluster deployment time - by the the configured "primary_url"
 //   (see setup/config.sh)

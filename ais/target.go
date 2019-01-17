@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"context"
@@ -1200,7 +1200,7 @@ func (t *targetrunner) httpbckhead(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		bucketprops = make(cmn.SimpleKVs)
-		bucketprops[cmn.HeaderCloudProvider] = cmn.ProviderDFC
+		bucketprops[cmn.HeaderCloudProvider] = cmn.ProviderAIS
 		bucketprops[cmn.HeaderVersioning] = cmn.VersionLocal
 	}
 	// double check if we support versioning internally for the bucket
@@ -1522,9 +1522,8 @@ func (renctx *renamectx) walkf(fqn string, osfi os.FileInfo, err error) error {
 	return nil
 }
 
-// checkCloudVersion returns if versions of an object differ in Cloud and DFC cache
-// and the object should be refreshed from Cloud storage
-// It should be called only in case of the object is present in DFC cache
+// checkCloudVersion returns (vchanged=) true if object versions differ between Cloud and local cache;
+// should be called only if the local copy exists
 func (t *targetrunner) checkCloudVersion(ct context.Context, bucket, objname, version string) (vchanged bool, errstr string, errcode int) {
 	var objmeta cmn.SimpleKVs
 	if objmeta, errstr, errcode = t.cloudif.headobject(ct, bucket, objname); errstr != "" {

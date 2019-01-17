@@ -20,7 +20,7 @@ type hashFuncs struct {
 const objNameLen = 50
 const fqnMaxLen = 128
 
-// Duplicated on purpose to avoid dependency on any DFC code.
+// Duplicated on purpose to avoid dependency on any AIStore code.
 func randFileName(src *rand.Rand, nameLen int) string {
 	const (
 		letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -52,7 +52,7 @@ func similarFileName(bucketName string, objNum int) string {
 	return bucketName + "/" + objectName
 }
 
-// Duplicated on purpose to avoid dependency on any DFC code.
+// Duplicated on purpose to avoid dependency on any AIStore code.
 func randNodeId(randGen *rand.Rand) string {
 	randIp := ""
 	for i := 0; i < 3; i++ {

@@ -1,9 +1,9 @@
 # coding: utf-8
 
 """
-    DFC
+    AIS
 
-    DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
     Contact: dfcdev@exchange.nvidia.com
@@ -27,14 +27,14 @@ REQUIRES = ["urllib3 >= 1.15", "six >= 1.10", "certifi", "python-dateutil"]
 setup(
     name=NAME,
     version=VERSION,
-    description="DFC",
+    description="AIS",
     author_email="dfcdev@exchange.nvidia.com",
     url="",
-    keywords=["OpenAPI", "OpenAPI-Generator", "DFC"],
+    keywords=["OpenAPI", "OpenAPI-Generator", "AIS"],
     install_requires=REQUIRES,
     packages=find_packages(),
     include_package_data=True,
     long_description="""\
-    DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
     """
 )

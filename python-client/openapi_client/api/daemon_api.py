@@ -1,9 +1,9 @@
 # coding: utf-8
 
 """
-    DFC
+    AIS
 
-    DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
     Contact: dfcdev@exchange.nvidia.com
@@ -324,7 +324,7 @@ class DaemonApi(object):
             collection_formats=collection_formats)
 
     def perform_operation(self, input_parameters, **kwargs):  # noqa: E501
-        """Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon  # noqa: E501
+        """Perform operations such as setting config value, shutting down proxy/target etc. on a AIS daemon  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True
@@ -345,7 +345,7 @@ class DaemonApi(object):
             return data
 
     def perform_operation_with_http_info(self, input_parameters, **kwargs):  # noqa: E501
-        """Perform operations such as setting config value, shutting down proxy/target etc. on a DFC daemon  # noqa: E501
+        """Perform operations such as setting config value, shutting down proxy/target etc. on a AIS daemon  # noqa: E501
 
         This method makes a synchronous HTTP request by default. To make an
         asynchronous HTTP request, please pass async_req=True

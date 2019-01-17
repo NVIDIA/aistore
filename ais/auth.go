@@ -10,9 +10,9 @@
 //    All user credentials are read from default files and environment variables.
 //    AWS: file ~/.aws/credentials
 //    GCP: file ~/gcp_creds.json and GOOGLE_CLOUD_PROJECT variable
-//         a user should have logged at least once to GCP before running any DFC operation
+//         a user should have logged at least once to GCP before running any AIStore operation
 // 2. AuthN server is enabled and everything is set up
-//    - DFC reads userID from HTTP request header: 'Authorization: Bearer <token>'.
+//    - AIS reads userID from HTTP request header: 'Authorization: Bearer <token>'.
 //    - A user credentials is loaded for the userID
 //      AWS: credentials are loaded from INI-file in memory. File must include the folowing lines:
 //       region = AWSREGION
@@ -23,7 +23,7 @@
 //          not have a way to load credentials from memory)
 // 3. If anything goes wrong: no user credentials found, invalid credentials
 //    format etc then default session is created (as if AuthN is disabled)
-package dfc
+package ais
 
 import (
 	"context"

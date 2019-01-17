@@ -14,5 +14,5 @@ var (
 
 func main() {
 	fmt.Printf("version: %s | build_time: %s\n", version, build)
-	dfc.Run()
+	ais.Run()
 }

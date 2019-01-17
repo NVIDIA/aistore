@@ -1,6 +1,6 @@
 ## Overview
 
-Package transport provides streaming object-based transport over HTTP for massive intra-DFC and DFC-to-DFC data transfers. This transport layer
+Package transport provides streaming object-based transport over HTTP for massive intra-AIS and AIS-to-AIS data transfers. This transport layer
 can be utilized for cluster-wide rebalancing, replication (of any kind), distributed merge-sort operation, and more.
 
 A **stream** (or, more exactly, a `transport.Stream`) asynchronously transfers **objects** between two HTTP endpoints.
@@ -161,7 +161,7 @@ go test -v -logtostderr=true
 
 * To run a test with a name matching "Multi", verbose logging and enabled assertions:
 ```
-DFC_STREAM_DEBUG=1 go test -v -run=Multi
+AIS_STREAM_DEBUG=1 go test -v -run=Multi
 ```
 
 For more examples, please see tests in the package directory.
@@ -171,8 +171,8 @@ For more examples, please see tests in the package directory.
 
 | Environment Variable | Description |
 |--- | --- |
-| DFC_STREAM_DEBUG | Enable inline assertions and verbose tracing |
-| DFC_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
+| AIS_STREAM_DEBUG | Enable inline assertions and verbose tracing |
+| AIS_STREAM_BURST_NUM | Max number of objects the caller is permitted to post for sending without experiencing any sort of back-pressure |
 
 ## See also
 

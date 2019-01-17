@@ -3,7 +3,7 @@
  *
  */
 // Package ais provides core functionality for the AIStore object storage.
-package dfc
+package ais
 
 import (
 	"fmt"

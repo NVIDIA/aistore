@@ -1,7 +1,7 @@
 ## Developer Docker Scripts
 
-Use the `./deploy_docker.sh` script to deploy DFC cluster(s) on a single machine. Each cluster can be deployed with one or three networks. The latter case is used to deploy a cluster with separated data and control planes. When deploying multiple clusters, only multiple networks are allowed.
-Use the `./stop_docker.sh` script to stop the DFC cluster(s) that were deployed.
+Use the `./deploy_docker.sh` script to deploy AIStore cluster(s) on a single machine. Each cluster can be deployed with one or three networks. The latter case is used to deploy a cluster with separated data and control planes. When deploying multiple clusters, only multiple networks are allowed.
+Use the `./stop_docker.sh` script to stop the AIStore cluster(s) that were deployed.
 
 ## Requirements
 
@@ -9,7 +9,7 @@ Install docker and docker-composer prior to deploying a cluster. How to setup do
 
 GOPATH environment variable must be defined before starting cluster deployment. Docker attaches $GOPATH/src directory to a container, so the container at start builds new binaries from the current sources.
 
-For the *i*th cluster, DFC creates three networks: dfc${i}\_public, dfc${i}\_internal\_control, and dfc${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (-m argument must be passed to the deploy script). It is expected that only DFC cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the docker public and replication networks of other clusters to allow for multi-tiering and replication.
+For the *i*th cluster, AIStore creates three networks: dfc${i}\_public, dfc${i}\_internal\_control, and dfc${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (-m argument must be passed to the deploy script). It is expected that only AIStore cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the docker public and replication networks of other clusters to allow for multi-tiering and replication.
 
 ## Deploying a Cluster
 
@@ -41,7 +41,7 @@ Note:
 * If the -s or --single and -m  or --multi flag are used, then multiple networks will take precedence
 * Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_dfc/aws.env` and passes this file to each container.
 
-Please see [main DFC README](/README.md#configuration) for more information about testing mode.
+Please see [main AIStore README](/README.md#configuration) for more information about testing mode.
 
 Example Usage:
 ```
@@ -99,7 +99,7 @@ Thus, to see the /tmp/dfc folder of container dfc${i}\_${target,proxy}\_${j}, na
 
 ## Extra configuration
 
-It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by DFC container. To fix this you can tune up variables in [deployment script](docker/dev/deploy_docker.sh).
+It is possible that default settings do not work in specific cases, e.g, default networks cannot be used by AIStore container. To fix this you can tune up variables in [deployment script](docker/dev/deploy_docker.sh).
 
 Useful script variables:
 

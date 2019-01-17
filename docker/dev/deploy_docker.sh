@@ -8,7 +8,7 @@ usage() {
     echo "  -f=LIST or --filesystems=LIST : where LIST is a comma seperated list of filesystems"
     echo "  -g or --gcp                   : to use GCP"
     echo "  -h or --help                  : show usage"
-    echo "  -l or --last                  : redeploy using the arguments from the last dfc docker deployment"
+    echo "  -l or --last                  : redeploy using the arguments from the last ais docker deployment"
     echo "  -m or --multi                 : use multiple networks"
     echo "  -p=NUM or --proxy=NUM         : where NUM is the number of proxies"
     echo "  -s or --single                : use a single network"
@@ -218,7 +218,7 @@ else
 fi
 
 if [ "$CLUSTER_CNT" -eq 0 ]; then
-    echo Enter number of dfc clusters:
+    echo Enter number of AIStore clusters:
     read CLUSTER_CNT
     is_number $CLUSTER_CNT
     if [ "$CLUSTER_CNT" -gt 1 ]; then
@@ -379,7 +379,7 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
 
     CONFFILE="dfc.json"
     source $DIR/../../ais/setup/config.sh
-    
+
     echo Stopping running clusters...
     docker-compose -p dfc${i} -f ${composer_file} down
 
@@ -389,9 +389,9 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     echo Starting Primary Proxy
     export HOST_CONTAINER_PATH=/tmp/dfc/c${i}_proxy_1
     mkdir -p $HOST_CONTAINER_PATH
-    DFCPRIMARYPROXY=TRUE docker-compose -p dfc${i} -f ${composer_file} up --build -d proxy
+    AIS_PRIMARYPROXY=TRUE docker-compose -p dfc${i} -f ${composer_file} up --build -d proxy
     sleep 5 # give primary proxy some room to breath
-    
+
     echo Starting cluster ..
     for ((j=1; j<=${TARGET_CNT}; j++)); do
         export HOST_CONTAINER_PATH=/tmp/dfc/c${i}_target_${j}

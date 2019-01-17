@@ -4,7 +4,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"context"
@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	gcpDfcHashType = "x-goog-meta-dfc-hash-type"
-	gcpDfcHashVal  = "x-goog-meta-dfc-hash-val"
+	gcpAisHashType = "x-goog-meta-dfc-hash-type"
+	gcpAisHashVal  = "x-goog-meta-dfc-hash-val"
 
 	gcpPageSize = 1000
 )
@@ -351,7 +351,7 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workfqn string, bucket string
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	v = cmn.NewCksum(attrs.Metadata[gcpDfcHashType], attrs.Metadata[gcpDfcHashVal])
+	v = cmn.NewCksum(attrs.Metadata[gcpAisHashType], attrs.Metadata[gcpAisHashVal])
 	md5 := hex.EncodeToString(attrs.MD5)
 	rc, err := o.NewReader(gctx)
 	if err != nil {
@@ -386,8 +386,8 @@ func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objnam
 	if ohash != nil {
 		htype, hval = ohash.Get()
 		md = make(cmn.SimpleKVs)
-		md[gcpDfcHashType] = htype
-		md[gcpDfcHashVal] = hval
+		md[gcpAisHashType] = htype
+		md[gcpAisHashVal] = hval
 	}
 	gcpObj := gcpclient.Bucket(bucket).Object(objname)
 	wc := gcpObj.NewWriter(gctx)

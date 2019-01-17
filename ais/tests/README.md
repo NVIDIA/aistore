@@ -1,9 +1,9 @@
-DFC testing
+AIStore testing
 -----------------------------------------------------------------
 
-DFC provides both unit tests and integration tests that can be run individually or in batches. Some tests require DFC cluster, others do not, and some of the tests require the cluster (under test) to be deployed with more than one storage target and more than one proxy/gateway.
+AIStore provides both unit tests and integration tests that can be run individually or in batches. Some tests require AIStore cluster, others do not, and some of the tests require the cluster (under test) to be deployed with more than one storage target and more than one proxy/gateway.
 
-To run all tests, make sure to deploy a DFC cluster with at least 3 proxies/gateways and at least 3 targets.
+To run all tests, make sure to deploy a AIStore cluster with at least 3 proxies/gateways and at least 3 targets.
 Then, cd to $GOPATH/src/github.com/NVIDIA/dfcpub and execute:
 
 ```

@@ -160,16 +160,14 @@ var liveProps = map[xml.Name]struct {
 	},
 }
 
-// TODO(nigeltao) merge props and allprop?
-
 // Props returns the status of the properties named pnames for resource name.
 //
 // Each Propstat has a unique status and each property name will only be part
 // of one Propstat element.
 //
-// DFC Note: passing both name and fi is with performance in mind, the two provide overlapping
-//           information, this is just to save a pair of file open and close calls in case dead
-//           property is not supported.
+// NOTE: passing both name and fi is with performance in mind, the two provide overlapping
+//       information, this is just to save a pair of file open and close calls in case dead
+//       property is not supported.
 func props(ctx context.Context, fs FileSystem, ls LockSystem, name string, fi os.FileInfo,
 	pnames []xml.Name) ([]Propstat, error) {
 	var (

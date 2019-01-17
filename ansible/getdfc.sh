@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 . /etc/profile.d/dfcpaths.sh
-echo 'Pull latest DFC'
-cd $DFCSRC
+echo 'Pull latest AIS'
+cd $AISSRC
 git fetch
 git reset --hard origin/master
 git status

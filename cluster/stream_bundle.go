@@ -59,7 +59,7 @@ var (
 )
 
 func init() {
-	debug = os.Getenv("DFC_STREAM_DEBUG") != ""
+	debug = os.Getenv("AIS_STREAM_DEBUG") != ""
 }
 
 //

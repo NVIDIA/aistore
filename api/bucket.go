@@ -1,4 +1,4 @@
-// Package api provides RESTful API to DFC object storage
+// Package api provides RESTful API to AIS object storage
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -17,7 +17,7 @@ import (
 // SetBucketProps API
 //
 // Set the properties of a bucket, using the bucket name and the bucket properties to be set.
-// Validation of the properties passed in is performed by DFC Proxy.
+// Validation of the properties passed in is performed by AIStore Proxy.
 func SetBucketProps(baseParams *BaseParams, bucket string, props cmn.BucketProps) error {
 	if props.Checksum == "" {
 		props.Checksum = cmn.ChecksumInherit

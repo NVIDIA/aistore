@@ -187,7 +187,7 @@ func NewStream(client *http.Client, toURL string, extra *Extra) (s *Stream) {
 	if extra != nil && extra.Burst > 0 {
 		burst = extra.Burst
 	}
-	if a := os.Getenv("DFC_STREAM_BURST_NUM"); a != "" {
+	if a := os.Getenv("AIS_STREAM_BURST_NUM"); a != "" {
 		if burst64, err := strconv.ParseInt(a, 10, 0); err != nil {
 			glog.Errorf("%s: error parsing burst env '%s': %v", s, a, err)
 			burst = burstNum

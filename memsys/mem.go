@@ -62,10 +62,10 @@ import (
 //
 // In addition, there are several environment variables that can be used
 // (to circumvent the need to change the code, for instance):
-// 	"DFC_MINMEM_FREE"
-// 	"DFC_MINMEM_PCT_TOTAL"
-// 	"DFC_MINMEM_PCT_FREE"
-// 	"DFC_MEM_DEBUG"
+// 	"AIS_MINMEM_FREE"
+// 	"AIS_MINMEM_PCT_TOTAL"
+// 	"AIS_MINMEM_PCT_FREE"
+// 	"AIS_MEM_DEBUG"
 // These names must be self-explanatory.
 //
 // Once constructed and initialized, memory-manager-and-slab-allocator
@@ -99,7 +99,7 @@ const (
 	maxdepth      = 1024 * 24       // ring cap max
 	sizetoGC      = cmn.GiB * 2     // see heuristics ("Heu")
 	loadavg       = 10              // "idle" load average to deallocate Slabs when below
-	minMemFree    = cmn.GiB         // default minimum memory size that must remain available - see DFC_MINMEM_*
+	minMemFree    = cmn.GiB         // default minimum memory size that must remain available - see AIS_MINMEM_*
 	memCheckAbove = time.Minute     // default memory checking frequency when above low watermark (see lowwm, setTimer())
 	freeIdleMin   = memCheckAbove   // time to reduce an idle slab to a minimum depth (see mindepth)
 	freeIdleZero  = freeIdleMin * 2 // ... to zero
@@ -183,7 +183,7 @@ type sortpair struct {
 }
 
 var (
-	// gMem2 is the global memory manager used in various packages outside dfc.
+	// gMem2 is the global memory manager used in various packages outside ais.
 	// Its runtime params are set below and is intended to remain so.
 	gMem2 = &Mem2{Name: GlobalMem2Name, Period: time.Minute * 2, MinPctFree: 50}
 	// Mapping of usageLvl values to corresponding strings for log messages
@@ -506,29 +506,29 @@ func (s *Slab2) Free(buf []byte) {
 
 func (r *Mem2) env() (err error) {
 	var minfree int64
-	if a := os.Getenv("DFC_MINMEM_FREE"); a != "" {
+	if a := os.Getenv("AIS_MINMEM_FREE"); a != "" {
 		if minfree, err = cmn.S2B(a); err != nil {
-			return fmt.Errorf("Cannot parse DFC_MINMEM_FREE '%s'", a)
+			return fmt.Errorf("Cannot parse AIS_MINMEM_FREE '%s'", a)
 		}
 		r.MinFree = uint64(minfree)
 	}
-	if a := os.Getenv("DFC_MINMEM_PCT_TOTAL"); a != "" {
+	if a := os.Getenv("AIS_MINMEM_PCT_TOTAL"); a != "" {
 		if r.MinPctTotal, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("Cannot parse DFC_MINMEM_PCT_TOTAL '%s'", a)
+			return fmt.Errorf("Cannot parse AIS_MINMEM_PCT_TOTAL '%s'", a)
 		}
 		if r.MinPctTotal < 0 || r.MinPctTotal > 100 {
-			return fmt.Errorf("Invalid DFC_MINMEM_PCT_TOTAL '%s'", a)
+			return fmt.Errorf("Invalid AIS_MINMEM_PCT_TOTAL '%s'", a)
 		}
 	}
-	if a := os.Getenv("DFC_MINMEM_PCT_FREE"); a != "" {
+	if a := os.Getenv("AIS_MINMEM_PCT_FREE"); a != "" {
 		if r.MinPctFree, err = strconv.Atoi(a); err != nil {
-			return fmt.Errorf("Cannot parse DFC_MINMEM_PCT_FREE '%s'", a)
+			return fmt.Errorf("Cannot parse AIS_MINMEM_PCT_FREE '%s'", a)
 		}
 		if r.MinPctFree < 0 || r.MinPctFree > 100 {
-			return fmt.Errorf("Invalid DFC_MINMEM_PCT_FREE '%s'", a)
+			return fmt.Errorf("Invalid AIS_MINMEM_PCT_FREE '%s'", a)
 		}
 	}
-	if a := os.Getenv("DFC_MEM_DEBUG"); a != "" {
+	if a := os.Getenv("AIS_MEM_DEBUG"); a != "" {
 		r.Debug = true
 	}
 	return

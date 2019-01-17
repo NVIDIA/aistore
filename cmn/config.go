@@ -254,7 +254,7 @@ type LRUConf struct {
 	// DontEvictTime is the parsed value of DontEvictTimeStr
 	DontEvictTime time.Duration `json:"-"`
 
-	// CapacityUpdTimeStr denotes the frequency with which DFC updates filesystem usage
+	// CapacityUpdTimeStr denotes the frequency at which AIStore updates local capacity utilization
 	CapacityUpdTimeStr string `json:"capacity_upd_time"`
 
 	// CapacityUpdTime is the parsed value of CapacityUpdTimeStr
@@ -630,8 +630,9 @@ func SetGLogVModule(v string) error {
 	return err
 }
 
-// TestingEnv returns true if DFC is running in dev environment, and
-// moreover, all the cluster is running on a single machine
+// TestingEnv returns true if AIStore is running in a development environment
+// where a single local filesystem is partitioned between all (locally running)
+// targets and is used for both local and Cloud buckets
 func TestingEnv() bool {
 	return GCO.Get().TestFSP.Count > 0
 }

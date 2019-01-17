@@ -1,17 +1,17 @@
 ## Disclaimer
-Note DFC for Kubernetes is not currently being developed or maintained by Nvidia. These files are outdated and were once used to deploy using kubernetes, but the development team has switched over to Docker. If you would like to deploy dfc in a containerized environment, consider using Docker. The Docker folder can be found in `dfcpub/docker`. If you would still like to use kubernetes, consider playing around with these files in this directory to get it working.
+Note AIStore for Kubernetes is not currently being developed or maintained by Nvidia. These files are outdated and were once used to deploy using kubernetes, but the development team has switched over to Docker. If you would like to deploy dfc in a containerized environment, consider using Docker. The Docker folder can be found in `dfcpub/docker`. If you would still like to use kubernetes, consider playing around with these files in this directory to get it working.
 
-## DFC in Kubernetes
+## AIStore in Kubernetes
 This document assumes that you already have k8s cluster setup with the kubectl configured to point to your cluster.
 
 If you don't have k8s cluster you can try setting up a minikube locally by following [Minikube installation](https://kubernetes.io/docs/getting-started-guides/minikube/)
 
-#### Deploying DFC
-1. Run  `deploy_docker.sh` script with k8s option to launch one DFC proxy, multiple DFC targets and one DFC client POD.
+#### Deploying AIStore
+1. Run  `deploy_docker.sh` script with k8s option to launch one AIStore proxy, multiple AIStore targets and one AIStore client POD.
 ```
 $ ./deploy_docker.sh -e k8s -a <aws.env file path>
 ```
-The current networking limitation requires that DFC client is also launched as container in kubernetes cluster. You can SSH into the client POD to interact with the cluster.
+The current networking limitation requires that AIStore client is also launched as container in kubernetes cluster. You can SSH into the client POD to interact with the cluster.
 
 2. To scale up/down the number target pods
 ```
@@ -23,7 +23,7 @@ For example if your cluster already has 4 targets running. To add 2 more targets
 3. To interact with the cluster
  * SSH into client
  ```
- $ kubectl exec -it <DFC_client_pod_name> -- /bin/bash
+ $ kubectl exec -it <AIS_client_pod_name> -- /bin/bash
   Example : kubectl exec -it dfcclient-5797bd5474-6j88v -- /bin/bash
  ```
  * To get cluster config

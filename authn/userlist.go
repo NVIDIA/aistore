@@ -50,7 +50,6 @@ type (
 	}
 )
 
-// borrowed from DFC
 func createHTTPClient() *http.Client {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	transport := &http.Transport{
@@ -253,7 +252,7 @@ func (m *userManager) sendRevokedTokensToProxy(tokens ...string) {
 		return
 	}
 
-	tokenList := dfc.TokenList{Tokens: tokens}
+	tokenList := ais.TokenList{Tokens: tokens}
 	injson, _ := jsoniter.Marshal(tokenList)
 	if err := m.proxyRequest(http.MethodDelete, cmn.Tokens, injson); err != nil {
 		glog.Errorf("Failed to send token list: %v", err)

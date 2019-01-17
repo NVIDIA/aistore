@@ -9,10 +9,10 @@ REPOPATH=src/github.com/NVIDIA
 DEVPATH=src/gitlab-master.nvidia.com/aistorage/
 
 # Only for gitlab repository
-# It replaces existing github.com DFC repository with a symlink to gitlab one
+# It replaces existing github.com AIStore repository with a symlink to gitlab one
 # WARNING: it erases directory $GOPATH/src/github.com/NVIDIA, so make sure
 #    that you are done with it before executing 'make devinit'
-# Run this target once after you 'go get' DFC for the first time
+# Run this target once after you 'go get' AIStore for the first time
 devinit:
 	@if [ -d "${GOPATH}/${REPOPATH}" ] && [ ! -L "${GOPATH}/${REPOPATH}" ]; then \
 		echo "Removing ${GOPATH}/${REPOPATH}" && \

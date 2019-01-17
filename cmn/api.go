@@ -76,7 +76,7 @@ const (
 const (
 	ProviderAmazon = "aws"
 	ProviderGoogle = "gcp"
-	ProviderDFC    = "dfc"
+	ProviderAIS    = "ais"
 )
 
 // Header Key enum
@@ -84,9 +84,9 @@ const (
 	HeaderCloudProvider = "CloudProvider" // from Cloud Provider enum
 	HeaderVersioning    = "Versioning"    // Versioning state for a bucket: "enabled"/"disabled"
 	// tiering
-	HeaderNextTierURL = "NextTierURL" // URL of the next tier in a DFC multi-tier environment
-	HeaderReadPolicy  = "ReadPolicy"  // Policy used for reading in a DFC multi-tier environment
-	HeaderWritePolicy = "WritePolicy" // Policy used for writing in a DFC multi-tier environment
+	HeaderNextTierURL = "NextTierURL" // URL of the next tier in a AIStore multi-tier environment
+	HeaderReadPolicy  = "ReadPolicy"  // Policy used for reading in a AIStore multi-tier environment
+	HeaderWritePolicy = "WritePolicy" // Policy used for writing in a AIStore multi-tier environment
 	// bucket props
 	HeaderBucketChecksumType    = "BucketChecksumType"    // Checksum type used for objects in the bucket
 	HeaderBucketValidateColdGet = "BucketValidateColdGet" // Cold get validation policy used for objects in the bucket
@@ -117,7 +117,7 @@ const (
 	// user/app API
 	URLParamWhat        = "what"         // "smap" | "bucketmd" | "config" | "stats" | "xaction" ...
 	URLParamProps       = "props"        // e.g. "checksum, size" | "atime, size" | "ctime, iscached" | "bucket, size" | xaction type
-	URLParamCheckCached = "check_cached" // true: check if object is cached in DFC
+	URLParamCheckCached = "check_cached" // true: check if object is cached in AIStore
 	URLParamOffset      = "offset"       // Offset from where the object should be read
 	URLParamLength      = "length"       // the total number of bytes that need to be read from the offset
 	// internal use
@@ -173,9 +173,9 @@ type RangeMsg struct {
 }
 
 // MountpathList contains two lists:
-// * Available - the list of mountpaths that can be utilized by DFC
-// * Disabled - the list of disabled mountpaths, mountpaths that triggered
-//	            IO errors and after extra tests are found faulty
+// * Available - list of local mountpaths available to the storage target
+// * Disabled  - list of disabled mountpaths, the mountpaths that generated
+//	         IO errors followed by (FSHC) health check, etc.
 type MountpathList struct {
 	Available []string `json:"available"`
 	Disabled  []string `json:"disabled"`
@@ -326,8 +326,8 @@ const (
 // in response to operations on the bucket itself or the objects inside the bucket.
 type BucketProps struct {
 
-	// CloudProvider can be "aws", "gcp", or "dfc".
-	// If a bucket is local, CloudProvider must be "dfc".
+	// CloudProvider can be "aws", "gcp" (clouds) - or "ais".
+	// If a bucket is local, CloudProvider must be "ais".
 	// Otherwise, it must be "aws" or "gcp".
 	CloudProvider string `json:"cloud_provider,omitempty"`
 

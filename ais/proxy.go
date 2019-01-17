@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
-package dfc
+package ais
 
 import (
 	"bytes"
@@ -1037,15 +1037,14 @@ func (p *proxyrunner) targetListBucket(r *http.Request, bucket string, dinfo *cl
 	}, res.err
 }
 
-// Receives info about locally cached files from targets in batches
-// and merges with existing list of cloud files
+// Receives and aggregates info on locally cached objects and merges the two lists
 func (p *proxyrunner) consumeCachedList(bmap map[string]*cmn.BucketEntry, dataCh chan *localFilePage, errCh chan error) {
 	for rb := range dataCh {
 		if rb.err != nil {
 			if errCh != nil {
 				errCh <- rb.err
 			}
-			glog.Errorf("Failed to get information about file in DFC cache: %v", rb.err)
+			glog.Errorf("Failed to get local object info: %v", rb.err)
 			return
 		}
 		if rb.entries == nil || len(rb.entries) == 0 {
@@ -1978,7 +1977,7 @@ func (p *proxyrunner) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handler for DFC when utilized as a reverse proxy to handle unmodified requests
+// http reverse-proxy handler, to handle unmodified requests
 // (not to confuse with p.rproxy)
 func (p *proxyrunner) reverseProxyHandler(w http.ResponseWriter, r *http.Request) {
 	baseURL := r.URL.Scheme + "://" + r.URL.Host
@@ -2522,7 +2521,7 @@ func (p *proxyrunner) validateBucketProps(props *cmn.BucketProps, isLocal bool) 
 	if props.NextTierURL != "" {
 		if props.CloudProvider == "" {
 			return fmt.Errorf("tiered bucket must use one of the supported cloud providers (%s | %s | %s)",
-				cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderDFC)
+				cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAIS)
 		}
 		if props.ReadPolicy == "" {
 			props.ReadPolicy = cmn.RWPolicyNextTier
@@ -2649,11 +2648,11 @@ func (p *proxyrunner) detectDaemonDuplicate(osi *cluster.Snode, nsi *cluster.Sno
 }
 
 func validateCloudProvider(provider string, isLocal bool) error {
-	if provider != "" && provider != cmn.ProviderAmazon && provider != cmn.ProviderGoogle && provider != cmn.ProviderDFC {
+	if provider != "" && provider != cmn.ProviderAmazon && provider != cmn.ProviderGoogle && provider != cmn.ProviderAIS {
 		return fmt.Errorf("invalid cloud provider: %s, must be one of (%s | %s | %s)", provider,
-			cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderDFC)
-	} else if isLocal && provider != cmn.ProviderDFC && provider != "" {
-		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", cmn.ProviderDFC)
+			cmn.ProviderAmazon, cmn.ProviderGoogle, cmn.ProviderAIS)
+	} else if isLocal && provider != cmn.ProviderAIS && provider != "" {
+		return fmt.Errorf("local bucket can only have '%s' as the cloud provider", cmn.ProviderAIS)
 	}
 	return nil
 }

@@ -1,8 +1,8 @@
 # coding: utf-8
 """
-    DFC
+    AIS
 
-    DFC is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
     Contact: dfcdev@exchange.nvidia.com

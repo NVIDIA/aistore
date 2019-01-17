@@ -1,11 +1,11 @@
-DFC Authentication Server (AuthN)
+AIStore Authentication Server (AuthN)
 -----------------------------------------
 
 ## Overview
 
-DFC Authentication Server provides a token-based security access to DFC REST API. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
+AIStore Authentication Server provides a token-based security access to AIStore REST API. It employs [JSON Web Tokens](https://github.com/dgrijalva/jwt-go) framework to grant access to resources: buckets and objects. Please read a short [introduction to JWT](https://jwt.io/introduction/) for details.
 
-The server is a standalone application that manages users and their tokens. It reports to the primary DFC proxy all changes on the fly and immediately after each user login or logout. The result is that the DFC primary proxy (aka DFC gateway) always has updated set of valid tokens that grant access to the DFC and Cloud resources.
+The server is a standalone application that manages users and their tokens. It reports to the primary AIStore proxy all changes on the fly and immediately after each user login or logout. The result is that the AIStore primary proxy (aka AIStore gateway) always has updated set of valid tokens that grant access to the AIStore and Cloud resources.
 
 For a client application, a typical workflow looks as follows:
 
@@ -20,13 +20,13 @@ Environment variables used by the deployment script to setup AuthN server:
 
 | Variable | Default value | Description |
 |---|---|---|
-| AUTHENABLED | false | Set it to `true` to enable authn server and token-based access in DFC proxy |
+| AUTHENABLED | false | Set it to `true` to enable authn server and token-based access in AIStore proxy |
 | AUTH_SU_NAME | admin | Super user name (see `A super user` section for details) |
 | AUTH_SU_PASS | admin | Super user password (see `A super user` section for details) |
 | SECRETKEY| aBitLongSecretKey | A secret key to encrypt and decrypt tokens |
 | CREDDIR | empty value | A path to directory to keep Google Storage user credentials |
 
-All variables can be set at DFC launch. Example of starting AuthN with default configuration:
+All variables can be set at AIStore launch. Example of starting AuthN with default configuration:
 
 ```
 $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
@@ -34,7 +34,7 @@ $ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
 
 Note: before starting deployment process don't forget to change the default secret key used to encrypt and decrypt tokens.
 
-To change AuthN settings after deployment, modify the server's configuration file and restart the server. If you change the server's secret key make sure to modify DFC proxy configuration as well.
+To change AuthN settings after deployment, modify the server's configuration file and restart the server. If you change the server's secret key make sure to modify AIStore proxy configuration as well.
 
 ### AuthN configuration and log
 
@@ -46,10 +46,10 @@ To change AuthN settings after deployment, modify the server's configuration fil
 
 ### How to enable AuthN server after deployment
 
-By default, DFC deployment currently won't launch AuthN server. To start AuthN, perform the following steps:
+By default, AIStore deployment currently won't launch AuthN server. To start AuthN, perform the following steps:
 
-- Change DFC proxy configuration to enable token-based access: look for `{"auth": { "enabled": false } }` in proxy configration file and replace `false` with `true`. Restart the proxy to apply changes
-- Start authn server: <path_to_dfc_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for DFC proxies and DFC targets
+- Change AIStore proxy configuration to enable token-based access: look for `{"auth": { "enabled": false } }` in proxy configration file and replace `false` with `true`. Restart the proxy to apply changes
+- Start authn server: <path_to_dfc_binaries>/authn -config=<path_to_config_dir>/authn.json. Path to config directory is set at the time of cluster deployment and it is the same as the directory for AIStore proxies and AIStore targets
 
 ## User management
 
@@ -85,9 +85,9 @@ Call revoke token API to forcefully invalidate a token before it expires.
 
 A generated token is returned as a JSON formatted message. Example: `{"token": "issued_token"}`.
 
-## Interaction with DFC proxy/gateway
+## Interaction with AIStore proxy/gateway
 
-DFC proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:
+AIStore proxies and targets require a valid token in a request header - but only if AuthN is enabled. Every token includes all the information needed by the target:
 
 - UserID (username)
 - Time when the the token was generated
@@ -96,9 +96,9 @@ DFC proxies and targets require a valid token in a request header - but only if 
 
 A token is validated by target. The token must not be expired and it must not be in black list. Black list is a list of revoked tokens: tokens that are revoked with REST API or belong to deleted users. List of revoked tokens is broadcast over the cluster on change. Periodically the list is cleaned up by removing expired tokens.
 
-### Calling DFC proxy API
+### Calling AIStore proxy API
 
-If authentication is enabled a REST API call to the DFC proxy must include a valid token issued by the AuthN. The token is passed in the request header in the format: `Authorization: Bearer <token>`. Curl example: `curl -L  http://localhost:8080/v1/buckets/* -X GET -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIs'`.
+If authentication is enabled a REST API call to the AIStore proxy must include a valid token issued by the AuthN. The token is passed in the request header in the format: `Authorization: Bearer <token>`. Curl example: `curl -L  http://localhost:8080/v1/buckets/* -X GET -H 'Content-Type: application/json' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIs'`.
 
 At this moment, only requests to buckets and objects API require a token.
 
@@ -129,7 +129,7 @@ $ curl -X POST http://localhost:8203/v1/users/username \
 {"token": "eyJhbGciOiJI.eyJjcmVkcyI.T6r6790"}
 
 ```
-4. The user adds the token for every DFC request to a proxy or a target (list bucket example)
+4. The user adds the token for every AIStore request to a proxy or a target (list bucket example)
 
 ```
 $ curl -L  http://localhost:8080/v1/buckets/bucketname -X GET \

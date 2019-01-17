@@ -1,4 +1,4 @@
-// Webdav server for DFC
+// Webdav server for AIStore
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -28,7 +28,7 @@ import (
 const (
 	logLevelNone = iota
 	logLevelWebDAV
-	logLevelDFC
+	logLevelAIS
 )
 
 var (
@@ -78,7 +78,7 @@ func main() {
 		h.ServeHTTP(w, r)
 	}))
 
-	webdavLog(logLevelNone, "DFC WebDAV server started, listening on %d, DFC = %s\n", port, u.String())
+	webdavLog(logLevelNone, "AIStore WebDAV server started, listening on %d, URL = %s\n", port, u.String())
 	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
