@@ -1,60 +1,128 @@
-## Table of Contents
+# Performance
+
+AIStore is all about the performance.
+As AIStore strives to be the most efficient storage solution for AI it is not possible without underlying components optimalizations.
+Below you will find some tips and tricks which you can use to ensure that AIStore delivers the best performance.
+
 - [Performance tuning](#performance-tuning)
+    - [General](#general)
+    - [CPU](#cpu)
+    - [Network](#network)
+        - [Smoke test](#smoke-test)
+        - [Maximum open files](#maximum-open-files)
+    - [Storage](#storage)
+        - [Block settings](#block-settings)
+        - [Benchmarking disk](#benchmarking-disk)
+        - [Underlying filesystem](#underlying-filesystem)
+    - [Virtualization](#virtualization)
 - [Performance testing](#performance-testing)
 
 ## Performance tuning
 
-AIStore utilizes local filesystems, which means that under pressure a AIStore target will have a significant number of open files. This is often the case when running stress tests that perform highly-intensive, concurrent object PUT operations. In the event that errors stating `too many open files` are encountered, system settings must be changed. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
+### General
 
-```
-root             hard    nofile          10240
-ubuntu           hard    nofile          1048576
-ubuntu           soft    nofile          1048576
-```
-After restarting, confirm that the limits have been increased accordingly:
-```shell
-ulimit -n
-```
+Here we gathered couple articles/papers which we think you may find useful:
 
-If you find that the result is still lower than expected, take the additional steps of modifying
-both `/etc/systemd/system.conf` and `/etc/systemd/user.conf` to change the value of `DefaultLimitNOFILE` to the desired limit. If that line does not exist, append it under the `Manager` section of those two files as such:
-```
-DefaultLimitNOFILE=$desiredLimit
-```
+* https://wiki.mikejung.biz/Ubuntu_Performance_Tuning <- good guide about general optimizations (some of them are described below)
+* https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf <- detailed view on how to tune the RHEL lot of the tips and tricks apply for other Linux distributions
 
-Additionally, add the following line to the end of `/etc/sysctl.conf`:
-```
-fs.file-max=$desiredLimit
+### CPU
+
+Setting CPU governor to `performance` setting can result in much better network throughput and overall performance: [Tuning Net](https://fasterdata.es.net/assets/Papers-and-Publications/100G-Tuning-TechEx2016.tierney.pdf) (slide 13)
+
+Depending on distribution you may need to install differrent tooling to be able to change it. On `Debian` and `Ubuntu` you can do:
+
+```bash
+apt-get install -y linux-tools-$(uname -r) # install `cpupower`
+cpupower frequency-info # check current settings
+cpupower frequency-set -r -g performance # set `performance` setting to all CPU's
+cpupower frequency-info # check settings after the change
 ```
 
-After a restart, verify using the same command, `ulimit -n`, that the limit for the number of open files has been increased accordingly.
+### Network
 
-For more information, refer to this [link](https://ro-che.info/articles/2017-03-26-increase-open-files-limit).
+* MTU should be set to `9000` (Jumbo frames) - this is one of the most important configurations
+* Optimize TCP send buffer sizes on the target side (`net.core.rmem_max`, `net.ipv4.tcp_rmem`)
+* Optimize TCP receive buffer on the client (reading) side (`net.core.wmem_max`, `net.ipv4.tcp_wmem`)
+* `net.ipv4.tcp_mtu_probing = 2` # especially important in communication between client <-> proxy or client <-> target and if client has `mtu` set > 1500
+* Wait.. there is more: [all ip-sysctl configurations](https://www.cyberciti.biz/files/linux-kernel/Documentation/networking/ip-sysctl.txt)
 
-Generally, configuring a AIStore cluster to perform under load is a vast topic that would be outside the scope of this README. The usual checklist includes (but is not limited to):
+#### Smoke test
 
-1. Setting MTU = 9000 (aka Jumbo frames)
-
-2. Following instruction guidelines for the Linux distribution that you deploy, e.g.:
-    - [Ubuntu Performance Tuning](https://wiki.mikejung.biz/Ubuntu_Performance_Tuning)
-    - [Red Hat Enterprise Linux 7 Performance Tuning](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf)
-
-3. Tuning TCP stack - in part, increasing the TCP send and receive buffer sizes:
-
-```shell
-$ sysctl -a | grep -i wmem
-$ sysctl -a | grep -i ipv4
+To ensure client ⇔ proxy, client ⇔ target, proxy ⇔ target, and target ⇔ target connectivity you can use `iperf` (make sure to use Jumbo frames and disable fragmentation).
+Here is example use of `iperf`:
+```bash
+iperf -P 20 -l 128K -i 1 -t 30 -w 512K -c <IP-address>
 ```
 
-And more.
+**NOTE**: `iperf` must show 95% of the bandwidth of a given phys interface. If it does not, try to find out why. It might have no sense to run any benchmark prior to finding out.
 
-Virtualization overhead may require a separate investigation. It is strongly recommended that a (virtualized) AIStore storage node (whether it's a gateway or a target) would have a direct and non-shared access to the (CPU, disk, memory and network) resources of its bare-metal host. Ensure that AIStore VMs do not get swapped out when idle.
+#### Maximum open files
 
-AIStore storage node, in particular, needs to have a physical resource in its entirety: RAM, CPU, network and storage. The underlying hypervisor must "resort" to the remaining minimum that is absolutely required.
+To ensure that AIStore works properly you probably need to increase the default number of open files.
+To check current setting you can use `ulimit -n`.
+We advise to set it to at least `100'000`.
 
-And, of course, make sure to use PCI passthrough for all local hard drives given to AIStore.
+### Storage
 
-Finally, to ease troubleshooting, consider the usual and familiar load generators such as `fio` and `iperf`, and observability tools: `iostat`, `mpstat`, `sar`, `top`, and more. For instance, `fio` and `iperf` may appear to be almost indispensable in terms of validating and then tuning performances of local storages and clustered networks, respectively. Goes without saying that it does make sense to do this type of basic checking-and-validating prior to running AIStore under stressful workloads.
+Storage-wise, each local `ais.json` config must be looking as follows:
+
+((missing -- image))
+
+* Each local path from the `fspaths` section above must be (or contain as a prefix) a mountpoint of a local filesystem.
+* Each local filesystem (above) must utilize one or more data drives, whereby none of the data drives is shared between two or more local filesystems.
+* Each filesystem must be fine-tuned for reading large files/blocks/xfersizes.
+
+#### Block settings
+
+When initializing the disk it is necessary to set proper block size: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/disk-performance.html
+```bash
+dd if=/dev/zero of=/dev/<disk_name> bs=<block_size>
+```
+
+#### Benchmarking disk
+
+**TIP:** double check that rootfs/tmpfs of the AIStore target are _not_ used when reading and writing data.
+
+When running a benchmark, make sure to run and collect the following in each and every target:
+
+```bash
+iostat -cdxtm 10
+```
+
+Local hard drive read performance, the fastest block-level reading smoke test is:
+```bash
+hdparm -Tt /dev/<drive-name>
+```
+
+Reading the block from certain offset (in gigabytes), `--direct` argument ensure that we bypass the drive’s buffer cache and read directly from the disk:
+```bash
+hdparm -t --direct --offset 100 /dev/<drive-name>
+```
+
+More: [Tune hard disk with `hdparm`](http://www.linux-magazine.com/Online/Features/Tune-Your-Hard-Disk-with-hdparm).
+
+#### Underlying filesystem
+
+Another way to increase storage performance is to benchmark different filesystems: `ext`, `xfs`, `openzfs`.
+Tuning the IO scheduler can be very important part in this process:
+ * http://blackbird.si/tips-for-optimizing-disk-performance-on-linux/
+ * https://cromwell-intl.com/open-source/performance-tuning/disks.html
+
+It seems like generally `deadline` scheduler is a good choice for AIStore, instead of default `cfq`.
+When you consider using `xfs` keep in mind that:
+
+> According to xfs.org, the CFQ scheduler defeats much of the parallelization in XFS.
+
+### Virtualization
+
+AIStore node (proxy and target) must be deployed as a single VM on a given bare-metal host.
+There must be no sharing of host resources between two or more VMs.
+Even if there is a single VM, the host may decide to swap it out when idle, or give it a single hyperthreaded vCPU instead of a full blown physical core - this condition must be prevented.
+AIStore node needs to have a physical resource in its entirety: RAM, CPU, network and storage. Hypervisor must resort to the remaining absolutely required minimum.
+Make sure to use PCI passthrough to assign a device (NIC, HDD) directly to the AIStore node VM.
+
+AIStore's primary goal is to scale with clustered drives. Therefore, the choice of a drive (type and capabilities) is very important.
 
 ## Performance testing
 
@@ -77,4 +145,3 @@ Example of deploying a cluster with disk IO disabled and object size 256KB:
 ```
 
 >> The command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
-
