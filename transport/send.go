@@ -501,6 +501,8 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 				s.header = s.maxheader[:l]
 				return s.sendHdr(b)
 			}
+		default:
+			break
 		}
 		err = io.EOF
 		num := atomic.LoadInt64(&s.stats.Num)
