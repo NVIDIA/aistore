@@ -5,8 +5,8 @@
 package cmn
 
 import (
-	"encoding/binary"
 	"encoding/hex"
+	"hash"
 )
 
 //
@@ -41,10 +41,8 @@ func NewCksum(kind string, val string) CksumValue {
 	return Cksumvalmd5{kind, val}
 }
 
-func NewCksumU64(kind string, hash uint64) CksumValue {
-	hashInBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(hashInBytes, hash)
-	return NewCksum(kind, hex.EncodeToString(hashInBytes))
+func HashToStr(h hash.Hash) string {
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func EqCksum(a, b CksumValue) bool {

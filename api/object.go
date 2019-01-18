@@ -134,7 +134,7 @@ func GetObject(baseParams *BaseParams, bucket, object string, options ...GetObje
 func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, options ...GetObjectInput) (int64, error) {
 	var (
 		n         int64
-		hash      string
+		cksumVal  string
 		w         = ioutil.Discard
 		q         url.Values
 		optParams OptionalParams
@@ -157,14 +157,14 @@ func GetObjectWithValidation(baseParams *BaseParams, bucket, object string, opti
 
 	if hdrHashType == cmn.ChecksumXXHash {
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
-		n, hash, err = cmn.ReadWriteWithHash(resp.Body, w, buf)
+		n, cksumVal, err = cmn.WriteWithHash(w, resp.Body, buf)
 		slab.Free(buf)
 
 		if err != nil {
 			return 0, fmt.Errorf("Failed to calculate xxHash from HTTP response body, err: %v", err)
 		}
-		if hash != hdrHash {
-			return 0, cmn.NewInvalidCksumError(hdrHash, hash)
+		if cksumVal != hdrHash {
+			return 0, cmn.NewInvalidCksumError(hdrHash, cksumVal)
 		}
 	} else {
 		return 0, fmt.Errorf("Can't validate hash types other than %s, object's hash type: %s", cmn.ChecksumXXHash, hdrHashType)

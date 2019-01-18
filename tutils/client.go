@@ -170,8 +170,8 @@ func Tcping(url string) (err error) {
 
 func readResponse(r *http.Response, w io.Writer, err error, src string, validate bool) (int64, string, error) {
 	var (
-		length int64
-		hash   string
+		length   int64
+		cksumVal string
 	)
 
 	// Note: This code can use some cleanup.
@@ -188,7 +188,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
 		defer slab.Free(buf)
 		if validate {
-			length, hash, err = cmn.ReadWriteWithHash(r.Body, w, buf)
+			length, cksumVal, err = cmn.WriteWithHash(w, r.Body, buf)
 			if err != nil {
 				return 0, "", fmt.Errorf("Failed to read HTTP response, err: %v", err)
 			}
@@ -201,7 +201,7 @@ func readResponse(r *http.Response, w io.Writer, err error, src string, validate
 		return 0, "", fmt.Errorf("%s failed, err: %v", src, err)
 	}
 
-	return length, hash, nil
+	return length, cksumVal, nil
 }
 
 func discardResponse(r *http.Response, err error, src string) (int64, error) {

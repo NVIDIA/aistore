@@ -7,7 +7,6 @@ package ais
 import (
 	"context"
 	"crypto/md5"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -43,7 +42,6 @@ import (
 	"github.com/NVIDIA/dfcpub/stats"
 	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/NVIDIA/dfcpub/transport"
-	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -858,13 +856,14 @@ func (t *targetrunner) objGetComplete(w http.ResponseWriter, r *http.Request, lo
 }
 
 func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int64, buf []byte) (
-	cksum string, sgl *memsys.SGL, rangeReader io.ReadSeeker, errstr string) {
+	cksumValue string, sgl *memsys.SGL, rangeReader io.ReadSeeker, errstr string) {
+	var (
+		err error
+	)
 	rangeReader = io.NewSectionReader(file, offset, length)
-	xx := xxhash.New64()
 	if length <= maxBytesInMem {
 		sgl = gmem2.NewSGL(length)
-		_, err := cmn.ReceiveAndChecksum(sgl, rangeReader, buf, xx)
-		if err != nil {
+		if _, cksumValue, err = cmn.WriteWithHash(sgl, rangeReader, buf); err != nil {
 			errstr = fmt.Sprintf("failed to read byte range, offset:%d, length:%d from %s, err: %v", offset, length, fqn, err)
 			t.fshc(err, fqn)
 			return
@@ -873,17 +872,12 @@ func (t *targetrunner) rangeCksum(file *os.File, fqn string, offset, length int6
 		rangeReader = memsys.NewReader(sgl)
 	}
 
-	_, err := rangeReader.Seek(0, io.SeekStart)
-	if err != nil {
+	if _, err = rangeReader.Seek(0, io.SeekStart); err != nil {
 		errstr = fmt.Sprintf("failed to seek file %s to beginning, err: %v", fqn, err)
 		t.fshc(err, fqn)
 		return
 	}
 
-	hashIn64 := xx.Sum64()
-	hashInBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
-	cksum = hex.EncodeToString(hashInBytes)
 	return
 }
 
@@ -2869,6 +2863,7 @@ func (t *targetrunner) receive(workFQN string, reader io.Reader, lom *cluster.LO
 		file       *os.File
 		fileWriter = ioutil.Discard
 		written    int64
+		cksumVal   string
 		nhobj      cmn.CksumValue
 	)
 
@@ -2912,12 +2907,11 @@ func (t *targetrunner) receive(workFQN string, reader io.Reader, lom *cluster.LO
 	// receive and checksum
 	if lom.Cksumcfg.Checksum != cmn.ChecksumNone {
 		cmn.Assert(lom.Cksumcfg.Checksum == cmn.ChecksumXXHash)
-		xx := xxhash.New64()
-		if written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf, xx); err != nil {
+		if written, cksumVal, err = cmn.WriteWithHash(fileWriter, reader, buf); err != nil {
 			t.fshc(err, workFQN)
 			return
 		}
-		nhobj = cmn.NewCksumU64(cmn.ChecksumXXHash, xx.Sum64())
+		nhobj = cmn.NewCksum(cmn.ChecksumXXHash, cksumVal)
 		if lom.Nhobj != nil {
 			if !cmn.EqCksum(nhobj, lom.Nhobj) {
 				err = fmt.Errorf("%s; workFQN: %q", lom.BadChecksum(nhobj), workFQN)
@@ -2931,8 +2925,8 @@ func (t *targetrunner) receive(workFQN string, reader io.Reader, lom *cluster.LO
 			t.fshc(err, workFQN)
 			return
 		}
-		hashInBytes := md5.Sum(nil)[:16]
-		md5Hash := hex.EncodeToString(hashInBytes)
+
+		md5Hash := cmn.HashToStr(md5)[:16]
 		if omd5 != md5Hash {
 			err = fmt.Errorf("Bad md5: %s; [%s != %s] workFQN: %q", lom, omd5, md5Hash, workFQN)
 			t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})

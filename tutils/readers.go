@@ -6,8 +6,6 @@ package tutils
 
 import (
 	"bytes"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +17,6 @@ import (
 
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/OneOfOne/xxhash"
 )
 
 const (
@@ -157,15 +154,9 @@ func NewRandReader(size int64, withHash bool) (Reader, error) {
 	rand1 := rand.New(rand.NewSource(seed))
 	rr := &rrLimited{rand1, size, 0}
 	if withHash {
-		xx := xxhash.New64()
-		_, err := cmn.ReceiveAndChecksum(ioutil.Discard, rr, buf, xx)
-		if err != nil {
+		if _, hash, err = cmn.WriteWithHash(ioutil.Discard, rr, buf); err != nil {
 			return nil, err
 		}
-		hashIn64 := xx.Sum64()
-		hashInBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(hashInBytes, hashIn64)
-		hash = hex.EncodeToString(hashInBytes)
 	}
 	rand1dup := rand.New(rand.NewSource(seed))
 	return &randReader{
@@ -299,7 +290,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 	var hash string
 	if withHash {
 		buf, slab := Mem2.AllocFromSlab2(cmn.DefaultBufSize)
-		if _, hash, err = cmn.ReadWriteWithHash(f, ioutil.Discard, buf); err != nil {
+		if _, hash, err = cmn.WriteWithHash(ioutil.Discard, f, buf); err != nil {
 			return nil, err
 		}
 		slab.Free(buf)

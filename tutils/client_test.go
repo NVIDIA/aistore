@@ -6,8 +6,6 @@ package tutils_test
 
 import (
 	"bufio"
-	"encoding/binary"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -250,12 +248,10 @@ func TestMain(m *testing.M) {
 		}
 
 		hasher.Write(data)
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, uint64(hasher.Sum64()))
-		hash := hex.EncodeToString(b)
-		v := r.Header.Get(cmn.HeaderObjCksumVal)
-		if hash != v {
-			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", v, hash))
+		cksum := cmn.HashToStr(hasher)
+		headerCksum := r.Header.Get(cmn.HeaderObjCksumVal)
+		if cksum != headerCksum {
+			errf(http.StatusNotAcceptable, fmt.Sprintf("Hash mismatch expected = %s, actual = %s", headerCksum, cksum))
 		}
 	}))
 	defer server.Close()

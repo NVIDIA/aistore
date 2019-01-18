@@ -6,8 +6,6 @@
 package tutils
 
 import (
-	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"math/rand"
@@ -98,9 +96,7 @@ func copyRandWithHash(w io.Writer, size int64, withHash bool, rnd *rand.Rand) (s
 		rem -= int64(m)
 	}
 	if withHash {
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
-		shash = hex.EncodeToString(b)
+		shash = cmn.HashToStr(h)
 	}
 	return shash, nil
 }

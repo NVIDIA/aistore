@@ -6,8 +6,6 @@ package cmn
 
 import (
 	"bytes"
-	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -30,6 +28,8 @@ const (
 	MiB = 1024 * KiB
 	GiB = 1024 * MiB
 	TiB = 1024 * GiB
+
+	DefaultBufSize = 32 * KiB
 )
 
 var toBiBytes = map[string]int64{
@@ -235,8 +235,6 @@ func (f *SizedReader) Size() int64 {
 	return f.size
 }
 
-const DefaultBufSize = 32 * KiB
-
 // CreateDir creates directory if does not exists. Does not return error when
 // directory already exists.
 func CreateDir(dir string) error {
@@ -333,66 +331,39 @@ func SaveReaderSafe(tmpfqn, fqn string, reader io.Reader, buf []byte, size ...in
 	return nil
 }
 
-// ReadWriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
+// WriteWithHash reads data from an io.Reader, writes data to an io.Writer and computes
 // xxHash on the data.
-func ReadWriteWithHash(r io.Reader, w io.Writer, buf []byte) (int64, string, error) {
-	var (
-		total int64
-	)
-	if buf == nil {
-		buf = make([]byte, DefaultBufSize)
-	}
-
+func WriteWithHash(w io.Writer, r io.Reader, buf []byte) (int64, string, error) {
 	h := xxhash.New64()
 	mw := io.MultiWriter(h, w)
-	for {
-		n, err := r.Read(buf)
-		total += int64(n)
-		if err != nil && err != io.EOF {
-			return 0, "", err
-		}
-
-		if n == 0 {
-			break
-		}
-
-		mw.Write(buf[:n])
-	}
-
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(h.Sum64()))
-	return total, hex.EncodeToString(b), nil
+	total, err := io.CopyBuffer(mw, r, buf)
+	return total, HashToStr(h), err
 }
 
-func ReceiveAndChecksum(filewriter io.Writer, rrbody io.Reader,
-	buf []byte, hashes ...hash.Hash) (written int64, err error) {
+func ReceiveAndChecksum(w io.Writer, r io.Reader, buf []byte, hashes ...hash.Hash) (written int64, err error) {
 	var writer io.Writer
 	if len(hashes) == 0 {
-		writer = filewriter
+		writer = w
 	} else {
-		hashwriters := make([]io.Writer, len(hashes)+1)
+		writers := make([]io.Writer, len(hashes)+1)
 		for i, h := range hashes {
-			hashwriters[i] = h.(io.Writer)
+			writers[i] = h
 		}
-		hashwriters[len(hashes)] = filewriter
-		writer = io.MultiWriter(hashwriters...)
+		writers[len(hashes)] = w
+		writer = io.MultiWriter(writers...)
 	}
-	written, err = io.CopyBuffer(writer, rrbody, buf)
+	written, err = io.CopyBuffer(writer, r, buf)
 	return
 }
 
 func ComputeXXHash(reader io.Reader, buf []byte) (csum string, errstr string) {
 	var err error
-	var xx hash.Hash64 = xxhash.New64()
+	var xx hash.Hash = xxhash.New64()
 	_, err = io.CopyBuffer(xx.(io.Writer), reader, buf)
 	if err != nil {
 		return "", fmt.Sprintf("Failed to copy buffer, err: %v", err)
 	}
-	hashIn64 := xx.Sum64()
-	hashInBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(hashInBytes, hashIn64)
-	csum = hex.EncodeToString(hashInBytes)
-	return csum, ""
+	return HashToStr(xx), ""
 }
 
 //===========================================================================

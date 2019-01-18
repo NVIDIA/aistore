@@ -10,8 +10,6 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -34,7 +32,6 @@ import (
 	"github.com/NVIDIA/dfcpub/fs"
 	"github.com/NVIDIA/dfcpub/memsys"
 	"github.com/NVIDIA/dfcpub/tutils"
-	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -703,7 +700,11 @@ func getAndCopyTmp(proxyURL string, id int, keynames <-chan string, t *testing.T
 }
 
 func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url string) (written int64, failed bool) {
-	var errstr string
+	var (
+		errstr   string
+		cksumVal string
+	)
+
 	t.Logf("Worker %2d: GET %q", id, url)
 	resp, err := http.Get(url)
 	if err == nil && resp == nil {
@@ -746,23 +747,18 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 		}
 	}()
 	if hdhashtype == cmn.ChecksumXXHash {
-		xx := xxhash.New64()
-		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil, xx)
+		written, cksumVal, err = cmn.WriteWithHash(file, resp.Body, nil)
 		if err != nil {
 			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
 			failed = true
 			return
 		}
-		hashIn64 := xx.Sum64()
-		hashInBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(hashInBytes, uint64(hashIn64))
-		hash := hex.EncodeToString(hashInBytes)
-		if hdhash != hash {
-			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, cmn.ChecksumXXHash, hdhash, hash)
+		if hdhash != cksumVal {
+			t.Errorf("Worker %2d: header's %s %s doesn't match the file's %s", id, cmn.ChecksumXXHash, hdhash, cksumVal)
 			failed = true
 			return
 		}
-		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, cmn.ChecksumXXHash, hdhash, hash)
+		tutils.Logf("Worker %2d: header's %s checksum %s matches the file's %s\n", id, cmn.ChecksumXXHash, hdhash, cksumVal)
 	} else if hdhashtype == cmn.ChecksumMD5 {
 		md5 := md5.New()
 		written, err = cmn.ReceiveAndChecksum(file, resp.Body, nil, md5)
@@ -770,8 +766,7 @@ func getAndCopyOne(id int, t *testing.T, errCh chan error, bucket, keyname, url 
 			t.Errorf("Worker %2d: failed to write file, err: %v", id, err)
 			return
 		}
-		hashInBytes := md5.Sum(nil)[:16]
-		md5hash := hex.EncodeToString(hashInBytes)
+		md5hash := cmn.HashToStr(md5)[:16]
 		if errstr != "" {
 			t.Errorf("Worker %2d: failed to compute %s, err: %s", id, cmn.ChecksumMD5, errstr)
 			failed = true
