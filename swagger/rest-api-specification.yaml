@@ -1064,7 +1064,7 @@ components:
       enum: [ais, aws, gcp]
     Headers:
       type: string
-      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, Version, Size, HEADEROBJCKSUMTYPE, HEADEROBJCKSUMVAL]
+      enum: [CloudProvider, Versioning, NextTierURL, ReadPolicy, WritePolicy, ObjVersion, ObjSize, ObjCksumType, ObjCksumVal]
     RWPolicy:
       type: string
       enum: [cloud, next_tier]

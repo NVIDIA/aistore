@@ -55,10 +55,10 @@ class TestObjectApi(unittest.TestCase):
     def test_object_headers(self):
         object_name, _ = self.__put_random_object()
         headers = self.object.get_with_http_info(self.BUCKET_NAME, object_name)[2]
-        self.assertTrue(self.models.Headers.HEADEROBJCKSUMTYPE in headers,
+        self.assertTrue(self.models.Headers.OBJCKSUMTYPE in headers,
                         "ChecksumType not in header for [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
-        self.assertTrue(headers[self.models.Headers.HEADEROBJCKSUMVAL] ,
+        self.assertTrue(headers[self.models.Headers.OBJCKSUMVAL] ,
                         "ChecksumVal is None or empty [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
 
@@ -188,10 +188,10 @@ class TestObjectApi(unittest.TestCase):
         log.info("HEAD local object [%s/%s]", bucket_name, object_name)
         headers = self.object.get_properties_with_http_info(
             bucket_name, object_name)[2]
-        self.assertTrue(self.models.Headers.SIZE in headers,
+        self.assertTrue(self.models.Headers.OBJSIZE in headers,
                         "Size not in header for [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
-        self.assertTrue(self.models.Headers.VERSION in headers,
+        self.assertTrue(self.models.Headers.OBJVERSION in headers,
                         "Version not in header for [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
 

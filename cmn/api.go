@@ -104,8 +104,8 @@ const (
 	HeaderObjCksumVal     = "ObjCksumVal"  // Checksum Value
 	HeaderObjAtime        = "ObjAtime"     // Object access time
 	HeaderObjReplicSrc    = "ObjReplicSrc" // In replication PUT request specifies the source target
-	HeaderObjSize         = "size"         // Object size (bytes)
-	HeaderObjVersion      = "version"      // Object version/generation - local or Cloud
+	HeaderObjSize         = "ObjSize"      // Object size (bytes)
+	HeaderObjVersion      = "ObjVersion"   // Object version/generation - local or Cloud
 	HeaderBucketECEnabled = "ECEnabled"    // EC is on for a bucket
 	HeaderBucketECMinSize = "ECMinSize"    // Objects under MinSize copied instead of being EC'ed
 	HeaderBucketECData    = "ECData"       // number of data chunks for EC

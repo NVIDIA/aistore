@@ -4,7 +4,7 @@
 """
     AIS
 
-    AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
+    AIS is a scalable object-storage based caching system with Amazon and Google Cloud backends.  # noqa: E501
 
     OpenAPI spec version: 1.1.0
     Contact: dfcdev@exchange.nvidia.com
