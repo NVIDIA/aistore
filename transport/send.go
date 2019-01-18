@@ -491,6 +491,17 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 		return s.sendHdr(b)
 	// control stream lifesycle at object boundaries
 	case <-s.time.idle.C:
+		select {
+		// next object
+		case obj, ok := <-s.workCh:
+			if ok {
+				s.sendoff.obj = obj
+				s.time.idle.Stop()
+				l := s.insHeader(s.sendoff.obj.hdr)
+				s.header = s.maxheader[:l]
+				return s.sendHdr(b)
+			}
+		}
 		err = io.EOF
 		num := atomic.LoadInt64(&s.stats.Num)
 		glog.Warningf("%s: timed out (%d/%d)", s, s.Numcur, num)

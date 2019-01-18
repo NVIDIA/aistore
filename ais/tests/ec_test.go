@@ -227,6 +227,35 @@ func randObjectSize(rnd *rand.Rand, n, every int) (
 	return
 }
 
+func calculateSlicesCount(slices map[string]int64) map[string]int {
+	calc := make(map[string]int, len(slices))
+	for k, _ := range slices {
+		o := filepath.Base(k)
+		if n, ok := calc[o]; ok {
+			calc[o] = n + 1
+		} else {
+			calc[o] = 1
+		}
+	}
+	return calc
+}
+
+func compareSlicesCount(t *testing.T, orig, found map[string]int) {
+	for k, v := range orig {
+		if fnd, ok := found[k]; !ok {
+			t.Errorf("%s - no files found", k)
+		} else if fnd != v {
+			t.Errorf("Object %s must have %d files, found %d", k, v, fnd)
+		}
+	}
+	for k, v := range found {
+		if _, ok := orig[k]; !ok {
+			t.Errorf("%s - should not exist (%d files found)", k, v)
+			continue
+		}
+	}
+}
+
 // Short test to make sure that EC options cannot be changed after
 // EC is enabled
 func TestECPropsChange(t *testing.T) {
@@ -750,6 +779,11 @@ func TestECExtraStress(t *testing.T) {
 	tutils.CheckFatal(err, t)
 	started := time.Now()
 
+	type sCnt struct {
+		obj string
+		cnt int
+	}
+	cntCh := make(chan sCnt, objCount)
 	wg := &sync.WaitGroup{}
 	wg.Add(objCount)
 	for idx := 0; idx < objCount; idx++ {
@@ -774,6 +808,7 @@ func TestECExtraStress(t *testing.T) {
 			}
 
 			atomic.AddInt64(&totalSlices, int64(totalCnt))
+			cntCh <- sCnt{obj: objName, cnt: totalCnt}
 
 			<-semaphore
 			wg.Done()
@@ -781,6 +816,7 @@ func TestECExtraStress(t *testing.T) {
 	}
 
 	wg.Wait()
+	close(cntCh)
 
 	var foundParts map[string]int64
 	fullPath := fmt.Sprintf("local/%s/%s", TestLocalBucketName, ecTestDir)
@@ -796,6 +832,13 @@ func TestECExtraStress(t *testing.T) {
 		time.Sleep(time.Millisecond * 30)
 	}
 	if len(foundParts) != int(totalSlices) {
+		slices := make(map[string]int, objCount)
+		for sl := range cntCh {
+			slices[sl.obj] = sl.cnt
+		}
+		fndSlices := calculateSlicesCount(foundParts)
+		compareSlicesCount(t, slices, fndSlices)
+
 		t.Fatalf("Expected total number of files: %d, found: %d\n",
 			totalSlices, len(foundParts))
 	}
