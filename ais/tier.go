@@ -72,7 +72,9 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn strin
 		resp.Body.Close()
 		return
 	}
-	_, props.Nhobj, props.Size, errstr = t.receive(fqn, props, "", resp.Body)
+	if err = t.receive(fqn, resp.Body, props, ""); err != nil {
+		errstr = err.Error()
+	}
 	resp.Body.Close()
 	return
 }

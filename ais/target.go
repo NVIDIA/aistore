@@ -1548,6 +1548,7 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (rlom 
 		glog.Infof("Found %s at %s", lom, neighsi)
 	}
 
+	// FIXME: this code below looks like a general code for sending request
 	geturl := fmt.Sprintf("%s%s?%s=%t", neighsi.PublicNet.DirectURL, r.URL.Path, cmn.URLParamLocal, lom.Bislocal)
 	//
 	// http request
@@ -1572,20 +1573,23 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (rlom 
 		htype   = response.Header.Get(cmn.HeaderObjCksumType)
 		hksum   = cmn.NewCksum(htype, hval)
 		version = response.Header.Get(cmn.HeaderObjVersion)
-		getfqn  = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
+		workFQN = fs.CSM.GenContentParsedFQN(lom.ParsedFQN, fs.WorkfileType, fs.WorkfileRemote)
 	)
+
+	// FIXME: Similarly to the Fill(...) we could have: Clone(...) were we would specify what needs to be cloned.
 	rlom = &cluster.LOM{}
 	*rlom = *lom
 	rlom.Nhobj = hksum
 	rlom.Version = version
-	if _, lom.Nhobj, lom.Size, errstr = t.receive(getfqn, rlom, "", response.Body); errstr != "" { // FIXME: transfer atime as well
+	if err = t.receive(workFQN, response.Body, rlom, ""); err != nil { // FIXME: transfer atime as well
 		response.Body.Close()
+		errstr = err.Error()
 		return
 	}
 	response.Body.Close()
 	// commit
-	if err = cmn.MvFile(getfqn, rlom.Fqn); err != nil {
-		glog.Errorln(err)
+	if err = cmn.MvFile(workFQN, rlom.Fqn); err != nil {
+		errstr = err.Error()
 		return
 	}
 	if errstr = rlom.Persist(); errstr != "" {
@@ -2196,10 +2200,6 @@ func (roi *recvObjInfo) init() error {
 }
 
 func (roi *recvObjInfo) recv() (err error, errCode int) {
-	var (
-		errstr string
-	)
-
 	cmn.Assert(roi.lom != nil)
 
 	// optimize out if the checksums do match
@@ -2214,14 +2214,13 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	}
 	roi.lom.Nhobj = roi.cksumVal
 
-	if _, roi.lom.Nhobj, roi.lom.Size, errstr = roi.t.receive(roi.workFQN, roi.lom, "", roi.r); errstr != "" {
-		return errors.New(errstr), http.StatusInternalServerError
+	if err = roi.t.receive(roi.workFQN, roi.r, roi.lom, ""); err != nil {
+		return err, http.StatusInternalServerError
 	}
 
 	// commit
 	if !dryRun.disk && !dryRun.network {
-		errstr, errCode := roi.commit()
-		if errstr != "" {
+		if errstr, errCode := roi.commit(); errstr != "" {
 			return errors.New(errstr), errCode
 		}
 	}
@@ -2863,14 +2862,16 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 // xxhash is always preferred over md5
 //
 //==============================================================================================
-func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
-	reader io.Reader) (sgl *memsys.SGL /* NIY */, nhobj cmn.CksumValue, written int64, errstr string) {
+
+// NOTE: LOM is updated on the end of the call with proper size and checksum.
+func (t *targetrunner) receive(workFQN string, reader io.Reader, lom *cluster.LOM, omd5 string) (err error) {
 	var (
-		err        error
 		file       *os.File
-		filewriter = ioutil.Discard
-		nhval      string
+		fileWriter = ioutil.Discard
+		written    int64
+		nhobj      cmn.CksumValue
 	)
+
 	if dryRun.disk && dryRun.network {
 		return
 	}
@@ -2878,39 +2879,33 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 		reader = readers.NewRandReader(dryRun.size)
 	}
 	if !dryRun.disk {
-		if file, err = cmn.CreateFile(workfqn); err != nil {
-			t.fshc(err, workfqn)
-			errstr = fmt.Sprintf("Failed to create %s, err: %s", workfqn, err)
-			return
+		if file, err = cmn.CreateFile(workFQN); err != nil {
+			t.fshc(err, workFQN)
+			return fmt.Errorf("Failed to create %s, err: %s", workFQN, err)
 		}
-		filewriter = file
+		fileWriter = file
 	}
 
 	buf, slab := gmem2.AllocFromSlab2(0)
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
-		if errstr == "" {
-			return
-		}
-		if !dryRun.disk {
-			if err = file.Close(); err != nil {
-				glog.Errorf("Nested: failed to close received file %s, err: %v", workfqn, err)
+
+		// Update LOM structure
+		lom.Size = written
+		lom.Nhobj = nhobj
+
+		if err != nil && !dryRun.disk {
+			if nestedErr := file.Close(); nestedErr != nil {
+				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, workFQN, nestedErr)
 			}
-			if err = os.Remove(workfqn); err != nil {
-				glog.Errorf("Nested error %s => (remove %s => err: %v)", errstr, workfqn, err)
+			if nestedErr := os.Remove(workFQN); nestedErr != nil {
+				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, workFQN, nestedErr)
 			}
 		}
 	}()
 
 	if dryRun.disk || dryRun.network {
-		if written, err = cmn.ReceiveAndChecksum(filewriter, reader, buf); err != nil {
-			errstr = err.Error()
-		}
-		if !dryRun.disk {
-			if err = file.Close(); err != nil {
-				errstr = fmt.Sprintf("Failed to close received file %s, err: %v", workfqn, err)
-			}
-		}
+		written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf)
 		return
 	}
 
@@ -2918,48 +2913,41 @@ func (t *targetrunner) receive(workfqn string, lom *cluster.LOM, omd5 string,
 	if lom.Cksumcfg.Checksum != cmn.ChecksumNone {
 		cmn.Assert(lom.Cksumcfg.Checksum == cmn.ChecksumXXHash)
 		xx := xxhash.New64()
-		if written, err = cmn.ReceiveAndChecksum(filewriter, reader, buf, xx); err != nil {
-			errstr = err.Error()
-			t.fshc(err, workfqn)
+		if written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf, xx); err != nil {
+			t.fshc(err, workFQN)
 			return
 		}
-		hashIn64 := xx.Sum64()
-		hashInBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(hashInBytes, hashIn64)
-		nhval = hex.EncodeToString(hashInBytes)
-		nhobj = cmn.NewCksum(cmn.ChecksumXXHash, nhval)
+		nhobj = cmn.NewCksumU64(cmn.ChecksumXXHash, xx.Sum64())
 		if lom.Nhobj != nil {
 			if !cmn.EqCksum(nhobj, lom.Nhobj) {
-				errstr = fmt.Sprintf("%s work %q", lom.BadChecksum(nhobj), workfqn)
+				err = fmt.Errorf("%s; workFQN: %q", lom.BadChecksum(nhobj), workFQN)
 				t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 				return
 			}
 		}
 	} else if omd5 != "" && lom.Cksumcfg.ValidateColdGet {
 		md5 := md5.New()
-		if written, err = cmn.ReceiveAndChecksum(filewriter, reader, buf, md5); err != nil {
-			errstr = err.Error()
-			t.fshc(err, workfqn)
+		if written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf, md5); err != nil {
+			t.fshc(err, workFQN)
 			return
 		}
 		hashInBytes := md5.Sum(nil)[:16]
-		md5hash := hex.EncodeToString(hashInBytes)
-		if omd5 != md5hash {
-			errstr = fmt.Sprintf("Bad md5: %s %s != %s work %q", lom, omd5, md5hash, workfqn)
+		md5Hash := hex.EncodeToString(hashInBytes)
+		if omd5 != md5Hash {
+			err = fmt.Errorf("Bad md5: %s; [%s != %s] workFQN: %q", lom, omd5, md5Hash, workFQN)
 			t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}
 	} else {
-		if written, err = cmn.ReceiveAndChecksum(filewriter, reader, buf); err != nil {
-			errstr = err.Error()
-			t.fshc(err, workfqn)
+		if written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf); err != nil {
+			t.fshc(err, workFQN)
 			return
 		}
 	}
-	if err = file.Close(); err != nil {
-		errstr = fmt.Sprintf("Failed to close received file %s, err: %v", workfqn, err)
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("Failed to close received file %s, err: %v", workFQN, err)
 	}
-	return
+	return nil
 }
 
 //==============================================================================

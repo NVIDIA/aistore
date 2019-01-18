@@ -87,8 +87,8 @@ func (lom *LOM) RestoredReceived(props *LOM) {
 func (lom *LOM) Exists() bool     { return !lom.DoesNotExist }
 func (lom *LOM) LRUenabled() bool { return lom.Bucketmd.LRUenabled(lom.Bucket) }
 func (lom *LOM) Misplaced() bool  { return lom.HrwFQN != lom.Fqn && !lom.IsCopy() }         // misplaced (subj to rebalancing)
-func (lom *LOM) IsCopy() bool     { return lom.CopyFQN != "" && lom.CopyFQN == lom.HrwFQN } // is a
-func (lom *LOM) HasCopy() bool    { return lom.CopyFQN != "" && lom.Fqn == lom.HrwFQN }     // has one
+func (lom *LOM) IsCopy() bool     { return lom.CopyFQN != "" && lom.CopyFQN == lom.HrwFQN } // is a mirrored copy of an object
+func (lom *LOM) HasCopy() bool    { return lom.CopyFQN != "" && lom.Fqn == lom.HrwFQN }     // has one mirrored copy
 
 //
 // local replica management

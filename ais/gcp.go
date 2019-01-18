@@ -338,7 +338,7 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (gcpimpl *gcpimpl) getobj(ct context.Context, workfqn string, bucket string, objname string) (lom *cluster.LOM, errstr string, errcode int) {
+func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var v cmn.CksumValue
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
@@ -363,8 +363,9 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workfqn string, bucket string
 	if errstr = lom.Fill(0); errstr != "" {
 		return
 	}
-	if _, lom.Nhobj, lom.Size, errstr = gcpimpl.t.receive(workfqn, lom, md5, rc); errstr != "" {
+	if err = gcpimpl.t.receive(workFQN, rc, lom, md5); err != nil {
 		rc.Close()
+		errstr = err.Error()
 		return
 	}
 	if glog.V(4) {

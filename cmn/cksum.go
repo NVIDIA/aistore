@@ -4,6 +4,11 @@
  */
 package cmn
 
+import (
+	"encoding/binary"
+	"encoding/hex"
+)
+
 //
 // typed checksum value
 //
@@ -34,6 +39,12 @@ func NewCksum(kind string, val string) CksumValue {
 	}
 	Assert(kind == ChecksumMD5)
 	return Cksumvalmd5{kind, val}
+}
+
+func NewCksumU64(kind string, hash uint64) CksumValue {
+	hashInBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(hashInBytes, hash)
+	return NewCksum(kind, hex.EncodeToString(hashInBytes))
 }
 
 func EqCksum(a, b CksumValue) bool {

@@ -347,7 +347,7 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 // object data operations
 //
 //=======================
-func (awsimpl *awsimpl) getobj(ct context.Context, workfqn, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
+func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
 	var v cmn.CksumValue
 	sess := createSession(ct)
 	svc := s3.New(sess)
@@ -381,8 +381,9 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workfqn, bucket, objname stri
 	if errstr = lom.Fill(0); errstr != "" {
 		return
 	}
-	if _, lom.Nhobj, lom.Size, errstr = awsimpl.t.receive(workfqn, lom, md5, obj.Body); errstr != "" {
+	if err := awsimpl.t.receive(workFQN, obj.Body, lom, md5); err != nil {
 		obj.Body.Close()
+		errstr = err.Error()
 		return
 	}
 	if glog.V(4) {
