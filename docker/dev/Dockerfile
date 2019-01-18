@@ -49,7 +49,7 @@ COPY dfc.json $CONFFILE
 
 EXPOSE 8080 9080 10080
 
-ENV VERSION `git describe --tags`
+ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
 RUN echo "\
 cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/dfc.go \n \

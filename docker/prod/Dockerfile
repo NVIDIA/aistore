@@ -41,7 +41,7 @@ RUN cd $GOPATH/src/github.com/NVIDIA &&\
     git reset --hard $HASH
 WORKDIR $WORKDIR
 
-ENV VERSION `git describe --tags`
+ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
 RUN go install -tags="${CLD}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
 

@@ -178,7 +178,7 @@ source $DIR/authn.sh
 # -alsologtostderr=false	 # Logs are written to standard error and files
 # -stderrthreshold=ERROR	 # Log errors and above are written to stderr and files
 # build
-VERSION=`git describe --tags`
+VERSION=`git rev-parse --short HEAD`
 BUILD=`date +%FT%T%z`
 
 if [ "$ENABLE_CODE_COVERAGE" == "" ]

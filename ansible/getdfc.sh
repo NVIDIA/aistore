@@ -11,7 +11,7 @@ if [ ! -z $1 ]; then
     git checkout $1
 fi
 
-VERSION=`git describe --tags`
+VERSION=`git rev-parse --short HEAD`
 BUILD=`date +%FT%T%z`
 echo "Cloud provider set to: ${CLDPROVIDER}"
 GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
