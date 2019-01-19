@@ -8,12 +8,20 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
+)
+
+const (
+	httpMaxRetries = 5                     // maximum number of retries for an HTTP request
+	httpRetrySleep = 30 * time.Millisecond // a sleep between HTTP request retries
 )
 
 // GetObjectInput is used to hold optional parameters for GetObject and GetObjectWithValidation
@@ -204,7 +212,32 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 	if len(replicateOpts) > 0 {
 		req.Header.Set(cmn.HeaderObjReplicSrc, replicateOpts[0].SourceURL)
 	}
+
 	resp, err := baseParams.Client.Do(req)
+	if err != nil {
+		// TODO: experimental. Some tests that do high load on server fail with
+		// 'broken pipe'. Retry helps but we need to make it more generic than
+		// just fixing tests. First, we need to be sure that we catch the
+		// correct error and retry here help. If it helps, the code block
+		// below will be removed, as well as all Printf's
+		{
+			fmt.Printf("Request failed with error: %v (%T)\n", err, err)
+			if nerr, ok := err.(*net.OpError); ok {
+				fmt.Printf("  The internal error is: %v (%T)\n", nerr.Err, nerr.Err)
+			}
+			if serr, ok := err.(*os.SyscallError); ok {
+				fmt.Printf("  The internal error is: %v (%T)\n", serr.Err, serr.Err)
+			}
+		}
+		if cmn.ShouldRetry(err) {
+			for i := 0; i < httpMaxRetries && err != nil; i++ {
+				time.Sleep(httpRetrySleep)
+				fmt.Printf("   retrying %d...\n", i+1)
+				resp, err = baseParams.Client.Do(req)
+			}
+		}
+	}
+
 	if err != nil {
 		return fmt.Errorf("Failed to %s, err: %v", http.MethodPut, err)
 	}

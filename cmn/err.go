@@ -63,6 +63,20 @@ func IsIOError(err error) bool {
 	}
 }
 
+// Check if the request should be retried after a server returned an error.
+// The code is partially borrowed from go-<version>/src/os/pipe_test.go and
+// added conversion from net.OpError
+func ShouldRetry(err error) bool {
+	if nerr, ok := err.(*net.OpError); ok {
+		err = nerr.Err
+	}
+	if serr, ok := err.(*os.SyscallError); ok {
+		err = serr.Err
+	}
+
+	return err == syscall.EPIPE
+}
+
 //===========================================================================
 //
 // Common errors reusable in API or client

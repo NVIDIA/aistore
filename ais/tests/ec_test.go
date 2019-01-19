@@ -30,6 +30,7 @@ const (
 	ecDataDir  = "/" + fs.ObjectType + "/"
 	ecWorkDir  = "/" + fs.WorkfileType + "/"
 	ecLogDir   = "/log/"
+	ecLocalDir = "/local/"
 	ecTestDir  = "ec-test/"
 
 	ECPutTimeOut = time.Minute * 4 // maximum wait time after PUT to be sure that the object is EC'ed/replicated
@@ -85,6 +86,7 @@ func ecGetAllLocalSlices(objDir, objName string) (map[string]int64, string) {
 		}
 		if info.IsDir() ||
 			strings.Contains(path, ecLogDir) ||
+			!strings.Contains(path, ecLocalDir) ||
 			strings.Contains(path, ecWorkDir) {
 			return nil
 		}
@@ -1133,6 +1135,21 @@ func TestECEmergencyTarget(t *testing.T) {
 	)
 	tutils.CheckFatal(err, t)
 
+	defer func() {
+		// Restore target
+		tutils.Logf("Reregistering target...\n")
+		err = tutils.RegisterTarget(proxyURL, removeTarget, smap)
+		tutils.CheckFatal(err, t)
+		smap, err = waitForPrimaryProxy(
+			proxyURL,
+			"to join target back",
+			smap.Version, testing.Verbose(),
+			len(smap.Pmap),
+			len(smap.Tmap)+1,
+		)
+		tutils.CheckFatal(err, t)
+	}()
+
 	// 3. Read objects
 	tutils.Logf("Reading all objects...")
 	getOneObj := func(idx int, objName string) {
@@ -1169,19 +1186,6 @@ func TestECEmergencyTarget(t *testing.T) {
 	if len(reslist.Entries) != numFiles {
 		t.Errorf("Invalid number of objects: %d, expected %d", len(reslist.Entries), numFiles)
 	}
-
-	// 5. Restore target
-	tutils.Logf("Reregistering target...\n")
-	err = tutils.RegisterTarget(proxyURL, removeTarget, smap)
-	tutils.CheckFatal(err, t)
-	smap, err = waitForPrimaryProxy(
-		proxyURL,
-		"to join target back",
-		smap.Version, testing.Verbose(),
-		len(smap.Pmap),
-		len(smap.Tmap)+1,
-	)
-	tutils.CheckFatal(err, t)
 }
 
 // Lost mountpah test:
@@ -1265,15 +1269,7 @@ func TestECEmergencyMpath(t *testing.T) {
 		defer r.Close()
 		tutils.CheckFatal(err, t)
 
-		// try PUT for a few times
-		for i := 0; i < 3; i++ {
-			err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
-			if err == nil {
-				break
-			}
-			tutils.Logf("Failed to PUT %s: %v. Retrying...\n", objName, err)
-			time.Sleep(50 * time.Millisecond)
-		}
+		err = api.PutObject(baseParams, TestLocalBucketName, objPath, "", r)
 		tutils.CheckFatal(err, t)
 
 		foundParts, mainObjPath := waitForECFinishes(totalCnt, objSize, sliceSize, doEC, fullPath, objName)
