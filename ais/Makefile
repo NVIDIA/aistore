@@ -3,7 +3,7 @@ SHELL := /bin/bash
 # Build version and flags
 VERSION := 1.0.0
 BUILD := `git rev-parse HEAD`
-LDFLAGS=-ldflags "-X=dfc.Version=$(VERSION) -X=dfc.Build=$(BUILD)"
+LDFLAGS=-ldflags "-X=main.version=$(VERSION) -X=main.build=$(BUILD)"
 
 REPOPATH=src/github.com/NVIDIA
 DEVPATH=src/gitlab-master.nvidia.com/aistorage/

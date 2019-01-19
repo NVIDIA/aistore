@@ -1,18 +1,18 @@
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
 package main
 
 import (
-	"fmt"
-
 	"github.com/NVIDIA/dfcpub/ais"
 )
 
-// NOTE: these variables are set by ldflags in `deploy.sh`
+// NOTE: these variables are set by ldflags
 var (
 	version string
 	build   string
 )
 
 func main() {
-	fmt.Printf("version: %s | build_time: %s\n", version, build)
-	ais.Run()
+	ais.Run(version, build)
 }

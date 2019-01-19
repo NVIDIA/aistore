@@ -172,7 +172,7 @@ func dryinit() {
 // daemon init & run
 //
 //==================
-func dfcinit() {
+func dfcinit(version, build string) {
 	var err error
 
 	flag.Parse()
@@ -191,6 +191,7 @@ func dfcinit() {
 	if err := cmn.LoadConfig(clivars.conffile, clivars.statstime, clivars.proxyurl, clivars.loglevel); err != nil {
 		glog.Fatalf("Failed to initialize, config %q, err: %v", clivars.conffile, err)
 	}
+	glog.Infof("version: %s | build_time: %s\n", version, build)
 
 	// init daemon
 	fs.Mountpaths = fs.NewMountedFS()
@@ -287,8 +288,8 @@ func dfcinit() {
 }
 
 // Run is the 'main' where everything gets started
-func Run() {
-	dfcinit()
+func Run(version, build string) {
+	dfcinit(version, build)
 	var ok bool
 
 	err := ctx.rg.run()
