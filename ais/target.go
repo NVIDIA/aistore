@@ -1010,11 +1010,11 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 			evict = (msg.Action == cmn.ActEvict)
 		}
 	} else if err != nil {
-		s := fmt.Sprintf("fildelete: Failed to read %s request, err: %v", r.Method, err)
+		s := fmt.Sprintf("objDelete: Failed to read %s request, err: %v", r.Method, err)
 		if err == io.EOF {
 			trailer := r.Trailer.Get("Error")
 			if trailer != "" {
-				s = fmt.Sprintf("fildelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
+				s = fmt.Sprintf("objDelete: Failed to read %s request, err: %v, trailer: %s", r.Method, err, trailer)
 			}
 		}
 		t.invalmsghdlr(w, r, s)
@@ -1027,7 +1027,7 @@ func (t *targetrunner) httpobjdelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err := t.fildelete(t.contextWithAuth(r), bucket, objname, evict)
+		err := t.objDelete(t.contextWithAuth(r), bucket, objname, evict)
 		if err != nil {
 			s := fmt.Sprintf("Error deleting %s/%s: %v", bucket, objname, err)
 			t.invalmsghdlr(w, r, s)
@@ -2353,7 +2353,7 @@ func (t *targetrunner) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 	t.statsif.AddMany(stats.NamedVal64{stats.RxCount, 1}, stats.NamedVal64{stats.RxSize, hdr.ObjAttrs.Size})
 }
 
-func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evict bool) error {
+func (t *targetrunner) objDelete(ct context.Context, bucket, objname string, evict bool) error {
 	var (
 		errstr  string
 		errcode int
@@ -2375,12 +2375,18 @@ func (t *targetrunner) fildelete(ct context.Context, bucket, objname string, evi
 		t.statsif.Add(stats.DeleteCount, 1)
 	}
 
-	_ = lom.Fill(cluster.LomFstat) // ignore fstat errors
+	_ = lom.Fill(cluster.LomFstat | cluster.LomCopy) // ignore fstat errors
 	if lom.DoesNotExist {
 		return nil
 	}
 	if !(evict && lom.Bislocal) {
 		// Don't evict from a local bucket (this would be deletion)
+		if lom.HasCopy() {
+			if errstr := lom.DelCopy(); errstr != "" {
+				return errors.New(errstr)
+			}
+		}
+
 		if err := os.Remove(lom.Fqn); err != nil {
 			return err
 		} else if evict {

@@ -17,7 +17,7 @@ import (
 	"github.com/NVIDIA/dfcpub/cluster"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/stats"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -122,7 +122,7 @@ func (t *targetrunner) doListEvictDelete(ct context.Context, evict bool, objs []
 		if !absdeadline.IsZero() && time.Now().After(absdeadline) {
 			continue
 		}
-		err := t.fildelete(ct, bucket, objname, evict)
+		err := t.objDelete(ct, bucket, objname, evict)
 		if err != nil {
 			return err
 		}
