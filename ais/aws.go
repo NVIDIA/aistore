@@ -28,10 +28,8 @@ import (
 )
 
 const (
-	awsPutAisHashType = "x-amz-meta-ais-hash-type"
-	awsPutAisHashVal  = "x-amz-meta-ais-hash-val"
-	awsGetAisHashType = "X-Amz-Meta-Ais-Hash-Type"
-	awsGetAisHashVal  = "X-Amz-Meta-Ais-Hash-Val"
+	awsChecksumType   = "x-amz-meta-ais-cksum-type"
+	awsChecksumVal    = "x-amz-meta-ais-cksum-val"
 	awsMultipartDelim = "-"
 	awsMaxPageSize    = 1000
 )
@@ -348,7 +346,11 @@ func (awsimpl *awsimpl) headobject(ct context.Context, bucket string, objname st
 //
 //=======================
 func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname string) (lom *cluster.LOM, errstr string, errcode int) {
-	var v cmn.CksumValue
+	var (
+		cksum        cmn.CksumValue
+		cksumToCheck cmn.CksumValue
+	)
+
 	sess := createSession(ct)
 	svc := s3.New(sess)
 	obj, err := svc.GetObject(&s3.GetObjectInput{
@@ -361,51 +363,54 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname stri
 		return
 	}
 	// may not have ais metadata
-	if htype, ok := obj.Metadata[awsGetAisHashType]; ok {
-		if hval, ok := obj.Metadata[awsGetAisHashVal]; ok {
-			v = cmn.NewCksum(*htype, *hval)
+	if htype, ok := obj.Metadata[awsChecksumType]; ok {
+		if hval, ok := obj.Metadata[awsChecksumVal]; ok {
+			cksum = cmn.NewCksum(*htype, *hval)
 		}
 	}
+
 	md5, _ := strconv.Unquote(*obj.ETag)
 	// FIXME: multipart
-	if strings.Contains(md5, awsMultipartDelim) {
-		if glog.V(3) {
-			glog.Infof("Warning: multipart object %s/%s - not validating checksum %s", bucket, objname, md5)
-		}
-		md5 = ""
+	if !strings.Contains(md5, awsMultipartDelim) {
+		cksumToCheck = cmn.NewCksum(cmn.ChecksumMD5, md5)
 	}
-	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Nhobj: v}
+
+	lom = &cluster.LOM{T: awsimpl.t, Bucket: bucket, Objname: objname, Nhobj: cksum}
 	if obj.VersionId != nil {
 		lom.Version = *obj.VersionId
 	}
 	if errstr = lom.Fill(0); errstr != "" {
 		return
 	}
-	if err := awsimpl.t.receive(workFQN, obj.Body, lom, md5); err != nil {
-		obj.Body.Close()
+	roi := &recvObjInfo{
+		t:            awsimpl.t,
+		cold:         true,
+		r:            obj.Body,
+		cksumToCheck: cksumToCheck,
+		lom:          lom,
+		workFQN:      workFQN,
+	}
+	if err := roi.writeToFile(); err != nil {
 		errstr = err.Error()
 		return
 	}
 	if glog.V(4) {
 		glog.Infof("GET %s/%s", bucket, objname)
 	}
-	obj.Body.Close()
 	return
 }
 
 func (awsimpl *awsimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cmn.CksumValue) (version string, errstr string, errcode int) {
 	var (
 		err          error
-		htype, hval  string
-		md           map[string]*string
 		uploadoutput *s3manager.UploadOutput
 	)
-	if ohash != nil {
-		htype, hval = ohash.Get()
-		md = make(map[string]*string)
-		md[awsPutAisHashType] = aws.String(htype)
-		md[awsPutAisHashVal] = aws.String(hval)
-	}
+
+	htype, hval := ohash.Get()
+	md := make(map[string]*string)
+	md[awsChecksumType] = aws.String(htype)
+	md[awsChecksumVal] = aws.String(hval)
+
 	sess := createSession(ct)
 	uploader := s3manager.NewUploader(sess)
 	uploadoutput, err = uploader.Upload(&s3manager.UploadInput{

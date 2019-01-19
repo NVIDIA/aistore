@@ -42,7 +42,7 @@ func (t *targetrunner) objectInNextTier(nextTierURL, bucket, objname string) (in
 	return
 }
 
-func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn string) (props *cluster.LOM, errstr string, errcode int) {
+func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn string) (lom *cluster.LOM, errstr string, errcode int) {
 	var url = nextTierURL + cmn.URLPath(cmn.Version, cmn.Objects, bucket, objname)
 
 	resp, err := t.httprunner.httpclientLongTimeout.Get(url)
@@ -67,12 +67,20 @@ func (t *targetrunner) getObjectNextTier(nextTierURL, bucket, objname, fqn strin
 		return
 	}
 
-	props = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
-	if errstr = props.Fill(0); errstr != "" {
+	lom = &cluster.LOM{T: t, Bucket: bucket, Objname: objname}
+	if errstr = lom.Fill(0); errstr != "" {
 		resp.Body.Close()
 		return
 	}
-	if err = t.receive(fqn, resp.Body, props, ""); err != nil {
+	// TODO: we should send atime, checksum and version
+	roi := &recvObjInfo{
+		t:       t,
+		workFQN: fqn,
+		cold:    true,
+		r:       resp.Body,
+		lom:     lom,
+	}
+	if err = roi.writeToFile(); err != nil {
 		errstr = err.Error()
 	}
 	resp.Body.Close()

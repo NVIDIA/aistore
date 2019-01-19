@@ -299,6 +299,10 @@ type CksumConf struct {
 	// is removed from local storage
 	ValidateWarmGet bool `json:"validate_checksum_warm_get"`
 
+	// ValidateClusterMigration determines if the migrated objects across single cluster
+	// should have their checksum validated.
+	ValidateClusterMigration bool `json:"validate_cluster_migration"`
+
 	// EnableReadRangeChecksum: Return read range checksum otherwise return entire object checksum
 	EnableReadRangeChecksum bool `json:"enable_read_range_checksum"`
 }

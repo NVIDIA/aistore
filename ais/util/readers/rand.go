@@ -26,8 +26,9 @@ type randReader struct {
 }
 
 var (
-	_ io.Reader   = &randReader{}
-	_ io.WriterTo = &randReader{}
+	_ io.ReadCloser = &randReader{}
+	_ io.WriterTo   = &randReader{}
+	_ io.Seeker     = &randReader{}
 )
 
 // Read implements the io.Reader interface.
@@ -50,6 +51,13 @@ func (r *randReader) Read(buf []byte) (int, error) {
 
 	r.offset += want
 	return int(want), nil
+}
+
+func (r *randReader) Close() error {
+	r.size = 0
+	r.offset = 0
+	r.buf = nil
+	return nil
 }
 
 // WriteTo implements the io.WriterTo interface.

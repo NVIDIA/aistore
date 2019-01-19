@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net"
@@ -42,6 +43,7 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/stats/statsd"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/OneOfOne/xxhash"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -102,11 +104,19 @@ type (
 		// Determines if the object was already in cluster and was received
 		// because some kind of migration.
 		migrated bool
-		r        io.Reader       // reader of the object
-		cksumVal cmn.CksumValue  // checksum value of the object
-		ctx      context.Context // context used when receiving object which is contained in cloud bucket
+		// Determines if the recv is cold recv: either from another cluster or cloud.
+		cold bool
 
-		// internal
+		// Reader with the content of the object.
+		r io.ReadCloser
+		// Checksum which needs to be checked on receive. It is only checked
+		// on specific occasions: see `writeToFile` method.
+		cksumToCheck cmn.CksumValue
+		// Context used when receiving object which is contained in cloud bucket.
+		// It usually contains credentials to access the cloud.
+		ctx context.Context
+
+		// INTERNAL
 
 		// FQN which is used only temporarily for receiving file. After
 		// successful receive is renamed to actual FQN.
@@ -1587,12 +1597,19 @@ func (t *targetrunner) getFromNeighbor(r *http.Request, lom *cluster.LOM) (rlom 
 	*rlom = *lom
 	rlom.Nhobj = hksum
 	rlom.Version = version
-	if err = t.receive(workFQN, response.Body, rlom, ""); err != nil { // FIXME: transfer atime as well
-		response.Body.Close()
+
+	roi := &recvObjInfo{
+		t:        t,
+		workFQN:  workFQN,
+		migrated: true,
+		r:        response.Body,
+		lom:      rlom,
+	}
+
+	if err = roi.writeToFile(); err != nil { // FIXME: transfer atime as well
 		errstr = err.Error()
 		return
 	}
-	response.Body.Close()
 	// commit
 	if err = cmn.MvFile(workFQN, rlom.Fqn); err != nil {
 		errstr = err.Error()
@@ -2141,18 +2158,18 @@ func (ci *allfinfos) listwalkf(fqn string, osfi os.FileInfo, err error) error {
 // In both case a new checksum is saved to xattrs
 func (t *targetrunner) doPut(r *http.Request, bucket, objname string) (err error, errcode int) {
 	var (
-		cksumType = r.Header.Get(cmn.HeaderObjCksumType)
-		cksum     = r.Header.Get(cmn.HeaderObjCksumVal)
-		cksumVal  = cmn.NewCksum(cksumType, cksum)
+		cksumType  = r.Header.Get(cmn.HeaderObjCksumType)
+		cksumValue = r.Header.Get(cmn.HeaderObjCksumVal)
+		cksum      = cmn.NewCksum(cksumType, cksumValue)
 	)
 
 	roi := &recvObjInfo{
-		t:        t,
-		objname:  objname,
-		bucket:   bucket,
-		ctx:      t.contextWithAuth(r),
-		r:        r.Body,
-		cksumVal: cksumVal,
+		t:            t,
+		objname:      objname,
+		bucket:       bucket,
+		r:            r.Body,
+		cksumToCheck: cksum,
+		ctx:          t.contextWithAuth(r),
 	}
 	if err := roi.init(); err != nil {
 		return err, http.StatusInternalServerError
@@ -2199,7 +2216,7 @@ func (roi *recvObjInfo) init() error {
 
 	// All objects which are migrated should contain checksum.
 	if roi.migrated {
-		cmn.Assert(roi.cksumVal != nil)
+		cmn.Assert(roi.cksumToCheck != nil)
 	}
 
 	return nil
@@ -2211,16 +2228,15 @@ func (roi *recvObjInfo) recv() (err error, errCode int) {
 	// optimize out if the checksums do match
 	if roi.lom.Exists() {
 		if errstr := roi.lom.Fill(cluster.LomCksum); errstr == "" {
-			if cmn.EqCksum(roi.lom.Nhobj, roi.cksumVal) {
+			if cmn.EqCksum(roi.lom.Nhobj, roi.cksumToCheck) {
 				glog.Infof("Existing %s is valid: PUT is a no-op", roi.lom)
 				io.Copy(ioutil.Discard, roi.r) // drain the reader
 				return nil, 0
 			}
 		}
 	}
-	roi.lom.Nhobj = roi.cksumVal
 
-	if err = roi.t.receive(roi.workFQN, roi.r, roi.lom, ""); err != nil {
+	if err = roi.writeToFile(); err != nil {
 		return err, http.StatusInternalServerError
 	}
 
@@ -2270,6 +2286,7 @@ func (roi *recvObjInfo) tryCommit() (errstr string, errCode int) {
 			errstr = fmt.Sprintf("Failed to open %s err: %v", roi.workFQN, err)
 			return
 		} else {
+			cmn.Assert(roi.lom.Nhobj != nil)
 			roi.lom.Version, errstr, errCode = getcloudif().putobj(roi.ctx, file, roi.lom.Bucket, roi.lom.Objname, roi.lom.Nhobj)
 			file.Close()
 			if errstr != "" {
@@ -2339,12 +2356,12 @@ func (t *targetrunner) recvRebalanceObj(w http.ResponseWriter, hdr transport.Hea
 	}
 
 	roi := &recvObjInfo{
-		t:        t,
-		objname:  hdr.Objname,
-		bucket:   hdr.Bucket,
-		r:        objReader,
-		migrated: true,
-		cksumVal: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.Cksum),
+		t:            t,
+		objname:      hdr.Objname,
+		bucket:       hdr.Bucket,
+		migrated:     true,
+		r:            ioutil.NopCloser(objReader),
+		cksumToCheck: cmn.NewCksum(hdr.ObjAttrs.CksumType, hdr.ObjAttrs.Cksum),
 	}
 	if err := roi.init(); err != nil {
 		glog.Error(err)
@@ -2876,13 +2893,12 @@ func (t *targetrunner) httpdaedelete(w http.ResponseWriter, r *http.Request) {
 //==============================================================================================
 
 // NOTE: LOM is updated on the end of the call with proper size and checksum.
-func (t *targetrunner) receive(workFQN string, reader io.Reader, lom *cluster.LOM, omd5 string) (err error) {
+// NOTE: `roi.r` is closed on the end of the call.
+func (roi *recvObjInfo) writeToFile() (err error) {
 	var (
-		file       *os.File
-		fileWriter = ioutil.Discard
-		written    int64
-		cksumVal   string
-		nhobj      cmn.CksumValue
+		file   *os.File
+		writer = ioutil.Discard
+		reader = roi.r
 	)
 
 	if dryRun.disk && dryRun.network {
@@ -2892,72 +2908,90 @@ func (t *targetrunner) receive(workFQN string, reader io.Reader, lom *cluster.LO
 		reader = readers.NewRandReader(dryRun.size)
 	}
 	if !dryRun.disk {
-		if file, err = cmn.CreateFile(workFQN); err != nil {
-			t.fshc(err, workFQN)
-			return fmt.Errorf("Failed to create %s, err: %s", workFQN, err)
+		if file, err = cmn.CreateFile(roi.workFQN); err != nil {
+			roi.t.fshc(err, roi.workFQN)
+			return fmt.Errorf("Failed to create %s, err: %s", roi.workFQN, err)
 		}
-		fileWriter = file
+		writer = file
 	}
 
 	buf, slab := gmem2.AllocFromSlab2(0)
 	defer func() { // free & cleanup on err
 		slab.Free(buf)
-
-		// Update LOM structure
-		lom.Size = written
-		lom.Nhobj = nhobj
+		reader.Close()
 
 		if err != nil && !dryRun.disk {
 			if nestedErr := file.Close(); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, workFQN, nestedErr)
+				glog.Errorf("Nested (%v): failed to close received object %s, err: %v", err, roi.workFQN, nestedErr)
 			}
-			if nestedErr := os.Remove(workFQN); nestedErr != nil {
-				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, workFQN, nestedErr)
+			if nestedErr := os.Remove(roi.workFQN); nestedErr != nil {
+				glog.Errorf("Nested (%v): failed to remove %s, err: %v", err, roi.workFQN, nestedErr)
 			}
 		}
 	}()
 
 	if dryRun.disk || dryRun.network {
-		written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf)
-		return
+		_, err = cmn.ReceiveAndChecksum(writer, reader, buf)
+		return err
 	}
 
 	// receive and checksum
-	if lom.Cksumcfg.Checksum != cmn.ChecksumNone {
-		cmn.Assert(lom.Cksumcfg.Checksum == cmn.ChecksumXXHash)
-		if written, cksumVal, err = cmn.WriteWithHash(fileWriter, reader, buf); err != nil {
-			t.fshc(err, workFQN)
-			return
-		}
-		nhobj = cmn.NewCksum(cmn.ChecksumXXHash, cksumVal)
-		if lom.Nhobj != nil {
-			if !cmn.EqCksum(nhobj, lom.Nhobj) {
-				err = fmt.Errorf("%s; workFQN: %q", lom.BadChecksum(nhobj), workFQN)
-				t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
-				return
-			}
-		}
-	} else if omd5 != "" && lom.Cksumcfg.ValidateColdGet {
-		md5 := md5.New()
-		if written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf, md5); err != nil {
-			t.fshc(err, workFQN)
-			return
-		}
+	var (
+		written int64
 
-		md5Hash := cmn.HashToStr(md5)[:16]
-		if omd5 != md5Hash {
-			err = fmt.Errorf("Bad md5: %s; [%s != %s] workFQN: %q", lom, omd5, md5Hash, workFQN)
-			t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
-			return
+		checkCksumType      string
+		expectedCksum       cmn.CksumValue
+		saveHash, checkHash hash.Hash
+		hashes              []hash.Hash
+	)
+
+	if !roi.cold && roi.lom.Cksumcfg.Checksum != cmn.ChecksumNone && (!roi.migrated || roi.lom.Cksumcfg.ValidateClusterMigration) {
+		checkCksumType = roi.lom.Cksumcfg.Checksum
+		cmn.Assert(checkCksumType == cmn.ChecksumXXHash, checkCksumType)
+
+		saveHash = xxhash.New64()
+		hashes = []hash.Hash{saveHash}
+
+		// if sender provided checksum we need to ensure that it is correct
+		if expectedCksum = roi.cksumToCheck; expectedCksum != nil {
+			checkHash = saveHash
 		}
-	} else {
-		if written, err = cmn.ReceiveAndChecksum(fileWriter, reader, buf); err != nil {
-			t.fshc(err, workFQN)
+	} else if roi.cold {
+		// by default we should calculate xxhash and save it together with file
+		saveHash = xxhash.New64()
+		hashes = []hash.Hash{saveHash}
+
+		// if configured and the cksum is provied we should also check md5 hash (aws, gcp)
+		if roi.lom.Cksumcfg.ValidateColdGet && roi.cksumToCheck != nil {
+			expectedCksum = roi.cksumToCheck
+			checkCksumType, _ = expectedCksum.Get()
+			cmn.Assert(checkCksumType == cmn.ChecksumMD5, checkCksumType)
+
+			checkHash = md5.New()
+			hashes = append(hashes, checkHash)
+		}
+	}
+
+	if written, err = cmn.ReceiveAndChecksum(writer, reader, buf, hashes...); err != nil {
+		roi.t.fshc(err, roi.workFQN)
+		return
+	}
+	roi.lom.Size = written
+
+	if checkHash != nil {
+		computedCksum := cmn.NewCksum(checkCksumType, cmn.HashToStr(checkHash))
+		if !cmn.EqCksum(expectedCksum, computedCksum) {
+			err = fmt.Errorf("Bad checksum expected %s, got: %s; workFQN: %q", expectedCksum.String(), computedCksum.String(), roi.workFQN)
+			roi.t.statsif.AddMany(stats.NamedVal64{stats.ErrCksumCount, 1}, stats.NamedVal64{stats.ErrCksumSize, written})
 			return
 		}
 	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("Failed to close received file %s, err: %v", workFQN, err)
+	if saveHash != nil {
+		roi.lom.Nhobj = cmn.NewCksum(cmn.ChecksumXXHash, cmn.HashToStr(saveHash))
+	}
+
+	if err = file.Close(); err != nil {
+		return fmt.Errorf("Failed to close received file %s, err: %v", roi.workFQN, err)
 	}
 	return nil
 }

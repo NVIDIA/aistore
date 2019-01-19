@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,8 +30,8 @@ import (
 )
 
 const (
-	gcpAisHashType = "x-goog-meta-ais-hash-type"
-	gcpAisHashVal  = "x-goog-meta-ais-hash-val"
+	gcpChecksumType = "x-goog-meta-ais-cksum-type"
+	gcpChecksumVal  = "x-goog-meta-ais-cksum-val"
 
 	gcpPageSize = 1000
 )
@@ -339,7 +340,6 @@ func (gcpimpl *gcpimpl) headobject(ct context.Context, bucket string, objname st
 //
 //=======================
 func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string, objname string) (lom *cluster.LOM, errstr string, errcode int) {
-	var v cmn.CksumValue
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
@@ -351,45 +351,48 @@ func (gcpimpl *gcpimpl) getobj(ct context.Context, workFQN string, bucket string
 		errstr = fmt.Sprintf("Failed to retrieve %s/%s metadata, err: %v", bucket, objname, err)
 		return
 	}
-	v = cmn.NewCksum(attrs.Metadata[gcpAisHashType], attrs.Metadata[gcpAisHashVal])
-	md5 := hex.EncodeToString(attrs.MD5)
+
+	cksum := cmn.NewCksum(attrs.Metadata[gcpChecksumType], attrs.Metadata[gcpChecksumVal])
+	cksumToCheck := cmn.NewCksum(cmn.ChecksumMD5, hex.EncodeToString(attrs.MD5))
+
 	rc, err := o.NewReader(gctx)
 	if err != nil {
 		errstr = fmt.Sprintf("The object %s/%s either %s or is not accessible, err: %v", bucket, objname, cmn.DoesNotExist, err)
 		return
 	}
 	// hashtype and hash could be empty for legacy objects.
-	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Nhobj: v, Version: fmt.Sprintf("%d", attrs.Generation)}
+	lom = &cluster.LOM{T: gcpimpl.t, Bucket: bucket, Objname: objname, Nhobj: cksum, Version: strconv.FormatInt(attrs.Generation, 10)}
 	if errstr = lom.Fill(0); errstr != "" {
 		return
 	}
-	if err = gcpimpl.t.receive(workFQN, rc, lom, md5); err != nil {
-		rc.Close()
+	roi := &recvObjInfo{
+		t:            gcpimpl.t,
+		cold:         true,
+		r:            rc,
+		cksumToCheck: cksumToCheck,
+		lom:          lom,
+		workFQN:      workFQN,
+	}
+
+	if err = roi.writeToFile(); err != nil {
 		errstr = err.Error()
 		return
 	}
 	if glog.V(4) {
 		glog.Infof("GET %s/%s", bucket, objname)
 	}
-	rc.Close()
 	return
 }
 
-func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, ohash cmn.CksumValue) (version string, errstr string, errcode int) {
-	var (
-		htype, hval string
-		md          cmn.SimpleKVs
-	)
+func (gcpimpl *gcpimpl) putobj(ct context.Context, file *os.File, bucket, objname string, cksum cmn.CksumValue) (version string, errstr string, errcode int) {
 	gcpclient, gctx, _, errstr := createClient(ct)
 	if errstr != "" {
 		return
 	}
-	if ohash != nil {
-		htype, hval = ohash.Get()
-		md = make(cmn.SimpleKVs)
-		md[gcpAisHashType] = htype
-		md[gcpAisHashVal] = hval
-	}
+
+	md := make(cmn.SimpleKVs)
+	md[gcpChecksumType], md[gcpChecksumVal] = cksum.Get()
+
 	gcpObj := gcpclient.Bucket(bucket).Object(objname)
 	wc := gcpObj.NewWriter(gctx)
 	wc.Metadata = md
