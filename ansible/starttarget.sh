@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
-sudo /home/ubuntu/dfc/bin/dfc -config=/home/ubuntu/dfc.json -role=target &
-if ! ps -C dfc -o pid= ; then
+sudo /home/ubuntu/ais/bin/ais -config=/home/ubuntu/ais.json -role=target &
+if ! ps -C ais -o pid= ; then
 	echo target started on host `hostname`
 else
 	echo failed to start target on host `hostname`

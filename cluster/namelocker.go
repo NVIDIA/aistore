@@ -12,7 +12,7 @@ package cluster
 // Objects are locked by their unique (string) names aka unames.
 // The lock can be exclusive (write) or shared (read).
 //
-// For implementation, please refer to dfc/rtnames.go
+// For implementation, please refer to ais/rtnames.go
 
 type NameLocker interface {
 	TryLock(uname string, exclusive bool) bool

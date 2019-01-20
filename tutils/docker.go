@@ -15,7 +15,7 @@ import (
 
 //For container naming
 const (
-	prefixStr = "dfc"
+	prefixStr = "ais"
 	proxyStr  = "_proxy_"
 	targetStr = "_target_"
 	pattern   = "^\"" + prefixStr + "[0-9]+" + proxyStr + "[1-9]+\"$" //Checking '_proxy_' should suffice
@@ -91,7 +91,7 @@ func ClusterCount() int {
 	lines := strings.Split(string(bytes), "\n")
 	for _, line := range lines {
 		if len(line) > len("\""+prefixStr+"i_") && strings.HasPrefix(line, "\""+prefixStr) {
-			// container names have the prefix dfci_ where i is the ith ais cluster
+			// container names have the prefix aisi_ where i is the ith ais cluster
 			m[line[:len("\""+prefixStr+"i_")]]++
 		}
 	}

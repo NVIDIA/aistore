@@ -250,15 +250,15 @@ func TestLsblk(t *testing.T) {
 				{"name": "xvdf", "size": "1.8T", "type": "disk", "mountpoint": null},
 				{"name": "xvdh", "size": "1.8T", "type": "disk", "mountpoint": null},
 				{"name": "xvdi", "size": "1.8T", "type": "disk", "mountpoint": null},
-				{"name": "xvdl", "size": "100G", "type": "disk", "mountpoint": "/dfc/xvdl"},
+				{"name": "xvdl", "size": "100G", "type": "disk", "mountpoint": "/ais/xvdl"},
 				{"name": "xvdy", "mountpoint": null, "fstype": "linux_raid_member",
 					"children": [
-						{"name": "md2", "mountpoint": "/dfc/3", "fstype": "xfs"}
+						{"name": "md2", "mountpoint": "/ais/3", "fstype": "xfs"}
 					]
 				},
 				{"name": "xvdz", "mountpoint": null, "fstype": "linux_raid_member",
 					"children": [
-						{"name": "md2", "mountpoint": "/dfc/3", "fstype": "xfs"}
+						{"name": "md2", "mountpoint": "/ais/3", "fstype": "xfs"}
 					]
 				}
 			]

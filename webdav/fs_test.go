@@ -235,7 +235,7 @@ func cmpFileInfos(t *testing.T, act []os.FileInfo, exp []os.FileInfo) {
 }
 
 const (
-	rootDir        = "/tmp/dfc"
+	rootDir        = "/tmp/ais"
 	bucket         = "webdavTestBucket"
 	bucketFullName = "/" + bucket + "/"
 	dir            = "dir"

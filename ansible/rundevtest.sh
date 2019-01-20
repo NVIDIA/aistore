@@ -1,10 +1,10 @@
 #!/bin/bash
 set -o xtrace
-source /etc/profile.d/dfcpaths.sh
+source /etc/profile.d/aispaths.sh
 source aws.env
-for dfcpid in `ps -C dfc -o pid=`; do echo Stopping AIS $dfcpid; sudo kill $dfcpid; done
-sudo rm -rf /home/ubuntu/.dfc*
-rm -rf /tmp/dfc*
+for aispid in `ps -C ais -o pid=`; do echo Stopping AIS $aispid; sudo kill $aispid; done
+sudo rm -rf /home/ubuntu/.ais*
+rm -rf /tmp/ais*
 cd $AISSRC
 if [ ! -z $1 ]; then
     echo Git checkout branch $1
@@ -20,15 +20,15 @@ setup/deploy.sh -loglevel=3 -statstime=10s <<< $'4\n3\n2\n1'
 
 echo sleep 10 seconds before checking AIS process
 sleep 10
-dfcprocs=$(ps -C dfc -o pid= | wc -l)
-echo number of dfcprocs $dfcprocs
-if [ $dfcprocs -lt 7 ]; then
-    echo dfc did not start properly
+aisprocs=$(ps -C ais -o pid= | wc -l)
+echo number of aisprocs $aisprocs
+if [ $aisprocs -lt 7 ]; then
+    echo ais did not start properly
     exit 1
 fi
 
 echo Working with AIS build
-grep -r Build /tmp/dfc | head -1
+grep -r Build /tmp/ais | head -1
 
 cd ../
 cdir=$(pwd)
@@ -40,7 +40,7 @@ BUCKET=devtestcloud go test -v -p 1 -count 1 -timeout 60m ./...
 cloudExitStatus=$?
 echo devtest exit status $cloudExitStatus
 
-for dfcpid in `ps -C dfc -o pid=`; do echo Stopping AIS $dfcpid; sudo kill $dfcpid; done
+for aispid in `ps -C ais -o pid=`; do echo Stopping AIS $aispid; sudo kill $aispid; done
 result=0
 if [ $cloudExitStatus -ne 0 ]; then
     echo DevTests failed

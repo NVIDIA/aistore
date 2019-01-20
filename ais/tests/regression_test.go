@@ -1,10 +1,8 @@
+// Package ais_test contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dfc_test provides distributed file-based cache with Amazon and Google Cloud backends.
-package dfc_test
+package ais_test
 
 import (
 	"bytes"
@@ -48,7 +46,7 @@ type regressionTestData struct {
 }
 
 const (
-	rootDir = "/tmp/dfc"
+	rootDir = "/tmp/ais"
 
 	TestLocalBucketName   = "TESTLOCALBUCKET"
 	RenameLocalBucketName = "renamebucket"

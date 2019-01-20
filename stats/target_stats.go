@@ -195,7 +195,7 @@ func (r *Trunner) removeLogs(maxtotal uint64) {
 		glog.Errorf("GC logs: cannot read log dir %s, err: %v", config.Log.Dir, err)
 		return // ignore error
 	}
-	// sample name dfc.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
+	// sample name ais.ip-10-0-2-19.root.log.INFO.20180404-031540.2249
 	var logtypes = []string{".INFO.", ".WARNING.", ".ERROR."}
 	for _, logtype := range logtypes {
 		var (

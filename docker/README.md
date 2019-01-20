@@ -126,7 +126,7 @@ $docker ps -a
 
 To view docker logs, use `docker logs <container_name>`. Example:
 ```
-    $docker logs dfc0_proxy_1
+    $docker logs ais0_proxy_1
 
     I 21:23:56.400794 metasync.go:142] Starting metasyncer
     I 21:24:06.415473 stats.go:422] {"err.n":0,"get.n":0,"del.n":0,"get.μs":0,"kalive.μs":0,"err.get.n":0,"err.list.n":0,"pst.n":0,"ren.n":0,
@@ -151,7 +151,7 @@ Note:
     $docker exec -it CONTAINER_NAME /bin/bash
 ```
 Note:
-* In production mode, the logs are expected to be in `/var/log/dfc/`.By default (development mode) the logs are under `tmp/dfc/log`
+* In production mode, the logs are expected to be in `/var/log/ais/`.By default (development mode) the logs are under `tmp/ais/log`
 * The `docker/dev` directory has a script named `container_shell.sh` that does the same thing
 
 ### List Docker Images
@@ -159,10 +159,10 @@ Note:
     $docker image ls
 
     REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
-    dfc1_proxy          latest              ced2cbd2ff2f        27 minutes ago      676MB
-    dfc1_target         latest              ced2cbd2ff2f        27 minutes ago      676MB
-    dfc0_proxy          latest              4c3fbcb54e4d        27 minutes ago      676MB
-    dfc0_target         latest              4c3fbcb54e4d        27 minutes ago      676MB
+    ais1_proxy          latest              ced2cbd2ff2f        27 minutes ago      676MB
+    ais1_target         latest              ced2cbd2ff2f        27 minutes ago      676MB
+    ais0_proxy          latest              4c3fbcb54e4d        27 minutes ago      676MB
+    ais0_target         latest              4c3fbcb54e4d        27 minutes ago      676MB
 ```
 
 ### List Docker Networks
@@ -171,12 +171,12 @@ Note:
 
     NETWORK ID          NAME                    DRIVER              SCOPE
     cb05b22edcb3        bridge                  bridge              local
-    86517bef938d        dfc0_internal_control   bridge              local
-    51f49b56fe57        dfc0_internal_data      bridge              local
-    2cee0651aa72        dfc0_public             bridge              local
-    e11635deb15d        dfc1_internal_control   bridge              local
-    9eefba13018f        dfc1_internal_data      bridge              local
-    674fee80acac        dfc1_public             bridge              local
+    86517bef938d        ais0_internal_control   bridge              local
+    51f49b56fe57        ais0_internal_data      bridge              local
+    2cee0651aa72        ais0_public             bridge              local
+    e11635deb15d        ais1_internal_control   bridge              local
+    9eefba13018f        ais1_internal_data      bridge              local
+    674fee80acac        ais1_public             bridge              local
 ```
 
 ### Start a Container

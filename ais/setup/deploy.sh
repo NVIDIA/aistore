@@ -11,9 +11,9 @@
 #	show "coverage: x.y% of statements" for each process, this indicates the proper termination and
 #	successful creation of coverage data for one process.
 # 2. run: make code-coverage
-#	this will generate dfc_cov.html file under /tmp/dfc
+#	this will generate ais_cov.html file under /tmp/ais
 # 3. view the result
-#	open /tmp/dfc/dfc_cov.html in a browser
+#	open /tmp/ais/ais_cov.html in a browser
 #
 # To deploy AIStore as a next tier cluster to the *already running*
 # AIStore cluster set DEPLOY_AS_NEXT_TIER=1.
@@ -52,7 +52,7 @@ if $USE_HTTPS; then
 	PROXYURL="https://localhost:$PORT"
 fi
 LOGLEVEL=${LOGLEVEL:-3} # Verbosity: 0 (minimal) to 4 (max)
-LOGROOT="/tmp/dfc$NEXT_TIER"
+LOGROOT="/tmp/ais$NEXT_TIER"
 #### Authentication setup #########
 SECRETKEY="${SECRETKEY:-aBitLongSecretKey}"
 AUTHENABLED="${AUTHENABLED:-false}"
@@ -66,14 +66,14 @@ MIRROR_ENABLED=false
 # existence of each fspath is checked at runtime
 #
 ###################################
-CONFDIR="$HOME/.dfc$NEXT_TIER"
+CONFDIR="$HOME/.ais$NEXT_TIER"
 TESTFSPATHCOUNT=1
 
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
 	echo "Error: TCP port $PORT is not open (check if AIStore is already running)"
 	exit 1
 fi
-TMPF=$(mktemp /tmp/dfc$NEXT_TIER.XXXXXXXXX)
+TMPF=$(mktemp /tmp/ais$NEXT_TIER.XXXXXXXXX)
 touch $TMPF;
 OS=$(uname -s)
 case $OS in
@@ -157,9 +157,9 @@ CONFFILE_STATSD=$CONFDIR/statsd.conf
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 for (( c=$START; c<=$END; c++ ))
 do
-	CONFDIR="$HOME/.dfc$NEXT_TIER$c"
+	CONFDIR="$HOME/.ais$NEXT_TIER$c"
 	mkdir -p $CONFDIR
-	CONFFILE="$CONFDIR/dfc.json"
+	CONFFILE="$CONFDIR/ais.json"
 	LOGDIR="$LOGROOT/$c/log"
 	source $DIR/config.sh
 	((PORT++))
@@ -168,7 +168,7 @@ do
 done
 
 # conf file for authn
-CONFDIR="$HOME/.dfc$NEXT_TIER"
+CONFDIR="$HOME/.ais$NEXT_TIER"
 CONFFILE="$CONFDIR/authn.json"
 LOGDIR="$LOGROOT/authn/log"
 source $DIR/authn.sh
@@ -183,11 +183,11 @@ BUILD=`date +%FT%T%z`
 
 if [ "$ENABLE_CODE_COVERAGE" == "" ]
 then
-	EXE=$GOPATH/bin/dfc
-	GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
+	EXE=$GOPATH/bin/ais
+	GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
 else
 	echo "Note: code test-coverage enabled!"
-	EXE=$GOPATH/bin/dfc_coverage.test
+	EXE=$GOPATH/bin/ais_coverage.test
 	rm $LOGROOT/*.cov
 	go test . -c -run=TestCoverage -v -o $EXE -cover
 fi
@@ -203,8 +203,8 @@ fi
 # run proxy and storage targets
 for (( c=$START; c<=$END; c++ ))
 do
-	CONFDIR="$HOME/.dfc$NEXT_TIER$c"
-	CONFFILE="$CONFDIR/dfc.json"
+	CONFDIR="$HOME/.ais$NEXT_TIER$c"
+	CONFFILE="$CONFDIR/ais.json"
 
 	PROXY_PARAM="-config=$CONFFILE -role=proxy -ntargets=$servcount $1 $2"
 	TARGET_PARAM="-config=$CONFFILE -role=target $1 $2"
@@ -212,7 +212,7 @@ do
 	then
 		CMD=$EXE
 	else
-		CMD="$EXE -coverageTest -test.coverprofile dfc$c.cov -test.outputdir $LOGROOT"
+		CMD="$EXE -coverageTest -test.coverprofile ais$c.cov -test.outputdir $LOGROOT"
 	fi
 
 	if [ $c -eq 0 ]
@@ -237,7 +237,7 @@ do
 done
 
 if [[ $AUTHENABLED = "true" ]]; then
-	CONFDIR="$HOME/.dfc$NEXT_TIER"
+	CONFDIR="$HOME/.ais$NEXT_TIER"
 	CONFFILE="$CONFDIR/authn.json"
 	set -x
 	$GOPATH/bin/authn -config=$CONFFILE &

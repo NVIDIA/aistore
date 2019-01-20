@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	gcpAisHashType = "x-goog-meta-dfc-hash-type"
-	gcpAisHashVal  = "x-goog-meta-dfc-hash-val"
+	gcpAisHashType = "x-goog-meta-ais-hash-type"
+	gcpAisHashVal  = "x-goog-meta-ais-hash-val"
 
 	gcpPageSize = 1000
 )

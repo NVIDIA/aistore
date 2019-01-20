@@ -1,8 +1,8 @@
+// Package ais_test contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-package dfc_test
+package ais_test
 
 import (
 	"flag"
@@ -15,26 +15,26 @@ import (
 )
 
 const (
-	baseDir                 = "/tmp/dfc"
-	LocalDestDir            = "/tmp/dfc/dest" // client-side download destination
-	LocalSrcDir             = "/tmp/dfc/src"  // client-side src directory for upload
+	baseDir                 = "/tmp/ais"
+	LocalDestDir            = "/tmp/ais/dest" // client-side download destination
+	LocalSrcDir             = "/tmp/ais/src"  // client-side src directory for upload
 	ColdValidStr            = "coldmd5"
 	ChksumValidStr          = "chksum"
 	ColdMD5str              = "coldmd5"
-	DeleteDir               = "/tmp/dfc/delete"
-	ChecksumWarmValidateDir = "/tmp/dfc/checksumWarmValidate"
+	DeleteDir               = "/tmp/ais/delete"
+	ChecksumWarmValidateDir = "/tmp/ais/checksumWarmValidate"
 	ChecksumWarmValidateStr = "checksumWarmValidate"
-	RangeGetDir             = "/tmp/dfc/rangeGet"
+	RangeGetDir             = "/tmp/ais/rangeGet"
 	RangeGetStr             = "rangeGet"
 	DeleteStr               = "delete"
-	SmokeDir                = "/tmp/dfc/smoke" // smoke test dir
+	SmokeDir                = "/tmp/ais/smoke" // smoke test dir
 	SmokeStr                = "smoke"
-	ReplicationDir          = "/tmp/dfc/replicationTest"
+	ReplicationDir          = "/tmp/ais/replicationTest"
 	ReplicationStr          = "replicationTest"
 	largefilesize           = 4                            // in MB
 	proxyURL                = "http://localhost:8080"      // the url for the cluster's proxy (local)
 	proxyURLNext            = "http://localhost:11080"     // the url for the next cluster's proxy (local)
-	dockerEnvFile           = "/tmp/docker_dfc/deploy.env" // filepath of Docker deployment config
+	dockerEnvFile           = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 )
 
 var (

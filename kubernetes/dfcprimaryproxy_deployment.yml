@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dfcprimaryproxy
+  name: aisprimaryproxy
 spec:
   selector:
     matchLabels:
-       app: dfcproxy-app
+       app: aisproxy-app
   replicas: 1
   template:
     metadata:
       labels:
-        app: dfcproxy-app
+        app: aisproxy-app
     spec:
       hostNetwork: true
       containers:
-      - name: dfcproxy
-        image: quay.io/nvidia/dfc
+      - name: aisproxy
+        image: quay.io/nvidia/ais
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -29,9 +29,9 @@ spec:
          - name: AIS_PRIMARYPROXY
            value: "TRUE"
         volumeMounts:
-         - name: dfc-config
-           mountPath: /etc/dfc/dfc.json
-           subPath: dfc.json
+         - name: ais-config
+           mountPath: /etc/ais/ais.json
+           subPath: ais.json
          - name: collectd-config
            mountPath: /etc/collectd/collectd.conf
            subPath: collectd.conf
@@ -40,18 +40,18 @@ spec:
            subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
-         - name: dfc-log
+         - name: ais-log
            mountPath: /tmp/
-         - name: dfc-localbucket
+         - name: ais-localbucket
            mountPath: /usr/nvidia/
         ports:
           - containerPort: 8081
       nodeSelector:
           nodename: proxy
       volumes:
-        - name: dfc-config
+        - name: ais-config
           configMap:
-            name: dfc-config
+            name: ais-config
         - name: collectd-config
           configMap:
             name: collectd-config
@@ -61,11 +61,11 @@ spec:
         - name: aws-credentials
           secret:
             secretName: aws-credentials
-        - name: dfc-log
+        - name: ais-log
           hostPath:
             path: /tmp
             type: Directory
-        - name: dfc-localbucket
+        - name: ais-localbucket
           hostPath:
             path: /usr/nvidia/
             type: Directory

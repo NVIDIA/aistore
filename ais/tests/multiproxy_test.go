@@ -1,8 +1,8 @@
+// Package ais_test contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-package dfc_test
+package ais_test
 
 import (
 	"fmt"
@@ -151,7 +151,6 @@ func primaryCrashElectRestart(t *testing.T) {
 		newPrimaryID, newPrimaryURL, oldPrimaryURL, smap.ProxySI.PublicNet.DaemonPort)
 	cmd, args, err := kill(smap.ProxySI.DaemonID, smap.ProxySI.PublicNet.DaemonPort)
 	// cmd and args are the original command line of how the proxy is started
-	// example: cmd = /Users/lid/go/bin/dfc, args = -config=/Users/lid/.dfc/dfc0.json -role=proxy -ntargets=3
 	tutils.CheckFatal(err, t)
 
 	smap, err = waitForPrimaryProxy(newPrimaryURL, "to designate new primary", smap.Version, testing.Verbose())
@@ -163,8 +162,6 @@ func primaryCrashElectRestart(t *testing.T) {
 	}
 
 	// re-construct the command line to start the original proxy but add the current primary proxy to the args
-	// example: cmd = /Users/lid/go/bin/dfc
-	//          args = -config=/Users/lid/.dfc/dfc0.json -role=proxy -ntargets=3 -proxyurl=http://10.112.76.36:8082
 	err = restore(cmd, args, false, "proxy (prev primary)")
 	tutils.CheckFatal(err, t)
 
@@ -878,7 +875,7 @@ func restore(cmd string, args []string, asPrimary bool, tag string) error {
 	return err
 }
 
-// getPID uses 'lsof' to find the pid of the dfc process listening on a port
+// getPID uses 'lsof' to find the pid of the ais process listening on a port
 func getPID(port string) (string, error) {
 	output, err := exec.Command("lsof", []string{"-sTCP:LISTEN", "-i", ":" + port}...).CombinedOutput()
 	if err != nil {
@@ -901,7 +898,7 @@ func getPID(port string) (string, error) {
 	return strings.Fields(lines[i+1])[1], nil
 }
 
-// getProcess finds the dfc process by 'lsof' using a port number, it finds the dfc process's
+// getProcess finds the ais process by 'lsof' using a port number, it finds the ais process's
 // original command line by 'ps', returns the command line for later to restart(restore) the process.
 func getProcess(port string) (string, string, []string, error) {
 	pid, err := getPID(port)

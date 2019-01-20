@@ -1,29 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dfctarget
+  name: aistarget
 spec:
   selector:
     matchLabels:
-      app: dfctarget-app
+      app: aistarget-app
   replicas: 1
   template:
     metadata:
       labels:
-        app: dfctarget-app
+        app: aistarget-app
     spec:
       hostNetwork: true
       containers:
-      - name: dfctarget
-        image: quay.io/nvidia/dfc
+      - name: aistarget
+        image: quay.io/nvidia/ais
         imagePullPolicy: Always
         env:
          - name: ROLE
            value: "target"
         volumeMounts:
-         - name: dfc-config
-           mountPath: /etc/dfc/dfc.json
-           subPath: dfc.json
+         - name: ais-config
+           mountPath: /etc/ais/ais.json
+           subPath: ais.json
          - name: collectd-config
            mountPath: /etc/collectd/collectd.conf
            subPath: collectd.conf
@@ -32,18 +32,18 @@ spec:
            subPath: statsd.conf
          - name: aws-credentials
            mountPath: /root/.aws/
-         - name: dfc-fs
+         - name: ais-fs
            mountPath: /usr/nvidia/data
-         - name: dfc-log
+         - name: ais-log
            mountPath: /tmp/
         ports:
           - containerPort: 8081
       nodeSelector:
           nodename: target
       volumes:
-        - name: dfc-config
+        - name: ais-config
           configMap:
-            name: dfc-config
+            name: ais-config
         - name: collectd-config
           configMap:
             name: collectd-config
@@ -53,11 +53,11 @@ spec:
         - name: aws-credentials
           secret:
             secretName: aws-credentials
-        - name: dfc-fs
+        - name: ais-fs
           hostPath:
-            path: /dfc
+            path: /ais
             type: Directory
-        - name: dfc-log
+        - name: ais-log
           hostPath:
             path: /tmp
             type: Directory

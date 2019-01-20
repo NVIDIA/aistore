@@ -41,7 +41,7 @@ func (m *BMD) LRUenabled(bucket string) bool {
 }
 
 // interface to Get current bucket-metadata instance
-// (for implementation, see dfc/bucketmeta.go)
+// (for implementation, see ais/bucketmeta.go)
 type Bowner interface {
 	Get() (bucketmd *BMD)
 }

@@ -26,10 +26,10 @@ This will skip some of the long-running tests and run instead all unit tests, pl
 
 To run individual tests:
 ```
-$ BUCKET=<bucket name> go test ./dfc/tests -v -p 1 -run=Regression
-$ BUCKET=<bucket name> go test ./dfc/tests -v -p 1 -run=GetAndRe
-$ BUCKET=<bucket name> go test ./dfc/tests -run=TestProxy/PrimaryCrash
-$ BUCKET=<bucket name> go test ./dfc/tests -v -run=smoke -numworkers=4
+$ BUCKET=<bucket name> go test ./ais/tests -v -p 1 -run=Regression
+$ BUCKET=<bucket name> go test ./ais/tests -v -p 1 -run=GetAndRe
+$ BUCKET=<bucket name> go test ./ais/tests -run=TestProxy/PrimaryCrash
+$ BUCKET=<bucket name> go test ./ais/tests -v -run=smoke -numworkers=4
 ```
 
 Note that, when running individual tests, more command line optons are available, for example: matching criteria, number of workers, etc.

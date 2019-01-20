@@ -1,5 +1,5 @@
-AIStore: storage for AI applications
-------------------------------------
+AIStore: scaleable storage for AI applications
+----------------------------------------------
 AIStore (AIS for short) is storage solution that is built from scratch and designed from ground up for large-scale AI applications. At the core of it's an open-source object storage with extensions and components tailored specifically for Deep Learning.
 
 AIStore cluster *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
@@ -67,7 +67,7 @@ All inter- and intra-cluster networking is HTTP/1.1 based. Users can connect to 
         - [Target Metrics](#target-metrics)
         - [Disk Metrics](#disk-metrics)
         - [Keepalive Metrics](#keepalive-metrics)
-        - [dfcloader Metrics](#dfcloader-metrics)
+        - [aisloader Metrics](#aisloader-metrics)
 - [Experimental](#experimental)
 	- [WebDAV](#webdav)
 	- [Multi-tiering](#multi-tiering)
@@ -122,8 +122,8 @@ If you've already installed [Go](https://golang.org/dl/), getting started with A
 
 ```shell
 $ cd $GOPATH/src
-$ go get -v github.com/NVIDIA/dfcpub/dfc
-$ cd github.com/NVIDIA/dfcpub/dfc
+$ go get -v github.com/NVIDIA/dfcpub/ais
+$ cd github.com/NVIDIA/dfcpub/ais
 $ make deploy
 $ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
 ```
@@ -165,11 +165,11 @@ The following sequence downloads up to 100 objects from the bucket called "myS3b
 ```shell
 $ cd $GOPATH/src/github.com/NVIDIA/dfcpub/ais/tests
 $ BUCKET=myS3bucket go test -v -run=down
-$ find /tmp/dfc -type f | grep local
-$ find /tmp/dfc -type f | grep cloud
+$ find /tmp/ais -type f | grep local
+$ find /tmp/ais -type f | grep cloud
 ```
 
-This, of course, assumes that all AIStore daemons are local and non-containerized (don't forget to run `make deploy` to make it happen) - and that the "test_fspaths" sections in their respective configurations point to the /tmp/dfc.
+This, of course, assumes that all AIStore daemons are local and non-containerized (don't forget to run `make deploy` to make it happen) - and that the "test_fspaths" sections in their respective configurations point to the /tmp/ais.
 
 To show all existing buckets, run:
 
@@ -430,7 +430,7 @@ Note that 'localhost' in the examples below is mostly intended for developers an
 | Create local bucket (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://localhost:8080/v1/buckets/abc` |
 | Destroy local bucket (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://localhost:8080/v1/buckets/abc` |
 | Rename local bucket (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' http://localhost:8080/v1/buckets/oldname` |
-| Set bucket props (proxy) | PUT {"action": "setprops"} /v1/buckets/bucket-name | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "cloud_provider": "dfc", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/abc'` |
+| Set bucket props (proxy) | PUT {"action": "setprops"} /v1/buckets/bucket-name | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "cloud_provider": "ais", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/abc'` |
 | Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
 | Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
@@ -625,8 +625,8 @@ The following Go code retrieves a list of all of object names from a named bucke
 // e.g. proxyurl: "http://localhost:8080"
 url := proxyurl + "/v1/buckets/" + bucket
 
-msg := &api.ActionMsg{Action: dfc.ActListObjects}
-fullbucketlist := &dfc.BucketList{Entries: make([]*dfc.BucketEntry, 0)}
+msg := &api.ActionMsg{Action: ais.ActListObjects}
+fullbucketlist := &ais.BucketList{Entries: make([]*ais.BucketEntry, 0)}
 for {
     // 1. First, send the request
     jsbytes, _ := json.Marshal(msg)
@@ -637,7 +637,7 @@ for {
     }(r)
 
     // 2. Unmarshal the response
-    pagelist := &dfc.BucketList{}
+    pagelist := &ais.BucketList{}
     respbytes, _ := ioutil.ReadAll(r.Body)
     _ = json.Unmarshal(respbytes, pagelist)
 
@@ -866,9 +866,9 @@ TODO
 
 ## Command-line Load Generator
 
-`dfcloader` is a command-line tool that is included with AIStore and that can be immediately used to generate load and evaluate cluster performance.
+`aisloader` is a command-line tool that is included with AIStore and that can be immediately used to generate load and evaluate cluster performance.
 
-For usage, run `$ dfcloader -help` or see [the source](cmd/dfcloader/main.go) for usage examples.
+For usage, run `$ aisloader -help` or see [the source](cmd/aisloader/main.go) for usage examples.
 
 ## Metrics with StatsD
 
@@ -882,46 +882,46 @@ All metric tags (or simply, metrics) are logged using the following pattern:
 
 `prefix.bucket.metric_name.metric_value|metric_type`,
 
-where `prefix` is one of: `dfcproxy.<daemon_id>`, `dfctarget.<daemon_id>`, or `dfcloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
+where `prefix` is one of: `aisproxy.<daemon_id>`, `aistarget.<daemon_id>`, or `aisloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
 
 Metrics that AIStore generates are named and grouped as follows:
 
 #### Proxy metrics:
 
-* `dfcproxy.<daemon_id>.get.count.1|c`
-* `dfcproxy.<daemon_id>.get.latency.<value>|ms`
-* `dfcproxy.<daemon_id>.put.count.1|c`
-* `dfcproxy.<daemon_id>.put.latency.<value>|ms`
-* `dfcproxy.<daemon_id>.delete.count.1|c`
-* `dfcproxy.<daemon_id>.list.count.1|c`
-* `dfcproxy.<daemon_id>.list.latency.<value>|ms`
-* `dfcproxy.<daemon_id>.rename.count.1|c`
-* `dfcproxy.<daemon_id>.cluster_post.count.1|c`
+* `aisproxy.<daemon_id>.get.count.1|c`
+* `aisproxy.<daemon_id>.get.latency.<value>|ms`
+* `aisproxy.<daemon_id>.put.count.1|c`
+* `aisproxy.<daemon_id>.put.latency.<value>|ms`
+* `aisproxy.<daemon_id>.delete.count.1|c`
+* `aisproxy.<daemon_id>.list.count.1|c`
+* `aisproxy.<daemon_id>.list.latency.<value>|ms`
+* `aisproxy.<daemon_id>.rename.count.1|c`
+* `aisproxy.<daemon_id>.cluster_post.count.1|c`
 
 #### Target Metrics
 
-* `dfctarget.<daemon_id>.get.count.1|c`
-* `dfctarget.<daemon_id>.get.latency.<value>|ms`
-* `dfctarget.<daemon_id>.get.cold.count.1|c`
-* `dfctarget.<daemon_id>.get.cold.bytesloaded.<value>|c`
-* `dfctarget.<daemon_id>.get.cold.vchanged.<value>|c`
-* `dfctarget.<daemon_id>.get.cold.bytesvchanged.<value>|c`
-* `dfctarget.<daemon_id>.put.count.1|c`
-* `dfctarget.<daemon_id>.put.latency.<value>|ms`
-* `dfctarget.<daemon_id>.delete.count.1|c`
-* `dfctarget.<daemon_id>.list.count.1|c`
-* `dfctarget.<daemon_id>.list.latency.<value>|ms`
-* `dfctarget.<daemon_id>.rename.count.1|c`
-* `dfctarget.<daemon_id>.evict.files.1|c`
-* `dfctarget.<daemon_id>.evict.bytes.<value>|c`
-* `dfctarget.<daemon_id>.rebalance.receive.files.1|c`
-* `dfctarget.<daemon_id>.rebalance.receive.bytes.<value>|c`
-* `dfctarget.<daemon_id>.rebalance.send.files.1|c`
-* `dfctarget.<daemon_id>.rebalance.send.bytes.<value>|c`
-* `dfctarget.<daemon_id>.error.badchecksum.xxhash.count.1|c`
-* `dfctarget.<daemon_id>.error.badchecksum.xxhash.bytes.<value>|c`
-* `dfctarget.<daemon_id>.error.badchecksum.md5.count.1|c`
-* `dfctarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
+* `aistarget.<daemon_id>.get.count.1|c`
+* `aistarget.<daemon_id>.get.latency.<value>|ms`
+* `aistarget.<daemon_id>.get.cold.count.1|c`
+* `aistarget.<daemon_id>.get.cold.bytesloaded.<value>|c`
+* `aistarget.<daemon_id>.get.cold.vchanged.<value>|c`
+* `aistarget.<daemon_id>.get.cold.bytesvchanged.<value>|c`
+* `aistarget.<daemon_id>.put.count.1|c`
+* `aistarget.<daemon_id>.put.latency.<value>|ms`
+* `aistarget.<daemon_id>.delete.count.1|c`
+* `aistarget.<daemon_id>.list.count.1|c`
+* `aistarget.<daemon_id>.list.latency.<value>|ms`
+* `aistarget.<daemon_id>.rename.count.1|c`
+* `aistarget.<daemon_id>.evict.files.1|c`
+* `aistarget.<daemon_id>.evict.bytes.<value>|c`
+* `aistarget.<daemon_id>.rebalance.receive.files.1|c`
+* `aistarget.<daemon_id>.rebalance.receive.bytes.<value>|c`
+* `aistarget.<daemon_id>.rebalance.send.files.1|c`
+* `aistarget.<daemon_id>.rebalance.send.bytes.<value>|c`
+* `aistarget.<daemon_id>.error.badchecksum.xxhash.count.1|c`
+* `aistarget.<daemon_id>.error.badchecksum.xxhash.bytes.<value>|c`
+* `aistarget.<daemon_id>.error.badchecksum.md5.count.1|c`
+* `aistarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
 
 Example of how these metrics show up in a grafana dashboard:
 
@@ -930,7 +930,7 @@ Example of how these metrics show up in a grafana dashboard:
 
 #### Disk Metrics
 
-* `dfctarget.<daemon_id>.iostat_*.gauge.<value>|g`
+* `aistarget.<daemon_id>.iostat_*.gauge.<value>|g`
 
 #### Keepalive Metrics
 
@@ -940,33 +940,33 @@ Example of how these metrics show up in a grafana dashboard:
 * `<prefix>.keepalive.average.<id>.count.1|c`
 * `<prefix>.keepalive.average.<id>.reset.1|c`
 
-#### dfcloader Metrics
+#### aisloader Metrics
 
-* `dfcloader.<ip>.<loader_id>.get.pending.<value>|g`
-* `dfcloader.<ip>.<loader_id>.get.count.1|c`
-* `dfcloader.<ip>.<loader_id>.get.latency.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.throughput.<value>|c`
-* `dfcloader.<ip>.<loader_id>.get.latency.proxyconn.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.proxy.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.targetconn.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.target.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.posthttp.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.proxyheader.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.targetheader.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.targetrequest.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.latency.targetresponse.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.get.error.1|c`
-* `dfcloader.<ip>.<loader_id>.put.pending.<value>|g`
-* `dfcloader.<ip>.<loader_id>.put.count.<value>|g`
-* `dfcloader.<ip>.<loader_id>.put.latency.<value>|,s`
-* `dfcloader.<ip>.<loader_id>.put.throughput.<value>|c`
-* `dfcloader.<ip>.<loader_id>.put.error.1|c`
-* `dfcloader.<ip>.<loader_id>.getconfig.count.1|c`
-* `dfcloader.<ip>.<loader_id>.getconfig.latency.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>|ms`
-* `dfcloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.pending.<value>|g`
+* `aisloader.<ip>.<loader_id>.get.count.1|c`
+* `aisloader.<ip>.<loader_id>.get.latency.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.throughput.<value>|c`
+* `aisloader.<ip>.<loader_id>.get.latency.proxyconn.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.proxy.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.targetconn.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.target.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.posthttp.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.proxyheader.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.targetheader.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.targetrequest.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.latency.targetresponse.<value>|ms`
+* `aisloader.<ip>.<loader_id>.get.error.1|c`
+* `aisloader.<ip>.<loader_id>.put.pending.<value>|g`
+* `aisloader.<ip>.<loader_id>.put.count.<value>|g`
+* `aisloader.<ip>.<loader_id>.put.latency.<value>|,s`
+* `aisloader.<ip>.<loader_id>.put.throughput.<value>|c`
+* `aisloader.<ip>.<loader_id>.put.error.1|c`
+* `aisloader.<ip>.<loader_id>.getconfig.count.1|c`
+* `aisloader.<ip>.<loader_id>.getconfig.latency.<value>|ms`
+* `aisloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>|ms`
+* `aisloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>|ms`
 
 ## Experimental
 

@@ -4,7 +4,7 @@ ENV GOLANG_VERSION 1.10
 ENV GOPATH /go
 ENV GOBIN /go/bin
 ENV PATH $GOBIN:/usr/local/go/bin:$PATH
-ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/dfc
+ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/ais
 
 RUN apt-get update &&\
   set -eux &&\
@@ -25,5 +25,5 @@ RUN python get-pip.py
 RUN pip install awscli
 RUN rm -rf go$GOLANG_VERSION.linux-amd64.tar.gz
 
-RUN go get -u -v github.com/NVIDIA/dfcpub/dfc && cd $WORKDIR
+RUN go get -u -v github.com/NVIDIA/dfcpub/ais && cd $WORKDIR
 WORKDIR $WORKDIR

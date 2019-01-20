@@ -3,9 +3,9 @@
   gather_facts: no
   become: true
   tasks:
-    - name: Compress dfc logs
+    - name: Compress ais logs
       archive:
-        path: /var/log/dfc
+        path: /var/log/ais
         dest: /tmp/log.tgz
     - fetch:
         src: /tmp/log.tgz

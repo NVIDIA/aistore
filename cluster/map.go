@@ -14,7 +14,7 @@ import (
 )
 
 // interface to Get current cluster-map instance
-// (for implementation, see dfc/clustermap.go)
+// (for implementation, see ais/clustermap.go)
 type Sowner interface {
 	Get() (smap *Smap)
 	Listeners() SmapListeners

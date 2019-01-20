@@ -1,10 +1,8 @@
+// Package ais_test contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-// Package dfc is a scalable object-storage based caching system with Amazon and Google Cloud backends.
-package dfc_test
+package ais_test
 
 import (
 	"io"

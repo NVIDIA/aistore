@@ -57,7 +57,7 @@ By default, AIStore deployment currently won't launch AuthN server. To start Aut
 
 After deploying the cluster, there will be an automatically generated superuser account - a special account that cannot be deleted and that will be used exclusively to manage users and their credentials. This superuser account does not have access to buckets and objects.
 
-Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in $CONFDIR, default value is $HOME/.dfc.
+Superuser's credentials can be set at cluster deployment time(please, see [Getting started](#getting-started)), or changed later by modifying AuthN configuration file `authn.json`. It is located in $CONFDIR, default value is $HOME/.ais.
 
 Adding and deleting usernames requires superuser authentication. Super user credentials are sent in the request header via `Authorization` field (for curl it is `curl -u<username>:<password ...`, for HTTP requesest it is header option `Authorization: Basic <base64-encoded-username:password>`).
 

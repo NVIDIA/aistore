@@ -46,10 +46,10 @@ fi
 
 if [ ! -z "$scale" ]; then
    echo "Scaling cluster "
-   cp /tmp/dfc_backup/* .
-   sudo docker-compose -f $environment"_docker-compose.yml" up --no-recreate --scale dfctarget=$scale -d dfctarget
+   cp /tmp/ais_backup/* .
+   sudo docker-compose -f $environment"_docker-compose.yml" up --no-recreate --scale aistarget=$scale -d aistarget
    rm aws.env
-   rm dfc.json
+   rm ais.json
    sudo docker ps
    echo Done
    exit 0
@@ -60,11 +60,11 @@ if [ -z "$aws_env" ]; then
    usage
 fi
 
-PROXYURL="http://dfcproxy:8080"
+PROXYURL="http://aisproxy:8080"
 PROXYID="ORIGINAL_PRIMARY"
 PORT=8080
-SERVICENAME="dfc"
-LOGDIR="/tmp/dfc/log"
+SERVICENAME="ais"
+LOGDIR="/tmp/ais/log"
 LOGLEVEL="3"
 CONFDIR="/usr/nvidia"
 ###################################
@@ -73,7 +73,7 @@ CONFDIR="/usr/nvidia"
 # existence of each fspath is checked at runtime
 #
 ###################################
-TESTFSPATHROOT="/tmp/dfc/"
+TESTFSPATHROOT="/tmp/ais/"
 
 echo Enter number of cache servers:
 read servcount
@@ -108,7 +108,7 @@ then
 fi
 if [ $cachesource -eq 2 ]
 then
-   echo Enter filesystem info in comma seperated format ex: /tmp/dfc1,/tmp/dfc:
+   echo Enter filesystem info in comma seperated format ex: /tmp/ais1,/tmp/ais:
    read fsinfo
    fspath=""
    IFS=',' read -r -a array <<< "$fsinfo"
@@ -139,7 +139,7 @@ then
   CLDPROVIDER="gcp"
 fi
 
-CONFFILE="dfc.json"
+CONFFILE="ais.json"
 c=0
 CONFFILE_STATSD="statsd.conf"
 CONFFILE_COLLECTD="collectd.conf"
@@ -155,16 +155,16 @@ sudo docker-compose -f $environment"_docker-compose.yml" down
 echo Building Image..
 sudo docker-compose -f $environment"_docker-compose.yml" build
 echo Starting Primary Proxy
-sudo AIS_PRIMARYPROXY=TRUE docker-compose -f $environment"_docker-compose.yml" up -d dfcproxy
+sudo AIS_PRIMARYPROXY=TRUE docker-compose -f $environment"_docker-compose.yml" up -d aisproxy
 echo Starting cluster ..
-sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale dfctarget=$servcount --scale dfcproxy=$proxycount --no-recreate
+sudo docker-compose -f $environment"_docker-compose.yml" up -d --scale aistarget=$servcount --scale aisproxy=$proxycount --no-recreate
 sleep 3
 sudo docker ps
 echo "Cleaning up files.."
-mkdir -p /tmp/dfc_backup
-mv aws.env /tmp/dfc_backup/
-mv $CONFFILE /tmp/dfc_backup/
-mv $CONFFILE_STATSD /tmp/dfc_backup/
-mv $CONFFILE_COLLECTD /tmp/dfc_backup/
+mkdir -p /tmp/ais_backup
+mv aws.env /tmp/ais_backup/
+mv $CONFFILE /tmp/ais_backup/
+mv $CONFFILE_STATSD /tmp/ais_backup/
+mv $CONFFILE_COLLECTD /tmp/ais_backup/
 
 echo done

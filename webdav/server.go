@@ -43,9 +43,9 @@ func main() {
 	)
 
 	flag.IntVar(&port, "port", 8079, "this server's port")
-	flag.StringVar(&proxy, "dfc-proxyurl", "127.0.0.1:8080", "dfc proxy's url (ip:port)")
-	flag.StringVar(&tmpDir, "tmpdir", "/tmp/dfc", "temporary directory to store files used by webdav")
-	flag.IntVar(&logLevel, "webdav-loglevel", logLevelNone, "verbose level(0 = none, 1 = webdav, 2 = dfc)")
+	flag.StringVar(&proxy, "ais-proxyurl", "127.0.0.1:8080", "ais proxy's url (ip:port)")
+	flag.StringVar(&tmpDir, "tmpdir", "/tmp/ais", "temporary directory to store files used by webdav")
+	flag.IntVar(&logLevel, "webdav-loglevel", logLevelNone, "verbose level(0 = none, 1 = webdav, 2 = ais)")
 	flag.Parse()
 	u := url.URL{Scheme: "http", Host: proxy}
 

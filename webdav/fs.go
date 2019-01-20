@@ -614,7 +614,7 @@ func (fs *FileSystem) newFile(name string) (*File, error) {
 	n, _ := f.bucketNode().addPath(f.path)
 
 	// check if it is a directory in memory; if it is not in memory and the path does exists, it will be find later
-	// when dfc is consulted
+	// when ais is consulted
 	if f.parent().find(f.fi.name) != nil {
 		f.typ = Directory
 		f.fi.mode |= os.ModeDir
@@ -864,7 +864,7 @@ func (f *File) Stat() (os.FileInfo, error) {
 	return &f.fi, nil
 }
 
-// createLocalFile creates a local file for read/write of a dfc object
+// createLocalFile creates a local file for read/write of a ais object
 func (f *File) createLocalFile(perm os.FileMode) error {
 	var err error
 

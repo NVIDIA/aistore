@@ -2,11 +2,11 @@
 
 This guide will help you set up a containerized, one-proxy, one-target deployment of AIStore within seconds.
 
-1. `docker pull aistorage/dfc-quick-start`
-2. `docker run -di aistorage/dfc-quick-start`
+1. `docker pull aistorage/ais-quick-start`
+2. `docker run -di aistorage/ais-quick-start`
 3. `./quick_start_dfc.sh`
 
-The first command will pull the latest image from the repository. To pull an image with a specific tag, check out [the available tags](https://hub.docker.com/r/aistorage/dfc-quick-start/tags/) and do `docker pull aistorage/dfc-quick-start:<TAG>` instead.
+The first command will pull the latest image from the repository. To pull an image with a specific tag, check out [the available tags](https://hub.docker.com/r/aistorage/ais-quick-start/tags/) and do `docker pull aistorage/ais-quick-start:<TAG>` instead.
 
 [`quick_start_dfc.sh`](quick_start_dfc.sh) will deploy AIStore with one proxy, one target, one local cache directory, and will be configured to use AWS as the cloud provider.
 
@@ -18,7 +18,7 @@ To set up your AWS configuration, use the [`aws configure`](https://docs.aws.ama
 
 Alternatively, mount your credentials file to the container in the `docker run` command, for example:
 
-`docker run -div ~/.aws/credentials:/root/.aws/credentials liangdrew/dfc`
+`docker run -div ~/.aws/credentials:/root/.aws/credentials liangdrew/ais`
 
 #### Port
 

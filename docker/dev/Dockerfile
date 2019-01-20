@@ -22,7 +22,7 @@ RUN wget https://bootstrap.pypa.io/get-pip.py &&\
 
 # Setting ENV variables
 ENV GOLANG_VERSION 1.11
-ENV CONFFILE /etc/dfc/dfc.json
+ENV CONFFILE /etc/ais/ais.json
 
 # Reassign argumets to environment variables so run.sh can use them
 ARG GOBASE
@@ -31,7 +31,7 @@ ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/ais
 
-RUN mkdir /etc/dfc
+RUN mkdir /etc/ais
 RUN mkdir /usr/nvidia
 
 # Installing go
@@ -45,15 +45,15 @@ ENV CLD $CLDPROVIDER
 
 ARG TARGETS
 ENV TARGETCNT $TARGETS
-COPY dfc.json $CONFFILE
+COPY ais.json $CONFFILE
 
 EXPOSE 8080 9080 10080
 
 ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
 RUN echo "\
-cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/dfc.go \n \
-cd $GOBIN && $GOBIN/dfc -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
+cd $WORKDIR && go install -tags=\"${CLD}\" -ldflags \"-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'\" $WORKDIR/setup/ais.go \n \
+cd $GOBIN && $GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3 -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
 CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETCNT"]

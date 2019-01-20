@@ -5,7 +5,7 @@ ENV CLD $CLDPROVIDER
 
 #Setting ENV variables 
 ENV GOLANG_VERSION 1.11.4
-ENV CONFFILE /etc/dfc/dfc.json
+ENV CONFFILE /etc/ais/ais.json
 ENV ROLE proxy
 ENV TARGETS 1000
 ENV GOPATH /go
@@ -43,12 +43,12 @@ WORKDIR $WORKDIR
 
 ENV VERSION `git rev-parse --short HEAD`
 ENV BUILD `date +%FT%T%z`
-RUN go install -tags="${CLD}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
+RUN go install -tags="${CLD}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
 
 RUN apt-get -y remove wget
-RUN mkdir /etc/dfc
+RUN mkdir /etc/ais
 RUN mkdir /usr/nvidia
-COPY dfc.json $CONFFILE
+COPY ais.json $CONFFILE
 
 # Statsd
 ENV STATSD_PATH /opt/statsd
@@ -66,7 +66,7 @@ COPY collectd.conf /etc/collectd
 RUN echo "\
 service collectd start \n \
 node $STATSD_PATH/stats.js $STATSD_PATH/$STATSD_CONF& \n \
-$GOBIN/dfc -config=\$1 -role=\$2 -ntargets=\$3  -alsologtostderr=true \n" \
+$GOBIN/ais -config=\$1 -role=\$2 -ntargets=\$3  -alsologtostderr=true \n" \
 > /run/run.sh
 RUN chmod +x /run/run.sh
 CMD ["sh","-c", "AIS_DAEMONID=`echo $HOSTNAME` /run/run.sh $CONFFILE $ROLE $TARGETS"]

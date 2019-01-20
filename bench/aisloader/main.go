@@ -2,17 +2,17 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
 
-// 'dfcloader' is a load generator for AIStore.
+// 'aisloader' is a load generator for AIStore.
 // It sends HTTP requests to a proxy server fronting targets.
 // Run with -help for usage information.
 
 // Examples:
 // 1. No put or get, just clean up:
-//    dfcloader -bucket=liding-dfc -duration 0s -totalputsize=0
+//    aisloader -bucket=nvais -duration 0s -totalputsize=0
 // 2. Time based local bucket put only:
-//    dfcloader -bucket=liding-dfc -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -local=true
+//    aisloader -bucket=nvais -duration 10s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=100 -local=true
 // 3. Put limit based cloud bucket mixed put(30%) and get(70%):
-//    dfcloader -bucket=liding-dfc -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -local=false -totalputsize=10240
+//    aisloader -bucket=nvais -duration 0s -numworkers=3 -minsize=1024 -maxsize=1048 -pctput=30 -local=false -totalputsize=10240
 
 package main
 
@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/bench/dfcloader/stats"
+	"github.com/NVIDIA/dfcpub/bench/aisloader/stats"
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/stats/statsd"
 	"github.com/NVIDIA/dfcpub/tutils"
@@ -114,7 +114,7 @@ func parseCmdLine() (params, error) {
 		"If duration is 0 and totalputsize is also 0, it is a no op.")
 	flag.IntVar(&p.numWorkers, "numworkers", 10, "Number of go routines sending requests in parallel")
 	flag.IntVar(&p.putPct, "pctput", 0, "Percentage of put requests")
-	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/dfc", "Local temporary directory used to store temporary files")
+	flag.StringVar(&p.tmpDir, "tmpdir", "/tmp/ais", "Local temporary directory used to store temporary files")
 	flag.Int64Var(&p.putSizeUpperBound, "totalputsize", 0, "Stops after total put size exceeds this (in KB); 0 = no limit")
 	flag.BoolVar(&p.cleanUp, "cleanup", true, "True if clean up after run")
 	flag.BoolVar(&p.verifyHash, "verifyhash", false, "True if verify xxhash during get")
@@ -241,7 +241,7 @@ func main() {
 	}
 
 	statsdC, err = statsd.New("localhost", runParams.statsdPort,
-		fmt.Sprintf("dfcloader.%s-%d", host, runParams.loaderID))
+		fmt.Sprintf("aisloader.%s-%d", host, runParams.loaderID))
 	if err != nil {
 		fmt.Println("Failed to connect to statd, running without statsd")
 	}

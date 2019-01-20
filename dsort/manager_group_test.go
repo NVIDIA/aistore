@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	testingConfigDir = "/tmp/dfc_tests"
+	testingConfigDir = "/tmp/ais_tests"
 )
 
 var _ = Describe("ManagerGroup", func() {

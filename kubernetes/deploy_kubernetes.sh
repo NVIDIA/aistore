@@ -44,11 +44,11 @@ if [ -z "$aws_env" ]; then
    usage
 fi
 
-PROXYURL="http://dfcproxy:8080"
+PROXYURL="http://aisproxy:8080"
 PROXYID="ORIGINAL_PRIMARY"
 PORT=8080
-SERVICENAME="dfc"
-LOGDIR="/tmp/dfc/log"
+SERVICENAME="ais"
+LOGDIR="/tmp/ais/log"
 LOGLEVEL="3"
 CONFDIR="/usr/nvidia"
 ###################################
@@ -57,7 +57,7 @@ CONFDIR="/usr/nvidia"
 # existence of each fspath is checked at runtime
 #
 ###################################
-TESTFSPATHROOT="/tmp/dfc/"
+TESTFSPATHROOT="/tmp/ais/"
 
 echo Enter number of cache servers:
 read servcount
@@ -92,7 +92,7 @@ then
 fi
 if [ $cachesource -eq 2 ]
 then
-   echo Enter filesystem info in comma seperated format ex: /tmp/dfc1,/tmp/dfc:
+   echo Enter filesystem info in comma seperated format ex: /tmp/ais1,/tmp/ais:
    read fsinfo
    fspath=""
    IFS=',' read -r -a array <<< "$fsinfo"
@@ -131,7 +131,7 @@ then
   CLDPROVIDER="gcp"
 fi
 
-CONFFILE="dfc.json"
+CONFFILE="ais.json"
 c=0
 CONFFILE_STATSD="statsd.conf"
 CONFFILE_COLLECTD="collectd.conf"
@@ -144,35 +144,35 @@ source $DIR/../ais/setup/config.sh
 echo Starting kubernetes deployment ..
 #Create AIStore configmap to attach during runtime
 echo Creating AIStore configMap
-kubectl delete configmap dfc-config
+kubectl delete configmap ais-config
 kubectl delete configmap collectd-config
 kubectl delete configmap statsd-config
-kubectl create configmap dfc-config --from-file=dfc.json
+kubectl create configmap ais-config --from-file=ais.json
 kubectl create configmap statsd-config --from-file=statsd.conf
 kubectl create configmap collectd-config --from-file=collectd.conf
 
 echo Stopping AIStore cluster
-kubectl delete -f dfctarget_deployment.yml
-kubectl delete -f dfcproxy_deployment.yml
-kubectl delete -f dfcprimaryproxy_deployment.yml
+kubectl delete -f aistarget_deployment.yml
+kubectl delete -f aisproxy_deployment.yml
+kubectl delete -f aisprimaryproxy_deployment.yml
 
 echo Starting Primary Proxy Deployment
-kubectl create -f dfcprimaryproxy_deployment.yml
+kubectl create -f aisprimaryproxy_deployment.yml
 
 echo Wating for proxy to start ....
 sleep 100
 
 echo Starting Proxy Deployment
-kubectl create -f dfcproxy_deployment.yml
+kubectl create -f aisproxy_deployment.yml
 
 echo Scaling proxies
-kubectl scale --replicas=$proxycount -f dfcproxy_deployment.yml
+kubectl scale --replicas=$proxycount -f aisproxy_deployment.yml
 
 echo Starting Target Deployment
-kubectl create -f dfctarget_deployment.yml
+kubectl create -f aistarget_deployment.yml
 
 echo Scaling targets
-kubectl scale --replicas=$servcount -f dfctarget_deployment.yml
+kubectl scale --replicas=$servcount -f aistarget_deployment.yml
 
 echo List of running pods
 kubectl get pods -o wide

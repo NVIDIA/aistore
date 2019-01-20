@@ -10,14 +10,14 @@ This README documents the steps to install and run AIStore
 https://community.spiceworks.com/how_to/110622-install-ansible-on-64-bit-ubuntu-14-04-lts
 https://www.server-world.info/en/note?os=Ubuntu_14.04&p=ssh&f=8
 
-#### Download dfc_ansible 
+#### Download ais_ansible 
 ```
 git clone git://github.com/NVIDIA/dfcpub
-git checkout dfc_ansible
+git checkout ais_ansible
 ```
 
 #### Configure AIStore cluster
-1. Create inventory file, see example inventory in dfc_ansible/inventory folder. 
+1. Create inventory file, see example inventory in ais_ansible/inventory folder. 
 2. Setup nodes - setup AIStore paths, install go, aws cli
 ```
 ansible-playbook -i inventory/cluster.ini setupnodes.yml
@@ -26,7 +26,7 @@ ansible-playbook -i inventory/cluster.ini setupnodes.yml
 ```
 ansible-playbook -i inventory/cluster.ini getgdfc.yml
 ```
-4. Config AIStore - runs $AISSRC/setup/config.sh to create dfc.json on all nodes in $HOME dir
+4. Config AIStore - runs $AISSRC/setup/config.sh to create ais.json on all nodes in $HOME dir
 ```
 ansible-playbook -i inventory/cluster.ini configdfc.yml
 ```

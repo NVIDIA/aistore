@@ -1,13 +1,8 @@
-// Package dfc provides distributed file-based cache with Amazon and Google Cloud backends.
-//
-// Example run:
-//     go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel -numops=5
-//
+// Package ais_test contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-package dfc_test
+package ais_test
 
 import (
 	"fmt"
@@ -22,6 +17,11 @@ import (
 	"github.com/NVIDIA/dfcpub/cmn"
 	"github.com/NVIDIA/dfcpub/tutils"
 )
+
+//
+// Example run:
+//     go test -v -run=rwstress -args -numfiles=10 -cycles=10 -nodel -numops=5
+//
 
 const (
 	rwdir    = "rwstress"

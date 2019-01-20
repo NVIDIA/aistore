@@ -185,8 +185,6 @@ func (j *eraser) yieldTerm() error {
 	default:
 		_, curr := j.mpathInfo.GetIOstats(fs.StatDiskUtil)
 		if curr.Max >= float32(xaction.DiskUtilHighWM) && curr.Min > float32(xaction.DiskUtilLowWM) {
-			time.Sleep(cmn.ThrottleSleepMax)
-		} else if curr.Max >= float32(xaction.DiskUtilLowWM) && curr.Min > float32(xaction.DiskUtilLowWM) {
 			time.Sleep(cmn.ThrottleSleepAvg)
 		} else {
 			time.Sleep(cmn.ThrottleSleepMin)

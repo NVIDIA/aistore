@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-export LOGDIR=/var/log/dfc
-export CONFDIR=/dfc
-export CONFFILE=$HOME/dfc.json
+export LOGDIR=/var/log/ais
+export CONFDIR=/ais
+export CONFFILE=$HOME/ais.json
 export LOGLEVEL=3
 export CLDPROVIDER=aws
 export PORT=8081
@@ -21,17 +21,17 @@ export NON_ELECTABLE=false
 FSP=
 for disk in "$@"; do
     if [ -z "$FSP" ]; then
-	FSP='"/dfc/'$disk'": " "'
+	FSP='"/ais/'$disk'": " "'
     else
-        FSP=$FSP', "/dfc/'$disk'": " "'
+        FSP=$FSP', "/ais/'$disk'": " "'
     fi
 done
 echo FSPATHS are $FSP
-#export FSPATHS='"/dfc/xvdb": " ", "/dfc/xvdc": " ", "/dfc/xvdd": " ", "/dfc/xvde": " "'
+#export FSPATHS='"/ais/xvdb": " ", "/ais/xvdc": " ", "/ais/xvdd": " ", "/ais/xvde": " "'
 export FSPATHS=$FSP
 export IPV4LIST=$(awk -vORS=, '{ print $1 }' ./inventory/cluster.txt | sed 's/,$//')
-sudo rm -rf dfcproxy.json || true
-sudo rm -rf dfc.json || true
-source /etc/profile.d/dfcpaths.sh
+sudo rm -rf aisproxy.json || true
+sudo rm -rf ais.json || true
+source /etc/profile.d/aispaths.sh
 $AISSRC/setup/config.sh
 

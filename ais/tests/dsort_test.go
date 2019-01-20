@@ -1,4 +1,8 @@
-package dfc_test
+// Package ais_test contains AIS integration tests.
+/*
+ * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ */
+package ais_test
 
 import (
 	"bytes"

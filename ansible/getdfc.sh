@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-. /etc/profile.d/dfcpaths.sh
+. /etc/profile.d/aispaths.sh
 echo 'Pull latest AIS'
 cd $AISSRC
 git fetch
@@ -14,4 +14,4 @@ fi
 VERSION=`git rev-parse --short HEAD`
 BUILD=`date +%FT%T%z`
 echo "Cloud provider set to: ${CLDPROVIDER}"
-GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/dfc.go
+GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go

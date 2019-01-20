@@ -104,7 +104,7 @@ class TestDaemonApi(unittest.TestCase):
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         localSubdir = target_port[-1]
-        mpath = "/tmp/dfc/" + localSubdir + "/1"
+        mpath = "/tmp/ais/" + localSubdir + "/1"
         input_params = self.models.InputParameters(
                 self.models.Actions.DISABLE, value=mpath)
         self.daemon.modify_mountpath(input_params)
@@ -129,7 +129,7 @@ class TestDaemonApi(unittest.TestCase):
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         localSubdir = target_port[-1]
-        mpath = "/tmp/dfc/" + localSubdir + "/1"
+        mpath = "/tmp/ais/" + localSubdir + "/1"
         input_params = self.models.InputParameters(
                 self.models.Actions.REMOVE, value=mpath)
         self.daemon.remove_mountpath(input_params)

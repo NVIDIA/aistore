@@ -1,6 +1,6 @@
 version: '3'
 services:
-  dfcproxy:
+  aisproxy:
     build:
       context: .
       dockerfile: Dockerfile
@@ -13,7 +13,7 @@ services:
       - AIS_PRIMARYPROXY=${AIS_PRIMARYPROXY}
     env_file:
       - aws.env
-  dfctarget:
+  aistarget:
     build:
       context: .
       dockerfile: Dockerfile

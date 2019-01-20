@@ -9,7 +9,7 @@ import (
 	"github.com/NVIDIA/dfcpub/memsys"
 )
 
-// For implementations, please refer to dfc/target.go
+// For implementations, please refer to ais/target.go
 
 type Target interface {
 	IsRebalancing() bool

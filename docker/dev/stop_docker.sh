@@ -1,6 +1,6 @@
 #!/bin/bash
 name=`basename "$0"`
-setup_file="/tmp/docker_dfc/deploy.env"
+setup_file="/tmp/docker_ais/deploy.env"
 
 usage() {
     echo "============================================== Usage: =============================================="
@@ -93,12 +93,12 @@ if [ "$CLUSTER_CNT" -gt 1 ]; then
     for container_name in $(docker ps --format "{{.Names}}"); do
         container_id=$(docker ps -aqf "name=${container_name}")
         for ((i=0; i<${CLUSTER_CNT}; i++)); do
-            if [[ $container_name != dfc${i}_* ]] ;
+            if [[ $container_name != ais${i}_* ]] ;
             then
-                docker network disconnect -f dfc${i}_public $container_id
+                docker network disconnect -f ais${i}_public $container_id
                 if [[ $container_name == *"_target_"* ]] ;
                 then
-                    docker network disconnect -f dfc${i}_internal_data $container_id
+                    docker network disconnect -f ais${i}_internal_data $container_id
                 fi
             fi
         done
@@ -116,8 +116,8 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export INT_CONTROL_SUBNET=$INT_CONTROL_SUBNET
     export INT_DATA_SUBNET=$INT_DATA_SUBNET
     if [ "$remove_images" = TRUE ]; then
-        docker-compose -p dfc${i} -f $composer_file down -v --rmi all --remove-orphans
+        docker-compose -p ais${i} -f $composer_file down -v --rmi all --remove-orphans
     else 
-        docker-compose -p dfc${i} -f $composer_file down -v --remove-orphans
+        docker-compose -p ais${i} -f $composer_file down -v --remove-orphans
     fi
 done

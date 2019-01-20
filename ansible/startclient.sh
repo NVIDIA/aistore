@@ -37,7 +37,7 @@ while getopts ":b:p:d:m:x:t:n:c:" opt; do
             maxsize=$OPTARG
             ;;
         t)
-            echo "Using dfcloader thread count of $OPTARG per bucket"
+            echo "Using aisloader thread count of $OPTARG per bucket"
             threads=$OPTARG
             ;;
         n)
@@ -60,12 +60,12 @@ while getopts ":b:p:d:m:x:t:n:c:" opt; do
     esac
 done
 
-source /etc/profile.d/dfcpaths.sh
-cd $AISSRC/../bench/dfcloader
+source /etc/profile.d/aispaths.sh
+cd $AISSRC/../bench/aisloader
 sudo rm -rf screenlog.0
 screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=$cleanup -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
 
-echo "started dfcloader, wait for screnlog file to show up with timeout of 2min"
+echo "started aisloader, wait for screnlog file to show up with timeout of 2min"
 x=0
 while [ "$x" -lt 24 -a ! -f screenlog.0 ]
 do
@@ -81,7 +81,7 @@ if grep -q 'Failed to boot strap' screenlog.0; then
 	echo 'Failed to boot strap, restarting one more time'
 	sudo rm -rf screenlog.0
 	screen -mdSL client go run main.go worker.go -ip=$PROXYIP -port=$PROXYPORT -bucket=$bucket -local=true -minsize=$minsize -maxsize=$maxsize -statsinterval=1 -readertype=rand -cleanup=false -pctput=$pctput -duration=$duration -totalputsize=4048000000 -numworkers=$threads
-	echo "started dfcloader, wait for screnlog file to show up with timeout of 2min"
+	echo "started aisloader, wait for screnlog file to show up with timeout of 2min"
 	x=0
 	while [ "$x" -lt 24 -a ! -f screenlog.0 ]
 	do

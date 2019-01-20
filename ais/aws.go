@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	awsPutAisHashType = "x-amz-meta-dfc-hash-type"
-	awsPutAisHashVal  = "x-amz-meta-dfc-hash-val"
+	awsPutAisHashType = "x-amz-meta-ais-hash-type"
+	awsPutAisHashVal  = "x-amz-meta-ais-hash-val"
 	awsGetAisHashType = "X-Amz-Meta-Ais-Hash-Type"
 	awsGetAisHashVal  = "X-Amz-Meta-Ais-Hash-Val"
 	awsMultipartDelim = "-"
@@ -360,7 +360,7 @@ func (awsimpl *awsimpl) getobj(ct context.Context, workFQN, bucket, objname stri
 		errstr = fmt.Sprintf("Failed to GET %s/%s, err: %v", bucket, objname, err)
 		return
 	}
-	// may not have dfc metadata
+	// may not have ais metadata
 	if htype, ok := obj.Metadata[awsGetAisHashType]; ok {
 		if hval, ok := obj.Metadata[awsGetAisHashVal]; ok {
 			v = cmn.NewCksum(*htype, *hval)

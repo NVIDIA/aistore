@@ -1,5 +1,5 @@
-sudo cp dfc.json dfcproxy.json
-sed -i '/logdir/c\"logdir": "/var/log/dfcproxy",' dfcproxy.json
+sudo cp ais.json aisproxy.json
+sed -i '/logdir/c\"logdir": "/var/log/aisproxy",' aisproxy.json
 export AIS_PRIMARYPROXY=True
-sudo -E /home/ubuntu/dfc/bin/dfc -config=/home/ubuntu/dfcproxy.json -role=proxy -ntargets=6 &
+sudo -E /home/ubuntu/ais/bin/ais -config=/home/ubuntu/aisproxy.json -role=proxy -ntargets=6 &
 

@@ -101,7 +101,7 @@ AIS_MEM_DEBUG=1 go test -v -logtostderr=true -duration=2m
 
 ## Global Memory Manager
 
-In the interest of reusing a single memory manager instance across multiple packages outside the dfc core package, the memsys package declares a `gMem2` variable that can be accessed through the matching exported Getter.
+In the interest of reusing a single memory manager instance across multiple packages outside the ais core package, the memsys package declares a `gMem2` variable that can be accessed through the matching exported Getter.
 The notable runtime parameters that are used for the global memory manager are MinFreePct and Period which are set to 50% and 2 minutes, respectively.
 Note that more specialized use cases which warrant custom memory managers with finely tuned parameters are free to create their own separate `Mem2` instances.
 

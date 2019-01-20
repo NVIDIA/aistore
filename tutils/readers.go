@@ -235,7 +235,7 @@ func NewInMemReader(size int64, withHash bool) (Reader, error) {
 
 type fileReader struct {
 	*os.File
-	fullName string // Example: "/dir/dfc/smoke/bGzhWKWoxHDSePnELftx"
+	fullName string // Example: "/dir/ais/smoke/bGzhWKWoxHDSePnELftx"
 	name     string // Example: smoke/bGzhWKWoxHDSePnELftx
 	xxHash   string
 }
@@ -296,7 +296,7 @@ func NewFileReaderFromFile(fn string, withHash bool) (Reader, error) {
 		slab.Free(buf)
 	}
 
-	return &fileReader{nil, fn, "" /* dfc prefix */, hash}, nil
+	return &fileReader{nil, fn, "" /* ais prefix */, hash}, nil
 }
 
 type sgReader struct {

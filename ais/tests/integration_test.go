@@ -1,9 +1,8 @@
+// Package ais_test contains AIS integration tests.
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
- *
  */
-
-package dfc_test
+package ais_test
 
 import (
 	"encoding/json"
@@ -201,7 +200,7 @@ func TestProxyFailbackAndReRegisterInParallel(t *testing.T) {
 			bucket:              TestLocalBucketName,
 		}
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
-		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
+		// With the current design of ais, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh = make(chan string, m.num)
 		errCh      = make(chan error, m.num)
@@ -351,7 +350,7 @@ func TestRegisterAndUnregisterTargetAndPutInParallel(t *testing.T) {
 			bucket:        TestLocalBucketName,
 		}
 		// Currently, a small percentage of GET errors can be reasonably expected as a result of this test.
-		// With the current design of dfc, there is exists a brief period in which the cluster map is synced to
+		// With the current design of ais, there is exists a brief period in which the cluster map is synced to
 		// all nodes in the cluster during re-registering. During this period, errors can occur.
 		filenameCh = make(chan string, m.num)
 		errCh      = make(chan error, m.num)
@@ -630,7 +629,7 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		md = metadata{
 			t:               t,
 			num:             num,
-			delay:           time.Second * 5,
+			delay:           time.Second * 10,
 			numGetsEachFile: 10,
 			repFilenameCh:   make(chan repFile, num),
 			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
@@ -1255,7 +1254,7 @@ func TestLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		num          = 5000
 		filesize     = 1024
 		maxErrPct    = 0
-		newMountpath = "/tmp/dfc"
+		newMountpath = "/tmp/ais"
 	)
 
 	var (
@@ -1331,7 +1330,7 @@ func TestGlobalAndLocalRebalanceAfterAddingMountpath(t *testing.T) {
 		num          = 10000
 		filesize     = 1024
 		maxErrPct    = 0
-		newMountpath = "/tmp/dfc/mountpath"
+		newMountpath = "/tmp/ais/mountpath"
 	)
 
 	var (
@@ -1942,7 +1941,7 @@ func testLocalMirror(t *testing.T, erase bool) {
 		if err := api.EraseCopies(baseParams, m.bucket); err != nil {
 			t.Fatalf("Failed to start erase-copies xaction, err: %v", err)
 		}
-		timedout := 30 // seconds
+		timedout := 60 // seconds
 		ok := false
 		for i := 0; i < timedout+1; i++ {
 			var allDetails = make(map[string][]stats.XactionDetails) // TODO: missing API

@@ -795,7 +795,7 @@ func (l *loggingT) exit(err error) {
 	}
 
 	// Originally, glog calls os.Exit(2) here. However for the sake of resilience,
-	// we don't want glog to kill a dfc process only is there is trouble creating
+	// we don't want glog to kill a ais process only is there is trouble creating
 	// or writing log files.
 }
 

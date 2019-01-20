@@ -43,20 +43,20 @@ devrefresh:
 	fi
 
 build:
-	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" setup/dfc.go
+	GOBIN=${GOPATH}/bin go install -tags="${CLDPROVIDER}" setup/ais.go
 
 kill:
-	@pkill -SIGINT dfc 2>/dev/null; sleep 1; true
+	@pkill -SIGINT ais 2>/dev/null; sleep 1; true
 	@pkill authn 2>/dev/null; sleep 1; true
-	@pkill -SIGKILL dfc 2>/dev/null; true
+	@pkill -SIGKILL ais 2>/dev/null; true
 
 # delete only caches, not logs
 rmcache:
 	@./setup/rmcache.sh
 
 clean:
-	rm -f $(GOPATH)/bin/dfc
-	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/dfcpub/dfc.a
+	rm -f $(GOPATH)/bin/ais
+	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/dfcpub/ais.a
 
 deploy:
 	@./setup/deploy.sh
@@ -73,7 +73,7 @@ cpuprof:
 	@go test -v -run=XXX -bench=. -count 10 -cpuprofile=/tmp/cpu.prof
 
 flamegraph: cpuprof
-	@go-torch dfc.test /tmp/cpu.prof -u http://localhost:6060/
+	@go-torch ais.test /tmp/cpu.prof -u http://localhost:6060/
 
 code-coverage:
 	@./setup/code_coverage.sh

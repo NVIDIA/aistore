@@ -45,37 +45,37 @@ def load_global_defaults():
 load_global_defaults()
 
 def load_dfc_cluster(cluster, clients):
-    dfc = {
+    ais = {
         'targets' : None,
         'proxy'   : None,
         'clients' : None,
         'new_targets' : None
     }
     ec2_conn = ec2_connect_to_region()
-    dfc['targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Target*'})
-    dfc['new_targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_NewTarget*'})
-    dfc['proxy'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Proxy*'})
-    dfc['clients'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Client*'})
-    if len(dfc['clients']) > clients:
-        dfc['clients'] = dfc['clients'][:clients]
-        logger.info("Considering reduced number of clients {}".format(len(dfc['clients'])))
+    ais['targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Target*'})
+    ais['new_targets'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_NewTarget*'})
+    ais['proxy'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Proxy*'})
+    ais['clients'] = ec2_conn.get_only_instances(filters={"tag:Name": cluster+'_Client*'})
+    if len(ais['clients']) > clients:
+        ais['clients'] = ais['clients'][:clients]
+        logger.info("Considering reduced number of clients {}".format(len(ais['clients'])))
     
     cluster_inventory = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.ini')
     cluster_txt = os.path.join(os.path.dirname(__file__), 'inventory', 'cluster.txt')
     with open(cluster_inventory, 'w') as c, open(cluster_txt, 'w') as ct:
-        for key in dfc:
+        for key in ais:
             print key
             c.write('['+key+']\n')
             file = os.path.join(os.path.dirname(__file__), 'inventory', key+'.txt')
             client_count = 0
             with open(file, 'w') as f:
-                for instance in dfc[key]:
+                for instance in ais[key]:
                     ip = instance.private_ip_address
                     print ip
                     c.write(ip+'\n')
                     ct.write(ip+'\n')
                     f.write(ip+'\n')
-    return dfc
+    return ais
 
 def ec2_connect_to_region():
     try:
@@ -226,22 +226,22 @@ def terminate_instance(region_name,ip_address):
     else:
         logger.info('failed to terminate instance with ip '+str(ip_address))
 
-def start_dfc_cluster(dfc):
-    for key in dfc:
-        logger.info("Booting dfc {}".format(key))
-        start_stop_instance(dfc[key], 'running')
+def start_dfc_cluster(ais):
+    for key in ais:
+        logger.info("Booting ais {}".format(key))
+        start_stop_instance(ais[key], 'running')
     #Additional sleep to make sure every instance is up for SSH connection
     time.sleep(15)
 
-def stop_dfc_cluster(dfc):
-    for key in dfc:
-        logger.info("Shutting down dfc {}".format(key))
-        start_stop_instance(dfc[key], 'stopped')
+def stop_dfc_cluster(ais):
+    for key in ais:
+        logger.info("Shutting down ais {}".format(key))
+        start_stop_instance(ais[key], 'stopped')
 
-def update_dfc_cluster(dfc):
+def update_dfc_cluster(ais):
     subprocess.call('./updatedfc.sh')
 
-def cleanup_dfc_cluster(dfc):
+def cleanup_dfc_cluster(ais):
     subprocess.call('./cleandfc.sh')
     
 if __name__ == '__main__':
@@ -258,14 +258,14 @@ if __name__ == '__main__':
 
     cluster = args.cluster
     clients = int(args.clients)
-    dfc = load_dfc_cluster(cluster, clients)
+    ais = load_dfc_cluster(cluster, clients)
 
     if args.command == 'restart':
-        start_dfc_cluster(dfc)
+        start_dfc_cluster(ais)
     elif args.command == 'shutdown':
-        stop_dfc_cluster(dfc)
+        stop_dfc_cluster(ais)
     elif args.command == 'update':
-        update_dfc_cluster(dfc)
+        update_dfc_cluster(ais)
     elif args.command == 'cleanup':
-        cleanup_dfc_cluster(dfc)
+        cleanup_dfc_cluster(ais)
 

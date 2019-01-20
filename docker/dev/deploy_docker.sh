@@ -68,7 +68,7 @@ if ! [ -x "$(command -v docker-compose)" ]; then
   exit 1
 fi
 
-mkdir -p /tmp/docker_dfc
+mkdir -p /tmp/docker_ais
 USE_AWS=0
 CLUSTER_CNT=0
 PROXY_CNT=0
@@ -76,8 +76,8 @@ TARGET_CNT=0
 FS_LIST=""
 TESTFSPATHCOUNT=0
 network=""
-LOCAL_AWS="/tmp/docker_dfc/aws.env"
-setup_file="/tmp/docker_dfc/deploy.env"
+LOCAL_AWS="/tmp/docker_ais/aws.env"
+setup_file="/tmp/docker_ais/deploy.env"
 
 aws_env="";
 os="ubuntu"
@@ -267,7 +267,7 @@ if [ "$FS_LIST" = "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
        read TESTFSPATHCOUNT
        is_number $TESTFSPATHCOUNT
     elif [ $cachesource -eq 2 ]; then
-       echo Enter filesystem info in comma seperated format ex: /tmp/dfc1,/tmp/dfc:
+       echo Enter filesystem info in comma seperated format ex: /tmp/ais1,/tmp/ais:
        read FS_LIST
     else
         echo "Not a valid entry. Exiting..."
@@ -299,8 +299,8 @@ if [ "${PWD##*/}" != "docker" ]; then
     cd $DIR
 fi
 
-SERVICENAME="dfc"
-LOGDIR="/tmp/dfc/log"
+SERVICENAME="ais"
+LOGDIR="/tmp/ais/log"
 LOGLEVEL="3"
 USE_HTTPS="false"
 NON_ELECTABLE="false"
@@ -313,7 +313,7 @@ CONFFILE_COLLECTD="collectd.conf"
 # existence of each fspath is checked at runtime
 #
 ###################################
-TESTFSPATHROOT="/tmp/dfc/"
+TESTFSPATHROOT="/tmp/ais/"
 c=0
 
 START=0
@@ -377,31 +377,31 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export CLDPROVIDER=$CLDPROVIDER
     export MIRROR_ENABLED=false
 
-    CONFFILE="dfc.json"
+    CONFFILE="ais.json"
     source $DIR/../../ais/setup/config.sh
 
     echo Stopping running clusters...
-    docker-compose -p dfc${i} -f ${composer_file} down
+    docker-compose -p ais${i} -f ${composer_file} down
 
     echo Building Image..
-    docker-compose -p dfc${i} -f ${composer_file} build
+    docker-compose -p ais${i} -f ${composer_file} build
 
     echo Starting Primary Proxy
-    export HOST_CONTAINER_PATH=/tmp/dfc/c${i}_proxy_1
+    export HOST_CONTAINER_PATH=/tmp/ais/c${i}_proxy_1
     mkdir -p $HOST_CONTAINER_PATH
-    AIS_PRIMARYPROXY=TRUE docker-compose -p dfc${i} -f ${composer_file} up --build -d proxy
+    AIS_PRIMARYPROXY=TRUE docker-compose -p ais${i} -f ${composer_file} up --build -d proxy
     sleep 5 # give primary proxy some room to breath
 
     echo Starting cluster ..
     for ((j=1; j<=${TARGET_CNT}; j++)); do
-        export HOST_CONTAINER_PATH=/tmp/dfc/c${i}_target_${j}
+        export HOST_CONTAINER_PATH=/tmp/ais/c${i}_target_${j}
         mkdir -p $HOST_CONTAINER_PATH
-        docker-compose -p dfc${i} -f ${composer_file} up --build -d --scale target=${j} --no-recreate
+        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale target=${j} --no-recreate
     done
     for ((j=2; j<=${PROXY_CNT}; j++)); do
-        export HOST_CONTAINER_PATH=/tmp/dfc/c${i}_proxy_${j}
+        export HOST_CONTAINER_PATH=/tmp/ais/c${i}_proxy_${j}
         mkdir -p $HOST_CONTAINER_PATH
-        docker-compose -p dfc${i} -f ${composer_file} up --build -d --scale proxy=${j} --scale target=$TARGET_CNT --no-recreate
+        docker-compose -p ais${i} -f ${composer_file} up --build -d --scale proxy=${j} --scale target=$TARGET_CNT --no-recreate
     done
 done
 
@@ -414,14 +414,14 @@ if [ "$CLUSTER_CNT" -gt 1 ] && [ "$network" = "multi" ]; then
     for container_name in $(docker ps --format "{{.Names}}"); do
         container_id=$(docker ps -aqf "name=${container_name}")
         for ((i=0; i<${CLUSTER_CNT}; i++)); do
-            if [[ $container_name != dfc${i}_* ]] ;
+            if [[ $container_name != ais${i}_* ]] ;
             then
-                echo Connecting $container_name to $dfc${i}_public
-                docker network connect dfc${i}_public $container_id
+                echo Connecting $container_name to $ais${i}_public
+                docker network connect ais${i}_public $container_id
                 if [[ $container_name == *"_target_"* ]] ;
                 then
-                    echo Connecting $container_name to $dfc${i}_internal_data
-                    docker network connect dfc${i}_internal_data $container_id
+                    echo Connecting $container_name to $ais${i}_internal_data
+                    docker network connect ais${i}_internal_data $container_id
                 fi
             fi
         done

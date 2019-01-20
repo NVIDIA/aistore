@@ -9,17 +9,17 @@ Install docker and docker-composer prior to deploying a cluster. How to setup do
 
 GOPATH environment variable must be defined before starting cluster deployment. Docker attaches $GOPATH/src directory to a container, so the container at start builds new binaries from the current sources.
 
-For the *i*th cluster, AIStore creates three networks: dfc${i}\_public, dfc${i}\_internal\_control, and dfc${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (-m argument must be passed to the deploy script). It is expected that only AIStore cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the docker public and replication networks of other clusters to allow for multi-tiering and replication.
+For the *i*th cluster, AIStore creates three networks: ais${i}\_public, ais${i}\_internal\_control, and ais${i}\_internal\_data. The latter two are used only if the cluster is deployed with multiple networks (-m argument must be passed to the deploy script). It is expected that only AIStore cluster *i* is attached to each these networks. In a multi-cluster configuration, proxy containers of one cluster are connected to the docker public networks of other clusters to allow for multi-tiering and replication.  In multi-cluster configuration, target containers of one cluster are connected to the docker public and replication networks of other clusters to allow for multi-tiering and replication.
 
 ## Deploying a Cluster
 
-Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in interactive mode. The script will ask you for a number of configuration parameters and deploy dfc accordingly:
+Run `./deploy_docker.sh` without arguments if you want to deploy a cluster in interactive mode. The script will ask you for a number of configuration parameters and deploy ais accordingly:
 
 ```
 ./deploy_docker.sh
 ```
 
-Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_dfc/aws.env` and passes this file to each container.
+Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
 To deploy a cluster in 'silent' mode use the following options (if any of them are not set, then the script switches to interactive mode and asks for the missing configuration parameters):
 
@@ -29,7 +29,7 @@ To deploy a cluster in 'silent' mode use the following options (if any of them a
 * -f=LIST or --filesystems=LIST : where LIST is a comma seperated list of filesystems
 * -g or --gcp                   : to use GCP
 * -h or --help                  : show usage
-* -l or --last                  : redeploy using the arguments from the last dfc docker deployment
+* -l or --last                  : redeploy using the arguments from the last ais docker deployment
 * -m or --multi                 : use multiple networks
 * -p=NUM or --proxy=NUM         : where NUM is the number of proxies
 * -s or --single                : use a single network
@@ -39,7 +39,7 @@ Note:
 * If the -f or --filesystems flag is used, the -d or --directories flag is disabled and vice-versa
 * If the -a or --aws flag is used, the -g or --gcp flag is disabled and vice-versa
 * If the -s or --single and -m  or --multi flag are used, then multiple networks will take precedence
-* Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_dfc/aws.env` and passes this file to each container.
+* Be sure that the aws credentials and configuration files are located outside of the script directory. The script copies AWS credentials and configuration from the provided location to `/tmp/docker_ais/aws.env` and passes this file to each container.
 
 Please see [main AIStore README](/README.md#configuration) for more information about testing mode.
 
@@ -51,7 +51,7 @@ Example Usage:
 
 ### Deploying Multiple Clusters
 
-When deploying multi-cluster configurations, each cluster will have the same number of proxies and targets. Each container name will be of this format: dfc${i}\_${target,proxy}\_${j}. Where *i* denotes the cluster number and *j* denotes the *j*th daemon of type target or proxy.
+When deploying multi-cluster configurations, each cluster will have the same number of proxies and targets. Each container name will be of this format: ais${i}\_${target,proxy}\_${j}. Where *i* denotes the cluster number and *j* denotes the *j*th daemon of type target or proxy.
 
 Example:
 ```
@@ -61,11 +61,11 @@ Example:
 
 ## Restarting a Cluster
 
-Running the same command that you used to deploy dfc using docker stops the running cluster and deploys a new dfc configuration from scratch (including multi-cluster configurations). It results in a fresh cluster(s) with all containers and networks rebuilt. Either run the previous deployment command (supply the same command arguments) or use the following command to redeploy using the arguments from the last dfc docker deployment:
+Running the same command that you used to deploy ais using docker stops the running cluster and deploys a new ais configuration from scratch (including multi-cluster configurations). It results in a fresh cluster(s) with all containers and networks rebuilt. Either run the previous deployment command (supply the same command arguments) or use the following command to redeploy using the arguments from the last ais docker deployment:
 ```
 ./deploy_docker.sh -l
 ```
-* Note: The deploy script saves configuration parameters to `/tmp/docker_dfc/deploy.env` each time before deploying. If this file doesn't exist or gets deleted, the command won't work.
+* Note: The deploy script saves configuration parameters to `/tmp/docker_ais/deploy.env` each time before deploying. If this file doesn't exist or gets deleted, the command won't work.
 
 ## Stopping a Cluster
 To stop the cluster, run one of the following scripts:
@@ -73,29 +73,29 @@ To stop the cluster, run one of the following scripts:
 # To stop the last deployed docker configuration
 ./stop_docker.sh -l
 ```
-* Note: This command uses the saved configuration parameters in `/tmp/docker_dfc/deploy.env` to determine how to stop dfc. If this file doesn't exist or gets deleted, the command won't work.
+* Note: This command uses the saved configuration parameters in `/tmp/docker_ais/deploy.env` to determine how to stop ais. If this file doesn't exist or gets deleted, the command won't work.
 ```
-# If a single network dfc configuration is currently deployed
+# If a single network ais configuration is currently deployed
 ./stop_docker.sh -s
 ```
 ```
-# If a multi network dfc configuration is currently deployed
+# If a multi network ais configuration is currently deployed
 ./stop_docker.sh -m
 ```
 ```
-# To stop a multiple cluster configuration of dfc that is currently deployed, where NUM_CLUSTERS >= 1
+# To stop a multiple cluster configuration of ais that is currently deployed, where NUM_CLUSTERS >= 1
 ./stop_docker.sh -c=NUM_CLUSTERS
 ```
-These commands stop all containers (even stopped and dead ones), and remove docker networks used by dfc. Refer to the stop_docker.sh script for more details about its usage.
+These commands stop all containers (even stopped and dead ones), and remove docker networks used by ais. Refer to the stop_docker.sh script for more details about its usage.
 
-After the cluster has been stopped, delete the `/tmp/dfc/` directory on your local machine. The following command does this (note Docker protects the contents of this directory):
+After the cluster has been stopped, delete the `/tmp/ais/` directory on your local machine. The following command does this (note Docker protects the contents of this directory):
 ```
-sudo rm -rf /tmp/dfc
+sudo rm -rf /tmp/ais
 ```
 
 ## Viewing the Local Filesystem of a Container
-The docker compose file is currently set to mount the /tmp/dfc/c${i}\_${target,proxy}\_${j} directory, where *i* is the cluster number and *j* is the daemon number, to /tmp/dfc inside the container.
-Thus, to see the /tmp/dfc folder of container dfc${i}\_${target,proxy}\_${j}, navigate to /tmp/dfc/c${i}\_{target,proxy}\_${j} directory on your local machine.
+The docker compose file is currently set to mount the /tmp/ais/c${i}\_${target,proxy}\_${j} directory, where *i* is the cluster number and *j* is the daemon number, to /tmp/ais inside the container.
+Thus, to see the /tmp/ais folder of container ais${i}\_${target,proxy}\_${j}, navigate to /tmp/ais/c${i}\_{target,proxy}\_${j} directory on your local machine.
 
 ## Extra configuration
 
@@ -111,7 +111,7 @@ Useful script variables:
 | PORT | 8080 | HTTP port for public API |
 | PORT_INTRA_CONTROL | 9080 | HTTP port for internal control plane API (for multiple networks case) |
 | PORT_INTRA_DATA | 10080 | HTTP port for internal data plane API (for multiple networks case) |
-| TESTFSPATHROOT | /tmp/dfc/ | the base directory for directories used in testing mode(option `-l` is set). All testing directories are located inside TESTFSPATHROOT and have short names 0, 1, 2 etc. |
+| TESTFSPATHROOT | /tmp/ais/ | the base directory for directories used in testing mode(option `-l` is set). All testing directories are located inside TESTFSPATHROOT and have short names 0, 1, 2 etc. |
 
 ## Running tests in docker environment
 
@@ -159,7 +159,7 @@ To open an interactive shell for a daemon with container name CONTAINER_NAME, us
 ```
 ./container_logs.sh CONTAINER_NAME
 ```
-* Note: The command currently defaults to open the /tmp/dfc/log working directory. To view the list of running containers and obtain a container name, use the command: `docker ps`
+* Note: The command currently defaults to open the /tmp/ais/log working directory. To view the list of running containers and obtain a container name, use the command: `docker ps`
 
 ### Accessing These Scripts From Anywhere
 Add the following to the end of your `~/.profile`:

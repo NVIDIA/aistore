@@ -126,7 +126,7 @@ func (g *rungroup) run() error {
 }
 
 func init() {
-	// CLI to override dfc JSON config
+	// CLI to override ais JSON config
 	flag.StringVar(&clivars.role, "role", "", "role: proxy OR target")
 	flag.StringVar(&clivars.conffile, "config", "", "config filename")
 	flag.StringVar(&clivars.loglevel, "loglevel", "", "glog loglevel")
@@ -172,7 +172,7 @@ func dryinit() {
 // daemon init & run
 //
 //==================
-func dfcinit(version, build string) {
+func aisinit(version, build string) {
 	var err error
 
 	flag.Parse()
@@ -208,7 +208,7 @@ func dfcinit(version, build string) {
 		ps := &stats.Prunner{}
 		ps.Init()
 		ctx.rg.add(ps, xproxystats)
-		_ = p.initStatsD("dfcproxy")
+		_ = p.initStatsD("aisproxy")
 		ps.Core.StatsdC = &p.statsdC
 
 		ctx.rg.add(newProxyKeepaliveRunner(p), xproxykeepalive)
@@ -220,7 +220,7 @@ func dfcinit(version, build string) {
 		ts := &stats.Trunner{TargetRunner: t} // iostat below
 		ts.Init()
 		ctx.rg.add(ts, xstorstats)
-		_ = t.initStatsD("dfctarget")
+		_ = t.initStatsD("aistarget")
 		ts.Core.StatsdC = &t.statsdC
 
 		ctx.rg.add(newTargetKeepaliveRunner(t), xtargetkeepalive)
@@ -289,7 +289,7 @@ func dfcinit(version, build string) {
 
 // Run is the 'main' where everything gets started
 func Run(version, build string) {
-	dfcinit(version, build)
+	aisinit(version, build)
 	var ok bool
 
 	err := ctx.rg.run()

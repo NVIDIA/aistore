@@ -42,15 +42,15 @@ valid_log_file_type() {
         return
     fi
     if [ "$1" == "error" ] || [ "$1" == "e" ]; then
-        log_file_name='dfc.ERROR'
+        log_file_name='ais.ERROR'
         return
     fi
     if [ "$1" == "warning" ] || [ "$1" == "w" ]; then
-        log_file_name='dfc.WARNING'
+        log_file_name='ais.WARNING'
         return
     fi
     if [ "$1" == "info" ] || [ "$1" == "i" ]; then
-        log_file_name='dfc.INFO'
+        log_file_name='ais.INFO'
         return
     fi
     echo "Not a valid log file type"
@@ -61,16 +61,16 @@ valid_log_file_type() {
 container_name_to_folder() {
     temp_container_name=$1
     temp_container_name="${temp_container_name:2}"
-    temp_container_name="/tmp/dfc/$temp_container_name/log/"
+    temp_container_name="/tmp/ais/$temp_container_name/log/"
     directories=("${directories[@]}" "$temp_container_name")
 }
 
-# get_container_names gets the container names of all dfc containers
+# get_container_names gets the container names of all ais containers
 # and adds their log directories to $directories
 get_container_names() {
     for container_name in $(docker ps --format "{{.Names}}"); do
-        if  [[ $container_name == dfc* ]]; then
-            if [[ $container_name =~ ^dfc[0-9]*_(proxy|target)_[0-9]* ]]; then
+        if  [[ $container_name == ais* ]]; then
+            if [[ $container_name =~ ^ais[0-9]*_(proxy|target)_[0-9]* ]]; then
                 container_name=${BASH_REMATCH[0]}
             else
                 echo Invalid container name format
@@ -85,9 +85,9 @@ get_container_names() {
 # the file path to array $files
 file_path_join() {
     if [ "$2" == "all" ] ; then
-        file_path_join $1 dfc.ERROR
-        file_path_join $1 dfc.WARNING
-        file_path_join $1 dfc.INFO
+        file_path_join $1 ais.ERROR
+        file_path_join $1 ais.WARNING
+        file_path_join $1 ais.INFO
     else
         combined="$1$2"
         if [ -f $combined ]; then

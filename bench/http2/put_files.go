@@ -15,7 +15,7 @@ import (
 
 const (
 	kilobytes = uint64(1024)
-	smokeDir  = "/tmp/dfc/smoke"        // smoke test dir
+	smokeDir  = "/tmp/ais/smoke"        // smoke test dir
 	ProxyURL  = "http://localhost:8080" // assuming local proxy is listening on 8080
 )
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # The following script lists the public, internal and replication network IP Addresses for
 # each daemon.
-setup_file="/tmp/docker_dfc/deploy.env"
+setup_file="/tmp/docker_ais/deploy.env"
 if [ -f $"$setup_file" ]; then
     # get $PORT, $PORT_INTRA_CONTROL and $PORT_INTRA_DATA
     source $setup_file
