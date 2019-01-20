@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"

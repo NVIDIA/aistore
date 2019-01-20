@@ -13,8 +13,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dsort/extract"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort/extract"
 )
 
 const (

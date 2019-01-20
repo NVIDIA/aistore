@@ -7,9 +7,9 @@ package ais_test
 import (
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 func TestPutObjectNoDaemonID(t *testing.T) {

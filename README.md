@@ -1,10 +1,12 @@
 AIStore: scaleable storage for AI applications
 ----------------------------------------------
-AIStore (AIS for short) is storage solution that is built from scratch and designed from ground up for large-scale AI applications. At the core of it's an open-source object storage with extensions and components tailored specifically for Deep Learning.
+AIStore (AIS for short) is storage solution built from scratch and designed from ground up for large-scale AI applications. At its core, it's an open-source object storage with extensions and components tailored specifically for Deep Learning.
 
-AIStore cluster *comprises* an arbitrary numbers of gateways (realized as HTTP **proxy** servers) and storage **targets** utilizing local disks (note the terminology in bold used throughout this document).
+AIS cluster *comprises* an arbitrary numbers of **gateways** and **storage targets**. AIS gateways are realized as HTTP **proxy** servers. AIS targets utilize local disks.
 
-Both **gateways/proxies** and **targets** are realized as software daemons that join (and, by virtue of joining, form) a storage cluster at their respective startup times, or upon user request. AIStore cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. There are no dependecies or designed-in limitations as far as special hardware capabilities. The code itself is free, open, and MIT-licensed.
+>> The terms *gateway* and *proxy* are used interchangeably throughout the READMEs and the source code.
+
+Both **gateways** and **targets** are realized as software daemons that join (and, by virtue of joining, form) a storage cluster at their respective startup times, or upon user request. AIStore cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. There are no dependecies or designed-in limitations as far as special hardware capabilities. The code itself is free, open, and MIT-licensed.
 
 A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, in particular, the fact that client <=> storage traffic is *no-extra-hops* direct, and also the caching/tiering capability. The latter may or may not be utilized - the deployment-time decision that would presumably depend, among other things, on use case, total usable storage capacity, and location of the original dataset(s) if any.
 
@@ -122,8 +124,8 @@ If you've already installed [Go](https://golang.org/dl/), getting started with A
 
 ```shell
 $ cd $GOPATH/src
-$ go get -v github.com/NVIDIA/dfcpub/ais
-$ cd github.com/NVIDIA/dfcpub/ais
+$ go get -v github.com/NVIDIA/aistore/ais
+$ cd github.com/NVIDIA/aistore/ais
 $ make deploy
 $ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
 ```
@@ -163,7 +165,7 @@ For other useful commands, see the [Makefile](ais/Makefile).
 The following sequence downloads up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
 
 ```shell
-$ cd $GOPATH/src/github.com/NVIDIA/dfcpub/ais/tests
+$ cd $GOPATH/src/github.com/NVIDIA/aistore/ais/tests
 $ BUCKET=myS3bucket go test -v -run=down
 $ find /tmp/ais -type f | grep local
 $ find /tmp/ais -type f | grep cloud
@@ -174,7 +176,7 @@ This, of course, assumes that all AIStore daemons are local and non-containerize
 To show all existing buckets, run:
 
 ```shell
-$ cd $GOPATH/src/github.com/NVIDIA/dfcpub
+$ cd $GOPATH/src/github.com/NVIDIA/aistore
 $ BUCKET=x go test ./ais/tests -v -run=bucketnames
 ```
 
@@ -369,7 +371,7 @@ Warning: as of version 1.2, disabling and enabling IO on the fly is not supporte
 Example of deploying a cluster with disk IO disabled and object size 256KB:
 
 ```
-/opt/dfcpub/dfc$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
+/opt/aistore/dfc$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
 ```
 
 Warning: the command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.

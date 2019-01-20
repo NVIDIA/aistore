@@ -12,7 +12,7 @@ import (
 	"io/ioutil"
 	"strconv"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (

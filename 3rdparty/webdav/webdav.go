@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package webdav provides a WebDAV server implementation.
-package webdav // import "github.com/NVIDIA/dfcpub/3rdparty/webdav"
+package webdav // import "github.com/NVIDIA/aistore/3rdparty/webdav"
 
 import (
 	"errors"

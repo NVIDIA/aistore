@@ -32,9 +32,9 @@ get_setup() {
 
 determine_config() {
     if [ "$network" == "single" ]; then
-        composer_file="${GOPATH}/src/github.com/NVIDIA/dfcpub/docker/dev/docker-compose.singlenet.yml"
+        composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.singlenet.yml"
     elif [ "$network" == "multi" ]; then
-        composer_file="${GOPATH}/src/github.com/NVIDIA/dfcpub/docker/dev/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/dfcpub/docker/dev/docker-compose.multinet.yml"
+        composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.multinet.yml"
     else
         echo "ERROR: No docker configuration selected."
         usage

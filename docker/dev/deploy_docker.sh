@@ -285,9 +285,9 @@ if [ "$FS_LIST" != "" ] && [ "$TESTFSPATHCOUNT" -eq 0 ]; then
     FSPATHS=${FSPATHS#","}
 fi
 
-composer_file="${GOPATH}/src/github.com/NVIDIA/dfcpub/docker/dev/docker-compose.singlenet.yml"
+composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.singlenet.yml"
 if [ "$network" = "multi" ]; then
-    composer_file="${GOPATH}/src/github.com/NVIDIA/dfcpub/docker/dev/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/dfcpub/docker/dev/docker-compose.multinet.yml"
+    composer_file="${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.singlenet.yml -f ${GOPATH}/src/github.com/NVIDIA/aistore/docker/dev/docker-compose.multinet.yml"
 fi
 
 PWD=$(pwd)

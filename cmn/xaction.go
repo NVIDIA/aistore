@@ -1,4 +1,4 @@
-// Package cmn provides common API constants and types, and low-level utilities for all dfcpub projects
+// Package cmn provides common API constants and types, and low-level utilities for all aistore projects
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  */
@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
 const timeStampFormat = "15:04:05.000000"

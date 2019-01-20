@@ -10,11 +10,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/dsort/playground/gen/util"
-	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/dsort/playground/gen/util"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 var (

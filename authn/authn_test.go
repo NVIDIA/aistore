@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (

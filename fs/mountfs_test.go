@@ -10,7 +10,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func TestAddNonExistingMountpath(t *testing.T) {

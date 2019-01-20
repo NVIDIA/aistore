@@ -10,8 +10,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func (t *targetrunner) objectInNextTier(nextTierURL, bucket, objname string) (in bool, errstr string, errcode int) {

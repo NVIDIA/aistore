@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 func TestStressDeleteBucketSingle(t *testing.T) {

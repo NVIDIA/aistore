@@ -33,9 +33,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 var (

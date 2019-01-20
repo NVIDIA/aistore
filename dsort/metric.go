@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 // TimeStats contains statistics about time spent on specific task. It calculates

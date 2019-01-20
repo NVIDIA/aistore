@@ -7,31 +7,31 @@ info:
   contact:
     name: "NVIDIA-AIS"
     email: "dfcdev@exchange.nvidia.com"
-    url: "https://github.com/NVIDIA/dfcpub"
+    url: "https://github.com/NVIDIA/aistore"
   license:
     name: MIT
-    url: https://github.com/NVIDIA/dfcpub/blob/master/LICENSE
+    url: https://github.com/NVIDIA/aistore/blob/master/LICENSE
 tags:
   - name: Object
     description: All APIs to interact with AIS objects
     externalDocs:
-      url: https://github.com/NVIDIA/dfcpub
+      url: https://github.com/NVIDIA/aistore
   - name: Bucket
     description: All APIs to interact with AIS buckets
     externalDocs:
-      url: https://github.com/NVIDIA/dfcpub
+      url: https://github.com/NVIDIA/aistore
   - name: Cluster
     description: All APIs to perform operations on the AIS cluster
     externalDocs:
-      url: https://github.com/NVIDIA/dfcpub
+      url: https://github.com/NVIDIA/aistore
   - name: Daemon
     description: All APIs to perform operations on individual AIS daemons
     externalDocs:
-      url: https://github.com/NVIDIA/dfcpub
+      url: https://github.com/NVIDIA/aistore
   - name: Sort
     description: All APIs to interact with DSort operation
     externalDocs:
-      url: https://github.com/NVIDIA/dfcpub/dsort
+      url: https://github.com/NVIDIA/aistore/dsort
 servers:
   - url: http://localhost:8080/v1
 paths:

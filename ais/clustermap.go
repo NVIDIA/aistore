@@ -13,14 +13,14 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 	jsoniter "github.com/json-iterator/go"
 )
 
 // NOTE: to access Snode, Smap and related structures, external
-//       packages and HTTP clients must import dfcpub/cluster (and not ais)
+//       packages and HTTP clients must import aistore/cluster (and not ais)
 
 //=====================================================================
 //

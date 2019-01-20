@@ -164,8 +164,8 @@ To open an interactive shell for a daemon with container name CONTAINER_NAME, us
 ### Accessing These Scripts From Anywhere
 Add the following to the end of your `~/.profile`:
 ```
-if [ -d "$GOPATH/src/github.com/NVIDIA/dfcpub/docker/dev" ] ; then
-  PATH="$PATH:$GOPATH/src/github.com/NVIDIA/dfcpub/docker/dev"
+if [ -d "$GOPATH/src/github.com/NVIDIA/aistore/docker/dev" ] ; then
+  PATH="$PATH:$GOPATH/src/github.com/NVIDIA/aistore/docker/dev"
 fi
 ```
 After that, execute the following to update your $PATH variable:

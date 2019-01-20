@@ -29,7 +29,7 @@ ARG GOBASE
 ENV GOPATH $GOBASE
 ENV GOBIN $GOPATH/bin
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
-ENV WORKDIR $GOPATH/src/github.com/NVIDIA/dfcpub/ais
+ENV WORKDIR $GOPATH/src/github.com/NVIDIA/aistore/ais
 
 RUN mkdir /etc/ais
 RUN mkdir /usr/nvidia

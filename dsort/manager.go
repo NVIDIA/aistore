@@ -19,14 +19,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dsort/extract"
-	"github.com/NVIDIA/dfcpub/dsort/filetype"
-	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/transport"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/dsort/filetype"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/transport"
 	sigar "github.com/cloudfoundry/gosigar"
 )
 

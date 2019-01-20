@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const (

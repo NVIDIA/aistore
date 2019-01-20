@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/transport"
+	"github.com/NVIDIA/aistore/transport"
 )
 
 func newClient(conns int) *http.Client {

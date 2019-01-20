@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/bench/aisloader/stats"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/stats/statsd"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/bench/aisloader/stats"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats/statsd"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 const (

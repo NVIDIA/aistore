@@ -4,7 +4,7 @@
 package main
 
 import (
-	"github.com/NVIDIA/dfcpub/ais"
+	"github.com/NVIDIA/aistore/ais"
 )
 
 // NOTE: these variables are set by ldflags

@@ -4,7 +4,7 @@
  */
 package cluster
 
-import "github.com/NVIDIA/dfcpub/cmn"
+import "github.com/NVIDIA/aistore/cmn"
 
 // - BMD represents buckets (that store objects) and associated metadata
 // - BMD (instance) can be obtained via Bowner.Get()

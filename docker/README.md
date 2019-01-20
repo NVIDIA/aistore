@@ -95,7 +95,7 @@ It’s OK if apt-get reports that none of these packages are installed.
 ## Starting AIStore
 1. If you have already installed go and configured $GOPATH execute the below command to download AIStore source code and all its dependencies.
 ```
-$go get -u -v github.com/NVIDIA/dfcpub/ais
+$go get -u -v github.com/NVIDIA/aistore/ais
 ```
 
 2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command. 

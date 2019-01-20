@@ -14,12 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/ios"
-	"github.com/NVIDIA/dfcpub/stats/statsd"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/stats/statsd"
 	jsoniter "github.com/json-iterator/go"
 )
 

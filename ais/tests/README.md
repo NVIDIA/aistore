@@ -4,7 +4,7 @@ AIStore testing
 AIStore provides both unit tests and integration tests that can be run individually or in batches. Some tests require AIStore cluster, others do not, and some of the tests require the cluster (under test) to be deployed with more than one storage target and more than one proxy/gateway.
 
 To run all tests, make sure to deploy a AIStore cluster with at least 3 proxies/gateways and at least 3 targets.
-Then, cd to $GOPATH/src/github.com/NVIDIA/dfcpub and execute:
+Then, cd to $GOPATH/src/github.com/NVIDIA/aistore and execute:
 
 ```
 $ BUCKET=<bucket name> go test -v -p 1 -count 1 -timeout 1h ./...
@@ -16,7 +16,7 @@ $ BUCKET=<bucket name> go test -v -p 1 -count 1 -timeout 1h ./...
 - -count=1: to disable Go test cache.
 - -v: when used, Go test shows result (PASS/FAIL) for each of the named tests.
 
-For a quick run, execute the following from the $GOPATH/src/github.com/NVIDIA/dfcpub:
+For a quick run, execute the following from the $GOPATH/src/github.com/NVIDIA/aistore:
 
 ```
 $ BUCKET=<bucket name> go test -v -p 1 -count 1 -short ./...

@@ -5,8 +5,8 @@
 package cluster
 
 import (
-	"github.com/NVIDIA/dfcpub/atime"
-	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/aistore/atime"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 // For implementations, please refer to ais/target.go

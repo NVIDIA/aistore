@@ -11,14 +11,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/atime"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/health"
-	"github.com/NVIDIA/dfcpub/ios"
-	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/stats"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/atime"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/health"
+	"github.com/NVIDIA/aistore/ios"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 

@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-// Package tutils provides common low-level utilities for all dfcpub unit and integration tests
+// Package tutils provides common low-level utilities for all aistore unit and integration tests
 package tutils
 
 import (
@@ -11,7 +11,7 @@ import (
 	"net/http/httptrace"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (

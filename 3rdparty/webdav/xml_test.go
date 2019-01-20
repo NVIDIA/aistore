@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	ixml "github.com/NVIDIA/dfcpub/3rdparty/webdav/internal/xml"
+	ixml "github.com/NVIDIA/aistore/3rdparty/webdav/internal/xml"
 )
 
 func TestReadLockInfo(t *testing.T) {

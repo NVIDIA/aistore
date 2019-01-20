@@ -1,5 +1,5 @@
 ## Disclaimer
-Note AIStore for Kubernetes is not currently being developed or maintained by Nvidia. These files are outdated and were once used to deploy using kubernetes, but the development team has switched over to Docker. If you would like to deploy ais in a containerized environment, consider using Docker. The Docker folder can be found in `dfcpub/docker`. If you would still like to use kubernetes, consider playing around with these files in this directory to get it working.
+Note AIStore for Kubernetes is not currently being developed or maintained by Nvidia. These files are outdated and were once used to deploy using kubernetes, but the development team has switched over to Docker. If you would like to deploy ais in a containerized environment, consider using Docker. The Docker folder can be found in `aistore/docker`. If you would still like to use kubernetes, consider playing around with these files in this directory to get it working.
 
 ## AIStore in Kubernetes
 This document assumes that you already have k8s cluster setup with the kubectl configured to point to your cluster.

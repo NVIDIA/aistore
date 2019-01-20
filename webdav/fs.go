@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/3rdparty/webdav"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 type (

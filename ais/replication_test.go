@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 const (

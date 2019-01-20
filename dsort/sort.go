@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/dsort/extract"
+	"github.com/NVIDIA/aistore/dsort/extract"
 )
 
 const (

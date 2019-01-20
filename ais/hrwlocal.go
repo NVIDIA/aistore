@@ -5,7 +5,7 @@
 package ais
 
 import (
-	"github.com/NVIDIA/dfcpub/cluster"
+	"github.com/NVIDIA/aistore/cluster"
 )
 
 func hrwTarget(bucket, objname string, smap *smapX) (si *cluster.Snode, errstr string) {

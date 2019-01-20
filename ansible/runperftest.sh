@@ -17,7 +17,7 @@ count=0
 while [ $clients_running -gt 0 ]; do 
 	clients_running=`parallel-ssh -h inventory/clients.txt -i "screen -ls client" | grep client | wc -l` 
 	echo running 
-	parallel-ssh -h inventory/clients.txt -i 'tail -10 /home/ubuntu/ais/src/github.com/NVIDIA/dfcpub/bench/aisloader/screenlog.0'
+	parallel-ssh -h inventory/clients.txt -i 'tail -10 /home/ubuntu/ais/src/github.com/NVIDIA/aistore/bench/aisloader/screenlog.0'
 	parallel-ssh -h inventory/targets.txt -i "iostat -xm 5 -c 2 | tail -33" || true
 	parallel-ssh -h inventory/targets.txt -i "netstat -s | grep transmit" || true
 	sleep 30
@@ -39,4 +39,4 @@ while [ $clients_running -gt 0 ]; do
 	fi
 done
 
-parallel-ssh -h inventory/clients.txt -i 'tail -20 /home/ubuntu/ais/src/github.com/NVIDIA/dfcpub/bench/aisloader/screenlog.0'
+parallel-ssh -h inventory/clients.txt -i 'tail -20 /home/ubuntu/ais/src/github.com/NVIDIA/aistore/bench/aisloader/screenlog.0'

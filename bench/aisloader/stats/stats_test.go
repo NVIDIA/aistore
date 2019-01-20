@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/bench/aisloader/stats"
+	"github.com/NVIDIA/aistore/bench/aisloader/stats"
 )
 
 func verify(t *testing.T, msg string, exp, act int64) {

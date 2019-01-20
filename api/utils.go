@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 var (

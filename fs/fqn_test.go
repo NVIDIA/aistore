@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 func TestFQN2Info(t *testing.T) {

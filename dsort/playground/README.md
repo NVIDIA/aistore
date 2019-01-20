@@ -10,11 +10,11 @@ Before you start playing with scripts make sure that you have installed our
 python client. This can be done by doing:
 ```shell
 $ # Install python client
-$ cd <path_to_repo>/dfcpub/python-client
+$ cd <path_to_repo>/aistore/python-client
 $ pip3 install .
 
 $ # Install playground helpers and scripts
-$ cd <path_to_repo>/dfcpub/dsort/playground
+$ cd <path_to_repo>/aistore/dsort/playground
 $ pip3 install -e .
 ```
 

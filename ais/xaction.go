@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/ec"
-	"github.com/NVIDIA/dfcpub/mirror"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/ec"
+	"github.com/NVIDIA/aistore/mirror"
 )
 
 type (

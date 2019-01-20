@@ -24,7 +24,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/webdav"
+	"github.com/NVIDIA/aistore/3rdparty/webdav"
 )
 
 var port = flag.Int("port", 9999, "server port")

@@ -5,7 +5,7 @@ sudo touch /etc/profile.d/aispaths.sh
 sudo sh -c "echo export PATH=$PATH:/usr/local/go/bin > /etc/profile.d/aispaths.sh"
 sudo sh -c "echo export GOBIN=$HOME/ais/bin >> /etc/profile.d/aispaths.sh"
 sudo sh -c "echo export GOPATH=$HOME/ais/ >> /etc/profile.d/aispaths.sh"
-sudo sh -c "echo export AISSRC=$HOME/ais/src/github.com/NVIDIA/dfcpub/ais >> /etc/profile.d/aispaths.sh"
+sudo sh -c "echo export AISSRC=$HOME/ais/src/github.com/NVIDIA/aistore/ais >> /etc/profile.d/aispaths.sh"
 sudo chmod 777 /etc/profile.d/aispaths.sh
 . /etc/profile.d/aispaths.sh
 rm -rf ~/ais || true
@@ -23,7 +23,7 @@ echo 'Setup go dep binary'
 curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 echo 'Go get AIS'
 cd $GOPATH/src
-go get -v github.com/NVIDIA/dfcpub/ais
+go get -v github.com/NVIDIA/aistore/ais
 cd $AISSRC
 
 VERSION=`git rev-parse --short HEAD`

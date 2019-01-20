@@ -4,7 +4,7 @@
 package hrw_bench
 
 import (
-	"github.com/NVIDIA/dfcpub/xoshiro256"
+	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
 

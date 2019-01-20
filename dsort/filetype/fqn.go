@@ -4,7 +4,7 @@
 package filetype
 
 import (
-	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 // Here is implementation of custom content file type for dsort. This content type

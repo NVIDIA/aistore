@@ -9,7 +9,7 @@ package dsort
 import (
 	"fmt"
 
-	"github.com/NVIDIA/dfcpub/dsort/extract"
+	"github.com/NVIDIA/aistore/dsort/extract"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

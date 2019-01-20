@@ -5,7 +5,7 @@
 package dsort
 
 import (
-	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/aistore/fs"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

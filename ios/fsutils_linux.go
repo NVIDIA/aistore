@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
 )
 
 func GetFSStats(path string) (blocks uint64, bavail uint64, bsize int64, err error) {

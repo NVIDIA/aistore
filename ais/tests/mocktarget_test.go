@@ -10,11 +10,11 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/ais"
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/ais"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/tutils"
 	jsoniter "github.com/json-iterator/go"
 )
 

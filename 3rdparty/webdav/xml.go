@@ -33,7 +33,7 @@ import (
 	// In the long term, this package should use the standard library's version
 	// only, and the internal fork deleted, once
 	// https://github.com/golang/go/issues/13400 is resolved.
-	ixml "github.com/NVIDIA/dfcpub/3rdparty/webdav/internal/xml"
+	ixml "github.com/NVIDIA/aistore/3rdparty/webdav/internal/xml"
 )
 
 // http://www.webdav.org/specs/rfc4918.html#ELEMENT_lockinfo

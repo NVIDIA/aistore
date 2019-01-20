@@ -2,7 +2,7 @@
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
  *
  */
-// Package tutils provides common low-level utilities for all dfcpub unit and integration tests
+// Package tutils provides common low-level utilities for all aistore unit and integration tests
 //
 //  FIXME -- FIXME: split and transform it into the: a) client API and b) test utilities
 //  FIXME -- FIXME: the client API must then move into the api package
@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/dsort"
-	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/memsys"
 	jsoniter "github.com/json-iterator/go"
 )
 

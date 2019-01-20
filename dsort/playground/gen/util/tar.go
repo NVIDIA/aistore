@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 var (

@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/transport"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 var buf1 []byte

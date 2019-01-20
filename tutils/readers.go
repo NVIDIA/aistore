@@ -15,8 +15,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/memsys"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
 )
 
 const (

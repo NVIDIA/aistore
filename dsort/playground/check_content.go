@@ -7,8 +7,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 var (

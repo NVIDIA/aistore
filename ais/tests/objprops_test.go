@@ -9,10 +9,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/memsys"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 func propsStats(t *testing.T, proxyURL string) (objChanged int64, bytesChanged int64) {

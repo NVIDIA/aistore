@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 const randReaderBufferSize = 64 * 1024 // size of internal buffer filled with random data

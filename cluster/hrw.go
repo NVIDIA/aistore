@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/fs"
-	"github.com/NVIDIA/dfcpub/xoshiro256"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/fs"
+	"github.com/NVIDIA/aistore/xoshiro256"
 	"github.com/OneOfOne/xxhash"
 )
 

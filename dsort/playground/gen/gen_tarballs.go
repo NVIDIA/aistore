@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/NVIDIA/dfcpub/dsort/playground/gen/util"
+	"github.com/NVIDIA/aistore/dsort/playground/gen/util"
 )
 
 const (

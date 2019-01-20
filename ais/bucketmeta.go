@@ -10,12 +10,12 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/NVIDIA/dfcpub/cluster"
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cluster"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 // NOTE: to access bucket metadata and related structures, external
-//       packages and HTTP clients must import dfcpub/cluster (and not ais)
+//       packages and HTTP clients must import aistore/cluster (and not ais)
 
 // - bucketMD is a server-side extension of the cluster.BMD
 // - bucketMD represents buckets (that store objects) and associated metadata

@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/dsort"
-	"github.com/NVIDIA/dfcpub/dsort/extract"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/dsort/extract"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 type dsortFramework struct {

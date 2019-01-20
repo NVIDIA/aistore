@@ -11,7 +11,7 @@ Source: [openapitools/openapi-generator](https://github.com/openapitools/openapi
 2. Run the following commands:
 
 ```shell
-cd </path/to/dfcpub>
+cd </path/to/aistore>
 java -jar </path/to/openapi-generator-cli.jar> generate -i swagger/rest-api-specification.yaml -g python -o ./python-client/
 ```
 

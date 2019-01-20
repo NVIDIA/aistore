@@ -5,7 +5,7 @@
 package ec
 
 import (
-	"github.com/NVIDIA/dfcpub/fs"
+	"github.com/NVIDIA/aistore/fs"
 )
 
 type SliceSpec struct{}

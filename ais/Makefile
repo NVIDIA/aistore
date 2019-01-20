@@ -55,8 +55,10 @@ rmcache:
 	@./setup/rmcache.sh
 
 clean:
+	rm -rf ~/.ais*
+	rm -rf /tmp/ais
 	rm -f $(GOPATH)/bin/ais
-	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/dfcpub/ais.a
+	rm -f $(GOPATH)/pkg/linux_amd64/github.com/NVIDIA/aistore/ais.a
 
 deploy:
 	@./setup/deploy.sh

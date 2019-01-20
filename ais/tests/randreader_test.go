@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/api"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/api"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 func TestRandomReaderPutStress(t *testing.T) {

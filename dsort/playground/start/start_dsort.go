@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/dsort"
-	"github.com/NVIDIA/dfcpub/tutils"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/dsort"
+	"github.com/NVIDIA/aistore/tutils"
 )
 
 var (

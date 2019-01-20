@@ -11,7 +11,7 @@ import (
 	"hash"
 	"io"
 
-	"github.com/NVIDIA/dfcpub/cmn"
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 var (
