@@ -1,20 +1,53 @@
-AIStore: scaleable storage for AI applications
-----------------------------------------------
-AIStore (AIS for short) is storage solution built from scratch and designed from ground up for large-scale AI applications. At its core, it's an open-source object storage with extensions and components tailored specifically for Deep Learning.
+AIStore: scalable storage for AI applications
+---------------------------------------------
+AIStore (AIS for short) is a built from scratch storage solution for AI applications. At its core, it's open-source object storage with extensions tailored for AI and, specifically, for petascale deep learning.
 
-AIS cluster *comprises* an arbitrary numbers of **gateways** and **storage targets**. AIS gateways are realized as HTTP **proxy** servers. AIS targets utilize local disks.
+As a storage system, AIS is a distributed object store with a RESTful S3-like API, and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read and write primitives to access objects and create, destroy, list, and configure buckets that contain those objects.
 
->> The terms *gateway* and *proxy* are used interchangeably throughout the READMEs and the source code.
+AIS cluster *comprises* an arbitrary numbers of **gateways** and **storage targets**. Targets utilize local disks, while gateways are  HTTP **proxies** that implement most of the control plane and never touch the data.
 
-Both **gateways** and **targets** are realized as software daemons that join (and, by virtue of joining, form) a storage cluster at their respective startup times, or upon user request. AIStore cluster can be deployed on pretty much any Linux distribution (although we do recommend the distros with 4.x kernels) and commodity hardware. There are no dependecies or designed-in limitations as far as special hardware capabilities. The code itself is free, open, and MIT-licensed.
+>> The terms *gateway* and *proxy* are used interchangeably throughout this README and other sources.
 
-A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, in particular, the fact that client <=> storage traffic is *no-extra-hops* direct, and also the caching/tiering capability. The latter may or may not be utilized - the deployment-time decision that would presumably depend, among other things, on use case, total usable storage capacity, and location of the original dataset(s) if any.
+Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on commodity hardware and pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
 
-<img src="images/dfc-overview-mp.png" alt="AIStore overview" width="448">
+A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, in particular, the fact that client <=> storage traffic has *no-extra-hops*: it's a direct path between the requesting client and the storage target that stores (or will store) the data.
 
-Provided storage services include [end-to-end checksumming](#checksumming), object versioning, Reed-Solomon based [erasure coding](#erasure-coding), health monitoring and recovery, and [local mirroring](#local-mirroring). I/O load balancing is also supported - at the time of this writing it requires "mirrored" buckets (that is, buckets configured for local replication).
+<img src="images/dfc-overview-mp.png" alt="AIStore overview" width="384">
 
-All inter- and intra-cluster networking is HTTP/1.1 based. Users can connect to proxies and execute RESTful operations. All clustered proxies (gateways) are identical as far as supported API that in turn includes documented-below control and data planes. Data moves **directly** between HTTP(S) clients and storage targets with no metadata servers and no extra-processing in-between. Distribution of data in the cluster is organized as a (lightning fast) two-dimensional consistent-hash, whereby objects, first, get distributed across all storage targets and, second, local disks of each target. Specialized-type software that we call [extended action](#extended-actions-xactions) maintains balanced distribution of the stored content in presence of servers joining or leaving the cluster.
+## Overview
+All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between. Distribution of objects across the cluster is organized as a (lightning fast) two-dimensional consistent-hash, whereby objects get distributed across all storage targets and, second, local disks of each target:
+
+<img src="images/ais-get-flow.png" alt="AIStore GET flow" width="640">
+
+### Limitations
+There are no limitations whatsoever on object and bucket sizes, numbers of objects and buckets, numbers of gateways and storage targets in a single AIS cluster.
+
+### Data Protection
+AIS supports end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon erasure coding that provides for arbitrary user-defined levels of cluster-wide data protection and space efficiency.
+
+### Scale-Out
+The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design. Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
+
+### HA
+AIS features a highly-available control plane where all gateways are absolutely identical in terms of their data and control plane APIs. Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
+
+## Fast Tier
+AIS can be deployed both as a self-contained standalone persistent storage cluster. AIS can also be optionally deployed as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction based on the monitored capacity and configurable high/low watermarks (see [LRU](#lru)). AWS/GCP integration is *turnkey* in the sense that it ony requires provisioning AIS targets with credentials to access the Cloud-based buckets.
+
+As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
+
+### Other Services
+
+The list of out-of-the-box services includes (but is not limited to):
+* health monitoring and recovery
+* range read
+* dry-run (to measure raw performance of network and disks)
+* full observability via StatsD/Grafana
+* load balancing
+
+>> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](#local-mirroring)).
+
+Most notably, though, AIStore integrates a special MapReduce layer codenamed [dSort](dsort/README.md) to perform user-defined merge/sort *transformations* of petascale datasets for the subsequent distributed training and inference by deep learning apps.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -527,7 +560,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next AIStore tier or from the Cloud.
 7. Finally, the target delivers the object to the client via HTTP(S) response.
 
-<img src="images/dfc-get-flow.png" alt="AIStore GET flow" width="800">
+<img src="images/ais-get-flow.png" alt="AIStore GET flow" width="800">
 
 ### `PUT`
 
@@ -538,7 +571,7 @@ Beyond these 5 (five) common steps the similarity between `GET` and `PUT` reques
 8. The target then writes the object to the local disk replacing the old one if it exists.
 9. Finally, the target writes extended attributes that include the versioning and checksum information, and thus commits the PUT transaction.
 
-<img src="images/dfc-put-flow.png" alt="AIStore PUT flow" width="800">
+<img src="images/ais-put-flow.png" alt="AIStore PUT flow" width="800">
 
 ## Extended Actions (xactions)
 
