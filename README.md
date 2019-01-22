@@ -1,29 +1,53 @@
-AIStore: scalable storage for AI applications
----------------------------------------------
+# AIStore: scalable storage for AI applications
+
 AIStore (AIS for short) is a built from scratch storage solution for AI applications. At its core, it's open-source object storage with extensions tailored for AI and, specifically, for petascale deep learning.
 
-As a storage system, AIS is a distributed object store with a RESTful S3-like API, and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read and write primitives to access objects and create, destroy, list, and configure buckets that contain those objects.
+As a storage system, AIS is a distributed object store with a [RESTful S3-like API](docs/http_api.md), and the gamut of capabilities that one would normally expect from an object store: eventual consistency, flat namespace, versioning, and all the usual read/write and contorl primitives to access objects and create, destroy, list, and configure buckets that contain those objects.
 
-AIS cluster *comprises* an arbitrary numbers of **gateways** and **storage targets**. Targets utilize local disks, while gateways are  HTTP **proxies** that implement most of the control plane and never touch the data.
+AIS cluster *comprises* an arbitrary numbers of **gateways** and **storage targets**. Targets utilize local disks while gateways are HTTP **proxies** that provide most of the control plane and never touch the data.
 
->> The terms *gateway* and *proxy* are used interchangeably throughout this README and other sources.
+>> The terms *gateway* and *proxy* are used interchangeably throughout this README and other sources in the repository.
 
-Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on commodity hardware and pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
+Both **gateways** and **targets** are userspace daemons that join (and, by joining, form) a storage cluster at their respective startup times, or upon user request. AIStore can be deployed on any commodity hardware and pretty much any Linux distribution (although we do recommend 4.x kernel). There are no designed-in size/scale type limitations. There are no dependencies on special hardware capabilities. The code itself is free, open, and MIT-licensed.
 
-A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, in particular, the fact that client <=> storage traffic has *no-extra-hops*: it's a direct path between the requesting client and the storage target that stores (or will store) the data.
+A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, and in particular, the fact that client <=> storage traffic has *no-extra-hops*: it's a direct path between the requesting client and the storage target that stores (or will store) the data.
 
-<img src="images/dfc-overview-mp.png" alt="AIStore overview" width="384">
+<img src="images/ais-overview-mp.png" alt="AIStore overview" width="384">
+
+AIS can be deployed as a self-contained standalone persistent storage cluster and/or as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction on a per-bucket basis based on the monitored capacity and configurable high/low watermarks (see [LRU](#lru)). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
+
+>> Terminology: AIS differentiates between **Cloud-based buckets** and those buckets that do not serve as a cache or tier in front of any Cloud storage. For shortness sake, the latter are referred to as **local buckets**.
+
+>> Cloud-based and local buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
+
+## Table of Contents
+- [Overview](#overview)
+    - [Limitations](#limitations)
+    - [Data Protection](#data-protection)
+    - [Scale-Out](#scale-out)
+    - [HA](#ha)
+    - [Fast Tier](#fast-tier)
+    - [Other Services](#other-services)
+    - [dSort](#dsort)
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+    - [Local Non-conteinerized](#local-non-conteinerized)
+    - [Tips](#tips)
+    - [Helpful Links](docs/helpful_links.md)
+- [Guides and References](#guides-and-references)
 
 ## Overview
-All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between. Distribution of objects across the cluster is organized as a (lightning fast) two-dimensional consistent-hash, whereby objects get distributed across all storage targets and, second, local disks of each target:
+All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
 <img src="images/ais-get-flow.png" alt="AIStore GET flow" width="640">
+
+Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
 
 ### Limitations
 There are no limitations whatsoever on object and bucket sizes, numbers of objects and buckets, numbers of gateways and storage targets in a single AIS cluster.
 
 ### Data Protection
-AIS supports end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon erasure coding that provides for arbitrary user-defined levels of cluster-wide data protection and space efficiency.
+AIS supports end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon erasure coding thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
 
 ### Scale-Out
 The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design. Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
@@ -32,89 +56,33 @@ The scale-out category includes balanced and fair distribution of objects where 
 AIS features a highly-available control plane where all gateways are absolutely identical in terms of their data and control plane APIs. Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
-AIS can be deployed both as a self-contained standalone persistent storage cluster. AIS can also be optionally deployed as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction based on the monitored capacity and configurable high/low watermarks (see [LRU](#lru)). AWS/GCP integration is *turnkey* in the sense that it ony requires provisioning AIS targets with credentials to access the Cloud-based buckets.
-
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
 
 ### Other Services
 
-The list of out-of-the-box services includes (but is not limited to):
+The (quickly growing) list of services includes (but is not limited to):
 * health monitoring and recovery
 * range read
-* dry-run (to measure raw performance of network and disks)
-* full observability via StatsD/Grafana
+* dry-run (to measure raw network and disk performance)
+* performance and capacity monitoring with full observability via StatsD/Grafana
 * load balancing
 
->> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](#local-mirroring)).
+>> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storservices.md#local-mirroring-and-load-balancing).
 
-Most notably, though, AIStore integrates a special MapReduce layer codenamed [dSort](dsort/README.md) to perform user-defined merge/sort *transformations* of petascale datasets for the subsequent distributed training and inference by deep learning apps.
+Most notably, AIStore provides [dSort](dsort/README.md) - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
-## Table of Contents
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-    - [Quick trial start with Docker](#quick-trial-start-with-docker)
-    - [Quick trial start with AIStore as an HTTP proxy](#quick-trial-start-with-aistore-as-an-http-proxy)
-    - [Regular installation](#regular-installation)
-    - [A few tips](#a-few-tips)
-- [Helpful Links: Go](#helpful-links-go)
-- [Helpful Links: AWS](#helpful-links-aws)
-- [Configuration](#configuration)
-    - [Runtime configuration](#runtime-configuration)
-    - [Managing filesystems](#managing-filesystems)
-    - [Disabling extended attributes](#disabling-extended-attributes)
-    - [Enabling HTTPS](#enabling-https)
-    - [Filesystem Health Checker](#filesystem-health-checker)
-    - [Networking](#networking)
-    - [Reverse proxy](#reverse-proxy)
-- [Performance tuning](#performance-tuning)
-- [Performance testing](#performance-testing)
-- [REST Operations](#rest-operations)
-    - [Querying information](#querying-information)
-    - [Example: querying runtime statistics](#example-querying-runtime-statistics)
-- [Read and Write Data Paths](#read-and-write-data-paths)
-    - [`GET`](#get)
-    - [`PUT`](#put)
-- [Extended Actions (xactions)](#extended-actions-xactions)
-- [List Bucket](#list-bucket)
-        - [properties-and-options](#properties-and-options)
-        - [Example: listing local and Cloud buckets](#example-listing-local-and-cloud-buckets)
-        - [Example: Listing all pages](#example-listing-all-pages)
-- [Rebalancing](#rebalancing)
-- [List/Range Operations](#listrange-operations)
-        - [List](#list)
-        - [Range](#range)
-        - [Examples](#examples)
-- [Joining a Running Cluster](#joining-a-running-cluster)
-- [Highly Available Control Plane](#highly-available-control-plane)
-    - [Bootstrap](#bootstrap)
-    - [Election](#election)
-    - [Non-electable gateways](#non-electable-gateways)
-    - [Metasync](#metasync)
-- [Storage Services](#storage-services)
-    - [Checksumming](#checksumming)
-    - [LRU](#lru)
-    - [Erasure coding](#erasure-coding)
-    - [Local mirroring and load balancing](#local-mirroring-and-load-balancing)
-- [Object checksums: brief theory of operations](#object-checksums-brief-theory-of-operations)
-- [Command-line Load Generator](#command-line-load-generator)
-- [Metrics with StatsD](#metrics-with-statsd)
-        - [Proxy metrics:](#proxy-metrics)
-        - [Target Metrics](#target-metrics)
-        - [Disk Metrics](#disk-metrics)
-        - [Keepalive Metrics](#keepalive-metrics)
-        - [aisloader Metrics](#aisloader-metrics)
-- [Experimental](#experimental)
-	- [WebDAV](#webdav)
-	- [Multi-tiering](#multi-tiering)
-	- [Inter-cluster replication](#inter-cluster-replication)
-	- [Authentication](#authentication)
+### dSort
+
+DSort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including tf.Record and tf.Example ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tf-records)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
+
+By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job is defined by a high-level specification that defines (or, names) input dataset, sorting algorithm, (desired) size of the output shard, and a few other parameters. Given this input, dSort generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. At the end of this job, the result - a *transformed*" dataset optimized for subsequent training and inference by deep learning apps.
 
 ## Prerequisites
 
-* Linux (with sysstat and attr packages)
+* Linux (with sysstat and attr packages, and kernel 4.x or later)
 * [Go 1.10 or later](https://golang.org/dl/)
-* Optionally, extended attributes (xattrs)
-* Optionally, Amazon (AWS) or Google Cloud (GCP) account
+* Extended attributes (xattrs)
+* Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account
 
 Some Linux distributions do not include sysstat and/or attr packages - to install, use 'apt-get' (Debian), 'yum' (RPM), or other applicable package management tool, e.g.:
 
@@ -123,77 +91,70 @@ $ apt-get install sysstat
 $ apt-get install attr
 ```
 
-The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is currently supported by all mainstream filesystems. Unfortunately, xattrs may not always be enabled in the OS kernel configurations - the fact that can be easily found out by running setfattr (Linux) or xattr (macOS) command as shown in this [single-host local deployment script](ais/setup/deploy.sh).
+The capability called [extended attributes](https://en.wikipedia.org/wiki/Extended_file_attributes), or xattrs, is a long time POSIX legacy and is supported by all mainstream filesystems with no exceptions. Unfortunately, extended attributes (xattrs) may not always be enabled (by the Linux distribution you are using) in the Linux kernel configurations - the fact that can be easily found out by running `setfattr` command.
 
-If this is the case - that is, if you happen not to have xattrs handy, you can configure AIStore not to use them at all (section **Configuration** below).
-
-To get started, it is also optional (albeit desirable) to have access to an Amazon S3 or GCP bucket. If you don't have or don't want to use Amazon and/or Google Cloud accounts - or if you simply deploy AIStore as a non-redundant object store - you can use so called *local buckets* as illustrated:
-
-a) in the [REST Operations](#rest-operations) section below, and
-b) in the [test sources](ais/tests/regression_test.go)
-
-Note that local and Cloud-based buckets support the same API with minor exceptions (only local buckets can be renamed, for instance).
+>> If disabled, please make sure to enable xattrs in your Linux kernel configuration.
 
 ## Getting Started
 
-### Quick trial start with Docker
+AIStore runs on commodity Linux machines with no special requirements on the hardware. The implication is that the number of possible (optimal and not-so-optimal) deployment options is practically unlimited. This section covers the bare minimum - the "Hello, World" of the AIStore deployment, if you will.
 
-To get started quickly with a containerized, one-proxy, one-target deployment of AIStore, see [Getting started quickly with AIStore using Docker](docker/quick_start/README.md).
+### Local Non-conteinerized
 
-### Quick trial start with AIStore as an HTTP proxy
-
-1. Set the field `rproxy` to `cloud` or `target` in  [the configuration](ais/setup/config.sh) prior to deployment.
-2. Set the environment variable `http_proxy` (supported by most UNIX systems) to the primary proxy URL of your AIStore cluster.
-
-```shell
-$ export http_proxy=<PRIMARY-PROXY-URL>
-```
-
-When these two are set, AIStore will act as a reverse proxy for your outgoing HTTP requests. _Note that this should only be used for a quick trial of AIStore, and not for production systems_.
-
-### Regular installation
-
-If you've already installed [Go](https://golang.org/dl/), getting started with AIStore takes about 30 seconds:
+If [Go](https://golang.org/dl/) is already installed, getting started with AIStore takes no more than a minute and entails:
 
 ```shell
 $ cd $GOPATH/src
 $ go get -v github.com/NVIDIA/aistore/ais
 $ cd github.com/NVIDIA/aistore/ais
 $ make deploy
-$ BUCKET=<your bucket name> go test ./tests -v -run=down -numfiles=2
+$ go test ./tests -v -run=Mirror
 ```
+The `go get` command installs AIStore sources and all versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
 
-The `go get` command will install the AIStore source code and all its versioned dependencies under your configured [$GOPATH](https://golang.org/cmd/go/#hdr-GOPATH_environment_variable).
-
-The `make deploy` command deploys AIStore daemons locally (for details, please see [the script](ais/setup/deploy.sh)). If you'd want to enable optional AIStore authentication server, execute instead:
+The `make deploy` command deploys AIStore daemons locally based on a few prompted Q&A. The example shown below deploys 10 targets (each with 2 local simulated filesystems) and 3 gateways, and will not require (or expect) to access Cloud storage (notice the "Cloud Provider" prompt below):
 
 ```shell
-$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy
-
+# make deploy
+Enter number of storage targets:
+10
+Enter number of proxies (gateways):
+3
+Number of local cache directories (enter 0 to use preconfigured filesystems):
+2
+Select Cloud Provider:
+1: Amazon Cloud
+2: Google Cloud
+3: None
+Enter your choice:
+3
 ```
-For information about AuthN server, please see [AuthN documentation](./authn/README.md).
 
-Finally, for the last command in the sequence above to work, you'll need to have a name - the bucket name.
-The bucket could be an Amazon or GCP based one, **or** a AIStore *local bucket*.
+>> Docker and K8s based deployments are described elsewhere in the documentation.
 
-Assuming the bucket exists, the `go test` command above will download two objects.
+>> To enable optional AIStore authentication server, execute instead `$ CREDDIR=/tmp/creddir AUTHENABLED=true make deploy`. For information on AuthN server, please see [AuthN documentation](authn/README.md).
 
-Similarly, assuming there's a bucket called "myS3bucket", the following command:
+Finally, the `go test` (above) will create a local bucket, configure it as a two-way mirror, generate thousands of random objects, read them all several times, and then destroy the replicas and eventually the bucket as well.
 
+Alternatively, if you happen to have Amazon and/or Google Cloud account, make sure to specify the corresponding bucket name when running `go test` For example, the following will download objects from your (presumably) S3 bucket and distribute them across AIStore:
+
+```shell
+$ BUCKET=myS3bucket go test ./tests -v -run=download
+```
+
+Here's a minor variation of the above:
 
 ```shell
 $ BUCKET=myS3bucket go test ./tests -v -run=download -args -numfiles=100 -match='a\d+'
 ```
 
-downloads up to 100 objects from the bucket called myS3bucket, whereby names of those objects
-will match 'a\d+' regex.
+This command runs test that matches the specified string ("download"). The test then downloads up to 100 objects from the bucket called myS3bucket, whereby names of those objects match 'a\d+' regex.
 
-For more testing commands and command line options, please refer to the corresponding
-[README](ais/tests/README.md) and/or the [test sources](ais/tests/).
+For more testing commands and command line options, please refer to the corresponding [README](ais/tests/README.md) and/or the [test sources](ais/tests/).
 
 For other useful commands, see the [Makefile](ais/Makefile).
 
-### A few tips
+### Tips
 
 The following sequence downloads up to 100 objects from the bucket called "myS3bucket" and then finds the corresponding cached objects locally, in the local and Cloud bucket directories:
 
@@ -223,834 +184,27 @@ $ find $LOGDIR -type f | grep log
 
 where $LOGDIR is the configured logging directory as per [AIStore configuration](ais/setup/config.sh).
 
-
 To terminate a running AIStore service and cleanup local caches, run:
 ```shell
 $ make kill
 $ make rmcache
 ```
 
-## Helpful Links: Go
-
-* [How to write Go code](https://golang.org/doc/code.html)
-
-* [How to install Go binaries and tools](https://golang.org/doc/install)
-
-* [The Go Playground](https://play.golang.org/)
-
-* [Go language support for Vim](https://github.com/fatih/vim-go)
-  (note: if you are a VIM user vim-go plugin is invaluable)
-
-* [Go lint tools to check Go source for errors and warnings](https://github.com/alecthomas/gometalinter)
-
-## Helpful Links: AWS
-
-* [AWS Command Line Interface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html)
-
-* [AWS S3 Tutorial For Beginners](https://www.youtube.com/watch?v=LfBn5Y1X0vE)
-
-
-## Configuration
-
-AIStore configuration is consolidated in a single [JSON file](ais/setup/config.sh) where all of the knobs must be self-explanatory and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
-
-<img src="images/dfc-config-1.png" alt="AIStore configuration: TCP port and URL" width="512">
-
-and
-
-<img src="images/dfc-config-2-commented.png" alt="AIStore configuration: local filesystems" width="548">
-
-As shown above, the "test_fspaths" section of the configuration corresponds to a single local filesystem being partitioned between both local and Cloud buckets. In production deployments, we use the (alternative) "fspaths" section that includes a number of local directories, whereby each directory is based on a different local filesystem. An example of 12 fspaths (and 12 local filesystems) follows below:
-
-<img src="images/example-12-fspaths-config.png" alt="Example: 12 fspaths" width="160">
-
-### Runtime configuration
-
-In most cases restart of the node is required after changing any of its configuration options. But a number of options can be modified on the fly using [REST API](#rest-operations).
-
-Each option can be set for an individual daemon, by sending a request to the daemon URL /v1/daemon or, for the entire cluster, by sending a request to the URL /v1/cluster of any proxy or gateway. In the latter case the primary proxy broadcasts the new value to all proxies and targets after it updates its local configuration.
-
-Both a proxy and a storage target support the same set of runtime options but a proxy uses only a few of them. The list of options which affect proxy includes `loglevel`, `vmodule`, `dest_retry_time`, `default_timeout`, and `default_long_timeout`.
-
-Warning: as of the version 1.2, all changes done via REST API(below) are not persistent. The default values are also all as of version 1.2 and are subject to change in next versions.
-
-| Option | Default value | Description |
-|---|---|---|
-| loglevel | 3 | Set global logging level. The greater number the more verbose log output |
-| vmodule | "" | Overrides logging level for a given modules.<br>{"name": "vmodule", "value": "target\*=2"} sets log level to 2 for target modules |
-| stats_time | 10s | A node periodically does 'housekeeping': updates internal statistics, remove old logs, and executes extended actions prefetch and LRU waiting in the line |
-| dont_evict_time | 120m | LRU does not evict an object which was accessed less than dont_evict_time ago |
-| disk_util_low_wm | 60 | Operations that implement self-throttling mechanism, e.g. LRU, do not throttle themselves if disk utilization is below `disk_util_low_wm` |
-| disk_util_high_wm | 80 | Operations that implement self-throttling mechanism, e.g. LRU, turn on maximum throttle if disk utilization is higher than `disk_util_high_wm` |
-| capacity_upd_time | 10m | Determines how often AIStore updates filesystem usage |
-| dest_retry_time | 2m | If a target does not respond within this interval while rebalance is running the target is excluded from rebalance process |
-| send_file_time | 5m | Timeout for getting object from neighbor target or for sending an object to the correct target while rebalance is in progress |
-| default_timeout | 30s | Default timeout for quick intra-cluster requests, e.g. to get daemon stats |
-| default_long_timeout | 30m | Default timeout for long intra-cluster requests, e.g. reading an object from neighbor target while rebalancing |
-| lowwm | 75 | If filesystem usage exceeds `highwm` LRU tries to evict objects so the filesystem usage drops to `lowwm` |
-| highwm | 90 | LRU starts immediately if a filesystem usage exceeds the value |
-| lru_enabled | true | Enables and disabled the LRU |
-| rebalancing_enabled | true | Enables and disables automatic rebalance after a target receives the updated cluster map. If the(automated rebalancing) option is disabled, you can still use the REST API(`PUT {"action": "rebalance" v1/cluster`) to initiate cluster-wide rebalancing operation |
-| validate_checksum_cold_get | true | Enables and disables checking the hash of received object after downloading it from the cloud or next tier |
-| validate_checksum_warm_get | false | If the option is enabled, AIStore checks the object's version (for a Cloud-based bucket), and an object's checksum. If any of the values(checksum and/or version) fail to match, the object is removed from local storage and (automatically) with its Cloud or next AIStore tier based version |
-| checksum | xxhash | Hashing algorithm used to check if the local object is corrupted. Value 'none' disables hash sum checking. Possible values are 'xxhash' and 'none' |
-| versioning | all | Defines what kind of buckets should use versioning to detect if the object must be redownloaded. Possible values are 'cloud', 'local', and 'all' |
-| fschecker_enabled | true | Enables and disables filesystem health checker (FSHC) |
-
-### Managing filesystems
-
-Configuration option `fspaths` specifies the list of local directories where storage targets store objects. An `fspath` aka `mountpath` (both terms are used interchangeably) is, simply, a local directory serviced by a local filesystem.
-
-NOTE: there must be a 1-to-1 relationship between `fspath` and an underlying local filesystem. Note as well that this may be not the case for the development environments where multiple mountpaths are allowed to coexist within a single filesystem (e.g., tmpfs).
-
-AIStore REST API makes it possible to list, add, remove, enable, and disable a `fspath` (and, therefore, the corresponding local filesystem) at runtime. Filesystem's health checker (FSHC) monitors the health of all local filesystems: a filesystem that "accumulates" I/O errors will be disabled and taken out, as far as the AIStore built-in mechanism of object distribution. For further details about FSHC and filesystem REST API, please [see FSHC readme](./health/fshc.md).
-
-Warning: as of the version 1.2, all changes done via REST API are not persistent.
-
-### Disabling extended attributes
-
-To make sure that AIStore does not utilize xattrs, configure "checksum"="none" and "versioning"="none" for all targets in a AIStore cluster. This can be done via the [common configuration "part"](ais/setup/config.sh) that'd be further used to deploy the cluster.
-
-### Enabling HTTPS
-
-To switch from HTTP protocol to an encrypted HTTPS, configure "use_https"="true" and modify "server_certificate" and "server_key" values so they point to your OpenSSL cerificate and key files respectively (see [AIStore configuration](ais/setup/config.sh)).
-
-### Filesystem Health Checker
-
-Default installation enables filesystem health checker component called FSHC. FSHC can be also disabled via section "fschecker" of the [configuration](ais/setup/config.sh).
-
-When enabled, FSHC gets notified on every I/O error upon which it performs extensive checks on the corresponding local filesystem. One possible outcome of this health-checking process is that FSHC disables the faulty filesystems leaving the target with one filesystem less to distribute incoming data.
-
-Please see [FSHC readme](./health/fshc.md) for further details.
-
-### Networking
-
-In addition to user-accessible public network, AIStore will optionally make use of the two other networks: internal (or intra-cluster) and replication. If configured via the [netconfig section of the configuration](ais/setup/config.sh), the intra-cluster network is utilized for latency-sensitive control plane communications including keep-alive and [metasync](#metasync). The replication network is used, as the name implies, for a variety of replication workloads.
-
-All the 3 (three) networking options are enumerated [here](common/network.go).
-
-### Reverse proxy
-
-AIStore gateway can act as a reverse proxy vis-à-vis AIStore storage targets. As of the v1.2, this functionality is restricted to GET requests only and must be used with caution and consideration. Related [configuration variable](ais/setup/config.sh) is called "rproxy" - see sub-section "http" of the section "netconfig". To eliminate HTTP redirects, simply set the "rproxy" value to "target" ("rproxy": "target").
-
-## Performance tuning
-
-AIStore utilizes local filesystems, which means that under pressure a AIStore target will have a significant number of open files. This is often the case when running stress tests that perform highly-intensive, concurrent object PUT operations. In the event that errors stating `too many open files` are encountered, system settings must be changed. To overcome the system's default `ulimit`, have the following 3 lines in each target's `/etc/security/limits.conf`:
-
-```
-root             hard    nofile          10240
-ubuntu           hard    nofile          1048576
-ubuntu           soft    nofile          1048576
-```
-After restarting, confirm that the limits have been increased accordingly using 
-```shell
-ulimit -n
-```
-
-If you find that the result is still lower than expected, take the additional steps of modifying
-both `/etc/systemd/system.conf` and `/etc/systemd/user.conf` to change the value of `DefaultLimitNOFILE` to the desired limit. If that line does not exist, append it under the `Manager` section of those two files as such:
-```
-DefaultLimitNOFILE=$desiredLimit
-```
-
-Additionally, add the following line to the end of `/etc/sysctl.conf`:
-```
-fs.file-max=$desiredLimit
-```
-
-After a restart, verify using the same command, `ulimit -n`, that the limit for the number of open files has been increased accordingly.
-
-For more information, refer to this [link](https://ro-che.info/articles/2017-03-26-increase-open-files-limit).
-
-Generally, configuring a AIStore cluster to perform under load is a vast topic that would be outside the scope of this README. The usual checklist includes (but is not limited to):
-
-1. Setting MTU = 9000 (aka Jumbo frames)
-
-2. Following instruction guidelines for the Linux distribution that you deploy, e.g.:
-    - [Ubuntu Performance Tuning](https://wiki.mikejung.biz/Ubuntu_Performance_Tuning)
-    - [Red Hat Enterprise Linux 7 Performance Tuning](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/pdf/performance_tuning_guide/Red_Hat_Enterprise_Linux-7-Performance_Tuning_Guide-en-US.pdf)
-
-3. Tuning TCP stack - in part, increasing the TCP send and receive buffer sizes:
-
-```shell
-$ sysctl -a | grep -i wmem
-$ sysctl -a | grep -i ipv4
-```
-
-And more.
-
-Virtualization overhead may require a separate investigation. It is strongly recommended that a (virtualized) AIStore storage node (whether it's a gateway or a target) would have a direct and non-shared access to the (CPU, disk, memory and network) resources of its bare-metal host. Ensure that AIStore VMs do not get swapped out when idle.
-
-AIStore storage node, in particular, needs to have a physical resource in its entirety: RAM, CPU, network and storage. The underlying hypervisor must "resort" to the remaining minimum that is absolutely required.
-
-And, of course, make sure to use PCI passthrough for all local hard drives given to AIStore.
-
-Finally, to ease troubleshooting, consider the usual and familiar load generators such as `fio` and `iperf`, and observability tools: `iostat`, `mpstat`, `sar`, `top`, and more. For instance, `fio` and `iperf` may appear to be almost indispensable in terms of validating and then tuning performances of local storages and clustered networks, respectively. Goes without saying that it does make sense to do this type of basic checking-and-validating prior to running AIStore under stressful workloads.
-
-## Performance testing
-
-[Command-line load generator](#command-line-load-generator) is a good tool to test overall AIStore performance. But it does not show what local subsystem - disk or network one - is a bottleneck. AIStore provides a way to switch off disk and/or network IO to test their impact on performance. It can be done by passing command line arguments or by setting environment variables. The environment variables have higher priority: if both a command line argument and an environment variable are defined then AIStore uses the environment variable.
-
-If any kind of IO is disabled then AIStore sends a warning to stderr and turns off some internal features including object checksumming, versioning, atime and extended attributes management.
-
-Warning: as of version 1.2, disabling and enabling IO on the fly is not supported, it must be done at target's startup.
-
-| CLI argument | Environment variable | Default value | Description |
-|---|---|---|---|
-| nodiskio | AIS_NODISKIO | false | true - disables disk IO. For GET requests a storage target does not read anything from disks - no file stat, file open etc - and returns an in-memory object with predefined size (see AIS_DRYOBJSIZE variable). For PUT requests it reads the request's body to /dev/null.<br>Valid values are true or 1, and falseor 0 |
-| nonetio | AIS_NONETIO | false | true - disables HTTP read and write. For GET requests a storage target reads the data from disks but does not send bytes to a caller. It results in that the caller always gets an empty object. For PUT requests, after opening a connection, AIStore reads the data from in-memory object and saves the data to disks.<br>Valid values are true or 1, and false or 0 |
-| dryobjsize | AIS_DRYOBJSIZE | 8m | A size of an object when a source is a 'fake' one: disk IO disabled for GET requests, and network IO disabled for PUT requests. The size is in bytes but suffixes can be used. The following suffixes are supported: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m' - the size of an object is 8 megabytes |
-
-Example of deploying a cluster with disk IO disabled and object size 256KB:
-
-```
-/opt/aistore/dfc$ AIS_NODISKIO=true AIS_DRYOBJSIZE=256k make deploy
-```
-
-Warning: the command-line load generator shows 0 bytes throughput for GET operations when network IO is disabled because a caller opens a connection but a storage target does not write anything to it. In this case the throughput can be calculated only indirectly by comparing total number of GETs or latency of the current test and those of previous test that had network IO enabled.
-
-## REST Operations
-
-
-AIStore supports a growing number and variety of RESTful operations. To illustrate common conventions, let's take a look at the example:
-
-```shell
-$ curl -X GET http://localhost:8080/v1/daemon?what=config
-```
-
-This command queries the AIStore configuration; at the time of this writing it'll result in a JSON output that looks as follows:
-
-> {"smap":{"":{"node_ip_addr":"","daemon_port":"","daemon_id":"","direct_url":""},"15205:8081":{"node_ip_addr":"localhost","daemon_port":"8081","daemon_id":"15205:8081","direct_url":"http://localhost:8081"},"15205:8082":{"node_ip_addr":"localhost","daemon_port":"8082","daemon_id":"15205:8082","direct_url":"http://localhost:8082"},"15205:8083":{"node_ip_addr":"localhost","daemon_port":"8083","daemon_id":"15205:8083","direct_url":"http://localhost:8083"}},"version":5}
-
-Notice the 4 (four) ubiquitous elements in the `curl` command line above:
-
-1. HTTP verb aka method.
-
-In the example, it's a GET but it can also be POST, PUT, and DELETE. For a brief summary of the standard HTTP verbs and their CRUD semantics, see, for instance, this [REST API tutorial](http://www.restapitutorial.com/lessons/httpmethods.html).
-
-2. URL path: hostname or IP address of one of the AIStore servers.
-
-By convention, a RESTful operation performed on a AIStore proxy server usually implies a "clustered" scope. Exceptions include querying
-proxy's own configuration via `?what=config` query string parameter.
-
-3. URL path: version of the REST API, resource that is operated upon, and possibly more forward-slash delimited specifiers.
-
-For example: /v1/cluster where 'v1' is the currently supported API version and 'cluster' is the resource.
-
-4. Control message in the query string parameter, e.g. `?what=config`.
-
-> Combined, all these elements tell the following story. They specify the most generic action (e.g., GET) and designate the target aka "resource" of this action: e.g., an entire cluster or a given daemon. Further, they may also include context-specific and query string encoded control message to, for instance, distinguish between getting system statistics (`?what=stats`) versus system configuration (`?what=config`).
-
-Note that 'localhost' in the examples below is mostly intended for developers and first time users that run the entire AIStore system on their Linux laptops. It is implied, however, that the gateway's IP address or hostname is used in all other cases/environments/deployment scenarios.
-
-| Operation | HTTP action | Example |
-|--- | --- | ---|
-| Unregister storage target | DELETE /v1/cluster/daemon/daemonID | `curl -i -X DELETE http://localhost:8080/v1/cluster/daemon/15205:8083` |
-| Register storage target | POST /v1/cluster/register | `curl -i -X POST -H 'Content-Type: application/json' -d '{"node_ip_addr": "172.16.175.41", "daemon_port": "8083", "daemon_id": "43888:8083", "direct_url": "http://172.16.175.41:8083"}' http://localhost:8083/v1/cluster/register` |
-| Set primary proxy forcefully(primary proxy)| PUT /v1/daemon/proxy/proxyID | `curl -i -X PUT -G http://localhost:8083/v1/daemon/proxy/23ef189ed  --data-urlencode "frc=true" --data-urlencode "can=http://localhost:8084"`  <sup id="a8">[8](#ft8)</sup>|
-| Update individual AIStore daemon (proxy or target) configuration | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8081/v1/daemon`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
-| Set cluster-wide configuration (proxy) | PUT {"action": "setconfig", "name": "some-name", "value": "other-value"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "setconfig","name": "stats_time", "value": "1s"}' http://localhost:8080/v1/cluster`<br>Please see [runtime configuration](#runtime-configuration) for the option list |
-| Shutdown target/proxy | PUT {"action": "shutdown"} /v1/daemon | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8082/v1/daemon` |
-| Shutdown cluster (proxy) | PUT {"action": "shutdown"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "shutdown"}' http://localhost:8080/v1/cluster` |
-| Rebalance cluster (proxy) | PUT {"action": "rebalance"} /v1/cluster | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action": "rebalance"}' http://localhost:8080/v1/cluster` |
-| Get object (proxy) | GET /v1/objects/bucket-name/object-name | `curl -L -X GET http://localhost:8080/v1/objects/myS3bucket/myobject -o myobject` <sup id="a1">[1](#ft1)</sup> |
-| Read range (proxy) | GET /v1/objects/bucket-name/object-name?offset=&length= | `curl -L -X GET http://localhost:8080/v1/objects/myS3bucket/myobject?offset=1024&length=512 -o myobject` |
-| Put object (proxy) | PUT /v1/objects/bucket-name/object-name | `curl -L -X PUT http://localhost:8080/v1/objects/myS3bucket/myobject -T filenameToUpload` |
-| Get bucket names | GET /v1/buckets/\* | `curl -X GET http://localhost:8080/v1/buckets/*` <sup>[6](#ft6)</sup> |
-| List objects in bucket | POST {"action": "listobjects", "value":{  properties-and-options... }} /v1/buckets/bucket-name | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size"}}' http://localhost:8080/v1/buckets/myS3bucket` <sup id="a2">[2](#ft2)</sup> |
-| Rename/move object (local buckets) | POST {"action": "rename", "name": new-name} /v1/objects/bucket-name/object-name | `curl -i -X POST -L -H 'Content-Type: application/json' -d '{"action": "rename", "name": "dir2/DDDDDD"}' http://localhost:8080/v1/objects/mylocalbucket/dir1/CCCCCC` <sup id="a3">[3](#ft3)</sup> |
-| Copy object | PUT /v1/objects/bucket-name/object-name?from_id=&to_id= | `curl -i -X PUT http://localhost:8083/v1/objects/mybucket/myobject?from_id=15205:8083&to_id=15205:8081` <sup id="a4">[4](#ft4)</sup> |
-| Delete object | DELETE /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L http://localhost:8080/v1/objects/mybucket/mydirectory/myobject` |
-| Evict object from cache | DELETE '{"action": "evict"}' /v1/objects/bucket-name/object-name | `curl -i -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "evict"}' http://localhost:8080/v1/objects/mybucket/myobject` |
-| Create local bucket (proxy) | POST {"action": "createlb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "createlb"}' http://localhost:8080/v1/buckets/abc` |
-| Destroy local bucket (proxy) | DELETE {"action": "destroylb"} /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action": "destroylb"}' http://localhost:8080/v1/buckets/abc` |
-| Rename local bucket (proxy) | POST {"action": "renamelb"} /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action": "renamelb", "name": "newname"}' http://localhost:8080/v1/buckets/oldname` |
-| Set bucket props (proxy) | PUT {"action": "setprops"} /v1/buckets/bucket-name | `curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "cloud_provider": "ais", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/abc'` |
-| Prefetch a list of objects | POST '{"action":"prefetch", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Prefetch a range of objects| POST '{"action":"prefetch", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X POST -H 'Content-Type: application/json' -d '{"action":"prefetch", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Delete a list of objects | DELETE '{"action":"delete", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"objnames":["o1","o2","o3"], "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Delete a range of objects| DELETE '{"action":"delete", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"delete", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Evict a list of objects | DELETE '{"action":"evict", "value":{"objnames":"[o1[,o]]"[, deadline: string][, wait: bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"objnames":["o1","o2","o3"], "dea1dline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Evict a range of objects| DELETE '{"action":"evict", "value":{"prefix":"your-prefix","regex":"your-regex","range","min:max" [, deadline: string][, wait:bool]}}' /v1/buckets/bucket-name | `curl -i -X DELETE -H 'Content-Type: application/json' -d '{"action":"evict", "value":{"prefix":"__tst/test-", "regex":"\\d22\\d", "range":"1000:2000", "deadline": "10s", "wait":true}}' http://localhost:8080/v1/buckets/abc` <sup>[5](#ft5)</sup> |
-| Get bucket props | HEAD /v1/buckets/bucket-name | `curl -L --head http://localhost:8080/v1/buckets/mybucket` |
-| Get object props | HEAD /v1/objects/bucket-name/object-name | `curl -L --head http://localhost:8080/v1/objects/mybucket/myobject` |
-| Check if an object is cached | HEAD /v1/objects/bucket-name/object-name | `curl -L --head http://localhost:8080/v1/objects/mybucket/myobject?check_cached=true` |
-| Set primary proxy (primary proxy only)| PUT /v1/cluster/proxy/new primary-proxy-id | `curl -i -X PUT http://localhost:8080/v1/cluster/proxy/26869:8080` |
-| Disable mountpath in target | POST {"action": "disable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "disable", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths`<sup>[7](#ft7)</sup> |
-| Enable mountpath in target | POST {"action": "enable", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "enable", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths`<sup>[7](#ft7)</sup> |
-| Add mountpath in target | PUT {"action": "add", "value": "/new/mountpath"} /v1/daemon/mountpaths | `curl -X PUT -L -H 'Content-Type: application/json' -d '{"action": "add", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
-| Remove mountpath from target | DELETE {"action": "remove", "value": "/existing/mountpath"} /v1/daemon/mountpaths | `curl -X DELETE -L -H 'Content-Type: application/json' -d '{"action": "remove", "value":"/mount/path"}' http://localhost:8083/v1/daemon/mountpaths` |
-___
-<a name="ft1">1</a>: This will fetch the object "myS3object" from the bucket "myS3bucket". Notice the -L - this option must be used in all AIStore supported commands that read or write data - usually via the URL path /v1/objects/. For more on the -L and other useful options, see [Everything curl: HTTP redirect](https://ec.haxx.se/http-redirects.html).
-
-<a name="ft2">2</a>: See the List Bucket section for details. [↩](#a2)
-
-<a name="ft3">3</a>: Notice the -L option here and elsewhere. [↩](#a3)
-
-<a name="ft4">4</a>: Advanced usage only. [↩](#a4)
-
-<a name="ft5">5</a>: See the List/Range Operations section for details.
-
-<a name="ft6">6</a>: Query string parameter `?local=true` can be used to retrieve just the local buckets.
-
-<a name="ft7">7</a>: The request returns an HTTP status code 204 if the mountpath is already enabled/disabled or 404 if mountpath was not found.
-
-<a name="ft8">8</a>: Advanced usage only. Use it when the cluster is in split-brain mode. E.g, if the original primary proxy's network gets down for a while, the rest proxies vote and select new primary. After network is back the original proxy does not join the new primary automatically. It results in two primary proxies in a cluster. [↩](#a8)
-
-### Querying information
-
-AIStore provides an extensive list of RESTful operations to retrieve cluster current state:
-
-| Operation | HTTP action | Example |
-|--- | --- | ---|
-| Get cluster map | GET /v1/daemon | `curl -X GET http://localhost:8080/v1/daemon?what=smap` |
-| Get proxy or target configuration| GET /v1/daemon | `curl -X GET http://localhost:8080/v1/daemon?what=config` |
-| Get proxy/target info | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=daemoninfo` |
-| Get cluster statistics (proxy) | GET /v1/cluster | `curl -X GET http://localhost:8080/v1/cluster?what=stats` |
-| Get target statistics | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=stats` |
-| Get rebalance statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://localhost:8080/v1/cluster?what=xaction&props=rebalance'` |
-| Get prefetch statistics (proxy) | GET /v1/cluster | `curl -X GET 'http://localhost:8080/v1/cluster?what=xaction&props=prefetch'` |
-| Get list of target's filesystems (target) | GET /v1/daemon?what=mountpaths | `curl -X GET http://localhost:8084/v1/daemon?what=mountpaths` |
-| Get list of all targets' filesystems (proxy) | GET /v1/cluster?what=mountpaths | `curl -X GET http://localhost:8080/v1/cluster?what=mountpaths` |
-| Get target bucket list | GET /v1/daemon | `curl -X GET http://localhost:8083/v1/daemon?what=bucketmd` |
-
-### Example: querying runtime statistics
-
-```shell
-$ curl -X GET http://localhost:8080/v1/cluster?what=stats
-```
-
-This single command causes execution of multiple `GET ?what=stats` requests within the AIStore cluster, and results in a JSON-formatted consolidated output that contains both http proxy and storage targets request counters, as well as per-target used/available capacities. For example:
-
-<img src="images/dfc-get-stats.png" alt="AIStore statistics" width="440">
-
-More usage examples can be found in the [the source](ais/tests/regression_test.go).
-
-## Read and Write Data Paths
-
-`GET object` and `PUT object` are by far the most common operations performed by a AIStore cluster.
-As far as I/O processing pipeline, the first few steps of the GET and, respectively, PUT processing are
-very similar if not identical:
-
-1. Client sends a `GET` or `PUT` request to any of the AIStore proxies/gateways.
-2. The proxy determines which storage target to redirect the request to, the steps including:
-    1. extract bucket and object names from the request;
-    2. select storage target as an HRW function of the (cluster map, bucket, object) triplet,
-       where HRW stands for [Highest Random Weight](https://en.wikipedia.org/wiki/Rendezvous_hashing);
-       note that since HRW is a consistent hashing mechanism, the output of the computation will be
-       (consistently) the same for the same `(bucket, object)` pair and cluster configuration.
-    3. redirect the request to the selected target.
-3. Target parses the bucket and object from the (redirected) request and determines whether the bucket
-   is a AIStore local bucket or a Cloud-based bucket.
-4. Target then determines a `mountpath` (and therefore, a local filesystem) that will be used to perform
-   the I/O operation. This time, the target computes HRW(configured mountpaths, bucket, object) on the
-   input that, in addition to the same `(bucket, object)` pair includes all currently active/enabled mountpaths.
-5. Once the highest-randomly-weighted `mountpath` is selected, the target then forms a fully-qualified name
-   to perform the local read/write operation. For instance, given a `mountpath`  `/a/b/c`, the fully-qualified
-   name may look as `/a/b/c/local/<bucket_name>/<object_name>` for a local bucket,
-   or `/a/b/c/cloud/<bucket_name>/<object_name>` for a Cloud bucket.
-
-Beyond these 5 (five) common steps the similarity between `GET` and `PUT` request handling ends, and the remaining steps include:
-
-### `GET`
-
-5. If the object already exists locally (meaning, it belongs to a AIStore local bucket or the most recent version of a Cloud-based object is cached
-   and resides on a local disk), the target optionally validates the object's checksum and version.
-   This type of `GET` is often referred to as a "warm `GET`".
-6. Otherwise, the target performs a "cold `GET`" by downloading the newest version of the object from the next AIStore tier or from the Cloud.
-7. Finally, the target delivers the object to the client via HTTP(S) response.
-
-<img src="images/ais-get-flow.png" alt="AIStore GET flow" width="800">
-
-### `PUT`
-
-5. If the object already exists locally and its checksum matches the checksum from the `PUT` request, processing stops because the object hasn't
-   changed.
-6. Target streams the object contents from an HTTP request to a temporary work file.
-7. Upon receiving the last byte of the object, the target sends the new version of the object to the next AIStore tier or the Cloud.
-8. The target then writes the object to the local disk replacing the old one if it exists.
-9. Finally, the target writes extended attributes that include the versioning and checksum information, and thus commits the PUT transaction.
-
-<img src="images/ais-put-flow.png" alt="AIStore PUT flow" width="800">
-
-## Extended Actions (xactions)
-
-Extended actions (xactions) are batch operations that may take seconds, sometimes minutes or even hours, to execute. Xactions run asynchronously, have one of the enumerated kinds, start/stop times, and xaction-specific statistics. Xactions start running based on a wide variety of runtime conditions that include:
-
-* periodic (defined by a configured interval of time)
-* resource utilization (e.g., usable capacity falling below configured watermark)
-* certain type of workload (e.g., PUT into a mirrored or erasure-coded bucket)
-* user request (e.g., to reduce a number of local object copies in a given bucket)
-* adding or removing storage targets (the events that trigger cluster-wide rebalancing)
-* adding or removing local disks (the events that cause local rebalancer to start moving stored content between *mountpaths* - see [Managing filesystems](#managing-filesystems))
-* and more.
-
-Further, to reduce congestion and minimize interference with user-generated workload, extended actions (self-)throttle themselves based on configurable watermarks. The latter include `disk_util_low_wm` and `disk_util_high_wm` (see [configuration](ais/setup/config.sh)). Roughly speaking, the idea is that when local disk utilization falls below the low watermark (`disk_util_low_wm`) extended actions that utilize local storage can run at full throttle. And vice versa.
-
-The amount of throttling that a given xaction imposes on itself is always defined by a combination of dynamic factors. To give concrete examples, an extended action that runs LRU evictions performs its "balancing act" by taking into account remaining storage capacity _and_ the current utilization of the local filesystems. The two-way mirroring (xaction) takes into account congestion on its communication channel that callers use for posting requests to create local replicas. And the `atimer` - extended action responsible for [access time updates](atime/atime.go) - self-throttles based on the remaining space (to buffer atimes), etc.
-
-Supported extended actions are enumerated in the [user-facing API](cmn/api.go) and include:
-
-* Cluster-wide rebalancing (denoted as `ActGlobalReb` in the [API](cmn/api.go)) that gets triggered when storage targets join or leave the cluster;
-* LRU-based cache eviction (see section [LRU](#lru)) that depends on the remaining free capacity and [configuration](ais/setup/config.sh);
-* Prefetching batches of objects (or arbitrary size) from the Cloud (see section [List/Range Operations](#listrange-operations));
-* Consensus voting (when conducting new leader [election](#election));
-* Erasure-encoding objects in a EC-configured bucket (see section [Erasure coding](#erasure-coding));
-* Creating additional local replicas, and
-* Reducing number of object replicas in a given locally-mirrored bucket (see [Bucket-specific Configuration](#bucket-specific-configuration));
-* and more.
-
-The picture illustrates results of a generic query that checks whether the (in this example) LRU-based cache eviction has already finished in a cluster containing 3 storage targets (which it has, as per the "status" field below):
-
-<img src="images/ais-xaction-lru.png" alt="Querying LRU progress" width="320">
-
-The query itself looks as follows:
-
-```shell
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=lru
-```
-
->> As always, `localhost:8080` above (and throughout this entire README) serves as a placeholder for the _real_ gateway's hostname/IP address.
-
-The corresponding RESTful API (section [REST Operations](#rest-operations)) includes support for querying absolutely all xactions including global-rebalancing and prefetch operations:
-
-```shell
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=rebalance
-$ curl -X GET http://localhost:8080/v1/cluster?what=xaction&props=prefetch
-```
-
-At the time of this writing, unlike all the rest xactions global-rebalancing and prefetch queries provide [extended statistics](stats/xaction_stats.go) on top and in addition to the generic "common denominator" mentioned and illustrated above.
-
-## List Bucket
-
-The ListBucket API returns a page of object names (and, optionally, their properties including sizes, creation times, checksums, and more), in addition to a token allowing the next page to be retrieved.
-
-#### properties-and-options
-The properties-and-options specifier must be a JSON-encoded structure, for instance '{"props": "size"}' (see examples). An empty structure '{}' results in getting just the names of the objects (from the specified bucket) with no other metadata.
-
-| Property/Option | Description | Value |
-| --- | --- | --- |
-| props | The properties to return with object names | A comma-separated string containing any combination of: "checksum","size","atime","ctime","iscached","bucket","version","targetURL". <sup id="a6">[6](#ft6)</sup> |
-| time_format | The standard by which times should be formatted | Any of the following [golang time constants](http://golang.org/pkg/time/#pkg-constants): RFC822, Stamp, StampMilli, RFC822Z, RFC1123, RFC1123Z, RFC3339. The default is RFC822. |
-| prefix | The prefix which all returned objects must have | For example, "my/directory/structure/" |
-| pagemarker | The token identifying the next page to retrieve | Returned in the "nextpage" field from a call to ListBucket that does not retrieve all keys. When the last key is retrieved, NextPage will be the empty string |
-| pagesize | The maximum number of object names returned in response | Default value is 1000. GCP and local bucket support greater page sizes. AWS is unable to return more than [1000 objects in one page](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTBucketGET.html). |\b
-
- <a name="ft6">6</a>: The objects that exist in the Cloud but are not present in the AIStore cache will have their atime property empty (""). The atime (access time) property is supported for the objects that are present in the AIStore cache. [↩](#a6)
-
-#### Example: listing local and Cloud buckets
-
-To list objects in the smoke/ subdirectory of a given bucket called 'myBucket', and to include in the listing their respective sizes and checksums, run:
-
-```shell
-$ curl -X POST -L -H 'Content-Type: application/json' -d '{"action": "listobjects", "value":{"props": "size, checksum", "prefix": "smoke/"}}' http://localhost:8080/v1/buckets/myBucket
-```
-
-This request will produce an output that (in part) may look as follows:
-
-<img src="images/dfc-ls-subdir.png" alt="AIStore list directory" width="440">
-
-For many more examples, please refer to the [test sources](ais/tests/) in the repository.
-
-#### Example: Listing all pages
-
-The following Go code retrieves a list of all of object names from a named bucket (note: error handling omitted):
-
-```go
-// e.g. proxyurl: "http://localhost:8080"
-url := proxyurl + "/v1/buckets/" + bucket
-
-msg := &api.ActionMsg{Action: ais.ActListObjects}
-fullbucketlist := &ais.BucketList{Entries: make([]*ais.BucketEntry, 0)}
-for {
-    // 1. First, send the request
-    jsbytes, _ := json.Marshal(msg)
-    r, _ := http.DefaultClient.Post(url, "application/json", bytes.NewBuffer(jsbytes))
-
-    defer func(r *http.Response){
-        r.Body.Close()
-    }(r)
-
-    // 2. Unmarshal the response
-    pagelist := &ais.BucketList{}
-    respbytes, _ := ioutil.ReadAll(r.Body)
-    _ = json.Unmarshal(respbytes, pagelist)
-
-    // 3. Add the entries to the list
-    fullbucketlist.Entries = append(fullbucketlist.Entries, pagelist.Entries...)
-    if pagelist.PageMarker == "" {
-        // If PageMarker is the empty string, this was the last page
-        break
-    }
-    // If not, update PageMarker to the next page returned from the request.
-    msg.GetPageMarker = pagelist.PageMarker
-}
-```
-
-Note that the PageMarker returned as a part of pagelist is for the next page.
-
-## Rebalancing
-
-AIStore rebalances its stored content based on the AIStore cluster map. When cache servers join or leave the cluster, the next updated version (aka generation) of the cluster map gets centrally replicated to all storage targets. Each target then starts, in parallel, a background thread to traverse its local caches and recompute locations of the cached items.
-
-Thus, the rebalancing process is completely decentralized. When a single server joins (or goes down in a) cluster of N servers, approximately 1/Nth of the content will get rebalanced via direct target-to-target transfers.
-
-## List/Range Operations
-
-AIStore provides two APIs to operate on groups of objects: List, and Range. Both of these share two optional parameters:
-
-| Parameter | Description | Default |
-|--- | --- | --- |
-| deadline | The amount of time before the request expires formatted as a [golang duration string](https://golang.org/pkg/time/#ParseDuration). A timeout of 0 means no timeout.| 0 |
-| wait | If true, a response will be sent only when the operation completes or the deadline passes. When false, a response will be sent once the operation is initiated. When setting wait=true, ensure your request has a timeout at least as long as the deadline. | false |
-
-#### List
-
-List APIs take a JSON array of object names, and initiate the operation on those objects.
-
-| Parameter | Description |
-| --- | --- |
-| objnames | JSON array of object names |
-
-#### Range
-
-Range APIs take an optional prefix, a regular expression, and a numeric range. A matching object name will begin with the prefix and contain a number that satisfies both the regex and the range as illustrated below.
-
-
-| Parameter | Description |
-| --- | --- |
-| prefix | The prefix that all matching object names will begin with. Empty prefix ("") will match all names. |
-| regex | The regular expression, represented as an escaped string, to match the number embedded in the object name. Note that the regular expression applies to the entire name - the prefix (if provided) is not excluded. |
-| range | Represented as "min:max", corresponding to the inclusive range from min to max. Either or both of min and max may be empty strings (""), in which case they will be ignored. If regex is an empty string, range will be ignored. |
-
-#### Examples
-
-| Prefix | Regex |  Escaped Regex | Range | Matches<br>(the match is highlighted) | Doesn't Match |
-| --- | --- | --- | --- | --- | --- |
-| "__tst/test-" | `"\d22\d"` | `"\\d22\\d"` | "1000:2000" | "__tst/test-`1223`"<br>"__tst/test-`1229`-4000.dat"<br>"__tst/test-1111-`1229`.dat"<br>"__tst/test-`1222`2-40000.dat" | "__prod/test-1223"<br>"__tst/test-1333"<br>"__tst/test-2222-4000.dat" |
-| "a/b/c" | `"^\d+1\d"` | `"^\\d+1\\d"` | ":100000" | "a/b/c/`110`"<br>"a/b/c/`99919`-200000.dat"<br>"a/b/c/`2314`video-big" | "a/b/110"<br>"a/b/c/d/110"<br>"a/b/c/video-99919-20000.dat"<br>"a/b/c/100012"<br>"a/b/c/30331" |
-
-## Joining a Running Cluster
-
-AIStore clusters can be deployed with an arbitrary number of AIStore proxies. Each proxy/gateway provides full access to the clustered objects and collaborates with all other proxies to perform majority-voted HA failovers (section [Highly Available Control Plane](#highly-available-control-plane) below).
-
-Not all proxies are equal though. Two out of all proxies can be designated via [AIStore configuration](ais/setup/config.sh)) as an "original" and a "discovery." The "original" one (located at the configurable "original_url") is expected to point to the primary at the cluster initial deployment time.
-
-Later on, when and if an HA event triggers automated failover, the role of the primary will be automatically assumed by a different proxy/gateway, with the corresponding cluster map (Smap) update getting synchronized across all running nodes.
-
-A new node, however, could potentially experience a problem when trying to join an already deployed and running cluster - simply because its configuration may still be referring to the old primary. The "discovery_url" (see [AIStore configuration](ais/setup/config.sh)) is precisely intended to address this scenario.
-
-Here's how a new node joins a running AIStore cluster:
-
-- first, there's the primary proxy/gateway referenced by the current cluster map (Smap) and/or - during the cluster deployment time - by the configured "primary_url" (see [AIStore configuration](ais/setup/config.sh))
-
-- if joining via the "primary_url" fails, then the new node goes ahead and tries the alternatives:
-  - "discovery_url"
-  - "original_url"
-- but only if those are defined and different from the previously tried.
-
-## Highly Available Control Plane
-
-AIStore cluster will survive a loss of any storage target and any gateway including the primary gateway (leader). New gateways and targets can join at any time – including the time of electing a new leader. Each new node joining a running cluster will get updated with the most current cluster-level metadata.
-Failover – that is, the election of a new leader – is carried out automatically on failure of the current/previous leader. Failback on the hand – that is, administrative selection of the leading (likely, an originally designated) gateway – is done manually via AIStore REST API (section [REST Operations](#rest-operations)).
-
-It is, therefore, recommended that AIStore cluster is deployed with multiple proxies aka gateways (the terms that are interchangeably used throughout the source code and this README).
-
-When there are multiple proxies, only one of them acts as the primary while all the rest are, respectively, non-primaries. The primary proxy's (primary) responsibility is serializing updates of the cluster-level metadata (which is also versioned and immutable).
-
-Further:
-
-- Each proxy/gateway stores a local copy of the cluster map (Smap)
-- Each Smap instance is immutable and versioned; the versioning is monotonic (increasing)
-- Only the current primary (leader) proxy distributes Smap updates to all other clustered nodes
-
-### Bootstrap
-
-The proxy's bootstrap sequence initiates by executing the following three main steps:
-
-- step 1: load a local copy of the cluster map and try to use it for the discovery of the current one;
-- step 2: use the local configuration and the local Smap to perform the discovery of the cluster-level metadata;
-- step 3: use all of the above _and_ the environment setting "AIS_PRIMARYPROXY" to figure out whether this proxy must keep starting up as a primary (otherwise, join as a non-primary).
-
-Further, the (potentially) primary proxy executes more steps:
-
-- (i)    initialize empty Smap;
-- (ii)   wait a configured time for other nodes to join;
-- (iii)  merge the Smap containing newly joined nodes with the Smap that was previously discovered;
-- (iiii) and use the latter to rediscover cluster-wide metadata and resolve remaining conflicts, if any.
-
-If during any of these steps the proxy finds out that it must be joining as a non-primary then it simply does so.
-
-### Election
-
-The primary proxy election process is as follows:
-
-- A candidate to replace the current (failed) primary is selected;
-- The candidate is notified that an election is commencing;
-- After the candidate (proxy) confirms that the current primary proxy is down, it broadcasts vote requests to all other nodes;
-- Each recipient node confirms whether the current primary is down and whether the candidate proxy has the HRW (Highest Random Weight) according to the local Smap;
-- If confirmed, the node responds with Yes, otherwise it's a No;
-- If and when the candidate receives a majority of affirmative responses it performs the commit phase of this two-phase process by distributing an updated cluster map to all nodes.
-
-### Non-electable gateways
-
-AIStore cluster can be *stretched* to collocate its redundant gateways with the compute nodes. Those non-electable local gateways ([AIStore configuration](ais/setup/config.sh)) will only serve as access points but will never take on the responsibility of leading the cluster.
-
-### Metasync
-
-By design AIStore does not have a centralized (SPOF) shared cluster-level metadata. The metadata consists of versioned objects: cluster map, buckets (names and properties), authentication tokens. In AIStore, these objects are consistently replicated across the entire cluster – the component responsible for this is called [metasync](ais/metasync.go). AIStore metasync makes sure to keep cluster-level metadata in-sync at all times.
-
-## Storage Services
-
-By default, buckets inherit [global configuration](ais/setup/config.sh). However, several distinct sections of this global configuration can be overridden at startup or at runtime on a per bucket basis. The list includes checksumming, LRU, erasure coding, and local mirroring - please see the following sections for details.
-
-### Checksumming
-
-Checksumming on bucket level is configured by setting bucket properties:
-
-* `cksum_config.checksum`: `"none"`,`"xxhash"` or `"inherit"` configure hashing type. Value
-`"inherit"` indicates that the global checksumming configuration should be used.
-* `cksum_config.validate_checksum_cold_get`: `true` or `false` indicate
-whether to perform checksum validation during cold GET.
-* `cksum_config.validate_checksum_warm_get`: `true` or `false` indicate
-whether to perform checksum validation during warm GET.
-* `cksum_config.enable_read_range_checksum`: `true` or `false` indicate whether to perform checksum validation during byte serving.
-
-Value for the `checksum` field (see above) *must* be provided *every* time the bucket properties are updated, otherwise the request will be rejected.
-
-Example of setting bucket properties:
-```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"cksum_config": {"checksum": "xxhash", "validate_checksum_cold_get": true, "validate_checksum_warm_get": false, "enable_read_range_checksum": false}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
-```
-
-### LRU
-
-Overriding the global configuration can be achieved by specifying the fields of the `LRUProps` instance of the `lruconfig` struct that encompasses all LRU configuration fields.
-
-* `lru_props.lowwm`: integer in the range [0, 100], representing the capacity usage low watermark
-* `lru_props.highwm`: integer in the range [0, 100], representing the capacity usage high watermark
-* `lru_props.atime_cache_max`: positive integer representing the maximum number of entries
-* `lru_props.dont_evict_time`: string that indicates eviction-free period [atime, atime + dont]
-* `lru_props.capacity_upd_time`: string indicating the minimum time to update capacity
-* `lru_props.lru_enabled`: bool that determines whether LRU is run or not; only runs when true
-
-**NOTE**: In setting bucket properties for LRU, any field that is not explicitly specified is defaulted to the data type's zero value.
-Example of setting bucket properties:
-```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"cksum_config":{"checksum":"none","validate_checksum_cold_get":true,"validate_checksum_warm_get":true,"enable_read_range_checksum":true},"lru_props":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","lru_enabled":true}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
-```
-
-To revert a bucket's entire configuration back to use global parameters, use `"action":"resetprops"` to the same PUT endpoint as above as such:
-```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"resetprops"}' 'http://localhost:8080/v1/buckets/<bucket-name>'
-```
-
-### Erasure coding
-
-AIStore provides data protection that comes in several flavors: [end-to-end checksumming](#checksumming), [Local mirroring](#local-mirroring-and-load-balancing), replication (for *small* objects), and erasure coding.
-
-Erasure coding, or EC, is a well-known storage technique that protects user data by dividing it into N fragments or slices, computing K redundant (parity) slices, and then storing the resulting (N+K) slices on (N+K) storage servers - one slice per target server.
-
-EC schemas are flexible and user-configurable: users can select the N and the K (above), thus ensurng that user data remains available even if the cluster loses **any** (emphasis on the **any**) of its K servers.
-
-* `ec_config.enabled`: bool - enables or disabled data protection the bucket
-* `ec_config.data_slices`: integer in the range [2, 100], representing the number of fragments the object is broken into
-* `ec_config.parity_slices`: integer in the range [2, 32], representing the number of redundant fragments to provide prtection from failures. The value defines the maximum number of storage targets a cluster can lose but it is still able to restore the original object
-* `ec_config.objsize_limit`: integer indicating the minimum size of an object that is erasure encoded. Smaller objects are just replicated. The field can be 0 - in this case the default value is used (as of version 1.3 it is 256KiB)
-
-Choose the number data and parity slices depending on required level of protection and the cluster configuration. The number of storage targets must be greater than sum of the number of data and parity slices. If the cluster uses only replication (by setting objsize_limit to a very high value), the number of storage targets must exceed the number of parity slices.
-
-Notes:
-
-- Every data and parity slice is stored on a separate storage target. To reconstruct a damaged object, AIStore requires at least `ec_config.data_slices` slices in total out of data and parity sets
-- Small objects are replicated `ec_config.parity_slices` times to have the same level of data protection that big objects do
-- Increasing the number of parity slices improves data protection level, but it may hit performance: doubling the number of slices approximately increases the time to encode the object by a factor of two
-
-Example of setting bucket properties:
-```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops","value":{"lru_props":{"lowwm":1,"highwm":100,"atime_cache_max":1,"dont_evict_time":"990m","capacity_upd_time":"90m","lru_enabled":true}, "ec_config": {"enabled": true, "data": 4, "parity": 2}}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
-```
-
-#### Limitations
-
-In the version 2.0, once a bucket is configured for EC, it'll stay erasure coded for its entire lifetime - there is currently no supported way to change this once-applied configuration to a different (N, K) schema, disable EC, and/or remove redundant EC-generated content.
-
-Secondly, only local buckets are currently supported. Both limitations will be removed in the subsequent releases.
-
-### Local mirroring and load balancing
-
-TODO
-
-## Object checksums: brief theory of operations
-
-1. objects are stored in the cluster with their content checksums and in accordance with their bucket configurations.
-
-2. xxhash is the system-default checksum.
-
-3. user can override the system default on a bucket level, by setting checksum=none.
-
-4. bucket (re)configuration can be done at any time. Bucket's checksumming option can be changed from xxhash to none and back, potentially multiple times and with no limitations.
-
-5. an object with a bad checksum cannot be retrieved (via GET) and cannot be replicated or migrated. Corrupted objects get eventually removed from the system.
-
-6. GET and PUT operations support an option to validate checksums. The validation is done against a checksum stored with an object (GET), or a checksum provided by a user (PUT).
-
-7. object replications and migrations are always checksum-protected. If an object does not have checksum (see #3 above), the latter gets computed on the fly and stored with the object, so that subsequent replications/migrations could reuse it.
-
-8. when two objects in the cluster have identical (bucket, object) names and checksums, they are considered to be full replicas of each other - the fact that allows optimizing PUT,replication, and object migration in a variety of use cases.
-
-## Command-line Load Generator
-
-`aisloader` is a command-line tool that is included with AIStore and that can be immediately used to generate load and evaluate cluster performance.
-
-For usage, run `$ aisloader -help` or see [the source](cmd/aisloader/main.go) for usage examples.
-
-## Metrics with StatsD
-
-In AIStore, each target and proxy communicates with a single [StatsD](https://github.com/etsy/statsd) local daemon listening on a UDP port `8125` (which is currently fixed). If a target or proxy cannot connect to the StatsD daemon at startup, the target (or proxy) will run without StatsD.
-
-StatsD publishes local statistics to a compliant backend service (e.g., [graphite](https://graphite.readthedocs.io/en/latest/)) for easy but powerful stats aggregation and visualization.
-
-Please read more on StatsD [here](https://github.com/etsy/statsd/blob/master/docs/backend.md).
-
-All metric tags (or simply, metrics) are logged using the following pattern:
-
-`prefix.bucket.metric_name.metric_value|metric_type`,
-
-where `prefix` is one of: `aisproxy.<daemon_id>`, `aistarget.<daemon_id>`, or `aisloader.<ip>.<loader_id>` and `metric_type` is `ms` for a timer, `c` for a counter, and `g` for a gauge.
-
-Metrics that AIStore generates are named and grouped as follows:
-
-#### Proxy metrics:
-
-* `aisproxy.<daemon_id>.get.count.1|c`
-* `aisproxy.<daemon_id>.get.latency.<value>|ms`
-* `aisproxy.<daemon_id>.put.count.1|c`
-* `aisproxy.<daemon_id>.put.latency.<value>|ms`
-* `aisproxy.<daemon_id>.delete.count.1|c`
-* `aisproxy.<daemon_id>.list.count.1|c`
-* `aisproxy.<daemon_id>.list.latency.<value>|ms`
-* `aisproxy.<daemon_id>.rename.count.1|c`
-* `aisproxy.<daemon_id>.cluster_post.count.1|c`
-
-#### Target Metrics
-
-* `aistarget.<daemon_id>.get.count.1|c`
-* `aistarget.<daemon_id>.get.latency.<value>|ms`
-* `aistarget.<daemon_id>.get.cold.count.1|c`
-* `aistarget.<daemon_id>.get.cold.bytesloaded.<value>|c`
-* `aistarget.<daemon_id>.get.cold.vchanged.<value>|c`
-* `aistarget.<daemon_id>.get.cold.bytesvchanged.<value>|c`
-* `aistarget.<daemon_id>.put.count.1|c`
-* `aistarget.<daemon_id>.put.latency.<value>|ms`
-* `aistarget.<daemon_id>.delete.count.1|c`
-* `aistarget.<daemon_id>.list.count.1|c`
-* `aistarget.<daemon_id>.list.latency.<value>|ms`
-* `aistarget.<daemon_id>.rename.count.1|c`
-* `aistarget.<daemon_id>.evict.files.1|c`
-* `aistarget.<daemon_id>.evict.bytes.<value>|c`
-* `aistarget.<daemon_id>.rebalance.receive.files.1|c`
-* `aistarget.<daemon_id>.rebalance.receive.bytes.<value>|c`
-* `aistarget.<daemon_id>.rebalance.send.files.1|c`
-* `aistarget.<daemon_id>.rebalance.send.bytes.<value>|c`
-* `aistarget.<daemon_id>.error.badchecksum.xxhash.count.1|c`
-* `aistarget.<daemon_id>.error.badchecksum.xxhash.bytes.<value>|c`
-* `aistarget.<daemon_id>.error.badchecksum.md5.count.1|c`
-* `aistarget.<daemon_id>.error.badchecksum.md5.bytes.<value>|c`
-
-Example of how these metrics show up in a grafana dashboard:
-
-<img src="images/target-statsd-grafana.png" alt="Target Metrics" width="256">
-
-
-#### Disk Metrics
-
-* `aistarget.<daemon_id>.iostat_*.gauge.<value>|g`
-
-#### Keepalive Metrics
-
-* `<prefix>.keepalive.heartbeat.<id>.delta.<value>|g`
-* `<prefix>.keepalive.heartbeat.<id>.count.1|c`
-* `<prefix>.keepalive.average.<id>.delta.<value>|g`
-* `<prefix>.keepalive.average.<id>.count.1|c`
-* `<prefix>.keepalive.average.<id>.reset.1|c`
-
-#### aisloader Metrics
-
-* `aisloader.<ip>.<loader_id>.get.pending.<value>|g`
-* `aisloader.<ip>.<loader_id>.get.count.1|c`
-* `aisloader.<ip>.<loader_id>.get.latency.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.throughput.<value>|c`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyconn.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxy.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetconn.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.target.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.posthttp.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyheader.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyrequest.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.proxyresponse.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetheader.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetrequest.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.latency.targetresponse.<value>|ms`
-* `aisloader.<ip>.<loader_id>.get.error.1|c`
-* `aisloader.<ip>.<loader_id>.put.pending.<value>|g`
-* `aisloader.<ip>.<loader_id>.put.count.<value>|g`
-* `aisloader.<ip>.<loader_id>.put.latency.<value>|,s`
-* `aisloader.<ip>.<loader_id>.put.throughput.<value>|c`
-* `aisloader.<ip>.<loader_id>.put.error.1|c`
-* `aisloader.<ip>.<loader_id>.getconfig.count.1|c`
-* `aisloader.<ip>.<loader_id>.getconfig.latency.<value>|ms`
-* `aisloader.<ip>.<loader_id>.getconfig.latency.proxyconn.<value>|ms`
-* `aisloader.<ip>.<loader_id>.getconfig.latency.proxy.<value>|ms`
-
-## Experimental
-
-There are features, capabilities and modules that we designate as _experimental_ - not ready yet for deployment and usage. Some of those might be eventually removed from the product, others - completed and stabilized. This section contains a partial list.
-
-### WebDAV
-
-WebDAV aka "Web Distributed Authoring and Versioning" is the IETF standard that defines HTTP extension for collaborative file management and editing. AIStore WebDAV server is a reverse proxy (with interoperable WebDAV on the front and AIStore's RESTful interface on the back) that can be used with any of the popular [WebDAV-compliant clients](https://en.wikipedia.org/wiki/Comparison_of_WebDAV_software).
-
-For information on how to run it and details, please refer to the [WebDAV README](webdav/README.md).
-
-### Multi-tiering
-
-AIStore can be deployed with multiple consecutive AIStore clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
-
-<img src="images/multi-tier.png" alt="AIStore multi-tier overview" width="680">
-
-Tiering is configured at the bucket level by setting bucket properties, for example:
-
-```shell
-$ curl -i -X PUT -H 'Content-Type: application/json' -d '{"action":"setprops", "value": {"next_tier_url": "http://localhost:8082", "read_policy": "cloud", "write_policy": "next_tier"}}' 'http://localhost:8080/v1/buckets/<bucket-name>'
-```
-
-The following fields are used to configure multi-tiering:
-
-* `next_tier_url`: an absolute URI corresponding to the primary proxy of the next tier configured for the bucket specified
-* `read_policy`: `"next_tier"` or `"cloud"` (defaults to `"next_tier"` if not set)
-* `write_policy`: `"next_tier"` or `"cloud"` (defaults to `"cloud"` if not set)
-
-For the `"next_tier"` policy, a tier will read or write to the next tier specified by the `next_tier_url` field. On failure, it will read or write to the cloud (aka AWS or GCP).
-
-For the `"cloud"` policy, a tier will read or write to the cloud (aka AWS or GCP) directly from that tier.
-
-Currently, the endpoints which support multi-tier policies are the following:
-
-* GET /v1/objects/bucket-name/object-name
-* PUT /v1/objects/bucket-name/object-name
-
-### Inter-cluster replication
-
-Object replication (service) sends and receives objects via HTTP(S). Each replicating worker (aka _replicator_) is associated with a single configured local filesystem and is tasked with queuing and subsequent FIFO processing of *replication requests*. To isolate the, potentially, massive replication traffic from all other intra- and inter-cluster workloads, the service can be configured to utilize a separate network. Replication transfers themselves are end-to-end protected by checksums.
-
-The picture below illustrates some of the aspects of replication service as far as its design and data flows.
-
-<img src="images/replication-overview.png" alt="Replication overview" width="800">
-
-**Note:** The service is currently in its prototype stage and is not yet available.
-
-
-### Authentication
-
-Please see [AuthN documentation](./authn/README.md).
+Alternatively, run `make clean` to delete AIStore binaries and all (locally accumulated) AIStore data.
+
+## Guides and References
+- [List/Range Operations](docs/batch.md)
+- [Object checksums: brief theory of operations](docs/checksum.md)
+- [Configuration](docs/configuration.md)
+- [Datapath](docs/datapath.md)
+- [Highly Available Control Plane](docs/ha.md)
+- [How to Benchmark](docs/howto_benchmark.md)
+- [RESTful API](docs/http_api.md)
+- [Joining a Cluster](docs/join_cluster.md)
+- [List Bucket](docs/list_bucket.md)
+- [Metrics with StatsD](docs/metrics.md)
+- [Performance](docs/performance.md)
+- [Rebalancing](docs/rebalance.md)
+- [Storage Services](docs/storage_svcs.md)
+- [Extended Actions (xactions)](docs/xaction.md)
+- [Experimental](docs/experimental.md)

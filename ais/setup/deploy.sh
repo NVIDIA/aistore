@@ -98,12 +98,12 @@ if [ $? -ne 0 ]; then
 fi
 rm $TMPF 2>/dev/null
 
-echo Enter number of cache targets:
+echo Enter number of storage targets:
 read servcount
 if ! [[ "$servcount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$servcount' is not a number"; exit 1
 fi
-echo "Enter number of proxies:"
+echo "Enter number of proxies (gateways):"
 read proxycount
 if ! [[ "$proxycount" =~ ^[0-9]+$ ]] ; then
 	echo "Error: '$proxycount' is not a number"; exit 1
