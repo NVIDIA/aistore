@@ -376,6 +376,8 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export TARGET_CNT=$TARGET_CNT
     export CLDPROVIDER=$CLDPROVIDER
     export MIRROR_ENABLED=false
+    export MIRROR_UTIL_THRESH=20
+    export IOSTAT_TIME="2s"
 
     CONFFILE="ais.json"
     source $DIR/../../ais/setup/config.sh

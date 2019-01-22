@@ -60,6 +60,8 @@ AUTH_SU_NAME="${AUTH_SU_NAME:-admin}"
 AUTH_SU_PASS="${AUTH_SU_PASS:-admin}"
 NON_ELECTABLE=false
 MIRROR_ENABLED=false
+MIRROR_UTIL_THRESH=20
+IOSTAT_TIME="2s"
 ###################################
 #
 # fspaths config is used if and only if test_fspaths.count == 0

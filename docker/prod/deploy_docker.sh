@@ -149,6 +149,8 @@ source $DIR/../ais/setup/config.sh
 #)  run the cluster
 export CLDPROVIDER=$CLDPROVIDER
 export MIRROR_ENABLED=false
+export MIRROR_UTIL_THRESH=20
+export IOSTAT_TIME="2s"
 
 echo Stoping running  cluster..
 sudo docker-compose -f $environment"_docker-compose.yml" down

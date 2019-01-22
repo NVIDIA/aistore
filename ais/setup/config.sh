@@ -5,7 +5,7 @@ cat > $CONFFILE <<EOL
 	"mirror": {
 		"copies":		2,
 		"mirror_burst_buffer":	512,
-		"mirror_util_thresh":	5,
+		"mirror_util_thresh":	${MIRROR_UTIL_THRESH},
 		"mirror_optimize_put":	false,
 		"mirror_enabled": 	${MIRROR_ENABLED}
 	},
@@ -24,7 +24,7 @@ cat > $CONFFILE <<EOL
 	},
 	"periodic": {
 		"stats_time":		"10s",
-		"iostat_time":		"2s",
+		"iostat_time":		"${IOSTAT_TIME}",
 		"retry_sync_time":	"2s"
 	},
 	"timeout": {
