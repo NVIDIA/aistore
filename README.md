@@ -67,7 +67,7 @@ The (quickly growing) list of services includes (but is not limited to):
 * performance and capacity monitoring with full observability via StatsD/Grafana
 * load balancing
 
->> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storservices.md#local-mirroring-and-load-balancing).
+>> As of the 2.0, load balancing consists in optimal selection of a local object replica and, therefore, requires buckets configured for [local mirroring](docs/storage_svcs.md#local-mirroring-and-load-balancing).
 
 Most notably, AIStore provides [dSort](dsort/README.md) - a MapReduce layer that performs a wide variety of user-defined merge/sort *transformations* on large datasets used for/by deep learning applications.
 
