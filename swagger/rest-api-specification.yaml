@@ -2,7 +2,7 @@ openapi: "3.0.0"
 info:
   version: "1.1.0"
   title: AIS
-  description: "AIS is a scalable object-storage based caching system with Amazon and Google Cloud backends."
+  description: "AIStore is a scalable object-storage based caching system with Amazon and Google Cloud backends."
   termsOfService: ""
   contact:
     name: "NVIDIA-AIS"
@@ -1099,6 +1099,8 @@ components:
         - stats
         - xaction
         - mountpaths
+        - daemoninfo
+        - bucketmd
     GetProps:
       type: string
       enum: [rebalance, prefetch]

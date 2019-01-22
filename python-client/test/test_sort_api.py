@@ -17,11 +17,11 @@ import unittest
 import shutil
 import tarfile, io, os
 import json
+from .helpers import bytestring, surpressResourceWarning
 
 import openapi_client
 from openapi_client.api.sort_api import SortApi  # noqa: E501
 from openapi_client.rest import ApiException
-
 
 class TestSortApi(unittest.TestCase):
     """SortApi unit test stubs"""
@@ -31,6 +31,8 @@ class TestSortApi(unittest.TestCase):
     PREFIX = "input-"
 
     def setUp(self):
+        surpressResourceWarning()
+
         configuration = openapi_client.Configuration()
         configuration.debug = False
         api_client = openapi_client.ApiClient(configuration)
@@ -55,7 +57,7 @@ class TestSortApi(unittest.TestCase):
                     t.size = len(b)
                     tar.addfile(t, io.BytesIO(b))
 
-            self.object.put(self.BUCKET_NAME, object_name, body=out.getvalue())
+            self.object.put(self.BUCKET_NAME, object_name, body=bytestring(out.getvalue()))
 
     def tearDown(self):
         # Delete bucket

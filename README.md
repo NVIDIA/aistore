@@ -101,6 +101,16 @@ DSort “views” AIS objects as named shards that comprise archived key/value d
 
 By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. Which ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
 
+### python client
+
+[OpenAPI Generator](https://github.com/openapitools/openapi-generator) provides a way to generate a python client package for simplified integration with the RESTful API. The user can, after following a few simple steps, import it to start communicating with the [RESTful API](docs/http_api.md). The package works by providing an easy-to-use interface, that covers the entire functionality of the RESTful API.
+
+To get started with the python client package, you will need to first follow [the instructions for generating the python package with OpenAPI Generator](swagger/README.md#how-to-generate-package). This creates a python package from an [OpenAPI Specification](https://swagger.io/docs/specification/about/) file located [here](swagger/rest-api-client.yaml), which should fully describe the RESTful API. Should you have any difficulty generating the client python package using OpenAPI Generator, please open a ticket, and we will provide assistance. 
+
+Once the package is generated, it can be [installed with pip following these instrutions](swagger/README.md#how-to-install), and then you will be ready to use the package to communicate the RESTful API.
+
+A complete guide on how to use the python client package can be found [here](swagger/README.md#how-to-use-package).
+
 ## Prerequisites
 
 * Linux (with sysstat and attr packages, and kernel 4.x or later)
@@ -245,3 +255,4 @@ Alternatively, run `make clean` to delete AIStore binaries and all (locally accu
 - [Package `memsis`](memsis/README.md)
 - [Package `transport`](transport/README.md)
 - [Package `dSort`](dsort/README.md)
+- [Package `swagger`](swagger/README.md)

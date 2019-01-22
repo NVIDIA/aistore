@@ -14,6 +14,7 @@
 from __future__ import absolute_import
 
 import unittest
+from .helpers import DictParser, surpressResourceWarning
 
 import openapi_client
 from openapi_client.api.cluster_api import ClusterApi  # noqa: E501
@@ -22,6 +23,8 @@ class TestClusterApi(unittest.TestCase):
     """ClusterApi unit test stubs"""
 
     def setUp(self):
+        surpressResourceWarning()
+
         configuration = openapi_client.Configuration()
         configuration.debug = False
         api_client = openapi_client.ApiClient(configuration)
@@ -41,7 +44,7 @@ class TestClusterApi(unittest.TestCase):
         5. Verify
         """
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
-        target =  smap.tmap.values()[1]
+        target =  list(smap.tmap.values())[1]
         daemon_info = self.models.Snode(target.daemon_id, public_net=target.public_net, intra_control_net=target.intra_control_net, intra_data_net=target.intra_data_net)
 
         self.cluster.unregister_target(daemon_info.daemon_id)
@@ -146,23 +149,6 @@ class TestClusterApi(unittest.TestCase):
             self.assertTrue(len(mountpaths.targets[target].available) > 0,
                     "Number of available mountpaths on target %s is zero."
                     % target)
-
-
-class DictParser(dict):
-    __getattr__= dict.__getitem__
-
-    def __init__(self, d):
-        self.update(**dict((k, self.parse(v))
-                           for k, v in d.iteritems()))
-
-    @classmethod
-    def parse(cls, v):
-        if isinstance(v, dict):
-            return cls(v)
-        elif isinstance(v, list):
-            return [cls.parse(i) for i in v]
-        else:
-            return v
 
 if __name__ == '__main__':
     unittest.main()

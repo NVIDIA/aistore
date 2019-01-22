@@ -22,11 +22,14 @@ from openapi_client.rest import ApiException
 import os
 import uuid
 import logging as log
+from .helpers import bytestring, surpressResourceWarning
 
 class TestBucketApi(unittest.TestCase):
     """BucketApi unit test stubs"""
 
     def setUp(self):
+        surpressResourceWarning()
+
         configuration = openapi_client.Configuration()
         configuration.debug = False
         api_client = openapi_client.ApiClient(configuration)
@@ -307,7 +310,7 @@ class TestBucketApi(unittest.TestCase):
     def __put_random_object(self, bucket_name=None):
         bucket_name = bucket_name if bucket_name else self.BUCKET_NAME
         object_name = uuid.uuid4().hex
-        input_object = os.urandom(self.FILE_SIZE)
+        input_object = bytestring(os.urandom(self.FILE_SIZE))
         log.info("PUT object [%s/%s] size [%d]",
                  bucket_name, object_name, self.FILE_SIZE)
         self.object.put(bucket_name, object_name, body=input_object)

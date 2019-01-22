@@ -14,16 +14,18 @@
 from __future__ import absolute_import
 
 import unittest
+from .helpers import DictParser, surpressResourceWarning
 
 import openapi_client
 from openapi_client.api.daemon_api import DaemonApi  # noqa: E501
 from openapi_client.rest import ApiException
 
-
 class TestDaemonApi(unittest.TestCase):
     """DaemonApi unit test stubs"""
 
     def setUp(self):
+        surpressResourceWarning()
+
         configuration = openapi_client.Configuration()
         configuration.debug = False
         api_client = openapi_client.ApiClient(configuration)
@@ -59,7 +61,7 @@ class TestDaemonApi(unittest.TestCase):
         target_id = smap.tmap.keys()[0]
         target_port = target_id[-4:]
         primary_proxy_port = smap.proxy_si.public_net.daemon_port
-        print target_port, target_id
+        print("%s, %s" % (target_port, target_id))
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         input_params = self.models.InputParameters(self.models.Actions.SHUTDOWN)
@@ -74,19 +76,19 @@ class TestDaemonApi(unittest.TestCase):
 
     def test_get_stats(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
-        target_port = smap.tmap.keys()[0][-4:]
+        target_port = next(iter(smap.tmap))[-4:]
         primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
         stats = DictParser.parse(self.daemon.get(self.models.GetWhat.STATS))
-        self.assertTrue(stats.capacity.values()[0].avail != 0,
+        self.assertTrue(list(stats.capacity.values())[0].avail != 0,
                         "Available disk space is returned as 0")
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % primary_proxy_port)
 
     def test_get_mountpaths(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
-        target_port = smap.tmap.keys()[0][-4:]
+        target_port = next(iter(smap.tmap))[-4:]
         primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
@@ -99,7 +101,7 @@ class TestDaemonApi(unittest.TestCase):
 
     def test_disable_enable_mountpath(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
-        target_port = smap.tmap.keys()[0][-4:]
+        target_port = next(iter(smap.tmap))[-4:]
         primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
@@ -124,7 +126,7 @@ class TestDaemonApi(unittest.TestCase):
 
     def test_remove_add_mountpath(self):
         smap = DictParser.parse(self.daemon.get(self.models.GetWhat.SMAP))
-        target_port = smap.tmap.keys()[0][-4:]
+        target_port = next(iter(smap.tmap))[-4:]
         primary_proxy_port = smap.proxy_si.public_net.daemon_port
         self.daemon.api_client.configuration.host = (
                 "http://localhost:%s/v1" % target_port)
@@ -153,23 +155,6 @@ class TestDaemonApi(unittest.TestCase):
         Perform operations such as setting config value, shutting down proxy/target etc. on a AIS daemon  # noqa: E501
         """
         pass
-
-
-class DictParser(dict):
-    __getattr__= dict.__getitem__
-
-    def __init__(self, d):
-        self.update(**dict((k, self.parse(v))
-                           for k, v in d.iteritems()))
-
-    @classmethod
-    def parse(cls, v):
-        if isinstance(v, dict):
-            return cls(v)
-        elif isinstance(v, list):
-            return [cls.parse(i) for i in v]
-        else:
-            return v
 
 if __name__ == '__main__':
     unittest.main()

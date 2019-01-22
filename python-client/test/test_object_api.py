@@ -23,12 +23,14 @@ import random
 import uuid
 import os
 import logging as log
-
+from .helpers import bytestring, skipPython3, DictParser, surpressResourceWarning
 
 class TestObjectApi(unittest.TestCase):
     """ObjectApi unit test stubs"""
 
     def setUp(self):
+        surpressResourceWarning()
+
         configuration = openapi_client.Configuration()
         configuration.debug = False
         api_client = openapi_client.ApiClient(configuration)
@@ -52,6 +54,7 @@ class TestObjectApi(unittest.TestCase):
         for bucket_name in self.created_buckets:
             self.bucket.delete(bucket_name, input_params)
 
+    @skipPython3
     def test_object_headers(self):
         object_name, _ = self.__put_random_object()
         headers = self.object.get_with_http_info(self.BUCKET_NAME, object_name)[2]
@@ -62,6 +65,7 @@ class TestObjectApi(unittest.TestCase):
                         "ChecksumVal is None or empty [%s/%s]" %
                         (self.BUCKET_NAME, object_name))
 
+    @skipPython3
     def test_apis_with_get(self):
         """
         Test case for GET, PUT and DELETE object.
@@ -84,6 +88,7 @@ class TestObjectApi(unittest.TestCase):
         self.__execute_operation_on_unavailable_object(
             self.object.get, self.BUCKET_NAME, object_name)
 
+    @skipPython3
     def test_apis_with_range_read(self):
         """
         Test case for GET range, PUT and DELETE object.
@@ -234,7 +239,7 @@ class TestObjectApi(unittest.TestCase):
     def __put_random_object(self, bucket_name=None):
         bucket_name = bucket_name if bucket_name else self.BUCKET_NAME
         object_name = uuid.uuid4().hex
-        input_object = os.urandom(self.FILE_SIZE)
+        input_object = bytestring(os.urandom(self.FILE_SIZE))
         log.info("PUT object [%s/%s] size [%d]",
                  bucket_name, object_name, self.FILE_SIZE)
         self.object.put(bucket_name, object_name, body=input_object)

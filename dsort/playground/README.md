@@ -2,20 +2,21 @@
 
 To make it easier to play and benchmark dsort feature, we made couple of scripts
 which help to make it happen. We provide scripts for two languages: Golang and
-Python3.
+Python.
 
-## Python 3
+## Python
 
-Before you start playing with scripts make sure that you have installed our
-python client. This can be done by doing:
+Before you start playing with scripts, make sure that you have installed our python client.
+
+Note that the python client currently [does not fully support python 3](/swagger/README.md#future)
+
+First build and install the client by following the instructions [here](/swagger/README.md#how-to-install-client-package)
+
+Then install playground helpers and scripts by doing:
+
 ```shell
-$ # Install python client
-$ cd <path_to_repo>/aistore/python-client
-$ pip3 install .
-
-$ # Install playground helpers and scripts
-$ cd <path_to_repo>/aistore/dsort/playground
-$ pip3 install -e .
+$ cd <path_to_repo>/dsort/playground
+$ pip install -e .
 ```
 
 ### put_tarballs.py
@@ -37,7 +38,7 @@ User can set couple of general flags:
 Example:
 
 ```shell
-(env) $ python3 put_tarballs.py --url http://proxyurl:9801 --shards 100 --fsize 1024 --fcount 100
+(env) $ python put_tarballs.py --url http://proxyurl:9801 --shards 100 --fsize 1024 --fcount 100
 ```
 
 This will create shards named: `INPUT_PREFIX+NUMBER+EXTENSION` like `shard-10.tar` with
@@ -68,7 +69,7 @@ all possible settings, for more advanced usage please refer to API).
 Example:
 
 ```shell
-(env) $ python3 -u start_dsort.py --url http://proxyurl:9801 --input "shard-{0..99}" --output "new-shard-{0..10000}" --outsize 10240 --elimit 40 --climit 20 --mem "80%" --refresh 2 | tee dsort.log
+(env) $ python -u start_dsort.py --url http://proxyurl:9801 --input "shard-{0..99}" --output "new-shard-{0..10000}" --outsize 10240 --elimit 40 --climit 20 --mem "80%" --refresh 2 | tee dsort.log
 ```
 
 This will create new shards named: `OUTPUT_PREFIX+NUMBER+EXTENSION` like `new-shard-10.tar` with
