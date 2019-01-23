@@ -302,11 +302,18 @@ func TestECPropsChange(t *testing.T) {
 	tutils.Logln("Trying to disable EC")
 	bucketProps.ECEnabled = false
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
-	if err == nil {
-		t.Error("Disabling EC must fail")
+	if err != nil {
+		t.Errorf("Disabling EC failed: %v", err)
 	}
 
-	tutils.Logln("Trying to modify EC options")
+	tutils.Logln("Trying to re-enable EC")
+	bucketProps.ECEnabled = true
+	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)
+	if err != nil {
+		t.Errorf("Enabling EC failed: %v", err)
+	}
+
+	tutils.Logln("Trying to modify EC options when EC is enabled")
 	bucketProps.ECEnabled = true
 	bucketProps.ECObjSizeLimit = 300000
 	err = api.SetBucketProps(baseParams, TestLocalBucketName, bucketProps)

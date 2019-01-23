@@ -23,7 +23,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,7 +39,8 @@ const (
 	opGet
 	opConfig
 
-	myName = "loader"
+	myName        = "loader"
+	dockerEnvFile = "/tmp/docker_ais/deploy.env" // filepath of Docker deployment config
 )
 
 type (
@@ -108,6 +108,13 @@ var (
 	statsdC              statsd.Client
 	getPending           int64
 	putPending           int64
+
+	ip   string
+	port string
+
+	envVars      = tutils.ParseEnvVariables(dockerEnvFile) // Gets the fields from the .env file from which the docker was deployed
+	dockerHostIP = envVars["PRIMARYHOSTIP"]                // Host IP of primary cluster
+	dockerPort   = envVars["PORT"]
 )
 
 func parseCmdLine() (params, error) {
@@ -117,8 +124,8 @@ func parseCmdLine() (params, error) {
 	)
 
 	// Command line options
-	ip := flag.String("ip", "localhost", "IP address for proxy server")
-	port := flag.Int("port", 8080, "Port number for proxy server")
+	flag.StringVar(&ip, "ip", "localhost", "IP address for proxy server")
+	flag.StringVar(&port, "port", "8080", "Port number for proxy server")
 	flag.IntVar(&p.statsShowInterval, "statsinterval", 10, "Interval to show stats in seconds; 0 = disabled")
 	flag.StringVar(&p.bucket, "bucket", "nvais", "Bucket name")
 	flag.BoolVar(&p.isLocal, "local", true, "True if using local bucket")
@@ -219,8 +226,16 @@ func parseCmdLine() (params, error) {
 			}
 		}
 	}
+	// For Dry-Run on Docker
+	if tutils.DockerRunning() && ip == "localhost" {
+		ip = dockerHostIP
+	}
 
-	p.proxyURL = "http://" + *ip + ":" + strconv.Itoa(*port)
+	if tutils.DockerRunning() && port == "8080" {
+		port = dockerPort
+	}
+
+	p.proxyURL = "http://" + ip + ":" + port
 	p.putSizeUpperBound *= 1024
 	return p, nil
 }
@@ -654,6 +669,67 @@ func newWorkOrder() {
 func completeWorkOrder(wo *workOrder) {
 	delta := wo.end.Sub(wo.start)
 
+	metrics := make([]statsd.Metric, 0)
+	if wo.err == nil {
+		metrics = []statsd.Metric{
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyconn",
+				Value: float64(wo.latencies.ProxyConn / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxy",
+				Value: float64(wo.latencies.Proxy / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetconn",
+				Value: float64(wo.latencies.TargetConn / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.target",
+				Value: float64(wo.latencies.Target / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.posthttp",
+				Value: float64(wo.latencies.PostHTTP / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyheader",
+				Value: float64(wo.latencies.ProxyWroteHeader / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyrequest",
+				Value: float64(wo.latencies.ProxyWroteRequest / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyresponse",
+				Value: float64(wo.latencies.ProxyFirstResponse / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetheader",
+				Value: float64(wo.latencies.TargetWroteHeader / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetrequest",
+				Value: float64(wo.latencies.TargetWroteRequest / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetresponse",
+				Value: float64(wo.latencies.TargetFirstResponse / time.Millisecond),
+			},
+		}
+	}
+
 	switch wo.op {
 	case opGet:
 		getPending--
@@ -682,62 +758,10 @@ func completeWorkOrder(wo *workOrder) {
 					Name:  "throughput",
 					Value: wo.size,
 				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyconn",
-					Value: float64(wo.latencies.ProxyConn / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxy",
-					Value: float64(wo.latencies.Proxy / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetconn",
-					Value: float64(wo.latencies.TargetConn / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.target",
-					Value: float64(wo.latencies.Target / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.posthttp",
-					Value: float64(wo.latencies.PostHTTP / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyheader",
-					Value: float64(wo.latencies.ProxyWroteHeader / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyrequest",
-					Value: float64(wo.latencies.ProxyWroteRequest / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyresponse",
-					Value: float64(wo.latencies.ProxyFirstResponse / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetheader",
-					Value: float64(wo.latencies.TargetWroteHeader / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetrequest",
-					Value: float64(wo.latencies.TargetWroteRequest / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetresponse",
-					Value: float64(wo.latencies.TargetFirstResponse / time.Millisecond),
-				},
 			)
+			if len(metrics) != 0 {
+				statsdC.Send("get", metrics...)
+			}
 		} else {
 			fmt.Println("Get failed: ", wo.err)
 			intervalStats.get.AddErr()
@@ -778,6 +802,9 @@ func completeWorkOrder(wo *workOrder) {
 					Value: wo.size,
 				},
 			)
+			if len(metrics) != 0 {
+				statsdC.Send("put", metrics...)
+			}
 		} else {
 			fmt.Println("Put failed: ", wo.err)
 			intervalStats.put.AddErr()

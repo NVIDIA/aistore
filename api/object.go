@@ -194,8 +194,8 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 	defer handle.Close()
 
 	path := cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
-	url := baseParams.URL + path
-	req, err := http.NewRequest(http.MethodPut, url, handle)
+	reqURL := baseParams.URL + path
+	req, err := http.NewRequest(http.MethodPut, reqURL, handle)
 	if err != nil {
 		return fmt.Errorf("Failed to create new HTTP request, err: %v", err)
 	}
@@ -221,14 +221,21 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 		// correct error and retry here help. If it helps, the code block
 		// below will be removed, as well as all Printf's
 		{
+			// duplicate the error to avoid modifying the original error
+			ecopy := err
 			if !cmn.IsErrConnectionRefused(err) {
-				fmt.Printf("Request failed with error: %v (%T)\n", err, err)
-			}
-			if nerr, ok := err.(*net.OpError); ok {
-				fmt.Printf("  The internal error is: %v (%T)\n", nerr.Err, nerr.Err)
-			}
-			if serr, ok := err.(*os.SyscallError); ok {
-				fmt.Printf("  The internal error is: %v (%T)\n", serr.Err, serr.Err)
+				fmt.Printf("Request failed with error: %v (%T)\n", ecopy, ecopy)
+				if uerr, ok := ecopy.(*url.Error); ok {
+					fmt.Printf("  The internal error is: %v (%T)\n", uerr.Err, uerr.Err)
+					ecopy = uerr
+				}
+				if nerr, ok := ecopy.(*net.OpError); ok {
+					fmt.Printf("  The internal error is: %v (%T)\n", nerr.Err, nerr.Err)
+					ecopy = nerr
+				}
+				if serr, ok := ecopy.(*os.SyscallError); ok {
+					fmt.Printf("  The internal error is: %v (%T)\n", serr.Err, serr.Err)
+				}
 			}
 		}
 		if cmn.ShouldRetry(err) {

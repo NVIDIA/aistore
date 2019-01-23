@@ -8,6 +8,9 @@ services:
         - GOBASE=${GOPATH}
         - TARGETS=${TARGET_CNT:-1000}
         - CLDPROVIDER=${CLDPROVIDER}
+        - NODISKIO=${NODISKIO}
+        - NONETIO=${NONETIO}
+        - DRYOBJSIZE=${DRYOBJSIZE}
     networks:
         public:
     environment:
@@ -26,6 +29,9 @@ services:
         - GOBASE=${GOPATH}
         - TARGETS=${TARGET_CNT:-1000}
         - CLDPROVIDER=${CLDPROVIDER}
+        - NODISKIO=${NODISKIO}
+        - NONETIO=${NONETIO}
+        - DRYOBJSIZE=${DRYOBJSIZE}
     networks:
         public:
     environment:

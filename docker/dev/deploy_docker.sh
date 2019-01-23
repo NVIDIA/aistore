@@ -13,6 +13,10 @@ usage() {
     echo "  -p=NUM or --proxy=NUM         : where NUM is the number of proxies"
     echo "  -s or --single                : use a single network"
     echo "  -t=NUM or --target=NUM        : where NUM is the number of targets"
+    echo "  -nodiskio=BOOL                : run Dry-Run mode with disk IO is disabled (default = false)"
+    echo "  -nonetio=BOOL                 : run Dry-Run mode with network IO is disabled (default = false)"
+    echo "  -dryobjsize=SIZE              : size of an object when a source is a 'fake' one."
+    echo "                                  'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB. Default value is '8m'"
     echo "Note:"
     echo "   -if the -f or --filesystems flag is used, the -d or --directories flag is disabled and vice-versa"
     echo "   -if the -a or --aws flag is used, the -g or --gcp flag is disabled and vice-versa"
@@ -28,6 +32,14 @@ is_number() {
     fi
 }
 
+is_size() {
+    if [ -z "$1" ]; then 
+      DRYOBJSIZE="8m"
+    elif ! [[ "$1" =~ ^[0-9]+[g|G|m|M|k|K]$ ]] ; then
+      echo "Error: '$1' is not a valid size"; exit 1
+    fi
+}
+
 save_setup() {
     echo "" > $setup_file
     echo "Saving setup"
@@ -39,6 +51,11 @@ save_setup() {
     echo "CLDPROVIDER=$CLDPROVIDER" >> $setup_file
     echo "aws_env=$aws_env" >> $setup_file
     echo "USE_AWS=$USE_AWS" >> $setup_file
+
+    echo "DRYRUN"=$DRYRUN >> $setup_file
+    echo "NODISKIO"=$NODISKIO >> $setup_file
+    echo "NONETIO"=$NONETIO >> $setup_file
+    echo "DRYOBJSIZE"=$DRYOBJSIZE >> $setup_file
 
     echo "FS_LIST=$FS_LIST" >> $setup_file
     echo "TESTFSPATHCOUNT=$TESTFSPATHCOUNT" >> $setup_file
@@ -62,6 +79,16 @@ get_setup() {
     fi
 }
 
+deploy_mode() {
+    if $NODISKIO; then
+        echo "Deployed in no disk IO mode with ${DRYOBJSIZE} fake object size."
+    elif $NONETIO; then
+        echo "Deployed in no network IO mode with ${DRYOBJSIZE} fake object size."
+    else 
+        echo "Deployed in normal mode."
+    fi
+}   
+
 
 if ! [ -x "$(command -v docker-compose)" ]; then
   echo 'Error: docker-compose is not installed.' >&2
@@ -81,6 +108,17 @@ setup_file="/tmp/docker_ais/deploy.env"
 
 aws_env="";
 os="ubuntu"
+
+# Indicate which dry-run mode the cluster is running on
+DRYRUN=""
+NODISKIO=false
+NONETIO=false
+DRYOBJSIZE="8m"
+
+# Graphite Server from Docker/Prod
+GRAPHITE_PORT=2003
+GRAPHITE_SERVER="52.41.234.112"
+
 for i in "$@"
 do
 case $i in
@@ -149,11 +187,73 @@ case $i in
         shift # past argument=value
         ;;
 
+    -nodiskio=*|--nodiskio=*)
+        NODISKIO="${i#*=}"
+        if $NODISKIO; then 
+            DRYRUN=1
+        fi
+        shift # past argument=value
+        ;;
+
+    -nonetio=*|--nonetio=*)
+        NONETIO="${i#*=}"
+        if $NONETIO; then 
+            DRYRUN=2
+        fi
+        shift # past argument=value
+        ;;
+
+    -dryobjsize=*|--dryobjsize=*)
+        DRYOBJSIZE="${i#*=}"
+        is_size $DRYOBJSIZE
+        shift # past argument=value
+        ;;
+
     *)
         usage
         ;;
 esac
 done
+
+
+if [ "$DRYRUN" = "" ]; then
+    echo "Select"
+    echo " 1: Use no disk io (Dry Run)"
+    echo " 2: Use no network io (Dry Run)"
+    echo "Enter the mode you want:"
+    echo "Note: No input will result in using the default (normal) mode"
+    read DRYRUN
+
+    if  [ -z "$DRYRUN" ]; then
+        echo "Setting to normal mode"
+        NODISKIO=false
+        NONETIO=false
+        DRYRUN=0
+    elif [ $DRYRUN -eq 1 ]; then
+        NODISKIO=true
+        NONETIO=false
+        DRYRUN=1
+    elif [ $DRYRUN -eq 2 ]; then
+        NODISKIO=false
+        NONETIO=true
+        DRYRUN=2
+    else 
+        echo "Not a valid entry. Exiting..."
+        exit 1
+    fi
+
+    if [ $DRYRUN -eq 0 ]; then
+        DRYOBJSIZE="8m"
+    else 
+        echo "Configure Dry Run object size (default is '8m' - 8 megabytes):"
+        echo "Note: 'g' or 'G' - GiB, 'm' or 'M' - MiB, 'k' or 'K' - KiB"
+        echo "No input will result in using the default size"
+        read DRYOBJSIZE
+        is_size $DRYOBJSIZE
+    fi
+
+fi
+
 
 if [ $USE_AWS -eq 0 ]; then
     echo Select
@@ -378,6 +478,9 @@ for ((i=0; i<${CLUSTER_CNT}; i++)); do
     export MIRROR_ENABLED=false
     export MIRROR_UTIL_THRESH=20
     export IOSTAT_TIME="2s"
+    export NODISKIO=$NODISKIO
+    export NONETIO=$NONETIO
+    export DRYOBJSIZE=$DRYOBJSIZE
 
     CONFFILE="ais.json"
     source $DIR/../../ais/setup/config.sh
@@ -430,7 +533,9 @@ if [ "$CLUSTER_CNT" -gt 1 ] && [ "$network" = "multi" ]; then
     done
 fi
 
+#Consider moving these to a folder instead of deleting - for future reference
 rm $CONFFILE $CONFFILE_STATSD $CONFFILE_COLLECTD
 docker ps
 
+deploy_mode
 echo done

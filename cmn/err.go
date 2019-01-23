@@ -67,6 +67,9 @@ func IsIOError(err error) bool {
 // The code is partially borrowed from go-<version>/src/os/pipe_test.go and
 // added conversion from net.OpError
 func ShouldRetry(err error) bool {
+	if uerr, ok := err.(*url.Error); ok {
+		err = uerr
+	}
 	if nerr, ok := err.(*net.OpError); ok {
 		err = nerr.Err
 	}
@@ -74,7 +77,7 @@ func ShouldRetry(err error) bool {
 		err = serr.Err
 	}
 
-	return err == syscall.EPIPE
+	return err == syscall.EPIPE || err == syscall.ECONNREFUSED
 }
 
 //===========================================================================

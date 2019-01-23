@@ -158,7 +158,7 @@ func dryinit() {
 	if dryRun.disk {
 		warning := "Dry-run: disk IO will be disabled"
 		fmt.Fprintf(os.Stderr, "%s\n", warning)
-		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, cmn.B2S(dryRun.size, 0))
+		glog.Infof("%s - in memory file size: %d (%s) bytes", warning, dryRun.size, dryRun.sizeStr)
 	}
 	if dryRun.network {
 		warning := "Dry-run: GET won't return objects, PUT won't send objects"

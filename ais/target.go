@@ -600,7 +600,10 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 			t.invalmsghdlr(w, r, errstr)
 			return
 		}
-	} else if lom.Bislocal { // does not exist in the local bucket: restore from neighbors
+
+		// does not exist in the local bucket: restore from neighbors
+		// Need to check if dryrun is enabled to stop from getting LOM
+	} else if lom.Bislocal && !dryRun.disk && !dryRun.network {
 		if errstr, errcode = t.restoreObjLocalBucket(lom, r); errstr == "" {
 			t.objGetComplete(w, r, lom, started, rangeOff, rangeLen, false)
 			t.rtnamemap.Unlock(lom.Uname, false)
@@ -645,7 +648,7 @@ func (t *targetrunner) httpobjget(w http.ResponseWriter, r *http.Request) {
 	//
 	// 3. coldget
 	//
-	if coldget && !dryRun.disk {
+	if coldget && !dryRun.disk && !dryRun.network {
 		t.rtnamemap.Unlock(lom.Uname, false)
 		if errstr, errcode := t.getCold(ct, lom, false); errstr != "" {
 			t.invalmsghdlr(w, r, errstr, errcode)

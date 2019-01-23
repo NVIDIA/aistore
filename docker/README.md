@@ -2,17 +2,14 @@
 
 ## Introduction
 
-AIStore can be run as a cluster of Docker containers. There are three modes of operation: development (docker/dev directory), production (docker/prod directory), and quick start (docker/quick_start directory).
+AIStore can be run as a cluster of Docker containers. There are three modes of operation: development (docker/dev directory) and quick start (docker/quick_start directory).
 
 ### Development Mode
 
 This mode is currently used for development purposes.
 All docker containers mount the same host's AIStore source directory, and then execute from this single source. Upon restart (of the AIStore cluster), all changes made in the host will, therefore, take an immediate effect.
-Note: The development mode is currently being maintained and updated.
 
-### Production Mode
-
-Note the `docker/prod` folder is currently not up to date and might require some tweaking to get it working. Containerized deployment for production is currently tracked seperately.
+> The development mode is currently being maintained and updated.
 
 ### Quick Start Mode
 
@@ -23,89 +20,88 @@ For introduction to Docker, please watch [Docker 101 youtube](https://www.youtub
 This README documents the steps to install and run AIStore
 
 ## Install Docker and Docker Compose
-Note: Using docker requires one of the following versions of Ubuntu:
+**Note:** Using Docker requires one of the following versions of Ubuntu:
 * Bionic 18.04 (LTS)
 * Xenial 16.04 (LTS)
 * Trusty 14.04 (LTS)
   
 1. Uninstall any old versions of docker:
-    ```
-    $sudo apt-get remove docker docker-engine docker.io    
+    ```shell
+    $ sudo apt-get remove docker docker-engine docker.io    
     ```
 It’s OK if apt-get reports that none of these packages are installed.
 
 2. Update the apt package index:
-    ```
-    $sudo apt-get update    
+    ```shell
+    $ sudo apt-get update    
     ```
 
 3. Install packages to allow apt to use a repository over HTTPS:
-    ```
-    $sudo apt-get install \
+    ```shell
+    $ sudo apt-get install \
         apt-transport-https \
         ca-certificates \
         curl \
         software-properties-common    
     ```
 4. Install Docker
+    ``` shell
+    $ sudo apt-get install docker-ce
     ```
-    $sudo apt-get install docker-ce
+5. Verify that Docker CE is installed correctly by running the "hello-world" image.
+    ```shell
+    $ sudo docker run hello-world
     ```
-5. Verify that Docker CE is installed correctly by running the hello-world image.
-    ```
-    $sudo docker run hello-world
-    ```
-6.  Add your current user to the docker group (but only if you are not the root). After executing the command, restart your machine for it to take effect.    
+6.  Add your current user to the Docker group (but only if you are not the root). After executing the command, restart your machine for it to take effect.    
+    ``` shell   
+    $ sudo usermod -aG docker $(whoami)       
     ```    
-    $sudo usermod -aG docker $(whoami)       
-    ```    
-7. Install docker compose using python pip. Install pip if you don't have it:
-    ```
-    $sudo apt-get install -y python-pip
-    $sudo pip install docker-compose
-
+7. Install Docker-Compose using python `pip`. Install `pip` if you don't have it:
+    ```shell
+    $ sudo apt-get install -y python-pip
+    $ sudo pip install docker-compose
     ```
 8. Test the installation:
-    ```
-    $docker-compose --version
+    ```shell
+    $ docker-compose --version
     docker-compose version 1.23.1, build 1719ceb
     ```
-9. If you have any troubles with your installation, consider using the latest version of [docker](https://docs.docker.com/install/) and [docker-compose](https://github.com/docker/compose/releases).
+9. If you have any troubles with your installation, consider using the latest version of [Docker](https://docs.docker.com/install/) and [Docker-Compose](https://github.com/docker/compose/releases).
 
 ## Uninstall Docker and Docker Compose
 1. To uninstall Docker, run the following:
-    ```
-    $sudo apt-get purge docker-ce
-    $sudo apt-get purge docker-ce-cli
+    ```shell
+    $ sudo apt-get purge docker-ce
+    $ sudo apt-get purge docker-ce-cli
     ```
 2. Ensure docker is completely uninstalled by running the following command:
-    ```
-    dpkg -l | grep -i docker
+    ```shell
+    $ dpkg -l | grep -i docker
     ```
     There should be no docker-ce and docker-ce-cli packages listed.
 3. To uninstall Docker-Compose, run the following:
-   ```
-   $pip uninstall docker-compose
+   ```shell
+   $ pip uninstall docker-compose
    ```
 4. Images, containers, volumes, or customized configuration files on your host are not automatically removed. To delete all images, containers, and volumes:
-    ```
-    $sudo rm -rf /var/lib/docker
+    ```shell
+    $ sudo rm -rf /var/lib/docker
     ```
 
 ## Starting AIStore
 1. If you have already installed go and configured $GOPATH execute the below command to download AIStore source code and all its dependencies.
-```
-$go get -u -v github.com/NVIDIA/aistore/ais
+```shell
+$ go get -u -v github.com/NVIDIA/aistore/ais
 ```
 
 2. Set up your AWS configuration by using the the [`aws configure`](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) command. 
-To run AIStore docker containers, you will need to pass your AWS config and credential directory via flag -a=<aws directory> CLI. By default, AWS stores config and credential files in `~/.aws/`
+To run AIStore Docker containers, you will need to pass your AWS config and credential directory via flag `-a=<aws directory>` CLI. By default, AWS stores config and credential files in `~/.aws/`
 Example:
-```
-$./deploy_docker.sh -a=~/.aws/
+```shell
+$ ./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy AIStore, refer to the deployment scripts in `docker/dev`, `docker/prod`, and `docker/quick_start`.
+3. To deploy AIStore, refer to the deployment scripts in [`docker/dev`](dev/dev_docker.md) and [`docker/quick_start`](quick_start/qs_docker.md).
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 ## Helpful docker commands
@@ -118,15 +114,15 @@ List all of the running containers using `docker ps`. Many commands require the 
 ### List All Containers
 
 Lists all containers (not only the running ones).
-```
-$docker ps -a
+```shell
+$ docker ps -a
 ```
 
 ### View Container Logs
 
 To view docker logs, use `docker logs <container_name>`. Example:
 ```
-    $docker logs ais0_proxy_1
+    $ docker logs ais0_proxy_1
 
     I 21:23:56.400794 metasync.go:142] Starting metasyncer
     I 21:24:06.415473 stats.go:422] {"err.n":0,"get.n":0,"del.n":0,"get.μs":0,"kalive.μs":0,"err.get.n":0,"err.list.n":0,"pst.n":0,"ren.n":0,
@@ -143,7 +139,7 @@ To view docker logs, use `docker logs <container_name>`. Example:
 ```
 Note:
 * You can obtain the container name by running command `docker ps`
-* The docker/dev directory has a more comprehensive script named `logs.sh` to view logs
+* The `docker/dev` directory has a more comprehensive script named `logs.sh` to view logs
 
 ### SSH Into a Container
 
@@ -156,7 +152,7 @@ Note:
 
 ### List Docker Images
 ```
-    $docker image ls
+    $ docker image ls
 
     REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
     ais1_proxy          latest              ced2cbd2ff2f        27 minutes ago      676MB
@@ -167,7 +163,7 @@ Note:
 
 ### List Docker Networks
 ```
-    $docker network ls
+    $ docker network ls
 
     NETWORK ID          NAME                    DRIVER              SCOPE
     cb05b22edcb3        bridge                  bridge              local
@@ -181,68 +177,68 @@ Note:
 
 ### Start a Container
 
-```
-    $docker start CONTAINER_NAME
+```shell
+    $ docker start CONTAINER_NAME
 ```
 
 ### Stop a Container
 
-```
-    $docker stop CONTAINER_NAME
+```shell
+    $ docker stop CONTAINER_NAME
 ```
 
 ### Restart a Container
 
-```
-    $docker restart CONTAINER_NAME
+```shell
+    $ docker restart CONTAINER_NAME
 ```
 
 ### Kill a Container
 
-```
-    $docker kill CONTAINER_NAME
+```shell
+    $ docker kill CONTAINER_NAME
 ```
 
 ### View Resource Usage Statistics for all Containers
 
-```
-    $docker stats
+```shell
+    $ docker stats
 ```
 
 ### Remove Unused Images
 
-```
-    $docker image prune -f
+```shell
+    $ docker image prune -f
 ```
 
 ### Remove all Stopped Containers
 
-```
-    $docker container prune -f
+```shell
+    $ docker container prune -f
 ```
 
 ### Remove all Unused Networks
 
-```
-    $docker network prune -f
+```shell
+    $ docker network prune -f
 ```
 
 ### Stop all Running Containers
 
-```
-    $docker stop $(docker ps -a -q)
+```shell
+    $ docker stop $(docker ps -a -q)
 ```
 
 ### Delete all Existing Containers
 
-```
-    $docker rm $(docker ps -a -q)
+```shell
+    $ docker rm $(docker ps -a -q)
 ```
 
 ### Delete all Existing Images
 
-```
-    $docker rmi $(docker images -q -a)
+```shell
+    $ docker rmi $(docker images -q -a)
 ```
 
 
