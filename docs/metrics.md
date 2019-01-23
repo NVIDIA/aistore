@@ -61,7 +61,7 @@ Metrics that AIStore generates are named and grouped as follows:
 
 Example of how these metrics show up in a grafana dashboard:
 
-<img src="images/target-statsd-grafana.png" alt="Target Metrics" width="256">
+![Target metrics](images/target-statsd-grafana.png)
 
 ### Disk Metrics
 

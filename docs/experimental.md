@@ -19,7 +19,7 @@ For information on how to run it and details, please refer to the [WebDAV README
 
 AIStore can be deployed with multiple consecutive AIStore clusters aka "tiers" sitting behind a primary tier. This provides the option to use a multi-level cache architecture.
 
-<img src="images/multi-tier.png" alt="AIStore multi-tier overview" width="680">
+![Multi-tier overview](images/multi-tier.png)
 
 Tiering is configured at the bucket level by setting bucket properties, for example:
 
@@ -48,7 +48,7 @@ Object replication (service) sends and receives objects via HTTP(S). Each replic
 
 The picture below illustrates some of the aspects of replication service as far as its design and data flows.
 
-<img src="images/replication-overview.png" alt="Replication overview" width="800">
+![Replication overview](images/replication-overview.png)
 
 **Note:** The service is currently in its prototype stage and is not yet available.
 

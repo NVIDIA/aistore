@@ -113,7 +113,7 @@ Please note that if you are running the service for the first time, the image bu
 ### List Running Containers
 List all of the running containers using `docker ps`. Many commands require the CONTAINER ID or NAME fields. Example output: 
 
-<img src="./../images/docker_ps.png" alt="docker ps" width="1000">
+![docker ps](../docs/images/docker_ps.png)
 
 ### List All Containers
 

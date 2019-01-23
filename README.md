@@ -12,7 +12,7 @@ Both **gateways** and **targets** are userspace daemons that join (and, by joini
 
 A bird's-eye view follows - and tries to emphasize a few distinguishing characteristics, and in particular, the fact that client <=> storage traffic has *no-extra-hops*: it's a direct path between the requesting client and the storage target that stores (or will store) the data.
 
-<img src="images/ais-overview-mp.png" alt="AIStore overview" width="384">
+<img src="docs/images/ais-overview-mp.png" alt="AIStore overview" width="400">
 
 AIS can be deployed as a self-contained standalone persistent storage cluster and/or as a fast tier in front of existing Amazon S3 and Google Cloud (GCP) storage. There's a built-in caching mechanism that provides least-recently-used eviction on a per-bucket basis based on the monitored capacity and configurable high/low watermarks (see [LRU](#lru)). AWS/GCP integration is *turnkey* and boils down to provisioning AIS targets with credentials to access Cloud-based buckets.
 
@@ -40,7 +40,7 @@ AIS can be deployed as a self-contained standalone persistent storage cluster an
 ## Overview
 All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
 
-<img src="images/ais-get-flow.png" alt="AIStore GET flow" width="640">
+<img src="docs/images/ais-get-flow.png" alt="AIStore GET flow" width="640">
 
 Distribution of objects across AIS cluster is done via (lightning fast) two-dimensional consistent-hash whereby objects get distributed across all storage targets and, within each target, all local disks.
 

@@ -12,11 +12,11 @@
 
 AIStore configuration is consolidated in a single [JSON file](ais/setup/config.sh) where all of the knobs must be self-explanatory and the majority of those, except maybe just a few, have pre-assigned default values. The notable exceptions include:
 
-<img src="images/ais-config-1.png" alt="AIStore configuration: TCP port and URL" width="512">
+<img src="images/ais-config-1.png" alt="Configuration: TCP port and URL" width="600">
 
 and
 
-<img src="images/ais-config-2-commented.png" alt="AIStore configuration: local filesystems" width="548">
+<img src="images/ais-config-2-commented.png" alt="Configuration: local filesystems" width="600">
 
 As shown above, the `test_fspaths` section of the configuration corresponds to a **single local filesystem being partitioned** between both *local* and *Cloud* buckets. In other words, the `test_fspaths` configuration option is intended strictly for development. 
 
