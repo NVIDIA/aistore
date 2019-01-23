@@ -49,6 +49,10 @@ const (
 	internalPageSize = 10000     // number of objects in a page for internal call between target and proxy to get atime/iscached
 	MaxPageSize      = 64 * 1024 // max number of objects in a page (warning logged if requested page size exceeds this limit)
 	maxBytesInMem    = 256 * cmn.KiB
+
+	// GET: when object is missing and rebalance is running we schedule couple of retries.
+	restoreMissingRetries   = 10
+	restoreMissingIntervals = 300 * time.Millisecond
 )
 
 type (
@@ -678,12 +682,17 @@ func (t *targetrunner) restoreObjLocalBucket(lom *cluster.LOM, r *http.Request) 
 	// check cluster-wide when global rebalance is running
 	aborted, running = t.xactions.isAbortedOrRunningRebalance()
 	if aborted || running {
-		if props, errs := t.getFromNeighbor(r, lom); errs == "" {
-			lom.RestoredReceived(props)
-			if glog.V(4) {
-				glog.Infof("Restored (global rebalance in-progress?): %s (%s)", lom, cmn.B2S(lom.Size, 1))
+		// Do couple of retries in case the object was moved or is being moved right now.
+		for retry := 0; retry < restoreMissingRetries; retry++ {
+			if props, errs := t.getFromNeighbor(r, lom); errs == "" {
+				lom.RestoredReceived(props)
+				if glog.V(4) {
+					glog.Infof("Restored (global rebalance in-progress?): %s (%s)", lom, cmn.B2S(lom.Size, 1))
+				}
+				return
 			}
-			return
+
+			time.Sleep(restoreMissingIntervals)
 		}
 	} else {
 		if lom.Bprops != nil && lom.Bprops.NextTierURL != "" {

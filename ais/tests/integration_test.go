@@ -96,7 +96,7 @@ func TestGetAndReRegisterInParallel(t *testing.T) {
 		err error
 		m   = metadata{
 			t:               t,
-			delay:           18 * time.Second,
+			delay:           10 * time.Second,
 			num:             num,
 			numGetsEachFile: 5,
 			repFilenameCh:   make(chan repFile, num),
@@ -629,7 +629,6 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 		md = metadata{
 			t:               t,
 			num:             num,
-			delay:           time.Second * 10,
 			numGetsEachFile: 10,
 			repFilenameCh:   make(chan repFile, num),
 			semaphore:       make(chan struct{}, 10), // 10 concurrent GET requests at a time
@@ -713,6 +712,9 @@ func TestGetDuringLocalAndGlobalRebalance(t *testing.T) {
 	go func() {
 		doGetsInParallel(&md)
 	}()
+
+	// Let's give gets some momentum
+	time.Sleep(time.Second * 4)
 
 	// register a new target
 	err = tutils.RegisterTarget(md.proxyURL, killTarget, md.smap)

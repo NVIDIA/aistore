@@ -26,7 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/transport"
-	"github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const NeighborRebalanceStartDelay = 10 * time.Second
@@ -142,8 +142,7 @@ func (rcl *globalRebJogger) walk(fqn string, fi os.FileInfo, err error) error {
 	if errstr := lom.Fill(cluster.LomAtime | cluster.LomCksum | cluster.LomCksumMissingRecomp); errstr != "" {
 		return errors.New(errstr)
 	}
-	// global rebalance: skip locally-misplaced and local copies (not to confuse with HasCopy())
-	if lom.DoesNotExist || lom.Misplaced() || lom.IsCopy() {
+	if lom.DoesNotExist || lom.IsCopy() {
 		return nil
 	}
 
@@ -246,20 +245,28 @@ func (rb *localRebJogger) walk(fqn string, fileInfo os.FileInfo, err error) erro
 		return nil
 	}
 
-	// Copy the object instead of moving, LRU takes care of obsolete copies
+	// Copy the object instead of moving, LRU takes care of obsolete copies.
+	// Note that global rebalance can run at the same time and by copying we
+	// allow local and global rebalance to work in parallel - global rebalance
+	// can still access the old object.
+
 	if glog.V(4) {
 		glog.Infof("Copying %s => %s", fqn, lom.HrwFQN)
 	}
+
+	rb.t.rtnamemap.Lock(lom.Uname, false)
 	if err := lom.CopyObject(lom.HrwFQN, rb.buf); err != nil {
+		rb.t.rtnamemap.Unlock(lom.Uname, false)
 		if !os.IsNotExist(err) {
 			rb.xreb.Abort()
 			rb.t.fshc(err, lom.HrwFQN)
+			return err
 		}
 		return nil
 	}
+	rb.t.rtnamemap.Unlock(lom.Uname, false)
 	rb.objectMoved++
 	rb.byteMoved += fileInfo.Size()
-
 	return nil
 }
 
