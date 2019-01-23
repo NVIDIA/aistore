@@ -35,6 +35,7 @@ AIS can be deployed as a self-contained standalone persistent storage cluster an
     - [Tips](#tips)
     - [Helpful Links](docs/helpful_links.md)
 - [Guides and References](#guides-and-references)
+- [Selected Package READMEs](#selected-package-readmes)
 
 ## Overview
 All inter- and intra-cluster networking is based on HTTP/1.1 (with HTTP/2 option currently under development). HTTP(S) clients execute RESTful operations vis-à-vis AIS gateways and data then moves **directly** between the clients and storage targets with no metadata servers and no extra processing in-between:
@@ -47,13 +48,13 @@ Distribution of objects across AIS cluster is done via (lightning fast) two-dime
 There are no limitations whatsoever on object and bucket sizes, numbers of objects and buckets, numbers of gateways and storage targets in a single AIS cluster.
 
 ### Data Protection
-AIS supports end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon erasure coding thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
+AIS [supports](docs/storage_svcs.md) end-to-end checksum protection, 2-way local mirroring, and Reed-Solomon erasure coding thus providing for arbitrary user-defined levels of cluster-wide data redundancy and space efficiency.
 
 ### Scale-Out
 The scale-out category includes balanced and fair distribution of objects where each storage target will store (via a variant of the consistent hashing) 1/Nth of the entire namespace where (the number of objects) N is unlimited by design. Similar to the AIS gateways, AIS storage targets can join and leave at any moment causing the cluster to rebalance itself in the background and without downtime.
 
 ### HA
-AIS features a highly-available control plane where all gateways are absolutely identical in terms of their data and control plane APIs. Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
+AIS features a [highly-available control plane](docs/ha.md) where all gateways are absolutely identical in terms of their data and control plane APIs. Gateways can be ad hoc added and removed, deployed remotely and/or locally to the compute clients (the latter option will eliminate one network roundtrip to resolve object locations).
 
 ## Fast Tier
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](#listrange-operations)) that runs in the background to download batches of objects. In addition, AIS can cache and tier itself (as of 2.0, native tiering is *experimental*).
@@ -75,7 +76,7 @@ Most notably, AIStore provides [dSort](dsort/README.md) - a MapReduce layer that
 
 DSort “views” AIS objects as named shards that comprise archived key/value data. In its 1.0 realization, dSort supports tar, zip, and tar-gzip formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including tf.Record and tf.Example ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tf-records)) and [MessagePack](https://msgpack.org/index.html). The user runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
 
-By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job is defined by a high-level specification that defines (or, names) input dataset, sorting algorithm, (desired) size of the output shard, and a few other parameters. Given this input, dSort generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. At the end of this job, the result - a *transformed*" dataset optimized for subsequent training and inference by deep learning apps.
+By design, dSort tightly integrates with the AIS-object to take full advantage of the combined clustered CPU and IOPS. Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. Which ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
 
 ## Prerequisites
 
@@ -84,7 +85,7 @@ By design, dSort tightly integrates with the AIS-object to take full advantage o
 * Extended attributes (xattrs)
 * Optionally, Amazon (AWS) or Google Cloud Platform (GCP) account
 
-Some Linux distributions do not include sysstat and/or attr packages - to install, use 'apt-get' (Debian), 'yum' (RPM), or other applicable package management tool, e.g.:
+Some Linux distributions do not include sysstat and/or attr packages - to install, use `apt-get` (Debian), `yum` (RPM), or other applicable package management tool, e.g.:
 
 ```shell
 $ apt-get install sysstat
@@ -208,3 +209,11 @@ Alternatively, run `make clean` to delete AIStore binaries and all (locally accu
 - [Storage Services](docs/storage_svcs.md)
 - [Extended Actions (xactions)](docs/xaction.md)
 - [Experimental](docs/experimental.md)
+
+## Selected Package READMEs
+- [Package `cluster`](cluster/README.md)
+- [Package `api`](api/README.md)
+- [Package `authn`](authn/README.md)
+- [Package `memsis`](memsis/README.md)
+- [Package `transport`](transport/README.md)
+- [Package `dSort`](dsort/README.md)
