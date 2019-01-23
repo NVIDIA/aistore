@@ -31,7 +31,7 @@ AIS can be deployed as a self-contained standalone persistent storage cluster an
     - [dSort](#dsort)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-    - [Local Non-conteinerized](#local-non-conteinerized)
+    - [Local Non-containerized](#local-non-containerized)
     - [Tips](#tips)
     - [Helpful Links](docs/helpful_links.md)
 - [Guides and References](#guides-and-references)
@@ -100,7 +100,7 @@ The capability called [extended attributes](https://en.wikipedia.org/wiki/Extend
 
 AIStore runs on commodity Linux machines with no special requirements on the hardware. The implication is that the number of possible (optimal and not-so-optimal) deployment options is practically unlimited. This section covers the bare minimum - the "Hello, World" of the AIStore deployment, if you will.
 
-### Local Non-conteinerized
+### Local Non-containerized
 
 If [Go](https://golang.org/dl/) is already installed, getting started with AIStore takes no more than a minute and entails:
 
