@@ -1,4 +1,4 @@
-package dfc
+package ais
 
 import (
 	"fmt"
@@ -6,21 +6,21 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/dfcpub/3rdparty/glog"
-	"github.com/NVIDIA/dfcpub/cmn"
-	"github.com/NVIDIA/dfcpub/stats"
+	"github.com/NVIDIA/aistore/3rdparty/glog"
+	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/stats"
 	jsoniter "github.com/json-iterator/go"
 )
 
-//============================
-//
-// Downloading (/v1/download)
-//
-//============================
+///////////
+// PROXY //
+///////////
 
+// [METHOD] /v1/download
 func (p *proxyrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet, http.MethodDelete:
@@ -124,7 +124,7 @@ func (p *proxyrunner) singleDownloadHandler(w http.ResponseWriter, r *http.Reque
 	if payload.Objname == "" {
 		objName := path.Base(payload.Link)
 		if objName == "." || objName == "/" {
-			p.invalmsghdlr(w, r, "Can not extract a valid objName from the provided download link.")
+			p.invalmsghdlr(w, r, "can not extract a valid objName from the provided download link")
 			return
 		}
 		payload.Objname = objName
@@ -141,7 +141,7 @@ func (p *proxyrunner) singleDownloadHandler(w http.ResponseWriter, r *http.Reque
 	}
 	bucketmd := p.bmdowner.get()
 	if _, ok := bucketmd.LBmap[payload.Bucket]; !ok {
-		p.invalmsghdlr(w, r, "Bucket does not exist.")
+		p.invalmsghdlr(w, r, "bucket does not exist")
 		return
 	}
 
@@ -184,10 +184,9 @@ func (p *proxyrunner) targetDownloadRequest(bucket, objname string, body []byte)
 	return res.status, res.err
 }
 
-// objects is a map of links(key) where the corresponding
-// value is the objname that the download will be saved as
-func (p *proxyrunner) bulkDownloadProcessor(w http.ResponseWriter,
-	r *http.Request, bucket string, objects cmn.SimpleKVs, headers map[string]interface{}) {
+// objects is a map of objnames (keys) where the corresponding
+// value is the link that the download will be saved as.
+func (p *proxyrunner) bulkDownloadProcessor(w http.ResponseWriter, r *http.Request, bucket string, objects cmn.SimpleKVs, headers map[string]string) {
 	var (
 		failures     = cmn.SimpleKVs{}
 		failureMutex = &sync.Mutex{}
@@ -200,21 +199,18 @@ func (p *proxyrunner) bulkDownloadProcessor(w http.ResponseWriter,
 	// check if the bucket exists
 	bucketmd := p.bmdowner.get()
 	if _, ok := bucketmd.LBmap[bucket]; !ok {
-		p.invalmsghdlr(w, r, "Specified bucket does not exist.")
+		p.invalmsghdlr(w, r, "specified bucket does not exist")
 		return
 	}
 
-	for link, objname := range objects {
-		go func(link, objname string) {
-			wg.Add(1)
-
+	for objname, link := range objects {
+		wg.Add(1)
+		go func(objname, link string) {
 			payload := cmn.DlBody{
-				Link:    link,
 				Objname: objname,
-				DlBase: cmn.DlBase{
-					Bucket: bucket,
-				},
+				Link:    link,
 			}
+			payload.Bucket = bucket
 
 			if len(headers) > 0 {
 				payload.Headers = headers
@@ -226,18 +222,18 @@ func (p *proxyrunner) bulkDownloadProcessor(w http.ResponseWriter,
 			}
 
 			if err != nil {
-				//FIXME: consider adding threadsafe SimpleKV store
+				// FIXME: consider adding threadsafe SimpleKV store
 				failureMutex.Lock()
-				failures[fmt.Sprintf("%q, %q", link, objname)] = err.Error()
+				failures[fmt.Sprintf("%q, %q", objname, link)] = err.Error()
 				failureMutex.Unlock()
 			}
 			wg.Done()
-		}(link, objname)
+		}(objname, link)
 	}
 	wg.Wait()
-	// FIXME: new stat?????
+	// FIXME: consider adding new stats: downloader failures
 	if len(failures) > 0 {
-		p.invalmsghdlr(w, r, fmt.Sprintf("The following downloads failed: %v", failures))
+		p.invalmsghdlr(w, r, fmt.Sprintf("following downloads failed: %v", failures))
 	}
 }
 
@@ -255,8 +251,10 @@ func (p *proxyrunner) listDownloadHandler(w http.ResponseWriter, r *http.Request
 
 	if payload.Base == "" {
 		glog.Errorf("No base provided for list download request.")
-		p.invalmsghdlr(w, r, "No prefix for list found. Prefix required.", http.StatusBadRequest)
+		p.invalmsghdlr(w, r, "no prefix for list found, prefix is required")
 		return
+	} else if !strings.HasSuffix(payload.Base, "/") {
+		payload.Base += "/"
 	}
 
 	if payload.Step == 0 {
@@ -264,7 +262,7 @@ func (p *proxyrunner) listDownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if payload.Start > payload.End {
-		p.invalmsghdlr(w, r, "Start value greater than end", http.StatusBadRequest)
+		p.invalmsghdlr(w, r, "start value greater than end")
 		return
 	}
 
@@ -273,10 +271,10 @@ func (p *proxyrunner) listDownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 	for i := payload.Start; i <= payload.End; i += payload.Step {
 		objname := fmt.Sprintf("%s%0*d%s", payload.Prefix, payload.DigitCount, i, payload.Suffix)
-		objects[payload.Base+objname] = objname
+		objects[objname] = payload.Base + objname
 	}
 	if glog.V(4) {
-		glog.Infof("Got a request to download the following objects: %v", objects)
+		glog.Infof("got a request to download the following objects: %v", objects)
 	}
 	p.bulkDownloadProcessor(w, r, payload.Bucket, objects, payload.Headers)
 }
@@ -296,36 +294,26 @@ func (p *proxyrunner) multiDownloadHandler(w http.ResponseWriter, r *http.Reques
 		glog.Infof("multiDownloadHandler payload %v", payload)
 	}
 
-	// check if an objectMap is present
-	if len(payload.ObjectMap) != 0 && len(payload.ObjectList) == 0 {
-		p.invalmsghdlr(w, r, "Missing object map or object list for multi download request", http.StatusBadRequest)
+	// check if an objectMap or objectList is present
+	if len(payload.ObjectMap) == 0 && len(payload.ObjectList) == 0 {
+		p.invalmsghdlr(w, r, "missing object map or object list for multi download request")
 		return
 	}
 
 	if len(payload.ObjectMap) != 0 {
 		for k, v := range payload.ObjectMap {
-			if objName, ok := v.(string); ok {
-				objects[k] = objName
-			} else {
-				p.invalmsghdlr(w, r, "objectMap values must be strings.", http.StatusBadRequest)
-				return
-			}
+			objects[k] = v
 		}
 	} else {
 		// process list of links
-		for _, v := range payload.ObjectList {
-			if link, ok := v.(string); ok {
-				objName := path.Base(link)
-				if objName == "." || objName == "/" {
-					// should we continue and let the use worry about this after?
-					p.invalmsghdlr(w, r, fmt.Sprintf("Can not extract a valid objName from the provided download link: %q.", link))
-					return
-				}
-				objects[link] = objName
-			} else {
-				p.invalmsghdlr(w, r, "objectList must be a list of strings.", http.StatusBadRequest)
+		for _, link := range payload.ObjectList {
+			objName := path.Base(link)
+			if objName == "." || objName == "/" {
+				// should we continue and let the use worry about this after?
+				p.invalmsghdlr(w, r, fmt.Sprintf("Can not extract a valid objName from the provided download link: %q.", link))
 				return
 			}
+			objects[objName] = link
 		}
 	}
 
@@ -334,4 +322,55 @@ func (p *proxyrunner) multiDownloadHandler(w http.ResponseWriter, r *http.Reques
 		glog.Infof("Got a request to download the following objects: %v", objects)
 	}
 	p.bulkDownloadProcessor(w, r, payload.Bucket, objects, payload.Headers)
+}
+
+////////////
+// TARGET //
+////////////
+
+// [METHOD] /v1/download
+func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
+	payload := cmn.DlBody{}
+	if err := cmn.ReadJSON(w, r, &payload); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+	if glog.V(4) {
+		glog.Infof("downloadHandler payload %v", payload)
+	}
+
+	if err := payload.Validate(); err != nil {
+		t.invalmsghdlr(w, r, err.Error())
+		return
+	}
+
+	if !t.verifyProxyRedirection(w, r, payload.Bucket, payload.Objname, cmn.Download) {
+		return
+	}
+
+	var (
+		response   string
+		err        error
+		statusCode int
+	)
+	switch r.Method {
+	case http.MethodGet:
+		glog.Infof("Getting status of download: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Status(&payload)
+	case http.MethodDelete:
+		glog.Infof("Cancelling download: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Cancel(&payload)
+	case http.MethodPost:
+		glog.Infof("Downloading: %s", payload)
+		response, err, statusCode = t.xactions.renewDownloader(t, payload.Bucket).Download(&payload)
+	default:
+		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
+		return
+	}
+
+	if statusCode >= http.StatusBadRequest {
+		cmn.InvalidHandlerWithMsg(w, r, err.Error(), statusCode)
+		return
+	}
+	w.Write([]byte(response))
 }

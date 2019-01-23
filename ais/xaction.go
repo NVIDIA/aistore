@@ -17,10 +17,10 @@ import (
 	"github.com/NVIDIA/aistore/3rdparty/glog"
 	"github.com/NVIDIA/aistore/cluster"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/downloader"
 	"github.com/NVIDIA/aistore/ec"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/mirror"
-	"github.com/NVIDIA/aistore/www"
 )
 
 type (
@@ -420,18 +420,18 @@ func (xs *xactions) abortBucketSpecific(bucket string) {
 	}
 }
 
-func (xs *xactions) renewDownloader(t *targetrunner) (xdl *www.Downloader) {
+func (xs *xactions) renewDownloader(t *targetrunner, bucket string) (xdl *downloader.Downloader) {
 	kind := cmn.Download
 	xs.Lock()
 	xx := xs.findU(kind)
 	if xx != nil {
-		xdl = xx.(*www.Downloader)
+		xdl = xx.(*downloader.Downloader)
 		xdl.Renew() // to reduce (but not totally eliminate) the race btw self-termination and renewal
 		xs.Unlock()
 		return
 	}
 	id := xs.uniqueid()
-	xdl = www.NewDownloader(t, fs.Mountpaths, id, kind)
+	xdl = downloader.NewDownloader(t, fs.Mountpaths, id, kind, bucket)
 	xs.add(xdl)
 	go xdl.Run()
 	xs.Unlock()

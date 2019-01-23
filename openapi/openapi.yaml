@@ -809,7 +809,7 @@ paths:
                   type: string
   /download/single:
     post:
-      summary: Queues a single object to be downloaded by DFC.
+      summary: Queues a single object to be downloaded by AIS.
       operationId: downloadSingleObject
       tags:
         - Download
@@ -833,7 +833,7 @@ paths:
               schema:
                 type: string
         '409':
-          description: Object with the same bucket and objname already exists on DFC.
+          description: Object with the same bucket and objname already exists on AIS.
           content:
             text/plain:
               schema:
@@ -846,7 +846,7 @@ paths:
                 type: string
   /download/multi:
     post:
-      summary: Queues multiple objects to be downloaded by DFC. Requires either an objectMap or ObjectList request body field.
+      summary: Queues multiple objects to be downloaded by AIS. Requires either an object_map or object_list request body field.
       operationId: downloadMultipleObjects
       tags:
         - Download
@@ -870,7 +870,7 @@ paths:
               schema:
                 type: string
         '409':
-          description: Object with the same bucket and objname already exists on DFC.
+          description: Object with the same bucket and objname already exists on AIS.
           content:
             text/plain:
               schema:
@@ -883,7 +883,7 @@ paths:
                 type: string
   /download/list:
     post:
-      summary: Queues for download all the objects that can be constructed from url= base + prefix + n + suffix. Where n is known as the key space. start <= n <= end. The key space can be modified using the step and digitCount modifiers in the request body.
+      summary: Queues for download all the objects that can be constructed from url= base + prefix + n + suffix. Where n is known as the key space. start <= n <= end. The key space can be modified using the step and digit_count modifiers in the request body.
       operationId: downloadObjectList
       tags:
         - Download
@@ -907,7 +907,7 @@ paths:
               schema:
                 type: string
         '409':
-          description: Object with the same bucket and objname already exists on DFC.
+          description: Object with the same bucket and objname already exists on AIS.
           content:
             text/plain:
               schema:
@@ -956,7 +956,7 @@ components:
           example: "dataset.gz"
         headers:
           type: object
-          description: JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when DFC actually makes the GET request to download the object from the link.
+          description: JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download the object from the link.
       required:
         - bucket
         - link
@@ -965,11 +965,11 @@ components:
       properties:
         bucket:
           type: string
-          description: bucket where the downloaded objects will be saved to
+          description: Bucket where the downloaded objects will be saved to.
           example: "testbucket"
         headers:
           type: object
-          description: JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when DFC actually makes the GET request to download each object.
+          description: JSON object where the key is a header name and the value is the corresponding header value (string). These values are used as the header values for when AIS actually makes the GET request to download each object.
         base:
           type: string
           description: The base URL of the object that will be used to formulate the download url
@@ -997,9 +997,9 @@ components:
           description: Used to download every nth object (where n = step) in the object space starting from start and ending at end. Default is 1 if not provided.
           example: "5"
           minimum: 1
-        digitCount:
+        digit_count:
           type: integer
-          description: Used to ensure that each key coforms to n digits (where n = digitCount). Basically prepends as many 0s as needed. i.e. if n == 4, then the key 45 will be 0045 and if n == 5, then key 45 wil be 00045. Not providing this field will mean no 0s are prepended to any index in the key space.
+          description: Used to ensure that each key coforms to n digits (where n = digit_count). Basically prepends as many 0s as needed. i.e. if n == 4, then the key 45 will be 0045 and if n == 5, then key 45 wil be 00045. Not providing this field will mean no 0s are prepended to any index in the key space.
           example: "4"
           minimum: 0
       required:
@@ -1010,15 +1010,15 @@ components:
       properties:
         bucket:
           type: string
-          description: bucket where the downloaded objects will be saved to
+          description: Bucket where the downloaded objects will be saved to.
           example: "testbucket"
         headers:
           type: object
-          description: JSON object where the key is a header name and the value is the corresponding header value(string). These values are used as the header values for when DFC actually makes the GET request to download the object.
-        objectMap:
+          description: JSON object where the key is a header name and the value is the corresponding header value(string). These values are used as the header values for when AIS actually makes the GET request to download the object.
+        object_map:
           type: object
-          description: JSON object where the key is a URL (string) pointing to some file and the corresponding value (string) is the objname the object will be saved as.
-        objectList:
+          description: JSON object where the key (string) is the objname the object will be saved as and value (string) is a URL pointing to some file.
+        object_list:
           type: array
           description: JSON array where each item is a URL (string) pointing to some file. The objname for each file will be the last element in the URL's path. 
           items:
@@ -1027,7 +1027,6 @@ components:
           minItems: 1
       required:
         - bucket
-        - base  
     SortSpec:
       type: object
       properties:

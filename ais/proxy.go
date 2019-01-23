@@ -551,32 +551,29 @@ func (p *proxyrunner) healthHandler(w http.ResponseWriter, r *http.Request) {
 	p.writeJSON(w, r, jsbytes, "proxycorestats")
 }
 
-// createLocalBucket returns true if the bucket already exists or is successfully created
-func (p *proxyrunner) createLocalBucket(w http.ResponseWriter, r *http.Request, msg cmn.ActionMsg, lbucket string) bool {
-	config := cmn.GCO().Get()
+func (p *proxyrunner) createLocalBucket(msg cmn.ActionMsg, bucket string) error {
+	config := cmn.GCO.Get()
 
 	p.bmdowner.Lock()
 	clone := p.bmdowner.get().clone()
-	bprops := cmn.BucketProps{
+	bucketProps := &cmn.BucketProps{
 		CksumConf:  cmn.CksumConf{Checksum: cmn.ChecksumInherit},
 		LRUConf:    cmn.GCO.Get().LRU,
 		MirrorConf: config.Mirror,
 	}
-	if !clone.add(lbucket, true, &bprops) {
+	if !clone.add(bucket, true, bucketProps) {
 		p.bmdowner.Unlock()
-		p.invalmsghdlr(w, r, fmt.Sprintf("Local bucket %s already exists", lbucket))
-		return false
+		return fmt.Errorf("Local bucket %s already exists", bucket)
 	}
-	if errstr := p.savebmdconf(clone); errstr != "" {
+	if errstr := p.savebmdconf(clone, config); errstr != "" {
 		p.bmdowner.Unlock()
-		p.invalmsghdlr(w, r, errstr)
-		return false
+		return errors.New(errstr)
 	}
 	p.bmdowner.put(clone)
 	p.bmdowner.Unlock()
-	msg.Action = path.Join(msg.Action, lbucket)
+	msg.Action = path.Join(msg.Action, bucket)
 	p.metasyncer.sync(true, clone, &msg)
-	return true
+	return nil
 }
 
 // POST { action } /v1/buckets/bucket-name
@@ -600,15 +597,16 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		if p.forwardCP(w, r, &msg, bucket, nil) {
 			return
 		}
-		p.createLocalBucket(w, r, msg, lbucket)
+		if err := p.createLocalBucket(msg, bucket); err != nil {
+			p.invalmsghdlr(w, r, err.Error())
+		}
 	case cmn.ActRenameLB:
 		if p.forwardCP(w, r, &msg, "", nil) {
 			return
 		}
 		bucketFrom, bucketTo := bucket, msg.Name
 		if bucketFrom == "" || bucketTo == "" {
-			errstr := fmt.Sprintf("Invalid rename local bucket request: empty name %s => %s",
-				bucketFrom, bucketTo)
+			errstr := fmt.Sprintf("Invalid rename local bucket request: empty name %q or %q", bucketFrom, bucketTo)
 			p.invalmsghdlr(w, r, errstr)
 			return
 		}
@@ -616,11 +614,10 @@ func (p *proxyrunner) httpbckpost(w http.ResponseWriter, r *http.Request) {
 		props, ok := clone.Get(bucketFrom, true)
 		if !ok {
 			s := fmt.Sprintf("Local bucket %s "+cmn.DoesNotExist, bucketFrom)
-			p.invalmsghdlr(w, r, s)
+			p.invalmsghdlr(w, r, s, http.StatusNotFound)
 			return
 		}
-		_, ok = clone.Get(bucketTo, true)
-		if ok {
+		if _, ok = clone.Get(bucketTo, true); ok {
 			s := fmt.Sprintf("Local bucket %s already exists", bucketTo)
 			p.invalmsghdlr(w, r, s)
 			return

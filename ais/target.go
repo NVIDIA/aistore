@@ -484,20 +484,15 @@ func (t *targetrunner) GetAtimeRunner() *atime.Runner { return getatimerunner() 
 func (t *targetrunner) GetMem2() *memsys.Mem2         { return gmem2 }
 func (t *targetrunner) GetFSPRG() fs.PathRunGroup     { return &t.fsprg }
 
-func (t *targetrunner) RegPathRunner(r fs.PathRunner) {
-	t.fsprg.Reg(r)
-}
-
-func (t *targetrunner) UnregPathRunner(r fs.PathRunner) {
-	t.fsprg.Unreg(r)
-}
-
-func (t *targetrunner) Receive(workfqn string, lom *cluster.LOM, omd5 string, reader io.Reader) (sgl *memsys.SGL /* NIY */, nhobj cmn.CksumValue, written int64, errstr string) {
-	return t.receive(workfqn, lom, omd5, reader)
-}
-
-func (t *targetrunner) Commit(ct context.Context, lom *cluster.LOM, tempfqn string, rebalance bool) (errstr string, errcode int) {
-	return t.putCommit(ct, lom, tempfqn, rebalance)
+func (t *targetrunner) Receive(workFQN string, reader io.ReadCloser, lom *cluster.LOM) error {
+	roi := &recvObjInfo{
+		t:       t,
+		r:       reader,
+		workFQN: workFQN,
+		lom:     lom,
+	}
+	err, _ := roi.recv()
+	return err
 }
 
 //===========================================================================================
@@ -575,52 +570,6 @@ func (t *targetrunner) verifyProxyRedirection(w http.ResponseWriter, r *http.Req
 		glog.Infof("%s %s %s/%s <= %s", r.Method, action, bucket, objname, pid)
 	}
 	return true
-}
-
-func (t *targetrunner) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	payload := cmn.DlBody{}
-	if err := cmn.ReadJSON(w, r, &payload); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-	if glog.V(4) {
-		glog.Infof("downloadHandler payload %v", payload)
-	}
-
-	if err := payload.Validate(); err != nil {
-		t.invalmsghdlr(w, r, err.Error())
-		return
-	}
-
-	if !t.verifyProxyRedirection(w, r, payload.Bucket, payload.Objname, cmn.Download) {
-		return
-	}
-
-	var (
-		response   string
-		err        error
-		statusCode int
-	)
-	switch r.Method {
-	case http.MethodGet:
-		glog.Infof("Getting status of download: %s", payload)
-		response, err, statusCode = t.xactions.renewDownloader(t).Status(&payload)
-	case http.MethodDelete:
-		glog.Infof("Cancelling download: %s", payload)
-		response, err, statusCode = t.xactions.renewDownloader(t).Cancel(&payload)
-	case http.MethodPost:
-		glog.Infof("Downloading: %s", payload)
-		response, err, statusCode = t.xactions.renewDownloader(t).Download(&payload)
-	default:
-		cmn.InvalidHandlerWithMsg(w, r, "invalid method for /download path")
-		return
-	}
-
-	if statusCode >= http.StatusBadRequest {
-		cmn.InvalidHandlerWithMsg(w, r, err.Error(), statusCode)
-		return
-	}
-	w.Write([]byte(response))
 }
 
 // GET /v1/objects/bucket[+"/"+objname]

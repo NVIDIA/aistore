@@ -335,13 +335,13 @@ const (
 	DownloadList   = "list"
 )
 
-type DlBase struct {
-	Headers map[string]interface{} `json:"headers,omitempty"`
-	Bucket  string                 `json:"bucket"`
+type dlBase struct {
+	Headers map[string]string `json:"headers,omitempty"`
+	Bucket  string            `json:"bucket"`
 }
 
 type DlBody struct {
-	DlBase
+	dlBase
 	Link    string `json:"link"`
 	Objname string `json:"objname"`
 }
@@ -356,41 +356,41 @@ func (b *DlBody) String() (str string) {
 
 func (b *DlBody) Validate() (err error) {
 	if b.Link == "" {
-		return errors.New("Missing the download url from the request body.")
+		return errors.New("missing the download url from the request body")
 	}
 
 	if b.Bucket == "" {
-		return errors.New("Missing the bucket name from the request body.")
+		return errors.New("missing the bucket name from the request body")
 	}
 
 	if b.Objname == "" {
-		return errors.New("Missing the objname name from the request body.")
+		return errors.New("missing the objname name from the request body")
 	}
 	return nil
 }
 
 type DlListBody struct {
-	DlBase
+	dlBase
 	Base       string `json:"base"`
 	Prefix     string `json:"prefix"`
 	Suffix     string `json:"suffix"`
 	Start      uint   `json:"start"`
 	End        uint   `json:"end"`
 	Step       uint   `json:"step"`
-	DigitCount uint   `json:"digitCount"`
+	DigitCount uint   `json:"digit_count"`
 }
 
 func (b *DlListBody) String() (str string) {
 	return fmt.Sprintf(
-		"bucket: %q, base: %q, prefix: %q, suffix: %q, start %v, end %v, step %v, digitCount %v",
+		"bucket: %q, base: %q, prefix: %q, suffix: %q, start %v, end %v, step %v, digit_count %v",
 		b.Bucket, b.Base, b.Prefix, b.Suffix, b.Start, b.End, b.Step, b.DigitCount,
 	)
 }
 
 type DlMultiBody struct {
-	DlBase
-	ObjectMap  map[string]interface{} `json:"objectMap"`
-	ObjectList []interface{}          `json:"objectList"`
+	dlBase
+	ObjectMap  map[string]string `json:"object_map"`
+	ObjectList []string          `json:"object_list"`
 }
 
 const (

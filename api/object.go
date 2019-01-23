@@ -264,3 +264,66 @@ func ReplicateObject(baseParams *BaseParams, bucket, object string) error {
 	_, err = DoHTTPRequest(baseParams, path, msg)
 	return err
 }
+
+func DownloadObject(baseParams *BaseParams, bucket, objname, link string) error {
+	body := cmn.DlBody{
+		Objname: objname,
+		Link:    link,
+	}
+	body.Bucket = bucket
+	msg, err := jsoniter.Marshal(body)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadSingle)
+	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}
+
+func DownloadObjectMulti(baseParams *BaseParams, bucket string, m map[string]string) error {
+	body := cmn.DlMultiBody{
+		ObjectMap: m,
+	}
+	body.Bucket = bucket
+	msg, err := jsoniter.Marshal(body)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodPost
+	path := cmn.URLPath(cmn.Version, cmn.Download, cmn.DownloadMulti)
+	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}
+
+func DownloadObjectStatus(baseParams *BaseParams, bucket, objname, link string) (resp []byte, err error) {
+	body := cmn.DlBody{
+		Objname: objname,
+		Link:    link,
+	}
+	body.Bucket = bucket
+	msg, err := jsoniter.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	baseParams.Method = http.MethodGet
+	path := cmn.URLPath(cmn.Version, cmn.Download)
+	resp, err = DoHTTPRequest(baseParams, path, msg)
+	return resp, err
+}
+
+func DownloadObjectCancel(baseParams *BaseParams, bucket, objname, link string) error {
+	body := cmn.DlBody{
+		Objname: objname,
+		Link:    link,
+	}
+	body.Bucket = bucket
+	msg, err := jsoniter.Marshal(body)
+	if err != nil {
+		return err
+	}
+	baseParams.Method = http.MethodDelete
+	path := cmn.URLPath(cmn.Version, cmn.Download)
+	_, err = DoHTTPRequest(baseParams, path, msg)
+	return err
+}

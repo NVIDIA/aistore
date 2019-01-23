@@ -46,8 +46,8 @@ Should you have any difficulty with these instructions, please open a ticket, an
 2. Run the following commands:
 
 ```shell
-cd <path_to_repo>
-java -jar </path/to/openapi-generator-cli.jar> generate -i swagger/rest-api-specification.yaml -g python -o ./python-client/
+cd </path/to/aistore>
+java -jar </path/to/openapi-generator-cli.jar> generate -i openapi/openapi.yaml -g python -o ./python-client/
 ```
 
 3. Install `pip` - a package management system used to install and manage software packages written in Python. Visit the [installation page](https://pip.pypa.io/en/stable/installing/) for instructions on how to install `pip`.
