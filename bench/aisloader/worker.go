@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tutils"
 )
@@ -34,9 +33,7 @@ func doPut(wo *workOrder) {
 		wo.err = err
 		return
 	}
-	baseParams := tutils.BaseAPIParams(wo.proxyURL)
-	baseParams.Client = tutils.TracedClient()
-	wo.err = api.PutObject(baseParams, wo.bucket, wo.objName, r.XXHash(), r)
+	wo.latencies, wo.err = tutils.PutWithMetrics(wo.proxyURL, wo.bucket, wo.objName, r.XXHash(), r)
 }
 
 func doGet(wo *workOrder) {

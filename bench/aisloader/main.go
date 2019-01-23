@@ -654,6 +654,67 @@ func newWorkOrder() {
 func completeWorkOrder(wo *workOrder) {
 	delta := wo.end.Sub(wo.start)
 
+	metrics := make([]statsd.Metric, 0)
+	if wo.err == nil {
+		metrics = []statsd.Metric{
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyconn",
+				Value: float64(wo.latencies.ProxyConn / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxy",
+				Value: float64(wo.latencies.Proxy / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetconn",
+				Value: float64(wo.latencies.TargetConn / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.target",
+				Value: float64(wo.latencies.Target / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.posthttp",
+				Value: float64(wo.latencies.PostHTTP / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyheader",
+				Value: float64(wo.latencies.ProxyWroteHeader / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyrequest",
+				Value: float64(wo.latencies.ProxyWroteRequest / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.proxyresponse",
+				Value: float64(wo.latencies.ProxyFirstResponse / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetheader",
+				Value: float64(wo.latencies.TargetWroteHeader / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetrequest",
+				Value: float64(wo.latencies.TargetWroteRequest / time.Millisecond),
+			},
+			statsd.Metric{
+				Type:  statsd.Timer,
+				Name:  "latency.targetresponse",
+				Value: float64(wo.latencies.TargetFirstResponse / time.Millisecond),
+			},
+		}
+	}
+
 	switch wo.op {
 	case opGet:
 		getPending--
@@ -682,62 +743,10 @@ func completeWorkOrder(wo *workOrder) {
 					Name:  "throughput",
 					Value: wo.size,
 				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyconn",
-					Value: float64(wo.latencies.ProxyConn / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxy",
-					Value: float64(wo.latencies.Proxy / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetconn",
-					Value: float64(wo.latencies.TargetConn / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.target",
-					Value: float64(wo.latencies.Target / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.posthttp",
-					Value: float64(wo.latencies.PostHTTP / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyheader",
-					Value: float64(wo.latencies.ProxyWroteHeader / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyrequest",
-					Value: float64(wo.latencies.ProxyWroteRequest / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.proxyresponse",
-					Value: float64(wo.latencies.ProxyFirstResponse / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetheader",
-					Value: float64(wo.latencies.TargetWroteHeader / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetrequest",
-					Value: float64(wo.latencies.TargetWroteRequest / time.Millisecond),
-				},
-				statsd.Metric{
-					Type:  statsd.Timer,
-					Name:  "latency.targetresponse",
-					Value: float64(wo.latencies.TargetFirstResponse / time.Millisecond),
-				},
 			)
+			if len(metrics) != 0 {
+				statsdC.Send("get", metrics...)
+			}
 		} else {
 			fmt.Println("Get failed: ", wo.err)
 			intervalStats.get.AddErr()
@@ -778,6 +787,9 @@ func completeWorkOrder(wo *workOrder) {
 					Value: wo.size,
 				},
 			)
+			if len(metrics) != 0 {
+				statsdC.Send("put", metrics...)
+			}
 		} else {
 			fmt.Println("Put failed: ", wo.err)
 			intervalStats.put.AddErr()

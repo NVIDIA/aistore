@@ -282,6 +282,66 @@ func GetWithMetrics(url, bucket string, keyname string, validate bool, offset, l
 	return len, l, err
 }
 
+// Put sends a PUT request to url
+func PutWithMetrics(url, bucket, object, hash string, reader cmn.ReadOpenCloser) (HTTPLatencies, error) {
+	handle, err := reader.Open()
+	if err != nil {
+		return HTTPLatencies{}, fmt.Errorf("Failed to open reader, err: %v", err)
+	}
+	defer handle.Close()
+
+	url += cmn.URLPath(cmn.Version, cmn.Objects, bucket, object)
+	req, err := http.NewRequest(http.MethodPut, url, handle)
+	if err != nil {
+		return HTTPLatencies{}, err
+	}
+
+	// The HTTP package doesn't automatically set this for files, so it has to be done manually
+	// If it wasn't set, we would need to deal with the redirect manually.
+	req.GetBody = func() (io.ReadCloser, error) {
+		return reader.Open()
+	}
+	if hash != "" {
+		req.Header.Set(cmn.HeaderObjCksumType, cmn.ChecksumXXHash)
+		req.Header.Set(cmn.HeaderObjCksumVal, hash)
+	}
+
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	resp, err := tracedClient.Do(req)
+	if err != nil {
+		return HTTPLatencies{}, fmt.Errorf("Failed to %s, err: %v", http.MethodPut, err)
+	}
+	defer func() {
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}()
+	tr.tsHTTPEnd = time.Now()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return HTTPLatencies{}, fmt.Errorf("Failed to read response, err: %v", err)
+		}
+		return HTTPLatencies{}, fmt.Errorf("HTTP error = %d, message = %s", resp.StatusCode, string(b))
+	}
+
+	l := HTTPLatencies{
+		ProxyConn:           tr.tsProxyConn.Sub(tr.tsBegin),
+		Proxy:               tr.tsRedirect.Sub(tr.tsProxyConn),
+		TargetConn:          tr.tsTargetConn.Sub(tr.tsRedirect),
+		Target:              tr.tsHTTPEnd.Sub(tr.tsTargetConn),
+		PostHTTP:            time.Since(tr.tsHTTPEnd),
+		ProxyWroteHeader:    tr.tsProxyWroteHeaders.Sub(tr.tsProxyConn),
+		ProxyWroteRequest:   tr.tsProxyWroteRequest.Sub(tr.tsProxyWroteHeaders),
+		ProxyFirstResponse:  tr.tsProxyFirstResponse.Sub(tr.tsProxyWroteRequest),
+		TargetWroteHeader:   tr.tsTargetWroteHeaders.Sub(tr.tsTargetConn),
+		TargetWroteRequest:  tr.tsTargetWroteRequest.Sub(tr.tsTargetWroteHeaders),
+		TargetFirstResponse: tr.tsTargetFirstResponse.Sub(tr.tsTargetWroteRequest),
+	}
+	return l, nil
+}
+
 func Del(proxyURL, bucket string, object string, wg *sync.WaitGroup, errCh chan error, silent bool) error {
 	if wg != nil {
 		defer wg.Done()
@@ -853,8 +913,4 @@ func ParseEnvVariables(fpath string, delimiter ...string) map[string]string {
 		}
 	}
 	return m
-}
-
-func TracedClient() *http.Client {
-	return tracedClient
 }
