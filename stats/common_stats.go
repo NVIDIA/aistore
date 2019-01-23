@@ -158,7 +158,7 @@ func (tracker statsTracker) registerCommonStats() {
 	tracker.register(DeleteCount, KindCounter, true)
 	tracker.register(RenameCount, KindCounter, true)
 	tracker.register(ListCount, KindCounter, true)
-	tracker.register(GetLatency, KindCounter, true)
+	tracker.register(GetLatency, KindLatency, true)
 	tracker.register(ListLatency, KindLatency, true)
 	tracker.register(KeepAliveMinLatency, KindLatency, true)
 	tracker.register(KeepAliveMaxLatency, KindLatency, true)
