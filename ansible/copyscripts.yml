@@ -9,14 +9,14 @@
         group: ubuntu
         mode: 0777
       with_items:
-        - mountdfc.sh
+        - mountais.sh
         - startproxy.sh
         - startclient.sh
         - starttarget.sh
         - startprimaryproxy.sh
         - enablestats.sh
-        - cleandfcstate.sh
-        - configdfc.sh
+        - cleanaisstate.sh
+        - configais.sh
         - inventory
-        - getdfc.sh
+        - getais.sh
         - setupnodes.sh

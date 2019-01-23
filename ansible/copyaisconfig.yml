@@ -1,0 +1,12 @@
+---
+- hosts: all
+  gather_facts: no
+  tasks:
+    - copy:
+        src: "{{ playbook_dri }}/inventory/ais.json"
+        dest: /home/ubuntu/
+        owner: ubuntu
+        group: ubuntu
+        mode: 0644
+...
+

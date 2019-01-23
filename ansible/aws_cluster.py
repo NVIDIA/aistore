@@ -44,7 +44,7 @@ def load_global_defaults():
 # Load global defaults
 load_global_defaults()
 
-def load_dfc_cluster(cluster, clients):
+def load_ais_cluster(cluster, clients):
     ais = {
         'targets' : None,
         'proxy'   : None,
@@ -226,23 +226,23 @@ def terminate_instance(region_name,ip_address):
     else:
         logger.info('failed to terminate instance with ip '+str(ip_address))
 
-def start_dfc_cluster(ais):
+def start_ais_cluster(ais):
     for key in ais:
         logger.info("Booting ais {}".format(key))
         start_stop_instance(ais[key], 'running')
     #Additional sleep to make sure every instance is up for SSH connection
     time.sleep(15)
 
-def stop_dfc_cluster(ais):
+def stop_ais_cluster(ais):
     for key in ais:
         logger.info("Shutting down ais {}".format(key))
         start_stop_instance(ais[key], 'stopped')
 
-def update_dfc_cluster(ais):
-    subprocess.call('./updatedfc.sh')
+def update_ais_cluster(ais):
+    subprocess.call('./updateais.sh')
 
-def cleanup_dfc_cluster(ais):
-    subprocess.call('./cleandfc.sh')
+def cleanup_ais_cluster(ais):
+    subprocess.call('./cleanais.sh')
     
 if __name__ == '__main__':
 
@@ -258,14 +258,14 @@ if __name__ == '__main__':
 
     cluster = args.cluster
     clients = int(args.clients)
-    ais = load_dfc_cluster(cluster, clients)
+    ais = load_ais_cluster(cluster, clients)
 
     if args.command == 'restart':
-        start_dfc_cluster(ais)
+        start_ais_cluster(ais)
     elif args.command == 'shutdown':
-        stop_dfc_cluster(ais)
+        stop_ais_cluster(ais)
     elif args.command == 'update':
-        update_dfc_cluster(ais)
+        update_ais_cluster(ais)
     elif args.command == 'cleanup':
-        cleanup_dfc_cluster(ais)
+        cleanup_ais_cluster(ais)
 

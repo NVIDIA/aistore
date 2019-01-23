@@ -13,20 +13,18 @@ mkdir -p ~/ais/{bin,pkg,src}
 
 if [ ! -d "/usr/local/go" ]; then
     echo 'Download go'
-    curl -LO https://storage.googleapis.com/golang/go1.11.4.linux-amd64.tar.gz
+    curl -LO https://storage.googleapis.com/golang/go1.11.linux-amd64.tar.gz
     shasum -a 256 go1.*
-    sudo tar -C /usr/local -xvzf go1.11.4.linux-amd64.tar.gz > /dev/null
+    sudo tar -C /usr/local -xvzf go1.11.linux-amd64.tar.gz > /dev/null
     sudo ln -s /usr/loca/go/bin/go /usr/bin/go
-    rm -rf go1.11.4.linux-amd64.tar.gz
+    rm -rf go1.11.linux-amd64.tar.gz
 fi
 echo 'Setup go dep binary'
 curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-echo 'Go get AIS'
+echo 'Go get AIStore source'
 cd $GOPATH/src
 go get -v github.com/NVIDIA/aistore/ais
 cd $AISSRC
+BUILD=`git rev-parse --short HEAD`
+go build && go install && GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-X github.com/NVIDIA/aistore/ais.build=$BUILD" setup/ais.go
 
-VERSION=`git rev-parse --short HEAD`
-BUILD=`date +%FT%T%z`
-echo "Cloud provider set to: ${CLDPROVIDER}"
-GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
