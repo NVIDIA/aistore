@@ -221,7 +221,9 @@ func PutObject(baseParams *BaseParams, bucket, object, hash string, reader cmn.R
 		// correct error and retry here help. If it helps, the code block
 		// below will be removed, as well as all Printf's
 		{
-			fmt.Printf("Request failed with error: %v (%T)\n", err, err)
+			if !cmn.IsErrConnectionRefused(err) {
+				fmt.Printf("Request failed with error: %v (%T)\n", err, err)
+			}
 			if nerr, ok := err.(*net.OpError); ok {
 				fmt.Printf("  The internal error is: %v (%T)\n", nerr.Err, nerr.Err)
 			}
