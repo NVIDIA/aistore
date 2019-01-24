@@ -101,7 +101,7 @@ Example:
 $ ./deploy_docker.sh -a=~/.aws/
 ```
 
-3. To deploy AIStore, refer to the deployment scripts in [`docker/dev`](dev/dev_docker.md) and [`docker/quick_start`](quick_start/qs_docker.md).
+3. To deploy AIStore, refer to the deployment scripts in [`docker/dev`](dev/README.md) and [`docker/quick_start`](quick_start/README.md).
 Please note that if you are running the service for the first time, the image build process will take some time; subsequent runs will use the cached images and be much faster.
 
 ## Helpful docker commands

@@ -38,35 +38,33 @@ $ ./aisloader -bucket=my_local_bucket -duration=10s -pctput=50 -local=true -clea
 
 This command will perform a performance test consisting of 50% PUT and 50% GET requests. It should return the following
 
- 
->  Found 0 existing objects
+>  Found 0 existing objects <br>
 >  Run configuration:
->  {
->    "proxy": "http://172.50.0.2:8080",
->    "local": true,
->    "bucket": "my_local_bucket",
->    "duration": "10s",
->    "put upper bound": 0,
->    "put %": 50,
->    "minimal object size in KB": 1024,
->    "maximal object size in KB": 1048576,
->    "# workers": 3,
->    "stats interval": "10s",
->    "backed by": "sg",
->    "cleanup": true
->  }
->
->
->  Actual run duration: 10.313689487s
->
->  | Time | OP | Count | Total Bytes | Latency(min, avg, max) |	Throughput | Error |
->  | ---- | ---- | ---- | ---- | ---- | ---- | ---- |     
->  | 11:23:06 | Put | 18 | 7.35GB | 398.57ms &emsp; 1.55s &emsp; 3.40s | 664.83MB | 0 |       
->  | 11:23:06 | Get | 15 | 5.19GB | 85.10ms &emsp; 267.73ms &emsp; 586.19ms | 470.15MB | 0 |        
->  | 11:23:06 | CFG | 0  | 0B | 0.00ms &emsp; 0.00ms &emsp; 0.00ms | 0B |	0 |        
->  11:23:06 Clean up ...
->  11:23:06 Clean up done
+```json
+{
+    "proxy": "http://172.50.0.2:8080",
+    "local": true,
+    "bucket": "my_local_bucket",
+    "duration": "10s",
+    "put upper bound": 0,
+    "put %": 50,
+    "minimal object size in KB": 1024,
+    "maximal object size in KB": 1048576,
+    "# workers": 3,
+    "stats interval": "10s",
+    "backed by": "sg",
+    "cleanup": true
+  }
+  ```
+  >Actual run duration: 10.313689487s
 
+  | Time | OP | Count | Total Bytes | Latency(min, avg, max) |	Throughput | Error |
+  | ---- | ---- | ---- | ---- | ---- | ---- | ---- |     
+  | 11:23:06 | Put | 18 | 7.35GB | 398.57ms &emsp; 1.55s &emsp; 3.40s | 664.83MB | 0 |       
+  | 11:23:06 | Get | 15 | 5.19GB | 85.10ms &emsp; 267.73ms &emsp; 586.19ms | 470.15MB | 0 |        
+  | 11:23:06 | CFG | 0  | 0B | 0.00ms &emsp; 0.00ms &emsp; 0.00ms | 0B | 0 |        
+>  11:23:06 Clean up ... <br>
+>  11:23:06 Clean up done
 
 ***Warning:*** Performance tests puts a heavy load on your computer, and could cause your computer to crash. Please save your work.
 
