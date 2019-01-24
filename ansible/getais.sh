@@ -10,5 +10,8 @@ if [ ! -z $1 ]; then
     echo Git checkout branch $1
     git checkout $1
 fi
-BUILD=`git rev-parse --short HEAD`
-go build && go install && GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-X github.com/NVIDIA/aistore/ais.build=$BUILD" setup/ais.go
+
+VERSION=`git rev-parse --short HEAD`
+BUILD=`date +%FT%T%z`
+echo "Cloud provider set to: ${CLDPROVIDER}"
+GOBIN=$GOPATH/bin go install -tags="${CLDPROVIDER}" -ldflags "-w -s -X 'main.version=${VERSION}' -X 'main.build=${BUILD}'" setup/ais.go
